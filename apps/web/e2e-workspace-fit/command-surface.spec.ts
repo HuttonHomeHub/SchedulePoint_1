@@ -2909,22 +2909,50 @@ test.describe('The plan command surface, at a fractional device scale', () => {
     await context.close();
   });
 
-  async function openPlan(
+  /**
+   * Runs `body` on the plan in a fresh context and ALWAYS closes it, releasing the pen first.
+   *
+   * **Closing in a `finally` is the point.** Each test used to close its own context as its last
+   * line, so a failure or a timeout leaked the context with its page, its live session and its
+   * heartbeat, still holding the pen. The next test then opened a plan whose lease was already
+   * this user's, which draws `Stop editing` rather than `Start editing` (see `ensurePen`).
+   * Releasing explicitly starts the next context from a free pen instead of racing the
+   * best-effort keepalive release a closing page fires.
+   */
+  async function withPlan(
     browser: Browser,
     options: { deviceScaleFactor: number; hasTouch: boolean },
-  ): Promise<{ context: BrowserContext; page: Page }> {
+    body: (page: Page) => Promise<void>,
+  ): Promise<void> {
     const context = await browser.newContext({
       storageState: seed,
       viewport: { width: 1646, height: 1097 },
       ...options,
     });
-    await acknowledgeViewportNotice(context);
-    const page = await context.newPage();
-    await page.goto(planUrl);
-    await ensurePen(page);
-    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
-    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.deviceScaleFactor);
-    return { context, page };
+    try {
+      await acknowledgeViewportNotice(context);
+      const page = await context.newPage();
+      await page.goto(planUrl);
+      await ensurePen(page);
+      await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+      expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.deviceScaleFactor);
+      try {
+        await body(page);
+      } finally {
+        // Teardown must not mask the test's own failure, so a page that cannot release still closes.
+        const stop = page.getByRole('button', { name: 'Stop editing' });
+        if (await stop.isVisible().catch(() => false)) {
+          await stop.click({ timeout: 5_000 }).catch(() => undefined);
+          await page
+            .getByRole('button', { name: 'Start editing' })
+            .first()
+            .waitFor({ timeout: 5_000 })
+            .catch(() => undefined);
+        }
+      }
+    } finally {
+      await context.close();
+    }
   }
 
   for (const options of [
@@ -2937,38 +2965,38 @@ test.describe('The plan command surface, at a fractional device scale', () => {
       browser,
     }) => {
       test.setTimeout(240_000);
-      const { context, page } = await openPlan(browser, options);
-      let painted = 0;
-      let headroom = Number.POSITIVE_INFINITY;
-      const read = async (cell: (typeof SCALE_CELLS)[number], armed: boolean): Promise<void> => {
-        await settleAt(page, cell);
-        const reading = await expectDividersOnlyBetweenGroups(
-          page,
-          `${pointer} at ${options.deviceScaleFactor}x, ${cell.width}${armed ? ', Add armed' : ''}`,
+      await withPlan(browser, options, async (page) => {
+        let painted = 0;
+        let headroom = Number.POSITIVE_INFINITY;
+        const read = async (cell: (typeof SCALE_CELLS)[number], armed: boolean): Promise<void> => {
+          await settleAt(page, cell);
+          const reading = await expectDividersOnlyBetweenGroups(
+            page,
+            `${pointer} at ${options.deviceScaleFactor}x, ${cell.width}${armed ? ', Add armed' : ''}`,
+          );
+          painted += reading.painted;
+          headroom = Math.min(headroom, reading.minClipHeadroom);
+        };
+        for (const cell of SCALE_CELLS) await read(cell, false);
+
+        // DO wraps at 1280 with Add armed, which is where a trailing group opens a line of its own.
+        await settleAt(page, SCALE_CELLS[1]!);
+        await page.locator('[data-toolbar-item="add-activity"]').first().click();
+        await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
+          /^Adding/,
         );
-        painted += reading.painted;
-        headroom = Math.min(headroom, reading.minClipHeadroom);
-      };
-      for (const cell of SCALE_CELLS) await read(cell, false);
+        await read(SCALE_CELLS[1]!, true);
 
-      // DO wraps at 1280 with Add armed, which is where a trailing group opens a line of its own.
-      await settleAt(page, SCALE_CELLS[1]!);
-      await page.locator('[data-toolbar-item="add-activity"]').first().click();
-      await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
-        /^Adding/,
-      );
-      await read(SCALE_CELLS[1]!, true);
-
-      expect(
-        painted,
-        'no divider was painted anywhere — the sweep asked about nothing',
-      ).toBeGreaterThan(0);
-      // The clipped dividers that were read must lie clear of the clip edge by about a pixel.
-      expect(
-        headroom,
-        'the closest clipped divider to the clip edge, in CSS px',
-      ).toBeGreaterThanOrEqual(0.9);
-      await context.close();
+        expect(
+          painted,
+          'no divider was painted anywhere — the sweep asked about nothing',
+        ).toBeGreaterThan(0);
+        // The clipped dividers that were read must lie clear of the clip edge by about a pixel.
+        expect(
+          headroom,
+          'the closest clipped divider to the clip edge, in CSS px',
+        ).toBeGreaterThanOrEqual(0.9);
+      });
     });
   }
 
@@ -2976,28 +3004,28 @@ test.describe('The plan command surface, at a fractional device scale', () => {
     browser,
   }) => {
     test.setTimeout(120_000);
-    const { context, page } = await openPlan(browser, { deviceScaleFactor: 1, hasTouch: false });
-    await settleAt(page, { width: 1000, height: 600 });
-    const second = page.locator('[data-deck-row]').nth(1);
-    const seam = await second.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      const box = el.getBoundingClientRect();
-      return {
-        width: parseFloat(cs.borderLeftWidth),
-        style: cs.borderLeftStyle,
-        x: box.left,
-        y: box.top,
-        height: box.height,
-      };
+    await withPlan(browser, { deviceScaleFactor: 1, hasTouch: false }, async (page) => {
+      await settleAt(page, { width: 1000, height: 600 });
+      const second = page.locator('[data-deck-row]').nth(1);
+      const seam = await second.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        return {
+          width: parseFloat(cs.borderLeftWidth),
+          style: cs.borderLeftStyle,
+          x: box.left,
+          y: box.top,
+          height: box.height,
+        };
+      });
+      expect(seam.style, 'the second row has no left border below lg').toBe('solid');
+      expect(seam.width).toBeGreaterThan(0);
+      const clip = { x: seam.x - 1, y: seam.y + 2, width: seam.width + 2, height: seam.height - 4 };
+      const painted = await page.screenshot({ clip });
+      // Hiding the border is the only thing that can change a strip this narrow and this inside the row.
+      await second.evaluate((el) => (el.style.borderLeftColor = 'transparent'));
+      const hidden = await page.screenshot({ clip });
+      expect(painted.equals(hidden), 'the seam is not painted: its own row clips it').toBe(false);
     });
-    expect(seam.style, 'the second row has no left border below lg').toBe('solid');
-    expect(seam.width).toBeGreaterThan(0);
-    const clip = { x: seam.x - 1, y: seam.y + 2, width: seam.width + 2, height: seam.height - 4 };
-    const painted = await page.screenshot({ clip });
-    // Hiding the border is the only thing that can change a strip this narrow and this inside the row.
-    await second.evaluate((el) => (el.style.borderLeftColor = 'transparent'));
-    const hidden = await page.screenshot({ clip });
-    expect(painted.equals(hidden), 'the seam is not painted: its own row clips it').toBe(false);
-    await context.close();
   });
 });
