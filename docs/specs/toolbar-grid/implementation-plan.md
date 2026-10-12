@@ -1,7 +1,7 @@
 # Implementation Plan: The toolbar as a grid: dividers, switches and shared columns
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — 2026-10-12 by the product owner ("approve, go with your recommendations"): CQ-1 (a) keep a quieter search outline that clears 3:1; CQ-2 (a) drop the dashed locked outline; CQ-3 (a) a promoted command wins over the shared column
 - **Owner:** web
 
 ## Breakdown
