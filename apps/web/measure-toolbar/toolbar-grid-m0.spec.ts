@@ -45,6 +45,12 @@ const PASSWORD = 'correct-horse-battery';
 const PHOTO_DIR = '../../docs/specs/toolbar-grid/photos';
 /** Only the untouched tree is photographed: a prototype run must never overwrite the "before" set. */
 const PHOTOS = TAG === 'before';
+/**
+ * `M0_TAG=after` (M5-T1) takes the same four-cell, four-state set to `photos/after-*`, so the
+ * "before" files are never rewritten. The forced-colours stills stay a "before" thing.
+ */
+const AFTER_PHOTOS = TAG === 'after';
+const PHOTO_PREFIX = AFTER_PHOTOS ? 'after' : 'm0';
 
 interface Cell {
   label: string;
@@ -366,7 +372,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
 
       /** Header + band + ~120 px of canvas, so a reader sees what the bar sits above. */
       const shoot = async (cell: Cell, state: string, bandBottom: number): Promise<void> => {
-        const file = `m0-${pointer}-${cell.label}-${state}.png`;
+        const file = `${PHOTO_PREFIX}-${pointer}-${cell.label}-${state}.png`;
         await page.screenshot({
           path: `${PHOTO_DIR}/${file}`,
           clip: {
@@ -386,7 +392,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
           const reading = await page.evaluate(readDeck);
           const markers = await page.evaluate(readMarkers);
           cells.push({ state, cell: c.label, markers, ...reading });
-          if (photos && PHOTOS && !LEAN && PHOTO_LABELS.has(c.label)) {
+          if (photos && (PHOTOS || AFTER_PHOTOS) && !LEAN && PHOTO_LABELS.has(c.label)) {
             await shoot(c, state, Number(reading.bandBottom));
           }
         }
