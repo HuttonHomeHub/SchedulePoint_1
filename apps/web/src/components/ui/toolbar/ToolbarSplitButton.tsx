@@ -4,6 +4,7 @@ import { useId } from 'react';
 import type { ToolbarLabelState } from './toolbar-registry';
 import {
   toolbarControlVariants,
+  toolbarIconClass,
   toolbarLabelClass,
   toolbarSplitCaretVariants,
 } from './toolbar-styles';
@@ -96,6 +97,8 @@ export interface ToolbarSplitButtonProps {
    * button cannot be `'roomy'`: its tooltip is a native `title`.
    */
   labelState?: ToolbarLabelState;
+  /** Paint the glyph a step quieter than the label — pass the render API's `quietIcons` (toolbar-grid M3). */
+  quietIcons?: boolean;
   /** The primary's tooltip; states the reason when `disabled`. */
   title: string;
   icon: React.ReactNode;
@@ -137,6 +140,7 @@ export function ToolbarSplitButton({
   caretDisabledReason,
   haspopup = 'menu',
   labelState = 'visible',
+  quietIcons = false,
   title,
   icon,
   label,
@@ -156,6 +160,7 @@ export function ToolbarSplitButton({
   const primaryDescriptionId = !primaryOff && primaryDescription ? `${reasonIds}-pd` : undefined;
   const primaryDescribedBy = primaryReasonId ?? primaryDescriptionId;
   const caretReasonId = caretOff && caretDisabledReason ? `${reasonIds}-c` : undefined;
+  const controlState = pressed ? (activeKind ?? 'armed') : open ? 'open' : 'rest';
   return (
     <span
       className={cn(
@@ -169,7 +174,7 @@ export function ToolbarSplitButton({
         // the two was drafted and withdrawn, because its stated reason — a rotating caret marking
         // an open disclosure — described a behaviour this product does not have.
         toolbarControlVariants({
-          state: pressed ? (activeKind ?? 'armed') : open ? 'open' : 'rest',
+          state: controlState,
           disabled: primaryOff && caretOff,
         }),
         'gap-0 p-0',
@@ -220,7 +225,15 @@ export function ToolbarSplitButton({
         // same gate for the mirror-image reason.
         className="inline-flex min-h-(--control-h) items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
       >
-        {icon}
+        <span
+          aria-hidden="true"
+          className={cn(
+            'inline-flex shrink-0 items-center',
+            quietIcons && toolbarIconClass(labelState, controlState),
+          )}
+        >
+          {icon}
+        </span>
         {labelClass ? <span className={labelClass}>{label}</span> : null}
         {primaryReasonId ? (
           <span id={primaryReasonId} className="sr-only">

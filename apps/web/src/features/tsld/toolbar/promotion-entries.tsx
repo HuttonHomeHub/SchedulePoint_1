@@ -276,6 +276,10 @@ export const ADD_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] = 
 ).map(([type, rank, place, icon]) => ({
   id: `add-${type === 'START_MILESTONE' ? 'start' : 'finish'}-milestone`,
   label: `Add: ${ACTIVITY_TYPE_LABELS[type]}`,
+  // "Add:" is dropped from the printed word (toolbar-grid M3, D-2): the Add control beside it already
+  // says what these are, and the word it costs is 33.5 px a milestone (`m0-measurement.md` §3). The
+  // name keeps it, and the printed text is contained in the name (WCAG 2.5.3).
+  visibleLabel: ACTIVITY_TYPE_LABELS[type],
   menuLabel: ACTIVITY_TYPE_LABELS[type],
   menuName: 'Add',
   icon,

@@ -280,6 +280,21 @@ So, for any command surface:
   (`oklch(0.53 0.02 264)`: 3.03:1 on the band and 3.44:1 on its own fill, against 4.39:1 and 4.99:1 for
   `--input`), scoped to that one field because `--chrome-input` is also the outline of every other chrome field
   and the segmented control's option boundary; a text field with no boundary fails 1.4.11.
+- **A glyph is a step quieter than its label, and the pen is the only saturated thing at rest** (toolbar-grid M3,
+  R4). `toolbarIconClass(labelState, state)` gives a glyph beside a visible label `--muted-foreground` (7.98:1 on
+  the band) at rest; an icon-only control's glyph keeps `--foreground` because it is the label, and a muted one
+  would read as a shaded control. Open, selected, armed and the pen take the label's ink. It applies to the
+  **band only** (the deck and the page header's two toolbars); the selection bar and the diagram-corner cluster
+  keep today's ink. `command-surface.spec.ts` reads every colour a deck control paints at 1912 × 1080, pen held
+  and nothing armed, and asserts that none but the pen's has OKLCH chroma above 0.06.
+- **Two marks between controls, and one is a placement the registry declares** (toolbar-grid M3, D-4). The
+  full-height divider is the boundary between deck groups; the short **inset rule** is the finer mark inside
+  one: between a group's sections, before the tools that follow the pen, before the history track, and before the
+  Settings… gear that closes the DO row. The last three come from `ToolbarItem.ruleBefore` and `groupTail` and
+  exist **from `--container-roomy` only** (79 rem of deck, 80 rem of window): below it each costs a line at
+  1024 with Link armed (DO has 5.2 px free there; the gear costs 12 px and the two rules 24, measured), so the
+  gear stays after Earned value and Author has no extra rules, and the 1024 floor keeps every row's line count in
+  every state (`floor-states.spec.ts` drives Link armed at the floor).
 - **A shaded control is quiet, not dimmed** (M6 V3). `toolbarControlVariants`' `disabled` is
   `text-muted-foreground bg-transparent shadow-none` and `cursor-default`, no longer `opacity-50`: a lens
   that is on but shaded keeps a 2 px underline in the same ink, and `forced-colors:[color:GrayText]` keeps
@@ -308,12 +323,17 @@ So, for any command surface:
   there `'roomy'` resolves to `'always'`. Because CSS can hide the label with no JavaScript involved,
   a `'roomy'` control always mounts a `description` tooltip, and only a plain `onActivate` item — the
   kind `ToolbarButton` renders and gives that tooltip — may declare it (`defineToolbar` refuses the
-  rest). **One today: Apply levelled dates…**, which is `'roomy-fine'` — the same rule for a mouse, and
-  icon-only under a coarse pointer at every width (`pointer-coarse:`), because the word cost touch a deck line
-  at 1280 (owner decision, 2026-10-09). Baseline overlay, Comments and Settings… were `'roomy'` until M6 and
-  Resource view until the M5 review; all four are `'never'` now (owner decisions, 2026-10-10), keeping an
-  `aria-label` name and a `description` tooltip. Baseline overlay's glyph is `Diff`, not the `Layers` that
-  `Baselines…` wears in Analysis nor Compare revisions' `GitCompareArrows`.
+  rest). **Two today, both `'roomy-fine'`** — the same rule for a mouse, and icon-only under a coarse pointer at
+  every width (`pointer-coarse:`). **Apply levelled dates…** because the word cost touch a deck line at 1280
+  (owner decision, 2026-10-09). **Baseline overlay** (owner decision, 2026-10-12, reversing the 2026-10-10
+  icon-only one): it prints **Baseline** (`visibleLabel`; the name is still
+  "Baseline overlay") on a mouse from 79 rem and is a glyph and a tooltip below it and under any touch pointer,
+  because with the word on, touch LOOK wraps at 1280, 1440 and 2160 with a conflict showing (`m0-measurement.md`
+  §5). Comments, Settings… and Resource view were `'roomy'` until M6 and the M5 review; all three are `'never'`
+  now (owner decisions, 2026-10-10), keeping an `aria-label` name and a `description` tooltip. Baseline
+  overlay's glyph is `Diff`, not the `Layers` that `Baselines…` wears in Analysis nor Compare revisions'
+  `GitCompareArrows`. **Recent edits wears `History`**, the glyph of a list of past states, where it wore the
+  caret every menu button wears.
 - **Free space is used: a menu command promotes onto the deck by a declared ladder** (toolbar-redesign M5,
   R9, spec §4.11). The stages are six rem viewport thresholds — `PROMOTE_80` (1280 px), `PROMOTE_90` (1440),
   `PROMOTE_100` (1600), `PROMOTE_119_5` (1912), `PROMOTE_135` (2160), `PROMOTE_160` (2560) — so a reader who raised the default font size gets the room

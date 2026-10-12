@@ -1354,26 +1354,35 @@ test.describe('The plan command surface', () => {
    * Verified red by making `Deck` resolve against the `'toolbar'` surface (the labels stop going
    * icon-only at 1024) and by removing `@container/deck` (the width assertion fails at every cell).
    */
-  const ROOMY_ITEMS: readonly { id: string; label: string; description: string }[] = [
+  const ROOMY_ITEMS: readonly {
+    id: string;
+    label: string;
+    /** The word the button prints when it is shorter than its name (WCAG 2.5.3: contained in it). */
+    visible?: string;
+    description: string;
+  }[] = [
     {
       id: 'apply-levelling',
       label: 'Apply levelled dates…',
       description:
         'Place the bars that levelling delays on their levelled dates. Work after them follows its links.',
     },
-  ];
-
-  /**
-   * **Icon-only at every width** (`'never'`): Resource view (the M5 review) and Baseline overlay,
-   * Comments and Settings… (M6, owner decisions 2026-10-10). Each keeps its name in `aria-label` and
-   * its tooltip says what it does; none paints a word.
-   */
-  const ICON_ONLY_ITEMS = [
+    // The owner reversed Baseline's icon-only decision on 2026-10-12 (toolbar-grid M3): "Baseline"
+    // from 79 rem on a mouse, a glyph below and under any touch pointer (`'roomy-fine'`).
     {
       id: 'baseline-overlay',
       label: 'Baseline overlay',
+      visible: 'Baseline',
       description: 'Draw the active baseline beside each bar',
     },
+  ];
+
+  /**
+   * **Icon-only at every width** (`'never'`): Resource view (the M5 review), Comments and Settings…
+   * (M6, owner decisions 2026-10-10). Each keeps its name in `aria-label` and its tooltip says what
+   * it does; none paints a word. Baseline overlay was the fourth until 2026-10-12.
+   */
+  const ICON_ONLY_ITEMS = [
     {
       id: 'comments',
       label: 'Comments',
@@ -1423,11 +1432,12 @@ test.describe('The plan command surface', () => {
           parseFloat(wrapperStyle.paddingRight),
         containerType: deckStyle.containerType,
         containerName: deckStyle.containerName,
-        items: specs.map(({ id, label }) => {
+        items: specs.map(({ id, label, visible }) => {
           const control = deck.querySelector(`[data-toolbar-item="${id}"]`);
+          const word = visible ?? label;
           const text = control
             ? [...control.querySelectorAll('span')].find(
-                (s) => s.textContent?.trim() === label && s.getAttribute('aria-hidden') !== 'true',
+                (s) => s.textContent?.trim() === word && s.getAttribute('aria-hidden') !== 'true',
               )
             : undefined;
           return { id, labelWidth: text ? text.getBoundingClientRect().width : null };
@@ -1435,7 +1445,7 @@ test.describe('The plan command surface', () => {
       };
     }, ROOMY_ITEMS);
 
-  test('the roomy control is labelled from 79 rem and icon-only below it, and the icon-only four never paint a word', async () => {
+  test('the roomy controls are labelled from 79 rem and icon-only below it, and the icon-only three never paint a word', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
@@ -1993,6 +2003,216 @@ test.describe('The plan command surface', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  /**
+   * **The milestone presets print their type, not "Add:", and still name the action** (toolbar-grid M3,
+   * D-2, SC-13 (e)). "Add: Start milestone" is the accessible name (a set member is named with its set),
+   * and the button prints "Start milestone": the Add control beside it already says what these are, and
+   * the word cost 33.5 px a milestone. WCAG 2.5.3 holds because the printed text is contained in the
+   * name, asked here of the real controls rather than of the registry.
+   *
+   * The two promote at different widths (Start at 119.5 rem on a mouse, Finish at 135), so this reads
+   * 2560 px, where both are on the bar.
+   *
+   * **Verified red** by dropping `visibleLabel` from the entries in `promotion-entries.tsx`: the
+   * buttons then print "Add: Start milestone" and the printed-word assertion fails.
+   */
+  test('Start and Finish milestone print their type without "Add:" and keep "Add: …" as their name', async () => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.waitForTimeout(450);
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    for (const [id, printed, name] of [
+      ['add-start-milestone', 'Start milestone', 'Add: Start milestone'],
+      ['add-finish-milestone', 'Finish milestone', 'Add: Finish milestone'],
+    ] as const) {
+      const control = deck.locator(`[data-toolbar-item="${id}"]`);
+      await expect(control, `${id} is not on the bar at 2560`).toBeVisible();
+      await expect(control).toHaveAccessibleName(name);
+      const words = await control.evaluate((el) =>
+        [...el.querySelectorAll('span')]
+          .filter(
+            (s) => s.getAttribute('aria-hidden') !== 'true' && s.getBoundingClientRect().width > 2,
+          )
+          .map((s) => s.textContent?.trim() ?? ''),
+      );
+      expect(words, `${id} prints a different word`).toEqual([printed]);
+      expect(name.toLowerCase(), 'label in name (WCAG 2.5.3)').toContain(printed.toLowerCase());
+    }
+  });
+
+  /**
+   * **Settings… closes the DO row from 79 rem, and stays after Earned value below it** (toolbar-grid
+   * M3, owner decision 2026-10-12; SC-13 (f)). The rule before it is the section rule and exists only
+   * where the gear has moved. What is asserted is geometry and order together: the gear is the last
+   * DOM stop of the row AND its rightmost control (the DOM order is the reading order, WCAG 1.3.2),
+   * and below 79 rem it is neither last nor behind a rule, so the 1024 floor keeps its line count.
+   *
+   * **Verified red** by deleting `groupTail: true` from the gear (it then sits mid-row at every cell)
+   * and by making `useDeckTailRoom` answer `true` always (it then moves at 1024 and the below-79-rem
+   * half fails).
+   */
+  test("Settings… is the DO row's last control from 79 rem, behind a rule, and not below it", async () => {
+    test.setTimeout(180_000);
+    await ensurePen(page);
+    for (const cell of DIVIDER_CELLS) {
+      await page.setViewportSize(cell);
+      await page.waitForTimeout(450);
+      const reading = await page.evaluate(() => {
+        const row = document.querySelector(
+          '[role="toolbar"][aria-label="Plan commands"] [data-deck-row="do"]',
+        );
+        if (!row) throw new Error('no DO row');
+        const items = [...row.querySelectorAll('[data-toolbar-item]')];
+        const box = (el: Element): DOMRect => el.getBoundingClientRect();
+        const gear = items.find((el) => el.getAttribute('data-toolbar-item') === 'calendar');
+        if (!gear) throw new Error('the gear is not on the DO row');
+        const section = gear.closest('div.flex.flex-wrap');
+        const ruleWidth = section
+          ? Number.parseFloat(getComputedStyle(section, '::before').width)
+          : Number.NaN;
+        const rightmost = [...items].sort((a, b) => box(b).right - box(a).right)[0]!;
+        const previous = items[items.indexOf(gear) - 1];
+        return {
+          last: items[items.length - 1]?.getAttribute('data-toolbar-item') ?? '',
+          rightmost: rightmost.getAttribute('data-toolbar-item') ?? '',
+          previous: previous?.getAttribute('data-toolbar-item') ?? '',
+          alone: section?.querySelectorAll('[data-toolbar-item]').length ?? 0,
+          ruleWidth,
+        };
+      });
+      const at = `${String(cell.width)} px`;
+      if (cell.width >= 1280) {
+        expect(reading.last, `${at}: the gear is not the last stop`).toBe('calendar');
+        expect(reading.rightmost, `${at}: the gear is not the rightmost control`).toBe('calendar');
+        expect(reading.alone, `${at}: the gear shares its section`).toBe(1);
+        expect(reading.ruleWidth, `${at}: no rule before the gear`).toBe(1);
+      } else {
+        expect(reading.last, `${at}: the gear moved below 79 rem`).not.toBe('calendar');
+        expect(reading.previous, `${at}: the gear left its place after Analysis`).toBe('analysis');
+      }
+    }
+  });
+
+  /**
+   * **Add and Undo carry an inset rule from 79 rem, and below it the rule does not exist** (toolbar-grid
+   * M3, D-4). The wrapper is `display: contents` below the container, so it has no box and no pseudo
+   * element; from it, it is a box with a 1 px mark. What it must not be is a stop, a role or a name.
+   *
+   * **Verified red** by dropping `contents` from `DECK_RULE_BEFORE` (the wrapper is then a box at
+   * 1024) and by deleting `ruleBefore` from Undo (one wrapper, not two).
+   */
+  test('Add and Undo are each behind an inset rule from 79 rem, and none is drawn below it', async () => {
+    test.setTimeout(180_000);
+    await ensurePen(page);
+    for (const cell of DIVIDER_CELLS) {
+      await page.setViewportSize(cell);
+      await page.waitForTimeout(450);
+      const reading = await page.evaluate(() => {
+        const wrappers = [...document.querySelectorAll('[data-deck-rule-before]')];
+        return wrappers.map((w) => ({
+          stop: w.querySelector('[data-toolbar-item]')?.getAttribute('data-toolbar-item') ?? '',
+          display: getComputedStyle(w).display,
+          rule: Number.parseFloat(getComputedStyle(w, '::before').width),
+          role: w.getAttribute('role'),
+          tabindex: w.getAttribute('tabindex'),
+        }));
+      });
+      const at = `${String(cell.width)} px`;
+      expect(
+        reading.map((w) => w.stop),
+        `${at}: the rules`,
+      ).toEqual(['add-activity', 'undo']);
+      for (const w of reading) {
+        expect(w.role, `${at}: ${w.stop} wrapper has a role`).toBeNull();
+        expect(w.tabindex, `${at}: ${w.stop} wrapper is a stop`).toBeNull();
+        if (cell.width >= 1280) {
+          expect(w.rule, `${at}: no rule before ${w.stop}`).toBe(1);
+        } else {
+          expect(w.display, `${at}: the ${w.stop} wrapper has a box below 79 rem`).toBe('contents');
+          expect(Number.isNaN(w.rule), `${at}: a rule is drawn before ${w.stop}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  /**
+   * **The pen is the only saturated thing at rest** (toolbar-grid M3, SC-12). With the pen held and
+   * nothing armed, at the owner's 1912 × 1080, every colour a deck control paints (its ink, the ink of
+   * each glyph and label inside it, and any fill) has OKLCH chroma at most 0.06, except the pen. The
+   * chroma is computed in the page from the real computed colours, through a canvas so any colour
+   * syntax the browser keeps is read as the pixels it paints. The pen is also asserted to BE saturated,
+   * so a reading that found nothing cannot pass.
+   *
+   * A chosen member (Colour by Criticality) is a state and not rest: it is read as well, because the
+   * raised fill is the existing `--secondary` and this is what proves the track did not introduce a
+   * colour.
+   *
+   * **Verified red** by giving the quiet glyph class an amber ink (`text-primary` in
+   * `toolbarIconClass`): every labelled control's glyph then reads chroma above the bound.
+   */
+  test('the pen is the only saturated control at rest at 1912', async () => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1912, height: 1080 });
+    await page.waitForTimeout(450);
+    await ensurePen(page);
+    await page.mouse.move(2, 2);
+    const reading = await page.evaluate(() => {
+      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      if (!deck) throw new Error('the deck was not found');
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const g = canvas.getContext('2d', { willReadFrequently: true })!;
+      const lin = (v: number): number => {
+        const c = v / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      /** OKLCH chroma of a CSS colour, or null when it paints nothing. */
+      const chroma = (css: string): number | null => {
+        g.clearRect(0, 0, 1, 1);
+        g.fillStyle = '#000';
+        g.fillStyle = css;
+        g.fillRect(0, 0, 1, 1);
+        const px = g.getImageData(0, 0, 1, 1).data;
+        if (px[3] === 0) return null;
+        const lr = lin(px[0]!);
+        const lg = lin(px[1]!);
+        const lb = lin(px[2]!);
+        const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+        const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+        const sCone = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+        const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * sCone;
+        const b = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * sCone;
+        return Math.hypot(a, b);
+      };
+      const painted: { id: string; part: string; chroma: number }[] = [];
+      for (const control of deck.querySelectorAll('[data-toolbar-focusable]')) {
+        const id = control.getAttribute('data-toolbar-item') ?? '(unnamed)';
+        for (const el of [control, ...control.querySelectorAll('*')]) {
+          if (el.getBoundingClientRect().width < 1) continue;
+          const style = getComputedStyle(el);
+          const ink = chroma(style.color);
+          if (ink !== null)
+            painted.push({ id, part: `${el.tagName.toLowerCase()} ink`, chroma: ink });
+          const fill = chroma(style.backgroundColor);
+          if (fill !== null)
+            painted.push({ id, part: `${el.tagName.toLowerCase()} fill`, chroma: fill });
+        }
+      }
+      return painted;
+    });
+    expect(reading.length, 'the reading found no painted colour at all').toBeGreaterThan(50);
+    const loud = reading.filter((r) => r.chroma > 0.06 && r.id !== 'pen');
+    expect(
+      loud,
+      `a deck control other than the pen is saturated at rest: ${JSON.stringify(loud.slice(0, 6))}`,
+    ).toEqual([]);
+    expect(
+      Math.max(...reading.filter((r) => r.id === 'pen').map((r) => r.chroma)),
+      'the pen is not saturated: the reading is about nothing',
+    ).toBeGreaterThan(0.06);
   });
 
   // Last in the describe: its conflict state mutates the shared plan.
@@ -2623,7 +2843,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
    * Two lines on touch is **not** asserted anywhere in M1: M0 measured DO 143.7 px over at this
    * cell whatever is compacted, so that is a later milestone's claim, if ever.
    */
-  test('a coarse 1024 cell stays within four deck lines, Apply levelled dates… is icon-only, and Comments never paints a word', async () => {
+  test('a coarse 1024 cell stays within four deck lines, Apply levelled dates… and Baseline are icon-only, and Comments never paints a word', async () => {
     test.setTimeout(120_000);
     const pointer = await page.evaluate(() =>
       window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
@@ -2657,6 +2877,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
         };
         return {
           applyLabelWidth: labelOf('apply-levelling', 'Apply levelled dates…'),
+          baselineLabelWidth: labelOf('baseline-overlay', 'Baseline'),
           lines,
           controls: tops.length,
           deckWidth: deck.getBoundingClientRect().width,
@@ -2673,6 +2894,16 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       expect(
         reading.applyLabelWidth!,
         `Apply levelled dates… shows its word under touch at ${at}`,
+      ).toBeLessThanOrEqual(2);
+      // Baseline overlay is `'roomy-fine'` as well (owner decision 2026-10-12, M0 §5): with the word on,
+      // touch LOOK wraps at 1280, 1440 and 2160 with a conflict showing, so the word is a mouse's.
+      expect(
+        reading.baselineLabelWidth,
+        `Baseline has no label in the tree at ${at}`,
+      ).not.toBeNull();
+      expect(
+        reading.baselineLabelWidth!,
+        `Baseline shows its word under touch at ${at}`,
       ).toBeLessThanOrEqual(2);
       expect(reading.controls, `no controls in the deck at ${at}`).toBeGreaterThan(15);
       expect(

@@ -17,6 +17,10 @@ import { describe, expect, it } from 'vitest';
  * none, and the last case below pins that none of the four files it names reads one itself (the
  * claim is about those files, not the directory: a new file here is not scanned).
  *
+ * **A second read decides a placement, not a size** (toolbar-grid M3): `use-deck-tail-room.ts` asks a
+ * media query (`DECK_TAIL_ROOM_QUERY`, the promotion ladder's first stage) whether the deck has room to
+ * send a `groupTail` item to the end of its group. It is its own file for the same reason.
+ *
  * Comments are stripped first (the repository has recorded four gates matching their own prose).
  */
 const DIR = join(process.cwd(), 'src/components/ui/toolbar');
@@ -61,5 +65,12 @@ describe('Deck and Toolbar measure no width to decide a layout', () => {
     for (const file of ['Deck.tsx', 'Toolbar.tsx', 'ToolbarButton.tsx', 'ToolbarPopover.tsx']) {
       expect(code(file), `${file} reads a media query`).not.toMatch(/useMediaQuery|matchMedia/);
     }
+  });
+
+  it('the tail-room read is the shared query, decides a placement, and Deck imports it', () => {
+    const hook = code('use-deck-tail-room.ts');
+    expect(hook).toMatch(/useMediaQuery\(DECK_TAIL_ROOM_QUERY/);
+    expect(hook).not.toMatch(/matchMedia|innerWidth|ResizeObserver/);
+    expect(code('Deck.tsx')).toMatch(/useDeckTailRoom\(\)/);
   });
 });

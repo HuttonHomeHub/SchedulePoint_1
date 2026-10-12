@@ -1,7 +1,7 @@
 import { forwardRef, useId } from 'react';
 
 import type { ToolbarLabelState } from './toolbar-registry';
-import { toolbarControlVariants, toolbarLabelClass } from './toolbar-styles';
+import { toolbarControlVariants, toolbarIconClass, toolbarLabelClass } from './toolbar-styles';
 
 import { useTooltip, type TooltipPlacementOptions } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -48,6 +48,12 @@ export interface ToolbarButtonProps {
    * absent, and the container query alone decides whether it is.
    */
   labelState?: ToolbarLabelState;
+  /**
+   * Paint the glyph a step quieter than the label (`toolbarIconClass`) — opt-in, passed by the
+   * command deck and the header's toolbars and by nothing else (toolbar-grid M3, D-5). Absent ⇒
+   * the glyph keeps the control's ink, as the selection bar's does.
+   */
+  quietIcons?: boolean;
   pressed?: boolean;
   /**
    * Which picture a pressed control takes (console epic M3). `'armed'` is a modal tool holding the
@@ -86,6 +92,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       description,
       icon,
       labelState = 'visible',
+      quietIcons = false,
       pressed,
       activeKind,
       busy,
@@ -164,6 +171,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr
     // chain — the explicit `aria-describedby` below would otherwise overwrite the spread's.
     const labelClass = toolbarLabelClass(labelState);
+    const controlState = pressed === true ? (activeKind ?? 'selected') : 'rest';
     const fullDescribedBy =
       [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
     return (
@@ -201,14 +209,20 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         }}
         className={cn(
           toolbarControlVariants({
-            state: pressed === true ? (activeKind ?? 'selected') : 'rest',
+            state: controlState,
             disabled: disabled === true,
           }),
           className,
         )}
       >
         {icon ? (
-          <span aria-hidden="true" className="inline-flex shrink-0 items-center">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'inline-flex shrink-0 items-center',
+              quietIcons && toolbarIconClass(labelState, controlState),
+            )}
+          >
             {icon}
           </span>
         ) : null}

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  DECK_TAIL_ROOM_QUERY,
   DESIGNED_MIN_WIDTH_PX,
   DESIGNED_MIN_WIDTH_QUERY,
   designedMinWidthPx,
@@ -103,5 +104,19 @@ describe('the promotion stages', () => {
 
   it('are spelled as min-width rem queries', () => {
     expect(promotionStageQuery(119.5)).toBe('(min-width: 119.5rem)');
+  });
+});
+
+describe('DECK_TAIL_ROOM_QUERY (toolbar-grid M3)', () => {
+  it('is the first promotion stage’s width, which is where the deck’s container reaches --container-roomy', () => {
+    // 80 rem of viewport less the band's 8 px inset either side is the 79 rem container: the stylesheet's
+    // `@roomy/deck:` rules and the DOM move of a `groupTail` item then begin at the same window width.
+    expect(DECK_TAIL_ROOM_QUERY).toBe(`(width >= ${String(PROMOTION_STAGES[0].rem)}rem)`);
+    expect(DECK_TAIL_ROOM_QUERY).toBe('(width >= 80rem)');
+  });
+
+  it('is not spelled as any stage query, so the harness that stubs the stages leaves it alone', () => {
+    // `M5_UNPROMOTED` answers "not reached" by exact string; an equal string would be stubbed with them.
+    expect(PROMOTION_STAGE_REMS.map(promotionStageQuery)).not.toContain(DECK_TAIL_ROOM_QUERY);
   });
 });

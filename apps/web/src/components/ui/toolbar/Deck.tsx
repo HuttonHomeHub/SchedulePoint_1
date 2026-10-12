@@ -16,6 +16,7 @@ import {
 } from './toolbar-registry';
 import {
   DECK_GROUP_DIVIDER,
+  DECK_RULE_BEFORE,
   DECK_TRAILING_SPACER,
   resolveLabelVisibility,
   TOOLBAR_INSET_RULE,
@@ -23,6 +24,7 @@ import {
 } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useDeckRowOrder } from './use-deck-row-order';
+import { useDeckTailRoom } from './use-deck-tail-room';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
@@ -164,6 +166,25 @@ export interface DeckProps<Ctx> {
   className?: string;
 }
 
+/**
+ * A deck group's sections from its registry sub-groups, in order. With `tailRoom`, every `groupTail`
+ * item leaves its own section for **one** section after the last, which the deck draws behind the
+ * ordinary section rule; without it nothing moves. Empty sections are dropped so a rule never has
+ * nothing on one side of it. Pure, and the one place the tail is decided.
+ */
+function sectionsOf<T extends { item: { groupTail?: true } }>(
+  subGroups: readonly (readonly T[])[],
+  tailRoom: boolean,
+): T[][] {
+  const tail = tailRoom
+    ? subGroups.flatMap((entries) => entries.filter((r) => r.item.groupTail))
+    : [];
+  const kept = subGroups.map((entries) =>
+    tailRoom ? entries.filter((r) => !r.item.groupTail) : [...entries],
+  );
+  return [...kept, tail].filter((section) => section.length > 0);
+}
+
 /** Whether the deck's line is wider than its box — true only where US-6's scrolling line applies. */
 function deckScrolls(deck: HTMLElement): boolean {
   return deck.scrollWidth > deck.clientWidth;
@@ -193,6 +214,10 @@ export function Deck<Ctx>({
   // LOOK then DO at the floor and wider; DO then LOOK on the scrolling line below it, rendered in
   // that order so the Tab and arrow sequence is the order on screen (`use-deck-row-order.ts`).
   const rowOrder = useDeckRowOrder(DECK_ROWS);
+  // Where the deck has room, a `groupTail` item leaves its section for a section of its own at the end
+  // of its deck group (`ToolbarItem.groupTail`). An input of the memo below, so the DOM order, the
+  // roving sequence and the first Tab stop all follow it together.
+  const tailRoom = useDeckTailRoom();
 
   /** Deck group → its registry sub-groups → the items in each, preserving registry order. */
   const groups = useMemo(() => {
@@ -207,15 +232,16 @@ export function Deck<Ctx>({
         ...group,
         // A sub-group with no visible items contributes no hairline — otherwise a card whose middle
         // section is entirely hidden by predicates draws a rule with nothing on one side of it.
-        sections: group.members
-          .map((member) => byRegistryGroup.get(member) ?? [])
-          .filter((section) => section.length > 0),
+        sections: sectionsOf(
+          group.members.map((member) => byRegistryGroup.get(member) ?? []),
+          tailRoom,
+        ),
       }))
         .filter((group) => group.sections.length > 0)
         // The groups follow the row order too, so the first roving stop is the first thing on screen.
         .sort((a, b) => rowOrder.indexOf(a.row) - rowOrder.indexOf(b.row))
     );
-  }, [resolved, rowOrder]);
+  }, [resolved, rowOrder, tailRoom]);
 
   /**
    * One roving tab stop across the whole deck — the COMMANDS only, since the fold's removal
@@ -340,6 +366,7 @@ export function Deck<Ctx>({
           active: r.active,
           activeKind: r.activeKind,
           labelState,
+          quietIcons: true,
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
             : {
@@ -360,6 +387,7 @@ export function Deck<Ctx>({
         icon={r.icon}
         {...(r.busy ? { busy: true } : {})}
         labelState={labelState}
+        quietIcons
         {...(r.item.isActive ? { pressed: r.active } : {})}
         activeKind={r.activeKind}
         disabled={!r.enabled}
@@ -575,21 +603,36 @@ export function Deck<Ctx>({
                         >
                           {clusterRuns(section).map((run) => {
                             const first = run.entries[0];
-                            if (run.cluster === undefined || first === undefined) {
-                              return run.entries.map(renderControl);
-                            }
-                            // A set's caption is presentational and leads the unit; the controls are the track.
+                            if (first === undefined) return null;
                             const lead = run.entries.filter((r) => r.item.presentational);
-                            return (
-                              <ClusterTrack
+                            // A set's caption is presentational and leads the unit; the controls are the track.
+                            const body =
+                              run.cluster === undefined ? (
+                                run.entries.map(renderControl)
+                              ) : (
+                                <ClusterTrack
+                                  key={first.item.id}
+                                  cluster={run.cluster}
+                                  {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
+                                >
+                                  {run.entries
+                                    .filter((r) => !r.item.presentational)
+                                    .map(renderControl)}
+                                </ClusterTrack>
+                              );
+                            // `ruleBefore` draws its inset rule on a wrapper round the whole run, from
+                            // `--container-roomy` only: below it the wrapper is `display: contents`, so it
+                            // has no box and the 1024 floor is what it was (`DECK_RULE_BEFORE`).
+                            return first.item.ruleBefore ? (
+                              <span
                                 key={first.item.id}
-                                cluster={run.cluster}
-                                {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
+                                data-deck-rule-before
+                                className={DECK_RULE_BEFORE}
                               >
-                                {run.entries
-                                  .filter((r) => !r.item.presentational)
-                                  .map(renderControl)}
-                              </ClusterTrack>
+                                {body}
+                              </span>
+                            ) : (
+                              body
                             );
                           })}
                         </div>

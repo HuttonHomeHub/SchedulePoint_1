@@ -1,6 +1,7 @@
 import { type Browser, type Page } from '@playwright/test';
 
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { pickAddKind } from '../e2e-support/toolbar';
 import {
   createHierarchy,
   diagramList,
@@ -86,18 +87,19 @@ async function read(page: Page): Promise<Reading> {
 async function expectFloor(
   page: Page,
   state: string,
-  opts: { canvas: boolean; cluster: boolean },
+  opts: { canvas: boolean; cluster: boolean; doLines?: number },
 ): Promise<Reading> {
+  const doLines = opts.doLines ?? 1;
   await page.waitForTimeout(500);
   const r = await read(page);
   // The peer's pen and the cycling read-out are the states `command-surface.spec.ts` does not drive
   // for dividers (toolbar-grid M1, SC-3): no group paints a box and no divider opens a line.
   await expectDividersOnlyBetweenGroups(page, `${state} at the floor`);
   expect(r.lines, `${state}: the deck sits on ${r.lines} lines at the floor`).toBeLessThanOrEqual(
-    2,
+    1 + doLines,
   );
   expect(r.look, `${state}: LOOK wraps to ${r.look} lines`).toBe(1);
-  expect(r.do, `${state}: DO wraps to ${r.do} lines`).toBe(1);
+  expect(r.do, `${state}: DO wraps to ${r.do} lines`).toBe(doLines);
   expect(r.cluster, `${state}: the cluster is ${r.cluster ? 'present' : 'absent'}`).toBe(
     opts.cluster,
   );
@@ -180,6 +182,38 @@ test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)',
     await reopen(true);
     await page.setViewportSize(FLOOR);
     await expectFloor(page, 'base', { canvas: true, cluster: true });
+
+    // ---- Link armed: the state the gear's move alone would have broken ---------------------------
+    // Link armed leaves DO 5.2 px at 1024 on a mouse, and the gear at the row's end costs 12 px, so the
+    // move and the two inset rules apply from 79 rem only (owner decision, 2026-10-12;
+    // `m0-measurement.md` §4). Verified red by making `useDeckTailRoom` answer `true` always and by
+    // dropping `contents` from `DECK_RULE_BEFORE`: DO wraps to two lines here.
+    await reopen(true);
+    await page.locator('[data-toolbar-item="link-tool"]').first().click();
+    await expect(page.locator('[data-toolbar-item="link-tool"]').first()).toHaveText(/^Linking/);
+    await page.setViewportSize(FLOOR);
+    await expectFloor(page, 'link armed', { canvas: true, cluster: true });
+
+    // ---- Add armed: the default type, then the longest label ---------------------------------------
+    // "Adding Task" fits DO at the floor. "Adding Finish milestone" is the widest state the deck has
+    // and DO wraps to two lines with it TODAY (`m0-measurement.md` §0.3: 75.7 px over at 1024 on a
+    // mouse), so the bar is that count and not one: the change must not add a third line.
+    await reopen(true);
+    await page.locator('[data-toolbar-item="add-activity"]').first().click();
+    await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(/^Adding/);
+    await page.setViewportSize(FLOOR);
+    await expectFloor(page, 'add armed', { canvas: true, cluster: true });
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await pickAddKind(page, 'Finish milestone');
+    await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
+      /^Adding Finish milestone/,
+    );
+    await page.setViewportSize(FLOOR);
+    await expectFloor(page, 'add armed (Finish milestone)', {
+      canvas: false,
+      cluster: true,
+      doLines: 2,
+    });
 
     // ---- selection (a bar docks in the foot row: lines only) ---------------------------------
     await reopen(true);

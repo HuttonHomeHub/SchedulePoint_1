@@ -234,6 +234,7 @@ describe('derivePromotedItems', () => {
           { promotion: { stage: 4, pointer: 'fine' }, armed: false },
           {
             labelState: 'visible',
+            quietIcons: false,
             disabled: false,
             disabledReason: undefined,
             active: false,

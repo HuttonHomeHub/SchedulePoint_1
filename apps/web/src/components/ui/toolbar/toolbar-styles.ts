@@ -1,4 +1,4 @@
-import { cva } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-registry';
 
@@ -276,6 +276,19 @@ export const TOOLBAR_TRACK_SWITCH = [
   '[&>[aria-pressed=true][aria-disabled=true]]:forced-colors:ring-0',
 ].join(' ');
 
+/**
+ * **The inset rule `ruleBefore` draws, from `--container-roomy` only** (toolbar-grid M3, D-4). It is the
+ * section rule (`TOOLBAR_INSET_RULE`) put on a wrapper round the item or track that follows it, with
+ * the same `ml-1 pl-2` the deck's sections use, so the three marks on a row (group divider, section
+ * rule, this) are two strengths and one geometry. Below `--container-roomy` the wrapper is
+ * `display: contents`: it has no box, draws nothing and costs the row nothing, which is how the
+ * 1024 floor keeps every row's line count in every state (`m0-measurement.md` §4). Not a variant of
+ * `TOOLBAR_INSET_RULE` because the rule must not exist at all below the container, and a `relative`
+ * wrapper with a `before:` would still reserve its padding.
+ */
+export const DECK_RULE_BEFORE =
+  'contents @roomy/deck:relative @roomy/deck:inline-flex @roomy/deck:items-stretch @roomy/deck:ml-1 @roomy/deck:pl-2 @roomy/deck:before:absolute @roomy/deck:before:inset-y-1/4 @roomy/deck:before:left-0 @roomy/deck:before:w-px @roomy/deck:before:bg-border';
+
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
   // `opacity-70`: `--muted-foreground` inside the chrome scope is `--chrome-muted-foreground`,
@@ -532,4 +545,42 @@ export function toolbarLabelMinWidthClass(state: ToolbarLabelState): string {
     return 'min-w-12 @max-roomy/deck:min-w-9 pointer-coarse:min-w-(--control-h)';
   }
   return state === 'roomy' ? 'min-w-12 @max-roomy/deck:min-w-9' : 'min-w-12';
+}
+
+/** A control's state in the ladder — what {@link toolbarIconClass} reads, and the CVA's own `state`. */
+export type ToolbarControlState = NonNullable<VariantProps<typeof toolbarControlVariants>['state']>;
+
+/**
+ * **The one class helper for a glyph's ink** (toolbar-grid M3, R4, SC-11): a glyph beside a visible
+ * label is a step quieter than the label, so the pen's amber slab is the only saturated thing at rest
+ * and the eye reads the words first. Called by every trigger that paints a glyph, which is what
+ * `toolbar-icon.structural.test.ts` pins; the surfaces that opt in (`quietIcons`: the deck and the
+ * header's toolbars) are the only callers that apply it.
+ *
+ * - `rest` with a visible label: `--muted-foreground`. A `'roomy'` label comes and goes in CSS, so the
+ *   glyph is muted only while the label shows and goes back to the control's own ink when the
+ *   label is `sr-only` (`@max-roomy/deck:`); `'roomy-fine'` also goes back under a coarse pointer.
+ *   It is `inherit` and not `text-foreground` so a shaded control's glyph stays shaded.
+ * - `rest` icon-only: **inherit** (`--foreground`). The glyph is the whole control, and a muted one
+ *   would read as shaded, which is a different fact (`toolbarControlVariants` `disabled`).
+ * - `open`, `selected`, `armed`, `primary`: inherit the state's own ink, which is what says the state.
+ *
+ * `forced-colors:text-inherit` keeps the author colour from replacing a shaded control's `GrayText`
+ * with `CanvasText` on the glyph: forced colours override an author `color`, and inheriting is what
+ * lets the control's system colour reach the glyph.
+ */
+export function toolbarIconClass(
+  labelState: ToolbarLabelState,
+  state: ToolbarControlState,
+): string {
+  if (state !== 'rest' || labelState === 'hidden') return '';
+  const quiet = 'text-muted-foreground forced-colors:text-inherit';
+  switch (labelState) {
+    case 'roomy':
+      return `${quiet} @max-roomy/deck:text-inherit`;
+    case 'roomy-fine':
+      return `${quiet} @max-roomy/deck:text-inherit pointer-coarse:text-inherit`;
+    case 'visible':
+      return quiet;
+  }
 }

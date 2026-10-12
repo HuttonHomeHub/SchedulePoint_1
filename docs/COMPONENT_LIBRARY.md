@@ -429,6 +429,35 @@ name**: the "no role, no name" rule is for the wrappers clustering makes, not fo
 (ADR-0119). The caption beside the Colour and Link "Type" sets is the label size (`text-sm`), muted.
 `Deck` and `Toolbar` props are unchanged.
 
+**`ruleBefore` and `groupTail`: two placements a registry item can ask the deck for** (toolbar-grid M3). Both are
+declared on the item, never special-cased by id in `Deck`, and `Toolbar` ignores both.
+`ruleBefore?: true` draws a short inset rule (the section rule's geometry) in the gap before the item, or before
+the whole track when the item is the first member of a cluster: Add carries one (the pen leads its group and the
+tools follow it, ADR-0133) and so does Undo. `Deck` wraps the run in a plain `<span data-deck-rule-before>` with no
+role, name or stop, and the wrapper is `display: contents` **below `--container-roomy`**, so it has no box and no
+mark there (`DECK_RULE_BEFORE`): the rule costs a row 12 px, which the 1024 floor does not have in every state.
+`groupTail?: true` sends the item, where the deck has room, to a section of its own after every section of its
+deck group, behind the ordinary section rule: Settings… is the end of the DO row from 80 rem of viewport (the
+width at which the deck's container reaches `--container-roomy`), and stays after Analysis below it. **The DOM
+order changes, not the CSS order** (`useDeckTailRoom`, a media-query read in its own file like `useDeckRowOrder`),
+because an `order` on a flex child would split the screen from the Tab and arrow sequence (WCAG 1.3.2, 2.4.3).
+`defineToolbar` refuses `ruleBefore` on the first item of a group (the group divider is already there) and on a
+later cluster member, `groupTail` inside a segment or a cluster, either on a presentational caption, and both
+on one item.
+
+**`toolbarIconClass(labelState, state)` and `quietIcons`: a glyph is a step quieter than its label** (toolbar-grid
+M3). `toolbar-styles.ts` exports the one rule for a toolbar glyph's ink, beside `toolbarLabelClass`: at rest,
+beside a **visible** label, `--muted-foreground`; an **icon-only** glyph keeps the control's ink (it is the whole
+control, and a muted one reads as shaded); `open`, `selected`, `armed` and `primary` take the state's own ink. A
+`'roomy'` label comes and goes in CSS, so its glyph is muted only while the word shows and gives back the control's
+ink (`inherit`, so a shaded control stays shaded) under `@max-roomy/deck:`; `'roomy-fine'` also gives it back
+under a coarse pointer. It is **opt-in**: `ToolbarButton`, `ToolbarPopover` and `ToolbarSplitButton` take
+`quietIcons?: boolean`, `ToolbarItemRenderApi` carries `quietIcons: boolean` for a custom `render` trigger, and
+`Toolbar` takes the same prop. `Deck` passes it for every control, and the page header's two toolbars (Plan
+details, Plan view) pass it; **the selection bar and the diagram-corner cluster do not** (D-5; the toolbar-grid plan files the
+follow-up that extends it, M5-T2). `toolbar-icon.structural.test.ts` refuses a trigger that paints a glyph without calling the
+helper. `ToolbarItemRenderApi.quietIcons` is a required member: a hand-built API object states it.
+
 **`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional
 `groupOrder`, the left-to-right order of its taxonomy groups, for a surface whose subject is **one object**
 (the selection bar leads with the activity's own `object` group and trails the `find` viewing controls). Four
