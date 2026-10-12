@@ -1,26 +1,26 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.7.6",
+    "better-auth": "1.7.7",
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.2",
-    "nodemailer": "10.0.13",
+    "nodemailer": "10.0.16",
     "zod": "4.6.5",
     "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.89.0",
     "react-dom": "19.3.0",
-    "lucide-react": "1.49.0",
+    "lucide-react": "1.54.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.41",
     "@tanstack/history": "1.162.4",
     "@tanstack/router-core": "1.171.34",
-    "playwright-core": "1.63.0",
+    "playwright-core": "1.64.0",
     "tailwindcss": "4.3.3",
-    "@tanstack/query-core": "5.104.0",
+    "@tanstack/query-core": "5.104.1",
     "@nestjs/core": "11.2.7",
     "@nestjs/common": "11.2.7",
     "eslint-plugin-react-hooks": "7.1.1",
-    "@tanstack/react-query": "5.104.0",
+    "@tanstack/react-query": "5.104.1",
     "body-parser": "2.3.0",
     "eslint": "9.39.5",
     "@prisma/client": "6.19.3"
@@ -590,7 +590,7 @@
       "ref": "index.mjs:311-324",
       "package": "better-auth",
       "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "311-324",
+      "lines": "314-321",
       "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
       "citedBy": [
         "docs/TECH_DEBT.md",
@@ -602,7 +602,7 @@
       "ref": "index.mjs:311-325",
       "package": "better-auth",
       "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "311-325",
+      "lines": "314-321",
       "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
       "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
     },
@@ -610,7 +610,7 @@
       "ref": "index.mjs:64-70",
       "package": "better-auth",
       "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "64-70",
+      "lines": "64-73",
       "anchor": "function rateLimitResponse(retryAfter) {",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -737,7 +737,7 @@
       "ref": "sign-in.mjs:264",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "263",
+      "lines": "264",
       "anchor": "rememberMe: z.boolean()",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -748,7 +748,7 @@
       "ref": "sign-in.mjs:339-351",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "341-353",
+      "lines": "342-354",
       "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.email, void 0, ctx.context.options.emailVerification?.expiresIn);",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
@@ -759,7 +759,7 @@
       "ref": "sign-in.mjs:353",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "352",
+      "lines": "353",
       "anchor": "const session = await ctx.context.internalAdapter.createSession(",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -928,7 +928,7 @@
       "ref": "lucide-react.d.ts:4306",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "4306",
+      "lines": "4319",
       "anchor": "declare const ChartColumnStacked: LucideIcon;",
       "citedBy": [
         "docs/specs/toolbar-redesign/feature-spec.md",
@@ -950,7 +950,7 @@
       "ref": "index.js:932-957",
       "package": "nodemailer",
       "path": "dist/cjs/smtp-connection/index.js",
-      "lines": "859-881",
+      "lines": "861-883",
       "anchor": "_formatError(message, type, response, command) {",
       "citedBy": [
         "apps/api/src/common/mail/smtp-mail.service.spec.ts",
@@ -961,7 +961,7 @@
       "ref": "coreBundle.js:13373",
       "package": "playwright-core",
       "path": "lib/coreBundle.js",
-      "lines": "13712",
+      "lines": "14369",
       "anchor": "assert(buffer, \"Fetch response has been disposed\");",
       "citedBy": ["apps/web/e2e-csp/csp.spec.ts", "docs/TECH_DEBT.md"]
     },
@@ -1349,8 +1349,8 @@
       "ref": "coreBundle.js:20396",
       "package": "playwright-core",
       "path": "lib/coreBundle.js",
-      "lines": "20396",
-      "anchor": "injected.checkElementStates(node, [\"visible\", \"enabled\", \"editable\"])",
+      "lines": "21546",
+      "anchor": "injected.checkElementStates(node, [\"visible\", \"enabled\", \"editable\"], frameVisible2)",
       "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
     },
     {
