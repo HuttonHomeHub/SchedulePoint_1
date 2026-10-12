@@ -4,6 +4,8 @@
   which the product owner approved 2026-10-08 with all three recommendations (CQ-1 the Gantt stays
   28 px; CQ-2 the activities table's `⋯` grows to 44 px on touch; CQ-3 `pointer`, not `any-pointer`,
   stays the gate). Built as milestones M0 to M3 (#901, #903, and M3 in review at the time of writing).
+- **Amended by:** ADR-0188 (2026-10-11) — D7's third bullet: the `row-select` marker is retired; the activities
+  table's select labels are swept as targets.
 - **Spec:** [`docs/specs/dense-row-touch-targets/feature-spec.md`](../specs/dense-row-touch-targets/feature-spec.md)
   · **Plan:** [`implementation-plan.md`](../specs/dense-row-touch-targets/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/dense-row-touch-targets/m0-measurement.md)

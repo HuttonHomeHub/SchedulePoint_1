@@ -9,6 +9,8 @@
 - **Amended by:** ADR-0183 (2026-10-09) — D1's coarse exception list keeps `icon-sm` for one consumer (the
   Gantt's `⋯`); every other dense-row target is `icon-row` and grows with its row. D8's blind spot (a
   control overflowing its container) gains a containment assertion for row-menu triggers.
+- **Amended by:** ADR-0188 (2026-10-11) — D1's coarse exception list gains the Gantt grid divider
+  (`coarseStrip="none"`); every other divider's grab strip is 44 px on a coarse pointer.
 - **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)

@@ -1,6 +1,8 @@
 # ADR-0094 — One meaning of "conflict", and a remedy on the object
 
 - **Status:** Accepted (M0–M5 landed 2026-08-14)
+- **Amended by:** ADR-0186 (2026-10-11) — D5 ("one of them renders nothing") stays true of the remedy and stops
+  being true of the conflict: its reason is stated on the object.
 - **Date:** 2026-08-14
 - **Supersedes:** nothing
 - **Amends:** ADR-0031 (the toolbar item taxonomy — a read-out's rank), ADR-0033 (`visualConflict`

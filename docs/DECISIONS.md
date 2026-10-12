@@ -10,6 +10,54 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-12 — Reconciliation pass: the reviewer agents had never heard of the last twelve ADRs
+
+**What was decided.** The pass `check:reconcile-due` called due on a full (unshallowed) clone: twelve ADRs
+since 2026-10-05 (ADR-0177 … ADR-0188), against a threshold of 8. Every other computed gate was green before
+it started (`check:counts`, `check:claims` at 143 claims, `check:adr-coverage` 188 of 188, `check:debt-status`
+167 detailed rows, `check:spec-status`, `check:flags`, `check:doc-links`, `check:e2e-roster`,
+`check:web-bundle`), so every finding below is something those gates cannot read. Four read-only agents ran
+the steps (two explorers, an api-reviewer, a component-reviewer) and **each finding was re-read at the cited
+line before it was written down**.
+
+**What it found wrong.**
+
+1. **No file in `.claude/agents/` mentioned ADR-0179, 0181, 0185 or 0188** (`grep -c` per file: zero in all
+   fifteen), so no reviewer knew the 1024 × 600 floor, the retired single pane, the toolbar's promotion rule
+   or the divider's size box. Five lines were false, not just silent: `component-reviewer.md` told every
+   component review that `tier` and `showLabel` "must stay two" (both deleted, ADR-0185 M7) and that deck
+   groups are captioned (`Deck.tsx`: no caption since M6); `ui-architect.md` described a context drawer
+   deleted on 2026-09-01 and a surviving `tier` field; `performance-reviewer.md` justified the canvas's
+   IntersectionObserver by the retired below-`md` pane; `accessibility-reviewer.md` still asked for contrast
+   "in BOTH light and dark". The fifth consecutive pass whose highest-yield step was the ungated one.
+2. **`TOOLBAR_ROADMAP.md` still described the `Early | Visual` mode switch** ADR-0148 deleted, in a file
+   edited the day before (#915) whose own callout records it being wrong twice. Two web docblocks
+   (`plan-workspace-toolbar.tsx`) carried the same switch and a "two-row … Flag-off" toolbar.
+3. **Amendments were recorded one way only.** Nine of the twelve ADRs amend an older one, and neither the
+   older ADR's header nor its `CLAUDE.md` §16 line recorded 0180→0030/0092, 0186→0094, 0187→0031/0186,
+   0188→0118/0173/0183, 0178→0143/0145, 0182→0143, 0184→0146 or 0185→0110, nor #456's amendment of ADR-0140
+   (in its body only). `docs/adr/README.md` showed ADR-0177 as Proposed. `check:adr-coverage` checks that a
+   line exists, not what it says. ADR-0030's own header still said the single pane "stays as a reflow
+   fallback" two days after ADR-0181 removed it.
+4. **The register:** **#474** read open over a built remedy (`useOverflowTabStop`, #915); **#492**'s "can
+   deadlock a recalculation" holds for the hierarchy cascade only, because `remove`, `bulkDelete` and
+   dissolve all take `acquirePlanWriteLock`, which the recalculation also holds, and the row omitted the
+   restore writers of the same shape; **#16** still called `web-v0.90.1` "the current tag".
+
+**Negative results.** The four accepted-but-unbuilt ADRs are still unbuilt (no `bullmq`, `ioredis`,
+`@aws-sdk` or `@opentelemetry` in any manifest). #405, #449, #450 and #456 agree with their code, tests and
+`docs/API.md`; #440's three writers are ordered; #493–#495 are real; #442, #470, #473 and #476 are built;
+ADR-0187's and ADR-0188's code matches the ADRs; no single-pane branch survives in the web code. About ninety
+implementation plans are still headed Draft. That is not a finding: ADR-0131 scoped the gate to specs after
+measuring the plans (#274). No new code defect; #492's real half was already on the register.
+
+**Consequences.** Four documentation pull requests, one logical change each: the ADR back-links with this
+record; the agent files; the toolbar and divider documents; the register rows. No row filed. An amendment
+back-link check (an ADR named under another's **Amends** appears in that ADR's header) is a candidate gate,
+noted here and not built, because a shared gate needs its own spec (ADR-0105).
+
+---
+
 ## 2026-10-11 — Placement batches and the recalculation lock activity rows in id order, not by taking the plan lock (#440)
 
 **What was decided.** The lock-free multi-row writers (`updatePlacements`, `updateLanePositions`) and the

@@ -1,6 +1,8 @@
 # ADR-0110 — A gate is verified against the defect it names
 
 - **Status:** Accepted
+- **Overturned in part by:** ADR-0185 (2026-10-11) — M5's keep of the dead ADR-0090 D6 / ADR-0091 D3a code is
+  overturned; that code is deleted (`docs/TECH_DEBT.md` #193).
 - **Date:** 2026-08-25
 - **Supersedes:** nothing
 - **Amends:** ADR-0092 (the dock's row now also carries the plan's facts), ADR-0109 (the deck's one

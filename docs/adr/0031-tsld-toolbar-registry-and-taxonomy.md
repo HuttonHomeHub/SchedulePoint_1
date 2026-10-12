@@ -4,6 +4,9 @@
 - **Amended by:** ADR-0185 (2026-10-11) — the three prominence tiers and the responsive overflow rule (decision 3) are gone:
   `ToolbarItem.tier` was deleted (`docs/TECH_DEBT.md` #193), and group 1's zoom controls moved to the diagram's corner. The
   taxonomy, the registry and the pen-gating are unchanged.
+- **Superseded in part by:** ADR-0181 (2026-10-09) — the below-`md` rule (noted inline in the decision it supersedes).
+- **Amended by:** ADR-0187 (2026-10-11) — the canonical left-to-right group order is the default, not a rule for
+  every toolbar: a toolbar may pass its own `groupOrder` (the selection bar leads with the object group).
 - **Date:** 2026-07-13
 - **Deciders:** James Ewbank (with Claude Code — feature-analyst / ui-architect)
 - **Related:** ADR-0030 (canvas-first workspace — this refines its header/chrome and

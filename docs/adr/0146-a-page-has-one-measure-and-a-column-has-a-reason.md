@@ -1,6 +1,8 @@
 # ADR-0146: A page has one measure, a column has a reason, and a fact belongs under its row
 
 - **Status:** Accepted; amended by ADR-0165 for the windowed table
+- **Extended by:** ADR-0184 (2026-10-09) — D3 (wrap, never truncate) and D4 (a fact belongs under its row) apply
+  to list rows too.
 - **Date:** 2026-09-17
 - **Deciders:** Product owner; agent implementation
 - **Spec:** [`docs/specs/page-composition/`](../specs/page-composition/)

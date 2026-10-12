@@ -3,6 +3,8 @@
 - **Status:** Accepted — 2026-10-11. The spec was approved by the product owner on 2026-10-10 (accessibility,
   UX and component reviews signed off); the product owner chose option B′ (a caption line above the selection
   bar's controls) on 2026-10-10 after M0 showed the inline read-out costs a line at 1912 × 1080.
+- **Amended by:** ADR-0187 (2026-10-11) — the Consequences' first Tab stop is no longer Zoom to selection or
+  Float paths: the selection bar leads with the activity's own actions.
 - **Spec:** [`docs/specs/conflict-reason-on-object/feature-spec.md`](../specs/conflict-reason-on-object/feature-spec.md)
   · **Plan:** [`implementation-plan.md`](../specs/conflict-reason-on-object/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/conflict-reason-on-object/m0-measurement.md) (the inline
