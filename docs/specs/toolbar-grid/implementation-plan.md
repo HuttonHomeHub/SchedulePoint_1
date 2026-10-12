@@ -490,6 +490,11 @@ cell, both pointers, base and worst states". The `e2e-promotion` SC-17/18 cases 
   2. Write the record.
   3. Hand the photos to the owner.
 
+**M5-T1 status (2026-10-12): recorded in `m-final-measurement.md`, photographs in `photos/after-*`; sign-off not given.**
+M4 was withdrawn, so "the stages where the column is set" reads "not applicable: M4 withdrawn 2026-10-12" there. The CSS
+ceiling the record reads against is **19.00 KiB**, not this task's 18.00 (M3 raised it; the build reads 18.05 KiB). The
+harness gained `M0_TAG=after`, which writes `photos/after-*` and cannot overwrite the M0 set.
+
 ##### Task M5-T2: ADR and docs (≈ one PR)
 
 - **Description:**
@@ -537,6 +542,12 @@ cell, both pointers, base and worst states". The `e2e-promotion` SC-17/18 cases 
   1. Read the shard wall times.
   2. Re-pack or record.
   3. Update #491.
+
+**M5-T4 status (2026-10-12): re-measured from CI run `38290423490`; no re-pack, ADR-0138's trigger recorded as fired in
+#491.** The web shards ran 766 / 1,172 / 1,089 / 962 s (suite steps 657 / 1,070 / 995 / 845 s, 3,567 s in all) and
+`scripts/e2e-durations.json` was re-harvested from that run. A re-pack edits `ci.yml`, which this task does not touch,
+and the arithmetic in #491 says a perfect four-way pack would still sit above the API job; the choice between the two
+remedies is the owner's.
 
 ## Sequencing & slices
 
