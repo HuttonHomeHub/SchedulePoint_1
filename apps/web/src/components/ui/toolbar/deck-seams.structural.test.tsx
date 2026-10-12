@@ -192,3 +192,145 @@ describe('the deck draws a divider between groups and a box around nothing', () 
     expect(withRule.length, 'the Plan group lost the rule between its two sections').toBe(1);
   });
 });
+
+/**
+ * **A cluster wrapper is a picture, and nothing else** (toolbar-grid M2, SC-7).
+ *
+ * `Deck` wraps a run of clustered items in a track. The wrapper sits INSIDE the `role="toolbar"`
+ * container and inside the roving walk's document, so the ways it could break the keyboard contract
+ * are each asserted on their own: it must carry no `role` and no accessible name (a `role="group"`
+ * would announce a fact with no words, and nest groups in groups); no `tabindex` and no
+ * `data-toolbar-focusable` (it would be a stop that does nothing); and wrapping must not change the
+ * roving stops or their order. **The rule is scoped to the wrappers clustering makes**: the header's
+ * `Diagram | Gantt` wrapper is a named `group` and keeps its role and name
+ * (`toolbar-segments.test.tsx`).
+ *
+ * Verified red by giving the wrapper `role="group"` in `ClusterTrack.tsx` (the attribute case fails),
+ * by adding `tabIndex={-1}` to it (the same case fails), and by moving a clustered member behind a
+ * non-clustered neighbour in the registry (`defineToolbar` refuses it).
+ */
+describe('a cluster wrapper has no role, no name and no stop', () => {
+  type TestCtx = Record<string, never>;
+  const clusterItems = (clustered: boolean): ToolbarItem<TestCtx>[] => {
+    const cluster = (kind: 'switch' | 'joined', id: string) =>
+      clustered ? { cluster: { id, kind } } : {};
+    return defineToolbar<TestCtx>([
+      { id: 'before', group: 'frame', order: 0, label: 'Before', onActivate: () => {} },
+      {
+        id: 'set-caption',
+        group: 'frame',
+        order: 1,
+        label: 'Set',
+        presentational: true,
+        ...cluster('switch', 'set'),
+        render: (_ctx, api) => (
+          <span {...api.itemProps} aria-hidden="true">
+            Set
+          </span>
+        ),
+      },
+      ...['one', 'two', 'three'].map((id, i): ToolbarItem<TestCtx> => ({
+        id,
+        group: 'frame',
+        order: 2 + i,
+        label: `Set: ${id}`,
+        visibleLabel: id,
+        isActive: () => id === 'two',
+        onActivate: () => {},
+        ...cluster('switch', 'set'),
+      })),
+      { id: 'a', group: 'tools', order: 0, label: 'A', onActivate: () => {} },
+      {
+        id: 'b',
+        group: 'tools',
+        order: 1,
+        label: 'B',
+        ...cluster('joined', 'pair'),
+        onActivate: () => {},
+      },
+      {
+        id: 'c',
+        group: 'tools',
+        order: 2,
+        label: 'C',
+        ...cluster('joined', 'pair'),
+        onActivate: () => {},
+      },
+    ]);
+  };
+
+  const stops = (): string[] =>
+    [...document.querySelectorAll('[data-toolbar-focusable]')].map(
+      (el) => el.getAttribute('data-toolbar-item') ?? '',
+    );
+
+  it('wraps each run in a plain span carrying none of those', () => {
+    render(<Deck items={clusterItems(true)} context={{}} label="Plan commands" />);
+
+    const tracks = [...document.querySelectorAll('[data-toolbar-cluster]')];
+    // The pinned positive: no wrapper at all would satisfy every attribute check below.
+    expect(tracks.map((t) => t.getAttribute('data-toolbar-cluster'))).toEqual(['set', 'pair']);
+    for (const track of tracks) {
+      expect(track.tagName).toBe('SPAN');
+      for (const attr of [
+        'role',
+        'aria-label',
+        'aria-labelledby',
+        'tabindex',
+        'data-toolbar-focusable',
+      ]) {
+        expect(
+          track.hasAttribute(attr),
+          `${track.getAttribute('data-toolbar-cluster')} has ${attr}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('keeps the same stops in the same order as the unclustered deck', () => {
+    const plain = render(<Deck items={clusterItems(false)} context={{}} label="Plan commands" />);
+    const without = stops();
+    plain.unmount();
+    render(<Deck items={clusterItems(true)} context={{}} label="Plan commands" />);
+    expect(stops()).toEqual(without);
+    expect(without).toEqual(['before', 'one', 'two', 'three', 'a', 'b', 'c']);
+  });
+
+  it('keeps a set’s caption on the line of its track, outside the track, and out of the stops', () => {
+    render(<Deck items={clusterItems(true)} context={{}} label="Plan commands" />);
+    const track = document.querySelector('[data-toolbar-cluster="set"]')!;
+    const unit = track.parentElement!;
+    // The unit is a no-wrap box holding the caption and then the track.
+    expect(unit.className).toMatch(/inline-flex/);
+    expect(unit.className).toMatch(/flex-nowrap/);
+    expect(unit.firstElementChild?.textContent).toBe('Set');
+    expect(unit.firstElementChild).not.toBe(track);
+    expect(track.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(unit.firstElementChild?.hasAttribute('data-toolbar-focusable')).toBe(false);
+  });
+
+  it('keeps exactly one pressed member in a switch and every name unchanged', () => {
+    render(<Deck items={clusterItems(true)} context={{}} label="Plan commands" />);
+    const track = document.querySelector('[data-toolbar-cluster="set"]')!;
+    const members = [...track.querySelectorAll('button')];
+    expect(members.map((m) => m.getAttribute('aria-label'))).toEqual([
+      'Set: one',
+      'Set: two',
+      'Set: three',
+    ]);
+    expect(members.filter((m) => m.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
+  });
+
+  it('paints a track on controls: the raised member on a switch, nothing raised on a joined unit', () => {
+    render(<Deck items={clusterItems(true)} context={{}} label="Plan commands" />);
+    const set = document.querySelector('[data-toolbar-cluster="set"]')!;
+    const pair = document.querySelector('[data-toolbar-cluster="pair"]')!;
+    for (const track of [set, pair]) {
+      expect(track.className).toMatch(/(^|\s)bg-field(\s|$)/);
+      expect(track.className).toMatch(/(^|\s)gap-px(\s|$)/);
+    }
+    // Raised only where one member is chosen; a joined unit has nothing to raise (spec D-3).
+    expect(set.className).toContain('aria-pressed=true');
+    expect(pair.className).not.toContain('aria-pressed=true');
+  });
+});

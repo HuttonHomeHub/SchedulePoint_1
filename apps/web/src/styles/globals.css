@@ -135,6 +135,15 @@
    `overflow-clip-margin` applies only when BOTH axes clip (measured in Chromium), so the block axis
    clips 5 px past the row too: the Filter badge's top is level with its control's, and menus,
    popovers and tooltips are portalled. */
+/* The deck's search field outline (toolbar-grid M2, CQ-1 (a)): `--chrome-input-quiet`, which no component may
+   name (`surface-seams.structural.test.ts`), so the class lives here. `:is(input)` lifts its specificity over
+   `Input`'s own `border-input`, which a utility of equal weight would lose or win by source order alone. */
+@utility deck-search-outline {
+  &:is(input) {
+    border-color: var(--chrome-input-quiet);
+  }
+}
+
 @utility deck-row-clip {
   overflow: clip;
   overflow-clip-margin: 5px;
@@ -393,6 +402,13 @@
   --chrome-muted: oklch(0.32 0.05 264);
   --chrome-border: oklch(1 0 0 / 14%);
   --chrome-input: oklch(0.62 0.02 264);
+  /* **The deck's search field outline only** (toolbar-grid M2, CQ-1 (a)): the smallest lightness at
+     chroma 0.02, hue 264 that still clears WCAG 1.4.11's 3:1 on BOTH grounds the field sits between,
+     the band (3.03:1) and its own `--field` fill (3.44:1), against 4.39:1 / 4.99:1 for
+     `--chrome-input`. Its own token, and `--chrome-input` untouched, because that one is also the
+     outline of every other chrome field and the boundary of the segmented control's options, none of
+     which was photographed or asked for a calmer line. `token-contrast.test.ts` gates it. */
+  --chrome-input-quiet: oklch(0.53 0.02 264);
   --chrome-accent: oklch(0.338 0.081 262);
   --chrome-accent-foreground: oklch(0.985 0 0);
   --chrome-primary: oklch(0.786 0.167 70);

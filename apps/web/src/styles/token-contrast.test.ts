@@ -709,6 +709,75 @@ describe('the deck group divider outranks the section rule', () => {
   });
 });
 
+/**
+ * **The deck's tracks, the raised member and the quieter search outline** (toolbar-grid M2, P3 to P7;
+ * readings in `docs/specs/toolbar-grid/m0-measurement.md` §6).
+ *
+ * A track is `--field` (`TOOLBAR_TRACK`): the band's own hue one step darker, so its members sit on a
+ * darker ground than the band. The raised member is `--secondary` on that track. Which of these pairs
+ * are asserted and which only reported is the point of the block:
+ *
+ * - the raised fill against the track (P3) and the members' ink on the track (P4) are 1.4.11 / 1.4.3
+ *   and **asserted**;
+ * - the focus ring on the track (P5) is asserted; on the raised fill (P5b) it is reported, the same
+ *   geometry and number as a focused `selected` control on the band today;
+ * - **the track against the band (P6) is reported and cannot be asserted**: the band's luminance is
+ *   0.0157, so even pure black would be 1.31:1 against it. The track is not the state indicator. A
+ *   text button "does not need a boundary" (WCAG 1.4.11, Understanding), and the state is carried by P3
+ *   and the underline;
+ * - the shaded, selected member keeps a `--muted-foreground` underline (`toolbarControlVariants`), and
+ *   in a track that underline sits on `--field` rather than on the band, so it is asserted there;
+ * - the search outline (P7) is the one place WCAG 1.4.11's text-input rule binds: the field has no
+ *   visible label and no border but this one, so it has to clear 3:1 on **both** the band it sits in
+ *   and its own fill. `--chrome-input-quiet` is `oklch(0.53 0.02 264)`, the smallest lightness that
+ *   does.
+ */
+describe("the deck's tracks: a raised member that is not colour alone, and a field that is findable", () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'chrome');
+
+  it('P3: the raised fill is a perceivable shape on the track (>= 3:1)', () => {
+    const value = ratio(tokens, '--field', '--secondary');
+    expect(value, `--secondary on --field is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('P4: a member’s label is legible on the track (>= 4.5:1)', () => {
+    const value = ratio(tokens, '--field', '--foreground');
+    expect(value, `--foreground on --field is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('P5: the focus ring is visible against the track (>= 3:1)', () => {
+    const value = ratio(tokens, '--field', '--ring');
+    expect(value, `--ring on --field is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('P5b: reports the focus ring against the raised fill, a focused selected control’s geometry', () => {
+    const value = ratio(tokens, '--secondary', '--ring');
+    expect(value, `--ring on --secondary is ${fmtRatio(value)}`).toBeGreaterThan(1);
+  });
+
+  it('P6: reports the track against the band, which no darker fill can lift past 1.31:1', () => {
+    const value = ratio(tokens, '--background', '--field');
+    expect(value, `--field on --background is ${fmtRatio(value)}`).toBeGreaterThan(1);
+    // The ceiling is the reason this is reported and not asserted: pure black would be 1.31:1.
+    const black = contrastRatio(fillOf(tokens), [0, 0, 0]);
+    expect(black, `pure black on the band is ${fmtRatio(black)}`).toBeLessThan(1.4);
+  });
+
+  it('the shaded, selected member’s muted underline is perceivable on the track (>= 3:1)', () => {
+    const value = ratio(tokens, '--field', '--muted-foreground');
+    expect(value, `--muted-foreground on --field is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('P7: the search outline clears 3:1 on the band it sits in and on its own fill', () => {
+    const band = ratio(tokens, '--background', '--chrome-input-quiet');
+    const field = ratio(tokens, '--field', '--chrome-input-quiet');
+    expect(band, `the outline on the band is ${fmtRatio(band)}`).toBeGreaterThanOrEqual(3);
+    expect(field, `the outline on --field is ${fmtRatio(field)}`).toBeGreaterThanOrEqual(3);
+    // Quieter than the shared outline it replaces on this one field, or it is not CQ-1 (a).
+    expect(band).toBeLessThan(ratio(tokens, '--background', '--input'));
+  });
+});
+
 describe('the axis markers are legible in the ruler band', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

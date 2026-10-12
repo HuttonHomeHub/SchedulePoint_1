@@ -35,6 +35,15 @@ const STAGE_CELLS = {
   PROMOTE_160: '2560x1440',
 };
 
+/**
+ * Entries whose members sit in a track (`ToolbarItem.cluster`, toolbar-grid M2), and how many 1 px joins that
+ * is: a track joins its members with `gap-px` where the rest of the row has `itemGapPx` between flex items,
+ * so the sum of rects plus `itemGapPx` per join overcharges the row by `itemGapPx - 1` px per join. L2 is the
+ * Colour set (a caption, then a track of three) and P5 the Link "Type" set (likewise). Charged net as
+ * `trackJoinSavingPx`, the way `triggerShrinkPx` is, so the ladder's arithmetic is the row's real arithmetic.
+ */
+const TRACK_JOINS = { L2: 2, P5: 2 };
+
 /** Entries whose promotion also renames their trigger: rank -> the trigger's item id. */
 const TRIGGER_RENAMED_BY = { P4: 'export' };
 
@@ -69,6 +78,12 @@ for (const pointer of ['fine', 'coarse']) {
     let width = Object.values(memberWidths).reduce((a, b) => a + b, 0) + gap * (ids.length - 1);
     const next = { ...entry, memberWidths };
     delete next.triggerShrinkPx;
+    delete next.trackJoinSavingPx;
+    const joins = TRACK_JOINS[entry.rank];
+    if (joins !== undefined) {
+      next.trackJoinSavingPx = r1(joins * (gap - 1));
+      width -= joins * (gap - 1);
+    }
     const trigger = TRIGGER_RENAMED_BY[entry.rank];
     if (trigger !== undefined) {
       const shrink = widthOf(unpromoted, trigger) - widthOf(promoted, trigger);
@@ -113,7 +128,7 @@ for (const pointer of ['fine', 'coarse']) {
   committed.note =
     'Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. ' +
     'entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): ' +
-    'the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns "Share & export" into "Export"). ' +
+    'the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less trackJoinSavingPx where the members sit in a 1 px-joined track (toolbar-grid M2), less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns "Share & export" into "Export"). ' +
     'A form whose stage is never is not on the bar at 3840, so its committed width stands. ' +
     'freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, ' +
     'a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.';

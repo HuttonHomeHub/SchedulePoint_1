@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 
+import { ClusterTrack } from './ClusterTrack';
 import {
   containerShouldStandDown,
   rovingIndexFor,
@@ -7,6 +8,7 @@ import {
   vetoesKey,
 } from './toolbar-keyboard';
 import {
+  clusterRuns,
   resolveItems,
   type ResolvedToolbarItem,
   type ToolbarGroupId,
@@ -87,7 +89,9 @@ import { cn } from '@/lib/utils';
  * with a `role` and an `aria-label`; what marks it from its neighbour is a full-height divider in the
  * gap before it (`DECK_GROUP_DIVIDER`), stronger than the short rule between its own sections, which is
  * what makes the two read as a hierarchy. (A pill, a dashed outline and a ring did this until the owner
- * asked for a grid; `m0-measurement.md` has the numbers.)
+ * asked for a grid; `m0-measurement.md` has the numbers.) **The one shape left is round a control**
+ * (toolbar-grid M2): a run of items that are one unit (`ToolbarItem.cluster`) sits in a recessed track,
+ * made by `ClusterTrack` with no role, no name and no stop, so a shape on the bar is something you press.
  *
  * ## What `caption` was called, and why it is now `name`
  *
@@ -316,6 +320,95 @@ export function Deck<Ctx>({
     successorFor: (id) => items.find((item) => item.id === id)?.successorId,
   });
 
+  const renderControl = (r: ResolvedToolbarItem<Ctx>): React.ReactElement => {
+    // One resolution per item: the `render` branch hands it to the trigger and
+    // the plain branch to `ToolbarButton`, and neither decides for itself.
+    const labelState = resolveLabelVisibility(r.item.labelVisibility, 'deck');
+    return r.item.render ? (
+      // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
+      // `focusables()` queries `[data-toolbar-focusable]` in document order
+      // and a duplicate marker would put the wrapper in the roving walk. See
+      // `Toolbar.tsx`'s copy of this wrapper.
+      <span
+        key={r.item.id}
+        data-toolbar-item-scope={r.item.id}
+        className="inline-flex items-center"
+      >
+        {r.item.render(context, {
+          disabled: !r.enabled,
+          disabledReason: r.disabledReason,
+          active: r.active,
+          activeKind: r.activeKind,
+          labelState,
+          itemProps: r.item.presentational
+            ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
+            : {
+                tabIndex: tabIndexFor(r.item.id),
+                'data-toolbar-focusable': '',
+                'data-toolbar-item': r.item.id,
+                onFocus: () => setActiveId(r.item.id),
+              },
+        })}
+      </span>
+    ) : (
+      <ToolbarButton
+        key={r.item.id}
+        itemId={r.item.id}
+        label={r.item.label}
+        {...(r.item.visibleLabel ? { visibleLabel: r.item.visibleLabel } : {})}
+        {...(r.item.description ? { description: r.item.description } : {})}
+        icon={r.icon}
+        {...(r.busy ? { busy: true } : {})}
+        labelState={labelState}
+        {...(r.item.isActive ? { pressed: r.active } : {})}
+        activeKind={r.activeKind}
+        disabled={!r.enabled}
+        disabledReason={r.disabledReason}
+        srDescription={r.srDescription}
+        tabIndex={tabIndexFor(r.item.id)}
+        onActivate={() => r.item.onActivate!(context)}
+        onFocus={() => setActiveId(r.item.id)}
+        // **The stacked geometry is GONE, and with it the four `!important`
+        // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
+        // icon while a split-button or popover trigger — which never reached this
+        // branch — kept the shared CVA's row. Nobody chose that: it is one
+        // `if` having a side effect on layout. Measured at 1646, the deck's label
+        // tops were 137 for inline items and 149 for stacked ones, and a reader's
+        // eye tracks the difference along the row.
+        //
+        // There is now exactly ONE geometry, so it needs no variant to select it:
+        // the shared `toolbarControlVariants` row is simply not overridden. A
+        // two-valued `layout` variant with no second consumer would be dead code
+        // pretending to be a choice.
+        //
+        // **The label's `text-micro` override is GONE**
+        // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
+        // the M0 probe that priced the geometry change altered flex-direction,
+        // height, gap and alignment and nothing else, so changing the type scale
+        // in the same commit "would make the shipped width unattributable to the
+        // number that justified the change". That was right, and the reason
+        // lapsed the moment the geometry shipped and was measured.
+        //
+        // **It produced two type scales on one row, by two separate mechanisms,
+        // and only the first was known.** Measured
+        // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
+        // trigger — never reached this branch at all and kept the shared CVA's
+        // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
+        // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
+        // `sr-only` description, so the moment a control carries a reason or an
+        // `srDescription` the override lands on an **invisible** span and the
+        // visible label falls through to `text-sm`. Three items were live in that
+        // state on the measured screen — `Next conflict`, `Float paths` and
+        // `Add note`, all shaded — which means **a plain command's label grew
+        // from 10 px to 14 px the moment it was disabled**.
+        //
+        // Deleting it leaves one scale declared in one place, by the primitive.
+        // `min-w-*` is kept: it is geometry, and it was never the problem.
+        className={toolbarLabelMinWidthClass(labelState)}
+      />
+    );
+  };
+
   return (
     <div
       ref={containerRef}
@@ -480,97 +573,23 @@ export function Deck<Ctx>({
                             sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
                           )}
                         >
-                          {section.map((r) => {
-                            // One resolution per item: the `render` branch hands it to the trigger and
-                            // the plain branch to `ToolbarButton`, and neither decides for itself.
-                            const labelState = resolveLabelVisibility(
-                              r.item.labelVisibility,
-                              'deck',
-                            );
-                            return r.item.render ? (
-                              // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
-                              // `focusables()` queries `[data-toolbar-focusable]` in document order
-                              // and a duplicate marker would put the wrapper in the roving walk. See
-                              // `Toolbar.tsx`'s copy of this wrapper.
-                              <span
-                                key={r.item.id}
-                                data-toolbar-item-scope={r.item.id}
-                                className="inline-flex items-center"
+                          {clusterRuns(section).map((run) => {
+                            const first = run.entries[0];
+                            if (run.cluster === undefined || first === undefined) {
+                              return run.entries.map(renderControl);
+                            }
+                            // A set's caption is presentational and leads the unit; the controls are the track.
+                            const lead = run.entries.filter((r) => r.item.presentational);
+                            return (
+                              <ClusterTrack
+                                key={first.item.id}
+                                cluster={run.cluster}
+                                {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
                               >
-                                {r.item.render(context, {
-                                  disabled: !r.enabled,
-                                  disabledReason: r.disabledReason,
-                                  active: r.active,
-                                  activeKind: r.activeKind,
-                                  labelState,
-                                  itemProps: r.item.presentational
-                                    ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
-                                    : {
-                                        tabIndex: tabIndexFor(r.item.id),
-                                        'data-toolbar-focusable': '',
-                                        'data-toolbar-item': r.item.id,
-                                        onFocus: () => setActiveId(r.item.id),
-                                      },
-                                })}
-                              </span>
-                            ) : (
-                              <ToolbarButton
-                                key={r.item.id}
-                                itemId={r.item.id}
-                                label={r.item.label}
-                                {...(r.item.visibleLabel
-                                  ? { visibleLabel: r.item.visibleLabel }
-                                  : {})}
-                                {...(r.item.description ? { description: r.item.description } : {})}
-                                icon={r.icon}
-                                {...(r.busy ? { busy: true } : {})}
-                                labelState={labelState}
-                                {...(r.item.isActive ? { pressed: r.active } : {})}
-                                activeKind={r.activeKind}
-                                disabled={!r.enabled}
-                                disabledReason={r.disabledReason}
-                                srDescription={r.srDescription}
-                                tabIndex={tabIndexFor(r.item.id)}
-                                onActivate={() => r.item.onActivate!(context)}
-                                onFocus={() => setActiveId(r.item.id)}
-                                // **The stacked geometry is GONE, and with it the four `!important`
-                                // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
-                                // icon while a split-button or popover trigger — which never reached this
-                                // branch — kept the shared CVA's row. Nobody chose that: it is one
-                                // `if` having a side effect on layout. Measured at 1646, the deck's label
-                                // tops were 137 for inline items and 149 for stacked ones, and a reader's
-                                // eye tracks the difference along the row.
-                                //
-                                // There is now exactly ONE geometry, so it needs no variant to select it:
-                                // the shared `toolbarControlVariants` row is simply not overridden. A
-                                // two-valued `layout` variant with no second consumer would be dead code
-                                // pretending to be a choice.
-                                //
-                                // **The label's `text-micro` override is GONE**
-                                // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
-                                // the M0 probe that priced the geometry change altered flex-direction,
-                                // height, gap and alignment and nothing else, so changing the type scale
-                                // in the same commit "would make the shipped width unattributable to the
-                                // number that justified the change". That was right, and the reason
-                                // lapsed the moment the geometry shipped and was measured.
-                                //
-                                // **It produced two type scales on one row, by two separate mechanisms,
-                                // and only the first was known.** Measured
-                                // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
-                                // trigger — never reached this branch at all and kept the shared CVA's
-                                // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
-                                // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
-                                // `sr-only` description, so the moment a control carries a reason or an
-                                // `srDescription` the override lands on an **invisible** span and the
-                                // visible label falls through to `text-sm`. Three items were live in that
-                                // state on the measured screen — `Next conflict`, `Float paths` and
-                                // `Add note`, all shaded — which means **a plain command's label grew
-                                // from 10 px to 14 px the moment it was disabled**.
-                                //
-                                // Deleting it leaves one scale declared in one place, by the primitive.
-                                // `min-w-*` is kept: it is geometry, and it was never the problem.
-                                className={toolbarLabelMinWidthClass(labelState)}
-                              />
+                                {run.entries
+                                  .filter((r) => !r.item.presentational)
+                                  .map(renderControl)}
+                              </ClusterTrack>
                             );
                           })}
                         </div>

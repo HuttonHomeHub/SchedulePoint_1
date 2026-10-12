@@ -1,7 +1,7 @@
 {
   "pointer": "fine",
   "provisional": false,
-  "note": "Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns \"Share & export\" into \"Export\"). A form whose stage is never is not on the bar at 3840, so its committed width stands. freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.",
+  "note": "Re-taken by measure-toolbar/promotion-widths.mjs from two runs of measure-toolbar/toolbar-redesign-m5.spec.ts. entries[].width is each promoted form as it renders on the real deck at 3840x1440 (e2e-workspace-fit/promotion.spec.ts holds it true within 2 px): the sum of the item rects of the entry (a set includes its aria-hidden caption) plus the 4 px gaps between them, less trackJoinSavingPx where the members sit in a 1 px-joined track (toolbar-grid M2), less triggerShrinkPx where promoting the entry also shortens its trigger (Share... turns \"Share & export\" into \"Export\"). A form whose stage is never is not on the bar at 3840, so its committed width stands. freeWidthByStage is the real UNPROMOTED deck at each stage cell (M5_UNPROMOTED=1: the stage media queries answer not-reached): the row width less its natural width in the base state and in the worst stress state, a cycling conflict read-out on LOOK and a peer holding the pen on DO. computePromotionStages reserves freeWorst less safetyPx, the spare width every row keeps in the worst state so a sub-pixel font difference cannot wrap a row the ladder filled to the pixel.",
   "itemGapPx": 4,
   "safetyPx": 2,
   "ladderOrder": {
@@ -25,12 +25,13 @@
       "name": "Colour by: Criticality / Total float / WBS group",
       "from": "View",
       "memberWidths": {
-        "colour-by-criticality-caption": 43.4,
+        "colour-by-criticality-caption": 49.3,
         "colour-by-criticality": 77.6,
         "colour-by-totalFloat": 80.5,
         "colour-by-wbs": 87
       },
-      "width": 300.5
+      "width": 300.4,
+      "trackJoinSavingPx": 6
     },
     {
       "rank": "L3",
@@ -119,12 +120,13 @@
       "name": "Link: Finish → Start / Start → Start / Finish → Finish",
       "from": "Link",
       "memberWidths": {
-        "link-fs-caption": 33.9,
+        "link-fs-caption": 38.3,
         "link-fs": 106.2,
         "link-ss": 99.3,
         "link-ff": 113.1
       },
-      "width": 364.5
+      "width": 362.9,
+      "trackJoinSavingPx": 6
     },
     {
       "rank": "P6",
@@ -218,56 +220,56 @@
       "PROMOTE_80": {
         "cell": "1280x800",
         "avail": 1264,
-        "naturalBase": 1115,
-        "freeBase": 149,
+        "naturalBase": 1109,
+        "freeBase": 155,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 146.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 152.9
       },
       "PROMOTE_90": {
         "cell": "1440x900",
         "avail": 1424,
-        "naturalBase": 1115,
-        "freeBase": 309,
+        "naturalBase": 1109,
+        "freeBase": 315,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 306.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 312.9
       },
       "PROMOTE_100": {
         "cell": "1600x900",
         "avail": 1584,
-        "naturalBase": 1115,
-        "freeBase": 469,
+        "naturalBase": 1109,
+        "freeBase": 475,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 466.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 472.9
       },
       "PROMOTE_119_5": {
         "cell": "1912x1080",
         "avail": 1896,
-        "naturalBase": 1115,
-        "freeBase": 781,
+        "naturalBase": 1109,
+        "freeBase": 787,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 778.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 784.9
       },
       "PROMOTE_135": {
         "cell": "2160x1200",
         "avail": 2144,
-        "naturalBase": 1115,
-        "freeBase": 1029,
+        "naturalBase": 1109,
+        "freeBase": 1035,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 1026.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 1032.9
       },
       "PROMOTE_160": {
         "cell": "2560x1440",
         "avail": 2544,
-        "naturalBase": 1115,
-        "freeBase": 1429,
+        "naturalBase": 1109,
+        "freeBase": 1435,
         "worstState": "peer-pen",
-        "naturalWorst": 1117.1,
-        "freeWorst": 1426.9
+        "naturalWorst": 1111.1,
+        "freeWorst": 1432.9
       }
     }
   },

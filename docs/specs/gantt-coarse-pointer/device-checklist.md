@@ -18,6 +18,10 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 > Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
 > Item 25 was added for TECH_DEBT #439 (dividers now follow a finger).
+> Item 29 was added for toolbar-grid M2 (2026-10-12): Undo, Redo and Recent edits, and the three Colour
+> options, now sit in joined tracks with a 1 px gap where there were 4 px. No target got smaller (44 px under
+> touch, asserted in `command-surface.spec.ts`), so items 1 to 28 do not change, but a finger meets something
+> different between two neighbours and only a hand can say whether it misses.
 > Items 13–24 were added on 2026-10-09 for the dense-row touch targets (`docs/specs/dense-row-touch-targets/`,
 > ADR-0183, TECH_DEBT #215). That work left the Gantt's targets unchanged (the `⋯` stays 28 px and the
 > arrow 24 px, ADR-0177 D4 and ADR-0183 D6), so items 1 to 12 do not change. **Revisit trigger:** if
@@ -213,6 +217,20 @@ Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stop
       tap "Reset to standard".** Safari does not focus a button on a tap, so the box could mistake the tap
       for focus leaving and close before the button acts. The panel went back to its standard size:
       [ ] yes [ ] no, the box closed first [ ] not Safari
+
+## The toolbar's joined controls (about 3 minutes, tablet posture)
+
+Open any plan at the full width of the screen (the Colour options are on the bar from about 1912 px; if they
+are not, say so and skip the last part of this step). Press **Start editing**, then make one small change so
+Undo has something to undo.
+
+- [ ] **29. Tap each of Undo, Redo and Recent edits (the three joined buttons on the lower row, in that
+      order) ten times, alternating, and tap each of the three Colour options ten times.** Press Redo only
+      when it has something to redo; a button that is greyed does nothing, which is not a miss.
+      Hit the wrong neighbour or nothing, out of 10: Undo ____ / 10 Redo ____ / 10 Recent edits ____ / 10
+      Colour options ____ / 10 each
+      The chosen Colour option looked different from the other two without my having to read them:
+      [ ] yes [ ] no [ ] not sure
 
 ## When you are done
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  clusterRuns,
   defineToolbar,
   groupOrderViolation,
   groupRank,
@@ -405,5 +406,106 @@ describe('defineToolbar — a visibleLabel is contained in the name (WCAG 2.5.3)
         base({ id: 'menu', label: 'Menu', visibleLabel: 'Menu', render: () => null }),
       ]),
     ).toThrow(/plain onActivate/);
+  });
+});
+
+describe('defineToolbar: a cluster is one run in one group (toolbar-grid M2)', () => {
+  const switchOf = (id: string, over: Partial<ToolbarItem<Ctx>> = {}): ToolbarItem<Ctx> =>
+    base({ id, cluster: { id: 'set', kind: 'switch' }, ...over });
+
+  it('accepts a contiguous run, whichever order the registry lists it in', () => {
+    const items = [
+      switchOf('c', { order: 3 }),
+      base({ id: 'x', order: 4 }),
+      switchOf('a', { order: 1 }),
+      switchOf('b', { order: 2 }),
+    ];
+    expect(() => defineToolbar(items)).not.toThrow();
+  });
+
+  it('refuses a member that sorts away from the others, naming the cluster', () => {
+    const items = [
+      switchOf('a', { order: 1 }),
+      base({ id: 'between', order: 2 }),
+      switchOf('b', { order: 3 }),
+    ];
+    expect(() => defineToolbar(items)).toThrow(/cluster "set" is not contiguous/);
+  });
+
+  it('refuses a cluster spanning two groups: the wrapper cannot hold both', () => {
+    const items = [switchOf('a', { group: 'frame' }), switchOf('b', { group: 'lens' })];
+    expect(() => defineToolbar(items)).toThrow(/cluster "set" spans groups, rows or kinds/);
+  });
+
+  it('refuses a cluster spanning two rows', () => {
+    const items = [switchOf('a', { row: 'strip' }), switchOf('b', { row: 'mode', order: 1 })];
+    expect(() => defineToolbar(items)).toThrow(/spans groups, rows or kinds/);
+  });
+
+  it('refuses one cluster id declared with two kinds', () => {
+    const items = [
+      switchOf('a', { order: 1 }),
+      base({ id: 'b', order: 2, cluster: { id: 'set', kind: 'joined' } }),
+    ];
+    expect(() => defineToolbar(items)).toThrow(/spans groups, rows or kinds/);
+  });
+
+  it('refuses a render item in a switch: its wrapper would stop the raised selector matching', () => {
+    const items = [switchOf('a', { order: 1 }), switchOf('b', { order: 2, render: () => null })];
+    expect(() => defineToolbar(items)).toThrow(/switch cluster "set" but is a render item/);
+    // A joined unit has nothing to raise, so it may hold render items (Undo, Redo, Recent edits).
+    const joined = (id: string, order: number): ToolbarItem<Ctx> =>
+      base({ id, order, render: () => null, cluster: { id: 'pair', kind: 'joined' } });
+    expect(() => defineToolbar([joined('x', 1), joined('y', 2)])).not.toThrow();
+  });
+
+  it('lets a member a predicate hides leave a shorter run rather than a broken one', () => {
+    const items = [
+      switchOf('a', { order: 1 }),
+      switchOf('b', { order: 2, isVisible: () => false }),
+      switchOf('c', { order: 3 }),
+    ];
+    expect(() => defineToolbar(items)).not.toThrow();
+    const runs = clusterRuns(resolveItems(items, { editing: false, hasSelection: false }, true));
+    expect(runs.map((run) => run.entries.map((e) => e.item.id))).toEqual([['a', 'c']]);
+  });
+});
+
+describe('clusterRuns', () => {
+  const entry = (id: string, cluster?: string) => ({
+    item: { id, ...(cluster ? { cluster: { id: cluster, kind: 'joined' as const } } : {}) },
+  });
+
+  it('groups consecutive members of one cluster and leaves every other entry on its own', () => {
+    const runs = clusterRuns([
+      entry('a'),
+      entry('b', 'one'),
+      entry('c', 'one'),
+      entry('d'),
+      entry('e', 'two'),
+    ]);
+    expect(runs.map((r) => [r.cluster?.id ?? null, r.entries.map((e) => e.item.id)])).toEqual([
+      [null, ['a']],
+      ['one', ['b', 'c']],
+      [null, ['d']],
+      ['two', ['e']],
+    ]);
+  });
+
+  it('keeps the order it was given, so wrapping a run can never reorder the roving walk', () => {
+    const flat = ['a', 'b', 'c', 'd'].map((id, i) =>
+      entry(id, i === 1 || i === 2 ? 'k' : undefined),
+    );
+    expect(clusterRuns(flat).flatMap((r) => r.entries.map((e) => e.item.id))).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+    ]);
+  });
+
+  it('does not merge two runs that happen to share an id across a gap', () => {
+    const runs = clusterRuns([entry('a', 'k'), entry('b'), entry('c', 'k')]);
+    expect(runs).toHaveLength(3);
   });
 });

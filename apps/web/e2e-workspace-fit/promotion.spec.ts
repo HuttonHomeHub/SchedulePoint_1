@@ -62,6 +62,7 @@ interface WidthEntry {
   memberWidths: Record<string, number>;
   /** Set where promoting the entry also shortens its trigger's name; `width` is net of it. */
   triggerShrinkPx?: number;
+  trackJoinSavingPx?: number;
   width: number;
 }
 interface WidthsFile {
@@ -451,7 +452,10 @@ for (const pointer of ['fine', 'coarse'] as const) {
         }
         // Net of the trigger it renames (Share… turns "Share & export" into "Export").
         const total =
-          sum + widths.itemGapPx * (membersOf(entry).length - 1) - (entry.triggerShrinkPx ?? 0);
+          sum +
+          widths.itemGapPx * (membersOf(entry).length - 1) -
+          (entry.triggerShrinkPx ?? 0) -
+          (entry.trackJoinSavingPx ?? 0);
         const totalDrift = total - entry.width;
         const where = `${pointer} ${entry.rank} (${entry.name}): ${total.toFixed(1)} px, file says ${String(entry.width)}`;
         expect(totalDrift, `${where} (wider)`).toBeLessThanOrEqual(

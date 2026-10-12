@@ -6,6 +6,8 @@ import {
   toolbarLabelClass,
   toolbarControlVariants,
   toolbarLabelMinWidthClass,
+  TOOLBAR_TRACK,
+  TOOLBAR_TRACK_SWITCH,
 } from './toolbar-styles';
 
 /**
@@ -99,5 +101,66 @@ describe('the group divider', () => {
     expect(DECK_GROUP_DIVIDER).toMatch(/before:border-l/);
     expect(DECK_GROUP_DIVIDER).not.toMatch(/before:bg-/);
     expect(DECK_GROUP_DIVIDER).toMatch(/before:absolute/);
+  });
+});
+
+/**
+ * **A track is a recessed bar with a 1 px join, and its raised member is never colour alone**
+ * (toolbar-grid M2). jsdom resolves no stylesheet, so what is asserted here is what the CLASSES
+ * promise; the browser reads the computed result (`command-surface.spec.ts`, the raised-member case:
+ * a distinct background AND a non-`none` box-shadow, in ordinary colours).
+ *
+ * Verified red by deleting the `shadow-[…]` class from `TOOLBAR_TRACK_SWITCH` (the second case fails),
+ * by deleting `forced-color-adjust` (the third), and by giving the track a `p-1` (the first: padding
+ * makes the track taller than its members and grows the row).
+ */
+describe('the track', () => {
+  it('is a recessed field with a 1 px join and no padding, so it is exactly as tall as its members', () => {
+    expect(TOOLBAR_TRACK).toMatch(/(^|\s)bg-field(\s|$)/);
+    expect(TOOLBAR_TRACK).toMatch(/(^|\s)gap-px(\s|$)/);
+    expect(TOOLBAR_TRACK).toMatch(/(^|\s)flex-nowrap(\s|$)/);
+    expect(TOOLBAR_TRACK).not.toMatch(/(^|\s)(p|px|py|pl|pr|pt|pb|border)(-\S+)?(\s|$)/);
+  });
+
+  it('raises the chosen member with a fill AND a composed box-shadow, never one alone', () => {
+    // The fill is the `selected` state's own (`--secondary`); the track only adds the shadow.
+    expect(toolbarControlVariants({ state: 'selected', disabled: false })).toMatch(
+      /(^|\s)bg-secondary(\s|$)/,
+    );
+    // One `box-shadow` value holds the 2 px `--field` inset ring and the underline moved in by it, so
+    // the two cannot compete for the property.
+    const shadow = TOOLBAR_TRACK_SWITCH.split(' ').filter((c) => c.includes(':shadow-[inset'));
+    expect(shadow).toHaveLength(1);
+    expect(shadow[0]).toMatch(
+      /inset_0_0_0_2px_var\(--field\),inset_0_-4px_0_0_var\(--background\)/,
+    );
+  });
+
+  it('raises only a member that is pressed and not shaded: a shaded one keeps its muted underline', () => {
+    for (const c of TOOLBAR_TRACK_SWITCH.split(' ')) {
+      expect(c, c).toContain('[aria-pressed=true]:not([aria-disabled=true])');
+    }
+  });
+
+  it('marks the chosen member under forced colours with system colours, opted out of the backplate', () => {
+    // `box-shadow` is dropped there and a border would move the box, so the mark is a `Highlight`
+    // fill. `forced-color-adjust: none` is what stops the UA painting a Canvas backplate that put
+    // `HighlightText` on white (measured), and the ordinary shadow and ring go with it.
+    for (const needle of [
+      'forced-colors:bg-[Highlight]',
+      'forced-colors:[color:HighlightText]',
+      'forced-colors:[forced-color-adjust:none]',
+      'forced-colors:shadow-none',
+      'forced-colors:ring-0',
+    ]) {
+      expect(TOOLBAR_TRACK_SWITCH, needle).toContain(needle);
+    }
+  });
+
+  it('keeps the control’s own focus ring inset, so a 1 px join has room for it', () => {
+    // An outset ring would reach into the neighbour across a 1 px gap.
+    const ordinary = toolbarControlVariants({ state: 'rest', disabled: false });
+    expect(ordinary).toMatch(/(^|\s)focus-visible:ring-inset(\s|$)/);
+    expect(ordinary).not.toMatch(/ring-offset/);
   });
 });

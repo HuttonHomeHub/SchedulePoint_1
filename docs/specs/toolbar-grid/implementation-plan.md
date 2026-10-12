@@ -220,7 +220,9 @@ forced colours.
 - **Description:** add `cluster` to `ToolbarItem` and `PromotableEntry`, and pass it through `derivePromotedItems`.
   `defineToolbar` refuses a non-contiguous cluster or one that spans sections. `Deck` and `Toolbar` wrap clustered
   runs in a `<span>` styled `TOOLBAR_TRACK`. `switch` members paint the raised `selected` fill inside their box.
-  `Toolbar`'s segment wrapper takes `TOOLBAR_TRACK`. Add a `forced-colors:` border on a raised member.
+  `Toolbar`'s segment wrapper takes `TOOLBAR_TRACK` **and keeps its `role="group"` and its name** (review B2). A raised
+  member takes `forced-colors:bg-[Highlight]` and `forced-colors:[color:HighlightText]` with
+  `forced-color-adjust: none` (a border would move the box; the opt-out is what stops the UA's `Canvas` backplate).
 - **Complexity:** L
 - **Dependencies:** M1
 - **Risks:** as above.
@@ -258,6 +260,36 @@ forced colours.
   3. Run the suites locally, including `e2e-forced-colors`.
   4. Accessibility and component reviews on the branch, then fold their findings.
   5. Changeset.
+
+**M2 status (2026-10-12): built on `feat/toolbar-grid-m2`, from M1's head `06bfd80e`; the two reviews in step 4 have not
+run yet.** What shipped, and where it differs from the text above:
+
+- **`cluster` and `ClusterTrack`** (`toolbar-registry.ts`, `ClusterTrack.tsx`, `toolbar-styles.ts`:
+  `TOOLBAR_TRACK`, `TOOLBAR_TRACK_SWITCH`). The wrapper is a plain `<span>`; a set's caption rides inside one
+  non-wrapping unit with its track (the review's optional nowrap unit, taken). `Toolbar`'s `Diagram | Gantt` wrapper
+  keeps `role="group"` and `aria-label="Plan view"` and is asserted to (`toolbar-segments.test.tsx`).
+- **Colour is a `switch`, the Link "Type" set is `joined`, Undo / Redo / Recent edits is `joined` in that order**
+  (`promotion-entries.tsx`, `tsld-toolbar-items.tsx`: orders 8, 9, 10). **The `History` glyph on Recent edits is M3-T1's,
+  not M2's, and was not built here.**
+- **The search outline** is `--chrome-input-quiet` (`oklch(0.53 0.02 264)`, CQ-1 (a)), **scoped to the deck's search
+  field with its own token** rather than changing `--chrome-input`: that token is also every other chrome field's outline
+  and the segmented control's option boundary, none of which was photographed.
+- **Forced colours differ from the plan's text**: `Highlight` / `HighlightText` with `forced-color-adjust: none`, not a
+  border (see the spec's R2). Found by looking at the first build: without the opt-out the chosen label disappeared.
+- **Citation fixed:** ADR-0119 D2 is the all-or-nothing partition rule; the flat-set decision is #154
+  (`promotion-entries.tsx:130-134`). (The text this plan was reviewed against carried the wrong one; it is not in this
+  file as written, and the spec's D2 line now names both.)
+- **Widths re-taken** (`promotion-widths.{fine,coarse}.json`, two harness runs): Colour's caption +5.9 px, Link "Type"'s
+  +4.4 px, the DO row 6 px narrower (the undo track). **No ladder move.** One thing the plan did not foresee: the harness
+  summed a set's member rects and added `itemGapPx` (4 px) between them, but a track joins its members with 1 px, so a
+  set in a track was charged 3 px per join too much. Left alone, that made `L6` (Has conflict only) miss coarse 2160 by a
+  few pixels while SC-18 (b) found it would fit. `promotion-widths.mjs` now charges the real join (`TRACK_JOINS`, recorded as
+  `trackJoinSavingPx`, as `triggerShrinkPx` is) and `promotion.spec.ts` SC-18 (a) subtracts it; with that the ladder is
+  unchanged.
+- **Journeys:** `command-surface.spec.ts` gains "a choice of one is a track with one raised member…" (fine and touch);
+  `deck-tracks-forced-colors.spec.ts` (in `e2e-workspace-fit`, with `forcedColors` as a per-test option) holds that the
+  chosen and unchosen member differ and has the `forcedColors: 'none'` control. No journey arrows across Undo's old order
+  (`e2e-undo` finds the controls by name), so none needed editing.
 
 ---
 

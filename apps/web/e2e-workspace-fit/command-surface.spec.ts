@@ -19,6 +19,7 @@ import {
 } from '../e2e-workspace-chrome/support';
 
 import { expectDividersOnlyBetweenGroups } from './deck-dividers';
+import { deckStops, expectTracks, lapDeck } from './deck-tracks';
 
 /**
  * **Every command on the plan's command surface clears 24 × 24 and a pointer can reach it.**
@@ -1897,6 +1898,88 @@ test.describe('The plan command surface', () => {
     }
   });
 
+  /**
+   * **A choice of one is a track with one raised member, and the roving walk keeps its stops**
+   * (toolbar-grid M2, SC-5 to SC-7).
+   *
+   * At 1912 the Colour set is on the LOOK row (L2) and Undo, Redo and Recent edits share a track on DO;
+   * Diagram | Gantt is in the header at every width. Every track is read in the browser
+   * (`deck-tracks.ts`): exactly one raised member per switch, raised by a fill AND an underline,
+   * members still 36 px tall with a point one pixel inside each edge landing on that member, the 1 px
+   * join belonging to the track, and no cluster wrapper with a role, a name or a tab stop (the header's
+   * Plan view group is the one named wrapper and keeps both).
+   *
+   * Then the keyboard: the same stops in document order, a lap that never rests on a wrapper, Redo
+   * before Recent edits (the order on screen), and pressing another Colour value moves the raise.
+   *
+   * **Verified red** by removing the `shadow-[…]` class from `TOOLBAR_TRACK_SWITCH` (the chosen
+   * member then has a fill and no underline: "has no underline" names Colour and Plan view), by giving
+   * `TOOLBAR_TRACK` `p-1` (the edge hits fail: padding takes the member's edge), and by listing Recent
+   * edits before Redo in the registry (the order assertion fails).
+   */
+  test('a choice of one is a track with one raised member, and the roving walk keeps its stop count', async () => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1912, height: 1080 });
+    await page.waitForTimeout(450);
+    await ensurePen(page);
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    await expect(deck.locator('[data-toolbar-item="colour-by-criticality"]')).toBeVisible();
+
+    const read = await expectTracks(page, 'fine 1912', 36);
+    // The pinned positive: Colour and Plan view are switches, Undo / Redo / Recent edits is joined.
+    expect(read.switches, 'Colour and Plan view').toBeGreaterThanOrEqual(2);
+    expect(read.joined, 'Undo / Redo / Recent edits').toBeGreaterThanOrEqual(1);
+
+    // Names are exactly what they were: the set's name is in each ("Colour by: X").
+    const colour = deck.locator('[data-toolbar-cluster="colour-by"] button');
+    await expect(colour).toHaveCount(3);
+    expect(
+      await colour.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label'))),
+    ).toEqual(['Colour by: Criticality', 'Colour by: Total float', 'Colour by: WBS group']);
+
+    // The walk: the same stops in document order, one Tab stop, Redo before Recent edits.
+    const stops = await deckStops(page);
+    expect(await deck.locator('[tabindex="0"]').count(), 'the deck has one Tab stop').toBe(1);
+    const visited = await lapDeck(page, stops.length);
+    expect(visited).toEqual(stops);
+    expect(stops.indexOf('redo')).toBe(stops.indexOf('undo') + 1);
+    expect(stops.indexOf('undo-history')).toBe(stops.indexOf('redo') + 1);
+
+    // CQ-1 (a): the search field keeps an outline, the quieter token rather than the shared one.
+    const outline = await page.evaluate(() => {
+      const field = document.querySelector('[data-toolbar-item="search"]');
+      const probe = (name: string): string => {
+        const el = document.createElement('i');
+        el.style.cssText = `border:1px solid var(${name});position:fixed`;
+        document.body.append(el);
+        const colour = getComputedStyle(el).borderTopColor;
+        el.remove();
+        return colour;
+      };
+      return {
+        actual: field ? getComputedStyle(field).borderTopColor : null,
+        quiet: probe('--chrome-input-quiet'),
+        shared: probe('--chrome-input'),
+      };
+    });
+    expect(outline.actual, 'the search field outline').toBe(outline.quiet);
+    expect(outline.quiet).not.toBe(outline.shared);
+
+    // Pressing another value moves the raise, and the track still holds exactly one.
+    await deck.locator('[data-toolbar-item="colour-by-totalFloat"]').click();
+    await expect(deck.locator('[data-toolbar-item="colour-by-totalFloat"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.mouse.move(2, 2);
+    await expectTracks(page, 'fine 1912 after pressing Total float', 36);
+    await deck.locator('[data-toolbar-item="colour-by-criticality"]').click();
+    await expect(deck.locator('[data-toolbar-item="colour-by-criticality"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   // Last in the describe: its conflict state mutates the shared plan.
   test('no group paints a box, and no divider starts or ends a line, in every state, at every cell', async () => {
     test.setTimeout(600_000);
@@ -2772,6 +2855,35 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       await page.getByRole('button', { name: 'Show Project Explorer' }).click();
       await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
     }
+  });
+
+  /**
+   * **The same tracks under a finger: every member 44 px tall, every edge and join intact**
+   * (toolbar-grid M2, SC-7; ADR-0118, ADR-0183). The 1 px join between Undo, Redo and Recent edits is
+   * the one place the gap between two touch targets shrank (it was 4 px), and `device-checklist.md`
+   * carries the on-device half. This is the part a browser can answer: no member is smaller for being
+   * in a track, and a point inside each member's own edge lands on it.
+   */
+  test('a choice of one is a track with one raised member, and every member clears 44 px', async () => {
+    test.setTimeout(180_000);
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(pointer, 'this context is not a coarse pointer — it would measure the wrong thing').toBe(
+      'coarse',
+    );
+    await showView('tsld');
+    await page.setViewportSize({ width: 1912, height: 1080 });
+    await page.waitForTimeout(450);
+    await ensurePen(page);
+    await expect(
+      page
+        .getByRole('toolbar', { name: 'Plan commands' })
+        .locator('[data-toolbar-item="colour-by-criticality"]'),
+    ).toBeVisible();
+    const read = await expectTracks(page, 'coarse 1912', HOUSE_TARGET);
+    expect(read.switches, 'Colour and Plan view').toBeGreaterThanOrEqual(2);
+    expect(read.joined, 'Undo / Redo / Recent edits').toBeGreaterThanOrEqual(1);
   });
 
   // Last in the describe: its conflict state mutates the shared plan.

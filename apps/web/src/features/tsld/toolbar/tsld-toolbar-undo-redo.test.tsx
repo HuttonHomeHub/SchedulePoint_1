@@ -146,14 +146,31 @@ describe('TSLD toolbar Recent edits menu (undo-redo M7)', () => {
   const press = (key: string) =>
     fireEvent.keyDown(document.activeElement ?? document.body, { key });
 
-  it('is a menu button named Recent edits, beside Undo', () => {
+  it('is a menu button named Recent edits, the third member of the Undo / Redo track', () => {
     const bar = doRow(historyCtx());
     expect(trigger(bar)).toHaveAttribute('aria-haspopup', 'menu');
     expect(trigger(bar)).toHaveAttribute('aria-expanded', 'false');
     const names = within(bar)
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'));
-    expect(names.indexOf('Recent edits')).toBe(names.indexOf('Undo move “C”') + 1);
+    // Undo, Redo, Recent edits (toolbar-grid M2): the order on screen is the order of the DOM, and so
+    // of the roving walk. Recent edits used to sit between the two one-step actions.
+    const undoAt = names.indexOf('Undo move “C”');
+    expect(names[undoAt + 1]).toMatch(/^Redo\b/);
+    expect(names[undoAt + 2]).toBe('Recent edits');
+    // One joined track holds all three, and the wrapper is only a picture: no role, no name, no stop.
+    const track = trigger(bar).closest('[data-toolbar-cluster]');
+    expect(track).toHaveAttribute('data-toolbar-cluster', 'history');
+    expect(track).toHaveAttribute('data-toolbar-cluster-kind', 'joined');
+    expect(track).not.toHaveAttribute('role');
+    expect(track).not.toHaveAttribute('aria-label');
+    expect(track).not.toHaveAttribute('tabindex');
+    expect(track).not.toHaveAttribute('data-toolbar-focusable');
+    expect(
+      within(track as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([names[undoAt], names[undoAt + 1], 'Recent edits']);
   });
 
   it('lists the undo steps newest first, then the redo steps, each saying what it does', () => {

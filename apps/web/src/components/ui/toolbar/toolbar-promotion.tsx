@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 
-import type { ToolbarGroupId, ToolbarItem, ToolbarRow } from './toolbar-registry';
+import type {
+  ToolbarClusterSpec,
+  ToolbarGroupId,
+  ToolbarItem,
+  ToolbarRow,
+} from './toolbar-registry';
 
 import { PROMOTION_STAGES } from '@/lib/breakpoints';
 
@@ -102,6 +107,11 @@ export interface PromotableEntry<Ctx> {
    * visible labels would otherwise lack.
    */
   captionBefore?: string;
+  /**
+   * The track this entry sits in (toolbar-grid M2) — see {@link ToolbarItem.cluster}. Every member of
+   * a set declares the same one, and the caption inherits it so it stays on the unit's line.
+   */
+  cluster?: ToolbarClusterSpec;
   /** The source menu's name in prose — the tooltip says it "moves into the ‹menu› menu" and the hand-off says where it went. */
   menuName: string;
   icon: ReactNode;
@@ -190,6 +200,7 @@ export function derivePromotedItems<Ctx>(
               order: trigger.order + entry.rank / 100 - 0.0005,
               label: entry.captionBefore,
               presentational: true,
+              ...present('cluster', entry.cluster),
               isVisible: visible,
               // The control's own height, so the caption shares its line's top: a 16 px caption
               // centred in a 36 px line sits 10 px lower and every line counter reads a second line.
@@ -197,7 +208,7 @@ export function derivePromotedItems<Ctx>(
                 <span
                   {...api.itemProps}
                   aria-hidden="true"
-                  className="text-muted-foreground inline-flex h-(--control-h) items-center px-1 text-xs whitespace-nowrap"
+                  className="text-muted-foreground inline-flex h-(--control-h) items-center px-1 text-sm whitespace-nowrap"
                 >
                   {entry.captionBefore}
                 </span>
@@ -229,6 +240,7 @@ export function derivePromotedItems<Ctx>(
         isVisible: visible,
         onActivate: entry.onActivate,
         ...present('visibleLabel', entry.visibleLabel),
+        ...present('cluster', entry.cluster),
         ...present('isEnabled', entry.isEnabled),
         ...present('disabledReason', entry.disabledReason),
         ...(entry.penGated ? { penGated: true } : {}),

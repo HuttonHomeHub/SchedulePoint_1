@@ -146,8 +146,9 @@ entry stops being needed.
   that is intended. Tooltips and the shortcuts
   sheet name the platform's own keys (⌘Z / ⇧⌘Z on a Mac; Ctrl+Z / Ctrl+Y elsewhere), and
   `aria-keyshortcuts` lists every chord that works.
-- **Recent edits jumps back several steps in one action** (undo-redo M7). A menu button beside
-  Undo, named **Recent edits** (not "Undo history": a second control whose name starts "Undo" is
+- **Recent edits jumps back several steps in one action** (undo-redo M7). A menu button at the end of the
+  **Undo, Redo, Recent edits** track (one joined unit, in that order, toolbar-grid M2: arrow keys visit Redo before
+  Recent edits because that is the order on screen), named **Recent edits** (not "Undo history": a second control whose name starts "Undo" is
   ambiguous to voice control and to a screen reader), lists the undo steps newest first and then the redo steps. A row
   shows the step's name; past the first it adds a second line saying what else the choice takes
   along ("and the 2 steps after it"), and a screen reader hears "Undo ⟨step⟩ and the 2 steps after
@@ -158,6 +159,12 @@ entry stops being needed.
   says "The history changed — open the list again." While a run is in flight Undo, Redo and the
   button are `aria-busy`. It is shaded with Undo and Redo (no pen, the Late-start overlay, nothing
   to undo), and a long step name is cut short in the row with the whole name in its `title`.
+- **A choice of one looks like a switch** (toolbar-grid M2). The Colour set and Diagram | Gantt sit in a
+  recessed track with exactly one member raised (a fill and an underline, and under forced colours a system
+  `Highlight` pair), so the chosen value reads without reading. Every member keeps its name ("Colour by: Total
+  float"), its `aria-pressed` and its roving stop; the track is a picture with no role, name or stop of its own,
+  and Diagram | Gantt stays the named group `Plan view`. The deck's search field keeps an outline that clears 3:1 on
+  both its grounds (a field with no boundary fails WCAG 1.4.11), one step quieter than the other chrome fields'.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.
