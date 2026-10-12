@@ -212,3 +212,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0186](0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)                            | The reason a conflict exists is stated on the object, and the toolbar chip stays a count   | Accepted           |
 | [0187](0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)        | A selection bar leads with its subject, and a floor never exceeds its row                  | Accepted           |
 | [0188](0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)            | A divider has a single-pointer twin, and its strip follows the finger                      | Accepted           |
+| [0189](0189-a-shape-on-the-toolbar-is-a-control.md)                                             | A shape on the toolbar is a control                                                        | Accepted           |
