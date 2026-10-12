@@ -617,13 +617,62 @@ describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
     refocus.mockRestore();
   });
 
-  it('puts the row seam before the second row on the scrolling line, whichever row that is', () => {
+  it('puts the row seam on the second row of the scrolling line, whichever row that is', () => {
     viewport(false);
     renderDeck();
-    const seamed = [...document.querySelectorAll('[data-deck-row] > [role="group"]')].filter((g) =>
-      g.className.includes('max-lg:after:absolute'),
+    // A border on the row wrapper and not a pseudo-element on its first group: the row clips its
+    // own left edge, which would hide anything hung outside its box.
+    const seamed = [...document.querySelectorAll('[data-deck-row]')].filter((row) =>
+      row.className.includes('max-lg:border-l'),
     );
     expect(seamed).toHaveLength(1);
-    expect(seamed[0]?.closest('[data-deck-row]')?.getAttribute('data-deck-row')).toBe('look');
+    expect(seamed[0]?.getAttribute('data-deck-row')).toBe('look');
+  });
+
+  it('draws one divider before every group but the first on its row, and no row mark', () => {
+    renderDeck();
+    expect(document.querySelector('[data-deck-row-mark]')).toBeNull();
+    for (const row of document.querySelectorAll('[data-deck-row]')) {
+      const groups = [...row.querySelectorAll(':scope > [role="group"]')];
+      // The pinned positive: a fixture with one group per row would satisfy this vacuously.
+      expect(
+        groups.length,
+        `row ${row.getAttribute('data-deck-row')} has fewer than two groups`,
+      ).toBeGreaterThan(1);
+      groups.forEach((group, index) => {
+        const trailing = group.classList.contains('ml-auto');
+        // A trailing group's divider is the spacer's, so that a trailing group that wraps onto a
+        // line of its own draws none; every other group draws its own.
+        expect(
+          group.className.includes('before:border-l'),
+          `group ${group.getAttribute('aria-label')} at index ${index}`,
+        ).toBe(index > 0 && !trailing);
+        const spacer = group.previousElementSibling;
+        expect(
+          spacer?.hasAttribute('data-deck-spacer') ?? false,
+          `the space before ${group.getAttribute('aria-label')}`,
+        ).toBe(index > 0 && trailing);
+      });
+    }
+  });
+
+  it('keeps the spacer out of the roving walk and the accessibility tree', () => {
+    renderDeck();
+    const spacers = document.querySelectorAll('[data-deck-spacer]');
+    expect(spacers.length, 'the fixture has a trailing group, so it has a spacer').toBe(1);
+    for (const spacer of spacers) {
+      expect(spacer.getAttribute('aria-hidden')).toBe('true');
+      expect(spacer.hasAttribute('data-toolbar-focusable')).toBe(false);
+      expect(spacer.hasAttribute('role')).toBe(false);
+      expect(spacer.hasAttribute('tabindex')).toBe(false);
+      expect(spacer.textContent).toBe('');
+    }
+  });
+
+  it('clips each row at its own left edge, so no divider is painted at the start of a line', () => {
+    renderDeck();
+    const rows = document.querySelectorAll('[data-deck-row]');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.className).toMatch(/(^|\s)deck-row-clip(\s|$)/);
   });
 });

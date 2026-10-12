@@ -79,8 +79,8 @@ import type { ToolbarLabelState, ToolbarLabelVisibility } from './toolbar-regist
  * The deck's group box — a `border` plus `px-2 py-1.5` at ≈ 1.2:1 against the band it sat in — cost
  * 14 px per deck line and 18 px per group to draw a boundary a 175 %-scaled screen cannot see
  * (`m0-measurement.md` §1). It went, and the `chrome` variant with it. A group is now a bare row of
- * controls, separated from its neighbour by an inset rule built at M7 (`Deck.tsx`) rather than by a
- * box. The base survives for the **selection bar**, which is not that epic's subject and keeps it.
+ * controls, separated from its neighbour by a divider (`DECK_GROUP_DIVIDER`) rather than by a box.
+ * The base survives for the **selection bar**, which is not that epic's subject and keeps it.
  *
  * **A style, not a component**, and that remains right for the reason it always was: the two
  * consumers wanted different behaviour, so a shared `<DeckCard>` would recouple things that should
@@ -120,13 +120,13 @@ export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2
  * hairline (ADR-0119). Declared once so the three consumers cannot drift (the
  * `TOOLBAR_CARET_TARGET` precedent). The height is `inset-y-1/4` — 50 % of the box — rather than
  * the study's 44 %, because the ratchet on arbitrary values (ADR-0099) is worth more than 6 %
- * of a hairline. **The group-level seam takes `inset-y-1/5` (60 %) and is NOT this constant** —
- * it is written inline in `Deck.tsx` because it also needs a negative offset to sit in the row's
- * own `gap-2`, which this rule (positioned inside a padded box) does not. This sentence read "the
- * group-level seam that joins it at M4" until M7, stating as fact a thing no milestone built: the
- * seam was specified in M1-T3, promised here, and absent from the tree until the ux and
- * architecture reviews found it, by which point M6 had deleted the caption border that was
- * incidentally doing its job.
+ * of a hairline.
+ *
+ * **There are two marks now, and the second is not this one.** This rule is the section mark: a
+ * short, quiet line between the registry sections inside a group. A boundary between two groups
+ * is `DECK_GROUP_DIVIDER` — full height, in the gap, and the stronger of the two (2.43:1 against
+ * this rule's 1.54:1, asserted). "One seam vocabulary" described the three bands sharing this rule
+ * and stays true of them; the deck's group boundary was never one of its uses.
  *
  * A pseudo-element rather than a `border-l` because a border is part of the box: it widens the
  * element, it moves with padding, and it is the same 1 px whether the row is 36 or 44 tall. The
@@ -146,61 +146,61 @@ export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 /**
- * **A deck group's container — a pill** (toolbar-redesign M6 V2). A pseudo-element that fills the
- * group's box exactly, `--muted` at 50 % with a hairline `--border`, behind the controls: it takes
- * **no layout width** (`Deck.tsx` says why that is the constraint) and, filling the box rather than
- * hanging past it, **cannot overflow the deck** — a first build hung it 2 px out and the deck's
- * `scrollWidth` exceeded its `clientWidth` by that much at every width, which `Deck`'s own
- * `deckScrolls` reads as "the line scrolls" (found by `narrow-shell.spec.ts`: "1280 x 600 does not
- * scroll sideways"). And `rounded-md` matches the
- * `Diagram | Gantt` segment's container, which is the same statement made elsewhere in the band.
- * `isolate` keeps its `-z-10` inside the group, so it can never fall behind the band.
+ * **The deck's row geometry, in CSS px, in one place** (toolbar-grid M1). The Tailwind classes below and
+ * `deck-row-clip` in `globals.css` are literal, so `deck-seams.structural.test.tsx` derives what they
+ * must say from these numbers and fails when they drift.
  *
- * **Why 50 % and a hairline, not 60 %.** The first build was 40 % and the review found it too faint
- * to read as a container at a tablet's distance. Raising the fill alone also lowers the idle hover
- * wash (`--muted`, the pill's own hue) against it — 1.15:1 at 40 %, 1.10:1 at 60 % — so the fill
- * goes only to 50 % (1.13:1) and the rest of the edge comes from the hairline, which is a border and
- * so costs no width. Text on the pill is 13.74:1 (foreground) and 7.17:1 (muted); the numbers are in
- * `m6-measurement.md` §3.
+ * - `gap`: the space between groups. 8 below 79 rem, where the 1024 floor has about 5 px spare on DO and
+ *   the gap must not widen; 24 from it (`@roomy/deck:`). The spacer's negative margin equals it.
+ * - `ringReach`: how far the forced-colours focus ring reaches (`2px` at a `2px` offset).
+ * - `clipMargin`: where the row's clip edge lies outside its box: the ring plus 1 px.
+ * - `divider`: how far the line's OUTER edge hangs from the group it leads (the line is 1 px wide, so it
+ *   spans `offset - 1` to `offset`). Roomy it is mid-gap (13 of 24). Compact the gap is 8, so mid-gap
+ *   (5) would sit inside the clip and show at a line's start; the line has to clear `clipMargin` by
+ *   1 px (`offset - 1 >= clipMargin + 1`, so 7) and so sits 1 px from the neighbour it follows. The ring
+ *   and the divider therefore each have 1 px of headroom on their own side of the clip edge.
  */
-export const DECK_GROUP_PILL =
-  'relative isolate before:absolute before:inset-x-0 before:inset-y-0 before:-z-10 before:rounded-md before:border before:border-border before:bg-muted/50';
+export const DECK_GEOMETRY_PX = {
+  gap: { compact: 8, roomy: 24 },
+  ringReach: 4,
+  clipMargin: 5,
+  divider: { compact: 7, roomy: 13 },
+} as const;
 
 /**
- * The Author pill while the pen is not held: hollow and dashed, so the group reads as locked (V3).
- * The dash is `--muted-foreground` at 50 % — 3.04:1 against the band, over the 3:1 a boundary needs
- * (1.4.11) — where the hairline `--border` it replaced was 1.5:1 and vanished beside the filled
- * pills. In forced colours the dash takes `GrayText`, the one colour the mode leaves for "unavailable".
- */
-export const DECK_GROUP_PILL_LOCKED =
-  'before:border-dashed before:border-muted-foreground/50 before:bg-transparent forced-colors:before:border-[GrayText]';
-
-/**
- * **The row's closing action, drawn as an outline** (M6 V4, reworked after the review). Share & export
- * was `--secondary`-filled, which is the exact fill of the selected `Diagram | Gantt` segment and of a
- * pressed toggle, so a reader could not tell "chosen" from "the row's last action". It is now an
- * inset 1 px ring in `--muted-foreground` at 60 % (3.6:1 on a pill): a shape no state in the ladder
- * uses, with no fill, so nothing it sits beside can be mistaken for it, and **no width** (a ring is
- * painted inside the box).
+ * **A deck group is split from its neighbour by a divider, never boxed** (toolbar-grid M1, R1). It
+ * replaces the pill, the locked Author outline, the Export and Share ring and the rows' eye and wrench:
+ * five boxes where the owner asked for a grid.
  *
- * It is a class on the **section** and reaches its buttons by descendant selector, because the pair
- * is `Export` (a hand-written `render` item) beside `Share…` (a plain button derived from a
- * `PromotableEntry`) and neither takes a `closing` prop: adding one to `ToolbarButton`, the registry
- * item and the entry would widen three public contracts for a decoration. The selector means the pair
- * is outlined together by construction, so "both or neither" cannot drift. A keyboard focus ring is
- * `ring-2` in `--ring` on the control itself and is more specific than this, so focus still wins.
+ * A 1 px line the full height of the controls, in the gap **before** every group but the first on its
+ * row (placed by `DECK_GEOMETRY_PX`). A pseudo-element, so it costs **no layout width**.
+ *
+ * **A divider is only ever leading, and the row clips its own edge** (`deck-row-clip`), so a group that
+ * wraps to the start of a line draws its divider outside the clip and nothing is painted: the
+ * leading-seam defect (SC-12, measured at 1024) solved without a box.
+ *
+ * `--muted-foreground` at 40 % is 2.43:1 on the band (`m0-measurement.md` §6), asserted at 2:1 in
+ * `token-contrast.test.ts` as a design floor (a separator is not a control, so 1.4.11 does not bind
+ * it); it outranks the section rule (`TOOLBAR_INSET_RULE`, 1.54:1). A `border-l` and not a background,
+ * so forced colours keep it. `relative` is the group's own (`Deck.tsx`), not repeated here.
  */
-export const DECK_CLOSING_SECTION =
-  '[&_button]:ring-1 [&_button]:ring-inset [&_button]:ring-muted-foreground/60';
+export const DECK_GROUP_DIVIDER =
+  'before:absolute before:inset-y-0 before:-left-1.75 before:border-l before:border-muted-foreground/40 @roomy/deck:before:-left-3.25';
 
 /**
- * A deck row's leading mark (M6 V1): hidden until the deck is `roomy` (79 rem, 1264 px — deliberately:
- * below it the rows have no 18 px to spend, `m6-measurement.md` §0), then 14 px of glyph with the
- * row's 8 px gap pulled in by `-mr-1`, so its net width is 18 px. Height is the control's so the glyph
- * sits on the controls' midline in a row whose items align to the top.
+ * **The trailing group's divider belongs to the space before it, not to the group** (toolbar-grid M1).
+ *
+ * A trailing group is pushed to its line's end by `ml-auto`, so when it wraps onto a line of its own it
+ * sits at the RIGHT with nothing to its left, and a divider on its own left edge would point at nothing
+ * and is out of the row clip's reach. So an empty, `aria-hidden` flex item before it draws the line, and
+ * takes the free space (`flex-1`, basis 0) the group's `ml-auto` used to take. Where the group shares a
+ * line the line sits in the gap before it; where it wraps, the spacer ends the line above and the line
+ * hangs past the row's right edge, clipped like a left-edge one. The negative margin cancels one of
+ * the two gaps the extra item adds, so a row's natural width is what it was without it
+ * (`promotion-widths.*.json` measures it that way).
  */
-export const DECK_ROW_MARK =
-  'text-muted-foreground -mr-1 hidden h-(--control-h) shrink-0 items-center @roomy/deck:inline-flex';
+export const DECK_TRAILING_SPACER =
+  'pointer-events-none relative -ml-2 min-w-0 flex-1 basis-0 self-stretch before:absolute before:inset-y-0 before:-right-1.75 before:border-l before:border-muted-foreground/40 @roomy/deck:-ml-6 @roomy/deck:before:-right-3.25';
 
 export const toolbarSplitCaretVariants = cva(
   // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
@@ -353,9 +353,9 @@ export const toolbarControlVariants = cva(
        * **A shaded control is quiet, not dimmed** (toolbar-redesign M6 V3). It was `opacity-50`, which
        * halves the whole control: label, glyph, a state fill and an underline together. That read as
        * a dead grey and — worse — was a number nobody had gated, since an alpha composites against
-       * whatever is behind it (the pill, the band, the amber of the pen). It is now the same
-       * `--muted-foreground` the chevrons and captions already wear, **7.98:1 on the band and 7.33:1
-       * on a deck pill** (`m6-measurement.md` §3), so the text clears 1.4.3's 4.5:1 although 1.4.3
+       * whatever is behind it (the band, the amber of the pen). It is now the same
+       * `--muted-foreground` the chevrons and captions already wear, **7.98:1 on the band** (7.33:1 on the
+       * deck pill the band wore until toolbar-grid M1; `m6-measurement.md` §3), so the text clears 1.4.3's 4.5:1 although 1.4.3
        * exempts an inactive control.
        *
        * The fill and the underline go too (`bg-transparent shadow-none`): ink in `--muted-foreground`

@@ -26,8 +26,8 @@ export const PROMOTION_LADDER: Readonly<Record<LadderRank, Exclude<PromotionAt, 
   // LOOK
   L1: { fine: 'PROMOTE_80', coarse: 'PROMOTE_80' },
   L2: { fine: 'PROMOTE_119_5', coarse: 'PROMOTE_119_5' },
-  L3: { fine: 'PROMOTE_90', coarse: 'PROMOTE_90' },
-  L4: { fine: 'PROMOTE_100', coarse: 'PROMOTE_135' },
+  L3: { fine: 'PROMOTE_90', coarse: 'PROMOTE_135' },
+  L4: { fine: 'PROMOTE_100', coarse: 'PROMOTE_90' },
   L5: { fine: 'PROMOTE_135', coarse: 'PROMOTE_160' },
   L6: { fine: 'PROMOTE_135', coarse: 'PROMOTE_135' },
   // DO

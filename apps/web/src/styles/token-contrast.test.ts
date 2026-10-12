@@ -664,6 +664,51 @@ describe("the command deck's state ladder gives four states four pictures", () =
   });
 });
 
+/**
+ * **The deck's group divider, against the band and against the section rule it outranks**
+ * (toolbar-grid M1, P1 and P2; readings in `docs/specs/toolbar-grid/m0-measurement.md` §6).
+ *
+ * The divider is `--muted-foreground` at 40 % (`DECK_GROUP_DIVIDER`), composited over the band
+ * the way the browser does it; the section rule is `--border` (`TOOLBAR_INSET_RULE`). Neither is
+ * a control or a state, so WCAG 1.4.11 does not bind them, and the 2:1 floor on the divider is a
+ * **design floor** and says so: it is what keeps the mark visible, which was the complaint about the
+ * 1.54:1 hairline it replaces. The second assertion is the hierarchy — a boundary between groups
+ * must be the stronger mark than the boundary between a group's sections — and it is a comparison
+ * of the two ratios, so a change that dims the divider or brightens the rule fails it even while
+ * each still clears its own floor.
+ */
+describe('the deck group divider outranks the section rule', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'chrome');
+  const value = (name: string): string => {
+    const v = tokens.get(name);
+    if (v === undefined) throw new Error(`${name} is not declared`);
+    return v;
+  };
+  const band = fillOf(tokens);
+  const dividerInk = compositeOver(
+    { ...parseColour(value('--muted-foreground')), alpha: 0.4 },
+    band,
+  );
+  const dividerRatio = contrastRatio(band, dividerInk);
+  const ruleRatio = contrastRatio(band, compositeOver(parseColour(value('--border')), band));
+
+  it('P1: the divider is visible on the band (design floor, >= 2:1)', () => {
+    expect(
+      dividerRatio,
+      `the divider is ${fmtRatio(dividerRatio)} on the band`,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('P2: the divider is the stronger mark, and the rule is a real mark to outrank', () => {
+    expect(
+      dividerRatio,
+      `the divider (${fmtRatio(dividerRatio)}) does not outrank the rule (${fmtRatio(ruleRatio)})`,
+    ).toBeGreaterThan(ruleRatio);
+    // A rule composited to nothing would make the comparison above vacuous.
+    expect(ruleRatio).toBeGreaterThan(1);
+  });
+});
+
 describe('the axis markers are legible in the ruler band', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

@@ -392,17 +392,21 @@ under focus"; only the cluster uses it, and `HistoryResultStrip` and the selecti
 DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
 deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
-**Three optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6).
+**Two optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6; the group box,
+the row mark and the closing ring it also shipped were deleted by toolbar-grid M1).
 `toolbarControlVariants` gains a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none` and
 `forced-colors:[color:GrayText]`, no longer `opacity-50`; a shaded `selected` lens keeps an underline).
-The row's closing action has **no variant**: `DECK_CLOSING_SECTION` outlines every button in the deck's `output`
-section by descendant selector, because Export is a hand-written `render` item and Share… a derived
-`ToolbarButton`, and a `closing` prop would have widened three contracts for a decoration. A shut
-`ToolbarSplitButton` caret is `cursor-default` with no hover wash (a live one has `hover:bg-muted`), not
+A shut `ToolbarSplitButton` caret is `cursor-default` with no hover wash (a live one has `hover:bg-muted`), not
 `opacity-50`. `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner (capped at `9+`) whose
-sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on). `toolbar-styles.ts` exports
-`DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`, `DECK_ROW_MARK` and `DECK_CLOSING_SECTION`, which `Deck` applies;
-nothing outside `Deck` should.
+sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on).
+
+**`Deck` draws dividers, not boxes** (toolbar-grid M1). `toolbar-styles.ts` exports `DECK_GROUP_DIVIDER` (a 1 px
+`before:` border in the gap before a group, half the gap to the left: 4 px of 8, 12 px of 24 from the roomy floor)
+and `DECK_TRAILING_SPACER` (an empty, `aria-hidden` flex item before a trailing group that carries its divider and
+takes the free space `ml-auto` used to take), and no longer exports `DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`,
+`DECK_ROW_MARK` or `DECK_CLOSING_SECTION`; `deck-seams.structural.test.tsx` refuses all four. Each deck row is
+`deck-row-clip` (a clip 4 px outside its box, so the forced-colours focus ring survives) so no divider opens a line. Nothing outside `Deck` should use either constant. Neither adds a role,
+a name or a tab stop, and `Deck`'s props are unchanged.
 
 **`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional
 `groupOrder`, the left-to-right order of its taxonomy groups, for a surface whose subject is **one object**

@@ -387,21 +387,20 @@ change as items promote** (View, Find, Panels, Author, Plan), and a promoted ite
 trigger in the same group. **The ladder's order is the product owner's ranking** (D-n), by frequency and
 importance, and each threshold is computed from measured widths, never judged.
 
-### The visual brief: containers, a closing action, quiet shading, and an organisation menu (toolbar-redesign M6)
+### The visual brief: dividers, quiet shading, and an organisation menu (toolbar-redesign M6, amended by toolbar-grid M1)
 
-**A group is a container, not a seam** (V2): each deck group is a low-contrast pill that costs the row no width,
-so a group that wraps onto its own line cannot open it with a stray rule (SC-12). **A row names itself quietly**
-(V1): a 14 px glyph in the muted ink (an eye, and a wrench rather than a second pencil beside `Start editing`) leads
-LOOK and DO, only from 79 rem (1264 px) where the row has room — deliberately — and never as a
-stripe, a tint band or a new colour. **A shaded control is quiet, not dimmed** (V3): the ink is the muted
-foreground at 7.98:1 and the fill and underline drop away — what says "shut" is that bare picture, no hover and
-the reachable reason (ADR-0082), and while the pen is not held the Author pill is hollow and dashed so the pen and
-the eleven commands it unlocks read as one locked unit; a lens that is on but shaded keeps a quiet underline,
-and a shaded control takes `GrayText` in forced colours. **The last action in a row is outlined, never filled**
-(V4): Export and a promoted Share… share one ring, because the secondary fill means "chosen" on the
-`Diagram | Gantt` segment and on a pressed toggle. **`Start editing` stays an ordinary control while the pen is not
-held** — the amber slab is the pen _held_ (ADR-0133 D3/D4); the locked Author pill's stronger dash is what says
-"start here". **A filter that is on says how many** (V4a): `Filter ▾` carries a
+**A group is split from the next by a divider, never boxed** (toolbar-grid M1, replacing M6 V2's pill): a 1 px line
+the full height of the controls in the gap before each group but the first on its row, stronger than the short rule
+between a group's own sections. **No divider starts or ends a line** (SC-12, now SC-3): each deck row clips its own
+left edge, so a group that wraps onto a line of its own draws none, and a trailing group's divider is drawn by the
+space before it, so a trailing group that wraps alone, right-aligned, draws none either. **There is no row mark and
+no ring round Export and Share…** (M6 V1 and V4, deleted): five boxes were what the owner said they had not asked for.
+**A shaded control is quiet, not dimmed** (V3): the ink is the muted foreground at 7.98:1 and the fill and underline
+drop away — what says "shut" is that bare picture, no hover and the reachable reason (ADR-0082). **The Author group
+has no locked outline while the pen is not held** (CQ-2, toolbar-grid M1): the eleven shaded commands and the pen
+leading them are the whole message. A lens that is on but shaded keeps a quiet underline, and a shaded control takes
+`GrayText` in forced colours. **`Start editing` stays an ordinary control while the pen is not held** — the amber slab
+is the pen _held_ (ADR-0133 D3/D4). **A filter that is on says how many** (V4a): `Filter ▾` carries a
 count on its glyph and "2 filters on" for a screen reader.
 
 **The organisation switcher is a menu button, and a single organisation is a label** (V5, ADR-0104). The header

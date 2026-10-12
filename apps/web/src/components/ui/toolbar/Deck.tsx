@@ -1,5 +1,4 @@
-import { Eye, Wrench } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 
 import {
   containerShouldStandDown,
@@ -14,10 +13,8 @@ import {
   type ToolbarItem,
 } from './toolbar-registry';
 import {
-  DECK_CLOSING_SECTION,
-  DECK_GROUP_PILL,
-  DECK_GROUP_PILL_LOCKED,
-  DECK_ROW_MARK,
+  DECK_GROUP_DIVIDER,
+  DECK_TRAILING_SPACER,
   resolveLabelVisibility,
   TOOLBAR_INSET_RULE,
   toolbarLabelMinWidthClass,
@@ -86,12 +83,11 @@ import { cn } from '@/lib/utils';
  * structure **inside** a group rather than as a name above it. This section said 7 → 4 until that
  * milestone gave `help` a name of its own.
  *
- * **There is no card**, and this paragraph said there was until M7. M1 deleted the box (a border
- * and padding at ≈1.2:1 against the band, drawing a boundary a 175 %-scaled screen cannot see) and
- * M6 deleted the caption. A deck group is now a bare row of controls with a `role` and an
- * `aria-label`, marked off from its neighbour by a rule taller than the one between its own
- * sections — the coarser boundary being the stronger mark, which is what makes the two read as a
- * hierarchy rather than as two of the same thing.
+ * **There is no card, and no box of any kind** (toolbar-grid M1). A deck group is a bare row of controls
+ * with a `role` and an `aria-label`; what marks it from its neighbour is a full-height divider in the
+ * gap before it (`DECK_GROUP_DIVIDER`), stronger than the short rule between its own sections, which is
+ * what makes the two read as a hierarchy. (A pill, a dashed outline and a ring did this until the owner
+ * asked for a grid; `m0-measurement.md` has the numbers.)
  *
  * ## What `caption` was called, and why it is now `name`
  *
@@ -382,83 +378,79 @@ export function Deck<Ctx>({
         <div
           key={row}
           data-deck-row={row}
-          className="flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap"
+          className={cn(
+            // **The row clips its own edges, and that is what keeps a divider off a line's start**: a
+            // wrapped group's leading divider hangs outside the clip (SC-12). `clip` and not `hidden`,
+            // which would make the row a scroll container (`deckScrolls` and `scrollIntoView` below
+            // `lg` would change). Clip margin, divider offsets and the gap are one set of numbers:
+            // `DECK_GEOMETRY_PX`. Horizontal gap only, so a wrapped line does not move further from the
+            // one above it.
+            '@roomy/deck:gap-x-6 deck-row-clip flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap',
+            // The seam between the two rows on the scrolling line: below `lg` the second row follows
+            // the first on the same line, and nothing else would say a row ended. A border and not a
+            // pseudo-element, because the row's clip would hide anything outside its box; `-ml-2`
+            // and `pl-2` put it mid-gap (half of the root's `max-lg:gap-4`). That is a different gap
+            // from `DECK_GEOMETRY_PX.gap` (between rows, below `lg`), so it is not derived from it.
+            rowIndex > 0 &&
+              'max-lg:border-muted-foreground/40 max-lg:-ml-2 max-lg:border-l max-lg:pl-2',
+          )}
         >
-          {/* **The row's identity is a quiet leading mark** (toolbar-redesign M6 V1): an eye for LOOK, a
-              wrench for DO (not a pencil: `Start editing` leads this row, and a second pencil beside it
-              read as a duplicate of the pen), in the muted ink, `aria-hidden` and never a stop. No stripe, no
-              tint band and no new colour — the pills carry the grouping and this carries only which
-              row you are on. **Roomy only** (`@roomy/deck:`, 79 rem = 1264 px, a deliberate floor), because it costs 18 px of the row and the
-              rows below that width have none to spare: at 1024 the LOOK row keeps about 28 px with a
-              conflict showing, and SC-1 asserts two lines there. Above it, the ladder's free widths are
-              read with the mark present (`promotion-widths.*.json`). */}
-          <span aria-hidden="true" data-deck-row-mark={row} className={DECK_ROW_MARK}>
-            {row === 'look' ? <Eye className="size-3.5" /> : <Wrench className="size-3.5" />}
-          </span>
           {groups
             .filter((group) => group.row === row)
             .map((group, groupIndex) => {
+              const trailing = 'trailing' in group;
               return (
-                <div
-                  key={group.id}
-                  role="group"
-                  aria-label={group.name}
-                  // **A ROW, caption leading — not a caption stacked above the buttons.** Read this
-                  // paragraph as history: M6 then deleted the caption outright, so what survives of
-                  // the decision is the row, and the group's name reaches AT through the
-                  // `aria-label` above rather than through anything rendered. Kept because the
-                  // measurement is the reason the deck is one row tall per card at all.
-                  //
-                  // Measured (`measure-output/m4-vertical-stack.json`): as a stacked card this was 81 px,
-                  // of which ~29 was a full-width caption row, and the deck was 170 px because the four
-                  // cards need ~2,126 px and never fit on one line at any width from 1280 to 1920. Two
-                  // rows of 81. The canvas was down to 224 px at 1280×900.
-                  //
-                  // Turning the card on its side spends the caption's width instead of its height, which
-                  // the deck has to spare and the workspace does not: the card becomes one row tall, and
-                  // the deck 170 → ~112. The height was never the buttons'.
-                  //
-                  // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
-                  // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
-                  // argument about the CARD, and is unaffected by what the buttons inside it do.
-                  // **No card** (console epic M1-T1, S1). The group's box — a `border` and `px-2 py-1.5`
-                  // at ≈ 1.2:1 against the band — cost 14 px per deck line and 18 px per group to draw
-                  // a boundary a 175 %-scaled screen cannot see (`m0-measurement.md` §1). The group
-                  // keeps its role and its name; its height is now the control row's. The shared
-                  // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
-                  className={cn(
-                    'flex items-stretch gap-2 max-lg:shrink-0',
-                    'trailing' in group && 'ml-auto',
-                    // **Each group is a pill, and the pill replaces the group seam** (toolbar-redesign
-                    // M6 V2). The seam (console epic M7) was a 1 px rule on the group that FOLLOWED
-                    // another, drawn at `-left-1` — so a group that wrapped onto a line of its own opened
-                    // that line with a rule pointing at nothing (SC-12, the leading-seam defect, found at
-                    // 1024). A container has no leading edge to misplace: it surrounds its own group
-                    // wherever the group lands. The pill is a pseudo-element filling the box exactly, so
-                    // it costs the row **no width** — the LOOK row at 1024 has about 28 px to spare with
-                    // a conflict showing, and `DECK_GROUP_PILL` spends none of it.
+                <Fragment key={group.id}>
+                  {/* A trailing group's divider is drawn by the space before it (`DECK_TRAILING_SPACER`),
+                      so a trailing group that wraps onto a line of its own, right-aligned, draws none. */}
+                  {trailing && groupIndex > 0 ? (
+                    <div aria-hidden="true" data-deck-spacer className={DECK_TRAILING_SPACER} />
+                  ) : null}
+                  <div
+                    role="group"
+                    aria-label={group.name}
+                    // **A ROW, caption leading — not a caption stacked above the buttons.** Read this
+                    // paragraph as history: M6 then deleted the caption outright, so what survives of
+                    // the decision is the row, and the group's name reaches AT through the
+                    // `aria-label` above rather than through anything rendered. Kept because the
+                    // measurement is the reason the deck is one row tall per card at all.
                     //
-                    // The finer division inside a group (`TOOLBAR_INSET_RULE` between registry sections)
-                    // is unchanged: a rule inside a container is still the right mark for "a different
-                    // kind of thing, same group", and the pill is the coarser mark around it.
+                    // Measured (`measure-output/m4-vertical-stack.json`): as a stacked card this was 81 px,
+                    // of which ~29 was a full-width caption row, and the deck was 170 px because the four
+                    // cards need ~2,126 px and never fit on one line at any width from 1280 to 1920. Two
+                    // rows of 81. The canvas was down to 224 px at 1280×900.
                     //
-                    // **The Author pill is hollow while the pen is not held**, so the eleven pen-gated
-                    // commands and the pen that leads them read as one locked unit instead of as eleven
-                    // separately dimmed controls (V3). Hollow-and-dashed is the second channel; the
-                    // shaded ink is the first.
-                    DECK_GROUP_PILL,
-                    group.id === 'author' && !authoringEnabled && DECK_GROUP_PILL_LOCKED,
-                    // The seam between the two rows on the scrolling line: below `lg` the second row's
-                    // first group follows the first row's last on the same line, and nothing else
-                    // would say a row ended.
-                    // Half of `max-lg:gap-4` (the root's) to the left, so it sits mid-gap. `after:`, because
-                    // the pill has the `before:`.
-                    groupIndex === 0 &&
-                      rowIndex > 0 &&
-                      'max-lg:after:bg-border max-lg:after:absolute max-lg:after:inset-y-1/5 max-lg:after:-left-2 max-lg:after:w-px',
-                  )}
-                >
-                  {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
+                    // Turning the card on its side spends the caption's width instead of its height, which
+                    // the deck has to spare and the workspace does not: the card becomes one row tall, and
+                    // the deck 170 → ~112. The height was never the buttons'.
+                    //
+                    // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
+                    // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
+                    // argument about the CARD, and is unaffected by what the buttons inside it do.
+                    // **No card** (console epic M1-T1, S1). The group's box — a `border` and `px-2 py-1.5`
+                    // at ≈ 1.2:1 against the band — cost 14 px per deck line and 18 px per group to draw
+                    // a boundary a 175 %-scaled screen cannot see (`m0-measurement.md` §1). The group
+                    // keeps its role and its name; its height is now the control row's. The shared
+                    // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
+                    className={cn(
+                      // `relative` on EVERY group, not only those with a divider: it is the containing
+                      // block for the `sr-only` (absolutely positioned) spans inside its controls. Without
+                      // it they anchor to an ancestor outside the scrolling line below `lg`, escape its
+                      // `overflow-x-auto`, widen the shell and let a click scroll the whole page sideways
+                      // (found by `narrow-shell.spec.ts` when the pill, which was `relative`, went).
+                      'relative flex items-stretch gap-2 max-lg:shrink-0',
+                      trailing && 'ml-auto',
+                      // **Every group but the first on its row is split from its neighbour by a divider**
+                      // (toolbar-grid M1, R1) — a pseudo-element in the gap before it, so it costs the row
+                      // no width, and the row's clip removes it where the group has no neighbour on its
+                      // line; a trailing group's is the spacer's, above. Sections keep the shorter
+                      // `TOOLBAR_INSET_RULE`, the finer mark. The Author group has no locked outline
+                      // while the pen is not held: its commands are shaded, and the pen leading the
+                      // group says why (ADR-0133).
+                      groupIndex > 0 && !trailing && DECK_GROUP_DIVIDER,
+                    )}
+                  >
+                    {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
                 It was an `aria-hidden` span reading VIEW / FIND / AUTHOR / PLAN, so nothing was
                 lost to assistive technology: the group's own `aria-label` has always carried the
                 word, which is the argument ADR-0119 used to delete `MODE`. The acceptance
@@ -476,115 +468,116 @@ export function Deck<Ctx>({
                 the commands. It was this span, its `pr-2`, its `border-r` and the gaps either
                 side, twice over on a row carrying two cards. The captions cost the row more than
                 the control the previous milestone added to it. */}
-                  <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
-                    {group.sections.map((section, sectionIndex) => (
-                      <div
-                        key={section[0]?.item.group ?? sectionIndex}
-                        className={cn(
-                          'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
-                          // The seven-group taxonomy, surviving as an inset hairline between sections
-                          // rather than as a caption above them — the ONE seam treatment the three
-                          // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.
-                          sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
-                          // The output section (Export, and Share… once promoted) is the row's closing
-                          // action: outlined together, never filled (`DECK_CLOSING_SECTION`).
-                          section[0]?.item.group === 'output' && DECK_CLOSING_SECTION,
-                        )}
-                      >
-                        {section.map((r) => {
-                          // One resolution per item: the `render` branch hands it to the trigger and
-                          // the plain branch to `ToolbarButton`, and neither decides for itself.
-                          const labelState = resolveLabelVisibility(r.item.labelVisibility, 'deck');
-                          return r.item.render ? (
-                            // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
-                            // `focusables()` queries `[data-toolbar-focusable]` in document order
-                            // and a duplicate marker would put the wrapper in the roving walk. See
-                            // `Toolbar.tsx`'s copy of this wrapper.
-                            <span
-                              key={r.item.id}
-                              data-toolbar-item-scope={r.item.id}
-                              className="inline-flex items-center"
-                            >
-                              {r.item.render(context, {
-                                disabled: !r.enabled,
-                                disabledReason: r.disabledReason,
-                                active: r.active,
-                                activeKind: r.activeKind,
-                                labelState,
-                                itemProps: r.item.presentational
-                                  ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
-                                  : {
-                                      tabIndex: tabIndexFor(r.item.id),
-                                      'data-toolbar-focusable': '',
-                                      'data-toolbar-item': r.item.id,
-                                      onFocus: () => setActiveId(r.item.id),
-                                    },
-                              })}
-                            </span>
-                          ) : (
-                            <ToolbarButton
-                              key={r.item.id}
-                              itemId={r.item.id}
-                              label={r.item.label}
-                              {...(r.item.visibleLabel
-                                ? { visibleLabel: r.item.visibleLabel }
-                                : {})}
-                              {...(r.item.description ? { description: r.item.description } : {})}
-                              icon={r.icon}
-                              {...(r.busy ? { busy: true } : {})}
-                              labelState={labelState}
-                              {...(r.item.isActive ? { pressed: r.active } : {})}
-                              activeKind={r.activeKind}
-                              disabled={!r.enabled}
-                              disabledReason={r.disabledReason}
-                              srDescription={r.srDescription}
-                              tabIndex={tabIndexFor(r.item.id)}
-                              onActivate={() => r.item.onActivate!(context)}
-                              onFocus={() => setActiveId(r.item.id)}
-                              // **The stacked geometry is GONE, and with it the four `!important`
-                              // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
-                              // icon while a split-button or popover trigger — which never reached this
-                              // branch — kept the shared CVA's row. Nobody chose that: it is one
-                              // `if` having a side effect on layout. Measured at 1646, the deck's label
-                              // tops were 137 for inline items and 149 for stacked ones, and a reader's
-                              // eye tracks the difference along the row.
-                              //
-                              // There is now exactly ONE geometry, so it needs no variant to select it:
-                              // the shared `toolbarControlVariants` row is simply not overridden. A
-                              // two-valued `layout` variant with no second consumer would be dead code
-                              // pretending to be a choice.
-                              //
-                              // **The label's `text-micro` override is GONE**
-                              // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
-                              // the M0 probe that priced the geometry change altered flex-direction,
-                              // height, gap and alignment and nothing else, so changing the type scale
-                              // in the same commit "would make the shipped width unattributable to the
-                              // number that justified the change". That was right, and the reason
-                              // lapsed the moment the geometry shipped and was measured.
-                              //
-                              // **It produced two type scales on one row, by two separate mechanisms,
-                              // and only the first was known.** Measured
-                              // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
-                              // trigger — never reached this branch at all and kept the shared CVA's
-                              // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
-                              // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
-                              // `sr-only` description, so the moment a control carries a reason or an
-                              // `srDescription` the override lands on an **invisible** span and the
-                              // visible label falls through to `text-sm`. Three items were live in that
-                              // state on the measured screen — `Next conflict`, `Float paths` and
-                              // `Add note`, all shaded — which means **a plain command's label grew
-                              // from 10 px to 14 px the moment it was disabled**.
-                              //
-                              // Deleting it leaves one scale declared in one place, by the primitive.
-                              // `min-w-*` is kept: it is geometry, and it was never the problem.
-                              className={toolbarLabelMinWidthClass(labelState)}
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
+                    <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
+                      {group.sections.map((section, sectionIndex) => (
+                        <div
+                          key={section[0]?.item.group ?? sectionIndex}
+                          className={cn(
+                            'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
+                            // The seven-group taxonomy, surviving as an inset hairline between sections
+                            // rather than as a caption above them — the ONE seam treatment the three
+                            // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.
+                            sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
+                          )}
+                        >
+                          {section.map((r) => {
+                            // One resolution per item: the `render` branch hands it to the trigger and
+                            // the plain branch to `ToolbarButton`, and neither decides for itself.
+                            const labelState = resolveLabelVisibility(
+                              r.item.labelVisibility,
+                              'deck',
+                            );
+                            return r.item.render ? (
+                              // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
+                              // `focusables()` queries `[data-toolbar-focusable]` in document order
+                              // and a duplicate marker would put the wrapper in the roving walk. See
+                              // `Toolbar.tsx`'s copy of this wrapper.
+                              <span
+                                key={r.item.id}
+                                data-toolbar-item-scope={r.item.id}
+                                className="inline-flex items-center"
+                              >
+                                {r.item.render(context, {
+                                  disabled: !r.enabled,
+                                  disabledReason: r.disabledReason,
+                                  active: r.active,
+                                  activeKind: r.activeKind,
+                                  labelState,
+                                  itemProps: r.item.presentational
+                                    ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
+                                    : {
+                                        tabIndex: tabIndexFor(r.item.id),
+                                        'data-toolbar-focusable': '',
+                                        'data-toolbar-item': r.item.id,
+                                        onFocus: () => setActiveId(r.item.id),
+                                      },
+                                })}
+                              </span>
+                            ) : (
+                              <ToolbarButton
+                                key={r.item.id}
+                                itemId={r.item.id}
+                                label={r.item.label}
+                                {...(r.item.visibleLabel
+                                  ? { visibleLabel: r.item.visibleLabel }
+                                  : {})}
+                                {...(r.item.description ? { description: r.item.description } : {})}
+                                icon={r.icon}
+                                {...(r.busy ? { busy: true } : {})}
+                                labelState={labelState}
+                                {...(r.item.isActive ? { pressed: r.active } : {})}
+                                activeKind={r.activeKind}
+                                disabled={!r.enabled}
+                                disabledReason={r.disabledReason}
+                                srDescription={r.srDescription}
+                                tabIndex={tabIndexFor(r.item.id)}
+                                onActivate={() => r.item.onActivate!(context)}
+                                onFocus={() => setActiveId(r.item.id)}
+                                // **The stacked geometry is GONE, and with it the four `!important`
+                                // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
+                                // icon while a split-button or popover trigger — which never reached this
+                                // branch — kept the shared CVA's row. Nobody chose that: it is one
+                                // `if` having a side effect on layout. Measured at 1646, the deck's label
+                                // tops were 137 for inline items and 149 for stacked ones, and a reader's
+                                // eye tracks the difference along the row.
+                                //
+                                // There is now exactly ONE geometry, so it needs no variant to select it:
+                                // the shared `toolbarControlVariants` row is simply not overridden. A
+                                // two-valued `layout` variant with no second consumer would be dead code
+                                // pretending to be a choice.
+                                //
+                                // **The label's `text-micro` override is GONE**
+                                // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
+                                // the M0 probe that priced the geometry change altered flex-direction,
+                                // height, gap and alignment and nothing else, so changing the type scale
+                                // in the same commit "would make the shipped width unattributable to the
+                                // number that justified the change". That was right, and the reason
+                                // lapsed the moment the geometry shipped and was measured.
+                                //
+                                // **It produced two type scales on one row, by two separate mechanisms,
+                                // and only the first was known.** Measured
+                                // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
+                                // trigger — never reached this branch at all and kept the shared CVA's
+                                // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
+                                // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
+                                // `sr-only` description, so the moment a control carries a reason or an
+                                // `srDescription` the override lands on an **invisible** span and the
+                                // visible label falls through to `text-sm`. Three items were live in that
+                                // state on the measured screen — `Next conflict`, `Float paths` and
+                                // `Add note`, all shaded — which means **a plain command's label grew
+                                // from 10 px to 14 px the moment it was disabled**.
+                                //
+                                // Deleting it leaves one scale declared in one place, by the primitive.
+                                // `min-w-*` is kept: it is geometry, and it was never the problem.
+                                className={toolbarLabelMinWidthClass(labelState)}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               );
             })}
         </div>

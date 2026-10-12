@@ -83,9 +83,35 @@ export async function newPlan(page: Page, planName: string): Promise<void> {
 /** Hold the pen, whether or not this session already does (ADR-0028). Idempotent. */
 export async function ensurePen(page: Page): Promise<void> {
   const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
+  const start = page.getByRole('button', { name: 'Start editing' });
+  // **Wait for the pen to be drawn before deciding which verb it shows.** This used to read
+  // `stop.isVisible()` — which does not wait — and click `Start editing` otherwise. A plan opened
+  // by a user who already holds its lease (a second tab, or the previous test's context, whose
+  // keepalive release is best effort) draws `Stop editing` directly once the toolbar mounts, so
+  // when the check ran a beat before the mount the click then waited for a button that was never
+  // going to exist: the whole test timeout, with no assertion run and a call log that names only
+  // the locator. Seen on CI at 1.75x in `command-surface.spec.ts`'s fractional-scale describe.
+  try {
+    await stop.or(start).first().waitFor({ timeout: 30_000 });
+    // Re-decided on every attempt: the label flips from `Start editing` (while the lock status
+    // loads, aria-disabled) to `Stop editing` when the status says this user already holds it.
+    await expect(async () => {
+      if (await stop.isVisible()) return;
+      await start.first().click({ timeout: 2_000 });
+      await expect(stop).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
+  } catch (error) {
+    const seen = await page
+      .getByRole('button', { name: /editing|Request control|Waiting/ })
+      .evaluateAll((els) => els.map((el) => `${el.textContent?.trim()} (${el.ariaDisabled})`))
+      .catch(() => ['(page unreadable)']);
+    throw new Error(
+      `ensurePen: the pen never settled on Stop editing. Pen buttons: ${seen.join(' | ') || 'none'}`,
+      {
+        cause: error,
+      },
+    );
+  }
 }
 
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
