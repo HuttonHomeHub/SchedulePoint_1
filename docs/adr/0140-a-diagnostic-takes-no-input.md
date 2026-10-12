@@ -1,6 +1,8 @@
 # ADR-0140: A diagnostic takes no input, so it cannot ask about anybody
 
 - **Status:** **Accepted** — 2026-09-13
+- **Amended:** 2026-10-11 (`docs/TECH_DEBT.md` #456) — a press is one read-only, `REPEATABLE READ`
+  transaction with a 3 s statement timeout. See "Amendment 2026-10-11" at the end of this file.
 - **Date:** 2026-09-13
 - **Deciders:** product owner (2026-09-13 — CQ-2: accept the ADR-0086 D6 narrowing **on the
   three-clause contract**; CQ-1: both counts, D-A first; aggregate scalars only; one named

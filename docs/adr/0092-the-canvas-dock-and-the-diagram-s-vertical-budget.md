@@ -1,6 +1,8 @@
 # ADR-0092 — The canvas dock, and the diagram's vertical budget
 
 - **Status:** Accepted (M1–M4 + M6 landed 2026-08-13; **M5 withdrawn by the product owner on the measurement**)
+- **Amended by:** ADR-0180 (2026-10-08) — the diagram's vertical budget is no longer always `CANVAS_MIN_HEIGHT`:
+  when the body is too short to give the panel rows, the diagram yields the whole body.
 - **Date:** 2026-08-13
 - **Supersedes:** nothing
 - **Amends:** ADR-0064 (§4 — where a transient statement lives), ADR-0031 (Fork-2 — the selection

@@ -1,6 +1,8 @@
 # ADR-0173: A column's width is the planner's, kept on their device, and its drag has a typed twin
 
 - **Status:** Accepted
+- **Amended by:** ADR-0188 (2026-10-11) — the Consequences' "filed rather than answered": the Explorer and the
+  docks now have a typed twin too (the divider's size box).
 - **Date:** 2026-10-04
 - **Deciders:** James Ewbank (product owner — approved the spec and plan as written, Q1–Q4 at their
   recommended defaults, 2026-10-03), with Claude Code

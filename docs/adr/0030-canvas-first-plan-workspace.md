@@ -1,6 +1,11 @@
 # ADR-0030: Canvas-first plan workspace — the TSLD canvas as the primary surface, with a drag-resizable activity panel
 
 - **Status:** Proposed
+- **Amended by:** ADR-0180 (2026-10-08) — the activities panel's split gains a second layout, used only when the
+  body is too short to give the panel rows: the panel takes the whole body.
+- **Superseded in part by:** ADR-0181 (2026-10-09) — the below-`md` single-pane toggle is retired, so the
+  ADR-0179 note above ("stays as a reflow fallback") no longer holds. Recorded in this header at the
+  2026-10-12 reconciliation pass; the body note sits under the **Responsive** paragraph.
 - **Date:** 2026-07-13
 - **Noted by:** ADR-0179 (2026-10-08) — the below-`md` single-pane toggle stays as a reflow fallback; its
   reason is now zoom, not a phone (the "a phone can't usefully split" line below is history).

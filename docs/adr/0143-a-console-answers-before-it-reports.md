@@ -1,6 +1,9 @@
 # ADR-0143: A console answers before it reports, and a page is what it is made of
 
 - **Status:** Accepted
+- **Amended by:** ADR-0178 (2026-10-06) — D1–D4: the console is grouped by what the reader came to do.
+- **Amended by:** ADR-0182 (2026-10-09) — D3's mechanism: the split moves from a viewport rule to a container
+  rule; its span-by-demand rule stands.
 - **Date:** 2026-09-15
 - **Deciders:** Product owner, web
 

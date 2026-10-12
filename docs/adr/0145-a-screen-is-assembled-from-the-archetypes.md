@@ -1,6 +1,7 @@
 # ADR-0145: A screen is assembled from the archetypes, and a metric names what it measures
 
 - **Status:** Accepted
+- **Extended by:** ADR-0178 (2026-10-06) — D1's archetype set.
 - **Date:** 2026-09-16
 - **Deciders:** Product owner; agent implementation
 - **Spec:** [`docs/specs/page-consistency/`](../specs/page-consistency/)
