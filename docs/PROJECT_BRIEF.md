@@ -101,7 +101,8 @@ Planners who want the graphical experience currently have no browser-native opti
 
 - Resource histogram view.
 - Version history beyond baselines (per-activity change log).
-- Real-time collaborative editing (multiple planners on one plan).
+- Real-time collaborative editing (multiple planners on one plan). _Dropped from 1.0 by the product owner on
+  2026-10-12 (`docs/DECISIONS.md`); one planner holds the pen at a time (ADR-0028)._
 - Layout auto-arrange for the network view.
 - Public API / webhooks.
 
@@ -255,7 +256,8 @@ Stack is inherited from the base — do not re-declare it here. App-specific req
 Deliberately postponed — become backlog items when a real signal picks them up:
 
 - Resource levelling and histogram view.
-- Real-time collaborative editing (multiple planners on one plan).
+- Real-time collaborative editing (multiple planners on one plan). _Dropped from 1.0 by the product owner on
+  2026-10-12 (`docs/DECISIONS.md`); one planner holds the pen at a time (ADR-0028)._
 - Monte Carlo / risk analysis.
 - Mobile field app for progress capture.
 - Full XER export (round-trip with P6).

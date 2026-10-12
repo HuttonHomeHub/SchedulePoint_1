@@ -10,6 +10,17 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-12 — Real-time collaborative editing is not in 1.0
+
+**What was decided.** Asked whether to specify real-time collaborative editing (several planners editing one
+plan at once) as the headline feature for 1.0, the product owner answered "No, drop it". It had been parked on
+2026-10-11 as the candidate 1.0 headline and listed as a Could-have and a future possibility in
+`docs/PROJECT_BRIEF.md` §8 and §19; both entries now carry this decision.
+
+**Consequences.** No spec is written and nothing is built. The single-editor model stands: one planner holds the
+pen at a time, with peer hand-off (ADR-0028). A later session should not propose it again unless the owner raises
+it. In the same answer the owner left the toolbar tweaks (#499) for later and took none of the older waiting items, so the next build is chosen from the hardening pass and the open rows.
+
 ## 2026-10-12 — The toolbar as a grid closes: boxes out, tracks in, one column withdrawn
 
 **What was decided.** The `toolbar-grid` epic is closed and filed as ADR-0189, "A shape on the toolbar is a
