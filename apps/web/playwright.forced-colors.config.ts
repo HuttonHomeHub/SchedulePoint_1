@@ -29,7 +29,7 @@ const WEB_PORT = '4183';
 
 export default defineConfig({
   testDir: './e2e-forced-colors',
-  testMatch: 'focus-ring.spec.ts',
+  testMatch: ['focus-ring.spec.ts', 'deck-focus-ring.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

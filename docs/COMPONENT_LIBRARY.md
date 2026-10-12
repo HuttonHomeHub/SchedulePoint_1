@@ -405,7 +405,7 @@ sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on).
 and `DECK_TRAILING_SPACER` (an empty, `aria-hidden` flex item before a trailing group that carries its divider and
 takes the free space `ml-auto` used to take), and no longer exports `DECK_GROUP_PILL`, `DECK_GROUP_PILL_LOCKED`,
 `DECK_ROW_MARK` or `DECK_CLOSING_SECTION`; `deck-seams.structural.test.tsx` refuses all four. Each deck row is
-`overflow-x-clip` so no divider opens a line. Nothing outside `Deck` should use either constant. Neither adds a role,
+`deck-row-clip` (a clip 4 px outside its box, so the forced-colours focus ring survives) so no divider opens a line. Nothing outside `Deck` should use either constant. Neither adds a role,
 a name or a tab stop, and `Deck`'s props are unchanged.
 
 **`groupOrder` (ADR-0187): the selection bar's own order, and nobody else's.** `Toolbar` takes an optional

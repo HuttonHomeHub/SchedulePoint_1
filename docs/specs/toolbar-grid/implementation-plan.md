@@ -174,6 +174,16 @@ ends a line, in every state, at every cell" (both pointers).
   5. Run `e2e-workspace-fit`, `e2e-promotion`, `e2e-narrow-shell` and `e2e-toolbar` locally.
   6. Changeset.
 
+> **M1 status (2026-10-12): built on `feat/toolbar-grid-m1`, not yet merged.** Three things differ from the
+> text above, each found by a journey. (1) A **trailing group that wraps alone** is right-aligned, so the row's
+> left clip cannot hide its leading divider; its divider is drawn by an empty `aria-hidden` flex item before it
+> (`DECK_TRAILING_SPACER`) whose right edge is the row's right edge when the group wraps. (2) The clip is
+> `overflow: clip` on both axes with `overflow-clip-margin: 4px` (`deck-row-clip`), not `overflow-x-clip`: the
+> forced-colours focus outline reaches 4 px, the margin applies only when both axes clip, and the dividers hang
+> past it (`e2e-forced-colors/deck-focus-ring.spec.ts`). (3) Every group stays `relative` after the pill goes,
+> or its `sr-only` spans escape the scrolling line below `lg`. Widths were re-taken: coarse L3 and L4 swap
+> stages (L3 90 to 135 rem, L4 135 to 90 rem), nothing else moves.
+
 ---
 
 ### Milestone M2: Switches and joined units

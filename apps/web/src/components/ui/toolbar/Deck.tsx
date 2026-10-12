@@ -381,19 +381,20 @@ export function Deck<Ctx>({
           key={row}
           data-deck-row={row}
           className={cn(
-            // **The row clips its own left edge, and that is what keeps a divider off a line's start.**
+            // **The row clips its own edges, and that is what keeps a divider off a line's start.**
             // A group's divider hangs half a gap to the LEFT of the group (`DECK_GROUP_DIVIDER`), so a
             // group that wraps to the start of a line has its divider outside this box and nothing is
             // painted — the leading-seam defect (SC-12) the pill was chosen to prevent, solved without
             // a box. `clip` and not `hidden`: `hidden` makes the row a scroll container (so
-            // `deckScrolls` and `scrollIntoView` below `lg` would change) and forces `overflow-y` to
-            // `auto`, which would cut the Filter badge at `-top-2.5`. Only pseudo-elements sit outside
-            // a row's box: menus, popovers and tooltips are portalled, and a focus ring is inset.
+            // `deckScrolls` and `scrollIntoView` below `lg` would change). The clip edge is 4 px outside
+            // the box (`deck-row-clip`, `globals.css`) so the forced-colours focus outline, which reaches
+            // 4 px, is not cut on the first or last control of a line. Only pseudo-elements sit outside
+            // that: menus, popovers and tooltips are portalled.
             //
             // The group gap is 8 px, and 24 px from `@roomy/deck:` (79 rem), where the floor has the
             // width to spend (`m0-measurement.md` §3): the deleted row marks give 18 px per row back.
             // Horizontal only, so a wrapped line does not move 16 px further from the one above it.
-            '@roomy/deck:gap-x-6 flex flex-wrap items-start gap-2 deck-row-clip max-lg:shrink-0 max-lg:flex-nowrap',
+            '@roomy/deck:gap-x-6 deck-row-clip flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap',
             // The seam between the two rows on the scrolling line: below `lg` the second row follows
             // the first on the same line, and nothing else would say a row ended. A border and not a
             // pseudo-element, because the row's clip would hide anything outside its box; `-ml-2`
@@ -440,6 +441,11 @@ export function Deck<Ctx>({
                     // keeps its role and its name; its height is now the control row's. The shared
                     // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
                     className={cn(
+                      // `relative` on EVERY group, not only those with a divider: it is the containing
+                      // block for the `sr-only` (absolutely positioned) spans inside its controls. Without
+                      // it they anchor to an ancestor outside the scrolling line below `lg`, escape its
+                      // `overflow-x-auto`, widen the shell and let a click scroll the whole page sideways
+                      // (found by `narrow-shell.spec.ts` when the pill, which was `relative`, went).
                       'relative flex items-stretch gap-2 max-lg:shrink-0',
                       trailing && 'ml-auto',
                       // **Every group but the first on its row is split from its neighbour by a divider**
