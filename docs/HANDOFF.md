@@ -3,78 +3,130 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-11 (evening), after the "outstanding items" sweep: the register's open rows worked
-through in groups, five pull requests, each squash-merged with all ten checks green on the pinned head.
+**Written:** 2026-10-12 (evening). The session covered three pieces of work:
+
+- the reconciliation pass;
+- the **toolbar-grid** epic, from spec to sign-off;
+- the web end-to-end shard re-pack.
+
+Every PR was squash-merged with all ten checks green on the pinned head.
 
 ## Where things stand
 
-- Merged to `main` this session: **#918** (group 3 correctness; `api` 0.89.0 via #919), **#920** (selection
-  bar, ADR-0187; `web` 0.185.0 via #921), **#922** (dividers, checkboxes, landmark, press-to-type size box,
-  ADR-0188; `web` 0.186.0 via #923), **#924** (web halves of #405 and #450; `web` 0.186.1 via #925), **#926**
-  (group 4 tidy, tests and performance; no web change). For #926, check the Version Packages PR (an `api`
-  patch); it may be open or merged. Tags: `api-v0.89.0`, `api-v0.89.1`, `web-v0.185.0`, `web-v0.186.0`, `web-v0.186.1`.
-- The product owner's screens: **monitor 1912 x 948** (mouse) and **Surface 1912 x 1114, DPR 1.5** (finger
-  and stylus, 44 px targets). Design floor **1024 x 600** (ADR-0179).
-- Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, reviewers are Sonnet,
-  **explorer** (Haiku) searches, planners are Opus. Never send implementation to `general-purpose`.
+- **Reconciliation pass (2026-10-12):** docs-drift PRs #929–#933, with the pass logged in
+  `docs/RECONCILE.md`. The next full pass is due at the next epic boundary, or three months at the latest.
+- **Toolbar-grid epic** (`docs/specs/toolbar-grid/`, ADR-0189): **shipped and signed off.** M4 (shared
+  columns) was withdrawn by the owner after M0.
 
-## What shipped, per register row
+  | Milestone                       | PR   | Release     |
+  | ------------------------------- | ---- | ----------- |
+  | M1 dividers                     | #935 | web 0.187.0 |
+  | M2 switches and joined units    | #937 | web 0.188.0 |
+  | M3 quiet icons and stray bits   | #949 | web 0.189.0 |
+  | M5 after record and photos      | #951 | —           |
+  | M5 command-band landmark (#493) | #952 | web 0.189.1 |
+  | M5 ADR-0189 and close-out       | #953 | —           |
 
-- **#449** a calendar or resource-limit edit marks the plans that use it as edited since calculated.
-  **#440** activity row locks are ordered for placements, lane moves and recalculation (the remaining bulk
-  writers are open row #492). **#456** a staff diagnostics press is one read-only, 3 s-bounded transaction
-  (ADR-0140 amended).
-- **#405 and #450** the revision comparison has basis-neutral date names beside the deprecated `*Early*`
-  fields (removing those needs its own ADR); single deletes and dissolve take an optional `?version`, and web
-  undo and redo now pass it.
-- **#485 and #487** the selection bar leads with its subject and the dock floors are capped (ADR-0187).
-  **#489, #486, #488, #484, #482** closed with evidence. The "Float paths" label was decided **not built**: it
-  adds a line in 8 of 80 measured readings.
-- **#470, #473, #476, #442** 44 px touch targets, the Explorer landmark, and the divider press-to-type size
-  box; no key opens it (ADR-0188). **#483** closed: it does not reproduce under a real text-size setting.
-- **#454, #469, #432, #441, #444** built or closed as measured (#454 stays deferred on its trigger).
-  **#429** not reproduced (20 runs, up to a 5 s delay) and left on its trigger. **#481, #443, #419, #445,
-  #446** left on their triggers. **#435** closed (10 clean CI runs) and **#475** closed.
+- **E2E shards** (#955, ADR-0138 amended): the four web shards are re-packed longest-first to about
+  890 s of suite time each. The owner chose to rebalance four over adding a fifth. #491 is closed. The
+  five-shard design stays documented in `docs/specs/e2e-fifth-shard/`, with its trigger: a slow run that
+  puts a web shard above `quality` again.
+- **The product owner's screens:**
+  - monitor 1912 × 948 (mouse);
+  - Surface 1912 × 1114 at DPR 1.5 (finger and stylus, 44 px targets);
+  - the design floor is 1024 × 600 (ADR-0179).
+- **Model routing** is pinned in `.claude/agents/`:
+  - **builder** (Sonnet) implements;
+  - reviewers are Sonnet;
+  - **explorer** (Haiku) searches;
+  - planners are Opus.
+
+## What the toolbar-grid epic changed (for anyone touching the toolbar)
+
+- **Boxes are gone.**
+  - Groups are separated by a hanging divider (`DECK_GROUP_DIVIDER`).
+  - Rows clip with `deck-row-clip` (overflow-clip-margin 5 px, so the forced-colours focus ring survives).
+- **Pick-one sets are switches.** Colour and Diagram | Gantt use a recessed track with the chosen
+  member raised (fill plus underline). Under forced colours the chosen member uses Highlight / HighlightText.
+- **Joined units:**
+  - Undo, Redo and Recent edits form one unit, in reading order.
+  - The Link Type set is joined too.
+  - The registry declares these with `cluster: {id, kind}`.
+- **Quiet icons:**
+  - `toolbarIconClass` plus a `quietIcons` opt-in on the Deck and header toolbars.
+  - The pen is the only bright control.
+  - #498 is the follow-up: a `ToolbarSurfaceContext`, and the selection bar.
+- **Stray bits:**
+  - Baseline shows its word at roomy-fine.
+  - The milestone presets show "Start/Finish milestone"; their accessible names still say "Add: …".
+  - Recent edits uses the History glyph.
+  - Settings is a `groupTail`, placed last in the DO row from 80 rem of viewport. Its focus is restored
+    when it moves.
+  - Add and Undo are `ruleBefore`, ruled from a 79 rem container.
+- **The band is a landmark:** `region "Plan command band"`.
+- **CSS budget:** 19.00 KiB, against 18.05 KiB used (`apps/web/bundle-budget.json`).
+- **Measured side effects the owner was told about:**
+  - At 1912 with a mouse, Earned value now sits inside the Analysis menu.
+  - With a coarse pointer and Link armed, the DO row wraps to two lines at 1280 and 1440.
+
+  Both are recorded in ADR-0189 and in `m-final-measurement.md`.
 
 ## Waiting on the product owner
 
-- **Sign off the toolbar photographs** (SC-16): `docs/specs/toolbar-redesign/photos/m6-*`. He has said the
-  main ones look ok; the sign-off is still not recorded in `m6-measurement.md`.
-- **Decided, do not reopen:** `Start editing` stays plain while the pen is not held (amber is reserved for the
-  held state, ADR-0133).
-- **Confirm 72rem** for the page-grid split (ADR-0182 "CQ-2 threshold provisional"); the **tap-to-answer page**
-  (<https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY>, answers in its `rowchecks` collection) had no answers.
-- **Surface sheet** (`docs/specs/gantt-coarse-pointer/device-checklist.md`): step **25** and the new steps
-  **18b, 25b, 26, 27, 28**. Step 28 is Safari on iPad: clicking Reset must not close the size box before it
-  acts. Step 26 is a finger-jitter reading for the 4 px press slop.
-- **The history count on or after 1 November** (ADR-0174 / #443: staff console, Tools, Run diagnostics, Copy
-  results). **Gantt hands-on readings.**
-- **CI time (#491):** the total passed the re-open trigger earlier and the new `dividers.spec.ts` adds about
-  30 s. `scripts/e2e-durations.json` was not updated (`workspace-fit` carries a harvested figure). Decide
-  whether to add a fifth shard after re-measuring.
-- **Header at 320 / 640 wide on touch** (#490): mobile is unsupported; recommended leave.
-- **Not exercised on real hardware:** the Filter badge on a real display, the long-press tooltip on real
-  touch, any screen reader, and CI's own font rendering.
+- **Toolbar "minor tweaks at some point"** (#499). The owner signed off with these words, unspecified.
+  **Ask which tweaks before building anything.**
+- **Unanswered from the reconciliation pass:**
+  - which of the waiting items below to take;
+  - whether to spec **real-time collaborative editing** for a 1.0.
+- **Ten Dependabot PRs, #938–#947**, are open and untouched. They need a triage decision. Note that the
+  `@playwright/test` 1.64 bump changes the browser build.
+- Carried over from the previous hand-off, still unanswered:
+  - **SC-16 sign-off** of the older toolbar-redesign photos (`docs/specs/toolbar-redesign/photos/m6-*`).
+  - **Confirm 72 rem** for the page-grid split (ADR-0182; the tap-to-answer page
+    <https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY> has no answers).
+  - **Surface sheet** steps 25, 18b, 25b, 26, 27 and 28
+    (`docs/specs/gantt-coarse-pointer/device-checklist.md`).
+  - **The history count on or after 1 November** (ADR-0174 / #443).
+  - **Gantt hands-on readings.**
+  - **Header at 320 / 640 wide on touch** (#490): the recommendation is to leave it.
+- **Decided, do not reopen:**
+  - `Start editing` stays plain while the pen is not held (ADR-0133).
+  - Four web shards, not five (2026-10-12).
+- **Not exercised on real hardware:**
+  - the toolbar's forced-colours rendering on Windows High Contrast;
+  - the gear's focus restore on a real tablet rotation;
+  - any screen reader.
 
 ## Open rows
 
-- From this work: **#492** (remaining unordered activity-lock writers), **#493** (axe `region` on a plan
-  page's command-band slot), **#494** (Gantt 25 px strip covers about a third of each row menu, pre-existing),
-  **#495** (`SizeField` vs `TextField` drift), **#496** (the `revision-delta-m0` e2e spec fails intermittently
-  on a local database; it passed CI on every recent PR).
-- Carried over, still open: **#490, #491, #481**, **#477, #478, #480, #437**, **#443, #445, #446, #419, #429, #454**, and the older **#401, #403, #406,
-  #408-#411**. `wip/history-numerator-preaggregate` (`64ff45d4`) is still the first remedy to measure when the
-  250,000 trigger fires.
+- **New this session:**
+  - **#497**: the `command-surface.spec.ts` collapsed-spine journeys read the canvas width before resize.
+  - **#498**: the quiet-icons follow-ups.
+  - **#499**: the owner's tweaks.
+- **Still open:**
+  - **#492**: the remaining unordered activity-lock writers.
+  - **#494**, **#495**, **#496**.
+  - **#490**, **#481**, **#477**, **#478**, **#480**, **#437**, **#443**, **#445**, **#446**, **#419**,
+    **#429**, **#454**.
+  - The older **#401**, **#403**, **#406** and **#408–#411**.
+- **Closed this session:** **#493** (landmark) and **#491** (shards).
 
 ## Suggested next
 
-1. The owner items above.
-2. The big parked idea: **real-time collaborative editing** is the candidate headline feature for a 1.0. The
-   owner parked it on 2026-10-11 to clear outstanding items first. It needs a **feature-analyst** spec on Opus;
-   nothing is built.
-3. A hardening pass before 1.0: real-hardware and screen-reader checks, the staff console's "live but unwired"
-   alert signals (`CLAUDE.md` §17), and the flaky spec (#496).
-4. Whichever open row the owner picks; each needs its own spec if it adds surface (ADR-0105).
+1. Ask the owner the open questions above: #499's tweaks, the Dependabot triage, and the collaborative
+   editing spec.
+2. If collaborative editing is wanted: a **feature-analyst** spec on Opus. Nothing is built.
+3. A hardening pass before 1.0:
+   - real-hardware and screen-reader checks;
+   - the staff console's unwired alert signals (`CLAUDE.md` §17);
+   - #496 and #497.
+4. Watch the CI runs after #955. #955's own run (38302288727) already finished one web shard after `quality`:
+   - web shards: 815 / 981 / 1,076 / 1,178 s;
+   - `quality`: 1,064 s.
+
+   That is the five-shard trigger on a single sample. Two other PRs' CI was running at the same time, so
+   read two or three quiet runs before putting the five-shard spec (`docs/specs/e2e-fifth-shard/`) back to
+   the owner.
 
 ## Environment notes a new session would otherwise rediscover
 
@@ -151,3 +203,12 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
 - **A `pr-title.yml` run can show a `cancelled` twin beside a success** after a description edit; the dedupe
   handles it. The Version Packages PR appears 1-2 minutes after a merge. A relayed `check_suite` event can
   name an older head: always read the check runs for the current head.
+- **`pnpm measure:toolbar -- <name>` ignores the filter** and runs every measure spec, rewriting
+  `docs/specs/toolbar-redesign/photos`. Run one spec with
+  `pnpm exec playwright test --config playwright.measure-toolbar.config.ts <spec>`; `M0_TAG=after` on
+  `toolbar-grid-m0.spec.ts` writes only `docs/specs/toolbar-grid/photos/after-*`.
+- **A worktree without `node_modules` cannot run the husky hook** (lint-staged not found). Either run
+  `pnpm install --frozen-lockfile --prefer-offline` in it, or format and lint the commit message from the
+  main checkout (`pnpm exec prettier --write`, `pnpm exec commitlint --edit`) before committing.
+- **`changeset-release/main` is updated 1–10 minutes after a merge**; poll it with `git ls-remote` rather
+  than listing workflow runs. The tag (`web-vX.Y.Z`) lands about a minute after the Version Packages merge.
