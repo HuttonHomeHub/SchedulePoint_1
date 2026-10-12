@@ -34,9 +34,9 @@ The frontend is not a blank slate; most "new" structure has a precedent.
   ADR-0109: mounted once, a CSS **grid** of a **docked Project Explorer** on the
   leading edge (an ARIA `tree`, lazy + virtualized; resizable 200–420, folding to
   a 34 px spine, or an off-canvas `Sheet` below `lg`), a **header row** carrying
-  identity, the organisation switcher and the account, a stage, and a trailing
-  **context drawer** a route may register a subject into — which has **no
-  production registrant today** (`docs/TECH_DEBT.md` #156). Selection is still
+  identity, the organisation switcher and the account, and a stage; the
+  grid is two columns (the trailing context drawer was deleted 2026-09-01, so this
+  bullet's "no production registrant" claim is gone as of 2026-10-12). Selection is still
   derived from the URL, and the shell still knows nothing about plans.
 
   <!-- This bullet has now been wrong in BOTH directions and the swing is the
@@ -53,11 +53,13 @@ The frontend is not a blank slate; most "new" structure has a precedent.
   - **A command surface WRAPS; it never hides** (ADR-0109 D1). This bullet said
     "three prominence tiers, responsive overflow" until 2026-08-30. There is no
     overflow: `ToolbarOverflow`, `computeOverflow`, `computeLadder` and
-    `toolbar-ladder.ts` were all deleted, and `tier` survives as a declared field
-    that **nothing branches on at render** — so "three prominence tiers" described
-    a prominence the product does not paint. The 2026-08-25 pass corrected the
-    shell bullet directly above this one and left this one, which is the
-    "one control and not its neighbour" shape in a document.
+    `toolbar-ladder.ts` were all deleted, and `ToolbarItem.tier` itself went at
+    toolbar-redesign M7 (ADR-0185; this bullet said it "survives as a declared field"
+    until 2026-10-12). ADR-0185: commands are only promoted, never hidden; below 1024
+    the deck is one scrolling line; Zoom/Fit/Minimap live on the diagram-corner cluster.
+  - **The design floor is 1024×600** (ADR-0179; a laptop or 11-inch tablet up). Below it
+    content reflows undesigned and a notice is shown. The below-`md` single-pane
+    workspace is retired (ADR-0181) — do not design for it.
   - **A taxonomy group may render as N named sub-groups** (ADR-0119) when its items
     declare a `segment` and the host passes `segmentLabels`. All-or-nothing: one
     item without a named segment and the whole group falls back to a single region.

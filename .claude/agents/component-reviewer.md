@@ -30,12 +30,16 @@ You review; you do not edit code.
   A hand-assembled label+control block is the finding — that idiom had been written
   33 times before `SelectField` (TECH_DEBT #42).
 - **Toolbar items are data (ADR-0031).** A declarative `ToolbarItem` registry and a
-  compiler-enforced 7-group taxonomy, rendered by `Deck` as four captioned groups
-  that **wrap**. `tier` and `showLabel` were one property once and must stay two —
-  conflating them again is a regression — but neither is about width any more:
-  **ADR-0109 D1 deleted the `⋯` overflow, the priority demotion and the whole width
-  ladder.** A command surface wraps; it never hides. This bullet defined `tier` as
-  "what demotes into `⋯`" until the 2026-08-25 pass.
+  compiler-enforced 7-group taxonomy, rendered by `Deck` as groups that carry an
+  `aria-label` and no visible caption. A command is never hidden (ADR-0109 D1, no `⋯`
+  overflow); below 1024 px the deck is one scrolling line. `ToolbarItem.tier` was
+  deleted (ADR-0185) and `showLabel` became `labelVisibility`
+  (`'always'|'never'|'roomy'|'roomy-fine'`). Police: promotion is **additive**
+  (`derivePromotedItems`, `promotion-entries.tsx`, ADR-0185); `groupOrder` on `Toolbar`
+  sets render, roving and first-Tab order together (ADR-0187); every `PanelResizer`
+  passes `sizeLabel` and `onReset`, `SizeField` is the typed-size twin, and
+  `coarseStrip="none"` is only for the Gantt grid divider (ADR-0188). This bullet said
+  "four captioned groups … `tier` and `showLabel` must stay two" until 2026-10-12.
 - **The canvas render layer is pure.** `features/tsld/render/` must not import
   `@/config/env` or React; flags are read in components and threaded as explicit
   scene/prop fields. A flag import there is blocking.

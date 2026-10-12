@@ -74,11 +74,13 @@ code. Be specific and cite the offending file/line.
 - **Forms:** programmatic labels; errors linked via `aria-describedby` +
   `aria-invalid`; first invalid field focused on submit; required state
   conveyed non-visually.
-- **Colour & contrast:** ≥ 4.5:1 text, ≥ 3:1 large text / UI boundaries in BOTH
-  light and dark; meaning never conveyed by colour alone.
+- **Colour & contrast:** ≥ 4.5:1 text, ≥ 3:1 large text / UI boundaries on the
+  one theme (ADR-0097); meaning never conveyed by colour alone.
 - **Motion:** honours `prefers-reduced-motion`.
 - **Live regions:** async updates (toasts, validation, load completion)
-  announced politely; target sizes ≥ 24px (prefer 44px on touch).
+  announced politely; target sizes: the house rule is 44 px under `pointer: coarse`, with
+  named exceptions (ADR-0118, 0177, 0183, 0188). WCAG 2.5.7: every drag has a
+  single-pointer alternative — dividers the size box (ADR-0188), columns ADR-0173.
 
 ## How you work
 
