@@ -110,7 +110,7 @@ baseline has no author) can say who changed one activity's duration, link or cra
 - **Snapshot the whole activity per write and diff at read** — larger rows; merge and redaction move into
   the read path; links and assignments are separate rows anyway.
 - **Row locks on the endpoint activities in id order** — a new multi-row row-locker that can deadlock with
-  the recalculation write and `updatePlacements`, which both row-lock many activities in no defined order.
+  the recalculation write and `updatePlacements`, which both row-lock many activities in no defined order. (True when written; #440 ordered both on 2026-10-11.)
 - **Per-activity advisory locks for batches** — 2,000 lock-table slots per batch.
 - **`CASCADE` from activities** — uncounted, so unbudgetable in expiry.
 - **Record a link on the successor only** — "who hung this on my activity?" becomes unanswerable from the
@@ -241,7 +241,7 @@ vitest.measure.config.mts`, against a disposable database), plus the `EXPLAIN` t
   measured against survivors with no history, which is the case the trim leaves unchanged; the probe
   no longer grows with the size of their history.
 - Pre-existing and not made worse: `updatePlacements` and the recalculation write both row-lock many
-  activities in no defined order (`docs/TECH_DEBT.md` #440).
+  activities in no defined order (`docs/TECH_DEBT.md` #440; true when written, ordered on 2026-10-11).
 
 ## References
 
