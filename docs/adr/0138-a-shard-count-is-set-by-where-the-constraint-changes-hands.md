@@ -2,6 +2,9 @@
 
 - **Status:** **Accepted** — 2026-09-12
 - **Date:** 2026-09-12
+- **Amended:** 2026-10-12 (`docs/TECH_DEBT.md` #491) — the four shards were re-packed from fresh
+  durations and the budget re-derived; the count stays four. See "Amendment 2026-10-12" at the end
+  of this file.
 - **Deciders:** product owner ("Approve — build it", 2026-09-12, on the four-shard spec); this pass
   (the milestone slicing, the approval gate's verdict, and every measurement that changed a number)
 - **Extends:** ADR-0058 (a gate that fails on day one gets deleted rather than fixed), ADR-0076
@@ -201,3 +204,27 @@ trigger, D6); or the measured shard spread ceasing to dominate the packed spread
 **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity gate
 is untouched in its honest form: there is nothing here to hold parity for. `apps/` contributes zero
 files to this epic's diff.
+
+## Amendment 2026-10-12 — the four shards are re-packed, not widened (`docs/TECH_DEBT.md` #491)
+
+**What happened.** The first re-open trigger fired: the web total re-harvested from run
+`38290423490` is 3,567 s across 50 suites against 2,372 s, and the committed assignment had drifted
+to suite sums of 657 / 1,070 / 995 / 845 s, which put shard 2's 1,172 s above `quality`'s 1,103 s.
+
+**Decision (product owner, 2026-10-12: "Just rebalance four").** D1's rule is unchanged and its
+output stays four. The `if: matrix.shard == N` conditions were re-assigned by a longest-processing-time
+pack of `scripts/e2e-durations.json`, keeping the three production-build suites together: suite sums
+**893 / 891 / 891 / 892 s**. No fifth shard and no three-run re-measure first; the five-shard design
+is kept as the documented alternative in [`docs/specs/e2e-fifth-shard/`](../specs/e2e-fifth-shard/).
+
+**The budget moved with it.** `SHARD_BUDGET_SECONDS` is 752 s (the API job's 857 s less a shard's
+~105 s fixed cost; it was 593 s from a 690 s API job). A four-way pack is ~892 s a shard, **above
+that budget**. That is stated rather than hidden: the gate prints and never asserts it (D4), and the
+gap is the argument for five.
+
+**Trade-off, on one sample.** The worst shard projects to ~1,000 s of wall time against `quality`'s
+1,103 s, about 10 % clear, and the 27 % swing recorded under Consequences would cross it. Accepted by
+the owner.
+
+**Re-open trigger added.** A CI run in which a web shard is slower than `quality` again: build the
+five-shard design (M0's measurement first, as its plan says). The earlier triggers stand.

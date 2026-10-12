@@ -49,11 +49,16 @@ const NAME = 'check:e2e-roster';
 /**
  * Suite seconds one web shard may hold before the web side takes the critical path back.
  *
- * Derived, not chosen: the API job measured 690 s end to end (499 s API e2e + 141 s pairwise + 50 s
- * setup) and a web shard pays 97 s of fixed cost (setup + browser install), so `690 − 97 = 593`.
- * **Printed, never asserted** — see the summary below.
+ * Derived, not chosen: the API job less a web shard's fixed cost (setup + browser install). On run
+ * 38290423490 the API job measured 857 s and the four shards' fixed costs were 109/102/94/117 s
+ * (mean ~105 s), so `857 − 105 ≈ 752`. It was 593 (`690 − 97`) until 2026-10-12, when the API
+ * suite had grown to 857 s and the figure had stopped describing anything.
+ * **Printed, never asserted** — see the summary below. A four-way pack of today's 3,567 s is ~892 s
+ * a shard, ABOVE this figure; the owner accepted that on 2026-10-12 ("just rebalance four") and the
+ * printed gap is the standing evidence for the five-shard alternative, documented in
+ * `docs/specs/e2e-fifth-shard/`.
  */
-const SHARD_BUDGET_SECONDS = 593;
+const SHARD_BUDGET_SECONDS = 752;
 
 /** The gate's own source, so the CLI guard below matches what the suite imports. */
 export const SELF = 'scripts/check-e2e-roster.mjs';
@@ -337,9 +342,10 @@ export function runGate(root) {
 
   // **Per-shard totals, printed and never asserted** — the balance is a projection from committed
   // durations, and a projection is only as fresh as its durations, so asserting on it would turn a
-  // stale file into a false failure. There is slack to absorb a poor packing anyway: the budget is
-  // 593 s per shard before the web side takes the critical path back from `e2e-api`, against a
-  // perfect four-way pack of 512 s. The assignment has to be not-terrible, not optimal.
+  // stale file into a false failure. The balance is the thing worth reading here: a spread of tens
+  // of seconds is a fresh pack, and a spread of hundreds is one that suites have outgrown (it was
+  // 657-1,070 s on 2026-10-12). What the gate asserts is only that every suite runs on exactly one
+  // declared shard.
   let balance = '';
   const sharded = jobsIn(stripped).find((j) => shardsOf(j.body) !== null);
   if (sharded !== undefined && durations !== null) {
