@@ -1,0 +1,360 @@
+<title>Plan toolbar grouping options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column of stacked "plates"; each plate is a to-scale
+   drawing of the plan header + two command rows, captioned like a drawing sheet. */
+:root{
+  --bg: oklch(0.975 0.006 264);
+  --surface: oklch(0.995 0.003 264);
+  --ink: oklch(0.24 0.04 264);
+  --ink-soft: oklch(0.45 0.03 264);
+  --rule: oklch(0.88 0.012 264);
+  --accent: oklch(0.62 0.15 60);
+  --tag: oklch(0.93 0.03 264);
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  /* The product's own chrome tokens (apps/web/src/styles/globals.css). The product has one
+     theme, so the drawings keep these values in both page themes. */
+  --chrome: oklch(0.252 0.056 264);
+  --chrome-fg: oklch(0.985 0 0);
+  --chrome-muted-fg: oklch(0.78 0.02 264);
+  --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-accent: oklch(0.338 0.081 262);
+  --chrome-primary: oklch(0.786 0.167 70);
+  --chrome-primary-fg: oklch(0.252 0.056 264);
+  --chrome-field: oklch(0.2 0.05 264);
+  --canvas: oklch(0.985 0.002 264);
+  --canvas-grid: oklch(0.9 0.01 264);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg: oklch(0.19 0.02 264);
+    --surface: oklch(0.23 0.025 264);
+    --ink: oklch(0.94 0.01 264);
+    --ink-soft: oklch(0.74 0.02 264);
+    --rule: oklch(0.34 0.03 264);
+    --accent: oklch(0.8 0.15 70);
+    --tag: oklch(0.3 0.04 264);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg: oklch(0.19 0.02 264);
+  --surface: oklch(0.23 0.025 264);
+  --ink: oklch(0.94 0.01 264);
+  --ink-soft: oklch(0.74 0.02 264);
+  --rule: oklch(0.34 0.03 264);
+  --accent: oklch(0.8 0.15 70);
+  --tag: oklch(0.3 0.04 264);
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
+.page{max-width:1240px;margin-inline:auto;padding-inline:20px;padding-block:32px 64px;display:grid;gap:40px}
+header.intro{display:grid;gap:14px;max-width:74ch}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+h1{font-family:var(--font-display);font-weight:600;font-size:clamp(28px,4vw,40px);line-height:1.1;margin:0;text-wrap:balance}
+h2{font-family:var(--font-display);font-weight:600;font-size:24px;margin:0;line-height:1.2;text-wrap:balance}
+h3{font-size:13px;font-family:var(--font-mono);font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);margin:0}
+p{margin:0}
+.lede{font-size:17px;color:var(--ink)}
+.found{display:grid;gap:8px;margin:0;padding-left:20px}
+.found li{max-width:72ch}
+.common{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;display:grid;gap:10px}
+.common ul{margin:0;padding-left:20px;display:grid;gap:6px}
+.plate{display:grid;gap:14px}
+.plate-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.letter{font-family:var(--font-mono);font-size:13px;font-weight:500;background:var(--tag);color:var(--ink);border-radius:4px;padding:2px 8px}
+.plate-head p{color:var(--ink-soft);flex-basis:100%;max-width:80ch}
+.sheet{border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--canvas)}
+.sheet-scale{overflow-x:auto}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 28px}
+.notes > div{min-width:0;display:grid;gap:6px;align-content:start}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
+.caption{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 10px;border-top:1px solid var(--rule);background:var(--surface)}
+footer.reply{border-top:1px solid var(--rule);padding-top:20px;display:grid;gap:8px;max-width:74ch}
+
+/* ---------- the drawing: fixed 1900 px wide, scaled to fit by script ---------- */
+.fit{width:100%;position:relative}
+.drawing{width:1900px;transform-origin:0 0;font-family:"Segoe UI",system-ui,sans-serif;font-size:14px;color:var(--chrome-fg)}
+.band{background:var(--chrome)}
+.hdr{display:flex;align-items:center;height:44px;padding:0 14px;gap:14px}
+.logo{width:26px;height:26px;border-radius:6px;background:var(--chrome-primary);color:var(--chrome-primary-fg);display:grid;place-items:center;font-weight:700}
+.brand{font-weight:600;font-size:16px}
+.crumb{color:var(--chrome-muted-fg)} .crumb b{color:var(--chrome-fg);font-weight:600}
+.draft{font-size:12px;padding:2px 8px;border-radius:5px;background:var(--chrome-accent)}
+.hdr .mid{flex:1;display:flex;justify-content:center}
+.seg{display:inline-flex;align-items:center;gap:0}
+.org{display:flex;align-items:center;gap:10px}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--chrome-accent);display:grid;place-items:center;font-size:11px;font-weight:600}
+.row{display:flex;align-items:center;height:44px;padding:0 10px;gap:12px}
+.row .spacer{flex:1}
+.g{display:flex;align-items:center;gap:2px;position:relative;padding:3px 4px;border-radius:8px}
+.b{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 10px;border-radius:6px;white-space:nowrap;color:var(--chrome-fg);font-weight:600;font-size:14px;position:relative}
+.b svg{width:16px;height:16px;flex:none}
+.b.icon{padding:0 9px}
+.b.on{background:oklch(0.42 0.06 264)}
+.b.pen{background:var(--chrome-primary);color:var(--chrome-primary-fg)}
+.b .car{margin-left:-2px;opacity:.85}
+.split{display:inline-flex;align-items:center}
+.split .care{display:inline-flex;align-items:center;height:34px;padding:0 6px;position:relative}
+.split .care::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:1px;background:oklch(1 0 0 / 22%)}
+.cap{font-size:12px;color:var(--chrome-muted-fg);font-weight:500;margin:0 2px 0 6px}
+.rule{width:1px;height:18px;background:oklch(1 0 0 / 22%);margin:0 6px;flex:none}
+.search{display:flex;align-items:center;gap:8px;width:236px;height:32px;padding:0 10px;border-radius:6px;border:1px solid var(--chrome-input, oklch(0.62 0.02 264));background:var(--chrome-field);color:var(--chrome-muted-fg);font-weight:400}
+.search svg{width:15px;height:15px}
+.mark{width:18px;display:grid;place-items:center;color:var(--chrome-muted-fg)}
+.mark svg{width:15px;height:15px}
+.edgeline{height:3px;background:var(--chrome-primary)}
+.canvas{height:120px;background:
+  repeating-linear-gradient(90deg,transparent 0 339px,var(--canvas-grid) 339px 340px),var(--canvas);position:relative}
+.canvas .bar{position:absolute;height:6px;border-radius:3px;background:oklch(0.62 0.15 150)}
+.canvas .crit{background:oklch(0.5 0.2 25)}
+.canvas .lbl{position:absolute;font:11px "Segoe UI",system-ui,sans-serif;color:oklch(0.3 0.03 264)}
+
+/* --- variant: TODAY (as shipped) --- */
+.v-today .g.pill::before{content:"";position:absolute;inset:0;border-radius:8px;background:oklch(0.48 0.04 264 / .5);border:1px solid oklch(0.38 0.05 264);opacity:.55;pointer-events:none}
+.v-today .closing .b{box-shadow:inset 0 0 0 1px oklch(1 0 0 / 45%)}
+/* --- variant A: clear pills --- */
+.v-a .g.pill{background:oklch(0.31 0.055 264);box-shadow:inset 0 0 0 1px oklch(1 0 0 / 26%)}
+.v-a .g.pill.author-off{background:transparent;box-shadow:inset 0 0 0 1px oklch(1 0 0 / 26%);outline:1px dashed transparent}
+.v-a .joined,.v-c .joined{display:inline-flex;border-radius:6px;box-shadow:inset 0 0 0 1px oklch(1 0 0 / 22%)}
+.v-a .joined .b{border-radius:0}
+.v-a .joined .b + .b{box-shadow:inset 1px 0 0 oklch(1 0 0 / 18%)}
+/* --- variant B: rules, no boxes --- */
+.v-b .row{gap:0}
+.v-b .g{padding:3px 14px}
+.v-b .g + .g::before,.v-b .spacer + .g::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:oklch(1 0 0 / 30%)}
+.v-b .g.first::before{display:none}
+.v-b .joined{display:inline-flex;border-radius:6px;box-shadow:inset 0 0 0 1px oklch(1 0 0 / 30%)}
+.v-b .joined .b{border-radius:0}
+.v-b .joined .b + .b{box-shadow:inset 1px 0 0 oklch(1 0 0 / 22%)}
+/* --- variant C: tiles --- */
+.v-c .g.pill{background:oklch(0.33 0.06 264)}
+.v-c .joined{background:oklch(0.21 0.05 264);box-shadow:none;padding:2px;border-radius:7px}
+.v-c .joined .b{height:30px;border-radius:5px}
+.v-c .joined .b.on{background:oklch(0.47 0.07 264)}
+.v-c .rule{background:oklch(1 0 0 / 14%)}
+.v-c .search{border-color:transparent;background:oklch(0.21 0.05 264)}
+
+/* --- variant D (recommended): dividers + recessed switches + shared columns --- */
+.v-d .row{gap:0}
+.v-d .g{padding:3px 14px}
+.v-d .g.col1{width:900px;flex:none}
+.v-d .g + .g::before,.v-d .spacer + .g::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:oklch(1 0 0 / 24%)}
+.v-d .g.first::before{display:none}
+.v-d .b svg{color:var(--chrome-muted-fg)}
+.v-d .b.on svg,.v-d .b.pen svg{color:inherit}
+.v-d .joined{display:inline-flex;background:oklch(0.205 0.05 264);padding:2px;border-radius:7px;gap:1px}
+.v-d .joined .b{height:30px;border-radius:5px}
+.v-d .joined .b.on{background:oklch(0.47 0.07 264);box-shadow:0 1px 0 oklch(1 0 0 / 12%) inset,0 1px 2px oklch(0 0 0 / 35%)}
+.v-d .rule{background:oklch(1 0 0 / 14%)}
+.v-d .search{border-color:transparent;background:oklch(0.205 0.05 264)}
+.v-d .split .care::before{background:oklch(1 0 0 / 16%)}
+.v-d .hdr .seg{background:oklch(0.205 0.05 264);padding:2px;border-radius:7px;gap:1px}
+.v-d .hdr .seg .b{height:30px;border-radius:5px}
+.v-d .colguide{position:absolute;top:44px;height:88px;width:0;border-left:1px dashed oklch(0.79 0.135 75 / 70%);pointer-events:none}
+.v-d .b.overlay-on{background:oklch(0.42 0.06 264)}
+.rec{background:var(--accent);color:oklch(0.2 0.03 264)}
+
+@media (prefers-reduced-motion:no-preference){ .sheet{transition:box-shadow .2s} }
+a{color:var(--accent)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <defs>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></symbol>
+  <symbol id="i-today" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-view" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="m2 13 10 5 10-5"/></symbol>
+  <symbol id="i-scope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l14-6 2 4-14 6z"/><path d="M10 16l-2 5M13 15l2 6"/></symbol>
+  <symbol id="i-diff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8M8 7h8M8 17h8"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c1 4 6 6 6 11a6 6 0 0 1-12 0c0-3 2-4 2-7 2 1 3 2 4 4 1-3 0-5 0-8z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M11 20V4M17 20v-7M3 20h18"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4z"/></symbol>
+  <symbol id="i-penoff" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M3 3l18 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-diamond" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 21 12 12 21 3 12z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></symbol>
+  <symbol id="i-select" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3l14 7-6 2-2 6z"/></symbol>
+  <symbol id="i-arrange" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 7h14M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.5A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z"/></symbol>
+  <symbol id="i-compare" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v13M17 7v13"/><path d="m4 14 3 3 3-3M14 10l3-3 3 3"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-net" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h5l5-6M12 12l5 6"/></symbol>
+  <symbol id="i-gantt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M8 12h10M6 18h8"/></symbol>
+ </defs>
+</svg>
+
+<main class="page">
+  <header class="intro">
+    <span class="eyebrow">SchedulePoint · plan workspace · 12 Oct 2026</span>
+    <h1>Plan toolbar grouping options</h1>
+    <p class="lede">You said the toolbar looks awful, and named two causes: the grouping is messy, and there are stray bits. Below is today's toolbar redrawn at your monitor's width (1912 px, editing on), then three ways to fix the grouping. All three share the same clean-up of the stray bits. Nothing has been built yet.</p>
+    <h3>What the review found</h3>
+    <ul class="found">
+      <li><strong>Every group is already meant to have a box.</strong> The five groups each sit on a rounded backing, but its edge is about 1.5 : 1 against the navy, so some groups look boxed and others don't.</li>
+      <li><strong>Three different box styles compete.</strong> The faint group backing, the search field's own border, and a brighter outline drawn round Export and Share, which puts a box inside a box.</li>
+      <li><strong>Most stray bits do a job, but don't look like it.</strong> The eye and wrench mark the two rows. The lone ▾ opens "Recent edits". The ± shows the baseline. The gear opens plan settings, but it sits next to Earned value as if it belonged to it.</li>
+    </ul>
+  </header>
+
+  <section class="common" aria-labelledby="common-h">
+    <h2 id="common-h" style="font-size:19px">The stray-bit clean-up, the same in every option</h2>
+    <ul>
+      <li>Remove the eye and wrench row marks. They are decoration, and the wrench is easy to mistake for an edit button.</li>
+      <li>Join the three Colour choices into one control, and show "Colour" at the same size as the buttons.</li>
+      <li>Give the ± a word: <strong>Baseline</strong>. You chose icon-only for it on 10 October, so this one needs your say-so.</li>
+      <li>Join undo, redo and Recent edits into one unit, and give Recent edits a clock icon instead of a bare ▾.</li>
+      <li>Show "Start milestone" with its diamond, without the repeated "Add:" (screen readers still hear "Add: Start milestone").</li>
+      <li>Move the settings gear to the end of the row, after Share, so it no longer reads as part of Earned value.</li>
+      <li>Drop the extra outline round Export and Share.</li>
+      <li>Keep the "…" on items that open a dialog. It is a documented rule, and it tells you a click won't act straight away.</li>
+    </ul>
+  </section>
+
+  <section class="plate" id="today">
+    <div class="plate-head"><span class="letter">Today</span><h2>As shipped</h2><p>Redrawn from your screenshot for comparison. The faint group backings are drawn at their real strength.</p></div>
+    <div class="sheet"><div class="fit"><div class="drawing v-today" data-variant="today"></div></div>
+      <div class="caption"><span>web 0.186.1 · 1912 px · editing on</span><span>reference</span></div></div>
+  </section>
+
+  <section class="plate" id="d">
+    <div class="plate-head"><span class="letter rec">Recommended</span><h2>Dividers, switches and columns</h2><p>My pick. Option B's quiet bar, with no group boxes, plus option C's recessed switches for anything where you choose one of several. Then one new idea: the two rows share columns. The first divider falls at the same point on both rows (the dashed amber guide is drawn here only to show it), and both right-hand groups end on the same edge, so the bar reads as one grid. Icons are a step quieter than their words, so the labels lead and the amber pen is the only loud thing on the bar.</p></div>
+    <div class="sheet"><div class="fit"><div class="drawing v-d" data-variant="d" style="position:relative"></div></div>
+      <div class="caption"><span>no group boxes · recessed switches · shared column on both rows</span><span>recommended</span></div></div>
+    <div class="notes">
+      <div><h3>Why this one</h3><ul><li>Every shape on the bar is a control you operate, so it never looks decorated.</li><li>The aligned columns make the two rows read as one toolbar, not two lists.</li><li>The diagram stays the brightest thing on screen.</li></ul></div>
+      <div><h3>What it costs</h3><ul><li>Changes ADR-0185's group pill, so the toolbar ADR gets an amendment.</li><li>The shared column needs a measured width at each screen size, checked at 1024, 1646 and 1912.</li><li>Below 1024 the bar is one scrolling line, so the columns only apply above that.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="plate" id="a">
+    <div class="plate-head"><span class="letter">Option A</span><h2>Clear pills</h2><p>Keep the five groups as they are, but make every group's box clearly visible: one box style, used the same way everywhere. Inside a group, a short divider separates the sections. This is the smallest change and follows the toolbar ADR's original intent.</p></div>
+    <div class="sheet"><div class="fit"><div class="drawing v-a" data-variant="a"></div></div>
+      <div class="caption"><span>one box tier · hairline dividers inside</span><span>closest to today</span></div></div>
+    <div class="notes">
+      <div><h3>Good</h3><ul><li>Every group reads as a group at a glance.</li><li>Smallest change to code and tests.</li></ul></div>
+      <div><h3>Watch</h3><ul><li>Five outlined boxes are still a lot of boxes on a busy bar.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="plate" id="b">
+    <div class="plate-head"><span class="letter">Option B</span><h2>Dividers, no boxes</h2><p>Take the group boxes away entirely. Groups are separated by a full-height divider and wider gaps. The only things with an outline are controls that are one unit: the Colour choice, the undo cluster, the split buttons and the search field.</p></div>
+    <div class="sheet"><div class="fit"><div class="drawing v-b" data-variant="b"></div></div>
+      <div class="caption"><span>no group containers · dividers between groups</span><span>quietest</span></div></div>
+    <div class="notes">
+      <div><h3>Good</h3><ul><li>The calmest bar; an outline means "this is one control".</li><li>Works as well on the Surface as on the monitor.</li></ul></div>
+      <div><h3>Watch</h3><ul><li>Groups rely on gaps, so a squeezed row loses some of its shape.</li><li>Replaces ADR-0185's group pill, so it needs a short ADR amendment.</li></ul></div>
+    </div>
+  </section>
+
+  <section class="plate" id="c">
+    <div class="plate-head"><span class="letter">Option C</span><h2>Shaded tiles</h2><p>Each group sits on a slightly lighter tile with no outline at all. Choices that switch between options, like Colour, sit in a darker recessed track with the selected one raised, like a physical switch.</p></div>
+    <div class="sheet"><div class="fit"><div class="drawing v-c" data-variant="c"></div></div>
+      <div class="caption"><span>filled tiles · recessed switch tracks</span><span>most structured</span></div></div>
+    <div class="notes">
+      <div><h3>Good</h3><ul><li>Groups are obvious without a single border line.</li><li>Selected states stand out more clearly than today.</li></ul></div>
+      <div><h3>Watch</h3><ul><li>The tile has to be bright enough to see on a dim screen, which means re-checking contrast.</li><li>The heaviest look of the three.</li></ul></div>
+    </div>
+  </section>
+
+  <footer class="reply">
+    <h2 style="font-size:19px">How to choose</h2>
+    <p>Reply with the recommended option, A, B or C, or mix them (for example "B, but keep the ± icon-only"). I'll then write a short spec with the exact rules and the checks that prove them, and stop for your approval before any code changes.</p>
+  </footer>
+</main>
+
+<script>
+(function(){
+  const I = (id) => `<svg aria-hidden="true"><use href="#i-${id}"/></svg>`;
+  const b = (icon,label,cls='') => `<span class="b ${cls}${label?'':' icon'}">${icon?I(icon):''}${label?`<span>${label}</span>`:''}</span>`;
+  const menu = (icon,label,cls='') => `<span class="b ${cls}">${icon?I(icon):''}<span>${label}</span><svg class="car" aria-hidden="true" style="width:13px;height:13px"><use href="#i-chev"/></svg></span>`;
+  const split = (icon,label) => `<span class="split">${b(icon,label)}<span class="care">${I('chev').replace('<svg','<svg style="width:13px;height:13px"')}</span></span>`;
+  const rule = '<span class="rule"></span>';
+  const search = `<span class="search">${I('search')}Search or filter…</span>`;
+
+  const header = `<div class="band hdr">
+    <span class="logo">S</span><span class="brand">SchedulePoint</span>
+    <span class="crumb">Project1 / <b>NetPoint reference: power-plant programme</b></span>
+    <span class="draft">Draft</span>${b('info','','icon')}${b('edit','','icon')}
+    <span class="mid"><span class="seg">${b('net','Diagram','on')}${b('gantt','Gantt')}</span></span>
+    <span class="org"><b>Wood Group</b><span class="avatar">JE</span></span></div>`;
+
+  function today(){
+    const look = `<div class="band row"><span class="mark">${I('eye')}</span>
+      <span class="g pill">${split('today','Go to today')}${menu('view','View')}${rule}<span class="cap">Colour</span>${b('','Criticality','on')}${b('','Total float')}${b('','WBS group')}${rule}${b('layers','Late-start overlay','on')}${b('scope','Feasible window')}${b('diff','')}</span>
+      <span class="g pill">${search}${menu('filter','Filter')}${b('flame','Critical only')}${b('alert','Next conflict')}</span>
+      <span class="spacer"></span>
+      <span class="g pill">${b('book','Legend')}${b('bars','')}${b('msg','')}</span></div>`;
+    const doRow = `<div class="band row"><span class="mark">${I('wrench')}</span>
+      <span class="g pill">${b('penoff','Stop editing','pen')}${split('plus','Add')}${b('flag','Add: Start milestone')}${split('link','Link')}${b('select','Select')}${b('arrange','Arrange')}${b('scale','Apply levelled dates…')}${b('undo','')}${b('chev','')}${b('redo','')}</span>
+      <span class="spacer"></span>
+      <span class="g pill">${menu('chart','Analysis')}${b('heart','Health check')}${b('compare','Compare revisions')}${b('dollar','Earned value…')}${b('gear','')}<span class="closing" style="display:inline-flex;gap:4px;margin-left:8px">${menu('export','Export')}${b('share','Share…')}</span></span></div>`;
+    return look + doRow;
+  }
+
+  function proposed(v){
+    const colour = `<span class="cap" style="font-size:14px;color:var(--chrome-muted-fg);font-weight:600;margin-left:4px">Colour</span><span class="joined">${b('','Criticality','on')}${b('','Total float')}${b('','WBS group')}</span>`;
+    const undo = `<span class="joined">${b('undo','')}${b('redo','')}${b('history','')}</span>`;
+    const first = v==='b' ? ' first' : v==='d' ? ' first col1' : '';
+    const look = `<div class="band row">
+      <span class="g pill${first}">${split('today','Go to today')}${menu('view','View')}${rule}${colour}${rule}${b('layers','Late-start overlay','on')}${b('scope','Feasible window')}${b('diff','Baseline')}</span>
+      <span class="g pill">${search}${menu('filter','Filter')}${b('flame','Critical only')}${b('alert','Next conflict')}</span>
+      <span class="spacer"></span>
+      <span class="g pill">${b('book','Legend')}${b('bars','')}${b('msg','')}</span></div>`;
+    const doRow = `<div class="band row">
+      <span class="g pill${first}">${b('penoff','Stop editing','pen')}${rule}${split('plus','Add')}${b('diamond','Start milestone')}${split('link','Link')}${b('select','Select')}${b('arrange','Arrange')}${b('scale','Apply levelled dates…')}${rule}${undo}</span>
+      <span class="spacer"></span>
+      <span class="g pill">${menu('chart','Analysis')}${b('heart','Health check')}${b('compare','Compare revisions')}${b('dollar','Earned value…')}</span>
+      <span class="g pill">${menu('export','Export')}${b('share','Share…')}${rule}${b('gear','')}</span></div>`;
+    return look + doRow;
+  }
+
+  const canvas = `<div class="edgeline"></div><div class="canvas">
+    <span class="lbl" style="left:70px;top:14px">Chimney Foundation</span><span class="bar" style="left:60px;top:32px;width:420px"></span>
+    <span class="lbl" style="left:520px;top:14px">Erect Chimney</span><span class="bar" style="left:500px;top:32px;width:600px"></span>
+    <span class="lbl" style="left:70px;top:58px">Mob</span><span class="bar crit" style="left:40px;top:76px;width:380px"></span>
+    <span class="lbl" style="left:1290px;top:58px">Fit &amp; Weld Boiler</span><span class="bar crit" style="left:1200px;top:76px;width:500px"></span></div>`;
+
+  document.querySelectorAll('.drawing').forEach(d => {
+    const v = d.dataset.variant;
+    d.innerHTML = header + (v==='today' ? today() : proposed(v)) + canvas
+      + (v==='d' ? '<span class="colguide" style="left:910px"></span>' : '');
+  });
+
+  function fit(){
+    document.querySelectorAll('.fit').forEach(f => {
+      const d = f.firstElementChild;
+      const s = Math.min(1, f.clientWidth / 1900);
+      d.style.transform = `scale(${s})`;
+      f.style.height = (d.offsetHeight * s) + 'px';
+    });
+  }
+  fit();
+  if ('ResizeObserver' in window) new ResizeObserver(fit).observe(document.body);
+  else addEventListener('resize', fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+})();
+</script>
