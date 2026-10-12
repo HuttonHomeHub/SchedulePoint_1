@@ -12,7 +12,7 @@ through in groups, five pull requests, each squash-merged with all ten checks gr
   bar, ADR-0187; `web` 0.185.0 via #921), **#922** (dividers, checkboxes, landmark, press-to-type size box,
   ADR-0188; `web` 0.186.0 via #923), **#924** (web halves of #405 and #450; `web` 0.186.1 via #925), **#926**
   (group 4 tidy, tests and performance; no web change). For #926, check the Version Packages PR (an `api`
-  patch); it may be open or merged. Tags: `api-v0.89.0`, `web-v0.185.0`, `web-v0.186.0`, `web-v0.186.1`.
+  patch); it may be open or merged. Tags: `api-v0.89.0`, `api-v0.89.1`, `web-v0.185.0`, `web-v0.186.0`, `web-v0.186.1`.
 - The product owner's screens: **monitor 1912 x 948** (mouse) and **Surface 1912 x 1114, DPR 1.5** (finger
   and stylus, 44 px targets). Design floor **1024 x 600** (ADR-0179).
 - Model routing is pinned in `.claude/agents/`: **builder** (Sonnet) implements, reviewers are Sonnet,
@@ -62,8 +62,7 @@ through in groups, five pull requests, each squash-merged with all ten checks gr
   page's command-band slot), **#494** (Gantt 25 px strip covers about a third of each row menu, pre-existing),
   **#495** (`SizeField` vs `TextField` drift), **#496** (the `revision-delta-m0` e2e spec fails intermittently
   on a local database; it passed CI on every recent PR).
-- Carried over, still open: **#490, #491, #481**, **#474** (built; delete the row once confirmed merged),
-  **#477, #478, #480, #437**, **#443, #445, #446, #419, #429, #454**, and the older **#401, #403, #406,
+- Carried over, still open: **#490, #491, #481**, **#477, #478, #480, #437**, **#443, #445, #446, #419, #429, #454**, and the older **#401, #403, #406,
   #408-#411**. `wip/history-numerator-preaggregate` (`64ff45d4`) is still the first remedy to measure when the
   250,000 trigger fires.
 
