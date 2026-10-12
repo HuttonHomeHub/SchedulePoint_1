@@ -1,7 +1,7 @@
 # Implementation Plan: The toolbar as a grid: dividers, switches and shared columns
 
 - **Feature spec:** [`feature-spec.md`](feature-spec.md)
-- **Status:** Approved — 2026-10-12 by the product owner ("approve, go with your recommendations"): CQ-1 (a) keep a quieter search outline that clears 3:1; CQ-2 (a) drop the dashed locked outline; CQ-3 (a) a promoted command wins over the shared column
+- **Status:** Accepted — shipped (ADR-0189). Approved 2026-10-12 by the product owner (CQ-1 (a), CQ-2 (a), CQ-3 (a)); built as M0-M3 and M5, M4 (shared columns) withdrawn by the owner after M0; signed off 2026-10-12
 - **Owner:** web
 
 > **Owner decisions after M0 (2026-10-12).** M0 fired two stop rules and the owner answered both:

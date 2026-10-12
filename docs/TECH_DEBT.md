@@ -11593,3 +11593,12 @@ On #930 (a Markdown-only change) web shard 2 failed `:2684` "the collapsed spine
 Toolbar-grid M3 paints a glyph beside a visible label a step quieter than the label, but only on the command deck and the page header's two toolbars (`quietIcons`, opt-in). The selection bar and the diagram-corner cluster keep the control's ink on purpose (D-5): extending it there is a visual decision, not a bug, and was left for the owner. Two things follow. First, the selection bar still reads as louder than the band above it. Second, the opt-in travels as a prop through `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton` and `ToolbarItemRenderApi.quietIcons`, so a new custom `render` trigger that paints its own glyph can forget it (the structural test catches a missing `toolbarIconClass` call, not a missing `quietIcons` pass-through). `Deck` forces it on for every control while `Toolbar` defaults it off, which is one more place a reader has to know.
 
 **Next:** (1) replace the prop threading with a `ToolbarSurfaceContext` the primitives read, so a surface declares its ink once and a custom trigger inherits it; (2) with the owner, decide whether the selection bar and the corner cluster take the quiet glyph, measure their contrast in forced colours as M3 did for the band, and flip them. **Also recorded here, not redesigned:** the tail move gates on the _viewport_ (`DECK_TAIL_ROOM_QUERY`, 80 rem) while the rule styles gate on the deck's _container_ (`--container-roomy`, 79 rem). They agree at the measured shells (the Project Explorer at its default width does not narrow the band at 1280, `command-surface.spec.ts` asserts `roomy` there), but a shell that narrowed the band below 79 rem at a window of 80 rem or more would show the gear in the tail with only the ungated rule styling. No such shell is known.
+
+### 499. The owner asked for minor toolbar tweaks at some point, and has not said which
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-12 (the owner's sign-off of toolbar-grid, recorded verbatim in `docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md`)
+**Raised:** 2026-10-12 (toolbar-grid M5-T2) · **Size:** S · **Owner:** web
+
+On signing off the built toolbar after seeing the after photographs, the owner answered "Signed off but minor tweaks required at some point". The tweaks are unspecified, so nothing is built and none are guessed at here.
+
+**Next:** ask the owner which tweaks they mean before building anything. **Trigger:** the owner names them. Not work now.

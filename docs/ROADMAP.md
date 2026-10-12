@@ -798,6 +798,13 @@ discriminators. Each becomes a spec/plan before build:
   activity's own actions. The dock's width floors can no longer exceed the row at large text. The cost is that the first
   Tab stop in the bar changes.
 
+- **The toolbar as a grid.** **Approved 2026-10-12; built as `toolbar-grid` M0-M3 (M4 withdrawn), signed off by the owner
+  the same day** ([ADR-0189](adr/0189-a-shape-on-the-toolbar-is-a-control.md); spec and plan at
+  [`docs/specs/toolbar-grid/`](specs/toolbar-grid/)). The command deck loses its boxes: groups are split by a divider,
+  a choice of one or a joined unit (Colour, Diagram | Gantt, Undo / Redo / Recent edits) is a recessed track, and a
+  glyph is a step quieter than its word. At 1912 on a mouse, Earned value moved into the Analysis menu to pay for
+  Baseline's word. The owner asked for minor tweaks later (`docs/TECH_DEBT.md` #499).
+
 - **A divider can be typed to a size, and a finger finds it.** **Approved 2026-10-11; built as `a11y-touch-sweep` M0-M3**
   ([ADR-0188](adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md); spec and plan at
   [`docs/specs/a11y-touch-sweep/`](specs/a11y-touch-sweep/)). Pressing a panel divider without dragging opens a small box to type

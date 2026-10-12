@@ -10,6 +10,20 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-12 — The toolbar as a grid closes: boxes out, tracks in, one column withdrawn
+
+**What was decided.** The `toolbar-grid` epic is closed and filed as ADR-0189, "A shape on the toolbar is a
+control". The deck's group pills, row marks, Export/Share ring and dashed locked outline are gone; groups are split
+by dividers; a choice of one (Colour, Diagram | Gantt) is a recessed track and Undo, Redo and Recent edits one joined
+track; a glyph beside a word is a step quieter than the word. The shared lead column was **withdrawn by the owner
+after M0** because it fit at 2160 px and wider only, and both of the owner's screens are 1912 wide, so M4 was never
+built. The owner signed off on seeing the after photographs: "Signed off but minor tweaks required at some point".
+The tweaks are unspecified and filed as `docs/TECH_DEBT.md` #499 to be asked about, not guessed.
+
+**Why, and what it cost.** At 1912 on a mouse Earned value moved from the bar into the Analysis menu (the ladder
+re-derivation spent its width on Baseline's word), and with a touch pointer and Link armed the DO row wraps to two
+lines at 1280 and 1440 where it was one (`m-final-measurement.md` §0). Both were shown to the owner before sign-off.
+
 ## 2026-10-12 — Reconciliation pass: the reviewer agents had never heard of the last twelve ADRs
 
 **What was decided.** The pass `check:reconcile-due` called due on a full (unshallowed) clone: twelve ADRs

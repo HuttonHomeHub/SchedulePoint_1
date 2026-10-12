@@ -2,7 +2,9 @@
 
 - **Status:** Accepted — 2026-10-11. The product owner approved the whole plan to run to completion on 2026-10-09;
   the decisions in spec §0.2 (OD-1 to OD-3) were made after M0 and M4, and the visual brief's open choices
-  (the closing action, the row mark) after the M6 review. Close-out is M7.
+  (the closing action, the row mark) after the M6 review. Close-out is M7. **Amended by ADR-0189** (2026-10-12): D3's Baseline overlay
+  shows its word from 79 rem, and D8 V1 (row marks), V2 (the group pill), V3 (the hollow Author outline) and V4
+  (the closing action's outline) are replaced by dividers, tracks and no boxes.
 - **Spec:** [`docs/specs/toolbar-redesign/feature-spec.md`](../specs/toolbar-redesign/feature-spec.md)
   · **Plan:** [`implementation-plan.md`](../specs/toolbar-redesign/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/toolbar-redesign/m0-measurement.md) (the stop rule and the
