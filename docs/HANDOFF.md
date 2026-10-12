@@ -73,14 +73,13 @@ Every PR was squash-merged with all ten checks green on the pinned head.
 
 ## Waiting on the product owner
 
-- **Toolbar "minor tweaks at some point"** (#499). The owner signed off with these words, unspecified.
-  **Ask which tweaks before building anything.**
-- **Unanswered from the reconciliation pass:**
-  - which of the waiting items below to take;
-  - whether to spec **real-time collaborative editing** for a 1.0.
-- **Ten Dependabot PRs, #938–#947**, are open and untouched. They need a triage decision. Note that the
-  `@playwright/test` 1.64 bump changes the browser build.
-- Carried over from the previous hand-off, still unanswered:
+- **Toolbar "minor tweaks at some point"** (#499). The owner signed off with these words, unspecified, and
+  on 2026-10-12 chose to leave them for later. **Ask which tweaks before building anything.**
+- **Dependabot PRs #938–#947:** the owner said "check and merge the safe ones" (2026-10-12). All ten are
+  being bundled into one `chore/deps-2026-10-12` PR, re-reading the `check:claims` register for each bump.
+  It includes better-auth 1.7.7, a security fix. If the bundle is not yet merged, finish it.
+- Carried over from the previous hand-off. On 2026-10-12 the owner chose to take **none of these for
+  now**; do not raise them again unless something changes:
   - **SC-16 sign-off** of the older toolbar-redesign photos (`docs/specs/toolbar-redesign/photos/m6-*`).
   - **Confirm 72 rem** for the page-grid split (ADR-0182; the tap-to-answer page
     <https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY> has no answers).
@@ -92,6 +91,7 @@ Every PR was squash-merged with all ten checks green on the pinned head.
 - **Decided, do not reopen:**
   - `Start editing` stays plain while the pen is not held (ADR-0133).
   - Four web shards, not five (2026-10-12).
+  - **Real-time collaborative editing is dropped from 1.0** (owner, 2026-10-12; `docs/DECISIONS.md`).
 - **Not exercised on real hardware:**
   - the toolbar's forced-colours rendering on Windows High Contrast;
   - the gear's focus restore on a real tablet rotation;
@@ -113,9 +113,9 @@ Every PR was squash-merged with all ten checks green on the pinned head.
 
 ## Suggested next
 
-1. Ask the owner the open questions above: #499's tweaks, the Dependabot triage, and the collaborative
-   editing spec.
-2. If collaborative editing is wanted: a **feature-analyst** spec on Opus. Nothing is built.
+1. Finish the dependency bundle if it is still open.
+2. Ask the owner what to build next. Collaborative editing is off the table for 1.0, so the candidates are the
+   hardening pass below and the open rows.
 3. A hardening pass before 1.0:
    - real-hardware and screen-reader checks;
    - the staff console's unwired alert signals (`CLAUDE.md` §17);
