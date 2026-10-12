@@ -4,6 +4,16 @@
 - **Status:** Approved — 2026-10-12 by the product owner ("approve, go with your recommendations"): CQ-1 (a) keep a quieter search outline that clears 3:1; CQ-2 (a) drop the dashed locked outline; CQ-3 (a) a promoted command wins over the shared column
 - **Owner:** web
 
+> **Owner decisions after M0 (2026-10-12).** M0 fired two stop rules and the owner answered both:
+>
+> 1. **The shared column is dropped.** It fits only at 2160 px and wider (3 of 12 pointer-stage cells), and both of
+>    the owner's screens are 1912 wide. Requirement 3 (shared columns), §4.2, §4.5, the `leadColumn` prop, every
+>    column success criterion and milestone **M4** are withdrawn. They stay below as history; they are not built.
+> 2. **The gear and the D-4 inset rules apply from 79 rem (1264 px) up only.** Below that, the gear stays after
+>    Earned value and the Author group has no extra rules, so at 1024 fine every row keeps today's line count in
+>    every state, Link armed included (DO has 5.2 px free there; the gear costs 12 px and the rules 24 px, measured,
+>    M0). "Move gear on big only" was the owner's answer; the rules follow it because they break the same floor.
+
 ## Breakdown
 
 The three critical questions in the spec (CQ-1 search outline, CQ-2 locked Author outline, CQ-3 column against
@@ -314,7 +324,7 @@ a new case for SC-12 (the pen is the only saturated control at rest, at 1912).
 
 ---
 
-### Milestone M4: Shared columns
+### Milestone M4: Shared columns (WITHDRAWN by the owner after M0, 2026-10-12; not built)
 
 **Outcome:** from 1280 px, the two rows share a lead column wherever it fits.
 **Entry point:** any plan, at a window 1280 px or wider → the command deck.

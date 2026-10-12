@@ -18,6 +18,16 @@
 > what it contradicts here. If M0 contradicts a premise the work stops and asks (the ADR-0185 precedent), and it does:
 > see the column, §4.5.
 
+> **Owner decisions after M0 (2026-10-12).** M0 fired two stop rules and the owner answered both:
+>
+> 1. **The shared column is dropped.** It fits only at 2160 px and wider (3 of 12 pointer-stage cells), and both of
+>    the owner's screens are 1912 wide. Requirement 3 (shared columns), §4.2, §4.5, the `leadColumn` prop, every
+>    column success criterion and milestone **M4** are withdrawn. They stay below as history; they are not built.
+> 2. **The gear and the D-4 inset rules apply from 79 rem (1264 px) up only.** Below that, the gear stays after
+>    Earned value and the Author group has no extra rules, so at 1024 fine every row keeps today's line count in
+>    every state, Link armed included (DO has 5.2 px free there; the gear costs 12 px and the rules 24 px, measured,
+>    M0). "Move gear on big only" was the owner's answer; the rules follow it because they break the same floor.
+
 ---
 
 ## 1. Business understanding
