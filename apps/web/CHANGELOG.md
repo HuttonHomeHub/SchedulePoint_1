@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.189.0
+
+### Minor Changes
+
+- [#949](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/949) [`b17cb49`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b17cb4933d374a8cc5dd167a529e7dac9607a081) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan toolbar's last loose ends are tidied. Icons beside a visible label are now a step quieter than the label, so the pen is the only bright thing on the bar while you are not using a tool. Baseline overlay shows the word Baseline again on a wide window with a mouse (and stays an icon with a tooltip on a narrow window or on touch). The Start milestone and Finish milestone buttons drop the word Add from what they show, though screen readers still hear "Add: Start milestone". Recent edits now wears a history icon instead of an arrow. On a wide window, Settings moves to the end of the lower row behind a short divider, and Add and Undo each follow one, so the keyboard order follows what you see; on a narrow window they stay where they were, so no row gains a line.
+
 ## 0.188.0
 
 ### Minor Changes
