@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.189.1
+
+### Patch Changes
+
+- [#952](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/952) [`a201cfa`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a201cfa2909fc83d7096bfcb133c987be18c9d71) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan's row of commands is now a named "Plan command band" region, so screen reader users can jump straight to it with landmark navigation.
+
 ## 0.189.0
 
 ### Minor Changes
