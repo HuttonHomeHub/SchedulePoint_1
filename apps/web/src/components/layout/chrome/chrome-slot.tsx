@@ -123,8 +123,8 @@ export function ChromeSlot({
         // absorbs the line's slack never lets anything wrap, which is the single defect this row's
         // design turns on (`docs/specs/one-row-header/falsification.md`, third result).
         name === 'identity' && 'flex min-w-0 shrink items-center empty:hidden',
-        // The mode cluster is the row's middle section. It is four segmented controls and a pen
-        // badge, and squeezing it folds `Early | Visual | Diagram | Gantt` onto a second line
+        // The mode cluster is the row's middle section. It is a segmented control and a pen
+        // badge, and squeezing it folds `Diagram | Gantt` onto a second line
         // INSIDE the row, turning one clean row into two ragged ones (ADR-0112 D4). The identity
         // slot beside it is the one that gives way.
         //

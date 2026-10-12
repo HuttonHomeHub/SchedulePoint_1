@@ -271,7 +271,7 @@ entry stops being needed.
 - Primary navigation in the **docked Project Explorer** on the leading edge
   (Client → Project → Plan, ADR-0109 D2), which also carries the organisation's
   six destinations — one navigator, not two; secondary via the workspace's own
-  chrome (the plan command deck's captioned groups, ADR-0031's taxonomy rendered
+  chrome (the plan command deck's named groups (no visible caption since toolbar-redesign M6), ADR-0031's taxonomy rendered
   by ADR-0109 D1); tertiary via in-context menus. Don't exceed this depth
   without review.
 - **An action's surface is decided by its subject.** An action whose subject is
@@ -351,7 +351,8 @@ entry stops being needed.
   coarse-only 44 px costs a mouse user **0 px** of diagram and a touch user 16 px
   of 808. A surface that cannot meet the house rule is **named in ADR-0118 §D1
   with the equivalent it offers a non-pointer user**, and the list has **two**
-  entries here and the Gantt's own (below): a breadcrumb crumb (a truncated crumb's width is the space left over, so
+  entries here, the Gantt's own (below) and the Gantt grid divider (ADR-0188 D3; typed twin
+  `View ▾` › Columns › `Table width`): a breadcrumb crumb (a truncated crumb's width is the space left over, so
   no CSS makes it 44px wide — a box was built, measured **16 × 44**, and withdrawn),
   and `icon-sm`'s dense-row consumers, whose containers are fixed independently of
   them (`docs/TECH_DEBT.md` #215). **The Gantt's coarse list is ADR-0177 D4** — the `⋯` (28), the summary-row
