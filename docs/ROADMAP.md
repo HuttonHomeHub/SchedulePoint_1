@@ -708,6 +708,13 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
   retains a real customer address indefinitely, which is exactly what ADR-0085 D3 spent a decision
   keeping erasable. The other two items in this list are compose edits on a host; this one is code.
 
+## Toward 1.0
+
+What 1.0 requires and promises is written down in [`RELEASE_1_0.md`](RELEASE_1_0.md) (ADR-0190); it has **not**
+been cut. Required before it, each to be specified on its own: a tested database backup and restore, a
+whole-organisation export, and the recycle bin's 90-day permanent clear-out turned on and proven. Collaborative
+editing is not in 1.0 (`DECISIONS.md`, 2026-10-12). Two owner tasks are parked and listed there without a position.
+
 ## Next
 
 ### Committed engine milestones (conformance framework)
