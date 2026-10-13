@@ -2150,6 +2150,35 @@ test.describe('The plan command surface', () => {
   });
 
   /**
+   * **Link keeps focus when an Add kind is promoted ahead of it, and nothing is announced as gone**
+   * (`docs/TECH_DEBT.md` #504). Start milestone is promoted from 100 rem (1600 px, `PROMOTION_LADDER.P2`);
+   * the run it adds sat before Link's, whose position was its key, so the control was re-created under
+   * the reader and the handoff announced "Link … is no longer available" about a control still on the bar.
+   *
+   * **Verified red** by removing the keyed `Fragment` round an unclustered run in `Deck.tsx`.
+   */
+  test('Link keeps focus across a resize over 100 rem, and nothing is announced as gone', async () => {
+    test.setTimeout(120_000);
+    await ensurePen(page);
+    const link = page
+      .getByRole('toolbar', { name: 'Plan commands', exact: true })
+      .locator('[data-toolbar-item="link-tool"]')
+      .first();
+    for (const [from, to] of [
+      [1500, 1700],
+      [1700, 1500],
+    ] as const) {
+      await page.setViewportSize({ width: from, height: 800 });
+      await page.waitForTimeout(400);
+      await link.focus();
+      await page.setViewportSize({ width: to, height: 800 });
+      await page.waitForTimeout(600);
+      await expect(link, `${String(from)} -> ${String(to)}`).toBeFocused();
+      await expect(page.getByTestId('announcer')).not.toContainText('no longer');
+    }
+  });
+
+  /**
    * **Add and Undo carry an inset rule from 79 rem, and below it the rule does not exist** (toolbar-grid
    * M3, D-4). The wrapper is `display: contents` below the container, so it has no box and no pseudo
    * element; from it, it is a box with a 1 px mark. What it must not be is a stop, a role or a name.

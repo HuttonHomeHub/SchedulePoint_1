@@ -639,7 +639,14 @@ export function Deck<Ctx>({
                             // A set's caption is presentational and leads the unit; the controls are the track.
                             const body =
                               run.cluster === undefined ? (
-                                run.entries.map(renderControl)
+                                // **Keyed by the item, not left to its position.** A run of one
+                                // unclustered item is a bare array, and an unkeyed array child is
+                                // keyed by its index among the runs, so a run appearing before this
+                                // one (a promoted Add kind) shifted it and React re-created the
+                                // control under whoever was focused on it (`docs/TECH_DEBT.md` #504).
+                                <Fragment key={first.item.id}>
+                                  {run.entries.map(renderControl)}
+                                </Fragment>
                               ) : (
                                 <ClusterTrack
                                   key={first.item.id}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ClusterTrack } from './ClusterTrack';
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
@@ -380,7 +380,11 @@ export function Toolbar<Ctx>({
   const renderRuns = (entries: readonly (typeof resolved)[number][]): React.ReactNode =>
     clusterRuns(entries).map((run) => {
       const first = run.entries[0];
-      if (run.cluster === undefined || first === undefined) return run.entries.map(renderItem);
+      if (first === undefined) return null;
+      // Keyed by the item: an unkeyed array is keyed by its index among the runs, so a run appearing
+      // before it would re-create the control under whoever was focused on it (`docs/TECH_DEBT.md` #504).
+      if (run.cluster === undefined)
+        return <Fragment key={first.item.id}>{run.entries.map(renderItem)}</Fragment>;
       const lead = run.entries.filter((r) => r.item.presentational);
       return (
         <ClusterTrack

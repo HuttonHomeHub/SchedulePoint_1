@@ -605,3 +605,28 @@ describe('groupOrder', () => {
     }
   });
 });
+
+// The same defect as `Deck` (`docs/TECH_DEBT.md` #504): an unkeyed run is keyed by its position.
+describe('Toolbar — a later item survives an earlier one appearing', () => {
+  const lateItems: ToolbarItem<{ show: boolean }>[] = defineToolbar<{ show: boolean }>([
+    { id: 'first', group: 'frame', order: 1, label: 'First', onActivate: () => {} },
+    {
+      id: 'early',
+      group: 'frame',
+      order: 2,
+      label: 'Early',
+      isVisible: (ctx) => ctx.show,
+      onActivate: () => {},
+    },
+    { id: 'later', group: 'frame', order: 3, label: 'Later', onActivate: () => {} },
+  ]);
+
+  it('keeps the same node, and its focus', () => {
+    const { rerender } = render(<Toolbar items={lateItems} context={{ show: false }} label="T" />);
+    const later = screen.getByRole('button', { name: 'Later' });
+    later.focus();
+    rerender(<Toolbar items={lateItems} context={{ show: true }} label="T" />);
+    expect(screen.getByRole('button', { name: 'Later' })).toBe(later);
+    expect(document.activeElement).toBe(later);
+  });
+});
