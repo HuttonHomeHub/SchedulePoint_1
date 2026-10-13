@@ -11618,3 +11618,12 @@ The warning reads `Toolbar: item "link-tool" was removed while it held focus and
 Forced-colours mode (a Windows contrast theme) overrides author colours and, in the browser's emulation, drops opacity cues the same way for every control. A menu's shaded item differs from an available one only by a muted text colour, so the two probably look identical there, and a shaded item is the only signal that an action is refused. The Gantt's bars and the diagram canvas keep their own colours, so the bars may vanish or be indistinguishable from the background. **Not measured on a real contrast theme**: the device check sheet's contrast section (`docs/specs/pre-1-0-hardening/device-check-sheet.md` steps 22 and 23) exists to confirm or refute this, and `docs/TECH_DEBT.md` #154's AT-observation debt is the same family.
 
 **Next:** after the owner's answers, add forced-colours rules: `GrayText` for `aria-disabled` menu items, buttons and dialog actions, and system colours (`Highlight`, `CanvasText`) for the Gantt's bars. **Trigger:** the owner reports either as wrong in the device check sheet, or a contrast-theme user reports it.
+
+### 506. The Make-milestone journey runs within a few seconds of its four-minute limit
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (`apps/web/e2e-workspace-chrome/zero-duration.spec.ts:239`, "converts from the selection bar, keeps the schedule, returns focus, and undoes exactly", `test.setTimeout(240_000)` read; two local runs)
+**Raised:** 2026-10-13 (driving `fix/ruler-labels-200pc`, local `web:workspace-chrome` run) · **Size:** S · **Owner:** web
+
+In a local `web:workspace-chrome` run the test hit its 240 s timeout inside `findBarWide`, and the next test in the file did not run. Re-running the whole file passed all three tests, with this one taking about 3.9 minutes of its 4. The ruler change being tested did not touch it, and it was not timed on `main`. So the test is slow enough that ordinary machine load can push it over, rather than shown to be wrong.
+
+**Next:** time it on `main` and find where the minutes go (it onboards, builds a hierarchy and checks two widths), then split it or shorten its set-up rather than raise the limit. **Trigger:** a timeout in CI, or a second local timeout. Not work now.
