@@ -2751,6 +2751,9 @@ chunk of it was already solved.
 > receiver, then confirm the row landed in the staff console's Mail panel — the durable half — and
 > restore. Observing a real outage still counts; it is no longer the only way.
 
+**The copy-and-paste steps now exist** (pre-1.0 hardening M9): `docs/guides/set-up-alerts.md`. The row
+stays as it is; it closes on the owner's report that the alert arrived and the heartbeat is green.
+
 **Owner confirmed 2026-09-01:** put to the product owner as one of the rows needing their input,
 the answer was _"I'll set them on the host"_ — so both closing conditions are theirs to satisfy and
 nothing here is owed. The row stays **open** until (1) has been observed, deliberately: a row closed
