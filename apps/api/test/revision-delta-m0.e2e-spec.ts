@@ -298,7 +298,9 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // Turnaround Window calendar (CAL-05: working time only 01-30 Oct 2026) walks past its one
     // window, and the recalculation answers `422 CALENDAR_WORKING_TIME_UNREACHABLE` (`calendarId`
     // null — the engine does not say which calendar). So: order by code, and perturb only activities on the plan's own
-    // default calendar, whose working time is continuous. (The seeder gives every activity an explicit
+    // default calendar, whose working time is continuous. COVERAGE COST, accepted by the spec (§4.3) and
+    // plan Task 4.2: the multi-calendar graph is still computed and compared (F1), but activities on
+    // non-default calendars are no longer perturbed by this spec. (The seeder gives every activity an explicit
     // calendar, so "follows the default" is read as "is the default", not as a null `calendarId`.)
     const onDefaultCalendar = new Set(
       (
@@ -310,13 +312,25 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     );
     const critical = oldSide
       .filter((a) => a.isCritical && a.type === 'TASK' && onDefaultCalendar.has(a.sourceActivityId))
-      .sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''));
+      .sort(
+        (a, b) =>
+          (a.code ?? '').localeCompare(b.code ?? '') ||
+          (a.sourceActivityId < b.sourceActivityId
+            ? -1
+            : a.sourceActivityId > b.sourceActivityId
+              ? 1
+              : 0),
+      );
     const extend = LEVER === 'shorten' ? [] : critical.slice(0, 4);
     const shrink = LEVER === 'extend' ? [] : critical.slice(4, 16);
     say(
       `non-vacuity [lever=${LEVER}]: ${critical.length} critical TASKs — extending ${extend.length}, shortening ${shrink.length}`,
     );
     expect(critical.length, 'the fixture has no critical TASKs to perturb').toBeGreaterThan(0);
+    // Measured 14 default-calendar critical TASKs: 4 extended + 10 shortened. A shorter pool would
+    // quietly weaken the perturbation, so it fails here rather than as a vaguer non-vacuity miss.
+    expect(extend, 'the extend group is short of its 4 targets').toHaveLength(4);
+    expect(shrink.length, 'nothing to shorten').toBeGreaterThanOrEqual(1);
     expect(critical.length, 'too few critical TASKs to perturb').toBeGreaterThan(0);
     const overlap = extend.filter((e) =>
       shrink.some((h) => h.sourceActivityId === e.sourceActivityId),
@@ -376,8 +390,10 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // DETACHES one, so the successor's chain can float free. If that still moves nothing, the
     // honest conclusion is that this fixture cannot produce a qualifying change set through the
     // public write path — which the condition says is itself the finding, not a bar to soften.
-    // Every page, then sorted: the first 100 rows in heap order were a different 100 links from run
-    // to run, so "the first three into a critical successor" named different dependencies each time.
+    // Every page, then sorted. The plan-level list is already keyset-ordered by id
+    // (`dependency.repository.ts:81`), so the old first page was probably stable and was NOT shown to
+    // cause #496; the full read and the sort by code are kept so the cuts are named by activity code
+    // rather than by a generated id, and so a plan over 100 links is read whole.
     const allLinks: Array<{ id: string; predecessorId: string; successor: { id: string } }> = [];
     let linkCursor: string | null = null;
     do {
