@@ -6388,6 +6388,13 @@ measures and wrong about what it measured. Part C's own discriminator — provin
 routing branch was the one under test — passed, and the scene it ran on was still wrong. **A control
 that proves the right code ran says nothing about whether it ran on the right data.**
 
+### 501. The Gantt's month labels thin by a pitch reasoned from the type size, so 200 % text has not been tested there
+
+**Status:** open · **Verified:** 2026-10-13 (read, not run: `features/gantt/layout/ruler-ticks.ts:23` fixes `MONTH_LABEL_MIN_PITCH_PX = 64` and its docblock says "reasoned from the type size, not measured in a browser"; `labelStep` at :41-54 uses it for every text size)
+**Raised:** 2026-10-13 (found closing #478) · **Size:** S · **Owner:** web
+
+#478 measured the diagram ruler's day numbers overprinting at 200 % text and thinned them by the label's measured width. The Gantt's month labels ("Sept 2027" at 10 px, ~50 px) are thinned by a constant 64 px that assumes the default size, so at 200 % text the same exposure is plausible: the label would be about 100 px against the same 64 px floor. **Not measured**, so this is a suspicion and not a defect. **Next:** measure it at the 200 % text-only cell as #478 did (ADR-0113); if labels overlap, pass a measured width to `buildRulerTicks` as `rulerTicks` takes one. **Trigger:** a 200 % text report on the Gantt, or the next change to `ruler-ticks.ts`.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this

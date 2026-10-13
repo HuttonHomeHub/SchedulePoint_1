@@ -192,6 +192,10 @@ export const DAY_LABEL_GAP_PX = 3;
  * (#478, ADR-0056 amendment 2026-10-13). 1 = every day, 2 = every other day, 7 = Mondays. At 200 %
  * text the label is twice as wide while the 18 px floor that decides whether the row exists is
  * not, so a pitch just over the floor used to print "28" over "29".
+ *
+ * "Every other day" is the calendar's odd days and "Monday" is the product's fixed ISO week start
+ * (`weekdayIndex`, 0 = Monday), never the browser's locale week: both depend only on the date, so
+ * a pan or a different plan shows the same numbers.
  */
 export function dayLabelStride(pxPerDay: number, labelWidthPx: number): 1 | 2 | 7 {
   const need = labelWidthPx + DAY_LABEL_GAP_PX;
@@ -221,10 +225,11 @@ export function rulerTicks(
   // (that blew the ADR-0026 draw budget at coarse zoom, where thousands of days are visible). A
   // screen-x is computed only for a tick we actually emit.
   const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
-  // A thinned row is chosen by the day's absolute offset, never its index in the view, so panning
-  // does not make the surviving labels hop to a different day.
+  // A thinned row is chosen by the date itself, never the day's index in the view or its offset
+  // from the data date, so panning (or a different plan) does not change which numbers show.
   const stride = showDays ? dayLabelStride(view.pxPerDay, dayLabelWidthPx) : 1;
-  let weekday = weekdayIndex(addCalendarDays(dataDate, firstDay));
+  // Only the Monday stride needs the weekday, so the coarse zooms with thousands of days skip it.
+  let weekday = stride === 7 ? weekdayIndex(addCalendarDays(dataDate, firstDay)) : 0;
   let y = anchor.getUTCFullYear();
   let m = anchor.getUTCMonth() + 1;
   let d = anchor.getUTCDate();
@@ -233,7 +238,7 @@ export function rulerTicks(
     // each month/year boundary adds the next — so the year/month in view is always labelled, not
     // only when a Jan-1 / 1st-of-month happens to be on screen.
     const first = off === firstDay;
-    if (showDays && (stride === 1 || (stride === 2 ? off % 2 === 0 : weekday === 0))) {
+    if (showDays && (stride === 1 || (stride === 2 ? oddNotLast(d, y, m) : weekday === 0))) {
       days.push({ x: screenXOfDay(off, view), label: String(d) });
     }
     if (showMonths && (first || d === 1)) {
@@ -246,7 +251,7 @@ export function rulerTicks(
       years.push({ x: first ? 0 : screenXOfDay(off, view), label: String(y) });
     }
     d += 1;
-    weekday = (weekday + 1) % 7;
+    if (stride === 7) weekday = (weekday + 1) % 7;
     if (d > daysInMonth(y, m)) {
       d = 1;
       m += 1;
@@ -274,6 +279,15 @@ function dropOverprintedSticky(ticks: RulerTick[], minGapPx: number): RulerTick[
   const [sticky, next] = ticks;
   if (!sticky || !next) return ticks;
   return next.x - sticky.x < minGapPx ? ticks.slice(1) : ticks;
+}
+
+/**
+ * Whether the thinned (every other day) row shows day `d`: the odd days, so the 1st always shows,
+ * except a month's last day when it is odd, because that day sits next to the following 1st and the
+ * pair would overprint (31 then 1; 29 then 1 in a leap February).
+ */
+function oddNotLast(d: number, y: number, m: number): boolean {
+  return d % 2 === 1 && d < daysInMonth(y, m);
 }
 
 /** Days in month `m` (1–12) of year `y`, Gregorian (UTC-agnostic — pure arithmetic). */

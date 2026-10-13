@@ -168,17 +168,22 @@ numbers over one another between 18 and about 32 px per day. **Measured, not ass
 41 of 67 adjacent pairs, and the Day and Week presets (91.4 and 42.7 px) none.
 
 **Decision.** `rulerTicks` takes the widest day label as the browser measures it. When that width plus
-`DAY_LABEL_GAP_PX` (3) exceeds the pitch it draws every 2nd day, and every Monday when even that does
+`DAY_LABEL_GAP_PX` (3) exceeds the pitch it draws every other day, and only Mondays when even that does
 not fit (`dayLabelStride`) — ADR-0141's rule for the thumbnail, pitch deciding what is drawn. The
-survivors are chosen by the day's offset from the data date, not its index in the view, so a pan does
-not make labels hop. The ticks and gridlines are untouched; only the labels thin. At 100 % text the
-stride is 1 and the row is exactly as it was.
+ticks and gridlines are untouched; only the labels thin. At 100 % text the stride is 1 and the row is
+exactly as it was.
 
-**Cost.** `TsldCanvas` measures the label once per computed ruler font, memoised, when the surface is
-measured (mount and container resize), never in the per-frame ruler sync.
+**Calendar-anchored, not data-date-anchored.** "Every other day" is the odd days of the month, so the
+1st always shows. Counting from the data date would have shown odd numbers on one plan and even on
+another and flipped at every 31-day month. A month's last day is skipped when it is odd (31, or 29 in
+a leap February) because it sits next to the following 1st and the pair would overprint. Both rules
+depend only on the date, so a pan never changes which numbers show. Mondays are the product's fixed
+ISO week start (`weekdayIndex`, 0 = Monday), not the browser's locale week.
 
-**Residual.** A text-size change that leaves the container's size alone does not re-measure until the
-next resize or reload; the browser applies a default-font-size change on reload in practice.
+**Cost.** `TsldCanvas` measures the widest of several samples once per computed font, letter spacing
+and word spacing (so a WCAG 1.4.12 override re-measures), memoised, never in the per-frame ruler sync.
+It runs when the surface is measured, when the `rem`-tall day row resizes (a text-size change that
+leaves the container alone) and when `document.fonts` is ready.
 
 ## Alternatives considered
 

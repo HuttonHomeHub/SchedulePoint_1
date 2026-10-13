@@ -1752,7 +1752,10 @@ export function TsldCanvas({
     const measureDayLabel = (): void => {
       const row = rulerDaysRef.current;
       if (!row) return;
-      const key = getComputedStyle(row).font;
+      // Letter and word spacing are in the key because WCAG 1.4.12 overrides change the width
+      // without changing the font.
+      const cs = getComputedStyle(row);
+      const key = `${cs.font}|${cs.letterSpacing}|${cs.wordSpacing}`;
       const cache = dayLabelWidthCacheRef.current;
       let width = cache.get(key);
       if (width === undefined) {
@@ -1760,10 +1763,14 @@ export function TsldCanvas({
         probe.style.position = 'absolute';
         probe.style.visibility = 'hidden';
         probe.style.whiteSpace = 'nowrap';
-        // Digits are tabular in the ruler's face, so "00" stands for every two-digit day.
-        probe.textContent = '00';
         row.appendChild(probe);
-        width = probe.getBoundingClientRect().width;
+        // The ruler sets no `tabular-nums`, so digits may differ in width: take the widest of the
+        // samples that stand for the proportional face's widest and typical pairs.
+        width = 0;
+        for (const sample of ['00', '88', '28', '69', '31']) {
+          probe.textContent = sample;
+          width = Math.max(width, probe.getBoundingClientRect().width);
+        }
         probe.remove();
         // A zero width means the row was not laid out; do not cache a lie, keep the last good one.
         if (width <= 0) return;
@@ -1772,6 +1779,7 @@ export function TsldCanvas({
       if (width !== dayLabelWidthRef.current) {
         dayLabelWidthRef.current = width;
         rulerSyncRef.current = { pxPerDay: 0, originX: 0, width: 0 };
+        dirtyRef.current = true;
       }
     };
 
@@ -2226,6 +2234,13 @@ export function TsldCanvas({
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
     ro?.observe(container);
+    // The day row is `rem`-tall, so a text-size change resizes it even when the container does not;
+    // a web-font swap does not resize anything, so `fonts.ready` covers it. The font-keyed cache
+    // makes a spurious fire a no-op.
+    const rulerRo =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measureDayLabel()) : null;
+    if (rulerDaysRef.current) rulerRo?.observe(rulerDaysRef.current);
+    void document.fonts?.ready.then(measureDayLabel);
 
     // Pause the render loop when the surface is off-screen (hidden row / scrolled away), and re-arm
     // a repaint the moment it returns (TECH_DEBT #30d). No-op where IntersectionObserver is absent.
@@ -2340,6 +2355,7 @@ export function TsldCanvas({
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
+      rulerRo?.disconnect();
       io?.disconnect();
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);

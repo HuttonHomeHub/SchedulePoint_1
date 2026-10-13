@@ -293,6 +293,24 @@ test.describe('The axis markers', () => {
     await expect
       .poll(async () => (await overlaps()).labels, { timeout: 15_000 })
       .toBeGreaterThan(1);
+    // Back to 100 % and then up again WITHOUT a reload or a window resize: the ruler must re-measure
+    // on its own (its day row is rem-tall, so a text-size change resizes it). The Week preset keeps
+    // the row present at both sizes, so this asserts the row stays whole through the change; it
+    // does not by itself prove a stale width, which the unit tests pin.
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 16, fixed: 13, serif: 16, sansSerif: 16 },
+    } as never);
+    await page.getByRole('button', { name: 'View', exact: true }).click();
+    await page.getByRole('radio', { name: /^Week\b/ }).check();
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(async () => (await overlaps()).labels, { timeout: 15_000 })
+      .toBeGreaterThan(1);
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 32, fixed: 26, serif: 32, sansSerif: 32 },
+    } as never);
+    await expect.poll(async () => (await overlaps()).overlapping, { timeout: 15_000 }).toBe(0);
+    expect((await overlaps()).labels).toBeGreaterThan(1);
     await cdp.send('Page.setFontSizes', {
       fontSizes: { standard: 16, fixed: 13, serif: 16, sansSerif: 16 },
     } as never);
