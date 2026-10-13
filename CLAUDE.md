@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1641 web
 > source files with 47 Playwright suites beside the base journey, and
-> 189 ADRs.
+> 190 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -241,7 +241,9 @@ repo` — `deps-dev` is Dependabot's own output for a development-dependency bum
 - **Semantic Versioning** (`MAJOR.MINOR.PATCH`), driven by **Changesets**.
 - User-visible changes add a changeset (`pnpm changeset`) describing the bump.
 - While pre-1.0, breaking changes bump the **minor**; the public contract is not
-  yet stable. The move to 1.0 is a deliberate, documented milestone.
+  yet stable. What 1.0 requires, and what it promises afterwards, is
+  [ADR-0190](docs/adr/0190-what-1-0-promises.md); the checklist the owner reads is
+  [`docs/RELEASE_1_0.md`](docs/RELEASE_1_0.md). The move to 1.0 is the owner's call.
 
 ## 11. Release & deployment process
 
@@ -590,6 +592,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
 - **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
 - **ADR-0189** _(Accepted; amends ADR-0185 D3 and D8 V1–V4)_ — A shape on the toolbar is a control → [`0189-a-shape-on-the-toolbar-is-a-control.md`](docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md)
+- **ADR-0190** _(Accepted)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

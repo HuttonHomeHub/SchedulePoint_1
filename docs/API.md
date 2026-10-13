@@ -27,6 +27,10 @@
   breaking changes; additive changes stay within the current version.
 - The OpenAPI document is the contract. Breaking changes require an ADR and a
   migration note in `CHANGELOG.md`.
+- **The URL version and the package version are two numbers.** `/api/v1` moves only for a breaking REST change.
+  The `@repo/api` package version (0.x today) is what Changesets bumps. From 1.0 a breaking change to the public
+  contract bumps the package's **major** and does not by itself change the URL; what the contract covers is
+  ADR-0190 D1 and [`RELEASE_1_0.md`](RELEASE_1_0.md).
 
 ### Deprecated fields
 

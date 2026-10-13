@@ -227,7 +227,7 @@ Stack is inherited from the base — do not re-declare it here. App-specific req
 ## 16. Deployment
 
 - **Environments:** dev (local), staging (single instance), production (single instance in v1, horizontally scalable design).
-- **Hosting target:** to be decided in a deployment ADR — likely a managed platform (Fly, Render, or a small Kubernetes cluster) with managed Postgres. Not committed here.
+- **Hosting target:** settled — Docker Compose on the product owner's host, with released images pulled automatically (`docs/TECH_DEBT.md` #5, ADR-0047). A managed platform or Kubernetes has not been costed and is not planned.
 - **Supported browsers:** latest 2 versions of Chrome, Edge, Firefox, Safari on desktop; latest 1 version of Safari / Chrome on 11-inch-class tablets held sideways (1024 × 600 and up, ADR-0179). No IE / legacy support.
 - **Backups:** daily Postgres snapshot with 30-day retention; per-org export on demand.
 - **Upgrade strategy:** rolling deploys, backwards-compatible migrations only, feature-flagged rollout for schema-affecting features.
