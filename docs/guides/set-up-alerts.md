@@ -95,8 +95,9 @@ Do these on the server that runs SchedulePoint.
    docker compose -f docker-compose.release.yml up -d
    ```
 
-   (If you use Dockge, press **Update** on the stack instead. If you use the auto-updater, add
-   `COMPOSE_PROFILES=autodeploy` to the command or keep it in `.env`, as you do today.)
+   (Use the same `docker compose` command you normally use to start the stack, including any profile
+   you add. If you use Dockge, press **Update** on the stack instead. Wherever this guide says
+   "recreate the server", it means this step.)
 
    **You should see:** Docker lists the `api` service as "Recreated" or "Started", then returns to the
    prompt. If the API refuses to start, a mistyped address is the usual cause: SchedulePoint checks
@@ -109,7 +110,7 @@ Do these on the server that runs SchedulePoint.
 ## Part 3: Check SchedulePoint sees them
 
 1. Sign in to SchedulePoint with an account whose address is listed in `STAFF_EMAILS` in `.env` (the
-   staff list), then open `/staff` on your site (for example `https://your-site.example/staff`).
+   staff list) and whose email is **verified**, then open `/staff` on your site (for example `https://your-site.example/staff`).
 2. Find the **Alerts and monitoring** box. Click **Alerts and monitoring** in the "On this page" list
    if you cannot see it.
 
@@ -135,7 +136,11 @@ Do these on the server that runs SchedulePoint.
 ## Part 4: Prove the phone alert works (break mail on purpose)
 
 You will break outgoing mail for a couple of minutes, ask for one password reset, and see the alert.
-Nothing is lost, and your users are only affected for those few minutes.
+
+**Be aware:** while mail is broken, any real email SchedulePoint tries to send (password resets,
+email verification, invitations) fails, is **not** retried and is lost. Those failures also raise real
+alerts, and the person waiting has to ask again. So do this at a quiet time, such as early morning
+or a weekend, and be quick.
 
 > **DO NOT SKIP the restore step (step 7).** If you stop in the middle, mail stays pointed at nothing
 > and nobody can get a password reset or an invitation. The steps are in an order that gets you back
@@ -143,9 +148,18 @@ Nothing is lost, and your users are only affected for those few minutes.
 
 ### Before you start
 
-1. **Write down your current mail setting.** In `.env`, find the line that begins `MAIL_SMTP_URL=` and
-   copy the whole line somewhere safe (it contains your mail provider's password, so keep it private).
-   You will paste it back in step 7.
+1. **Save a copy of your settings.** On the server, in the folder that holds `.env`, run:
+
+   ```bash
+   cp .env .env.pre-alert-test
+   ```
+
+   **If you use Dockge** there is no file to copy: select and copy the whole **Env** box into a note
+   on your computer before you change anything.
+
+   The copy holds your mail provider's password. Keep it out of git and out of chat, and delete it
+   after the last step (`rm .env.pre-alert-test`). You will restore from it in step 7.
+
 2. **Choose an address that has a SchedulePoint account**, such as your own sign-in address. This is
    important. SchedulePoint deliberately does nothing when you ask to reset the password for an address
    with no account (so strangers cannot find out who has one). If you use "any old address", no email is
@@ -161,7 +175,7 @@ Nothing is lost, and your users are only affected for those few minutes.
    MAIL_SMTP_URL=smtp://127.0.0.1:1
    ```
 
-   Leave the `MAIL_FROM=` line alone.
+   Leave the `MAIL_FROM=` line alone. Make sure there is only one `MAIL_SMTP_URL=` line in the file.
 
 2. Recreate the server:
 
@@ -170,14 +184,19 @@ Nothing is lost, and your users are only affected for those few minutes.
    ```
 
 3. Open your site's `/forgot-password` page (for example `https://your-site.example/forgot-password`),
-   type the address with an account, and press the button.
+   type the address with an account, and press the button **once**.
+
+   (If the page shows "not found", the password-reset feature is switched off on your site, so the
+   test cannot run until it is on.)
 
    **You should see:** the page says to check your email. That is normal. The page says the same thing
    whether or not the email went, again on purpose. No email will arrive.
 
-4. Watch your phone. Within about a minute you should get **one ntfy alert** that names how many sends
-   failed, the time window, and the kind of message ("password reset"). It will not name the person's
-   address, on purpose. It may look like a small block of text with `"text":` and `"event":` in it
+4. Watch your phone. Within about a minute you should get **one ntfy alert** that reads
+   `SchedulePoint: password_reset mail failed to send.` It names the kind of message but not the
+   person's address, on purpose. A single failure sends only this short line, with no count. If you
+   pressed the button more than once, a second summary arrives about 10 minutes later, such as
+   `2 mail sends failed in the last 10 minutes (password_reset)`. That is expected. It may look like a small block of text with `"text":` and `"event":` in it
    because ntfy shows the message as it arrives; that is fine.
 
    **If nothing arrives after 3 minutes:** go straight to step 7 (restore), then see "If something
@@ -191,13 +210,13 @@ Nothing is lost, and your users are only affected for those few minutes.
 
 6. Take the screenshot or note the time, so you can tell the person who asked (see "Tell us the result").
 
-7. **Restore mail now. Do not skip.** Put the original line back in `.env` exactly as you saved it:
+7. **Restore mail now. Do not skip.** Put your saved settings back:
 
    ```bash
-   MAIL_SMTP_URL=<the line you copied before you started>
+   cp .env.pre-alert-test .env
    ```
 
-   Then recreate the server again:
+   (Dockge: paste the Env text you saved back into the Env box.) Then recreate the server again:
 
    ```bash
    docker compose -f docker-compose.release.yml up -d
@@ -206,19 +225,24 @@ Nothing is lost, and your users are only affected for those few minutes.
 8. Prove mail works again: request one more reset on `/forgot-password` for the same address.
 
    **You should see:** the reset email arrives in that inbox, and **no** new phone alert. In `/staff`
-   the Mail box's failure count stops growing.
+   the Mail box's failure count stops growing. A late summary alert on your phone after the restore is
+   normal if you pressed the button more than once or real mail failed during the test. It describes
+   the broken period, not a new failure.
+
+9. Delete the saved copy, since it holds a password: `rm .env.pre-alert-test`.
 
 ### If something goes wrong
 
 - **No phone alert, but the heartbeat was green in Part 3:** first make sure you used an address that
   has an account. Then run
-  `docker compose -f docker-compose.release.yml logs api --since 10m | grep -i alert` and send what it
-  prints (it never contains your addresses) to whoever maintains SchedulePoint. Your ntfy address could be
+  `docker compose -f docker-compose.release.yml logs api --since 10m | grep mail_alert`. A line named
+  `mail_alert.failed` means the server could not reach your ntfy address; `mail_alert.rejected` means
+  ntfy answered but refused it. Send what it prints (it never contains your addresses) to whoever maintains SchedulePoint. Your ntfy address could be
   wrong; test it again with the `curl` command from Part 1.
 - **The `/staff` Mail box shows no failure either:** mail was probably still pointing at the real
   provider. Check the `MAIL_SMTP_URL=` line really changed and that step 2 ran without errors.
-- **Mail still does not work after step 8:** the saved line was not restored exactly. Paste it back from
-  your safe copy and recreate again. Check `/staff` Mail box says nothing is failing.
+- **Mail still does not work after step 8:** the settings were not restored. Run
+  `cp .env.pre-alert-test .env` (Dockge: paste your saved Env text back) and recreate again. Check `/staff` Mail box says nothing is failing.
 - **You want to switch an alert off:** clear the value (`MAIL_ALERT_URL=`), save and recreate. Behaviour
   returns to exactly what it was before this guide.
 

@@ -1084,8 +1084,10 @@ instead**, which takes about two minutes and is fully reversible:
    installation. A reset for an address with no account sends nothing, by design (ADR-0074, so a
    stranger cannot learn who is registered), so a made-up address produces no failure and no alert —
    which looks exactly like a broken alert.
-4. Watch your receiver. You should get one alert naming the count, the window and the kind of
-   message. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
+4. Watch your receiver. A single failure alerts at once with `SchedulePoint: <kind> mail failed to
+send.` (the kind only, no count). Press reset once; if more failures land inside
+   `MAIL_ALERT_WINDOW_MINUTES`, a summary naming the count, the window and the kinds follows when the
+   window closes. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
    that is the durable half, and it proves the row was written as well as the alert sent.
 5. Restore the real `MAIL_SMTP_URL`, recreate, and send one more reset to confirm mail works again.
    **Do this before step 6** — a half-finished retirement that leaves mail pointed at nothing is
