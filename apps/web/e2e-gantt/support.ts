@@ -245,6 +245,93 @@ export async function seedNestedWbs(page: Page, orgSlug: string): Promise<string
   return names;
 }
 
+/** The activities {@link seedForcedColoursPlan} creates, by the role each plays on the chart. */
+export const FORCED_COLOURS_PLAN = {
+  task: 'Alpha task',
+  critical: 'Bravo critical',
+  float: 'Delta side task',
+  summary: 'Phase summary',
+  child: 'Phase child',
+  milestone: 'Handover milestone',
+} as const;
+
+/**
+ * **One plan holding every mark the Gantt draws**, through the public API, for the forced-colours
+ * journey and its measurement (`docs/TECH_DEBT.md` #505): an ordinary task with progress, a
+ * critical task, a task with float (so a float tail), a summary with a child that has progress, a
+ * finish milestone, FS links between them, and a captured baseline (so the variance column and the
+ * ghost bar exist). The chain Alpha → Bravo → Handover is the longest path, so those three are
+ * critical and the rest carry float; the journey asserts that rather than trusting this comment.
+ *
+ * Seeded over the API for the reason `seedActivities` gives, then `syncClient` tells the open page.
+ * The caller holds the pen (every write here is pen-gated).
+ */
+export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promise<void> {
+  const planId = openPlanId(page);
+  const failure = await page.evaluate(
+    async ({ org, id, names }: { org: string; id: string; names: Record<string, string> }) => {
+      const base = `/api/v1/organizations/${org}/plans/${id}`;
+      const send = async (
+        path: string,
+        method: string,
+        body: Record<string, unknown>,
+      ): Promise<{ id: string; version: number }> => {
+        const response = await fetch(`${base}${path}`, {
+          method,
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) throw new Error(`${method} ${path}: ${response.status}`);
+        return ((await response.json()) as { data: { id: string; version: number } }).data;
+      };
+      try {
+        const alpha = await send('/activities', 'POST', { name: names.task, durationDays: 5 });
+        const bravo = await send('/activities', 'POST', { name: names.critical, durationDays: 10 });
+        const delta = await send('/activities', 'POST', { name: names.float, durationDays: 2 });
+        const summary = await send('/activities', 'POST', {
+          name: names.summary,
+          type: 'WBS_SUMMARY',
+        });
+        const child = await send('/activities', 'POST', {
+          name: names.child,
+          durationDays: 4,
+          parentId: summary.id,
+        });
+        const handover = await send('/activities', 'POST', {
+          name: names.milestone,
+          type: 'FINISH_MILESTONE',
+          durationDays: 0,
+        });
+        for (const [from, to] of [
+          [alpha.id, bravo.id],
+          [bravo.id, handover.id],
+          [delta.id, handover.id],
+          [child.id, handover.id],
+        ] as const) {
+          await send('/dependencies', 'POST', { predecessorId: from, successorId: to, type: 'FS' });
+        }
+        await send(`/activities/${alpha.id}/progress`, 'PATCH', {
+          version: alpha.version,
+          percentComplete: 40,
+        });
+        await send(`/activities/${child.id}/progress`, 'PATCH', {
+          version: child.version,
+          percentComplete: 60,
+        });
+        await send('/schedule/recalculate', 'POST', {});
+        await send('/baselines', 'POST', { name: 'Forced colours baseline' });
+        return null;
+      } catch (error) {
+        return String(error);
+      }
+    },
+    { org: orgSlug, id: planId, names: FORCED_COLOURS_PLAN },
+  );
+  if (failure !== null) throw new Error(`seedForcedColoursPlan: ${failure}`);
+  await syncClient(page);
+}
+
 /**
  * **Make the open page aware of a write that went straight to the REST API.**
  *
