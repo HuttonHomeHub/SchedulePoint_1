@@ -11511,28 +11511,6 @@ reachable); a discoverability gap. **Next:** decide with the owner whether the f
 or the shell takes the wheel at the canvas edge. **Trigger:** a user reading that loses the band at a short window, or the
 next pass over the narrow shell.
 
-### 478. The canvas ruler's day labels collide at 200 % text in a 1280 × 800 window
-
-**Status:** open · **Verified:** 2026-10-09 (toolbar redesign M3 UX review, text-only 200 % at 1280 × 800, a reviewer's screenshot; not measured with a harness)
-**Raised:** 2026-10-09 · **Size:** S · **Owner:** web
-
-At the browser's default font size of 200 % the canvas ruler's day-number labels overlap one another at 1280 × 800 (40 × 25
-rem). This is the canvas ruler, not the command band: M3's SC-7 cell passes (every deck control is hit-testable) and the
-ruler is outside its scope. **Next:** measure it (ADR-0113) at that cell and decide whether the ruler tier should thin its
-labels by pitch, as ADR-0141 does for the thumbnail. **Trigger:** the next pass over the ruler, or a 200 % text report.
-### 480. The Diagram viewport cluster is not reachable while a dock has taken the stage, so Fit no longer closes the dock from it
-
-**Status:** open · **Verified:** 2026-10-10 (measured in Chromium: at 640 × 740 with a dock open the stage is 1 px wide and the cluster is clipped out of it; below a 40 px row the stage is `inert` and the cluster is below its visible bottom; `plan-workspace-toolbar.test.tsx` "a dock that has taken the row")
-**Raised:** 2026-10-10 (toolbar redesign M4, corrected after review) · **Size:** S · **Owner:** web
-
-Zoom, Fit and the Minimap used to live on the deck, so pressing Fit while a dock had squeezed the stage inert closed the dock and
-fitted a frame later (ADR-0180's wrapped viewport command). They live in the stage now, and in those states the stage is a sliver
-nobody can see. **What users see:** nothing of the cluster (an earlier version of this row said "visible but dead"; that was not
-what a browser shows). **The route that stays** is `View ▾` ▸ Zoom ▸ **Fit to plan**, which is the same wrapped command: with a
-dock squeezing the stage it closes the dock and fits a frame later. Hosting the cluster outside the inert region was tried on
-paper and refused: it would draw a card over the dock that has filled the row. **Left open** only for the Zoom steps, which have
-no equivalent there (the presets in `View ▾` do). **Trigger:** a user reading that loses the diagram behind a dock at 1024.
-
 ### 481. Three components keep their own copy of "this container goes away under focus"
 
 **Status:** open · **Verified:** 2026-10-11 (`use-container-unmount-handoff.ts` is imported by `diagram-viewport-cluster.tsx` only; the copies re-read at the lines below)

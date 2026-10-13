@@ -24,7 +24,7 @@ Each cell is shown before the fix -> after the fix where it changed.
 | 100 % | Month   | 0 -> 0   | n/a -> n/a     | 0                 | 0 -> 0            |
 | 100 % | Quarter | 0 -> 0   | n/a -> n/a     | 0                 | 0 -> 0            |
 | 100 % | Year    | 0 -> 0   | n/a -> n/a     | 0                 | 0 -> 0            |
-| 200 % | arrival | 68 -> 34 | 19.9 -> 39.9   | 28.8              | 41 -> 0           |
+| 200 % | arrival | 68 -> 33 | 19.9 -> 39.9   | 28.8              | 41 -> 0           |
 | 200 % | Day     | 18 -> 18 | 91.4 -> 91.4   | 28.8              | 0 -> 0            |
 | 200 % | Week    | 34 -> 34 | 42.7 -> 42.7   | 28.8              | 0 -> 0            |
 | 200 % | Month   | 0 -> 0   | n/a -> n/a     | 0                 | 0 -> 0            |
@@ -44,7 +44,7 @@ measured; this is a horizontal problem only.
 ## What was built
 
 `rulerTicks` takes the measured width and thins by stride 1, 2 or 7 (Mondays); see the ADR-0056
-amendment of 2026-10-13. After: 0 overlapping pairs in every cell, 34 labels at the 200 % arrival
+amendment of 2026-10-13. After: 0 overlapping pairs in every cell, 33 labels at the 200 % arrival
 framing (39.9 px between them), 100 % cells unchanged.
 
 ## Not measured
