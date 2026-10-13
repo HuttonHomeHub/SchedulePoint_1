@@ -256,6 +256,8 @@ interface TestFixtures {
   /** The 429s this test's contexts have seen so far. Auto-started by `throttleGuard`. */
   rateLimits: RateLimitTracker;
   throttleGuard: void;
+  /** Auto: with `E2E_LOG_LOST_REASON=1`, prints which test met the toolbar's missing-reason warning. */
+  lostReasonLog: void;
 }
 
 interface WorkerFixtures {
@@ -328,6 +330,27 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       if (failure && !allowRateLimited) {
         throw failure;
       }
+    },
+    { auto: true },
+  ],
+
+  // A diagnostic, off unless asked for (docs/TECH_DEBT.md #504): the focus handoff warns once per item
+  // id, in development, that an item left while focused and declares no `lostReason`. The warning
+  // names the item but not the test or the step, so this prints the test title beside it. It reads
+  // console output only and asserts nothing, so a run with it on passes and fails exactly as one without.
+  lostReasonLog: [
+    async ({ context }, provide, testInfo) => {
+      if (process.env['E2E_LOG_LOST_REASON'] !== '1') {
+        await provide();
+        return;
+      }
+      context.on('console', (message) => {
+        const text = message.text();
+        if (text.includes('declares no `lostReason`')) {
+          process.stdout.write(`[lostReason] ${testInfo.titlePath.join(' > ')}\n  ${text}\n`);
+        }
+      });
+      await provide();
     },
     { auto: true },
   ],
