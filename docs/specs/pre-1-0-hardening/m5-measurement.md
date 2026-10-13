@@ -32,12 +32,12 @@ strip differs there was not investigated, and the `⋯` is covered under both.)
 
 ## The options
 
-| Option                                                           | Result                                                                                                                                                                                                                                                                            |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (a) a trailing gutter, as the plan words it (12 px)              | Fails on the arithmetic. The strip starts 15 px inside the block, so 12 leaves Float left under it by 3 px, and the `⋯` (outside the block) is untouched.                                                                                                                         |
-| (a') the gutter at 16 px, and the `⋯` made a column of the block | **Chosen.** The `⋯` ends at 889 and the strip begins at 890; Float left (button ends 853) is now 37 px clear: 0 px under it for both. No header narrows (Activity, the elastic column, absorbs the 44 px; its seeded width is unchanged at 180).                                  |
-| (b) controls stacked above the strip                             | Not buildable in `GanttPanel` alone. The pinned block is `sticky z-10`, a stacking context, so a control inside it cannot rise above the strip's z-30 wrapper; raising the block would instead cover the strip's whole left half. Would also cost the divider 10 px at every row. |
-| (c) a chart-only strip                                           | Needs a `PanelResizer` prop (a component public-contract change) and would still cover the `⋯`, which is in the chart half of the strip.                                                                                                                                          |
+| Option                                                                                             | Result                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) a trailing gutter, as the plan words it (12 px)                                                | Fails on the arithmetic. The strip starts 15 px inside the block, so 12 leaves Float left under it by 3 px, and the `⋯` (outside the block) is untouched.                                                                                                                         |
+| (a') the gutter (16 px as first built, 20 px after review), and the `⋯` made a column of the block | **Chosen.** The `⋯` ends at 889 and the strip begins at 890; Float left (button ends 853) is now 37 px clear: 0 px under it for both. No header narrows (Activity, the elastic column, absorbs the extra 48 px (28 + 20); its seeded width is unchanged at 180).                  |
+| (b) controls stacked above the strip                                                               | Not buildable in `GanttPanel` alone. The pinned block is `sticky z-10`, a stacking context, so a control inside it cannot rise above the strip's z-30 wrapper; raising the block would instead cover the strip's whole left half. Would also cost the divider 10 px at every row. |
+| (c) a chart-only strip                                                                             | Needs a `PanelResizer` prop (a component public-contract change) and would still cover the `⋯`, which is in the chart half of the strip.                                                                                                                                          |
 
 ## After (option a')
 
@@ -48,9 +48,9 @@ Identical at all five cells.
 | Float left (header cell ends 861) | 809 - 853, no longer within 30 px of the strip, so the harness stops listing it | 890 - 915 | 0 px    | itself                |
 | `Actions for …` (both rows)       | 861 - 889                                                                       | 890 - 915 | 0 px    | itself                |
 
-The pinned block grew from 746 to 790 px (+28 for the `⋯` column, +16 for the gutter), so the chart
-begins 44 px further right at the seeded width; Activity is the same 180 px, so no column loses width.
-The chart no longer has a `⋯` hanging over its first 28 px, so its usable width falls by 16, not 44.
+The pinned block grew from 746 to 794 px (+28 for the `⋯` column, +20 for the gutter), so the chart
+begins 48 px further right at the seeded width; Activity is the same 180 px, so no column loses width.
+The chart no longer has a `⋯` hanging over its first 28 px, so its usable width falls by 20, not 48.
 The strip is still 25 px and the divider's centre line is unchanged relative to the block's edge.
 
 ## Side finding
@@ -60,3 +60,22 @@ variance value was 28 px right of its header, over the chart. Giving the `⋯` a
 (and a width on the `Actions` header) aligns them. **Read from the layout code, not measured**: the
 harness plan has no baseline. The baseline journey (`column-widths.spec.ts`, "with a baseline") runs
 `chartMeetsGrid`, which now includes the `Actions` header in the pinned columns.
+
+## Review amendments (same day)
+
+- **Gutter 16 to 20.** The margin from the last control to the strip is the gutter less the strip's 15 px
+  inset: 1 px at 16, 5 px at 20. The accessibility review found the row menu's focus ring (`ring-2` plus
+  `ring-offset-2`, 4 px; the forced-colours outline is 2 px plus 2 px) reached about 3 px under the strip at
+  16, and a press 1 to 3 px right of the button grabbed the divider. At 20 the ring clears it. The tables
+  above were taken at 16; the re-measurement at 20 is recorded in the last section.
+- **Zoom framing.** `barRegionWidth` is `clientWidth - DEFAULT_GRID_WIDTH`, and `DEFAULT_GRID_WIDTH` was
+  `defaultGridWidth(COLUMNS, 0)`, read from the columns' default widths alone. It does **not** read
+  `pinnedExtraWidth`, which feeds only the host's pane prefs (`useGanttGridPrefs`, the floor and the seed).
+  So the first build left `pxPerDay` unchanged while the chart began 48 px further right, and Month's 91 days
+  no longer fitted by 48 px (the UX review's reading was right; the component review's was not).
+  `DEFAULT_GRID_WIDTH` now adds the same constants (`pinnedExtraWidth(false, hasRowMenus)`; `vs baseline` stays
+  out, as before). They are constants of the host, not planner choices, so ADR-0173 D5's "a column change
+  cannot rescale bars" still holds. The cost is that every plan's presets frame 48 px less width, so a day is
+  narrower by 48 over the room the bars had (the scroller's width less the 584 px of default columns), a larger
+  share the narrower the window, which restores the relation between the framing and the visible chart end that existed before this change.
+  Said in the changeset.

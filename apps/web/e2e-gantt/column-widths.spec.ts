@@ -260,6 +260,21 @@ test('the pinned columns still end where the chart begins at every width, with a
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
   await chartMeetsGrid(page, 'with a baseline, at standard widths');
+  // The `vs baseline` value sits under its heading: the row-menu cell used to push it 28 px right.
+  const variance = await ganttGrid(page).evaluate((grid) => {
+    const head = [...grid.querySelectorAll('[role="columnheader"]')].find(
+      (h) => (h.textContent ?? '').trim() === 'vs baseline',
+    );
+    const index = head?.getAttribute('aria-colindex');
+    const cell = grid.querySelector(
+      `[role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="${index}"]`,
+    );
+    return head && cell
+      ? { head: head.getBoundingClientRect().right, cell: cell.getBoundingClientRect().right }
+      : null;
+  });
+  expect(variance, 'no vs baseline header or first-row cell to compare').not.toBeNull();
+  expect(Math.round(variance?.cell ?? -1)).toBe(Math.round(variance?.head ?? -2));
 
   // **All at the maximum**, written straight to storage: typing is chart-guarded (a width that would
   // leave the chart under 240 px is clamped), so this is the state a planner reaches by widening

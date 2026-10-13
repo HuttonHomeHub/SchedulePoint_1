@@ -170,6 +170,13 @@ import { cn } from '@/lib/utils';
 const RULER_BAND_PX = 40;
 
 /**
+ * Whether this workspace gives the Gantt row menus. One value feeds both the grid pane's floor
+ * (`pinnedExtraWidth`: the menu is a column of the pinned block) and the `rowMenuContextFor` prop,
+ * so the pane cannot reserve a column the panel does not draw, or the reverse (#494).
+ */
+const GANTT_HAS_ROW_MENUS = true;
+
+/**
  * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
  *
  * `Diagram | Gantt` is the one two-way switch left in the mode row (ADR-0148 deleted the
@@ -610,11 +617,9 @@ export function ToolbarPlanWorkspace({
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
     widths: ganttColumnWidths.widths,
-    // The workspace always supplies row menus (`rowMenuContextFor`, below), so the row-menu column
-    // is part of the pinned block here exactly as it is in the panel.
     extraPinnedWidth: pinnedExtraWidth(
       model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
-      true,
+      GANTT_HAS_ROW_MENUS,
     ),
   });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
@@ -1743,7 +1748,7 @@ export function ToolbarPlanWorkspace({
           // The row menu's context (M5-T3). The SAME builder the dock uses, called per row — so
           // the menu and the bar cannot offer different things for one activity, and there is no
           // second assembly to keep in step.
-          rowMenuContextFor={rowMenuContextFor}
+          {...(GANTT_HAS_ROW_MENUS ? { rowMenuContextFor } : {})}
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
           viewState={ganttViewState}

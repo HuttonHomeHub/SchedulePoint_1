@@ -19,8 +19,8 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
 > Item 25 was added for TECH_DEBT #439 (dividers now follow a finger).
 > Items 6 and 25b changed for #494 (the Gantt's row menus and Float left no longer sit under the divider's
-> strip; the three dots moved 44 px left, into the table, and the table is 44 px
-> wider by default). Targets did not change size.
+> strip). The table is 48 px wider by default and the three dots now sit inside it, with a margin before the
+> line, where they used to hang across it. Targets did not change size.
 > Item 29 was added for toolbar-grid M2 (2026-10-12): Undo, Redo and Recent edits, and the three Colour
 > options, now sit in joined tracks with a 1 px gap where there were 4 px. No target got smaller (44 px under
 > touch, asserted in `command-surface.spec.ts`), so items 1 to 28 do not change, but a finger meets something

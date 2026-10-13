@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { ColumnWidths } from '../layout/column-widths';
+import { pinnedExtraWidth, type ColumnWidths } from '../layout/column-widths';
 import { GANTT_COLUMNS } from '../layout/grid-columns';
 
 import { useGanttGridPrefs } from './use-gantt-grid-prefs';
@@ -38,5 +38,26 @@ describe('useGanttGridPrefs — Reset widths restores the divider', () => {
     expect(JSON.parse(localStorage.getItem('schedulepoint:gantt-grid-width') ?? '{}').size).toBe(
       584,
     );
+  });
+});
+
+describe('useGanttGridPrefs: a pane stored before the row-menu column and the gutter existed', () => {
+  beforeEach(() => localStorage.clear());
+
+  /** The stored pane stands (ADR-0173) unless it is under the floor the new extras raise. */
+  it('is read back clamped up to that floor, and left alone above it', () => {
+    const extra = pinnedExtraWidth(false, true);
+    localStorage.setItem('schedulepoint:gantt-grid-width', JSON.stringify({ size: 500 }));
+    const low = renderHook(() =>
+      useGanttGridPrefs({ columns: COLUMNS, widths: {}, extraPinnedWidth: extra }),
+    );
+    expect(low.result.current.min).toBe(584 - 180 + 120 + extra);
+    expect(low.result.current.size).toBe(low.result.current.min);
+
+    localStorage.setItem('schedulepoint:gantt-grid-width', JSON.stringify({ size: 700 }));
+    const old = renderHook(() =>
+      useGanttGridPrefs({ columns: COLUMNS, widths: {}, extraPinnedWidth: extra }),
+    );
+    expect(old.result.current.size).toBe(700);
   });
 });

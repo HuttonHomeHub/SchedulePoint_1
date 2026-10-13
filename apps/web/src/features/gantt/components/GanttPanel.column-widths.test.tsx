@@ -1,8 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COLUMN_WIDTHS_STORAGE_KEY } from '../layout/column-widths';
-import { GRID_END_GUTTER, pinnedExtraWidth } from '../layout/column-widths';
+import {
+  COLUMN_WIDTHS_STORAGE_KEY,
+  GRID_END_GUTTER,
+  pinnedExtraWidth,
+} from '../layout/column-widths';
 import { GANTT_COLUMNS } from '../layout/grid-columns';
 import { useGanttColumnWidths } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs } from '../model/use-gantt-grid-prefs';

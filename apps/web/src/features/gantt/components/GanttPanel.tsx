@@ -458,8 +458,15 @@ function GanttPanelBody({
    * framing's only grid input (ADR-0173 D5): making it planner-aware would rescale every bar on
    * every frame of a column change. `grid-width.structural.test.ts` pins that it is the only thing
    * `barRegionWidth` reads.
+   *
+   * **The row-menu column and the end gutter are in it** (#494): they are constants of the host, not
+   * a planner's choice, and leaving them out framed the zoom presets on room the chart no longer
+   * has, so Month's 91 days ran 48 px off the visible end. (`vs baseline` stays out, as before.)
    */
-  const DEFAULT_GRID_WIDTH = useMemo(() => defaultGridWidth(COLUMNS, 0), [COLUMNS]);
+  const DEFAULT_GRID_WIDTH = useMemo(
+    () => defaultGridWidth(COLUMNS, pinnedExtraWidth(false, rowMenuContextFor !== undefined)),
+    [COLUMNS, rowMenuContextFor],
+  );
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The line a finger or stylus is shown when it selects a bar (ADR-0177 D2): the refusal reason, or

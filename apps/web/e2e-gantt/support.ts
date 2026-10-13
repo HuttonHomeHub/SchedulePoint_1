@@ -1,11 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-/**
- * `GRID_END_GUTTER` in `column-widths.ts`, restated: that module reaches `config/env.ts`, whose
- * compile-time `__APP_VERSION__` Playwright's loader does not define. A drift fails loudly here
- * (`chartMeetsGrid` is off by the difference at every width), so the copy cannot go quietly stale.
- */
-const GRID_END_GUTTER = 16;
+import { GRID_END_GUTTER } from '../src/features/gantt/layout/pinned-geometry';
 
 /**
  * Journey helpers for the flag-ON **Gantt view** suite (`VITE_GANTT_VIEW`, ADR-0059,
@@ -311,11 +306,12 @@ export function ganttRow(page: Page, name: string): ReturnType<Page['getByRole']
 }
 
 /**
- * **The pinned columns end exactly where the chart begins, less the trailing gutter** (the 16 px
- * that keeps the last column and the row menus out from under the divider's strip, #494) — the
- * invariant ADR-0095's `Float` incident violated and `grid-width.structural.test.ts` pins in arithmetic. Lifted out of
- * `gantt.spec.ts` (where it was a closure) so the column-widths journey asserts the same thing the
- * same way; a second copy would be two definitions of "meets" that could drift apart.
+ * **The pinned columns end where the chart begins, less the trailing gutter** (the 20 px that keeps
+ * the last column and the row menus out from under the divider's strip, #494). That is the invariant
+ * ADR-0095's `Float` incident violated and `grid-width.structural.test.ts` pins in arithmetic.
+ * Lifted out of `gantt.spec.ts` (where it was a closure) so the column-widths journey asserts the
+ * same thing the same way; a second copy would be two definitions of "meets" that could drift
+ * apart.
  *
  * Only meaningful at `scrollLeft: 0`. The pinned block is `position: sticky; left: 0`, so once the
  * scroller moves the chart header slides UNDER it and the two edges legitimately overlap — an

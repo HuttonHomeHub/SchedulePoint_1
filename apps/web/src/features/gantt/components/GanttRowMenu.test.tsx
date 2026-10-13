@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ACTIONS_COLUMN_WIDTH } from '../layout/pinned-geometry';
+
 import {
   GanttRowMenu,
   type GanttRowMenuHandle,
@@ -373,5 +375,13 @@ describe('the openAt handle (ADR-0177 D3)', () => {
     fireEvent.click(trigger);
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(trigger).toHaveFocus();
+  });
+});
+
+describe('GanttRowMenu: its column width', () => {
+  it('is a size-7 button, 28 px, which is the width the pinned block reserves for it', () => {
+    render(<GanttRowMenu context={() => context()} activityName="Foundations" />);
+    expect(screen.getByRole('button', { name: 'Actions for Foundations' })).toHaveClass('size-7');
+    expect(ACTIONS_COLUMN_WIDTH).toBe(7 * 4);
   });
 });

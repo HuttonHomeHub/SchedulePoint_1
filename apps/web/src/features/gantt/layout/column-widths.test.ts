@@ -143,8 +143,8 @@ describe('pinnedExtraWidth', () => {
     );
   });
 
-  it('keeps the gutter at least as wide as the divider strip reaches into the grid (15 px)', () => {
-    expect(GRID_END_GUTTER).toBeGreaterThanOrEqual(15);
+  it('keeps the gutter wider than the strip reaches into the grid (15 px) and the focus ring (4 px)', () => {
+    expect(GRID_END_GUTTER).toBeGreaterThanOrEqual(15 + 4);
   });
 });
 
