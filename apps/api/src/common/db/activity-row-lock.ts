@@ -49,3 +49,48 @@ export async function lockActivityRowsInIdOrder(
     FOR NO KEY UPDATE
   `;
 }
+
+/**
+ * Lock every active activity of the given plans in id order, before a cascade soft-deletes them
+ * (`docs/TECH_DEBT.md` #492). The cascade is one `updateMany` per plan set, and `updateMany` locks
+ * rows in scan order; a placement batch or a recalculation locking the same rows in id order could
+ * then hold what the delete wants while wanting what it holds. Locking here first, in the same id
+ * order as {@link lockActivityRowsInIdOrder}, puts the delete in that one total order.
+ *
+ * Plan-wide rather than by id list because the cascade knows the plans, not the rows, and the
+ * delete must wait for any row of those plans. Same `IN (SELECT … unnest(…))` form as above.
+ */
+export async function lockPlanActivityRowsInIdOrder(
+  db: Prisma.TransactionClient,
+  planIds: readonly string[],
+): Promise<void> {
+  if (planIds.length === 0) return;
+  await db.$queryRaw`
+    SELECT 1
+    FROM activities
+    WHERE plan_id IN (SELECT u FROM unnest(${[...planIds]}::uuid[]) AS u)
+      AND deleted_at IS NULL
+    ORDER BY id
+    FOR NO KEY UPDATE
+  `;
+}
+
+/**
+ * Lock the named active activities in id order, without a plan or organisation scope. The cascade
+ * resolves its ids from rows it has already read inside the caller's transaction (and the caller has
+ * scoped them), so there is nothing further to narrow by; a stale id locks nothing.
+ */
+export async function lockActivityIdsInIdOrder(
+  db: Prisma.TransactionClient,
+  ids: readonly string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  await db.$queryRaw`
+    SELECT 1
+    FROM activities
+    WHERE id IN (SELECT u FROM unnest(${[...ids]}::uuid[]) AS u)
+      AND deleted_at IS NULL
+    ORDER BY id
+    FOR NO KEY UPDATE
+  `;
+}

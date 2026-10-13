@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
 
+import { lockActivityIdsInIdOrder, lockPlanActivityRowsInIdOrder } from '../db/activity-row-lock';
+import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
 
 /**
@@ -185,6 +187,17 @@ export class HierarchyLifecycleService {
           data: stamp,
         })
       ).count;
+    };
+
+    // Wait for everything else that writes these plans' activities before writing any of them
+    // (`docs/TECH_DEBT.md` #492): the plans' advisory locks (sorted), which a recalculation and a
+    // baseline capture hold, then their active rows in id order, which the pen-only placement
+    // writers use instead of the plan lock. Both come before the first write, so a delete that has
+    // to wait is holding nothing the other side needs. The activity callers already hold the plan
+    // lock; taking it again in the same transaction is free.
+    const lockPlansForCascade = async (planIds: string[]): Promise<void> => {
+      await acquirePlanWriteLocks(tx, planIds);
+      await lockPlanActivityRowsInIdOrder(tx, planIds);
     };
 
     // Soft-delete the active activities under a set of plans, in one updateMany.
@@ -380,6 +393,7 @@ export class HierarchyLifecycleService {
               })
             ).map((p) => p.id)
           : [];
+      await lockPlansForCascade(planIds);
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
@@ -405,6 +419,7 @@ export class HierarchyLifecycleService {
       const planIds = (
         await tx.plan.findMany({ where: { projectId: id, deletedAt: null }, select: { id: true } })
       ).map((p) => p.id);
+      await lockPlansForCascade(planIds);
       counts.baselines = await deleteBaselinesUnderPlans(planIds);
       counts.dependencies = await deleteLinksUnderPlans(planIds);
       counts.steps = await deleteStepsUnderPlans(planIds);
@@ -419,6 +434,7 @@ export class HierarchyLifecycleService {
         await tx.project.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'plan') {
+      await lockPlansForCascade([id]);
       counts.baselines = await deleteBaselinesUnderPlans([id]);
       counts.dependencies = await deleteLinksUnderPlans([id]);
       counts.steps = await deleteStepsUnderPlans([id]);
@@ -434,6 +450,7 @@ export class HierarchyLifecycleService {
       // link incident to any of them, all under the one batch id so a restore of
       // the root reactivates the subtree together.
       const subtreeIds = await resolveActivitySubtree(id);
+      await lockActivityIdsInIdOrder(tx, subtreeIds);
       if (knockOn) appendAll(knockOn.activityIds, subtreeIds);
       counts.dependencies = await deleteLinksForActivities(subtreeIds);
       counts.steps = await deleteStepsForActivities(subtreeIds);
@@ -510,6 +527,9 @@ export class HierarchyLifecycleService {
 
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
     const list = [...ids];
+    // Id order before the first write, so this sweep cannot meet a placement batch or the
+    // recalculation in the opposite order (`docs/TECH_DEBT.md` #492).
+    await lockActivityIdsInIdOrder(tx, list);
 
     // Four set-wise sweeps for the whole batch, in the same order the per-id path used: links
     // before the rows they join, so nothing observes a dangling edge mid-transaction.
@@ -555,6 +575,11 @@ export class HierarchyLifecycleService {
    * soft-delete: deleted-only — every write here reactivates rows selected by the batch id the
    * deleted root carries (or by the id of a root proven deleted by `loadDeletedRoot`), so each
    * target is soft-deleted by construction; a `deletedAt` guard would only restate that.
+   *
+   * lock-order: disjoint-rows — every writer that locks activity rows in id order (the placement
+   * writers and the recalculation engine's result write, and the delete cascade) selects only
+   * ACTIVE rows, and this method writes only SOFT-DELETED ones, so the two row sets are disjoint
+   * and neither side can hold what the other wants (`docs/TECH_DEBT.md` #492).
    */
   async restoreBatch(
     tx: Prisma.TransactionClient,

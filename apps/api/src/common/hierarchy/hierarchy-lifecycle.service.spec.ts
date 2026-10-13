@@ -20,6 +20,8 @@ function makeTx() {
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   });
   return {
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockResolvedValue([]),
     client: model(),
     project: model(),
     plan: model(),
@@ -86,6 +88,26 @@ describe('HierarchyLifecycleService', () => {
         where: { id: 'c1', deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
+    });
+
+    it('takes every plan lock, then the row locks, before its first write (#492)', async () => {
+      tx.project.findMany.mockResolvedValue([{ id: 'p1' }]);
+      tx.plan.findMany.mockResolvedValue([{ id: 'pl2' }, { id: 'pl1' }, { id: 'pl2' }]);
+
+      await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
+
+      // Two distinct plans in one sorted advisory-lock statement, then one plan-wide row lock.
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(tx.$executeRaw.mock.calls[0]?.[2]).toEqual(['pl1', 'pl2']);
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      const rowLock = tx.$queryRaw.mock.invocationCallOrder[0] ?? Infinity;
+      const firstWrite = Math.min(
+        ...[tx.baselineActivity, tx.activityDependency, tx.activity, tx.plan].map(
+          (m) => m.updateMany.mock.invocationCallOrder[0] ?? Infinity,
+        ),
+      );
+      expect(Math.max(...tx.$executeRaw.mock.invocationCallOrder)).toBeLessThan(rowLock);
+      expect(rowLock).toBeLessThan(firstWrite);
     });
 
     it('skips the plan/activity sweep when a client has no active projects', async () => {
