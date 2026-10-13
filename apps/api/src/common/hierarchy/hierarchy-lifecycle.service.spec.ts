@@ -96,8 +96,9 @@ describe('HierarchyLifecycleService', () => {
 
       await service.cascadeSoftDelete(asTx(), 'client', 'c1', ACTOR);
 
-      // Two distinct plans, so two advisory locks, then one plan-wide row lock.
-      expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+      // Two distinct plans in one sorted advisory-lock statement, then one plan-wide row lock.
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(tx.$executeRaw.mock.calls[0]?.[2]).toEqual(['pl1', 'pl2']);
       expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
       const rowLock = tx.$queryRaw.mock.invocationCallOrder[0] ?? Infinity;
       const firstWrite = Math.min(

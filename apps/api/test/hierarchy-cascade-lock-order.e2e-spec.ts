@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import type { Prisma } from '@prisma/client';
+import { PrismaClient, type Prisma } from '@prisma/client';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -43,6 +43,13 @@ interface Holder {
 describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  /**
+   * The test's own connections, for the transactions it parks and the `pg_stat_activity` polling. A
+   * held transaction pins a connection for the whole case, and case D parks one while two requests
+   * wait on it: on the app's pool (small on a small runner) that could starve the very requests
+   * under test, which would look like a failure of the lock order and be nothing of the sort.
+   */
+  let aux: PrismaClient;
   let agent: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
@@ -57,9 +64,13 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    const url = new URL(process.env.DATABASE_URL ?? '');
+    url.searchParams.set('connection_limit', '4');
+    aux = new PrismaClient({ datasourceUrl: url.toString() });
   });
 
   afterAll(async () => {
+    await aux?.$disconnect();
     await app?.close();
   });
 
@@ -80,7 +91,7 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     const gate = new Promise<void>((resolve) => (open = resolve));
     let ready!: (tx: Tx) => void;
     const started = new Promise<Tx>((resolve) => (ready = resolve));
-    const done = prisma.$transaction(
+    const done = aux.$transaction(
       async (tx) => {
         await take(tx);
         ready(tx);
@@ -91,8 +102,16 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     // A statement that failed inside the held transaction (case B's NOWAIT probe) ends it in
     // rollback; the test has already read what it needed, so that end is not an error here.
     const settled = done.catch(() => undefined);
+    // If `take` itself fails, `started` would never settle: race it against the transaction so a
+    // setup failure surfaces as that failure rather than as a timeout.
+    const tx = await Promise.race([
+      started,
+      done.then(() => {
+        throw new Error('the held transaction ended before it was released');
+      }),
+    ]);
     return {
-      tx: await started,
+      tx,
       release: async () => {
         open();
         await settled;
@@ -100,22 +119,34 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     };
   }
 
-  /** Reads `pg_stat_activity` until some backend is waiting on one of the given lock kinds. */
-  async function waitUntilBlocked(events: readonly string[]): Promise<string> {
+  /**
+   * Reads `pg_stat_activity` until `count` backends are waiting on one of the given lock kinds,
+   * narrowed to the statement they are running (`query` ILIKE `pattern`) so an unrelated backend
+   * on the shared database cannot satisfy it.
+   */
+  async function waitUntilBlocked(
+    events: readonly string[],
+    pattern: string,
+    count = 1,
+  ): Promise<string> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const rows = await prisma.$queryRaw<{ wait_event: string }[]>`
+      const rows = await aux.$queryRaw<{ wait_event: string }[]>`
         SELECT wait_event FROM pg_stat_activity
         WHERE datname = current_database()
           AND pid <> pg_backend_pid()
           AND wait_event_type = 'Lock'
-          AND wait_event = ANY(${[...events]}::text[])`;
+          AND wait_event = ANY(${[...events]}::text[])
+          AND query ILIKE ${pattern}`;
       const hit = rows[0];
-      if (hit) return hit.wait_event;
+      if (rows.length >= count && hit) return hit.wait_event;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    throw new Error(`no backend waited on ${events.join(' or ')} within 10 s`);
+    throw new Error(`${count} backend(s) did not wait on ${events.join(' or ')} within 10 s`);
   }
+
+  const ON_ADVISORY = '%pg_advisory_xact_lock%';
+  const ON_ACTIVITY_ROWS = '%activities%';
 
   async function createProject(): Promise<{ clientId: string; projectId: string }> {
     const client = await agent.post(`${ORG}/clients`).send({ name: 'Northgate' }).expect(201);
@@ -156,7 +187,7 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     let status: Promise<number> | undefined;
     try {
       status = sendDelete(`${ORG}/plans/${planId}`);
-      expect(await waitUntilBlocked(['advisory'])).toBe('advisory');
+      expect(await waitUntilBlocked(['advisory'], ON_ADVISORY)).toBe('advisory');
     } finally {
       await holder.release();
     }
@@ -187,7 +218,7 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     let probe: unknown;
     try {
       status = sendDelete(`${ORG}/plans/${planId}`);
-      await waitUntilBlocked(['transactionid', 'tuple']);
+      await waitUntilBlocked(['transactionid', 'tuple'], ON_ACTIVITY_ROWS);
       // In id order the delete is parked on the lowest row and holds nothing above it, so this
       // succeeds. In scan order it already holds the highest row and this fails with 55P03.
       try {
@@ -207,16 +238,25 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
 
   it('C: a client delete takes its plans locks in sorted order', async () => {
     const { clientId, projectId } = await createProject();
+    // Plan ids are time-ordered (uuid v7), so two plans created in turn would already be in sorted
+    // order and a delete that locked them in creation order would pass. The second plan is inserted
+    // with an explicit id BELOW the first's, so the plan created first has the HIGHER id and only a
+    // delete that sorts takes the lower one first.
     const first = await createPlan(projectId, 'Plan C1');
-    const second = await createPlan(projectId, 'Plan C2');
-    const [lower, higher] = [first.planId, second.planId].sort() as [string, string];
+    const template = await prisma.plan.findUniqueOrThrow({ where: { id: first.planId } });
+    const lowerId = '00000000-0000-4000-8000-000000000001';
+    const { id: _id, createdAt: _created, updatedAt: _updated, ...shared } = template;
+    await prisma.plan.create({ data: { ...shared, id: lowerId, name: 'Plan C2' } });
+    const higher = first.planId;
+    const lower = lowerId;
+    expect(lower < higher).toBe(true);
 
     const holder = await hold((tx) => acquirePlanWriteLock(tx, lower));
     let status: Promise<number> | undefined;
     let tookHigher = false;
     try {
       status = sendDelete(`${ORG}/clients/${clientId}`);
-      await waitUntilBlocked(['advisory']);
+      await waitUntilBlocked(['advisory'], ON_ADVISORY);
       // Parked on the lower key, the delete has not reached the higher one: a sorted order.
       const [row] = await holder.tx.$queryRaw<{ got: boolean }[]>`
         SELECT pg_try_advisory_xact_lock(hashtext('dependency-plan'), hashtext(${higher})) AS got`;
@@ -241,13 +281,16 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
         .post(`${ORG}/plans/${planId}/baselines`)
         .send({ name: 'Racing' })
         .then((res) => res.status);
-      await waitUntilBlocked(['advisory']);
+      await waitUntilBlocked(['advisory'], ON_ADVISORY);
       removal = sendDelete(`${ORG}/plans/${planId}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Both requests are now queued on the plan lock, whatever order they release in.
+      await waitUntilBlocked(['advisory'], ON_ADVISORY, 2);
     } finally {
       await holder.release();
     }
-    await capture;
+    // Whichever gets the lock first, the capture either lands before the delete and is swept by it
+    // (201), or finds no activities left and is refused (422): never a 5xx, never a survivor.
+    expect([201, 422]).toContain(await capture);
     expect(await removal).toBe(204);
     expect(await prisma.baseline.count({ where: { planId, deletedAt: null } })).toBe(0);
   });

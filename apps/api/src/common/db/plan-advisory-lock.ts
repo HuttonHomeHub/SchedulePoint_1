@@ -40,21 +40,35 @@ export async function acquirePlanWriteLock(
 }
 
 /**
- * Take {@link acquirePlanWriteLock} for several plans: de-duplicated and in sorted id order, so two
- * transactions that each need an overlapping set meet in one total order and cannot deadlock on
- * each other (`docs/TECH_DEBT.md` #492). A client or project delete is the only caller that holds
- * more than one plan lock, and every other caller holds one, so a sorted order cannot form a cycle
- * with them. The cost is one lock-table entry per plan for the length of the transaction, bounded by
- * Postgres's shared lock table (`max_locks_per_transaction` x connections), which is ample for the
- * plan counts a single client holds.
+ * Take {@link acquirePlanWriteLock} for several plans in **one** round trip: de-duplicated and in
+ * ascending plan-id order, so two transactions that each need an overlapping set meet in one total
+ * order and cannot deadlock on each other (`docs/TECH_DEBT.md` #492). The inner `ORDER BY` sorts
+ * before the target list evaluates `pg_advisory_xact_lock` per row, so the order is the database's
+ * and not only the caller's `sort()` (the shape `acquireResourceWriteLocks` uses); `COLLATE "C"`
+ * makes it the same byte order as the JavaScript sort. A client or project delete is the only
+ * caller that holds more than one plan lock, and every other caller holds one, so a sorted order
+ * cannot form a cycle with them. A no-op on an empty list.
+ *
+ * Two limits, stated so nobody has to rediscover them. (a) The order is by plan id but the lock key
+ * is `hashtext(plan_id)`, so two plans whose hashes collide share a key and the id order is not
+ * guaranteed to be the key order; a collision costs a false wait, and only an interleaving of two
+ * multi-plan callers across a collision could deadlock (about 1e-6 at 100 plans), a risk accepted
+ * rather than closed. (b) The caller resolves its plan list BEFORE locking, so a plan created or
+ * moved under the project in that window is not locked: a missed lock, which can interleave with
+ * that one plan's writers but cannot deadlock, and the row locks that follow still cover the
+ * activities of the plans that were found. The cost is one lock-table entry per plan for the length
+ * of the transaction, bounded by Postgres's shared lock table (`max_locks_per_transaction` x
+ * connections), which is ample for the plan counts a single client holds.
  */
 export async function acquirePlanWriteLocks(
   db: Prisma.TransactionClient,
   planIds: readonly string[],
 ): Promise<void> {
-  for (const planId of [...new Set(planIds)].sort()) {
-    await acquirePlanWriteLock(db, planId);
-  }
+  const ordered = [...new Set(planIds)].sort();
+  if (ordered.length === 0) return;
+  await db.$executeRaw`
+    SELECT pg_advisory_xact_lock(hashtext(${PLAN_LOCK_NAMESPACE}), hashtext(id))
+    FROM (SELECT unnest(${ordered}::text[]) AS id ORDER BY 1 COLLATE "C") AS ordered`;
 }
 
 /**

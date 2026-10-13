@@ -1018,8 +1018,9 @@ export class ScheduleRepository {
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.
    *
-   * soft-delete: any-state — stamps the freshness cursor of the one plan this transaction just
-   * recalculated, which the caller loaded active and holds the plan write lock on.
+   * A plan deleted while this recalculation waited for the lock is left alone: the caller loaded
+   * it active BEFORE the lock, so the delete can commit in between, and stamping its row would
+   * write to a plan the user has deleted (`docs/TECH_DEBT.md` #492).
    */
   async stampScheduleComputedAt(
     planId: string,
@@ -1035,6 +1036,7 @@ export class ScheduleRepository {
           schedule_total_float_mode = ${criticality.totalFloatMode}::"TotalFloatMode",
           schedule_make_open_ends_critical = ${criticality.makeOpenEndsCritical}
       WHERE id = ${planId}::uuid
+        AND deleted_at IS NULL
     `;
   }
 

@@ -38,20 +38,37 @@ function sourceFiles(dir: string): string[] {
 
 const RAW_TAGS = new Set(['$executeRaw', '$queryRaw']);
 const UPDATES_ACTIVITIES = /\bUPDATE\s+activities\b/i;
-const SEAMS = [
-  'lockActivityRowsInIdOrder(',
-  'lockPlanActivityRowsInIdOrder(',
-  'lockActivityIdsInIdOrder(',
-];
+const SEAMS = new Set([
+  'lockActivityRowsInIdOrder',
+  'lockPlanActivityRowsInIdOrder',
+  'lockActivityIdsInIdOrder',
+]);
 const PRISMA_ACTIVITY_WRITE = /(?:^|\.)activity\.(?:updateMany|updateManyAndReturn)$/;
-/** An equality on the primary key (`id: x`, shorthand `id,`) writes one row, which cannot interleave. */
-const SINGLE_ROW_BY_ID = /[{,]\s*id\s*(?:,|:(?!\s*\{)|\})/;
 const DECLARATION = /lock-order:\s*[\w-]+\s*[—-]\s*([^]*?)\*\//;
 
 /** True when a docblock's `lock-order:` reason names both the engine and the placement writers. */
 function declares(docblock: string): boolean {
   const reason = DECLARATION.exec(docblock)?.[1] ?? '';
   return /\b(?:engine|recalculation)\b/i.test(reason) && /\bplacement\b/i.test(reason);
+}
+
+/**
+ * True when a Prisma `where` is an equality on the primary key at its TOP level (`{ id }`,
+ * `{ id: x }`, or `this.active({ id, version })`), which writes one row and cannot interleave with
+ * another writer's order. A nested `{ parent: { id } }` or `{ id: { in: [...] } }` is not.
+ */
+function isSingleRowWhere(expr: ts.Expression | undefined): boolean {
+  if (expr && ts.isCallExpression(expr) && expr.expression.getText().endsWith('.active')) {
+    return isSingleRowWhere(expr.arguments[0]);
+  }
+  if (!expr || !ts.isObjectLiteralExpression(expr)) return false;
+  return expr.properties.some(
+    (prop) =>
+      (ts.isShorthandPropertyAssignment(prop) && prop.name.text === 'id') ||
+      (ts.isPropertyAssignment(prop) &&
+        prop.name.getText() === 'id' &&
+        !ts.isObjectLiteralExpression(prop.initializer)),
+  );
 }
 
 function isActivityWrite(node: ts.Node, file: ts.SourceFile): boolean {
@@ -64,12 +81,110 @@ function isActivityWrite(node: ts.Node, file: ts.SourceFile): boolean {
   if (!ts.isCallExpression(node) || !PRISMA_ACTIVITY_WRITE.test(node.expression.getText(file))) {
     return false;
   }
-  return !SINGLE_ROW_BY_ID.test(node.arguments[0]?.getText(file) ?? '');
+  const arg = node.arguments[0];
+  const where =
+    arg && ts.isObjectLiteralExpression(arg)
+      ? arg.properties.find(
+          (prop): prop is ts.PropertyAssignment =>
+            ts.isPropertyAssignment(prop) && prop.name.getText(file) === 'where',
+        )?.initializer
+      : undefined;
+  return !isSingleRowWhere(where);
 }
 
 interface Writer {
   method: string;
   ordered: boolean;
+}
+
+const calleeName = (call: ts.CallExpression): string =>
+  call.expression.getText().split('.').pop() ?? '';
+
+function descendants(root: ts.Node, found: ts.Node[] = []): ts.Node[] {
+  ts.forEachChild(root, (child) => {
+    found.push(child);
+    descendants(child, found);
+  });
+  return found;
+}
+
+/** A function bound to a name inside the method (`const lock = async () => {…}`), with its name. */
+function localFunction(node: ts.Node): { name: string; fn: ts.Node } | undefined {
+  if (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    ts.isVariableDeclaration(node.parent) &&
+    ts.isIdentifier(node.parent.name)
+  ) {
+    return { name: node.parent.name.text, fn: node };
+  }
+  return undefined;
+}
+
+/**
+ * Whether the write is preceded by a call to an id-order seam, or to a LOCAL helper whose body
+ * calls one, in the same method (ADR-0110: verified against the defect, not the spelling). A helper
+ * that merely DEFINES the seam call counts for nothing until something calls the helper — which is
+ * the shape that left the delete cascade unguarded while a textual search for the seam name passed.
+ * A write inside a local closure (`const sweep = async () => tx.activity.updateMany(…)`) is ordered
+ * when a lock call precedes it inside the closure, or when one precedes EVERY call of the closure.
+ */
+function lockedBeforeWrite(method: ts.Node, write: ts.Node): boolean {
+  const all = descendants(method);
+  const helpers = new Map<string, ts.Node>();
+  for (const node of all) {
+    const local = localFunction(node);
+    if (
+      local &&
+      descendants(local.fn).some((n) => ts.isCallExpression(n) && SEAMS.has(calleeName(n)))
+    ) {
+      helpers.set(local.name, local.fn);
+    }
+  }
+  const inHelperBody = (node: ts.Node) =>
+    [...helpers.values()].some(
+      (fn) => node.getStart() >= fn.getStart() && node.getEnd() <= fn.getEnd(),
+    );
+  const isLockCall = (node: ts.Node): node is ts.CallExpression =>
+    ts.isCallExpression(node) &&
+    !inHelperBody(node) &&
+    (SEAMS.has(calleeName(node)) || helpers.has(calleeName(node)));
+  // A lock covers a site only if it is a statement of a block that CONTAINS the site and comes
+  // first: a lock in one `if` branch says nothing about a sibling branch.
+  const covers = (lock: ts.Node, site: ts.Node) => {
+    let statement: ts.Node = lock;
+    while (
+      statement.parent &&
+      !ts.isBlock(statement.parent) &&
+      !ts.isCaseClause(statement.parent)
+    ) {
+      statement = statement.parent;
+    }
+    const block = statement.parent;
+    return (
+      block !== undefined &&
+      lock.getStart() < site.getStart() &&
+      site.getStart() >= block.getStart() &&
+      site.getEnd() <= block.getEnd()
+    );
+  };
+  const lockedBetween = (from: number, site: ts.Node) =>
+    all.some((node) => isLockCall(node) && node.getStart() >= from && covers(node, site));
+
+  let enclosing: ReturnType<typeof localFunction> = undefined;
+  for (let up: ts.Node | undefined = write.parent; up && up !== method; up = up.parent) {
+    enclosing = localFunction(up);
+    if (enclosing) break;
+  }
+  if (!enclosing) return lockedBetween(method.getStart(), write);
+  if (lockedBetween(enclosing.fn.getStart(), write)) return true;
+  const { name, fn } = enclosing;
+  const calls = all.filter(
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) &&
+      calleeName(node) === name &&
+      !(node.getStart() >= fn.getStart() && node.getEnd() <= fn.getEnd()),
+  );
+  return calls.length > 0 && calls.every((call) => lockedBetween(method.getStart(), call));
 }
 
 /** Every multi-row activity write in `source`, and whether its method locks or declares. */
@@ -83,8 +198,7 @@ export function activityWriters(source: string): Writer[] {
         method = method.parent;
       }
       const name = method && 'name' in method ? (method.name?.getText(file) ?? '?') : '<top level>';
-      const before = method ? source.slice(method.getFullStart(), node.getStart(file)) : '';
-      const locks = SEAMS.some((seam) => before.includes(seam));
+      const locks = method ? lockedBeforeWrite(method, node) : false;
       const declared = method
         ? declares(source.slice(method.getFullStart(), method.getStart(file)))
         : false;
@@ -215,6 +329,46 @@ describe('multi-row activity writers lock in id order', () => {
         ),
       ),
     ).toEqual([]);
+  });
+
+  it('is red when a helper defines the seam call, the write follows, and nothing calls the helper', () => {
+    // The real shape of the delete cascade: the lock lives in a local helper, the write is in a
+    // sibling closure, and a call site that forgets the helper must not be excused by its mere
+    // existence above the write.
+    const helperNeverCalled = `
+      class H {
+        async cascade(tx: Tx, entity: string, planIds: string[]) {
+          const lockPlans = async (ids: string[]) => {
+            await lockPlanActivityRowsInIdOrder(tx, ids);
+          };
+          const sweep = async (ids: string[]) =>
+            tx.activity.updateMany({ where: { planId: { in: ids }, deletedAt: null }, data });
+          if (entity === 'plan') {
+            await sweep(planIds);
+          }
+        }
+      }`;
+    expect(unorderedActivityWriters(helperNeverCalled)).toEqual(['cascade']);
+    const oneBranchForgets = helperNeverCalled.replace(
+      'await sweep(planIds);',
+      "await lockPlans(planIds);\n await sweep(planIds);\n } else if (entity === 'project') {\n await sweep(planIds);",
+    );
+    expect(unorderedActivityWriters(oneBranchForgets)).toEqual(['cascade']);
+    const everyBranchLocks = oneBranchForgets.replace(
+      "} else if (entity === 'project') {\n await sweep(planIds);",
+      "} else if (entity === 'project') {\n await lockPlans(planIds);\n await sweep(planIds);",
+    );
+    expect(unorderedActivityWriters(everyBranchLocks)).toEqual([]);
+  });
+
+  it('does not excuse a nested id, only a top-level primary-key equality', () => {
+    const nested = `
+      class S {
+        async promote(tx: Tx, id: string) {
+          return tx.activity.updateMany({ where: { parent: { id } }, data });
+        }
+      }`;
+    expect(unorderedActivityWriters(nested)).toEqual(['promote']);
   });
 
   it('is red when the seam runs after the statement rather than before it', () => {
