@@ -37,6 +37,10 @@ shard above `quality` again (§4.1: ~1,000 s against 1,103 s leaves 10 %, and AD
 27 % swing), or when ADR-0138's re-derived triggers fire. M0's measurement is then the first step,
 as written. §§1-4 below are unedited from the draft and argue for B; read them as that argument.
 
+**Trigger restated 2026-10-13** (ADR-0138's amendment of that date): the "above `quality`" trigger fired on four
+consecutive runs and no four-way pack can meet it now that `quality` takes ~690 s. The trigger in force is: the slowest
+web shard's median over three consecutive runs exceeds 1,250 s, or any shard is cancelled by its 30-minute timeout.
+
 ## 0. Where every number came from
 
 The argument is arithmetic, so the sources come first (ADR-0076).

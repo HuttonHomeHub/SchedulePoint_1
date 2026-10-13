@@ -398,19 +398,22 @@ jobs:
     name: End-to-end tests (web shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
     # **Four shards, and the assignment is derived rather than eyeballed.** `scripts/e2e-durations.json`
-    # holds each suite's measured time (re-harvested 2026-10-12 from run 38290423490, 3,567 s across
-    # 50 suites); a longest-processing-time-first pack over it lands the four shards at
-    # 893/891/891/892 s of suite time, with the three production-build suites (csp, forced-colours,
-    # splitting) kept together as one unit on shard 4 because each pays for a `vite build` the file
-    # does not record. The pack REPLACED one that had drifted to 657/1,070/995/845 s as suites grew
-    # (`workspace-chrome` 147 to 525 s, `workspace-fit` 56 to 422 s), which put shard 2 above `quality`.
+    # holds each suite's measured time (re-harvested 2026-10-13 as the median of runs 38314679272,
+    # 38315222823 and 38317448630, 3,760 s across 50 suites); a longest-processing-time-first pack over
+    # it lands the four shards at 936/936/953/935 s of suite time, with the three production-build
+    # suites (csp, forced-colours, splitting) kept together as one unit on shard 2 because each pays
+    # for a `vite build` the file does not record. Every shard also pays a ~114 s fixed cost (setup,
+    # install, browser install; median of twelve shard-runs, 90-174 s, no shard-specific overhead), so
+    # the projected wall time is ~1,050 s a shard. This pack REPLACED the 2026-10-12 one (893/891/891/892 s
+    # on one run), whose shard 4 then measured 1,064-1,157 s on three runs because `workspace-chrome`,
+    # `workspace-fit` and `gantt-editing` had grown past the figures it was packed from.
     #
-    # **Four, not five, by the owner's decision of 2026-10-12** ("just rebalance four", no three-run
-    # measurement first). The five-shard design is kept as the documented alternative in
-    # `docs/specs/e2e-fifth-shard/`, with its trigger: a slow run that puts a web shard above
-    # `quality` again. On the one measured run a four-way pack is ~1,000 s of wall time against
-    # `quality`'s 1,103 s, so it has no margin for ADR-0138's measured 27 % swing; that is accepted,
-    # and named so the next red read is a trigger rather than a surprise.
+    # **Four, not five, by the owner's decision of 2026-10-12** ("just rebalance four"). The
+    # five-shard design is kept as the documented alternative in `docs/specs/e2e-fifth-shard/`. Its
+    # trigger is restated in ADR-0138's amendment of 2026-10-13: the slowest web shard's median over
+    # three consecutive runs exceeds 1,250 s, or any shard is cancelled by its 30-minute timeout. The
+    # earlier trigger ("slower than `quality`") can no longer be met by any four-way pack, `quality`
+    # having fallen to ~690 s.
     #
     # `fail-fast: false` because a red shard must not cancel the other three: the whole value of
     # sharding is lost if one failure hides what the rest would have told you.
@@ -425,8 +428,8 @@ jobs:
     # A runaway guard, not a bar — and back to 30 now that this job's own duration justifies it.
     #
     # It was 60 for exactly one milestone, because the unsharded web job needed ~30 min and 30 had
-    # CANCELLED it at 30 m 08 s. Sharded, the slowest shard measured 1,172 s on run 38290423490 (the
-    # pack above is ~1,000 s), so 30 is 1.5-1.8x its own duration: thinner than the 2.9-3.4x it was
+    # CANCELLED it at 30 m 08 s. Sharded, the slowest shard measured 1,157 s on run 38317448630 (the
+    # pack above is ~1,050 s), so 30 is 1.5-1.7x its own duration: thinner than the 2.9-3.4x it was
     # when it shipped, and still a guard against a hang rather than a bar. The guard is per JOB and
     # above that job's duration; the epic-wide constant was the bug.
     timeout-minutes: 30
@@ -526,7 +529,7 @@ jobs:
       # apps/web/playwright.config.ts) and drives the full stack in a browser.
       # This run serves the app FLAG-OFF (read-only surface, pen inert).
       - name: Web end-to-end tests
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e
 
       # Flag-ON editing journeys: a second Playwright run (playwright.edit.config.ts)
@@ -546,7 +549,7 @@ jobs:
       # no layering left to describe — this is the only plan workspace there is. Runs after the
       # prior runs tear down their servers, reusing the ports.
       - name: Web end-to-end tests (canvas toolbar workspace)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:toolbar
 
       # The toolbar FIT gate is GONE (workspace redesign, 2026-08-24), and deleted rather than
@@ -567,7 +570,7 @@ jobs:
       # on-canvas milestones, two-click linking — is exercised end to end (ADR-0032). Runs last,
       # after the prior runs tear down their servers, reusing the ports.
       - name: Web end-to-end tests (canvas authoring flag on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:authoring
 
       # Flag-ON live cross-plan / programme scheduling journey (playwright.programme.config.ts) serving
@@ -576,7 +579,7 @@ jobs:
       # recalculate — the result panel, the driven "External" badge, and the staleness cycle — is
       # exercised end to end (ADR-0045 F8). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (programme scheduling flag on)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:programme
 
       # Flag-ON Notes journey (playwright.notes.config.ts) serving the app with VITE_NOTES on (on the
@@ -584,7 +587,7 @@ jobs:
       # and deleting an activity note, the per-row count badge tracking it, and an axe pass are
       # exercised end to end (ADR-0046). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (notes flag on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:notes
 
       # Flag-ON undo/redo journey (playwright.undo.config.ts) serving the app
@@ -593,7 +596,7 @@ jobs:
       # announcements — is exercised end to end (ADR-0048 M3). Runs last, after the prior runs tear down
       # their servers, reusing the ports.
       - name: Web end-to-end tests (undo/redo flag on)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:undo
 
       # Flag-ON on-canvas activity types journey (playwright.loe.config.ts) serving the app with
@@ -612,7 +615,7 @@ jobs:
       # over-allocation highlight — is exercised end to end (Stage E). Runs last, after the prior runs
       # tear down their servers, reusing the ports.
       - name: Web end-to-end tests (canvas resource view flag on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:resource-view
 
       # Flag-ON schedule interchange (XER import) journey (playwright.interchange.config.ts) serving
@@ -653,11 +656,11 @@ jobs:
       # landing. Runs at 1646, the width the result is judged on, because at 1920 the page measure
       # binds and at 1646 the region does — a different layout, and the one the report came from.
       - name: Web end-to-end tests (page composition)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:page-composition
 
       - name: Web end-to-end tests (library scoping)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:library
 
       # The calendar shift-editor journey (playwright.calendar-shifts.config.ts). No longer flag-on:
@@ -690,7 +693,7 @@ jobs:
       # caught twice — that the plan's calendar actually reaches the control, rather than the field
       # rendering, looking right, and quietly refusing the unit a planner reaches for.
       - name: Web end-to-end tests (assignment lag flag on)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:assignment-lag
 
       # The Float paths surface (audit F4) against a real API and a real eight-hour calendar. What a
@@ -701,7 +704,7 @@ jobs:
       # broken and fixed; that the panel survives a view switch; and that the emphasis reaches both
       # the canvas's parallel listbox and the Gantt's rows in words, not by opacity alone.
       - name: Web end-to-end tests (float paths flag on)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:float-paths
 
       # The Health check panel (health M2-T4) against a real API. No VITE_ flag exists for it
@@ -713,7 +716,7 @@ jobs:
       # the workspace selection through the canvas's parallel listbox; and that opening it closes
       # the Float paths dock — one dock at a time, proven against the real sibling.
       - name: Web end-to-end tests (health check)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:health-check
 
       # The revision comparison dock (revision M2-T4) against a real API. No VITE_ flag exists for
@@ -727,7 +730,7 @@ jobs:
       # measurement recorded the dock squeezed to 137.6 px and said in its own words that it proved
       # boxes and not reachability (the ADR-0114 M1 defect).
       - name: Web end-to-end tests (revision compare)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:revision-compare
 
       # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
@@ -739,7 +742,7 @@ jobs:
       # amended, and the single assertion here worth the whole suite; and that the Gantt walks the
       # same match set without stealing focus to do it.
       - name: Web end-to-end tests (search navigation flag on)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:search-nav
 
       # The canvas plural selection (`VITE_CANVAS_MULTI_SELECT`) against a real API with the pen
@@ -749,7 +752,7 @@ jobs:
       # restore the bars and silently lose the logic between them, and a mock would report success
       # either way.
       - name: Web end-to-end tests (multi-select flag on)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:multi-select
 
       # Activity copy / paste / duplicate (`VITE_ACTIVITY_COPY_PASTE`) against a real API with the
@@ -759,7 +762,7 @@ jobs:
       # Ctrl+Z removes the whole paste WITH its links; and that Ctrl+C stands down for a real text
       # selection — `window.getSelection` is stubbed in the unit suite, so only a browser has one.
       - name: Web end-to-end tests (copy/paste flag on)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:copy-paste
 
       # Accessibility across every STORED THEME PREFERENCE (ADR-0055 §5, rescoped by ADR-0097).
@@ -787,7 +790,7 @@ jobs:
       # sibling step above pins the flags off and is now the rollback-parity side. Both are kept:
       # dropping either would leave one half of the rollback contract unproven.
       - name: Web end-to-end tests (designed chrome band, flag on — the shipped default)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
       # Flag-ON Gantt view journey (playwright.gantt.config.ts) serving the app with VITE_GANTT_VIEW
@@ -796,7 +799,7 @@ jobs:
       # dates the engine computed, `?view=gantt` survives a reload, and the grid is arrow-navigable
       # and axe-clean. Runs after the prior suites tear down their servers, reusing the ports.
       - name: Web end-to-end tests (Gantt view flag on)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:gantt
 
       # The Gantt editing epic's journey (playwright.gantt-editing.config.ts), landing with M1 —
@@ -838,7 +841,7 @@ jobs:
       # the Resources tab persists. Runs after the prior suites tear down their servers, reusing the
       # ports.
       - name: Web end-to-end tests (tabbed activity editor)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:activity-editor
 
       # Auto-arrange (playwright.arrange.config.ts, diagram-legibility M-C2), closing
@@ -852,7 +855,7 @@ jobs:
       # nothing to say, which is the negative control the milestone's own plan first got backwards.
       # Runs after the prior suites tear down their servers, reusing the ports.
       - name: Web end-to-end tests (Auto-arrange)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:arrange
 
       # The NetPoint grammar (playwright.netpoint-grammar.config.ts, docs/specs/netpoint-grammar/).
@@ -862,7 +865,7 @@ jobs:
       # (ADR-0102, ADR-0100 M4, ADR-0121) are invisible to jsdom, which resolves no custom property
       # and has no canvas. Runs after the prior suites tear down their servers, reusing the ports.
       - name: Web end-to-end tests (NetPoint grammar)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:netpoint-grammar
 
       # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
@@ -874,7 +877,7 @@ jobs:
       # and releasing the pen shuts the writes. Runs after the prior suites tear down their servers,
       # reusing the ports.
       - name: Web end-to-end tests (WBS improvements flag on)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:wbs
 
       # Recently deleted (playwright.recently-deleted.config.ts, ADR-0096), with the retention
@@ -888,7 +891,7 @@ jobs:
       # constant that would render 90 and look right. Runs after the prior suites tear down their
       # servers, reusing the ports.
       - name: Web end-to-end tests (recently deleted)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:recently-deleted
 
       # Canvas authoring flow (playwright.authoring-flow.config.ts) with the pen enforced at the API
@@ -898,7 +901,7 @@ jobs:
       # only a real browser, a real recalculation cadence and a real server can say which of those
       # clicks actually became a pick. Runs after the prior suites tear down their servers.
       - name: Web end-to-end tests (canvas authoring flow)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:authoring-flow
 
       # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
@@ -941,7 +944,7 @@ jobs:
       # run about the wrong pointer. No extra step is needed: it is the same suite and the same
       # config. Runs after the prior suites tear down their servers.
       - name: Web end-to-end tests (command surface — target sizes, fine and coarse)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:workspace-fit
 
       # The promotion ladder (playwright.promotion.config.ts, toolbar-redesign M5): the real deck at
@@ -964,7 +967,7 @@ jobs:
       # defect. Its axe scan opts in wcag22aa + target-size (every legacy scan requests WCAG 2.0
       # tags, and axe ships target-size disabled). Runs after the prior suites tear down.
       - name: Web end-to-end tests (minimap)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:minimap
 
       # The narrow-shell journey (playwright.narrow-shell.config.ts,
@@ -1011,7 +1014,7 @@ jobs:
       # markers. Its script omits --pass-with-no-tests: with no flag to skip on, "no tests ran"
       # could only mean a broken testDir. Runs after the prior suites tear down.
       - name: Web end-to-end tests (axis markers)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:axis-markers
 
       # The exported-diagram journey (playwright.export.config.ts, TECH_DEBT #164 W3-M2). It
@@ -1027,7 +1030,7 @@ jobs:
       # Its script omits --pass-with-no-tests on purpose — it has no flag to skip on, so "no tests
       # ran" could only mean a broken testDir.
       - name: Web end-to-end tests (exported diagram)
-        if: ${{ matrix.shard == 1 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:export
 
       # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
@@ -1039,7 +1042,7 @@ jobs:
       # nav link, and that the `/me` feed is scoped by ACTOR — the teammate is the SUBJECT of the
       # role change and must not see it. Runs after the prior suites tear down their servers.
       - name: Web end-to-end tests (audit log flag on)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:audit
 
       # ADR-0074 M5-T3. Two steps, because `AUTH_REQUIRE_EMAIL_VERIFICATION` is a server-boot
@@ -1049,7 +1052,7 @@ jobs:
       # a socket, and the only way to obtain a reset link at all, since it goes to the mailbox and
       # the verification row now stores its identifier hashed.
       - name: Web end-to-end tests (account recovery flags on)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:account
 
       # The enforcement half, against its own API process with the switch ON. It was committed red
@@ -1059,7 +1062,7 @@ jobs:
       # bounced the new member to `/sign-in` saying nothing. Both are unflagged runtime branches on
       # a server switch, so this is the only step that can see either.
       - name: Web end-to-end tests (email verification enforced)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:account-verify
 
       # ADR-0086, staff-console M3. **Not a flag-on suite** — every sibling pins a `VITE_` constant
@@ -1071,7 +1074,7 @@ jobs:
       # `/api/v1`, which the component tests could not see because they mock `apiFetch` and assert
       # back whatever path the code passed them.
       - name: Web end-to-end tests (staff console)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:staff
 
       # The organisation overview — the landing every sign-in reaches (ADR-0098 M2). It lands with
@@ -1099,7 +1102,7 @@ jobs:
       # It also pins the silent half: a trip through an org-less screen must not rewrite the
       # reader's persisted drawer preference.
       - name: Web end-to-end tests (app shell, org-less routes)
-        if: ${{ matrix.shard == 2 }}
+        if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:shell
 
       # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
@@ -1111,7 +1114,7 @@ jobs:
       # and two WCAG 1.4.10 reflow failures at 320px (a 31-character button label, and an email
       # address setting a grid column's min-content width).
       - name: Web end-to-end tests (public screens layout)
-        if: ${{ matrix.shard == 3 }}
+        if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:public
 
       # The CSP gate. Unlike every step above it, this one builds the app and serves `dist/` through
@@ -1124,7 +1127,7 @@ jobs:
       # what the first real violation on the deployed origin turned out to be (Zod probing for
       # `eval`). Last step, since it is the only one paying for a production build.
       - name: Web end-to-end tests (Content-Security-Policy)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:csp
 
       # Also `vite preview`, and beside the CSP suite for the same reason: it is the other gate whose
@@ -1144,7 +1147,7 @@ jobs:
       # On the CSP suite's shard, because these are the only steps paying for a production build and
       # splitting them would make two shards pay for one.
       - name: Web end-to-end tests (forced colours)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:forced-colors
 
       # The third production-build suite, on that same shard for the reason the two above give: it
@@ -1154,7 +1157,7 @@ jobs:
       # from `dist/assets/` and checking the page reloads once and recovers
       # (`docs/specs/route-code-splitting/`). Hermetic: no API, no database.
       - name: Web end-to-end tests (route code splitting)
-        if: ${{ matrix.shard == 4 }}
+        if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:splitting
 
       # **Per shard, and the name MUST carry the shard number.** `actions/upload-artifact` v4+

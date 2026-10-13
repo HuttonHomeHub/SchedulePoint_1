@@ -228,3 +228,33 @@ the owner.
 
 **Re-open trigger added.** A CI run in which a web shard is slower than `quality` again: build the
 five-shard design (M0's measurement first, as its plan says). The earlier triggers stand.
+
+## Amendment 2026-10-13 — re-packed on three runs' medians, and the trigger restated (pre-1-0-hardening M1)
+
+**Evidence.** The 2026-10-12 pack projected 893 / 891 / 891 / 892 s of suite time from one run. Four
+runs since measured the slowest web shard at 1,178 / 1,064 / 1,136 / 1,157 s (runs 38302288727,
+38314679272, 38315222823, 38317448630), shard 4 each time. Per-step timings from the last three show
+why: each shard's fixed cost (job wall less its suite steps) was 90-174 s over twelve shard-runs, median
+114 s, with **no consistent shard-4 overhead**. The plan had assumed one; the data says shard 4 was slow
+because its suite sum was 923-1,036 s, the suites having outgrown the single run they were packed from.
+Run 38317448630's base `test:e2e` took 272 s against ~390 s on the others, which is why per-suite
+**medians** are used.
+
+**The re-pack.** `scripts/e2e-durations.json` now holds those medians (3,760 s across 50 suites) and a
+longest-processing-time pack, with `csp`, `forced-colors` and `splitting` kept as one unit, gives suite
+sums of **936 / 936 / 953 / 935 s**. With the uniform 114 s fixed cost the projected shard walls are
+**1,050 / 1,050 / 1,067 / 1,049 s**, an 18 s spread against the 30 s target. The `if: matrix.shard == N`
+conditions and the `ci.yml` comment were rewritten from it.
+
+**Why the 2026-10-12 trigger can no longer be met.** "A web shard slower than `quality`" fired on all
+four runs, and no four-way pack satisfies it: `quality` fell to 676-698 s on the last two runs while the
+web suites sum to ~3,760 s, ~1,050 s a shard even when perfectly balanced.
+
+**Trigger, decided by the product owner on 2026-10-13.** Build the five-shard design in
+[`docs/specs/e2e-fifth-shard/`](../specs/e2e-fifth-shard/) when the slowest web shard's median over three
+consecutive runs exceeds 1,250 s, or any shard is cancelled by its 30-minute timeout. The earlier
+re-open triggers stand.
+
+**Acceptance, to be recorded after merge.** The three runs that follow should show the slowest shard
+below 1,147 s on at least two of three and the four shards within ~120 s. That is a reading, not a gate
+(D4); if it is missed a tech-debt row is opened rather than a third re-pack on one reading.
