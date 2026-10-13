@@ -1,7 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COLUMN_WIDTHS_STORAGE_KEY } from '../layout/column-widths';
+import {
+  COLUMN_WIDTHS_STORAGE_KEY,
+  GRID_END_GUTTER,
+  pinnedExtraWidth,
+} from '../layout/column-widths';
 import { GANTT_COLUMNS } from '../layout/grid-columns';
 import { useGanttColumnWidths } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs } from '../model/use-gantt-grid-prefs';
@@ -58,7 +62,7 @@ function Host(): React.ReactElement {
   const gridPrefs = useGanttGridPrefs({
     columns: IDENTITY,
     widths: columnWidths.widths,
-    extraPinnedWidth: 0,
+    extraPinnedWidth: pinnedExtraWidth(false, false),
   });
   return <GanttPanel activities={ACTIVITIES} columnWidths={columnWidths} gridPrefs={gridPrefs} />;
 }
@@ -112,7 +116,10 @@ describe('GanttPanel — column widths', () => {
     expect(widths[1]).toBe(120);
     expect(widths.reduce((a, b) => a + b, 0)).toBe(400 + 120 + 84 + 400 + 400 + 60);
     const separator = screen.getByRole('separator', { name: 'Grid width' });
-    expect(Number(separator.getAttribute('aria-valuenow'))).toBe(widths.reduce((a, b) => a + b, 0));
+    // The pane is the columns plus the trailing gutter that keeps the last one clear of the divider.
+    expect(Number(separator.getAttribute('aria-valuenow'))).toBe(
+      widths.reduce((a, b) => a + b, 0) + GRID_END_GUTTER,
+    );
     expect(Number(separator.getAttribute('aria-valuemax'))).toBeGreaterThanOrEqual(
       Number(separator.getAttribute('aria-valuemin')),
     );
@@ -212,13 +219,13 @@ describe('GanttPanel — column widths', () => {
       fireEvent.pointerUp(edge, { pointerId: 1, clientX: 40 });
       expect(screen.getByRole('separator', { name: 'Grid width' })).toHaveAttribute(
         'aria-valuenow',
-        '624',
+        String(584 + GRID_END_GUTTER + 40),
       );
       expect(headerWidths()[1]).toBe(220);
       fireEvent.doubleClick(edge);
       expect(screen.getByRole('separator', { name: 'Grid width' })).toHaveAttribute(
         'aria-valuenow',
-        '584',
+        String(584 + GRID_END_GUTTER),
       );
     });
   });

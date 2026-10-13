@@ -260,6 +260,21 @@ test('the pinned columns still end where the chart begins at every width, with a
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
   await chartMeetsGrid(page, 'with a baseline, at standard widths');
+  // The `vs baseline` value sits under its heading: the row-menu cell used to push it 28 px right.
+  const variance = await ganttGrid(page).evaluate((grid) => {
+    const head = [...grid.querySelectorAll('[role="columnheader"]')].find(
+      (h) => (h.textContent ?? '').trim() === 'vs baseline',
+    );
+    const index = head?.getAttribute('aria-colindex');
+    const cell = grid.querySelector(
+      `[role="row"][aria-rowindex="2"] [role="gridcell"][aria-colindex="${index}"]`,
+    );
+    return head && cell
+      ? { head: head.getBoundingClientRect().right, cell: cell.getBoundingClientRect().right }
+      : null;
+  });
+  expect(variance, 'no vs baseline header or first-row cell to compare').not.toBeNull();
+  expect(Math.round(variance?.cell ?? -1)).toBe(Math.round(variance?.head ?? -2));
 
   // **All at the maximum**, written straight to storage: typing is chart-guarded (a width that would
   // leave the chart under 240 px is clamped), so this is the state a planner reaches by widening
@@ -357,6 +372,72 @@ test('dragging a column edge widens it, Activity gives way, and it is remembered
   await page.mouse.up();
   await expect(separator).toHaveAttribute('aria-valuenow', String(Number(tableWidth) + 40));
   await chartMeetsGrid(page, 'after dragging the Activity edge');
+});
+
+test('the divider strip covers no table control: a press at the edge of a row menu or Float left reaches it, and the divider still drags', async ({
+  page,
+}) => {
+  // `docs/TECH_DEBT.md` #494: the 25 px strip sat over a third of each row's `⋯` and of the Float left
+  // button, so a mouse press near their edge started a drag of the divider instead.
+  test.setTimeout(240_000);
+  await ganttPlan(page);
+  const separator = page.getByRole('separator', { name: 'Grid width' });
+
+  const strip = await separator.locator(':scope > span').boundingBox();
+  if (strip === null) throw new Error('no box for the divider strip');
+  const menu = ganttGrid(page)
+    .getByRole('button', { name: /^Actions for / })
+    .first();
+  const sort = ganttGrid(page).getByRole('button', { name: 'Float left' });
+  for (const [name, control] of [
+    ['the row menu', menu],
+    ['Float left', sort],
+  ] as const) {
+    const box = await control.boundingBox();
+    if (box === null) throw new Error(`no box for ${name}`);
+    const covered = Math.max(
+      0,
+      Math.min(box.x + box.width, strip.x + strip.width) - Math.max(box.x, strip.x),
+    );
+    expect(covered, `${name} sits ${covered} px under the divider strip`).toBe(0);
+    // And by what a pointer meets, 2 px in from each side: never the divider. (Not "the control
+    // itself": a column's own resize edge straddles each header boundary by design, ADR-0173 M2.)
+    for (const x of [box.x + 2, box.x + box.width - 2]) {
+      const meetsDivider = await separator.evaluate(
+        (el, point) => {
+          const hit = document.elementFromPoint(point.x, point.y);
+          return hit !== null && el.contains(hit);
+        },
+        { x, y: box.y + box.height / 2 },
+      );
+      expect(
+        meetsDivider,
+        `a press ${Math.round(x - box.x)} px into ${name} lands on the divider`,
+      ).toBe(false);
+    }
+  }
+
+  const menuBox = await menu.boundingBox();
+  if (menuBox === null) throw new Error('no box for the row menu');
+  await page.mouse.click(menuBox.x + 2, menuBox.y + menuBox.height / 2);
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
+
+  // The divider still drags from its own line.
+  const before = Number(await separator.getAttribute('aria-valuenow'));
+  const line = await separator.boundingBox();
+  if (line === null) throw new Error('no box for the divider');
+  const y = line.y + line.height / 2;
+  await page.mouse.move(line.x + line.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(line.x + line.width / 2 + 40, y, { steps: 8 });
+  await page.mouse.up();
+  // Within a couple of px of the 40 travelled: the 1 px line is grabbed off its own centre.
+  await expect
+    .poll(async () => Number(await separator.getAttribute('aria-valuenow')) - before)
+    .toBeGreaterThanOrEqual(36);
+  await chartMeetsGrid(page, 'after dragging the Grid width divider');
 });
 
 test('under a coarse pointer there are no edges, and the typed field is a 44 px target', async ({

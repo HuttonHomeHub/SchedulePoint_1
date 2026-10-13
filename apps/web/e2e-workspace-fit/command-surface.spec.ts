@@ -1304,10 +1304,14 @@ test.describe('The plan command surface', () => {
 
     // The row helper's shape, read from `e2e-gantt/support.ts:234-239` rather than re-invented:
     // a `row` filtered by a `gridcell` whose name starts with the activity's.
+    // Clicked on the name cell, not the row's centre: the centre of a row can land under the
+    // divider's strip (it did, at a 794 px table on a short plan, #494), which is a press on the
+    // divider and not on the row.
     await page
       .getByRole('row')
       .filter({ has: page.getByRole('gridcell', { name: /^Site setup\b/ }) })
       .first()
+      .getByRole('gridcell', { name: /^Site setup\b/ })
       .click();
 
     // The pinned positive for the STATE. Without it a click that selected nothing leaves

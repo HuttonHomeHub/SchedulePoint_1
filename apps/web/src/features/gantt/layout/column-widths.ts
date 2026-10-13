@@ -71,17 +71,12 @@ export const GANTT_GRID_MAX_WIDTH = 720;
  */
 export const NAME_COLUMN_MIN_WIDTH = 120;
 
-/** Width of the variance column, shown only when a baseline is active. Not a `GanttColumn`. */
-export const VARIANCE_COLUMN_WIDTH = 72;
-
-/**
- * The width of pinned content that is not a {@link GanttColumn}: the `vs baseline` column, present
- * only while a baseline is active. One derivation, because three sites used to spell it and the
- * ADR-0095 incident was two answers to "how wide is the grid".
- */
-export function variancePinnedWidth(showVariance: boolean): number {
-  return showVariance ? VARIANCE_COLUMN_WIDTH : 0;
-}
+export {
+  ACTIONS_COLUMN_WIDTH,
+  GRID_END_GUTTER,
+  pinnedExtraWidth,
+  VARIANCE_COLUMN_WIDTH,
+} from './pinned-geometry';
 
 /** The columns a planner has not hidden, in declaration order. */
 export function shownColumns(hidden: ReadonlySet<GanttColumnKey>): readonly GanttColumn[] {
@@ -212,9 +207,10 @@ export function ganttColumnWidth(
 /**
  * The pane's ceiling. **The floor always wins**: a ceiling below the floor makes `clampSize` return
  * the ceiling, i.e. a pane narrower than its own columns, which is ADR-0095's Float-over-chart
- * incident again. With the shipped widths `FIXED` tops out at 686 — all six columns at their defaults,
- * Activity at its 120 px floor, and the 72 px baseline column (`column-widths.test.ts` pins it) — so
- * the inversion was latent; per-column widths are what make it live. (The 746 a fresh pane seeds
+ * incident again. With the shipped widths `FIXED` tops out at 734 — all six columns at their defaults,
+ * Activity at its 120 px floor, the 72 px baseline column, the 28 px row-menu column and the 20 px
+ * gutter (`pinnedExtraWidth`; `column-widths.test.ts` pins the sum) — so
+ * the inversion was latent; per-column widths are what make it live. (What a fresh pane seeds
  * to is the same sum with Activity at its 180 px default, which is a size, not a floor.)
  */
 export function gridCeiling(fixedWidth: number): number {

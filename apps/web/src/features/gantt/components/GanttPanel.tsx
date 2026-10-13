@@ -13,6 +13,7 @@ import {
 } from '../layout/bar-geometry';
 import {
   DEFAULT_COLUMN_WIDTHS,
+  ACTIONS_COLUMN_WIDTH,
   VARIANCE_COLUMN_WIDTH,
   chartGuard,
   defaultGridWidth,
@@ -20,7 +21,7 @@ import {
   ganttFixedWidth,
   isResizableKey,
   shownColumns,
-  variancePinnedWidth,
+  pinnedExtraWidth,
   type ColumnWidths,
   type ResizableColumnKey,
 } from '../layout/column-widths';
@@ -394,8 +395,9 @@ function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
   const gridPrefs = useGanttGridPrefs({
     columns,
     widths: columnWidths?.widths ?? NO_WIDTHS,
-    extraPinnedWidth: variancePinnedWidth(
+    extraPinnedWidth: pinnedExtraWidth(
       varianceByActivityId !== undefined && varianceByActivityId.size > 0,
+      props.rowMenuContextFor !== undefined,
     ),
   });
   return <GanttPanelBody {...props} gridPrefs={gridPrefs} />;
@@ -456,8 +458,15 @@ function GanttPanelBody({
    * framing's only grid input (ADR-0173 D5): making it planner-aware would rescale every bar on
    * every frame of a column change. `grid-width.structural.test.ts` pins that it is the only thing
    * `barRegionWidth` reads.
+   *
+   * **The row-menu column and the end gutter are in it** (#494): they are constants of the host, not
+   * a planner's choice, and leaving them out framed the zoom presets on room the chart no longer
+   * has, so Month's 91 days ran 48 px off the visible end. (`vs baseline` stays out, as before.)
    */
-  const DEFAULT_GRID_WIDTH = useMemo(() => defaultGridWidth(COLUMNS, 0), [COLUMNS]);
+  const DEFAULT_GRID_WIDTH = useMemo(
+    () => defaultGridWidth(COLUMNS, pinnedExtraWidth(false, rowMenuContextFor !== undefined)),
+    [COLUMNS, rowMenuContextFor],
+  );
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The line a finger or stylus is shown when it selects a bar (ADR-0177 D2): the refusal reason, or
@@ -517,8 +526,13 @@ function GanttPanelBody({
    * chart starting at 817 — ADR-0095's Float incident, reproduced by a column added afterwards.
    */
   const FIXED_WIDTH = useMemo(
-    () => ganttFixedWidth(COLUMNS, widths, variancePinnedWidth(showVariance)),
-    [COLUMNS, widths, showVariance],
+    () =>
+      ganttFixedWidth(
+        COLUMNS,
+        widths,
+        pinnedExtraWidth(showVariance, rowMenuContextFor !== undefined),
+      ),
+    [COLUMNS, widths, showVariance, rowMenuContextFor],
   );
   /**
    * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8) — an instance the HOST owns
@@ -561,10 +575,11 @@ function GanttPanelBody({
   const registerGuard = columnWidths?.registerGuard;
   // Read through a ref so the guard registers once, not on every drag frame (each frame changes
   // `widths` or `gridWidth`); the effect below keeps the ref current after every commit.
-  const guardInputs = useRef({ COLUMNS, widths, showVariance, gridWidth });
+  const hasRowMenus = rowMenuContextFor !== undefined;
+  const guardInputs = useRef({ COLUMNS, widths, showVariance, hasRowMenus, gridWidth });
   useEffect(() => {
-    guardInputs.current = { COLUMNS, widths, showVariance, gridWidth };
-  }, [COLUMNS, widths, showVariance, gridWidth]);
+    guardInputs.current = { COLUMNS, widths, showVariance, hasRowMenus, gridWidth };
+  }, [COLUMNS, widths, showVariance, hasRowMenus, gridWidth]);
   useEffect(() => {
     if (registerGuard === undefined) return undefined;
     return registerGuard((key: ResizableColumnKey, candidate: number): number => {
@@ -574,7 +589,7 @@ function GanttPanelBody({
         fixedWithoutColumn: ganttFixedWidth(
           others,
           current.widths,
-          variancePinnedWidth(current.showVariance),
+          pinnedExtraWidth(current.showVariance, current.hasRowMenus),
         ),
         pane: current.gridWidth,
         scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
@@ -1274,11 +1289,15 @@ function GanttPanelBody({
                 );
               })}
               {actionColumns === 0 ? null : (
-                // `sr-only`, so it names the column for assistive technology without taking layout —
-                // the trigger sits in the slack at the end of the pinned block and has no visible
-                // heading of its own.
-                <div role="columnheader" aria-colindex={COLUMNS.length + 1} className="sr-only">
-                  Actions
+                // The column has a width (`ACTIONS_COLUMN_WIDTH`) and no visible heading: the name is
+                // `sr-only`, so it reaches assistive technology without a label above a lone `⋯`.
+                <div
+                  role="columnheader"
+                  aria-colindex={COLUMNS.length + 1}
+                  className="shrink-0"
+                  style={{ width: ACTIONS_COLUMN_WIDTH }}
+                >
+                  <span className="sr-only">Actions</span>
                 </div>
               )}
               {showVariance ? (
@@ -2183,7 +2202,12 @@ function GanttRowView({
           // `aria-required-children` violation axe rates CRITICAL — one per rendered row, which the
           // `e2e-gantt` journey's scan caught after this shipped. The sr-only link summary above is
           // untouched: it carries no role, so it is text content rather than an unallowed child.
-          <div role="gridcell" aria-colindex={COLUMNS.length + 1} className="flex shrink-0">
+          <div
+            role="gridcell"
+            aria-colindex={COLUMNS.length + 1}
+            className="flex shrink-0"
+            style={{ width: ACTIONS_COLUMN_WIDTH }}
+          >
             <GanttRowMenu
               ref={(handle) => {
                 menuRef.current = handle;

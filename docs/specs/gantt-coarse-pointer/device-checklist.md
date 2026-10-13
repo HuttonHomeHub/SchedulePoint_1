@@ -18,6 +18,9 @@ fine instead of writing. Windows: Snipping Tool, then Record.
 > same pull request, and the hand-off says so. Items 9–11 were added for `web` 0.173.0 (#843).
 > Item 12 was added for #464 and the arrow's move (item 6's wording changed with it).
 > Item 25 was added for TECH_DEBT #439 (dividers now follow a finger).
+> Items 6 and 25b changed for #494 (the Gantt's row menus and Float left no longer sit under the divider's
+> strip). The table is 48 px wider by default and the three dots now sit inside it, with a margin before the
+> line, where they used to hang across it. Targets did not change size.
 > Item 29 was added for toolbar-grid M2 (2026-10-12): Undo, Redo and Recent edits, and the three Colour
 > options, now sit in joined tracks with a 1 px gap where there were 4 px. No target got smaller (44 px under
 > touch, asserted in `command-surface.spec.ts`), so items 1 to 28 do not change, but a finger meets something
@@ -65,7 +68,9 @@ Use **one finger**. Pick a normal task row (a bar, not a grey summary row).
       [ ] a text box opened [ ] nothing happened [ ] something else: __________
 - [ ] **6. Tap the three dots at the end of a row ten times. Then tap the small arrow beside a summary
       row ten times.** (The arrow sits just before the summary's activity name, in the Activity
-      column, the one with the task names.)
+      column, the one with the task names. The three dots now sit inside the table, a little left
+      of the line between the table and the chart, where they used to hang across it. Aim for them
+      as you normally would.)
       Missed or hit the wrong thing, out of 10: dots ____ / 10 arrow ____ / 10
 
 ## Pass B: tablet (keyboard cover folded back or removed)
@@ -198,7 +203,9 @@ Dividers now follow a finger all the way (TECH_DEBT #439); before, the drag stop
       [ ] needed a second try: __________. A control beside one of them was taken by mistake:
       [ ] no [ ] yes: __________. The line between the table and the chart in the Gantt stays
       narrow on purpose (use View > Columns > Table width there): [ ] understood [ ] it should be
-      wider too
+      wider too. Tap the right-hand edge of the last table column's heading (Float left) and the
+      left edge of a row's three dots: [ ] each took the tap [ ] one of them moved the line instead:
+      __________
 
 - [ ] **26. Press the line between the Project Explorer and the plan with one finger, without moving
       it (a plain tap), then do the same on the line above the activities table and beside an open

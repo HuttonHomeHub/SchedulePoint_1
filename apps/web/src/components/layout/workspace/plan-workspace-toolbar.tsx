@@ -82,7 +82,7 @@ import {
   isDefaultWidths,
   resolveColumnWidths,
   shownColumns,
-  variancePinnedWidth,
+  pinnedExtraWidth,
 } from '@/features/gantt/layout/column-widths';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
@@ -168,6 +168,13 @@ import { cn } from '@/lib/utils';
  * into (WCAG 2.4.7 / 2.4.11). It is the floor for "a sliver", not a layout target.
  */
 const RULER_BAND_PX = 40;
+
+/**
+ * Whether this workspace gives the Gantt row menus. One value feeds both the grid pane's floor
+ * (`pinnedExtraWidth`: the menu is a column of the pinned block) and the `rowMenuContextFor` prop,
+ * so the pane cannot reserve a column the panel does not draw, or the reverse (#494).
+ */
+const GANTT_HAS_ROW_MENUS = true;
 
 /**
  * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
@@ -610,8 +617,9 @@ export function ToolbarPlanWorkspace({
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
     widths: ganttColumnWidths.widths,
-    extraPinnedWidth: variancePinnedWidth(
+    extraPinnedWidth: pinnedExtraWidth(
       model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
+      GANTT_HAS_ROW_MENUS,
     ),
   });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
@@ -1740,7 +1748,7 @@ export function ToolbarPlanWorkspace({
           // The row menu's context (M5-T3). The SAME builder the dock uses, called per row — so
           // the menu and the bar cannot offer different things for one activity, and there is no
           // second assembly to keep in step.
-          rowMenuContextFor={rowMenuContextFor}
+          {...(GANTT_HAS_ROW_MENUS ? { rowMenuContextFor } : {})}
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
           viewState={ganttViewState}
