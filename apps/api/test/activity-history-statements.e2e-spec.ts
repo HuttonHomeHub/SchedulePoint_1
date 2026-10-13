@@ -72,11 +72,16 @@ const OWN_LINK_REMOVE = 4;
 // however many rows: the placements route now takes its rows in id order before the UPDATE (3 to 4),
 // and the single DELETE takes the plan advisory lock as bulk delete does (7 to 8).
 const OWN_PLACEMENTS = 4;
-const OWN_PARENTS = 6;
-const OWN_DISSOLVE = 12;
-const OWN_DELETE = 8;
-const OWN_RESTORE = 20;
-const OWN_BULK_DELETE = 9;
+//
+// Five moved on 2026-10-13 (`docs/TECH_DEBT.md` #492), each by the row-lock `SELECT` the cascade now
+// issues before its first write and however many rows: the re-parent (6 to 7), a delete (8 to 9) and
+// a bulk delete (9 to 10) one each, a dissolve two (12 to 14: its own children-and-summary lock, then
+// the cascade's), and the single-activity restore one (20 to 21: the plan lock batch restore takes).
+const OWN_PARENTS = 7;
+const OWN_DISSOLVE = 14;
+const OWN_DELETE = 9;
+const OWN_RESTORE = 21;
+const OWN_BULK_DELETE = 10;
 const OWN_BATCH_RESTORE = 21;
 const BATCH_RECORDER_STATEMENTS = 3;
 const CROSS_PLAN_RECORDER_STATEMENTS = 3;
