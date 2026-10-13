@@ -550,6 +550,30 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     await expect(fit).toBeVisible();
     await fit.click();
     await page.keyboard.press('Escape');
+    // The steps are the other half of #480: they are the same wrapped commands as Fit, so when a dock
+    // has taken the row they close it first. Open one at the design floor, then narrow the window
+    // until it has taken the row (the stage is a sliver and `inert`). The panel's buttons share the
+    // cluster's names on purpose, so scope to the panel.
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await page.locator('[data-toolbar-item="comments"]').click();
+    const dock = page.locator('[data-right-dock]');
+    await expect(dock).toHaveCount(1);
+    await page.setViewportSize({ width: 640, height: 740 });
+    // Prove the dock has taken the row (the stage is `inert`; the cluster is merely clipped to a
+    // sliver there, which Playwright still calls visible) rather than assume it. 640 wide, not 1024 with a dragged dock: no helper here drags a dock across the row,
+    // and below the floor (ADR-0179) is where `dockSqueezed` is reached without one.
+    await expect(stageOf(page).locator('xpath=ancestor-or-self::*[@inert]')).toHaveCount(1);
+    const ruler = page.getByTestId('tsld-ruler');
+    const before = await ruler.innerText();
+    await page.getByRole('button', { name: /^View/ }).click();
+    const panel = page.getByRole('dialog', { name: 'View' });
+    await panel.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(dock).toHaveCount(0);
+    await expect.poll(async () => ruler.innerText()).not.toBe(before);
+    const zoomedIn = await ruler.innerText();
+    await panel.getByRole('button', { name: 'Zoom out' }).click();
+    await expect.poll(async () => ruler.innerText()).not.toBe(zoomedIn);
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1024, height: 600 });
   });
 });
