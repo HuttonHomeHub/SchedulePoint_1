@@ -258,3 +258,23 @@ re-open triggers stand.
 **Acceptance, to be recorded after merge.** The three runs that follow should show the slowest shard
 below 1,147 s on at least two of three and the four shards within ~120 s. That is a reading, not a gate
 (D4); if it is missed a tech-debt row is opened rather than a third re-pack on one reading.
+
+**Acceptance reading, 2026-10-13 (pre-1-0-hardening M1 Task 1.2 step 4).** Four `ci.yml` push runs on
+`main` after the re-pack (job wall, seconds; run 38379259195 for #964 was cancelled by the next push
+and is excluded):
+
+| Run (PR)           | Shard 1 | Shard 2 | Shard 3 | Shard 4 | `quality` | Slowest shard | Spread |
+| ------------------ | ------- | ------- | ------- | ------- | --------- | ------------- | ------ |
+| 38362835289 (#962) | 1,032   | 1,067   | 1,057   | 1,031   | 688       | 1,067         | 36     |
+| 38371797515 (#963) | 1,062   | 1,061   | 964     | 856     | 899       | 1,062         | 206    |
+| 38379361804 (#965) | 994     | 828     | 1,036   | 1,063   | 671       | 1,063         | 235    |
+| 38388415840 (#966) | 1,024   | 837     | 1,047   | 912     | 1,058     | 1,047         | 210    |
+
+- **Slowest shard below 1,147 s: met on 4 of 4** (1,047 to 1,067 s; before the re-pack it was
+  1,136 to 1,178 s).
+- **The four within ~120 s: missed on 3 of 4** (spreads 36 / 206 / 235 / 210 s). The shortest shard
+  rotates (4, 4, 2, 2), so the spread tracks run-to-run variation in the suites, not a shard that the
+  pack under-filled. Per the plan, no second re-pack is made on this reading; the gap is recorded as
+  `docs/TECH_DEBT.md` #502 with its own trigger.
+- The fifth-shard trigger above is not near: the slowest shard's median over these four runs is about
+  1,062 s against 1,250 s.
