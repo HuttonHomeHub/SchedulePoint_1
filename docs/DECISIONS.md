@@ -10,6 +10,23 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-13 — Pre-1.0 batch 2 is approved, and 1.0 requires backups, the organisation export and the clear-out
+
+**What was decided.** The product owner chose four items for the next batch (#505 contrast themes, defining what 1.0
+means, #500 with #504, #501 with #506) and approved the spec and plan in `docs/specs/pre-1-0-batch-2/` as written,
+with these answers: the batch writes down what 1.0 means but does **not** cut 1.0; a tested database backup and
+restore, a whole-organisation export, and the recycle bin's 90-day permanent clear-out are all **required** before
+1.0, each specified on its own after this batch; the diagram keeps its own colours under a Windows contrast theme.
+
+**Why.** The original brief promised all three for version 1, and no document said what 1.0 requires, so "before 1.0"
+had no end.
+
+**Consequences.** `docs/RELEASE_1_0.md` (Milestone 1) lists the three as required lines, not known limits, and
+`PROJECT_BRIEF.md` keeps them. Three specs follow this batch. The two jobs parked earlier today stay parked and are
+listed on the checklist without a position.
+
+---
+
 ## 2026-10-13 — The two owner tasks from the hardening pass are parked, not dropped
 
 **What was decided.** At the close of the pre-1.0 hardening pass the product owner parked the two tasks
