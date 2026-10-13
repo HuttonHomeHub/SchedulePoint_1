@@ -52,7 +52,7 @@ import {
  * `docs/TECH_DEBT.md` #154 is untouched and the device check sheet (steps 22-23) still confirms.
  *
  * **Not covered here, by decision (ADR-0191 D3):** the TSLD diagram keeps its own palette under a
- * contrast theme, so it has no assertion; `docs/TECH_DEBT.md` #507 tracks that choice.
+ * contrast theme, so it has no assertion; `docs/TECH_DEBT.md` #508 tracks that choice.
  *
  * **Verified red** by removing the shaded-control rule from `globals.css` (the menu item and the
  * pending button keep `ButtonText`) and, separately, the `forced-colors:` classes from

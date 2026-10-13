@@ -126,6 +126,11 @@ error, empty, and selected/active. A missing state is an incomplete component.
   `plan-facts.tsx` Recalculate, `AcceptInvitationCard` (Accept, Sign out), `RecentlyDeletedTable`
   Restore. Each was judged intended; the census is `docs/specs/estate-polish-oct/m1a-census.md`.
 
+**A new shaded primitive needs no forced-colours code (ADR-0191 D1).** Shade it with `aria-disabled`, as ADR-0082 and
+ADR-0083 require, on an interactive role, and the unlayered rule in `globals.css` makes it `GrayText` under a contrast
+theme. Do not restate `forced-colors:[color:GrayText]` on it. A primitive that paints its own shaded state under
+`forced-color-adjust: none` (the toolbar's pressed member) must be excluded by state in that rule and say so.
+
 ## Primitive: `Menu` / `MenuItem` (`components/ui/menu.tsx`)
 
 The single **action menu** primitive: a hand-rolled WAI-ARIA APG "Menu Button" on

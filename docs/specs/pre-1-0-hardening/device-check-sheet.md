@@ -221,9 +221,16 @@ to turn it on, choose **Yes**. Reload the page.
       Wrong: at any point you cannot tell where you are. Times you lost your place: ____
 - [ ] **22. Open a menu and a dialog.** Record what you see: do the menu and dialog have a clear edge? In a
       menu with a shaded (unavailable) item, does the shaded item look different from an available one?
-      Answer: ____________ (A shaded item that looks the same is worth knowing; we may fix it.)
+      Correct: the shaded item and a shaded button are in the theme's grey (the "disabled text" colour) and
+      the available ones are in the theme's normal text colour.
+      Wrong: a shaded item or button looks the same as an available one.
+      Answer: ____________
 - [ ] **23. Look at the Gantt and the diagram.** Record what you see: are the Gantt bars visible? Is the
       diagram visible, and can you tell which activity is selected?
+      Correct: each Gantt bar has a dark edge (a critical bar's edge is thicker), a summary bar and a milestone
+      are solid, progress shows inside its bar, and the selected row is filled in the theme's highlight
+      colour with readable words. The diagram keeps its own colours by decision (TECH_DEBT #508).
+      Wrong: a bar, a milestone or the selected row cannot be seen.
       Answer: ____________
 - [ ] **24. Turn the theme off** (Settings › Contrast themes › **None** › Apply, or the same keyboard
       shortcut and **Yes**), and reload.
@@ -305,4 +312,7 @@ Zoom group, the Gantt's row menus, the diagram ruler, the gear's place, a landma
 viewport notice) updates this file in the same pull request, and the hand-off says so. Steps 12 to 14
 refer to Gantt sheet items 6, 25b and 29 by number so the wording is not copied; if those items are
 renumbered, update this file. Answers are recorded in `device-check-results.md` beside this file, and each
-"wrong" becomes a `TECH_DEBT.md` row or a fix. Step 22 and 23 are expected to confirm TECH_DEBT #505.
+"wrong" becomes a `TECH_DEBT.md` row or a fix. Steps 22 and 23 confirm TECH_DEBT #505 on a real theme: they describe what the fix shows (a global `GrayText`
+rule for shaded controls and `forced-colors:` variants on the Gantt's marks, ADR-0191), so a change to either
+updates their "Correct" lines in the same pull request. The diagram's colours are deliberately unchanged
+(#508); if it is reported unreadable there, that row's trigger has fired.

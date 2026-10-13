@@ -27,6 +27,21 @@
 - Manual keyboard + screen-reader pass for any non-trivial UI; the
   **Accessibility Reviewer** agent audits it.
 
+### Forced-colours checks (ADR-0191)
+
+A Windows contrast theme is emulated in Chromium (`forcedColors: 'active'`; real Windows is
+`docs/TECH_DEBT.md` #154's debt, confirmed by the device check sheet). Where each check lives:
+
+- **The rules' shape:** `apps/web/src/styles/focus-ring.structural.test.ts` (the unlayered block, the ring, the
+  shaded-control rule with its pressed exclusion and no `box-shadow`). Fails in milliseconds, reads source.
+- **The focus ring in a real bundle:** `apps/web/e2e-forced-colors/` (production preview, pixels).
+- **A toolbar switch's chosen member:** `e2e-workspace-fit/deck-tracks-forced-colors.spec.ts`.
+- **The Gantt, a row menu's shaded item and a shaded `Button`:** `e2e-gantt/forced-colors.spec.ts`.
+
+A check lives in the suite of the surface it tests, asserts the **computed system colour** first (compared with the
+same colour resolved from a probe), uses a **screenshot difference** from the same box without the mark only as
+corroboration, and carries a `forcedColors: 'none'` **control** proving no forced value leaks into ordinary colours.
+
 ### Colour-contrast gates (ADR-0055 §5)
 
 The Corporate theme shipped with six verified contrast defects past a human review, a

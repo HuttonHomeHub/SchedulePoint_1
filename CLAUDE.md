@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 25 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1641 web
+> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1642 web
 > source files with 47 Playwright suites beside the base journey, and
 > 190 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -593,6 +593,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
 - **ADR-0189** _(Accepted; amends ADR-0185 D3 and D8 V1–V4)_ — A shape on the toolbar is a control → [`0189-a-shape-on-the-toolbar-is-a-control.md`](docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md)
 - **ADR-0190** _(Accepted)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
+- **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -6808,6 +6808,11 @@ more time**, so every row this register closes about a missing reason makes the 
 for one file larger. That is a mechanism, not a coincidence, and it is a stronger argument for the
 trigger below than a static count could be.
 
+**Forced-colours half, 2026-10-13 (#505, ADR-0191):** the forced-colours part of the recipe is now global. One
+unlayered rule in `globals.css` makes any `aria-disabled` interactive role `GrayText`, so a hand-rolled recipe no longer
+restates it and the extraction this row asks for has one fewer thing to carry. The sighted look in ordinary colours
+(opacity, muted ink) is still hand-rolled per site.
+
 **Reclassified `open` → `deferred` on this row's own last sentence**, which names a trigger — "the
 next epic that touches three or more of them" — and that is what `deferred` means here (ADR-0120).
 
@@ -11611,6 +11616,8 @@ The warning reads `Toolbar: item "link-tool" was removed while it held focus and
 
 Forced-colours mode (a Windows contrast theme) overrides author colours and, in the browser's emulation, drops opacity cues the same way for every control. A menu's shaded item differs from an available one only by a muted text colour, so the two probably look identical there, and a shaded item is the only signal that an action is refused. The Gantt's bars and the diagram canvas keep their own colours, so the bars may vanish or be indistinguishable from the background. **Not measured on a real contrast theme**: the device check sheet's contrast section (`docs/specs/pre-1-0-hardening/device-check-sheet.md` steps 22 and 23) exists to confirm or refute this, and `docs/TECH_DEBT.md` #154's AT-observation debt is the same family.
 
+**Progress 2026-10-13:** the code is on `fix/forced-colors-shaded-and-gantt` (ADR-0191): the global `GrayText` rule and the Gantt's `forced-colors:` variants. The row stays open until the M2-T1 measurement and the `e2e-gantt/forced-colors.spec.ts` journey have run against a database; the diagram's choice is #507.
+
 **Next:** after the owner's answers, add forced-colours rules: `GrayText` for `aria-disabled` menu items, buttons and dialog actions, and system colours (`Highlight`, `CanvasText`) for the Gantt's bars. **Trigger:** the owner reports either as wrong in the device check sheet, or a contrast-theme user reports it.
 
 ### 506. The Make-milestone journey runs within a few seconds of its four-minute limit
@@ -11629,3 +11636,12 @@ In a local `web:workspace-chrome` run the test hit its 240 s timeout inside `fin
 `docs/RELEASE_1_0.md` and ADR-0190 call the REST API a contract, and nothing machine-checks that it did not change. The OpenAPI document is generated at start-up and served at `/api/docs` **only when the server is not production** (`apps/api/src/main.ts:36-50`); no spec file is written out, committed or diffed in CI. `main.ts:40` sets `.setVersion('1.0')`, a label for the URL version that will read as the package version once 1.0 ships, so `info.version` needs a decision when the file exists. Row 15 (OpenAPI accuracy gaps) means the document describes bare DTOs rather than the `{ data, meta }` envelope, so a diff of it would miss envelope changes.
 
 **Next:** export the document to a committed file from a script, fix `info.version`, and diff it in CI against `main` so a removed field or changed type fails with a message. **Trigger:** the owner decides 1.0 waits on it (checklist line 12), or a program outside this repository starts to depend on `/api/v1`. Not work now.
+
+### 508. The TSLD diagram keeps its own colours under a Windows contrast theme
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (decision: owner's answer to Q4 of `docs/specs/pre-1-0-batch-2/feature-spec.md` §6, "no"; the canvas paints a bitmap in the design system's palette, `apps/web/src/features/tsld`; not measured on a real contrast theme)
+**Raised:** 2026-10-13 (ADR-0191 D3) · **Size:** L · **Owner:** web
+
+Under `forced-colors: active` the Gantt and every shaded control follow the reader's theme (#505). The diagram does not: it is a canvas bitmap with its own palette, which a contrast theme does not recolour, so it stays visible but in our colours, not the reader's. The owner chose that on 2026-10-13 and ADR-0191 D3 records it as a decision, not an omission. Repainting the canvas from system colours means reading the system colours into the painter's scene (`Canvas`, `CanvasText`, `Highlight`, `GrayText` per mark class), keeping the class cues of ADR-0157 (hue and shape) and re-checking each mark; that is a piece of work of its own.
+
+**Next:** none now. **Trigger:** a contrast-theme user reports the diagram unreadable or out of step with the rest of the app (device check sheet step 23 is where it would be seen), or the owner reverses the Q4 answer. Then spec it (a painter change is a component contract, ADR-0105).
