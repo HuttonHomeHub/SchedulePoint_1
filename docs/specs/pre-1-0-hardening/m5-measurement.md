@@ -79,3 +79,20 @@ harness plan has no baseline. The baseline journey (`column-widths.spec.ts`, "wi
   narrower by 48 over the room the bars had (the scroller's width less the 584 px of default columns), a larger
   share the narrower the window, which restores the relation between the framing and the visible chart end that existed before this change.
   Said in the changeset.
+
+## After the amendments (gutter 20), re-measured
+
+Same harness, same five cells, identical at all of them. The pane is 794 px; the pinned block ends at x = 909
+and the strip is 894 to 919.
+
+| Control                      | Box (x)   | Strip (x) | Overlap | Clearance | A press 2 px in meets |
+| ---------------------------- | --------- | --------- | ------- | --------- | --------------------- |
+| `Actions for …` (both rows)  | 861 - 889 | 894 - 919 | 0 px    | **5 px**  | itself                |
+| Float left (button ends 853) | 809 - 853 | 894 - 919 | 0 px    | 41 px     | not listed (> 30 px)  |
+
+- The new `vs baseline` assertion in the "with a baseline" journey passes (`web:gantt`, 17 passed): the first
+  row's variance cell ends where its header does.
+- The journey that clicks a Gantt row (`command-surface.spec.ts`, "every object action in the Gantt view…")
+  clicked the row's centre, which at 794 px lands on the divider strip on a short plan (Playwright reported
+  the strip "intercepts pointer events"). It now clicks the name cell. That is a test that was relying on where
+  the centre happened to fall, not a product regression.
