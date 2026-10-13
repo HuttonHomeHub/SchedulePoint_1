@@ -11582,3 +11582,48 @@ On signing off the built toolbar after seeing the after photographs, the owner a
 **Raised:** 2026-10-13 (found closing #492) · **Size:** S · **Owner:** api
 
 #492 made `dissolveSummary` lock the summary and its children as one id-ordered set before promoting them. `ActivitiesService.remove` has the same shape: the cascade it calls locks the whole subtree in id order, but the opt-in `?version=` path (#450; a redo of a delete passes it, ADR-0176) has already locked the root summary on its own. On the **opt-in** path (`version` in the body, #450) the summary row is already locked a statement earlier by `lockActivityVersion`, so a placement batch that holds a child with a lower id and wants the summary can meet a dissolve that holds the summary and wants that child: a cycle, `40P01`. The default path (no `version`) takes the rows in one sorted pass and is not affected. **Next:** for both, do the version check against the row the ordered lock has already taken (read the version in the same `ORDER BY id` statement), so the subject is never locked ahead of its descendants. **Trigger:** a `40P01` or an unexplained 500 from an undo/redo of a summary dissolve or delete while another planner drags bars under that summary.
+
+### 502. The four web shards finish up to ~235 s apart after the 2026-10-13 re-pack
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (ADR-0138 "Acceptance reading, 2026-10-13": `ci.yml` push runs 38362835289, 38371797515, 38379361804 and 38388415840 on `main`; per-shard job wall read from the run's jobs)
+**Raised:** 2026-10-13 (pre-1-0-hardening M1 acceptance) · **Size:** S · **Owner:** web/ci
+
+ADR-0138's re-pack projected an 18 s spread and measured 36 / 206 / 235 / 210 s. The slowest shard is 1,047 to 1,067 s on all four runs, so the point of the re-pack (a shorter wait) is met; the plan's "four within ~120 s" is not. The shortest shard rotates (shard 4, 4, 2, 2), which reads as run-to-run variation in the suites rather than a shard the pack under-filled, so no second re-pack was made on one reading (plan Task 1.2 step 4).
+
+**Next:** if the same shard is shortest or longest again, re-derive `scripts/e2e-durations.json` from more than three runs before packing. **Trigger:** the same shard is the shortest, or the longest, on three consecutive `main` runs, or ADR-0138's fifth-shard trigger fires. Not work now.
+
+### 503. A narrow-shell journey once counted a banner flicker that should be zero
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (`apps/web/e2e-narrow-shell/narrow-shell.spec.ts:425`, "a live narrowing gets a banner: focus, typed text and the editor survive", read; one occurrence, no stack or trace kept)
+**Raised:** 2026-10-13 (driving `feat/view-zoom-steps`, local run) · **Size:** S · **Owner:** web
+
+The test read its banner-flicker counter as 1 where it asserts 0, once, in a local run on 2026-10-13, and passed on the immediate re-run. It has not been reproduced on `main`. Nothing was changed in response: with one occurrence and no trace, a flicker in the viewport notice and a read taken a frame early are indistinguishable.
+
+**Next:** on a second occurrence keep the Playwright trace and record which of the notice's states mounted twice. **Trigger:** a second occurrence, locally or in CI. Not work now.
+
+### 504. The link tool leaves the bar without a `lostReason`, so a reader is told what left and not why
+
+**Status:** open · **Verified:** 2026-10-13 (read, not run: `components/ui/toolbar/use-focus-handoff.ts:125-133` warns in development once per item id when focus handoff runs for an item with no `lostReason`; the `link-tool` item at `features/tsld/toolbar/tsld-toolbar-items.tsx:3291` declares none; only one item in that file does, `:3498`)
+**Raised:** 2026-10-13 (console warning seen during a local `web:workspace-fit` run) · **Size:** S · **Owner:** web
+
+The warning reads `Toolbar: item "link-tool" was removed while it held focus and declares no lostReason`. It means a real handoff: the Link activities control held focus and left the resolved item set (the cause in the observed run was not recorded), removing it dropped focus to the page, and ADR-0135's hook put it back on the successor or the toolbar and announced the move (it only acts when `document.activeElement` is the page or `body`). So focus was lost for a frame and restored; it did not stay lost. What is missing is the sentence: the announcement composes `lostReason` after the item's label, so for `link-tool` the reader hears that it left and not why. The warning is development-only (`import.meta.env.DEV`) and once per item id, so production is silent and a test run is not failed.
+
+**Next:** give `link-tool` a static `lostReason` describing the condition (the registry rule is that it is true before and after the change; read `link-tool`'s promotion entries in `promotion-entries.tsx:315-330` to word it), and check whether `successorId` is also worth setting. **Trigger:** none needed; small, do it with the next toolbar change.
+
+### 505. Under a Windows contrast theme, shaded menu items are likely indistinguishable and the Gantt has no forced-colours handling
+
+**Status:** open · **Verified:** 2026-10-13 (read, not run: `grep forced-colors` over `components/ui/menu.tsx`, `components/ui/dialog.tsx`, `components/ui/button.tsx` and `features/gantt` returns nothing; `menu.tsx:433` marks a disabled item with `aria-disabled` only and `:456-466` styles it with `text-muted-foreground`, a colour forced-colours mode replaces; `button.tsx:21` uses `aria-disabled:opacity-60`; the only forced-colours rules in the app are the global focus ring in `styles/globals.css`, `toolbar-styles.ts`, `ToolbarSplitButton.tsx`, `viewport-notice.tsx` and `conflict-readout.ts`)
+**Raised:** 2026-10-13 (found by code reading while reviewing the device check sheet) · **Size:** S · **Owner:** web
+
+Forced-colours mode (a Windows contrast theme) overrides author colours and, in the browser's emulation, drops opacity cues the same way for every control. A menu's shaded item differs from an available one only by a muted text colour, so the two probably look identical there, and a shaded item is the only signal that an action is refused. The Gantt's bars and the diagram canvas keep their own colours, so the bars may vanish or be indistinguishable from the background. **Not measured on a real contrast theme**: the device check sheet's contrast section (`docs/specs/pre-1-0-hardening/device-check-sheet.md` steps 22 and 23) exists to confirm or refute this, and `docs/TECH_DEBT.md` #154's AT-observation debt is the same family.
+
+**Next:** after the owner's answers, add forced-colours rules: `GrayText` for `aria-disabled` menu items, buttons and dialog actions, and system colours (`Highlight`, `CanvasText`) for the Gantt's bars. **Trigger:** the owner reports either as wrong in the device check sheet, or a contrast-theme user reports it.
+
+### 506. The Make-milestone journey runs within a few seconds of its four-minute limit
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (`apps/web/e2e-workspace-chrome/zero-duration.spec.ts:239`, "converts from the selection bar, keeps the schedule, returns focus, and undoes exactly", `test.setTimeout(240_000)` read; two local runs)
+**Raised:** 2026-10-13 (driving `fix/ruler-labels-200pc`, local `web:workspace-chrome` run) · **Size:** S · **Owner:** web
+
+In a local `web:workspace-chrome` run the test hit its 240 s timeout inside `findBarWide`, and the next test in the file did not run. Re-running the whole file passed all three tests, with this one taking about 3.9 minutes of its 4. The ruler change being tested did not touch it, and it was not timed on `main`. So the test is slow enough that ordinary machine load can push it over, rather than shown to be wrong.
+
+**Next:** time it on `main` and find where the minutes go (it onboards, builds a hierarchy and checks two widths), then split it or shorten its set-up rather than raise the limit. **Trigger:** a timeout in CI, or a second local timeout. Not work now.

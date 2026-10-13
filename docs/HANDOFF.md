@@ -3,132 +3,93 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-12 (evening). The session covered three pieces of work:
-
-- the reconciliation pass;
-- the **toolbar-grid** epic, from spec to sign-off;
-- the web end-to-end shard re-pack.
-
-Every PR was squash-merged with all ten checks green on the pinned head.
+**Written:** 2026-10-13. The session planned, built and shipped the **pre-1.0 hardening pass**
+(`docs/specs/pre-1-0-hardening/`, approved by the owner 2026-10-13, all nine milestones). Every PR
+was squash-merged with all ten checks green on the pinned head.
 
 ## Where things stand
 
-- **Reconciliation pass (2026-10-12):** docs-drift PRs #929–#933, with the pass logged in
-  `docs/RECONCILE.md`. The next full pass is due at the next epic boundary, or three months at the latest.
-- **Toolbar-grid epic** (`docs/specs/toolbar-grid/`, ADR-0189): **shipped and signed off.** M4 (shared
-  columns) was withdrawn by the owner after M0.
+- **Releases this session:** `api` 0.89.3 (#965), `web` 0.190.0 (#968), and `web` 0.190.1
+  (#971) for the ruler fix.
+- **Hardening pass, by milestone:**
 
-  | Milestone                       | PR   | Release     |
-  | ------------------------------- | ---- | ----------- |
-  | M1 dividers                     | #935 | web 0.187.0 |
-  | M2 switches and joined units    | #937 | web 0.188.0 |
-  | M3 quiet icons and stray bits   | #949 | web 0.189.0 |
-  | M5 after record and photos      | #951 | —           |
-  | M5 command-band landmark (#493) | #952 | web 0.189.1 |
-  | M5 ADR-0189 and close-out       | #953 | —           |
+  | M   | What                                                     | PR(s)   | Release     |
+  | --- | -------------------------------------------------------- | ------- | ----------- |
+  | 0   | Spec and plan, approved                                  | #960    | —           |
+  | 1   | Re-pack the four web e2e shards (ADR-0138 amendment)     | #962    | —           |
+  | 2   | Deletes and restores take the plan lock in order (#492)  | #964    | api 0.89.3  |
+  | 3   | Collapsed-spine journeys wait for the canvas (#497)      | #963    | —           |
+  | 4   | Revision-delta spec picks its change set fixedly (#496)  | #966    | —           |
+  | 5   | Gantt ⋯ menus and Float left clear of the divider (#494) | #967    | web 0.190.0 |
+  | 6   | Zoom out / Zoom in in View ▾ › Zoom (#480)               | #969    | web 0.190.0 |
+  | 7   | Ruler day numbers thinned at 200 % text (#478)           | #970    | web 0.190.1 |
+  | 8   | Device check sheet, shard acceptance, new rows           | this PR | —           |
+  | 9   | Owner's alerts guide (`docs/guides/set-up-alerts.md`)    | #961    | —           |
 
-- **E2E shards** (#955, ADR-0138 amended): the four web shards are re-packed longest-first to about
-  890 s of suite time each. The owner chose to rebalance four over adding a fifth. #491 is closed. The
-  five-shard design stays documented in `docs/specs/e2e-fifth-shard/`, with its trigger: a slow run that
-  puts a web shard above `quality` again.
-- **The product owner's screens:**
-  - monitor 1912 × 948 (mouse);
-  - Surface 1912 × 1114 at DPR 1.5 (finger and stylus, 44 px targets);
-  - the design floor is 1024 × 600 (ADR-0179).
-- **Model routing** is pinned in `.claude/agents/`:
-  - **builder** (Sonnet) implements;
-  - reviewers are Sonnet;
-  - **explorer** (Haiku) searches;
-  - planners are Opus.
-
-## What the toolbar-grid epic changed (for anyone touching the toolbar)
-
-- **Boxes are gone.**
-  - Groups are separated by a hanging divider (`DECK_GROUP_DIVIDER`).
-  - Rows clip with `deck-row-clip` (overflow-clip-margin 5 px, so the forced-colours focus ring survives).
-- **Pick-one sets are switches.** Colour and Diagram | Gantt use a recessed track with the chosen
-  member raised (fill plus underline). Under forced colours the chosen member uses Highlight / HighlightText.
-- **Joined units:**
-  - Undo, Redo and Recent edits form one unit, in reading order.
-  - The Link Type set is joined too.
-  - The registry declares these with `cluster: {id, kind}`.
-- **Quiet icons:**
-  - `toolbarIconClass` plus a `quietIcons` opt-in on the Deck and header toolbars.
-  - The pen is the only bright control.
-  - #498 is the follow-up: a `ToolbarSurfaceContext`, and the selection bar.
-- **Stray bits:**
-  - Baseline shows its word at roomy-fine.
-  - The milestone presets show "Start/Finish milestone"; their accessible names still say "Add: …".
-  - Recent edits uses the History glyph.
-  - Settings is a `groupTail`, placed last in the DO row from 80 rem of viewport. Its focus is restored
-    when it moves.
-  - Add and Undo are `ruleBefore`, ruled from a 79 rem container.
-- **The band is a landmark:** `region "Plan command band"`.
-- **CSS budget:** 19.00 KiB, against 18.05 KiB used (`apps/web/bundle-budget.json`).
-- **Measured side effects the owner was told about:**
-  - At 1912 with a mouse, Earned value now sits inside the Analysis menu.
-  - With a coarse pointer and Link armed, the DO row wraps to two lines at 1280 and 1440.
-
-  Both are recorded in ADR-0189 and in `m-final-measurement.md`.
+- **What changed for planners:**
+  - deleting a plan, project or client no longer fails when a recalculation or a bar drag is running;
+  - in the Gantt the ⋯ menus sit inside the table (48 px wider), clear of the divider, and the
+    "vs baseline" values line up under their header; the zoom presets frame on the new width;
+  - View ▾ › Zoom has Zoom out, Zoom in and Fit to plan in one row, usable when a dock has squeezed
+    the diagram; zoom steps are announced ("Zoomed in." / "Zoomed out.");
+  - at large text the diagram ruler shows every second calendar day (odd days, the 1st always) or
+    only Mondays rather than overprinting, and re-measures when the text size changes.
+- **CI shards:** the 2026-10-13 re-pack brought the slowest web shard to 1,047–1,067 s on four `main`
+  runs (was up to 1,178 s). The four still finish up to ~235 s apart, with the short shard rotating —
+  row #502. The fifth-shard trigger is now **slowest shard above 1,250 s (median of three runs) or a
+  30-minute timeout** (owner, 2026-10-13; ADR-0138).
 
 ## Waiting on the product owner
 
-- **Toolbar "minor tweaks at some point"** (#499). The owner signed off with these words, unspecified, and
-  on 2026-10-12 chose to leave them for later. **Ask which tweaks before building anything.**
-- **Dependabot PRs #938–#947:** the owner said "check and merge the safe ones" (2026-10-12). All ten are
-  being bundled into one `chore/deps-2026-10-12` PR, re-reading the `check:claims` register for each bump.
-  It includes better-auth 1.7.7, a security fix. If the bundle is not yet merged, finish it.
-- Carried over from the previous hand-off. On 2026-10-12 the owner chose to take **none of these for
-  now**; do not raise them again unless something changes:
-  - **SC-16 sign-off** of the older toolbar-redesign photos (`docs/specs/toolbar-redesign/photos/m6-*`).
-  - **Confirm 72 rem** for the page-grid split (ADR-0182; the tap-to-answer page
-    <https://claude.ai/artifact/Mw5537uKYi8bXimcMU1kYY> has no answers).
-  - **Surface sheet** steps 25, 18b, 25b, 26, 27 and 28
-    (`docs/specs/gantt-coarse-pointer/device-checklist.md`).
-  - **The history count on or after 1 November** (ADR-0174 / #443).
-  - **Gantt hands-on readings.**
-  - **Header at 320 / 640 wide on touch** (#490): the recommendation is to leave it.
-- **Decided, do not reopen:**
-  - `Start editing` stays plain while the pen is not held (ADR-0133).
-  - Four web shards, not five (2026-10-12).
-  - **Real-time collaborative editing is dropped from 1.0** (owner, 2026-10-12; `docs/DECISIONS.md`).
-- **Not exercised on real hardware:**
-  - the toolbar's forced-colours rendering on Windows High Contrast;
-  - the gear's focus restore on a real tablet rotation;
-  - any screen reader.
+- **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test
+  part at a quiet time). Tell the next session when a test alert reaches the phone; that closes #100.
+- **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours
+  in two sittings). Reply with one line per step. Each "wrong" becomes a row or a fix; the answers go
+  into a `device-check-results.md` beside it. Its contrast-theme steps are expected to confirm #505.
+- Still parked by the owner (do not raise unless something changes): the toolbar "minor tweaks"
+  (#499 — ask which before building), SC-16 photos, 72 rem confirmation, Surface sheet steps 25, 18b,
+  25b, 26–28, the history count on or after 1 November, Gantt hands-on readings, header at 320/640.
+- **Decided, do not reopen:** collaborative editing is not in 1.0; four web shards; `Start editing`
+  stays plain while the pen is not held.
 
-## Open rows
+## Open rows worth knowing
 
-- **New this session:**
-  - **#497**: the `command-surface.spec.ts` collapsed-spine journeys read the canvas width before resize.
-  - **#498**: the quiet-icons follow-ups.
-  - **#499**: the owner's tweaks.
-- **Still open:**
-  - **#492**: the remaining unordered activity-lock writers.
-  - **#494**, **#495**, **#496**.
-  - **#490**, **#481**, **#477**, **#478**, **#480**, **#437**, **#443**, **#445**, **#446**, **#419**,
-    **#429**, **#454**.
-  - The older **#401**, **#403**, **#406** and **#408–#411**.
-- **Closed this session:** **#493** (landmark) and **#491** (shards).
+- **New this session:** #500 (dissolve/remove with `?version=` lock the summary before the ordered
+  lock), #501 (Gantt month labels at 200 % text, unmeasured), #502 (shard spread), #503 (one
+  narrow-shell banner flicker, not reproduced), #504 (link-tool has no `lostReason`), #505 (forced
+  colours: shaded menu items and Gantt bars — likely real, confirm via the device sheet), #506 (the
+  Make-milestone journey runs within seconds of its 4-minute limit).
+- **Narrowed:** #496 is now only the unexplained 401 mid-seed (suspected: a second process sharing
+  `app_test`).
+- **Closed this session:** #492, #494, #497, #480, #478.
+- Older open rows are unchanged; see `docs/TECH_DEBT.md`.
 
 ## Suggested next
 
-1. Finish the dependency bundle if it is still open.
-2. Ask the owner what to build next. Collaborative editing is off the table for 1.0, so the candidates are the
-   hardening pass below and the open rows.
-3. A hardening pass before 1.0:
-   - real-hardware and screen-reader checks;
-   - the staff console's unwired alert signals (`CLAUDE.md` §17);
-   - #496 and #497.
-4. Watch the CI runs after #955. #955's own run (38302288727) already finished one web shard after `quality`:
-   - web shards: 815 / 981 / 1,076 / 1,178 s;
-   - `quality`: 1,064 s.
-
-   That is the five-shard trigger on a single sample. Two other PRs' CI was running at the same time, so
-   read two or three quiet runs before putting the five-shard spec (`docs/specs/e2e-fifth-shard/`) back to
-   the owner.
+1. Read the owner's device-sheet answers when they arrive; fix or file each "wrong". #505 is the most
+   likely real accessibility defect before 1.0.
+2. Small pre-1.0 fixes ready to pick up: #504 (one `lostReason`), #505 (forced-colours rules), #500
+   (lock order on the `?version=` paths).
+3. A reconciliation pass is due at this epic boundary (`docs/RECONCILE.md`; the last was 2026-10-12).
 
 ## Environment notes a new session would otherwise rediscover
+
+- **Run every e2e suite that touches what you changed, not just the suite named in the plan.** Two
+  CI reds this session came from suites nobody ran locally: View ▾'s height is asserted in
+  `web:workspace-fit` (`assertViewPanelFitsTheFloor`, ≤ 420 px at 1024 × 600), and widening the Gantt
+  grid moved a row's centre under the divider in `command-surface.spec.ts`. Grep `apps/web/e2e*/` for
+  the component or test id before choosing suites.
+- **One local database, one DB-backed run at a time.** Builders in parallel worktrees took turns on
+  Postgres by an explicit "DB free" hand-off from the orchestrator; non-DB work (code, unit tests,
+  lint, reviews) ran in parallel. A builder cannot receive a message mid-run, so it stops and waits.
+- **Rebasing parallel branches:** both `docs/TECH_DEBT.md`'s closed ledger and `CLAUDE.md`'s web
+  file count conflict between any two PRs that close a row or add a file. Keep both ledger rows (and
+  check for a duplicated row when a later commit edited one); the count can merge cleanly and still be
+  wrong by one — always re-run `pnpm check:counts` after a rebase.
+- **A fresh worktree's `pnpm prepush` fails lint/typecheck** until `pnpm --filter @repo/api exec prisma
+generate` has run and stale `.eslintcache` files are deleted. Turbo can stop other test tasks after
+  the known `@repo/interchange` failure; run `pnpm --filter @repo/web test` (or `turbo run test
+--filter='!@repo/interchange'`) to confirm.
 
 - **`send_later` works in a session the product owner started.** Arm it as the first action of each turn;
   re-arm only on a firing; `list_triggers` can return `[]` while triggers are live. A fired notification
