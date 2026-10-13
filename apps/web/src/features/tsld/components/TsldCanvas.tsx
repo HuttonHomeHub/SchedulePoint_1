@@ -92,6 +92,7 @@ import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { sceneLayers } from '../render/scene-layers';
 import { drawnSpanPlacement } from '../render/snap';
 import {
+  DAY_LABEL_DEFAULT_WIDTH_PX,
   presetOf,
   pxPerDayForPreset,
   rulerTicks,
@@ -1162,6 +1163,10 @@ export function TsldCanvas({
     days: HTMLSpanElement[];
   }>({ years: [], months: [], days: [] });
   const rulerSyncRef = useRef({ pxPerDay: 0, originX: 0, width: 0 });
+  // The widest day number at the ruler's CURRENT type size (#478). Measured when the surface is
+  // measured, never in the per-frame sync, and memoised per computed font so a pan costs nothing.
+  const dayLabelWidthRef = useRef(DAY_LABEL_DEFAULT_WIDTH_PX);
+  const dayLabelWidthCacheRef = useRef(new Map<string, number>());
   // The AXIS-MARKER band (#148): two rows inside the same 40 px ruler element, so the marks that
   // name the x axis stop being painted over the bars and cost the diagram nothing. Row B is
   // persistent (`Data date`, `Today`) and Row A transient (the cursor readout, M3).
@@ -1741,6 +1746,43 @@ export function TsldCanvas({
     };
     republishRoomRef.current = publishMinimapRoom;
 
+    // At 200 % text the ruler's 12 px type is 24 px, and "28" no longer fits the 18 px day pitch the
+    // row is shown from. A probe in the real row is read once per font, so the width is the
+    // browser's own and not an estimate (ADR-0056 amendment 2026-10-13).
+    const measureDayLabel = (): void => {
+      const row = rulerDaysRef.current;
+      if (!row) return;
+      // Letter and word spacing are in the key because WCAG 1.4.12 overrides change the width
+      // without changing the font.
+      const cs = getComputedStyle(row);
+      const key = `${cs.font}|${cs.letterSpacing}|${cs.wordSpacing}`;
+      const cache = dayLabelWidthCacheRef.current;
+      let width = cache.get(key);
+      if (width === undefined) {
+        const probe = document.createElement('span');
+        probe.style.position = 'absolute';
+        probe.style.visibility = 'hidden';
+        probe.style.whiteSpace = 'nowrap';
+        row.appendChild(probe);
+        // The ruler sets no `tabular-nums`, so digits may differ in width: take the widest of the
+        // samples that stand for the proportional face's widest and typical pairs.
+        width = 0;
+        for (const sample of ['00', '88', '28', '69', '31']) {
+          probe.textContent = sample;
+          width = Math.max(width, probe.getBoundingClientRect().width);
+        }
+        probe.remove();
+        // A zero width means the row was not laid out; do not cache a lie, keep the last good one.
+        if (width <= 0) return;
+        cache.set(key, width);
+      }
+      if (width !== dayLabelWidthRef.current) {
+        dayLabelWidthRef.current = width;
+        rulerSyncRef.current = { pxPerDay: 0, originX: 0, width: 0 };
+        dirtyRef.current = true;
+      }
+    };
+
     const measure = (): void => {
       const rect = container.getBoundingClientRect();
       // A hidden container (the short-body swap sets `display: none` on the canvas row) measures
@@ -1748,6 +1790,7 @@ export function TsldCanvas({
       // 1 px width to `setMinimapRoom`, all for a size nobody can see — then reallocate again on
       // return. The last real size, which the viewport math reads from `sizeRef`, stands instead.
       if (rect.width === 0 && rect.height === 0) return;
+      measureDayLabel();
       // The canvas sits below the ruler band, so its drawable height is the container minus the ruler —
       // and, when the resource strip is active (Stage E, ADR-0049), minus the strip band at the bottom,
       // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
@@ -1813,7 +1856,13 @@ export function TsldCanvas({
       if (v.pxPerDay === last.pxPerDay && v.originX === last.originX && s.width === last.width)
         return;
       rulerSyncRef.current = { pxPerDay: v.pxPerDay, originX: v.originX, width: s.width };
-      const model = rulerTicks(v, s, sceneRef.current.dataDate);
+      const model = rulerTicks(
+        v,
+        s,
+        sceneRef.current.dataDate,
+        undefined,
+        dayLabelWidthRef.current,
+      );
       const pools = rulerPoolRef.current;
       syncRulerRow(years, pools.years, model.years, true);
       syncRulerRow(months, pools.months, model.months, true);
@@ -2185,6 +2234,13 @@ export function TsldCanvas({
 
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
     ro?.observe(container);
+    // The day row is `rem`-tall, so a text-size change resizes it even when the container does not;
+    // a web-font swap does not resize anything, so `fonts.ready` covers it. The font-keyed cache
+    // makes a spurious fire a no-op.
+    const rulerRo =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measureDayLabel()) : null;
+    if (rulerDaysRef.current) rulerRo?.observe(rulerDaysRef.current);
+    void document.fonts?.ready.then(measureDayLabel);
 
     // Pause the render loop when the surface is off-screen (hidden row / scrolled away), and re-arm
     // a repaint the moment it returns (TECH_DEBT #30d). No-op where IntersectionObserver is absent.
@@ -2299,6 +2355,7 @@ export function TsldCanvas({
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
+      rulerRo?.disconnect();
       io?.disconnect();
       canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);

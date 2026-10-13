@@ -158,6 +158,33 @@ defaults on.
 **Neutral.** The Month-bands toggle is one more entry in the `View▾` registry (ADR-0031) and its
 drift-guard test.
 
+## Amendment 2026-10-13 (#478): the day row thins by pitch at large text
+
+The day numbers are shown from 18 px per day (`DAY_ROW_MIN_PX_PER_DAY`), a figure that was right for
+12 px type. At 200 % text the ruler's `text-xs` is 24 px, "28" measures 28.8 px, and the row printed
+numbers over one another between 18 and about 32 px per day. **Measured, not assumed**
+(`docs/specs/pre-1-0-hardening/m7-measurement.md`, 1280 × 800, Chromium, `Page.setFontSizes`): at
+100 % text no pair overlapped at any framing; at 200 % the arrival framing (19.9 px pitch) overlapped
+41 of 67 adjacent pairs, and the Day and Week presets (91.4 and 42.7 px) none.
+
+**Decision.** `rulerTicks` takes the widest day label as the browser measures it. When that width plus
+`DAY_LABEL_GAP_PX` (3) exceeds the pitch it draws every other day, and only Mondays when even that does
+not fit (`dayLabelStride`) — ADR-0141's rule for the thumbnail, pitch deciding what is drawn. The
+ticks and gridlines are untouched; only the labels thin. At 100 % text the stride is 1 and the row is
+exactly as it was.
+
+**Calendar-anchored, not data-date-anchored.** "Every other day" is the odd days of the month, so the
+1st always shows. Counting from the data date would have shown odd numbers on one plan and even on
+another and flipped at every 31-day month. A month's last day is skipped when it is odd (31, or 29 in
+a leap February) because it sits next to the following 1st and the pair would overprint. Both rules
+depend only on the date, so a pan never changes which numbers show. Mondays are the product's fixed
+ISO week start (`weekdayIndex`, 0 = Monday), not the browser's locale week.
+
+**Cost.** `TsldCanvas` measures the widest of several samples once per computed font, letter spacing
+and word spacing (so a WCAG 1.4.12 override re-measures), memoised, never in the per-frame ruler sync.
+It runs when the surface is measured, when the `rem`-tall day row resizes (a text-size change that
+leaves the container alone) and when `document.fonts` is ready.
+
 ## Alternatives considered
 
 - **A single `pxPerDay` zoom level with no named presets** — rejected before this ADR; presets are

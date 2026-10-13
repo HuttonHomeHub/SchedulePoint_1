@@ -18,6 +18,8 @@ import {
   isWorkingDay,
   presetOf,
   pxPerDayForPreset,
+  DAY_LABEL_DEFAULT_WIDTH_PX,
+  dayLabelStride,
   rulerTicks,
   stepZoom,
   todayDayFraction,
@@ -187,6 +189,93 @@ describe('rulerTicks', () => {
     const view: Viewport = { pxPerDay: ZOOM_STOPS.day, originX: 5, originY: 0 };
     const r = rulerTicks(view, SIZE, DATA_DATE);
     expect(r.days[0]!.x).toBeLessThan(0);
+  });
+});
+
+describe('rulerTicks: day labels by pitch (#478)', () => {
+  // 12 px type measures 14.4 px for "00" and 24 px type 28.8 (measured, m7-measurement.md).
+  const W100 = 14.4;
+  const W200 = 28.8;
+  const at = (pxPerDay: number, width: number, originX = 40) =>
+    rulerTicks({ pxPerDay, originX, originY: 0 }, SIZE, DATA_DATE, undefined, width).days;
+
+  it('leaves the row exactly as it was at 100 % text, from the 18 px floor up', () => {
+    for (const px of [18, 19.9, 24, ZOOM_STOPS.day]) {
+      const withDefault = rulerTicks({ pxPerDay: px, originX: 40, originY: 0 }, SIZE, DATA_DATE);
+      const days = at(px, W100);
+      expect(days).toEqual(withDefault.days);
+      // Every consecutive day is labelled: one tick per pixel pitch.
+      expect(days[1]!.x - days[0]!.x).toBeCloseTo(px, 6);
+    }
+    expect(DAY_LABEL_DEFAULT_WIDTH_PX).toBeLessThanOrEqual(18 - 3);
+  });
+
+  it('draws every other day, the odd days of the month, when a label would meet its neighbour', () => {
+    const days = at(19.9, W200);
+    for (const t of days) expect(Number(t.label) % 2).toBe(1);
+    expect(days.some((t) => t.label === '1')).toBe(true);
+    expect(days[1]!.x - days[0]!.x).toBeGreaterThanOrEqual(39.8 - 1e-6);
+  });
+
+  it("never prints a month's last odd day beside the next 1st (31 then 1, 29 then 1)", () => {
+    const labels = (date: string) =>
+      rulerTicks(
+        { pxPerDay: 19.9, originX: 0, originY: 0 },
+        { width: 500, height: 400 },
+        date,
+        undefined,
+        W200,
+      ).days.map((t) => t.label);
+    const jan = labels('2026-01-20');
+    expect(jan).not.toContain('31');
+    expect(jan).toContain('29');
+    expect(jan).toContain('1');
+    // 2028 is a leap year: 29 Feb is odd and sits next to 1 Mar.
+    expect(labels('2028-02-20')).not.toContain('29');
+  });
+
+  it('keeps every day once the pitch holds the wider label', () => {
+    expect(dayLabelStride(31.8, W200)).toBe(1);
+    expect(dayLabelStride(31.7, W200)).toBe(2);
+  });
+
+  it('falls back to Mondays when even every other day does not fit', () => {
+    expect(dayLabelStride(18, 60)).toBe(7);
+    const days = at(18, 60);
+    expect(days.length).toBeGreaterThan(1);
+    expect(days[1]!.x - days[0]!.x).toBeCloseTo(18 * 7, 6);
+  });
+
+  it('shows the same numbers whatever the data date or the pan', () => {
+    const view = { pxPerDay: 19.9, originX: 13.7, originY: 0 };
+    const odd = (date: string) =>
+      rulerTicks(view, SIZE, date, undefined, W200).days.every((t) => Number(t.label) % 2 === 1);
+    expect(odd('2026-03-01')).toBe(true);
+    expect(odd('2026-03-02')).toBe(true);
+    for (const originX of [40, -250.2]) {
+      for (const t of at(19.9, W200, originX)) expect(Number(t.label) % 2).toBe(1);
+    }
+  });
+
+  it('carries the Monday weekday across month boundaries', () => {
+    // 2026-01-01 is a Thursday; Mondays are 5, 12, 19, 26 Jan, then 2, 9 Feb, 2 Mar.
+    const days = rulerTicks(
+      { pxPerDay: 18, originX: 0, originY: 0 },
+      { width: 18 * 75, height: 400 },
+      '2026-01-01',
+      undefined,
+      60,
+    ).days;
+    const inRange = days.filter((t) => t.x >= 0 && t.x < 18 * 70).map((t) => t.label);
+    expect(inRange).toEqual(['5', '12', '19', '26', '2', '9', '16', '23', '2', '9']);
+  });
+
+  it('does not touch the month or year rows', () => {
+    const view = { pxPerDay: 19.9, originX: 40, originY: 0 };
+    const thin = rulerTicks(view, SIZE, DATA_DATE, undefined, W200);
+    const wide = rulerTicks(view, SIZE, DATA_DATE, undefined, W100);
+    expect(thin.months).toEqual(wide.months);
+    expect(thin.years).toEqual(wide.years);
   });
 });
 

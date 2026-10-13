@@ -9,6 +9,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
 /**
  * **The axis markers' journey** (`docs/specs/canvas-axis-markers/`, `docs/TECH_DEBT.md` #148) —
@@ -221,5 +222,97 @@ test.describe('The axis markers', () => {
         { timeout: 15_000 },
       )
       .toBe(0);
+  });
+
+  test("the ruler's day numbers never overprint at 200 % text (#478)", async ({ page }) => {
+    test.setTimeout(240_000);
+    // 200 % text makes 1280 px 40 rem wide, which raises the below-the-floor notice (ADR-0179).
+    await page.addInitScript((key: string) => {
+      window.localStorage.setItem(key, '1');
+    }, VIEWPORT_NOTICE_ACK_KEY);
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Ruler day labels journey');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Site setup', laneIndex: 0, durationDays: 30 },
+      { name: 'Dig footings', laneIndex: 1, durationDays: 45 },
+    ]);
+    await recalculate(page, orgSlug);
+
+    // Text-only 200 %, not a CSS `html { font-size }`, so the ruler's `rem` type answers as it does
+    // for a planner who raised the browser's default size.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 32, fixed: 26, serif: 32, sansSerif: 32 },
+    } as never);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.reload();
+    await expect(page.getByTestId('tsld-ruler')).toBeVisible();
+
+    // The glyph boxes, not the padded spans: the padding is air, and the row is judged by whether
+    // one number is printed over another.
+    const overlaps = (): Promise<{ labels: number; overlapping: number }> =>
+      page.evaluate(() => {
+        const row = document.querySelector('[data-testid="tsld-ruler"]')?.children[2];
+        if (!row) throw new Error('no ruler day row');
+        const boxes = [...row.querySelectorAll<HTMLElement>('span')]
+          .filter((el) => el.style.display !== 'none' && el.textContent)
+          .map((el) => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const r = range.getBoundingClientRect();
+            return { left: r.left, right: r.right };
+          })
+          .sort((a, b) => a.left - b.left);
+        let overlapping = 0;
+        for (let i = 1; i < boxes.length; i += 1) {
+          if (boxes[i]!.left < boxes[i - 1]!.right) overlapping += 1;
+        }
+        return { labels: boxes.length, overlapping };
+      });
+
+    // The arrival framing is the one that overprinted: a pitch of ~20 px against a ~29 px number.
+    await expect
+      .poll(async () => (await overlaps()).labels, { timeout: 15_000 })
+      .toBeGreaterThan(1);
+    expect((await overlaps()).overlapping, 'arrival framing').toBe(0);
+
+    for (const preset of ['Day', 'Week', 'Month']) {
+      await page.getByRole('button', { name: 'View', exact: true }).click();
+      await page.getByRole('radio', { name: new RegExp(`^${preset}\\b`) }).check();
+      await page.keyboard.press('Escape');
+      await expect.poll(async () => (await overlaps()).overlapping, { timeout: 15_000 }).toBe(0);
+    }
+
+    // Day and Week are the presets that keep the row; the guard above would also pass if the row
+    // had been dropped, so say it is still there where it should be.
+    await page.getByRole('button', { name: 'View', exact: true }).click();
+    await page.getByRole('radio', { name: /^Day\b/ }).check();
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(async () => (await overlaps()).labels, { timeout: 15_000 })
+      .toBeGreaterThan(1);
+    // Back to 100 % and then up again WITHOUT a reload or a window resize: the ruler must re-measure
+    // on its own (its day row is rem-tall, so a text-size change resizes it). The Week preset keeps
+    // the row present at both sizes, so this asserts the row stays whole through the change; it
+    // does not by itself prove a stale width, which the unit tests pin.
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 16, fixed: 13, serif: 16, sansSerif: 16 },
+    } as never);
+    await page.getByRole('button', { name: 'View', exact: true }).click();
+    await page.getByRole('radio', { name: /^Week\b/ }).check();
+    await page.keyboard.press('Escape');
+    await expect
+      .poll(async () => (await overlaps()).labels, { timeout: 15_000 })
+      .toBeGreaterThan(1);
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 32, fixed: 26, serif: 32, sansSerif: 32 },
+    } as never);
+    await expect.poll(async () => (await overlaps()).overlapping, { timeout: 15_000 }).toBe(0);
+    expect((await overlaps()).labels).toBeGreaterThan(1);
+    await cdp.send('Page.setFontSizes', {
+      fontSizes: { standard: 16, fixed: 13, serif: 16, sansSerif: 16 },
+    } as never);
   });
 });

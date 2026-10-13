@@ -177,12 +177,40 @@ function weekdayIndex(iso: string): number {
  */
 export const STICKY_LABEL_MIN_GAP_PX = 28;
 
+/**
+ * The widest day label ("28") at the ruler's 12 px type, in px. The default for a caller that has
+ * not measured; chosen so `DAY_LABEL_GAP_PX` more still fits the 18 px floor, which keeps the row
+ * exactly as it was at the default text size.
+ */
+export const DAY_LABEL_DEFAULT_WIDTH_PX = 15;
+
+/** The air kept between two day numbers, the label's own 3 px inline padding. */
+export const DAY_LABEL_GAP_PX = 3;
+
+/**
+ * How many days apart the day numbers are drawn, so each fits its measured width plus a gap
+ * (#478, ADR-0056 amendment 2026-10-13). 1 = every day, 2 = every other day, 7 = Mondays. At 200 %
+ * text the label is twice as wide while the 18 px floor that decides whether the row exists is
+ * not, so a pitch just over the floor used to print "28" over "29".
+ *
+ * "Every other day" is the calendar's odd days and "Monday" is the product's fixed ISO week start
+ * (`weekdayIndex`, 0 = Monday), never the browser's locale week: both depend only on the date, so
+ * a pan or a different plan shows the same numbers.
+ */
+export function dayLabelStride(pxPerDay: number, labelWidthPx: number): 1 | 2 | 7 {
+  const need = labelWidthPx + DAY_LABEL_GAP_PX;
+  if (pxPerDay >= need) return 1;
+  return pxPerDay * 2 >= need ? 2 : 7;
+}
+
 export function rulerTicks(
   view: Viewport,
   size: Size,
   dataDate: string,
   /** Measured label width, when the caller has a 2D context; else the documented default. */
   minLabelGapPx: number = STICKY_LABEL_MIN_GAP_PX,
+  /** The widest day label as measured at the current text size; see {@link dayLabelStride}. */
+  dayLabelWidthPx: number = DAY_LABEL_DEFAULT_WIDTH_PX,
 ): RulerModel {
   const firstDay = Math.floor((0 - view.originX) / view.pxPerDay) - 1;
   const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay) + 1;
@@ -197,6 +225,11 @@ export function rulerTicks(
   // (that blew the ADR-0026 draw budget at coarse zoom, where thousands of days are visible). A
   // screen-x is computed only for a tick we actually emit.
   const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
+  // A thinned row is chosen by the date itself, never the day's index in the view or its offset
+  // from the data date, so panning (or a different plan) does not change which numbers show.
+  const stride = showDays ? dayLabelStride(view.pxPerDay, dayLabelWidthPx) : 1;
+  // Only the Monday stride needs the weekday, so the coarse zooms with thousands of days skip it.
+  let weekday = stride === 7 ? weekdayIndex(addCalendarDays(dataDate, firstDay)) : 0;
   let y = anchor.getUTCFullYear();
   let m = anchor.getUTCMonth() + 1;
   let d = anchor.getUTCDate();
@@ -205,7 +238,9 @@ export function rulerTicks(
     // each month/year boundary adds the next — so the year/month in view is always labelled, not
     // only when a Jan-1 / 1st-of-month happens to be on screen.
     const first = off === firstDay;
-    if (showDays) days.push({ x: screenXOfDay(off, view), label: String(d) });
+    if (showDays && (stride === 1 || (stride === 2 ? oddNotLast(d, y, m) : weekday === 0))) {
+      days.push({ x: screenXOfDay(off, view), label: String(d) });
+    }
     if (showMonths && (first || d === 1)) {
       // The sticky label is **pinned to x = 0**, not to the off-screen first column it was seeded
       // from — it names the month you are looking at, so it belongs at the left edge rather than
@@ -216,6 +251,7 @@ export function rulerTicks(
       years.push({ x: first ? 0 : screenXOfDay(off, view), label: String(y) });
     }
     d += 1;
+    if (stride === 7) weekday = (weekday + 1) % 7;
     if (d > daysInMonth(y, m)) {
       d = 1;
       m += 1;
@@ -243,6 +279,15 @@ function dropOverprintedSticky(ticks: RulerTick[], minGapPx: number): RulerTick[
   const [sticky, next] = ticks;
   if (!sticky || !next) return ticks;
   return next.x - sticky.x < minGapPx ? ticks.slice(1) : ticks;
+}
+
+/**
+ * Whether the thinned (every other day) row shows day `d`: the odd days, so the 1st always shows,
+ * except a month's last day when it is odd, because that day sits next to the following 1st and the
+ * pair would overprint (31 then 1; 29 then 1 in a leap February).
+ */
+function oddNotLast(d: number, y: number, m: number): boolean {
+  return d % 2 === 1 && d < daysInMonth(y, m);
 }
 
 /** Days in month `m` (1–12) of year `y`, Gregorian (UTC-agnostic — pure arithmetic). */
