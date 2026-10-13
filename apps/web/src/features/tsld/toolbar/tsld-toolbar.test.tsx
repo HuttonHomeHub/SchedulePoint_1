@@ -111,9 +111,13 @@ describe('TSLD toolbar registry (two-row)', () => {
       within(screen.getByRole('dialog', { name: 'View' })).getByRole('radio', { name: /Month/ }),
     );
     expect(spies.setZoomPreset).toHaveBeenCalledWith('month');
-    expect(screen.queryByRole('button', { name: 'Zoom in' })).not.toBeInTheDocument();
-    // Fit to plan is in the panel (the route that stays when the cluster is withdrawn) and not on
-    // the deck itself.
+    // The steps and Fit to plan are in the panel (the routes that stay when the cluster is
+    // withdrawn, #480) and not on the deck itself.
+    expect(
+      within(screen.getByRole('toolbar', { name: 'Plan commands' })).queryByRole('button', {
+        name: 'Zoom in',
+      }),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('toolbar', { name: 'Plan commands' })).queryByRole('button', {
         name: 'Fit to plan',

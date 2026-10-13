@@ -2145,6 +2145,7 @@ const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
 
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   const fitReasonId = useId();
+  const stepReasonId = useId();
   const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
     // A toggle on the bar is not also a row here (toolbar-redesign M5); the entry says which.
     const keys = viewToggleKeysFor(id, ctx.planView).filter(
@@ -2195,9 +2196,47 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     // wrapped command: with a dock squeezing the stage it closes the dock and fits a frame later, as
     // the deck's Fit did before the cluster existed (`docs/TECH_DEBT.md` #480).
     const fitReason = id === 'zoom' ? canvasViewportReason(ctx, FIT_NO_DIAGRAM_REASON) : undefined;
+    // **Zoom out and Zoom in beside it**, for the same reason: the cluster's two steps were the part
+    // of #480 with no route while a dock squeezes the stage. `ctx.stepZoom` is wrapped like `ctx.fit`,
+    // so a step closes the dock first. Same names as the cluster's buttons on purpose (ADR-0117) —
+    // one command, one name — so a journey scopes its locator to this panel.
+    const stepReason = id === 'zoom' ? canvasViewportReason(ctx, ZOOM_DISABLED_REASON) : undefined;
     const fitRow =
       id === 'zoom' ? (
         <div className="flex flex-col gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-disabled={stepReason !== undefined || undefined}
+            aria-describedby={stepReason !== undefined ? stepReasonId : undefined}
+            onClick={() => {
+              if (stepReason === undefined) ctx.stepZoom(0.5);
+            }}
+            className="justify-start"
+          >
+            <Minus aria-hidden="true" className="size-4" />
+            Zoom out
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-disabled={stepReason !== undefined || undefined}
+            aria-describedby={stepReason !== undefined ? stepReasonId : undefined}
+            onClick={() => {
+              if (stepReason === undefined) ctx.stepZoom(2);
+            }}
+            className="justify-start"
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            Zoom in
+          </Button>
+          {stepReason !== undefined ? (
+            <p id={stepReasonId} className="text-muted-foreground text-xs">
+              {stepReason}
+            </p>
+          ) : null}
           <Button
             type="button"
             variant="outline"
