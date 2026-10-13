@@ -1,278 +1,308 @@
 # Device check sheet: screen reader, contrast theme, rotation and large text
 
-For the product owner. About one hour in total, plus setup. No developer tools, nothing to type up.
+For the product owner. **About 1½ to 2 hours, best done in two sittings: the Surface first, then the PC.**
+Every part stands alone, so you can stop after any part and carry on another day.
 
 **What this is for.** A computer test cannot hear Narrator, see a real Windows contrast theme or turn a
-real tablet. These checks are the ones only you can do. Your answers decide which fixes get built. There
-are no wrong answers: "nothing happened" is as useful as "it worked".
+real tablet. These checks are the ones only you can do. Your answers decide which fixes get built.
 
-**How to answer.** Tick a box, or write a few words on the line. Photos and a screen recording are fine
-instead of writing. Windows: Snipping Tool, then Record. Each step says what **Correct** looks or sounds
-like and what **Wrong** looks or sounds like. If you are not sure, tick "not sure" and say what you saw.
+**One rule for every step.** If a step goes **wrong**, write the step number and what you heard or saw,
+in your own words. "Wrong:" below describes the app misbehaving, never you. If you are not sure, say
+"not sure" and what you noticed. If you cannot do a step, say "skipped".
 
-> **Keep this sheet current.** Any change that alters what a step tests (the toolbar's names, the
-> `View ▾` Zoom panel, the Gantt's row menus, the diagram ruler, the gear's place, or a landmark's name)
-> updates this file in the same pull request, and the hand-off says so. The "Correct" lines were checked
-> against `web` 0.190.0 on `main`, plus the ruler change in `fix/ruler-labels-200pc` (TECH_DEBT #478),
-> which is not in a release yet: run section 6 only once that release is live. Gantt items 6, 25b and 29
-> are not copied here, because a copy drifts: section 7 points you at them by number in
-> [`../gantt-coarse-pointer/device-checklist.md`](../gantt-coarse-pointer/device-checklist.md).
-> When you have answered, a follow-up change records them in `device-check-results.md` beside this file
-> and turns each "wrong" into a `TECH_DEBT.md` row or a fix.
+**How to send your answers.** Reply to Claude with a short list, one line per step, for example:
+`1 ok, 2 ok, 3 wrong (it said "group" and never "Plan command band"), 4 skipped`. Photos or a screen
+recording of anything odd help (Windows: Snipping Tool, which also records). You can fill in the tick
+boxes below too, but the list is what gets read.
+
+## Words used on this sheet
+
+- **Focus ring:** the outline that shows which button or box the keyboard is on.
+- **Scan mode:** a Narrator mode where single letters jump around the page (D = next landmark, H = next
+  heading) and the arrow keys read line by line. Caps Lock + Space switches it on and off. Narrator says
+  "scan mode on" or "scan mode off". Typing and menus need it **off**.
+- **Landmark (or region):** a named part of the page, such as "Plan command band", that a screen reader
+  can jump to.
+- **Dialog:** a box that opens over the page and must be dealt with before you go back to the page.
+- **Dock:** a side panel that opens beside the diagram (for example the Health check).
+- **Summary row:** a row with a small arrow and other activities nested under it.
+- **View ▾:** the View button, which has a small down arrow. **Analysis ▾** is the same kind of button.
+- **The account you normally use to edit plans:** use it for every step; the checks need editing rights.
+- **Browser window maximised, not full screen:** the window fills the screen but you can still see the
+  title bar. Do not press F11.
 
 ## Before you start
 
-- Address to open: your SchedulePoint site, on `web` 0.190.0 or later (the release list on GitHub shows
-  which version your site has pulled).
-- Machines: the **Surface** (finger and stylus; browser: Edge) and the **PC** (mouse; the monitor at
-  1912 × 948).
-- Plan to open: any plan with a few activities, a few links, and at least one grouped "summary" row. A
-  practice plan is best.
-- Sign in as someone who can edit (Planner or Org Admin), so the editing steps work.
+- Open your SchedulePoint site in **Edge**, on both machines.
+- Use a **practice plan** that has been calculated (run Recalculate if the plan has never been), with a
+  few activities, a few links, and at least one summary row. Nothing here changes your plans, but pressing
+  **Start editing** and trying menus can; a practice plan is safer.
+- On the Surface, check **Rotation lock** is **off** (Action Centre, the tile near the bottom). Note what
+  it was so you can put it back: ____________
+- Turn the volume up.
 
-**How to start and stop Narrator.** Press **Ctrl + Windows key + Enter**. A blue box and a voice
-appear. Press the same three keys again to stop it. The Narrator key is **Caps Lock** (hold it while you
-press the other key; a tap of Caps Lock does not switch Caps Lock on while Narrator is running). Turn
-the volume up. If the voice is too fast: Narrator key + Page Up / Page Down.
+**Narrator: start and stop.** Press **Ctrl + Windows key + Enter**. A welcome box may appear the first
+time: press Enter (or Escape) to close it. The blue box and the voice mean it is on. Press the same
+three keys to stop it. If Narrator says nothing after you click into the page, click once on a blank part
+of the page and try again.
 
-**The few Narrator keys you need.**
+**The few Narrator keys you need.** "Narrator key" is Caps Lock (hold it while pressing the other key).
 
-| To do this                         | Press                                                                  |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| Move to the next / previous item   | Caps Lock + Right arrow / Left arrow                                   |
-| Jump to the next landmark (region) | **D** (while Narrator's scan mode is on; Caps Lock + Space toggles it) |
-| Jump to the next heading           | **H** (scan mode on)                                                   |
-| Hear where you are                 | Caps Lock + W                                                          |
-| Stop it talking                    | Ctrl                                                                   |
+| To do this                     | Press                                   |
+| ------------------------------ | --------------------------------------- |
+| Next / previous item           | Narrator key + Right arrow / Left arrow |
+| Read the item you are on again | Narrator key + Tab                      |
+| Scan mode on / off             | Caps Lock + Space                       |
+| Next landmark (scan mode on)   | D                                       |
+| Stop it talking                | Ctrl                                    |
 
-**How to pick a Windows contrast theme.** Settings, then Accessibility, then **Contrast themes**. Pick
-one from the drop-down (Aquatic, Desert, Dusk and Night sky are the colourful ones; try one of them and
-then, if you have time, "High contrast black"), then press **Apply**. The screen flashes and goes
-black or blue. To turn it off: the same page, set the drop-down to **None**, press **Apply**. A quick
-way to switch on and off: **Left Alt + Left Shift + Print Screen**, then press Enter on the box.
+---
 
-## 1. Narrator on the Surface, in Edge (about 20 minutes)
+# Part A: the Surface (about 45 minutes, no settings changed)
 
-Start Narrator. Use the keyboard cover and your fingers as you like. Nothing here changes your plans.
+## 1. Narrator in Edge (about 25 minutes)
 
-- [ ] **1. Sign in.** Open the site's sign-in page. Move through it with Caps Lock + Right arrow.
+Start Narrator. Use the keyboard cover.
+
+- [ ] **1. Sign in.** Open the sign-in page. Move through it with Narrator key + Right arrow.
       Correct: it says "Email", then "Password", each as an edit box, then a button called "Sign in".
-      Wrong: a box with no name (it says just "edit"), or the button read as only "button".
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **2. Open a plan.** Use the left-hand Project Explorer (the tree of clients, projects and plans).
-      Correct: each row says its name, "tree view item" or similar, and whether it is expanded or
-      collapsed; the plan opens.
-      Wrong: a row that is read as only "group" or "clickable", or Narrator goes quiet.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **3. Find the command band.** Turn scan mode on (Caps Lock + Space) and press **D** repeatedly to
-      jump between landmarks.
-      Correct: one of the stops says "Plan command band" (as a region). The buttons you meet after it are
-      the toolbar: "Add activity", "Link activities", "Diagram", "Gantt", "View" and so on.
-      Wrong: no stop called "Plan command band"; or the toolbar's buttons are read as a bare "button"
-      with no name.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **4. Move through the activities on the diagram.** Switch to the **Diagram** view. Press Tab until
-      Narrator says "Activities in the diagram" (a list). Press the **Down arrow** and **Up arrow**.
-      Correct: each press says one activity (its name and, usually, its dates), and the same activity is
-      highlighted on the picture. Pressing Enter on one opens its editor.
-      Wrong: Down arrow says nothing; the picture and the voice disagree; or focus jumps somewhere else.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **5. Open the activity editor and move between its tabs.** With an activity chosen (step 4), open
-      its editor (Enter). Then use Tab, and the Left and Right arrows on the tab row.
-      Correct: a dialog opens and Narrator says the activity's name (or "Edit activity"). The tabs are
-      read as "General", "Scheduling", "Logic", "Resources", "Progress" and "Notes", each as a tab, one
-      "selected". A tab with unsaved changes or a problem says so. Escape closes the dialog and focus
-      returns to where you were.
-      Wrong: the dialog opens but Narrator stays on the page behind it; a tab is read without its name;
-      Escape leaves you nowhere (Narrator says "unknown" or starts at the top of the page).
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **6. Open a menu and leave it with Escape.** Go to the **Gantt** view (the button named "Gantt").
-      Find a row's three-dots button. Narrator should call it "Actions for" and the activity's name. Press
-      Enter or Space to open it, move with the arrows, then press **Escape**.
-      Correct: the menu opens and says "menu"; each item is named and says if it is shaded (unavailable);
-      Escape closes it and focus is back on the three-dots button.
-      Wrong: the three dots have no name; the menu opens but the arrows do nothing; after Escape the
-      voice says nothing or starts again from the top.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **7. Read a Gantt row.** Press Tab into the table and use the arrows.
-      Correct: a row says the activity's name, then its other cells with column names (for example
-      "Duration"); a summary row says "expanded" or "collapsed".
-      Wrong: cells read as numbers with no column name; a summary row does not say its state.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **8. Zoom from the View menu, and hear the zoom.** Go back to the **Diagram** view. Open
-      **View ▾** (the button named "View") and find the **Zoom** group in the panel.
-      Correct: one row of three buttons: "Zoom out", "Zoom in" and "Fit to plan". Pressing **Zoom in**
-      makes the voice say **"Zoomed in."**; pressing **Zoom out** says **"Zoomed out."**; the picture
-      changes each time.
-      Wrong: the buttons are read as "button" only; the voice says nothing after a press; or the voice
-      says it but the picture did not change.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **9. Zoom when a side panel has squeezed the diagram.** Open a side panel that takes most of the
-      width (for example the activity list or a dock that makes the diagram narrow). Open **View ▾**,
-      **Zoom** again.
-      Correct: the three buttons are still there and still work. Pressing one closes the panel and then
-      zooms (you may see the panel shut first); it is not left half open.
-      Wrong: the Zoom buttons are missing, or pressing them does nothing.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
+      Wrong: a box with no name (it just says "edit"), or the button read as only "button".
+- [ ] **2. Open a plan** from the Project Explorer (the tree on the left).
+      Correct: each row says its name and whether it is expanded or collapsed; the plan opens.
+      Wrong: a row read as only "group" or "clickable"; Narrator goes quiet.
+- [ ] **3. Find the command band.** Turn **scan mode on** (Caps Lock + Space) and press **D** repeatedly.
+      Correct: one stop says "Plan command band", as a region. The buttons after it are the toolbar, each
+      with a name ("Diagram", "Gantt", "View", and so on).
+      Wrong: no "Plan command band" stop; toolbar buttons read as a bare "button".
+- [ ] **4. Move through the activities on the diagram.** Turn **scan mode off** first (Narrator says "scan
+      mode off"). Open the **Diagram** view. Press Tab until Narrator says "Activities in the diagram",
+      then press the Down and Up arrows.
+      Correct: each press reads one activity, and the same activity is highlighted on the picture.
+      Wrong: the arrows say nothing; the voice and the picture disagree; focus jumps elsewhere.
+      (Do not have the Link tool switched on. Step 5 uses Enter, which opens the Logic tab.)
+- [ ] **5. Open the activity editor and move between its tabs.** With an activity chosen in step 4, press
+      Enter. It opens on the **Logic** tab. The tabs are a list down the left side, so use the **Up and
+      Down arrows** to move between them.
+      Correct: a dialog opens and Narrator says the activity's name. You hear tabs such as "General",
+      "Scheduling", "Logic", "Resources", "Progress", "Notes" (a summary row also has "Members", and
+      there may be "Cost" and "History"), each as a tab, one "selected". Type a letter in the name box on
+      the General tab: that tab should then say "unsaved changes". Escape closes the dialog (answer "discard"
+      if it asks) and focus goes back to where you were.
+      Wrong: Narrator stays reading the page behind the dialog; a tab has no name; Escape leaves you
+      nowhere.
+- [ ] **6. Open a menu and leave it with Escape.** Scan mode must be **off**. Open the **Gantt** view (the
+      button named "Gantt"). Find a row's three-dots button; Narrator should call it "Actions for" and the
+      activity's name. If the menu's items are shaded, press **Start editing** first. Press Enter to open
+      it, use the arrows, then press **Escape**.
+      Correct: it opens as a "menu", items are named, shaded ones say so; Escape closes it and focus is
+      back on the three dots.
+      Wrong: no name on the three dots; arrows do nothing; after Escape the voice starts from the top.
+- [ ] **7. Read a Gantt row.** Scan mode **off**. Tab into the table and use the arrows. Record what you
+      hear; there is no strict pass or fail here.
+      Hoped for: the activity's name, then each cell with its column name (for example "Duration"); a
+      summary row says "expanded" or "collapsed".
+      Worth reporting: cells read as bare numbers; a summary row that never says its state.
+- [ ] **8. Zoom from the View menu.** Scan mode **off**. Go to the **Diagram** view, open **View ▾** and find
+      the **Zoom** group.
+      Correct: one row of three buttons: "Zoom out", "Zoom in", "Fit to plan". Pressing Zoom in, you hear
+      something like "Zoom in, button" and then, a moment later, **"Zoomed in."** Zoom out gives
+      "Zoomed out." The picture changes each time.
+      Wrong: buttons read as just "button"; no spoken "Zoomed in."; spoken but the picture did not change;
+      the three buttons are shaded (then the plan has not been calculated).
 
 Notes: ____________________________________________________________
 
-## 2. NVDA on the PC (about 8 minutes; only if NVDA is already installed, otherwise skip)
+## 2. The Settings gear when you turn the Surface (about 10 minutes)
 
-Do not install anything for this. Start NVDA (Ctrl + Alt + N), open the site in Edge or Firefox.
+The gear is a small cog icon at the right end of the toolbar row. **Do not tap it**: that opens the
+Settings dialog. **Leave Narrator on** for this part. Keep the keyboard cover attached.
 
-- [ ] **10. Repeat steps 1, 3 and 8 above with NVDA.** (Sign in; the "Plan command band" region, found
-      with **D** in browse mode; View ▾ › Zoom › Zoom in and Zoom out.)
-      Correct: the same names and the same "Zoomed in." / "Zoomed out." as Narrator.
-      Wrong: different or missing names, or no zoom announcement.
-      It: [ ] correct [ ] wrong [ ] not sure [ ] skipped (not installed): __________
-- [ ] **11. Open an activity editor and press Escape.**
+- [ ] **9. Put focus on the gear with the keyboard.** In the Diagram view, press Tab until you are in the
+      toolbar, then use the Left and Right arrow keys along it until the gear has the focus ring. (The
+      toolbar is one stop, so Tab alone will not walk along it.) Narrator says "Settings".
+      Correct: the gear has a ring and is read as "Settings".
+      If you could not reach it: ____________
+- [ ] **10. Turn the Surface to portrait.** If the Surface will not turn with the cover attached, detach
+      the cover, hold the Surface upright, and press Tab and the arrows to the gear again.
+      Correct: the screen turns and a slim banner appears saying the window is narrower than SchedulePoint
+      is designed for; Narrator may read it out. That is expected. The focus ring is **still on the
+      gear**, and pressing Enter opens Settings. (The banner never takes focus.)
+      Wrong: the ring disappears; focus jumps to the page or the edge of the toolbar; Narrator says a
+      control "was removed" when you had not left the gear.
+- [ ] **11. Turn it back to landscape.** Same as step 10.
+      Correct: the ring is still on the gear. Press Escape if Settings opened.
+      Wrong: as in step 10.
+
+Notes: ____________________________________________________________
+
+## 3. The Gantt sheet's three items (about 15 minutes)
+
+Narrator **off**; tablet posture; finger. These are already written, so use that sheet for the wording
+and write your answers here. **Our steps 12, 13 and 14 are items 6, 25b and 29 of
+[`device-checklist.md`](../gantt-coarse-pointer/device-checklist.md); you do not need the rest of that
+sheet.**
+
+- [ ] **12. Item 6:** tapping the Gantt's three dots and a summary row's arrow, ten times each. The three
+      dots now sit inside the table, clear of the divider line.
+      Misses: dots ____ / 10 arrow ____ / 10
+- [ ] **13. Item 25b:** putting a finger on the line between the Project Explorer and the plan.
+      Result: ____________
+- [ ] **14. Item 29:** Undo, Redo, Recent edits and the Colour options.
+      Result: ____________
+
+Notes: ____________________________________________________________
+
+---
+
+# Part B: the PC at normal settings (about 20 minutes)
+
+Mouse, browser window maximised, not full screen. Nothing is changed on the PC in this part.
+
+## 4. NVDA (about 8 minutes; skip if NVDA is not already installed)
+
+Do not install anything. Start NVDA from the Start menu (Ctrl + Alt + N also works if it was set up). To
+stop: Insert + Q, then Enter. In NVDA, Insert is the NVDA key. Say which step number goes wrong.
+
+- [ ] **15. Sign in, then find the "Plan command band".** In browse mode press **D** to jump landmarks.
+      Correct: the same names as Narrator.
+      Wrong: different or missing names. Skipped (not installed): [ ]
+- [ ] **16. Zoom.** Turn browse mode off (Insert + Space). Open View ▾ › Zoom, press Zoom in then Zoom out.
+      Correct: "Zoomed in." and "Zoomed out." are spoken.
+      Wrong: no announcement.
+- [ ] **17. Open an activity editor, then press Escape without typing anything.**
       Correct: the dialog is announced with the activity's name; Escape returns you to where you were.
       Wrong: NVDA keeps reading the page behind the dialog.
-      It: [ ] correct [ ] wrong [ ] not sure [ ] skipped: __________
 
 Notes: ____________________________________________________________
 
-## 3. A Windows contrast theme (about 10 minutes, either machine)
+## 5. Zoom when a side panel squeezes the diagram, and the mouse edge test (about 10 minutes)
 
-Turn on a contrast theme (see "Before you start"), then reload the page. Turn Narrator off for this.
+No screen reader. Narrator and NVDA off.
 
-- [ ] **12. Look at the toolbar.** Find a switch-style button that is on (for example the **Diagram**
-      button when you are in the Diagram view, or **Start editing** once pressed). Compare it with one
-      that is off.
-      Correct: the one that is on is filled with the theme's highlight colour (often a solid block of one
-      colour) with its words in a contrasting colour that you can read; the off ones are plain.
-      Wrong: the on and off buttons look the same; the words on a filled button vanish into the fill; a
-      button has no visible edge.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **13. Press Tab twenty times, watching the screen.**
-      Correct: every control you land on has a visible ring or outline in the theme's highlight colour.
-      Wrong: at any point you cannot tell where you are.
-      Number of times you lost your place: ____
-- [ ] **14. Open a menu and a dialog.**
-      Correct: both have a clear edge and readable text; a shaded (unavailable) item looks different from
-      an available one, in the theme's grey text colour.
-      Wrong: a menu blends into the page; unavailable items look the same as available ones.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **15. Look at the diagram and the Gantt.**
-      Correct: the bars, links and dates can be told apart from the background, even if the colours are
-      not the usual ones; the selected activity is clearly marked.
-      Wrong: bars or links vanish; you cannot tell which activity is selected.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **16. Turn the theme off again** (Settings › Contrast themes › None › Apply), and reload.
+- [ ] **18. Zoom with a squeezed diagram.** Make the Edge window narrow and short by dragging its corner
+      (about the width of a phone held sideways, and not much taller). Click Continue anyway if a "designed
+      for larger screens" page appears. Press **Start editing**, then open **Analysis ▾ › Health check…** so
+      the panel takes up most of the room and the diagram is squeezed out. Open **View ▾ › Zoom** and press
+      **Zoom in**.
+      Correct: the three buttons are there; pressing one closes the **side panel** (not the View menu) and
+      then zooms. If you cannot make a panel squeeze the diagram, write "skipped".
+      Wrong: the Zoom buttons are missing or do nothing; the panel stays open over the diagram.
+      Then drag the window back to a maximised window.
+- [ ] **19. Click the very edge of the Gantt's controls.** **Start editing**, plan open in the **Gantt** view.
+      Click a row's three-dots button three times at its **left edge**, three times in the **middle** and
+      three times at its **right edge**. Press Escape after each menu. Then click the **"Float left"**
+      column heading the same way: left edge, middle, right edge, three clicks each.
+      Correct: every click opens the menu or sorts, and never starts dragging the divider.
+      Wrong: a click near the edge grabs the divider (the table width changes) instead.
+
+Notes: ____________________________________________________________
+
+---
+
+# Part C: the PC with settings changed (about 35 minutes)
+
+Each setting is switched back before the next one. Narrator and NVDA off.
+
+## 6. A Windows contrast theme (about 12 minutes)
+
+Turn one on: Settings, Accessibility, **Contrast themes**, choose **Night sky** (or any dark one), press
+**Apply**. The screen flashes. A quicker way is Left Alt + Left Shift + Print Screen; a box asks whether
+to turn it on, choose **Yes**. Reload the page.
+
+- [ ] **20. Look at the toolbar.** Compare a button that is "on" with one that is "off". **Diagram** or
+      **Gantt** (whichever view you are in) is the reliable example; **Start editing** reads **Stop
+      editing** once pressed, which is safe.
+      Correct: the "on" button is filled with the theme's highlight colour with readable words; the "off"
+      ones are plain.
+      Wrong: on and off look the same; the words vanish into the fill.
+- [ ] **21. Press Tab about twenty times** and watch. The toolbar is one stop (arrow keys move inside it),
+      so Tab will skip along it quickly; that is expected.
+      Correct: every control you land on has a visible ring in the theme's highlight colour.
+      Wrong: at any point you cannot tell where you are. Times you lost your place: ____
+- [ ] **22. Open a menu and a dialog.** Record what you see: do the menu and dialog have a clear edge? In a
+      menu with a shaded (unavailable) item, does the shaded item look different from an available one?
+      Answer: ____________ (A shaded item that looks the same is worth knowing; we may fix it.)
+- [ ] **23. Look at the Gantt and the diagram.** Record what you see: are the Gantt bars visible? Is the
+      diagram visible, and can you tell which activity is selected?
+      Answer: ____________
+- [ ] **24. Turn the theme off** (Settings › Contrast themes › **None** › Apply, or the same keyboard
+      shortcut and **Yes**), and reload.
       Correct: the app looks as it did before.
-      Wrong: it stays in odd colours after the theme is off.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
+      Wrong: it stays in odd colours.
 
 Notes: ____________________________________________________________
 
-## 4. The gear when you turn the Surface (about 5 minutes, the Surface only)
+## 7. 200 % text, and the diagram's day numbers (about 15 minutes)
 
-The Settings gear (a small cog at the right-hand end of the toolbar's editing row) moves when the
-screen gets narrower than about 1280 px, because the toolbar rearranges itself. Focus must stay on it.
+Make the page's text twice as big: Edge, Settings, Appearance, Fonts, **Customize fonts**, **Font size**
+set to **32** (the normal size is 16). Only the page's text should grow, not Edge itself. Reload.
 
-- [ ] **17. Landscape: put focus on the gear.** Detach the keyboard cover (so the screen can turn), hold
-      the Surface landscape, open a plan, then Tab or tap until the gear has the focus ring. Its name is
-      "Settings…" and it is icon-only.
-      Correct: the gear shows a ring and, if Narrator is on, it says "Settings".
-      It: [ ] ring seen [ ] could not reach it: __________
-- [ ] **18. Turn the Surface to portrait without touching anything else.**
-      Correct: the toolbar rearranges, the gear may move, and the focus ring is **still on the gear**
-      (or Narrator says nothing new). Pressing Enter opens the settings dialog.
-      Wrong: the ring disappears; focus jumps to the page or to the toolbar's edge; Narrator announces
-      that a control "was removed" or "moved" when you had not left the gear.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **19. Turn it back to landscape.** Same as step 18.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
+At this size a "SchedulePoint is designed for larger screens" page will appear. That is expected: press
+**Continue anyway**. Edge remembers it on this device.
 
-Notes: ____________________________________________________________
+**Skip steps 28 to 30 until I tell you the ruler fix is released.** Do 25 to 27 now.
 
-## 5. 200 % text on the PC (about 8 minutes, the PC only)
-
-Make text twice as big without zooming the page: Settings › Accessibility › **Text size**, slider to
-**200 %**, Apply. (If your Windows has no slider that high, use the browser: Edge Settings › Appearance
-› **Font size** › Very large, and tell us which you used.) Reload the page.
-
-- [ ] **20. Use the toolbar.**
-      Correct: nothing is cut off or hidden behind something else; the toolbar wraps onto more lines or
-      moves items into a menu, and every button can still be reached and read.
-      Wrong: a button is half hidden; the toolbar needs sideways scrolling to reach something; text
-      overlaps text.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **21. Open the activity editor, the View menu and a Gantt row menu.**
-      Correct: each opens fully on screen and scrolls if needed; no button is out of reach.
-      Wrong: the bottom of a dialog is off the screen with no way to scroll to it.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
+- [ ] **25. Use the toolbar.**
+      Correct: nothing is cut off or hidden; the toolbar wraps or moves things into a menu, and every
+      button can be reached and read.
+      Wrong: a button is half hidden; text overlaps text.
+- [ ] **26. Open the activity editor, the View menu and a Gantt row menu.**
+      Correct: each opens fully on screen and scrolls if needed.
+      Wrong: the bottom of a dialog is off-screen with no way to scroll to it.
+- [ ] **27. Look at the Gantt's top strip of months.** Record what you see: do any month names overprint?
+      Answer: ____________ (We have not tested this at large text.)
+- [ ] **28. The day numbers on the diagram's ruler.** Open the Diagram view. Pick **Week** from the
+      Day / Week / Month / Quarter / Year choices; every day should be numbered. Then press **Zoom out**
+      once, look, and press it once more, look. Month, Quarter and Year show no day numbers at all; that
+      is correct.
+      Correct: no two numbers touch. When the days are close together only every second calendar day is
+      numbered (1, 3, 5 and so on) and the 31st (or 29th in a leap February) is left out on purpose, or
+      only Mondays are numbered. The numbers do not change as you pan sideways.
+      Wrong: two numbers overlap or touch; numbers change as you pan.
+- [ ] **29. Set the text size back to normal** (Font size 16) and reload.
+- [ ] **30. Look at the ruler again.** Pick **Week** again.
+      Correct: every day is numbered, exactly as before.
+      Wrong: days are skipped when there was plenty of room.
 
 Notes: ____________________________________________________________
 
-## 6. The diagram's day numbers at 200 % text (about 4 minutes, the PC only)
+---
 
-**Only once the release containing `fix/ruler-labels-200pc` (TECH_DEBT #478) is live.** Keep 200 % text
-from section 5. Open the Diagram view of a plan that runs for a few weeks. The ruler is the strip of
-dates across the top; the day numbers are the small numbers on its lowest line. They are shown once
-there are about 18 px per day.
+## Before you leave
 
-- [ ] **22. Zoom the diagram in and out slowly** (View ▾ › Zoom › Zoom in or Zoom out, ten steps each way)
-      and look at the day numbers.
-      Correct: the numbers never touch or overprint. When the days are close together, only every second
-      calendar day shows (the odd numbers: 1, 3, 5 and so on, never an even one beside them); closer
-      still, only the Mondays show. As you zoom in, more numbers appear. Panning sideways does not change
-      which numbers show.
-      Wrong: two numbers overlap or touch; numbers appear and disappear as you pan; the 30th and the 1st
-      of the next month overprint each other.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-- [ ] **23. Turn text back to 100 % and look again.**
-      Correct: every day number shows, as before this change.
-      Wrong: numbers are still skipped when there was room for them all.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
+- [ ] Narrator off (Ctrl + Windows key + Enter) and NVDA off
+- [ ] Contrast theme set to None
+- [ ] Edge font size back to 16 on the PC
+- [ ] Rotation lock back to how you found it (written above)
+- [ ] Edge window back to maximised
+
+Anything odd you noticed that is not on the sheet is welcome too, in your own words:
 
 Notes: ____________________________________________________________
 
-## 7. The Gantt's row menus and the toolbar's joined buttons (about 10 minutes, the Surface)
-
-These three were changed since you last answered, and they are already written in the Gantt sheet. Do
-them from there, so there is one copy of the wording. Tablet posture, finger.
-
-- [ ] **24. Item 6** of [`device-checklist.md`](../gantt-coarse-pointer/device-checklist.md): the Gantt's
-      three dots and the summary arrow, ten taps each. The table is 48 px wider now and the three dots sit
-      inside it, clear of the divider.
-      Result: dots ____ / 10 arrow ____ / 10 (misses)
-- [ ] **25. Item 25b** of the same sheet: putting a finger on the line between the Project Explorer and
-      the plan.
-      Result as written there: __________
-- [ ] **26. Item 29** of the same sheet: Undo, Redo, Recent edits and the Colour options.
-      Result as written there: __________
-- [ ] **27. With a mouse on the PC, click a Gantt row's three dots, and the "Float left" column heading,
-      at several points across each button, including the very edge.**
-      Correct: every click opens the menu or sorts, and a click never starts dragging the divider.
-      Wrong: a click on the edge of the button grabs the divider (the table width changes) instead.
-      It: [ ] correct [ ] wrong [ ] not sure: __________
-
-Notes: ____________________________________________________________
-
-## When you are done
-
-Total steps: 27. Send this sheet with its ticks, any photos or recording, and anything odd you noticed
-that is not on the sheet, in your own words:
-
-Notes: ____________________________________________________________
+Total: 30 steps.
 
 ## Your results
 
-Fill in as you go, or leave blank and send the ticks above.
+| Field                                   | Answer |
+| --------------------------------------- | ------ |
+| Date                                    |        |
+| Site version, if you know it            |        |
+| NVDA version, or "not installed"        |        |
+| Contrast theme tried                    |        |
+| Steps that went wrong (numbers)         |        |
+| Steps you were not sure about (numbers) |        |
+| Steps skipped (numbers)                 |        |
 
-| Field                                    | Answer |
-| ---------------------------------------- | ------ |
-| Date                                     |        |
-| Site version                             |        |
-| Narrator version (Win+Ctrl+Enter, About) |        |
-| NVDA version, or "not installed"         |        |
-| Contrast theme tried                     |        |
-| Text-size method (200 %)                 |        |
-| Steps correct (of 27)                    |        |
-| Steps wrong (list the numbers)           |        |
-| Steps not sure (list the numbers)        |        |
+## For maintainers
 
-Each "wrong" becomes a row in `docs/TECH_DEBT.md` or a fix, recorded in a sibling
-`device-check-results.md`.
+This sheet was checked against `web` 0.190.0 on `main`, plus the ruler change in
+`fix/ruler-labels-200pc` (TECH_DEBT #478), which was not released when this was written: steps 28 to 30
+wait for it.
+
+**Keep this sheet current.** Any change that alters what a step tests (the toolbar's names, the `View ▾`
+Zoom group, the Gantt's row menus, the diagram ruler, the gear's place, a landmark's name, or the
+viewport notice) updates this file in the same pull request, and the hand-off says so. Steps 12 to 14
+refer to Gantt sheet items 6, 25b and 29 by number so the wording is not copied; if those items are
+renumbered, update this file. Answers are recorded in `device-check-results.md` beside this file, and each
+"wrong" becomes a `TECH_DEBT.md` row or a fix. Step 22 and 23 are expected to confirm TECH_DEBT #505.
