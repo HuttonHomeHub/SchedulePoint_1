@@ -13,18 +13,18 @@ was squash-merged with all ten checks green on the pinned head.
   (#971) for the ruler fix.
 - **Hardening pass, by milestone:**
 
-  | M   | What                                                     | PR(s)   | Release     |
-  | --- | -------------------------------------------------------- | ------- | ----------- |
-  | 0   | Spec and plan, approved                                  | #960    | —           |
-  | 1   | Re-pack the four web e2e shards (ADR-0138 amendment)     | #962    | —           |
-  | 2   | Deletes and restores take the plan lock in order (#492)  | #964    | api 0.89.3  |
-  | 3   | Collapsed-spine journeys wait for the canvas (#497)      | #963    | —           |
-  | 4   | Revision-delta spec picks its change set fixedly (#496)  | #966    | —           |
-  | 5   | Gantt ⋯ menus and Float left clear of the divider (#494) | #967    | web 0.190.0 |
-  | 6   | Zoom out / Zoom in in View ▾ › Zoom (#480)               | #969    | web 0.190.0 |
-  | 7   | Ruler day numbers thinned at 200 % text (#478)           | #970    | web 0.190.1 |
-  | 8   | Device check sheet, shard acceptance, new rows           | this PR | —           |
-  | 9   | Owner's alerts guide (`docs/guides/set-up-alerts.md`)    | #961    | —           |
+  | M   | What                                                     | PR(s) | Release     |
+  | --- | -------------------------------------------------------- | ----- | ----------- |
+  | 0   | Spec and plan, approved                                  | #960  | —           |
+  | 1   | Re-pack the four web e2e shards (ADR-0138 amendment)     | #962  | —           |
+  | 2   | Deletes and restores take the plan lock in order (#492)  | #964  | api 0.89.3  |
+  | 3   | Collapsed-spine journeys wait for the canvas (#497)      | #963  | —           |
+  | 4   | Revision-delta spec picks its change set fixedly (#496)  | #966  | —           |
+  | 5   | Gantt ⋯ menus and Float left clear of the divider (#494) | #967  | web 0.190.0 |
+  | 6   | Zoom out / Zoom in in View ▾ › Zoom (#480)               | #969  | web 0.190.0 |
+  | 7   | Ruler day numbers thinned at 200 % text (#478)           | #970  | web 0.190.1 |
+  | 8   | Device check sheet, shard acceptance, new rows           | #972  | —           |
+  | 9   | Owner's alerts guide (`docs/guides/set-up-alerts.md`)    | #961  | —           |
 
 - **What changed for planners:**
   - deleting a plan, project or client no longer fails when a recalculation or a bar drag is running;
@@ -39,16 +39,20 @@ was squash-merged with all ten checks green on the pinned head.
   row #502. The fifth-shard trigger is now **slowest shard above 1,250 s (median of three runs) or a
   30-minute timeout** (owner, 2026-10-13; ADR-0138).
 
-## Waiting on the product owner
+## Parked by the owner (2026-10-13) — keep, do not raise
 
-- **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test
-  part at a quiet time). Tell the next session when a test alert reaches the phone; that closes #100.
-- **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours
-  in two sittings). Reply with one line per step. Each "wrong" becomes a row or a fix; the answers go
-  into a `device-check-results.md` beside it. Its contrast-theme steps are expected to confirm #505.
-- Still parked by the owner (do not raise unless something changes): the toolbar "minor tweaks"
-  (#499 — ask which before building), SC-16 photos, 72 rem confirmation, Surface sheet steps 25, 18b,
-  25b, 26–28, the history count on or after 1 November, Gantt hands-on readings, header at 320/640.
+The owner parked these at the end of the session (`docs/DECISIONS.md`, 2026-10-13). They are not work for
+a session, and a session does not bring them up again until the owner does. When the owner returns to
+one, the steps are ready:
+
+- **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
+  a quiet time). When a test alert reaches the owner's phone, close #100.
+- **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
+  sittings). The owner replies with one line per step; record the answers in a `device-check-results.md`
+  beside the sheet and turn each "wrong" into a row or a fix. Its contrast-theme steps confirm #505.
+- Older parked items, unchanged: the toolbar "minor tweaks" (#499 — ask which before building), SC-16
+  photos, 72 rem confirmation, Surface sheet steps 25, 18b, 25b, 26–28, the history count on or after
+  1 November, Gantt hands-on readings, header at 320/640.
 - **Decided, do not reopen:** collaborative editing is not in 1.0; four web shards; `Start editing`
   stays plain while the pen is not held.
 
@@ -66,11 +70,16 @@ was squash-merged with all ten checks green on the pinned head.
 
 ## Suggested next
 
-1. Read the owner's device-sheet answers when they arrive; fix or file each "wrong". #505 is the most
-   likely real accessibility defect before 1.0.
-2. Small pre-1.0 fixes ready to pick up: #504 (one `lostReason`), #505 (forced-colours rules), #500
-   (lock order on the `?version=` paths).
-3. A reconciliation pass is due at this epic boundary (`docs/RECONCILE.md`; the last was 2026-10-12).
+Nothing is in flight: no open PRs, no wake-ups armed, every release tagged (`api-v0.89.3`,
+`web-v0.190.0`, `web-v0.190.1`). Ask the owner what to take next, offering, in this order:
+
+1. **#505**: forced-colours rules for shaded menu items (`GrayText`) and the Gantt's bars. This is the
+   most likely real accessibility defect left before 1.0, and it can be fixed from the code without
+   waiting for the device sheet.
+2. **#504** (give the Link tool a `lostReason`) and **#500** (lock order on the `?version=` delete and
+   dissolve paths). Both are small.
+3. **A reconciliation pass** (`docs/RECONCILE.md`). One is due at this epic boundary; the last was
+   2026-10-12.
 
 ## Environment notes a new session would otherwise rediscover
 

@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-13 — The two owner tasks from the hardening pass are parked, not dropped
+
+**What was decided.** At the close of the pre-1.0 hardening pass the product owner parked the two tasks
+it left for them, so they are kept rather than lost:
+
+1. **Setting up the mail and uptime alerts** on the host, with `docs/guides/set-up-alerts.md`
+   (about 15 minutes; the test step loses any real mail sent during it, so do it at a quiet time).
+   Closing `docs/TECH_DEBT.md` #100 waits on an alert observed on the owner's phone.
+2. **Running the device check sheet**, `docs/specs/pre-1-0-hardening/device-check-sheet.md`
+   (about 1½–2 hours in two sittings: the Surface, then the PC). Its answers go into a
+   `device-check-results.md` beside it, and each "wrong" becomes a row or a fix. Its contrast-theme
+   steps are the confirmation `#505` waits on.
+
+**Consequences.** Neither is work a session can do, and a session does not raise either again until the
+owner brings it up. Both stay findable from `docs/HANDOFF.md` ("Parked by the owner"), from #100, and
+from #505. #505 can still be fixed from the code before the sheet is run, since its defect is read from
+the source; the sheet would then confirm the fix rather than the fault.
+
 ## 2026-10-12 — Real-time collaborative editing is not in 1.0
 
 **What was decided.** Asked whether to specify real-time collaborative editing (several planners editing one
