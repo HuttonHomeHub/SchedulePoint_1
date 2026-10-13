@@ -18,6 +18,8 @@ import {
   isWorkingDay,
   presetOf,
   pxPerDayForPreset,
+  DAY_LABEL_DEFAULT_WIDTH_PX,
+  dayLabelStride,
   rulerTicks,
   stepZoom,
   todayDayFraction,
@@ -187,6 +189,61 @@ describe('rulerTicks', () => {
     const view: Viewport = { pxPerDay: ZOOM_STOPS.day, originX: 5, originY: 0 };
     const r = rulerTicks(view, SIZE, DATA_DATE);
     expect(r.days[0]!.x).toBeLessThan(0);
+  });
+});
+
+describe('rulerTicks: day labels by pitch (#478)', () => {
+  // 12 px type measures 14.4 px for "00" and 24 px type 28.8 (measured, m7-measurement.md).
+  const W100 = 14.4;
+  const W200 = 28.8;
+  const at = (pxPerDay: number, width: number, originX = 40) =>
+    rulerTicks({ pxPerDay, originX, originY: 0 }, SIZE, DATA_DATE, undefined, width).days;
+
+  it('leaves the row exactly as it was at 100 % text, from the 18 px floor up', () => {
+    for (const px of [18, 19.9, 24, ZOOM_STOPS.day]) {
+      const withDefault = rulerTicks({ pxPerDay: px, originX: 40, originY: 0 }, SIZE, DATA_DATE);
+      const days = at(px, W100);
+      expect(days).toEqual(withDefault.days);
+      // Every consecutive day is labelled: one tick per pixel pitch.
+      expect(days[1]!.x - days[0]!.x).toBeCloseTo(px, 6);
+    }
+    expect(DAY_LABEL_DEFAULT_WIDTH_PX).toBeLessThanOrEqual(18 - 3);
+  });
+
+  it('draws every other day when a label would meet its neighbour at 200 % text', () => {
+    const days = at(19.9, W200);
+    expect(days[1]!.x - days[0]!.x).toBeCloseTo(39.8, 6);
+    // The labels left are non-adjacent days.
+    expect(Number(days[1]!.label) - Number(days[0]!.label)).toBeOneOf([2, -29, -28, -27, -30]);
+  });
+
+  it('keeps every day once the pitch holds the wider label', () => {
+    expect(dayLabelStride(31.8, W200)).toBe(1);
+    expect(dayLabelStride(31.7, W200)).toBe(2);
+  });
+
+  it('falls back to Mondays when even every other day does not fit', () => {
+    expect(dayLabelStride(18, 60)).toBe(7);
+    const days = at(18, 60);
+    expect(days.length).toBeGreaterThan(1);
+    expect(days[1]!.x - days[0]!.x).toBeCloseTo(18 * 7, 6);
+  });
+
+  it('chooses the surviving days by their date, so a pan does not move them', () => {
+    // Each view's surviving labels are the even day offsets from the data date, whatever the pan.
+    for (const originX of [40, 40 - 2 * 19.9, 13.7, -250.2]) {
+      for (const t of at(19.9, W200, originX)) {
+        expect(Math.abs(Math.round((t.x - originX) / 19.9) % 2)).toBe(0);
+      }
+    }
+  });
+
+  it('does not touch the month or year rows', () => {
+    const view = { pxPerDay: 19.9, originX: 40, originY: 0 };
+    const thin = rulerTicks(view, SIZE, DATA_DATE, undefined, W200);
+    const wide = rulerTicks(view, SIZE, DATA_DATE, undefined, W100);
+    expect(thin.months).toEqual(wide.months);
+    expect(thin.years).toEqual(wide.years);
   });
 });
 

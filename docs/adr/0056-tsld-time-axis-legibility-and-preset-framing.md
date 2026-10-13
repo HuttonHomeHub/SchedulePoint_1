@@ -158,6 +158,28 @@ defaults on.
 **Neutral.** The Month-bands toggle is one more entry in the `View▾` registry (ADR-0031) and its
 drift-guard test.
 
+## Amendment 2026-10-13 (#478): the day row thins by pitch at large text
+
+The day numbers are shown from 18 px per day (`DAY_ROW_MIN_PX_PER_DAY`), a figure that was right for
+12 px type. At 200 % text the ruler's `text-xs` is 24 px, "28" measures 28.8 px, and the row printed
+numbers over one another between 18 and about 32 px per day. **Measured, not assumed**
+(`docs/specs/pre-1-0-hardening/m7-measurement.md`, 1280 × 800, Chromium, `Page.setFontSizes`): at
+100 % text no pair overlapped at any framing; at 200 % the arrival framing (19.9 px pitch) overlapped
+41 of 67 adjacent pairs, and the Day and Week presets (91.4 and 42.7 px) none.
+
+**Decision.** `rulerTicks` takes the widest day label as the browser measures it. When that width plus
+`DAY_LABEL_GAP_PX` (3) exceeds the pitch it draws every 2nd day, and every Monday when even that does
+not fit (`dayLabelStride`) — ADR-0141's rule for the thumbnail, pitch deciding what is drawn. The
+survivors are chosen by the day's offset from the data date, not its index in the view, so a pan does
+not make labels hop. The ticks and gridlines are untouched; only the labels thin. At 100 % text the
+stride is 1 and the row is exactly as it was.
+
+**Cost.** `TsldCanvas` measures the label once per computed ruler font, memoised, when the surface is
+measured (mount and container resize), never in the per-frame ruler sync.
+
+**Residual.** A text-size change that leaves the container's size alone does not re-measure until the
+next resize or reload; the browser applies a default-font-size change on reload in practice.
+
 ## Alternatives considered
 
 - **A single `pxPerDay` zoom level with no named presets** — rejected before this ADR; presets are
