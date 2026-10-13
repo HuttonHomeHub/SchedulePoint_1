@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
 
 import { lockActivityIdsInIdOrder, lockPlanActivityRowsInIdOrder } from '../db/activity-row-lock';
+import { assertVersionMatches } from '../db/locked-version';
 import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
 
@@ -130,6 +131,10 @@ export class HierarchyLifecycleService {
    * {@link HierarchyLifecycleService.restoreBatch} keys the whole restore on that one value — N
    * batches would mean N restores, and "undo the delete" would only ever bring back one activity.
    * Omitted, it mints its own exactly as before, so every existing caller is unchanged.
+   *
+   * `expectedRootVersion` is the activity branch's opt-in version check (#450, #500): the root's
+   * version is compared against the row the branch's own id-order lock returned, and a mismatch is a
+   * 409 (a vanished root a 404) before anything is written. Only the activity branch reads it.
    */
   async cascadeSoftDelete(
     tx: Prisma.TransactionClient,
@@ -138,6 +143,7 @@ export class HierarchyLifecycleService {
     actorId: string,
     injectedBatchId?: string,
     knockOn?: KnockOn,
+    expectedRootVersion?: number,
   ): Promise<CascadeDeleteResult> {
     const batchId = injectedBatchId ?? randomUUID();
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
@@ -450,7 +456,18 @@ export class HierarchyLifecycleService {
       // link incident to any of them, all under the one batch id so a restore of
       // the root reactivates the subtree together.
       const subtreeIds = await resolveActivitySubtree(id);
-      await lockActivityIdsInIdOrder(tx, subtreeIds);
+      const locked = await lockActivityIdsInIdOrder(tx, subtreeIds);
+      // The opt-in version check (`?version=`, #450) reads the root from the rows this ordered lock
+      // took. Locking the root on its own first held it above the subtree rows it then waited for,
+      // the opposite of a placement batch (#500). Before the first write, so a refusal stamps nothing.
+      if (expectedRootVersion !== undefined) {
+        assertVersionMatches(
+          locked.find((row) => row.id === id)?.version ?? null,
+          expectedRootVersion,
+          'activity',
+          'Activity not found.',
+        );
+      }
       if (knockOn) appendAll(knockOn.activityIds, subtreeIds);
       counts.dependencies = await deleteLinksForActivities(subtreeIds);
       counts.steps = await deleteStepsForActivities(subtreeIds);

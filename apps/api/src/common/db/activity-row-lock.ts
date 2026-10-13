@@ -1,6 +1,16 @@
 import { Prisma } from '@prisma/client';
 
 /**
+ * A row the id-order lock took, with the `version` it held at that moment. A versioned delete or
+ * dissolve compares the root's version from THIS result rather than locking the root on its own
+ * first, which would hold the root above rows it then waits for (`docs/TECH_DEBT.md` #500).
+ */
+export interface LockedActivityVersion {
+  id: string;
+  version: number;
+}
+
+/**
  * Lock the named activity rows in **id order**, before a multi-row `UPDATE activities` writes them
  * (`docs/TECH_DEBT.md` #440).
  *
@@ -30,16 +40,19 @@ import { Prisma } from '@prisma/client';
  *
  * The scope predicates repeat the `UPDATE`'s own (plan, organisation, not deleted), so a stale or
  * foreign id locks nothing. Must run inside the writer's transaction.
+ *
+ * Returns the locked rows' `(id, version)` from the same statement, so a caller that must compare a
+ * version does it under the lock without a second, differently-ordered one (#500). The rest ignore it.
  */
 export async function lockActivityRowsInIdOrder(
   db: Prisma.TransactionClient,
   organizationId: string,
   planId: string,
   ids: readonly string[],
-): Promise<void> {
-  if (ids.length === 0) return;
-  await db.$queryRaw`
-    SELECT 1
+): Promise<LockedActivityVersion[]> {
+  if (ids.length === 0) return [];
+  return db.$queryRaw<LockedActivityVersion[]>`
+    SELECT id, version
     FROM activities
     WHERE id IN (SELECT u FROM unnest(${[...ids]}::uuid[]) AS u)
       AND plan_id = ${planId}::uuid
@@ -78,15 +91,16 @@ export async function lockPlanActivityRowsInIdOrder(
 /**
  * Lock the named active activities in id order, without a plan or organisation scope. The cascade
  * resolves its ids from rows it has already read inside the caller's transaction (and the caller has
- * scoped them), so there is nothing further to narrow by; a stale id locks nothing.
+ * scoped them), so there is nothing further to narrow by; a stale id locks nothing. Returns the
+ * locked rows' `(id, version)` for the versioned delete's root check (#500).
  */
 export async function lockActivityIdsInIdOrder(
   db: Prisma.TransactionClient,
   ids: readonly string[],
-): Promise<void> {
-  if (ids.length === 0) return;
-  await db.$queryRaw`
-    SELECT 1
+): Promise<LockedActivityVersion[]> {
+  if (ids.length === 0) return [];
+  return db.$queryRaw<LockedActivityVersion[]>`
+    SELECT id, version
     FROM activities
     WHERE id IN (SELECT u FROM unnest(${[...ids]}::uuid[]) AS u)
       AND deleted_at IS NULL

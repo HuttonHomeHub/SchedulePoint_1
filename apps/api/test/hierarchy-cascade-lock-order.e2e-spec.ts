@@ -26,6 +26,13 @@ import { clearDomainData } from './audit-reset';
  * exact resource in question, sends the real `DELETE`, and then reads `pg_stat_activity` until the
  * delete's backend reports what it is waiting for. What it waits on, and what it already holds when
  * it gets there, is the whole claim: a sleep would only make it a race that passes by luck.
+ *
+ * **Cases E to G (`docs/TECH_DEBT.md` #500) prove lock ORDER, not a reproduced `40P01`.** A redo of a
+ * summary delete or dissolve carries the version it read; the check used to take the summary's row
+ * lock on its own, BEFORE the ordered lock over the subtree, so it held the higher-id summary while
+ * waiting on a lower-id child, the opposite of a placement batch. That is a cycle in principle, but
+ * the harness cannot make Postgres detect one (#70). What it can show, deterministically, is what
+ * the request holds while it waits, and that is the whole defect.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -307,5 +314,193 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     expect([201, 422]).toContain(await capture);
     expect(await removal).toBe(204);
     expect(await prisma.baseline.count({ where: { planId, deletedAt: null } })).toBe(0);
+  });
+
+  /**
+   * A summary with one child whose id is BELOW the summary's, so an id-order lock reaches the child
+   * first and a lock taken on the summary alone is, necessarily, held above it. The pen is taken
+   * because both routes under test are pen-gated.
+   */
+  async function seedSummaryWithLowerChild(): Promise<{
+    planId: string;
+    summaryId: string;
+    childId: string;
+    version: number;
+  }> {
+    const { projectId } = await createProject();
+    const { planId, activityId } = await createPlan(projectId, 'Plan Summary');
+    await agent.post(`${ORG}/plans/${planId}/edit-lock`).send({}).expect(200);
+    const template = await prisma.activity.findUniqueOrThrow({ where: { id: activityId } });
+    const { id: _id, createdAt: _created, updatedAt: _updated, ...shared } = template;
+    const [childId, summaryId] = [randomUUID(), randomUUID()].sort() as [string, string];
+    await prisma.activity.create({
+      data: { ...shared, id: summaryId, name: 'Phase', type: 'WBS_SUMMARY', parentId: null },
+    });
+    await prisma.activity.create({
+      data: { ...shared, id: childId, name: 'Child', parentId: summaryId },
+    });
+    const summary = await prisma.activity.findUniqueOrThrow({ where: { id: summaryId } });
+    return { planId, summaryId, childId, version: summary.version };
+  }
+
+  const remove = (summaryId: string, version: number) =>
+    agent.delete(`${ORG}/activities/${summaryId}?version=${version}`).then((res) => res);
+  const dissolve = (summaryId: string, version: number) =>
+    agent
+      .post(`${ORG}/activities/${summaryId}/dissolve`)
+      .send({ version })
+      .then((res) => res);
+
+  /**
+   * Parks on the child, sends the versioned request, and reports whether the summary's row was
+   * still free to lock while the request waited. Held, the request took the summary BEFORE the
+   * child: not an id order.
+   */
+  async function summaryHeldWhileParkedOnChild(
+    childId: string,
+    summaryId: string,
+    send: () => Promise<{ status: number }>,
+  ): Promise<{ summaryProbe: unknown; status: number }> {
+    const holder = await hold(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM activities WHERE id = ${childId}::uuid FOR NO KEY UPDATE`;
+    });
+    let status: Promise<number> | undefined;
+    let summaryProbe: unknown;
+    try {
+      status = send().then((res) => res.status);
+      await waitUntilBlocked(['transactionid', 'tuple'], ON_ACTIVITY_ROWS);
+      // The probe runs inside the holder's own transaction. When it fails (55P03) Postgres aborts
+      // that transaction, and `hold` swallows the resulting rollback on purpose: the failure is
+      // the reading, and the assertion on `summaryProbe` is where it is reported.
+      try {
+        await holder.tx
+          .$queryRaw`SELECT 1 FROM activities WHERE id = ${summaryId}::uuid FOR NO KEY UPDATE NOWAIT`;
+      } catch (error) {
+        summaryProbe = error;
+      }
+    } finally {
+      await holder.release();
+      // Settled even when `waitUntilBlocked` threw, so the request cannot write into the next
+      // case's freshly cleared tables.
+      await status?.catch(() => undefined);
+    }
+    return { summaryProbe, status: await status };
+  }
+
+  it('E: a versioned summary delete locks the subtree in id order, holding nothing above the child', async () => {
+    const { summaryId, childId, version } = await seedSummaryWithLowerChild();
+    const run = await summaryHeldWhileParkedOnChild(childId, summaryId, () =>
+      remove(summaryId, version),
+    );
+    expect(
+      run.summaryProbe,
+      'the delete already held the summary while parked on its lower-id child',
+    ).toBe(undefined);
+    expect(run.status).toBe(200);
+    expect(
+      await prisma.activity.count({
+        where: { id: { in: [summaryId, childId] }, deletedAt: { not: null } },
+      }),
+    ).toBe(2);
+  });
+
+  it('F: a versioned dissolve locks the summary and its children in id order', async () => {
+    const { summaryId, childId, version } = await seedSummaryWithLowerChild();
+    const run = await summaryHeldWhileParkedOnChild(childId, summaryId, () =>
+      dissolve(summaryId, version),
+    );
+    expect(
+      run.summaryProbe,
+      'the dissolve already held the summary while parked on its lower-id child',
+    ).toBe(undefined);
+    expect(run.status).toBe(200);
+    const child = await prisma.activity.findUniqueOrThrow({ where: { id: childId } });
+    expect(child.deletedAt).toBeNull();
+    expect(child.parentId).toBeNull();
+  });
+
+  /**
+   * Parks on the child, sends a request with a STALE version, and shows it is still waiting on the
+   * subtree lock (it has not answered) before releasing. Under the old order the version was
+   * compared first and the answer came without waiting, so this pins the changed ORDER of the
+   * check, not only its outcome.
+   */
+  async function staleVersionWaitsForSubtreeLock(
+    childId: string,
+    send: () => Promise<{ status: number; body: { error: { details?: unknown } } }>,
+  ): Promise<{ answeredWhileParked: boolean; status: number; details: unknown }> {
+    const holder = await hold(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM activities WHERE id = ${childId}::uuid FOR NO KEY UPDATE`;
+    });
+    let answered = false;
+    let response: ReturnType<typeof send> | undefined;
+    let answeredWhileParked = false;
+    try {
+      response = send();
+      void response.then(
+        () => (answered = true),
+        () => (answered = true),
+      );
+      await waitUntilBlocked(['transactionid', 'tuple'], ON_ACTIVITY_ROWS);
+      answeredWhileParked = answered;
+    } finally {
+      await holder.release();
+      await response?.catch(() => undefined);
+    }
+    const res = await response;
+    return { answeredWhileParked, status: res.status, details: res.body.error.details };
+  }
+
+  it.each([
+    ['delete ?version=', (id: string, v: number) => remove(id, v)],
+    ['dissolve { version }', (id: string, v: number) => dissolve(id, v)],
+  ])(
+    'G: a stale version on a %s waits for the subtree lock, then answers 409 and writes nothing',
+    async (_label, send) => {
+      const { summaryId, childId, version } = await seedSummaryWithLowerChild();
+      const before = await prisma.activity.findMany({
+        where: { id: { in: [summaryId, childId] } },
+        orderBy: { id: 'asc' },
+      });
+      const run = await staleVersionWaitsForSubtreeLock(childId, () =>
+        send(summaryId, version + 1),
+      );
+      expect(run.answeredWhileParked, 'the stale version was refused before the subtree lock').toBe(
+        false,
+      );
+      expect(run.status).toBe(409);
+      expect(run.details).toMatchObject({ reason: 'STALE_VERSION' });
+      const after = await prisma.activity.findMany({
+        where: { id: { in: [summaryId, childId] } },
+        orderBy: { id: 'asc' },
+      });
+      // Deleted-at, delete batch, parent and version of both rows are exactly as they were.
+      expect(after).toEqual(before);
+    },
+  );
+
+  // A regression guard rather than a red case: it passes on the old code too, because the old early
+  // lock also found no row once the soft delete committed. It pins that the answer stayed 404.
+  it('G: a root deleted by somebody else while the request waits answers 404', async () => {
+    const { summaryId, version } = await seedSummaryWithLowerChild();
+    // The root deleted between the request's first read and its lock: the ordered lock re-checks
+    // `deleted_at` after waiting, so it finds no root row.
+    for (const send of [remove, dissolve]) {
+      await prisma.activity.updateMany({ where: { id: summaryId }, data: { deletedAt: null } });
+      const holder = await hold(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM activities WHERE id = ${summaryId}::uuid FOR NO KEY UPDATE`;
+      });
+      let status: Promise<number> | undefined;
+      try {
+        status = send(summaryId, version).then((res) => res.status);
+        await waitUntilBlocked(['transactionid', 'tuple'], ON_ACTIVITY_ROWS);
+        await holder.tx
+          .$executeRaw`UPDATE activities SET deleted_at = now() WHERE id = ${summaryId}::uuid`;
+      } finally {
+        await holder.release();
+        await status?.catch(() => undefined);
+      }
+      expect(await status).toBe(404);
+    }
   });
 });

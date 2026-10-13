@@ -15,7 +15,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Permission, Principal } from '../../common/auth/principal';
 import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { chunkIds } from '../../common/db/id-chunks';
-import { lockActivityVersion, assertVersionMatches } from '../../common/db/locked-version';
+import { assertVersionMatches } from '../../common/db/locked-version';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
@@ -1502,17 +1502,6 @@ export class ActivitiesService {
       // A summary delete sweeps a subtree's activities AND links, the two tables the recalculation
       // writes, and used to do it with no plan lock (`docs/TECH_DEBT.md` #440). `bulkDelete` takes it.
       await acquirePlanWriteLock(tx, existing.planId);
-      // Opt-in (`?version=`, #450): the subject row is locked and compared before the cascade touches
-      // anything, so the version deleted is the version the client read. For a summary it guards the
-      // root only; its children were covered by the client's own check (ADR-0176).
-      if (expectedVersion !== undefined) {
-        assertVersionMatches(
-          await lockActivityVersion(tx, organization.id, activityId),
-          expectedVersion,
-          'activity',
-          'Activity not found.',
-        );
-      }
       const knockOn: KnockOn = { links: [], activityIds: [] };
       const cascade = await this.lifecycle.cascadeSoftDelete(
         tx,
@@ -1521,6 +1510,11 @@ export class ActivitiesService {
         principal.userId,
         undefined,
         knockOn,
+        // Opt-in (`?version=`, #450): the cascade compares it against the root row its own id-order
+        // lock took and before it writes, so the version deleted is the version the client read. For
+        // a summary it guards the root only; its children were covered by the client's own check
+        // (ADR-0176). Checked there, not here, so the root is never locked above its subtree (#500).
+        expectedVersion,
       );
       // The links the delete took from SURVIVING activities are a change to those activities; the
       // deleted subject has no entry (it is in the audit log, below). Recorded last, in this
@@ -1877,16 +1871,6 @@ export class ActivitiesService {
     const { promoted, deleteBatchId } = await this.prisma.$transaction(async (tx) => {
       // Same lock as every other parent-tree write.
       await acquirePlanWriteLock(tx, existing.planId);
-      // Opt-in (`version` in the body, #450): redo's check-then-dissolve could otherwise promote a
-      // child a colleague filed under the summary in the one round trip between the read and here.
-      if (expectedVersion !== undefined) {
-        assertVersionMatches(
-          await lockActivityVersion(tx, organization.id, activityId),
-          expectedVersion,
-          'activity',
-          'Activity not found.',
-        );
-      }
 
       /*
        * **Re-read the summary under the lock**, and take the children's new parent from THAT row.
@@ -1914,10 +1898,23 @@ export class ActivitiesService {
       // The children and the summary go in as one id-ordered set, because the cascade below
       // stamps the summary next and a second, separate sorted pass would not be one total order
       // against a placement batch (`docs/TECH_DEBT.md` #492).
-      await lockActivityRowsInIdOrder(tx, organization.id, existing.planId, [
+      const lockedRows = await lockActivityRowsInIdOrder(tx, organization.id, existing.planId, [
         activityId,
         ...rows.map((row) => row.id),
       ]);
+      // Opt-in (`version` in the body, #450): redo's check-then-dissolve could otherwise promote a
+      // child a colleague filed under the summary in the one round trip between the read and here.
+      // Compared from the ordered lock's own rows: locking the summary on its own first held it above
+      // the children it then waited for (#500). Still before the first write, so a refusal stamps
+      // nothing.
+      if (expectedVersion !== undefined) {
+        assertVersionMatches(
+          lockedRows.find((row) => row.id === activityId)?.version ?? null,
+          expectedVersion,
+          'activity',
+          'Activity not found.',
+        );
+      }
       await tx.activity.updateMany({
         where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
         data: {
