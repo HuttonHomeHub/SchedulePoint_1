@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.89.3
+
+### Patch Changes
+
+- [#964](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/964) [`4436b76`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4436b7640c9fca84dbe447a596beb8a6aad75acf) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleting a plan, project or client no longer fails with a server error when a recalculation is running or someone is dragging bars at the same moment. The delete now waits its turn instead, and restoring a single activity does the same.
+
 ## 0.89.2
 
 ### Patch Changes
