@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.190.1
+
+### Patch Changes
+
+- [#970](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/970) [`0d04a54`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0d04a54fe41c149af0871019158effa8cef2ba81) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The numbers along the diagram's date ruler no longer print over one another when the browser's text size is set to 200 %. The ruler now shows every second day, or only Mondays, when the numbers would not fit. At the normal text size nothing changes.
+
 ## 0.190.0
 
 ### Minor Changes
