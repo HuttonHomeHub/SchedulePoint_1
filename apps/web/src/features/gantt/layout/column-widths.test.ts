@@ -14,7 +14,9 @@ import {
   readStoredWidths,
   serialiseWidths,
   shownColumns,
-  variancePinnedWidth,
+  ACTIONS_COLUMN_WIDTH,
+  GRID_END_GUTTER,
+  pinnedExtraWidth,
   VARIANCE_COLUMN_WIDTH,
 } from './column-widths';
 import { GANTT_COLUMNS } from './grid-columns';
@@ -131,10 +133,18 @@ describe('chartGuard', () => {
   });
 });
 
-describe('variancePinnedWidth', () => {
-  it('is the variance column while a baseline shows, and nothing otherwise', () => {
-    expect(variancePinnedWidth(true)).toBe(VARIANCE_COLUMN_WIDTH);
-    expect(variancePinnedWidth(false)).toBe(0);
+describe('pinnedExtraWidth', () => {
+  it('is always the trailing gutter, plus the variance and row-menu columns when they show', () => {
+    expect(pinnedExtraWidth(false, false)).toBe(GRID_END_GUTTER);
+    expect(pinnedExtraWidth(true, false)).toBe(GRID_END_GUTTER + VARIANCE_COLUMN_WIDTH);
+    expect(pinnedExtraWidth(false, true)).toBe(GRID_END_GUTTER + ACTIONS_COLUMN_WIDTH);
+    expect(pinnedExtraWidth(true, true)).toBe(
+      GRID_END_GUTTER + ACTIONS_COLUMN_WIDTH + VARIANCE_COLUMN_WIDTH,
+    );
+  });
+
+  it('keeps the gutter at least as wide as the divider strip reaches into the grid (15 px)', () => {
+    expect(GRID_END_GUTTER).toBeGreaterThanOrEqual(15);
   });
 });
 

@@ -82,7 +82,7 @@ import {
   isDefaultWidths,
   resolveColumnWidths,
   shownColumns,
-  variancePinnedWidth,
+  pinnedExtraWidth,
 } from '@/features/gantt/layout/column-widths';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
@@ -610,8 +610,11 @@ export function ToolbarPlanWorkspace({
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
     widths: ganttColumnWidths.widths,
-    extraPinnedWidth: variancePinnedWidth(
+    // The workspace always supplies row menus (`rowMenuContextFor`, below), so the row-menu column
+    // is part of the pinned block here exactly as it is in the panel.
+    extraPinnedWidth: pinnedExtraWidth(
       model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
+      true,
     ),
   });
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);

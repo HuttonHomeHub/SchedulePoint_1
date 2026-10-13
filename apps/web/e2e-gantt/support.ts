@@ -1,6 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
+ * `GRID_END_GUTTER` in `column-widths.ts`, restated: that module reaches `config/env.ts`, whose
+ * compile-time `__APP_VERSION__` Playwright's loader does not define. A drift fails loudly here
+ * (`chartMeetsGrid` is off by the difference at every width), so the copy cannot go quietly stale.
+ */
+const GRID_END_GUTTER = 16;
+
+/**
  * Journey helpers for the flag-ON **Gantt view** suite (`VITE_GANTT_VIEW`, ADR-0059,
  * `docs/specs/gantt-view/`). The onboarding + client/project/plan helpers mirror
  * `e2e-library/support.ts` verbatim. The onboarding actor becomes the org's Org Admin, which
@@ -304,8 +311,9 @@ export function ganttRow(page: Page, name: string): ReturnType<Page['getByRole']
 }
 
 /**
- * **The pinned columns end exactly where the chart begins** — the invariant ADR-0095's `Float`
- * incident violated and `grid-width.structural.test.ts` pins in arithmetic. Lifted out of
+ * **The pinned columns end exactly where the chart begins, less the trailing gutter** (the 16 px
+ * that keeps the last column and the row menus out from under the divider's strip, #494) — the
+ * invariant ADR-0095's `Float` incident violated and `grid-width.structural.test.ts` pins in arithmetic. Lifted out of
  * `gantt.spec.ts` (where it was a closure) so the column-widths journey asserts the same thing the
  * same way; a second copy would be two definitions of "meets" that could drift apart.
  *
@@ -331,12 +339,11 @@ export async function chartMeetsGrid(page: Page, where: string): Promise<void> {
   );
   // The Timeline header's text includes its ruler labels, so it is matched by prefix.
   const timeline = heads.find((h) => h.name.startsWith('Timeline'));
-  // `Actions` is `sr-only`, so it takes no layout and its rect says nothing about the pane.
-  const pinned = heads.filter((h) => !h.name.startsWith('Timeline') && h.name !== 'Actions');
+  const pinned = heads.filter((h) => !h.name.startsWith('Timeline'));
   expect(timeline, `${where}: no Timeline column header`).toBeDefined();
   expect(pinned.length, `${where}: no pinned column headers`).toBeGreaterThan(0);
   expect(
-    Math.round(Math.max(...pinned.map((h) => h.right))),
-    `${where}: the pinned columns do not end where the chart begins — ${JSON.stringify(heads)}`,
+    Math.round(Math.max(...pinned.map((h) => h.right))) + GRID_END_GUTTER,
+    `${where}: the pinned columns do not end one gutter before the chart begins — ${JSON.stringify(heads)}`,
   ).toBe(Math.round(timeline?.left ?? -1));
 }
