@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRulerTicks, DAY_TICK_MIN_PX, MONTH_LABEL_MIN_PITCH_PX } from './ruler-ticks';
+import {
+  buildRulerTicks,
+  DAY_TICK_MIN_PX,
+  MONTH_LABEL_MIN_PITCH_PX,
+  monthLabelSamples,
+} from './ruler-ticks';
 
 /**
  * The tick maths is shared by the on-screen ruler and the printed document (ADR-0059 M4). Testing
@@ -98,6 +103,46 @@ describe('buildRulerTicks', () => {
       const sparse = labelled('2020-01-01', 3000, 0.05); // a year is 18 px: every 5th year
       expect(sparse.length).toBeGreaterThan(0);
       for (const t of sparse) expect(Number(t.label.slice(-4)) % 5).toBe(0);
+    });
+
+    // #501: 65.5 px between labels 99.1 px wide overprinted at 200 % text. A wider label must
+    // thin to a coarser step rather than keep the 64 px floor.
+    it('thins to a coarser step when the caller measures a wider label', () => {
+      // 1.07 px/day: a quarter is 97.7 px, a half-year 195 px, a month 32.6 px.
+      const at = (pitch?: number): string[] =>
+        buildRulerTicks('2026-01-01', 700, 1.07, pitch)
+          .filter((t) => t.label !== '')
+          .map((t) => t.label);
+      expect(at()).toHaveLength(at(MONTH_LABEL_MIN_PITCH_PX).length);
+      const wide = at(113);
+      expect(wide.length).toBeLessThan(at().length);
+      for (const label of wide) expect(label).toMatch(/^(Jan|Jul)/);
+    });
+
+    it('keeps labels a measured pitch apart', () => {
+      const labels = labelled('2026-01-01', 900, 1.07).length;
+      const pitch = 113;
+      const wide = buildRulerTicks('2026-01-01', 900, 1.07, pitch).filter((t) => t.label !== '');
+      expect(wide.length).toBeLessThan(labels);
+      for (let i = 1; i < wide.length; i += 1) {
+        expect(wide[i]!.x - wide[i - 1]!.x).toBeGreaterThanOrEqual(pitch);
+      }
+    });
+
+    // The printed document passes no pitch, and paper does not scale with text size: its ticks
+    // must be exactly what the default produces.
+    it.each([0.2, 0.8, 1.1, 3, 6, 20])('is unchanged for the default pitch at %s px/day', (px) => {
+      expect(buildRulerTicks('2026-01-01', 1500, px)).toEqual(
+        buildRulerTicks('2026-01-01', 1500, px, MONTH_LABEL_MIN_PITCH_PX),
+      );
+    });
+  });
+
+  describe('monthLabelSamples', () => {
+    it('gives one label per month of the year', () => {
+      const samples = monthLabelSamples();
+      expect(samples).toHaveLength(12);
+      for (const s of samples) expect(s).toMatch(/2027/);
     });
   });
 });

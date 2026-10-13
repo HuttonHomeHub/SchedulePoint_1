@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GanttRuler } from './GanttRuler';
 
@@ -71,5 +71,39 @@ describe('GanttRuler', () => {
   it('is hidden from assistive technology', () => {
     const { container } = render(<GanttRuler anchorIso="2026-02-02" widthPx={200} pxPerDay={6} />);
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  // #501: jsdom has no layout, so the label probe reads zero and the default pitch stands; with a
+  // measured width (200 % text) the same zoom must thin to a coarser step.
+  describe('the measured label width', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    const labelCount = (container: HTMLElement): number =>
+      [...container.querySelectorAll('span')].filter((s) => s.className.includes('text-muted'))
+        .length;
+
+    it('thins the labels when the probe measures wider than the default pitch covers', () => {
+      // 1.07 px/day: a quarter is 97.7 px, so the default 64 px pitch labels every other month.
+      const props = { anchorIso: '2026-01-01', widthPx: 700, pxPerDay: 1.07 };
+      const unmeasured = render(<GanttRuler {...props} />);
+      const before = labelCount(unmeasured.container);
+      unmeasured.unmount();
+
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe(): void {}
+          disconnect(): void {}
+        },
+      );
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+        width: 99,
+      } as DOMRect);
+      const measured = render(<GanttRuler {...props} />);
+      expect(labelCount(measured.container)).toBeLessThan(before);
+    });
   });
 });
