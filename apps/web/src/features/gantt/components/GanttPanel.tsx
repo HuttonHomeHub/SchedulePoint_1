@@ -188,7 +188,7 @@ const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
  * global `GrayText` rule. The bars and marks below set their own forced colours for the same reason.
  */
 const FORCED_SELECTED_ROW_CLASS =
-  'forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:[forced-color-adjust:none] forced-colors:[&_*:not([aria-disabled=true])]:text-inherit';
+  'forced-colors:bg-[Highlight] forced-colors:[color:HighlightText] forced-colors:[forced-color-adjust:none] forced-colors:[&_*:not([aria-disabled=true])]:text-inherit';
 
 /**
  * **A bar and its marks in system colours** (#505, ADR-0191 D2). Fill and ring are the two things

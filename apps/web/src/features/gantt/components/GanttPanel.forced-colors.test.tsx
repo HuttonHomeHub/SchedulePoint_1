@@ -107,7 +107,7 @@ describe('GanttPanel, forced colours', () => {
     const [first, second] = rows();
     expect(second).toHaveClass(
       'forced-colors:bg-[Highlight]',
-      'forced-colors:text-[HighlightText]',
+      'forced-colors:[color:HighlightText]',
     );
     expect(first!.className).not.toContain('forced-colors:bg-[Highlight]');
     // The sticky grid half repeats it: it paints its own background over the row's.
