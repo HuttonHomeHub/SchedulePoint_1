@@ -559,7 +559,10 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     const dock = page.locator('[data-right-dock]');
     await expect(dock).toHaveCount(1);
     await page.setViewportSize({ width: 640, height: 740 });
-    await page.waitForTimeout(600);
+    // Prove the dock has taken the row (the stage is inert, so the cluster is withdrawn) rather than
+    // assume it. 640 wide, not 1024 with a dragged dock: no helper here drags a dock across the row,
+    // and below the floor (ADR-0179) is where `dockSqueezed` is reached without one.
+    await expect(clusterOf(page)).toBeHidden();
     const ruler = page.getByTestId('tsld-ruler');
     const before = await ruler.innerText();
     await page.getByRole('button', { name: /^View/ }).click();

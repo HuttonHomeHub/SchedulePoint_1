@@ -141,17 +141,33 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(spies.fit).toHaveBeenCalledOnce();
   });
 
-  it('shades the panel\u2019s Fit to plan with its reason when there is no diagram, and does nothing', () => {
+  it('puts Zoom out and Zoom in in the View panel, stepping by the cluster\u2019s factors (#480)', () => {
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /View/ }));
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Zoom out' }));
+    expect(spies.stepZoom).toHaveBeenLastCalledWith(0.5);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Zoom in' }));
+    expect(spies.stepZoom).toHaveBeenLastCalledWith(2);
+    expect(spies.stepZoom).toHaveBeenCalledTimes(2);
+  });
+
+  it('shades the panel\u2019s three zoom buttons with one shared reason when there is no diagram, and does nothing', () => {
     renderRows(ctx({ hasDiagram: false }));
     fireEvent.click(screen.getByRole('button', { name: /View/ }));
-    const fit = within(screen.getByRole('dialog', { name: 'View' })).getByRole('button', {
-      name: 'Fit to plan',
-    });
-    expect(fit).toHaveAttribute('aria-disabled', 'true');
-    expect(document.getElementById(fit.getAttribute('aria-describedby')!)?.textContent).toBe(
-      'Add an activity to fit the view',
+    const panel = screen.getByRole('dialog', { name: 'View' });
+    const describedBy = new Set<string>();
+    for (const name of ['Zoom out', 'Zoom in', 'Fit to plan']) {
+      const button = within(panel).getByRole('button', { name });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      describedBy.add(button.getAttribute('aria-describedby')!);
+      fireEvent.click(button);
+    }
+    expect(describedBy.size).toBe(1);
+    expect(document.getElementById([...describedBy][0]!)?.textContent).toBe(
+      'Add an activity to zoom or fit the view',
     );
-    fireEvent.click(fit);
+    expect(spies.stepZoom).not.toHaveBeenCalled();
     expect(spies.fit).not.toHaveBeenCalled();
   });
 

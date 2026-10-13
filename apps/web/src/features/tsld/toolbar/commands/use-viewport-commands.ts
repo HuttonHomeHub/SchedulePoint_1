@@ -46,9 +46,15 @@ export function useViewportCommands(args: {
   // Stepping, fitting and go-to-date are canvas VIEWPORT commands with no Gantt equivalent (its
   // scale comes from the preset and its chart already spans the plan). `canvasActive` shades
   // them with a reason in the Gantt rather than leaving dead buttons.
+  // Announces the direction only (WCAG 4.1.3): the repaint is invisible to AT and both the corner
+  // cluster and the `View ▾` panel route here. Only these toolbar presses reach it — the canvas's own
+  // wheel and key zoom call the handle directly — so nothing speaks on load or on a programmatic fit.
   const stepZoom = useCallback<TsldToolbarContext['stepZoom']>(
-    (factor) => canvasControlRef.current?.stepZoom(factor),
-    [canvasControlRef],
+    (factor) => {
+      canvasControlRef.current?.stepZoom(factor);
+      announce(factor > 1 ? 'Zoomed in.' : 'Zoomed out.');
+    },
+    [canvasControlRef, announce],
   );
 
   // Go to date (ADR-0033 M2): a pure view pan via the canvas control handle — no fetch, no write,
