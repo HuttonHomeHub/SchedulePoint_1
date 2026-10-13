@@ -293,7 +293,24 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // The widening is the honest expression of what this is — a knob edited between runs to
     // isolate one lever at a time, which is what produced the table above.
     const LEVER = 'both' as Lever;
-    const critical = oldSide.filter((a) => a.isCritical && a.type === 'TASK');
+    // TECH_DEBT #496 — the selection used to depend on the order Postgres returned the frozen rows,
+    // and on whether a pick landed on a window-only calendar. `+20 days` on an activity of the
+    // Turnaround Window calendar (CAL-05: working time only 01-30 Oct 2026) walks past its one
+    // window, and the recalculation answers `422 CALENDAR_WORKING_TIME_UNREACHABLE` (`calendarId`
+    // null — the engine does not say which calendar). So: order by code, and perturb only activities on the plan's own
+    // default calendar, whose working time is continuous. (The seeder gives every activity an explicit
+    // calendar, so "follows the default" is read as "is the default", not as a null `calendarId`.)
+    const onDefaultCalendar = new Set(
+      (
+        await prisma.activity.findMany({
+          where: { planId, deletedAt: null, calendarId: planRow.calendarId },
+          select: { id: true },
+        })
+      ).map((a) => a.id),
+    );
+    const critical = oldSide
+      .filter((a) => a.isCritical && a.type === 'TASK' && onDefaultCalendar.has(a.sourceActivityId))
+      .sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''));
     const extend = LEVER === 'shorten' ? [] : critical.slice(0, 4);
     const shrink = LEVER === 'extend' ? [] : critical.slice(4, 16);
     say(
@@ -359,9 +376,30 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // DETACHES one, so the successor's chain can float free. If that still moves nothing, the
     // honest conclusion is that this fixture cannot produce a qualifying change set through the
     // public write path — which the condition says is itself the finding, not a bar to soften.
-    const links = await client.getPage<{ id: string; successor: { id: string } }>(
-      `/api/v1/organizations/${orgSlug}/plans/${planId}/dependencies?limit=100`,
-    );
+    // Every page, then sorted: the first 100 rows in heap order were a different 100 links from run
+    // to run, so "the first three into a critical successor" named different dependencies each time.
+    const allLinks: Array<{ id: string; predecessorId: string; successor: { id: string } }> = [];
+    let linkCursor: string | null = null;
+    do {
+      const page: {
+        rows: Array<{ id: string; predecessorId: string; successor: { id: string } }>;
+        meta: { nextCursor: string | null };
+      } = await client.getPage<{ id: string; predecessorId: string; successor: { id: string } }>(
+        `/api/v1/organizations/${orgSlug}/plans/${planId}/dependencies?limit=100` +
+          (linkCursor === null ? '' : `&cursor=${encodeURIComponent(linkCursor)}`),
+      );
+      allLinks.push(...page.rows);
+      linkCursor = page.meta.nextCursor;
+    } while (linkCursor !== null);
+    const codeOf = new Map(oldSide.map((a) => [a.sourceActivityId, a.code]));
+    const links = {
+      rows: allLinks.sort(
+        (a, b) =>
+          (codeOf.get(a.successor.id) ?? '').localeCompare(codeOf.get(b.successor.id) ?? '') ||
+          (codeOf.get(a.predecessorId) ?? '').localeCompare(codeOf.get(b.predecessorId) ?? '') ||
+          a.id.localeCompare(b.id),
+      ),
+    };
     const criticalIds = new Set(oldSide.filter((a) => a.isCritical).map((a) => a.sourceActivityId));
     const cuts =
       LEVER === 'shorten'
