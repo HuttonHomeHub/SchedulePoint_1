@@ -961,6 +961,10 @@ origin to buy JIT speed on a few login forms.
 
 ## Alerting on mail failures
 
+> **Setting this up for the first time? Follow [`docs/guides/set-up-alerts.md`](guides/set-up-alerts.md).**
+> It is the step-by-step version for a non-specialist, including the test that proves it works. This
+> section stays the reference.
+
 `docs/TECH_DEBT.md` #100. ADR-0075 decided a failed send is the **operator's** signal, not the
 caller's — telling the caller would make "that address was free" distinguishable from "that address
 is taken" on an unauthenticated endpoint. The application emits one alertable line,
@@ -970,7 +974,7 @@ organisation, with the first signal being someone who cannot get in telling some
 
 > **Read the two subsections below before setting any of this up.** `scripts/watch-mail-failures.sh`
 > is **superseded** (2026-08-09) by `MAIL_ALERT_URL` and `HEARTBEAT_URL`, which do the same two jobs
-> from inside the container. It is kept in-tree for one release as the fallback, and this section is
+> from inside the container. It is still in-tree as the fallback (it was meant to go after one release and has not), and this section is
 > kept because an operator running it today needs it to keep making sense. **If you are setting this
 > up for the first time, skip to "The API can now do this itself" and do not install the cron at
 > all.** What follows describes the path being retired.
@@ -1076,9 +1080,14 @@ instead**, which takes about two minutes and is fully reversible:
    mail alert was never going to work either and you have learned it without breaking mail.
 2. Point `MAIL_SMTP_URL` at a port with nothing on it — `smtp://127.0.0.1:1` is enough — and
    recreate. Sends now fail at connect, immediately, with no message going anywhere by accident.
-3. Trigger one send: request a password reset for a throwaway address on your own installation.
-4. Watch your receiver. You should get one alert naming the count, the window and the kind of
-   message. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
+3. Trigger one send: request a password reset for **an address that has an account** on your own
+   installation. A reset for an address with no account sends nothing, by design (ADR-0074, so a
+   stranger cannot learn who is registered), so a made-up address produces no failure and no alert —
+   which looks exactly like a broken alert.
+4. Watch your receiver. A single failure alerts at once with `SchedulePoint: <kind> mail failed to
+send.` (the kind only, no count). Press reset once; if more failures land inside
+   `MAIL_ALERT_WINDOW_MINUTES`, a summary naming the count, the window and the kinds follows when the
+   window closes. Then open `/staff` and confirm the failure is in the Mail panel with an error class —
    that is the durable half, and it proves the row was written as well as the alert sent.
 5. Restore the real `MAIL_SMTP_URL`, recreate, and send one more reset to confirm mail works again.
    **Do this before step 6** — a half-finished retirement that leaves mail pointed at nothing is
