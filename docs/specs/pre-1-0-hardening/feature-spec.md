@@ -1,6 +1,7 @@
 # Feature Spec: Pre-1.0 hardening pass
 
-- **Status:** Draft — written 2026-10-13 for the product owner's approval; nothing is built.
+- **Status:** Approved — by the product owner on 2026-10-13, all nine milestones, with the fifth-shard trigger set as
+  the default below (OQ-1).
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-10-13
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #492, #497, #496, #494, #478, #480, #100, and ADR-0138's shard
@@ -368,14 +369,12 @@ None to the contract.
   `docs/DEPLOYMENT.md`, `docs/guides/set-up-alerts.md`, `docs/specs/gantt-coarse-pointer/device-checklist.md`,
   `scripts/e2e-durations.json`, CLAUDE.md §16 (ADR-0138's line).
 
-## Open questions for the owner
+## Questions for the owner (answered)
 
-**Critical (one):**
-
-1. **ADR-0138's trigger.** The trigger you set on 2026-10-12 ("a web shard slower than `quality`") has fired on all four
-   runs since, and no four-way pack can satisfy it now that `quality` takes ~690 s. The plan re-packs four as you
-   decided and restates the trigger as "slowest shard above 1,250 s (median of three runs), or a shard cancelled by its
-   timeout". Is that the line at which you would want five shards, or do you want a different number?
+**Answered 2026-10-13 (OQ-1).** ADR-0138's trigger becomes: the slowest web shard's median over three consecutive
+runs exceeds 1,250 s, or any shard is cancelled by its 30-minute timeout. The trigger the owner set on 2026-10-12 ("a
+web shard slower than `quality`") had fired on all four runs since, and no four-way pack can satisfy it now that
+`quality` takes ~690 s.
 
 **Defaults (proceed unless told otherwise):** advisory lock plus id-order rows for #492; Gantt gutter for #494; thin
 labels for #478; a new guide under `docs/guides/`; Narrator on the Surface, NVDA on the PC only if already installed;

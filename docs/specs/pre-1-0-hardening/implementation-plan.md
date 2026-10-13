@@ -1,7 +1,7 @@
 # Implementation Plan: Pre-1.0 hardening pass
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — written 2026-10-13; nothing is built.
+- **Status:** Approved — by the product owner on 2026-10-13, all nine milestones.
 - **Owner:** product owner; implementation by the **builder** agent (Sonnet), one PR per milestone.
 
 ## Breakdown
