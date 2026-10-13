@@ -387,11 +387,16 @@ describe('multi-row activity writers lock in id order', () => {
     // order to a placement batch. `lockActivityVersion` was that lock and is deleted; this keeps a
     // successor (a raw lock of one activity by id) from returning ahead of the seam.
     const text = readFileSync(join(SRC, 'modules/activities/activities.service.ts'), 'utf8');
+    // Code only: a comment may name the deleted helper without being a call to it.
+    const stripComments = (code: string) =>
+      code.replace(/\/\*[^]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
     for (const name of ['remove', 'dissolveSummary']) {
       const start = text.indexOf(`\n  async ${name}(`);
-      const end = text.indexOf('\n  /**', start);
       expect(start, `${name} found`).toBeGreaterThan(-1);
-      const body = text.slice(start, end);
+      // To the next method signature, so a docblock-less neighbour cannot extend or cut the slice.
+      const end = text.slice(start + 1).search(/\n {2}(?:async|private|public|protected) /);
+      expect(end, `${name} is followed by another method`).toBeGreaterThan(-1);
+      const body = stripComments(text.slice(start, start + 1 + end));
       expect(body, name).not.toMatch(/lockActivityVersion/);
       expect(body, name).not.toMatch(/\$queryRaw/);
     }
@@ -399,9 +404,11 @@ describe('multi-row activity writers lock in id order', () => {
       join(SRC, 'common/hierarchy/hierarchy-lifecycle.service.ts'),
       'utf8',
     );
-    const branch = lifecycle.slice(
-      lifecycle.indexOf("} else if (entity === 'activity') {"),
-      lifecycle.indexOf('// Dependency leaf'),
+    const branch = stripComments(
+      lifecycle.slice(
+        lifecycle.indexOf("} else if (entity === 'activity') {"),
+        lifecycle.indexOf('// Dependency leaf'),
+      ),
     );
     const seam = branch.indexOf('lockActivityIdsInIdOrder');
     expect(seam).toBeGreaterThan(-1);

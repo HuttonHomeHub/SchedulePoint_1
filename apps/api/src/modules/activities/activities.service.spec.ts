@@ -1308,6 +1308,18 @@ describe('ActivitiesService', () => {
         expect(txUpdateMany).toHaveBeenCalledTimes(1);
       });
 
+      it('finds the summary among the locked rows wherever it sits in them', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(summary());
+        txFindMany.mockResolvedValue([{ id: 'child-1' }, { id: 'child-2' }]);
+        txQueryRaw.mockResolvedValue([
+          { id: 'child-1', version: 9 },
+          { id: ACTIVITY_ID, version: 3 },
+          { id: 'child-2', version: 9 },
+        ]);
+        await dissolveAt(3);
+        expect(txUpdateMany).toHaveBeenCalledTimes(1);
+      });
+
       it('answers 409 STALE_VERSION and promotes nothing when the summary moved', async () => {
         activities.findActiveByIdInOrg.mockResolvedValue(summary());
         txQueryRaw.mockResolvedValue([{ id: ACTIVITY_ID, version: 4 }]);
