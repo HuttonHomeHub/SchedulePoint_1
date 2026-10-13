@@ -752,8 +752,8 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
-- **A contrast theme is the reader's palette.** **Approved 2026-10-13; built as `pre-1-0-batch-2` M2, code landed and
-  the real-browser readings owed** ([ADR-0191](adr/0191-a-contrast-theme-is-the-readers-palette.md); spec and plan at
+- **A contrast theme is the reader's palette.** **Approved 2026-10-13; built as `pre-1-0-batch-2` M2; measured and
+  journey-tested in emulation, real Windows still on the device check sheet** ([ADR-0191](adr/0191-a-contrast-theme-is-the-readers-palette.md); spec and plan at
   [`docs/specs/pre-1-0-batch-2/`](specs/pre-1-0-batch-2/)). Under a Windows contrast theme a greyed-out menu item or
   button now looks greyed out, and the Gantt's bars, milestones, progress and selected row stay visible. The diagram keeps
   its own colours by the owner's decision (`docs/TECH_DEBT.md` #508).

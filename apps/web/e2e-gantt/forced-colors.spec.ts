@@ -70,6 +70,12 @@ import {
  */
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * Buttons carry `transition-colors`, so a colour read in the frame after the mode switch is a point
+ * on a transition from the previous mode's value, not the value the rules resolve to.
+ */
+const NO_TRANSITIONS = '*,*::before,*::after{transition:none!important;animation:none!important}';
+
 /** Hold the create request open so the dialog's submit stays `aria-disabled`, then let it go. */
 function holdCreateRequest(page: Page): Promise<() => void> {
   return new Promise((resolveHandle) => {
@@ -126,10 +132,10 @@ async function readMarks(page: Page): Promise<Readings> {
   const trigger = selected.row.getByRole('button', { name: /^Actions for/ });
 
   // A keyboard ring inside the selected row: focus the trigger the way a Tab would.
+  await page.keyboard.press('Shift');
   await trigger.focus();
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Tab');
   await expect(trigger).toBeFocused();
+  expect(await trigger.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
   const triggerFocus = { ...(await computed(trigger)), behind: await colourBehind(trigger) };
 
   // An open cell inside the selected row: its ink must differ from its fill.
@@ -189,6 +195,7 @@ test('a contrast theme keeps the Gantt readable and a shaded control shaded', as
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
   await ensurePen(page);
+  await page.addStyleTag({ content: NO_TRANSITIONS });
 
   // The pinned positives: every mark the assertions below read exists, and is the kind of mark it
   // is named for. Without them a selector that matched nothing would read as "nothing vanished".
@@ -292,6 +299,8 @@ test('a contrast theme keeps the Gantt readable and a shaded control shaded', as
   });
 
   await test.step('active: a natively disabled control still reads GrayText (untouched by the rule)', async () => {
+    // The page was left in ordinary colours by the last reading above.
+    await page.emulateMedia({ forcedColors: 'active' });
     const native = await page.evaluate(() => {
       const probe = document.createElement('button');
       probe.disabled = true;

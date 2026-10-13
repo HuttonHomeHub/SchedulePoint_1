@@ -276,7 +276,11 @@ export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promis
         method: string,
         body: Record<string, unknown>,
       ): Promise<{ id: string; version: number }> => {
-        const response = await fetch(`${base}${path}`, {
+        // Activity-scoped routes (progress) hang off the organisation, not the plan.
+        const url = path.startsWith('/activities/')
+          ? `/api/v1/organizations/${org}${path}`
+          : `${base}${path}`;
+        const response = await fetch(url, {
           method,
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
@@ -320,6 +324,19 @@ export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promis
           percentComplete: 60,
         });
         await send('/schedule/recalculate', 'POST', {});
+        // The engine does not roll a child's percent up into its summary, so a summary's progress
+        // is set directly, after the recalculation (which rewrites derived fields) and with the
+        // version the recalculation left it at.
+        const listed = await fetch(`${base}/activities?limit=100`, { credentials: 'include' });
+        const rows = (
+          (await listed.json()) as { data: { id: string; name: string; version: number }[] }
+        ).data;
+        const summaryRow = rows.find((row) => row.name === names.summary);
+        if (summaryRow === undefined) throw new Error('summary not found after recalculation');
+        await send(`/activities/${summaryRow.id}/progress`, 'PATCH', {
+          version: summaryRow.version,
+          percentComplete: 50,
+        });
         await send('/baselines', 'POST', { name: 'Forced colours baseline' });
         return null;
       } catch (error) {

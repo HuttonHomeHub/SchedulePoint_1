@@ -2,8 +2,8 @@
 
 - **Status:** Accepted — 2026-10-13. The spec was approved by the product owner on 2026-10-13, with Q4 answered "no"
   (the diagram keeps its own colours; D3). D2's mapping is the spec's default, revised after the accessibility, component and UX reviews (the selected row is an
-  edge, not a fill) and trimmed by the M2-T1 readings (`m2-measurement.md`), which are not taken yet; anything that
-  survives unaided is removed from the Gantt, not kept.
+  edge, not a fill) and trimmed by the M2-T1 readings (`docs/specs/pre-1-0-batch-2/m2-measurement.md`, taken 2026-10-13): the float tail,
+  the ghost, the armed outline and the arrows survive unaided and carry no forced form.
 - **Spec:** [`docs/specs/pre-1-0-batch-2/feature-spec.md`](../specs/pre-1-0-batch-2/feature-spec.md) §4.1 · **Plan:**
   [`implementation-plan.md`](../specs/pre-1-0-batch-2/implementation-plan.md) Milestone 2
 - **Date:** 2026-10-13

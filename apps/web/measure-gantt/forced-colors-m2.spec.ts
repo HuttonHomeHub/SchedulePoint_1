@@ -89,6 +89,8 @@ async function limb<T>(fn: () => Promise<T>): Promise<Limb<T>> {
 
 /** Computed values plus whether the box paints anything a reader can see. */
 async function mark(page: Page, target: Locator) {
+  // A mark that is absent is a finding, not a wait: `evaluate` on nothing blocks until the test times out.
+  if ((await target.count()) === 0) return { count: 0 };
   return {
     count: await target.count(),
     computed: await computed(target.first()),
@@ -134,6 +136,10 @@ test('M2-T1: contrast-theme readings of the Gantt, shaded controls and existing 
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
   await ensurePen(page);
+  // Buttons carry `transition-colors`: a read right after a mode switch is a point on a transition.
+  await page.addStyleTag({
+    content: '*,*::before,*::after{transition:none!important;animation:none!important}',
+  });
 
   // Pinned positives: the marks exist and the critical one is critical.
   await expect(marksOf(page, PLAN.critical).bar).toHaveCount(1);
@@ -174,6 +180,7 @@ test('M2-T1: contrast-theme readings of the Gantt, shaded controls and existing 
       milestone: await limb(() => mark(page, milestone.milestone)),
       progressOnTask: await limb(() => mark(page, selected.progress)),
       progressOnChild: await limb(() => mark(page, child.progress)),
+      progressOnSummary: await limb(() => mark(page, summary.progress)),
       baselineGhost: await limb(() => mark(page, task.ghost)),
     };
 
@@ -200,9 +207,8 @@ test('M2-T1: contrast-theme readings of the Gantt, shaded controls and existing 
       // `:focus-visible` outline in `Highlight`.
       focusedControl: await limb(async () => {
         const trigger = selected.row.getByRole('button', { name: /^Actions for/ });
+        await page.keyboard.press('Shift');
         await trigger.focus();
-        await page.keyboard.press('Shift+Tab');
-        await page.keyboard.press('Tab');
         const read = await computed(trigger);
         return {
           ...read,

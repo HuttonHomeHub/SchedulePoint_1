@@ -86,7 +86,7 @@ const chartCell = (page: Page, name: string): Locator =>
 /** The marks of one activity's row, each a locator that may match nothing (a milestone has no bar). */
 export function marksOf(page: Page, name: string) {
   const cell = chartCell(page, name);
-  const bar = cell.locator('span[class~="h-3.5"]');
+  const bar = cell.locator('span[class~="h-3.5"][class~="overflow-hidden"]');
   return {
     row: ganttRow(page, name),
     bar,
@@ -148,8 +148,9 @@ export function colourBehind(target: Locator): Promise<string> {
   return target.evaluate((node) => {
     for (let el = node.parentElement; el !== null; el = el.parentElement) {
       const bg = getComputedStyle(el).backgroundColor;
-      if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+      // Fully transparent in either spelling: forced colours reports `rgba(255, 255, 255, 0)`.
+      if (bg !== 'transparent' && !/,\s*0\)$/.test(bg)) return bg;
     }
-    return 'rgba(0, 0, 0, 0)';
+    return 'transparent';
   });
 }
