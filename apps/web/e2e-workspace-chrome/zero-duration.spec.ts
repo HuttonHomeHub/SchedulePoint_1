@@ -240,35 +240,45 @@ test.describe('Make milestone… (M4)', () => {
     page,
   }) => {
     test.setTimeout(240_000);
-    const orgSlug = await onboard(page, STAMP + 1);
-    await createHierarchy(page);
-    await newPlan(page, 'Make milestone');
-    await ensurePen(page);
+    // Each phase is a step so a `--reporter=json` run reports where the time goes (#506).
+    const orgSlug = await test.step('onboard', () => onboard(page, STAMP + 1));
+    await test.step('hierarchy', () => createHierarchy(page));
+    await test.step('plan', async () => {
+      await newPlan(page, 'Make milestone');
+      await ensurePen(page);
+    });
 
-    const pre = await createActivity(page, orgSlug, { name: 'Pre', durationDays: 5, laneIndex: 0 });
-    const z = await createActivity(page, orgSlug, {
-      name: 'Pour slab',
-      durationDays: 0,
-      laneIndex: 1,
-      visualStart: '2026-01-12',
+    const { pre, z, loose } = await test.step('seed activities', async () => {
+      const pre = await createActivity(page, orgSlug, {
+        name: 'Pre',
+        durationDays: 5,
+        laneIndex: 0,
+      });
+      const z = await createActivity(page, orgSlug, {
+        name: 'Pour slab',
+        durationDays: 0,
+        laneIndex: 1,
+        visualStart: '2026-01-12',
+      });
+      const succ = await createActivity(page, orgSlug, {
+        name: 'Succ',
+        durationDays: 1,
+        laneIndex: 2,
+      });
+      // FC-6 is about an UNPLACED zero-duration task: a placed one also shows `Clear visual start`,
+      // which already wraps the foot row at 1646 with no new item (m0-measurement.md, M0-T5, accepted
+      // at M-F-T6). This one sits at the data date in Succ's lane, clear of Succ, and ties to nothing.
+      const loose = await createActivity(page, orgSlug, {
+        name: 'Loose event',
+        durationDays: 0,
+        laneIndex: 2,
+      });
+      await linkActivities(page, orgSlug, pre.id, z.id);
+      await linkActivities(page, orgSlug, z.id, succ.id);
+      await recalculate(page, orgSlug);
+      await ensurePen(page);
+      return { pre, z, loose };
     });
-    const succ = await createActivity(page, orgSlug, {
-      name: 'Succ',
-      durationDays: 1,
-      laneIndex: 2,
-    });
-    // FC-6 is about an UNPLACED zero-duration task: a placed one also shows `Clear visual start`,
-    // which already wraps the foot row at 1646 with no new item (m0-measurement.md, M0-T5, accepted
-    // at M-F-T6). This one sits at the data date in Succ's lane, clear of Succ, and ties to nothing.
-    const loose = await createActivity(page, orgSlug, {
-      name: 'Loose event',
-      durationDays: 0,
-      laneIndex: 2,
-    });
-    await linkActivities(page, orgSlug, pre.id, z.id);
-    await linkActivities(page, orgSlug, z.id, succ.id);
-    await recalculate(page, orgSlug);
-    await ensurePen(page);
 
     const before = await rowsByName(page, orgSlug);
     expect(before.get('Succ')?.earlyStart?.slice(0, 10)).toBe('2026-01-12');
@@ -279,85 +289,91 @@ test.describe('Make milestone… (M4)', () => {
     // well inside 1646 × 1097, `innerWidth` read 1646, and every canvas click timed out behind
     // "<html> intercepts pointer events" for four minutes. Growing works, so the order is the fix.
     for (const width of [1646, 1920]) {
-      await page.setViewportSize({ width, height: 1097 });
-      await findBarWide(page, pre.id);
-      await expect(dock.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
-      // Absent for an ordinary task: it does not apply (ADR-0082's omit clause).
-      await expect(dock.getByRole('button', { name: MAKE_MILESTONE })).toHaveCount(0);
-      const ordinary = await footRowHeight(page);
+      await test.step(`viewport ${String(width)}`, async () => {
+        await page.setViewportSize({ width, height: 1097 });
+        await test.step('select Pre', () => findBarWide(page, pre.id));
+        await expect(dock.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+        // Absent for an ordinary task: it does not apply (ADR-0082's omit clause).
+        await expect(dock.getByRole('button', { name: MAKE_MILESTONE })).toHaveCount(0);
+        const ordinary = await footRowHeight(page);
 
-      await findBarWide(page, loose.id);
-      const button = dock.getByRole('button', { name: MAKE_MILESTONE });
-      await expect(button).toBeVisible();
-      expect(await footRowHeight(page), `foot row at ${String(width)}`).toBe(ordinary);
-      await expectReachableTarget(button);
+        await test.step('select Loose event', () => findBarWide(page, loose.id));
+        const button = dock.getByRole('button', { name: MAKE_MILESTONE });
+        await expect(button).toBeVisible();
+        expect(await footRowHeight(page), `foot row at ${String(width)}`).toBe(ordinary);
+        await expectReachableTarget(button);
 
-      // The dialog's own controls at this width too, then Cancel: nothing is written.
-      await button.click();
-      const dialog = page.getByRole('dialog', { name: /milestone/ });
-      await expect(dialog).toBeVisible();
-      // No predecessor, so Start is preselected (spec D5).
-      await expect(dialog.getByRole('radio', { name: 'Start milestone' })).toHaveAttribute(
-        'aria-checked',
-        'true',
-      );
-      for (const control of [
-        dialog.getByRole('radio', { name: 'Finish milestone' }),
-        dialog.getByRole('radio', { name: 'Start milestone' }),
-        dialog.getByRole('button', { name: 'Cancel' }),
-        dialog.getByRole('button', { name: 'Make milestone', exact: true }),
-      ]) {
-        await expectReachableTarget(control);
-      }
-      await dialog.getByRole('button', { name: 'Cancel' }).click();
-      await expect(dialog).toHaveCount(0);
-      await expect(diagramList(page)).toBeFocused();
+        // The dialog's own controls at this width too, then Cancel: nothing is written.
+        await button.click();
+        const dialog = page.getByRole('dialog', { name: /milestone/ });
+        await expect(dialog).toBeVisible();
+        // No predecessor, so Start is preselected (spec D5).
+        await expect(dialog.getByRole('radio', { name: 'Start milestone' })).toHaveAttribute(
+          'aria-checked',
+          'true',
+        );
+        for (const control of [
+          dialog.getByRole('radio', { name: 'Finish milestone' }),
+          dialog.getByRole('radio', { name: 'Start milestone' }),
+          dialog.getByRole('button', { name: 'Cancel' }),
+          dialog.getByRole('button', { name: 'Make milestone', exact: true }),
+        ]) {
+          await expectReachableTarget(control);
+        }
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toHaveCount(0);
+        await expect(diagramList(page)).toBeFocused();
+      });
     }
     expect((await rowsByName(page, orgSlug)).get('Loose event')?.type).toBe('TASK');
 
     // The placed one: its predecessor makes Finish the default.
-    await findBarWide(page, z.id);
-    await dock.getByRole('button', { name: MAKE_MILESTONE }).click();
-    const dialog = page.getByRole('dialog', { name: /milestone/ });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('radio', { name: 'Finish milestone' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    await dialog.getByRole('button', { name: 'Make milestone', exact: true }).click();
-    await expect(dialog).toHaveCount(0);
+    await test.step('convert Pour slab', async () => {
+      await test.step('select Pour slab', () => findBarWide(page, z.id));
+      await dock.getByRole('button', { name: MAKE_MILESTONE }).click();
+      const dialog = page.getByRole('dialog', { name: /milestone/ });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('radio', { name: 'Finish milestone' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      await dialog.getByRole('button', { name: 'Make milestone', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
 
-    // Focus is on the activity in the diagram, not on <body>.
-    await expect(diagramList(page)).toBeFocused();
-    expect(await selectedActivityId(page)).toBe(z.id);
-    // And the announcement, made from the recalculated row once it arrived.
-    await expect(page.getByTestId('announcer')).toHaveText(
-      /Pour slab is now a finish milestone, dated \w{3} \d{1,2} \w{3}\. Its successors and float are unchanged\./,
-      { timeout: 20_000 },
-    );
+      // Focus is on the activity in the diagram, not on <body>.
+      await expect(diagramList(page)).toBeFocused();
+      expect(await selectedActivityId(page)).toBe(z.id);
+      // And the announcement, made from the recalculated row once it arrived.
+      await expect(page.getByTestId('announcer')).toHaveText(
+        /Pour slab is now a finish milestone, dated \w{3} \d{1,2} \w{3}\. Its successors and float are unchanged\./,
+        { timeout: 20_000 },
+      );
 
-    await expect
-      .poll(async () => (await rowsByName(page, orgSlug)).get('Pour slab')?.type, {
-        timeout: 15_000,
-      })
-      .toBe('FINISH_MILESTONE');
-    const converted = (await rowsByName(page, orgSlug)).get('Pour slab');
-    // Monday 12 → SUNDAY 11: one calendar day, never the Friday.
-    expect(converted?.visualStart).toBe('2026-01-11');
+      await expect
+        .poll(async () => (await rowsByName(page, orgSlug)).get('Pour slab')?.type, {
+          timeout: 15_000,
+        })
+        .toBe('FINISH_MILESTONE');
+      const converted = (await rowsByName(page, orgSlug)).get('Pour slab');
+      // Monday 12 → SUNDAY 11: one calendar day, never the Friday.
+      expect(converted?.visualStart).toBe('2026-01-11');
+    });
 
-    // Undo, from the keyboard, with focus where the conversion left it.
-    await page.keyboard.press('Control+z');
-    await expect
-      .poll(async () => (await rowsByName(page, orgSlug)).get('Pour slab')?.type, {
-        timeout: 15_000,
-      })
-      .toBe('TASK');
+    await test.step('undo', async () => {
+      // Undo, from the keyboard, with focus where the conversion left it.
+      await page.keyboard.press('Control+z');
+      await expect
+        .poll(async () => (await rowsByName(page, orgSlug)).get('Pour slab')?.type, {
+          timeout: 15_000,
+        })
+        .toBe('TASK');
 
-    await recalculate(page, orgSlug);
-    const after = await rowsByName(page, orgSlug);
-    expect(after.get('Succ')?.earlyStart?.slice(0, 10)).toBe('2026-01-12');
-    expect(comparable(after.get('Pour slab'))).toEqual(comparable(before.get('Pour slab')));
-    expect(comparable(after.get('Succ'))).toEqual(comparable(before.get('Succ')));
+      await recalculate(page, orgSlug);
+      const after = await rowsByName(page, orgSlug);
+      expect(after.get('Succ')?.earlyStart?.slice(0, 10)).toBe('2026-01-12');
+      expect(comparable(after.get('Pour slab'))).toEqual(comparable(before.get('Pour slab')));
+      expect(comparable(after.get('Succ'))).toEqual(comparable(before.get('Succ')));
+    });
   });
 
   test('a resourced zero-duration task is shaded with the assignments reason', async ({ page }) => {
