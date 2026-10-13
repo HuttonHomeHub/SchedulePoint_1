@@ -247,6 +247,43 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    describe('the activity branch’s expected root version (#500)', () => {
+      it('compares the root from the ordered lock’s rows, before the first write', async () => {
+        tx.$queryRaw.mockResolvedValue([
+          { id: 'a1', version: 4 },
+          { id: 'c1', version: 9 },
+        ]);
+        await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR, undefined, undefined, 4);
+        expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+        expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+          tx.activity.updateMany.mock.invocationCallOrder[0] ?? Infinity,
+        );
+      });
+
+      it('answers 409 STALE_VERSION and writes nothing when the root moved', async () => {
+        tx.$queryRaw.mockResolvedValue([{ id: 'a1', version: 5 }]);
+        await expect(
+          service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR, undefined, undefined, 4),
+        ).rejects.toMatchObject({ details: { reason: 'STALE_VERSION' } });
+        expect(tx.activity.updateMany).not.toHaveBeenCalled();
+        expect(tx.activityDependency.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('answers 404 when the ordered lock found no root row', async () => {
+        tx.$queryRaw.mockResolvedValue([{ id: 'c1', version: 1 }]);
+        await expect(
+          service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR, undefined, undefined, 1),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        expect(tx.activity.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('checks nothing when no version is passed, as every other caller does', async () => {
+        tx.$queryRaw.mockResolvedValue([]);
+        await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+        expect(tx.activity.updateMany).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('deletes an activity alone as a leaf (no descendants)', async () => {
       // A leaf has no `parent_id` children, so the subtree resolves to just itself.
       tx.activity.findMany.mockResolvedValue([]);

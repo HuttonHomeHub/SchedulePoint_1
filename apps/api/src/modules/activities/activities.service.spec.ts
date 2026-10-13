@@ -1291,6 +1291,46 @@ describe('ActivitiesService', () => {
     const summary = (over: Partial<Activity> = {}) =>
       activity({ id: ACTIVITY_ID, type: 'WBS_SUMMARY', parentId: null, ...over });
 
+    describe('an opt-in version (#500)', () => {
+      const dissolveAt = (version: number) =>
+        service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID, undefined, version);
+
+      it('is compared from the ordered lock’s rows, and nothing else locks the summary', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(summary());
+        txFindMany.mockResolvedValue([{ id: 'child-1' }]);
+        txQueryRaw.mockResolvedValue([
+          { id: 'child-1', version: 2 },
+          { id: ACTIVITY_ID, version: 3 },
+        ]);
+        await dissolveAt(3);
+        // One raw statement: the id-order lock. A second would be the early single-row lock back.
+        expect(txQueryRaw).toHaveBeenCalledTimes(1);
+        expect(txUpdateMany).toHaveBeenCalledTimes(1);
+      });
+
+      it('answers 409 STALE_VERSION and promotes nothing when the summary moved', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(summary());
+        txQueryRaw.mockResolvedValue([{ id: ACTIVITY_ID, version: 4 }]);
+        await expect(dissolveAt(3)).rejects.toMatchObject({ details: { reason: 'STALE_VERSION' } });
+        expect(txUpdateMany).not.toHaveBeenCalled();
+        expect(lifecycle.cascadeSoftDelete).not.toHaveBeenCalled();
+      });
+
+      it('answers 404 when the ordered lock found no summary row', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(summary());
+        txQueryRaw.mockResolvedValue([]);
+        await expect(dissolveAt(3)).rejects.toBeInstanceOf(NotFoundError);
+        expect(txUpdateMany).not.toHaveBeenCalled();
+      });
+
+      it('checks nothing without a version, even when the lock returned no summary row', async () => {
+        activities.findActiveByIdInOrg.mockResolvedValue(summary());
+        txQueryRaw.mockResolvedValue([]);
+        await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+        expect(txUpdateMany).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('promotes the direct children to the summary’s own parent, then deletes it', async () => {
       activities.findActiveByIdInOrg.mockResolvedValue(summary({ parentId: 'grandparent' }));
       txFindFirst.mockResolvedValue({ parentId: 'grandparent' });
@@ -1627,6 +1667,21 @@ describe('ActivitiesService', () => {
         USER_ID,
         undefined,
         expect.anything(), // the knock-on collector (ADR-0174)
+        undefined, // no `?version=`: the cascade checks nothing
+      );
+    });
+
+    it('hands an opt-in `?version=` to the cascade, which checks it after its ordered lock (#500)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await service.remove(principalWith(ALL), 'acme', ACTIVITY_ID, undefined, 7);
+      expect(lifecycle.cascadeSoftDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        'activity',
+        ACTIVITY_ID,
+        USER_ID,
+        undefined,
+        expect.anything(),
+        7,
       );
     });
 

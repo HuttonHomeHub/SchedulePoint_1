@@ -382,6 +382,35 @@ describe('multi-row activity writers lock in id order', () => {
     expect(unorderedActivityWriters(late)).toEqual(['bulk']);
   });
 
+  it('takes no single-row activity lock ahead of the id-order seam in remove and dissolveSummary (#500)', () => {
+    // A single-row lock on the root held it above rows the id-order lock then waits for, the opposite
+    // order to a placement batch. `lockActivityVersion` was that lock and is deleted; this keeps a
+    // successor (a raw lock of one activity by id) from returning ahead of the seam.
+    const text = readFileSync(join(SRC, 'modules/activities/activities.service.ts'), 'utf8');
+    for (const name of ['remove', 'dissolveSummary']) {
+      const start = text.indexOf(`\n  async ${name}(`);
+      const end = text.indexOf('\n  /**', start);
+      expect(start, `${name} found`).toBeGreaterThan(-1);
+      const body = text.slice(start, end);
+      expect(body, name).not.toMatch(/lockActivityVersion/);
+      expect(body, name).not.toMatch(/\$queryRaw/);
+    }
+    const lifecycle = readFileSync(
+      join(SRC, 'common/hierarchy/hierarchy-lifecycle.service.ts'),
+      'utf8',
+    );
+    const branch = lifecycle.slice(
+      lifecycle.indexOf("} else if (entity === 'activity') {"),
+      lifecycle.indexOf('// Dependency leaf'),
+    );
+    const seam = branch.indexOf('lockActivityIdsInIdOrder');
+    expect(seam).toBeGreaterThan(-1);
+    expect(branch).not.toMatch(/\$queryRaw/);
+    // The version is compared after the ordered lock and before the first write.
+    expect(branch.indexOf('assertVersionMatches')).toBeGreaterThan(seam);
+    expect(branch.indexOf('assertVersionMatches')).toBeLessThan(branch.indexOf('updateMany'));
+  });
+
   it('has the single DELETE take the plan advisory lock', () => {
     const text = readFileSync(join(SRC, 'modules/activities/activities.service.ts'), 'utf8');
     const start = text.indexOf('\n  async remove(');
