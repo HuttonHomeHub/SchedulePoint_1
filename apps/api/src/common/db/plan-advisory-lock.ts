@@ -40,6 +40,24 @@ export async function acquirePlanWriteLock(
 }
 
 /**
+ * Take {@link acquirePlanWriteLock} for several plans: de-duplicated and in sorted id order, so two
+ * transactions that each need an overlapping set meet in one total order and cannot deadlock on
+ * each other (`docs/TECH_DEBT.md` #492). A client or project delete is the only caller that holds
+ * more than one plan lock, and every other caller holds one, so a sorted order cannot form a cycle
+ * with them. The cost is one lock-table entry per plan for the length of the transaction, bounded by
+ * Postgres's shared lock table (`max_locks_per_transaction` x connections), which is ample for the
+ * plan counts a single client holds.
+ */
+export async function acquirePlanWriteLocks(
+  db: Prisma.TransactionClient,
+  planIds: readonly string[],
+): Promise<void> {
+  for (const planId of [...new Set(planIds)].sort()) {
+    await acquirePlanWriteLock(db, planId);
+  }
+}
+
+/**
  * Take a transaction-scoped Postgres advisory lock keyed by the ORGANISATION, serialising
  * cross-plan dependency creates within one org (ADR-0045 §3) so a concurrent mirror insert cannot
  * race the plan-level cycle walk. Uses {@link CROSS_PLAN_ORG_LOCK_NAMESPACE} — a distinct key

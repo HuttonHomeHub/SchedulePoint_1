@@ -2009,6 +2009,9 @@ export class ActivitiesService {
     // The lifecycle enforces the top-down invariant: restoring an activity whose
     // parent plan is still soft-deleted raises PARENT_DELETED (→ 409).
     await this.prisma.$transaction(async (tx) => {
+      // The plan lock batch restore takes below, so a restore and a recalculation of the same plan
+      // are serialised rather than interleaved (`docs/TECH_DEBT.md` #492).
+      await acquirePlanWriteLock(tx, existing.planId);
       const knockOn: KnockOn = { links: [], activityIds: [] };
       const counts = await this.lifecycle.restoreBatch(
         tx,
