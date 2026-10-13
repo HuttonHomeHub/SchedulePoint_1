@@ -16,8 +16,8 @@ export interface RulerTick {
  * The least pixel distance between two month labels' left edges at the default text size, and the
  * pitch the printed document always uses (paper does not scale with the reader's text setting). The
  * widest label is "Sept 2027" (en-GB spells September with four letters): measured at 49.6 px at
- * the `text-micro` size (10 px), plus the 4 px `left-1` inset the label sits at, plus a gap of
- * about 10 px so neighbours read as two words rather than one string. The chosen step is judged on
+ * the `text-micro` size (10 px), plus a gap of about 14 px so neighbours read as two words rather
+ * than one string (the labels' common `left-1` inset cancels in a left-to-left pitch). The chosen step is judged on
  * an average month, and a 59-day pair is 3% shorter than that, which the gap absorbs.
  *
  * **This is only right at 16 px text.** `text-micro` is in `rem`, so at 200 % text the same label
@@ -89,6 +89,9 @@ export function buildRulerTicks(
   const showDays = pxPerDay >= DAY_TICK_MIN_PX;
   const step = labelStep(pxPerDay, minLabelPitchPx);
   const ticks: RulerTick[] = [];
+  let firstMonthIso: string | null = null;
+  let firstMonthTick: RulerTick | null = null;
+  let anyLabel = false;
 
   for (let day = 0; day <= totalDays; day += 1) {
     const iso = addCalendarDays(anchorIso, day);
@@ -97,14 +100,27 @@ export function buildRulerTicks(
       const year = Number(iso.slice(0, 4));
       const monthIndex = Number(iso.slice(5, 7)) - 1;
       const labelled = monthIndex % step.months === 0 && year % step.years === 0;
-      ticks.push({
+      const tick: RulerTick = {
         x: daysBetween(anchorIso, iso) * pxPerDay,
         label: labelled ? MONTH_FORMAT.format(new Date(`${iso}T00:00:00Z`)) : '',
         major: true,
-      });
+      };
+      if (labelled) anyLabel = true;
+      if (firstMonthTick === null) {
+        firstMonthTick = tick;
+        firstMonthIso = iso;
+      }
+      ticks.push(tick);
     } else if (showDays) {
       ticks.push({ x: day * pxPerDay, label: '', major: false });
     }
+  }
+
+  // A coarse step can land on no labelled month in view (a year-long range at a half-year step with
+  // no January or July in it), leaving a ruler of bare lines. One label cannot overprint anything,
+  // so the first month start in view carries it.
+  if (!anyLabel && firstMonthTick !== null && firstMonthIso !== null) {
+    firstMonthTick.label = MONTH_FORMAT.format(new Date(`${firstMonthIso}T00:00:00Z`));
   }
 
   return ticks;

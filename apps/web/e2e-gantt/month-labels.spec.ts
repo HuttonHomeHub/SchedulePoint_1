@@ -44,7 +44,7 @@ async function applyFontSize(cdp: CDPSession, scale: 1 | 2): Promise<void> {
 /** Self-contained (Playwright serialises it). Glyph boxes, so padding is not counted. */
 function readMonthLabels(): { labels: number; overlaps: number; clearance: number } {
   const header = document.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
-  const ruler = header?.lastElementChild?.querySelector<HTMLElement>('.relative.h-full');
+  const ruler = document.querySelector<HTMLElement>('[data-testid="gantt-ruler"]');
   if (!header || !ruler) throw new Error('no Gantt ruler');
   const boxes = [...ruler.querySelectorAll<HTMLElement>('span')].map((s) => {
     const range = document.createRange();
@@ -135,6 +135,7 @@ test.describe('the Gantt ruler at 200 % text', () => {
           })
           .toBe(0);
         const facts = await page.evaluate(readMonthLabels);
+        expect(facts.labels, `${framing}: the ruler is not left bare`).toBeGreaterThan(0);
         expect(
           facts.clearance,
           `${framing}: label bottom sits inside the 34 px ruler`,

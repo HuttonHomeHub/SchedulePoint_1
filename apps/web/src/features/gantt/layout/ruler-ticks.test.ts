@@ -130,11 +130,35 @@ describe('buildRulerTicks', () => {
     });
 
     // The printed document passes no pitch, and paper does not scale with text size: its ticks
-    // must be exactly what the default produces.
+    // are what the default produces. (The zero-label fallback below changes a range only where it
+    // had no label at all, at any pitch.)
     it.each([0.2, 0.8, 1.1, 3, 6, 20])('is unchanged for the default pitch at %s px/day', (px) => {
       expect(buildRulerTicks('2026-01-01', 1500, px)).toEqual(
         buildRulerTicks('2026-01-01', 1500, px, MONTH_LABEL_MIN_PITCH_PX),
       );
+    });
+  });
+
+  describe('a range whose step lands on no month in view still carries one label', () => {
+    const labels = (anchor: string, width: number, px: number, pitch?: number): string[] =>
+      buildRulerTicks(anchor, width, px, pitch)
+        .filter((t) => t.label !== '')
+        .map((t) => t.label);
+
+    it('labels the first month start in a year-long range at the yearly step', () => {
+      // 0.3 px/day with a 113 px pitch is the every-January step; 300 days from 1 Feb holds none.
+      const found = labels('2026-02-01', 90, 0.3, 113);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatch(/^Feb/);
+    });
+
+    it('labels one month in a short range at the half-year step with no January or July', () => {
+      // 0.6 px/day: the half-year step; 100 days from 1 Feb reach May.
+      expect(labels('2026-02-01', 60, 0.6)).toHaveLength(1);
+    });
+
+    it('adds nothing where a label already lands', () => {
+      expect(labels('2026-01-01', 90, 0.3, 113)).toEqual(['Jan 2026']);
     });
   });
 

@@ -37,9 +37,8 @@ async function applyFont(cdp: CDPSession, scale: 1 | 2): Promise<void> {
 /** Self-contained (Playwright serialises it). */
 function readMonths(): Record<string, unknown> {
   const header = document.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
-  const cell = header?.lastElementChild as HTMLElement | null | undefined;
-  const ruler = cell?.querySelector<HTMLElement>('.relative.h-full');
-  if (!header || !cell || !ruler) throw new Error('no Gantt ruler');
+  const ruler = document.querySelector<HTMLElement>('[data-testid="gantt-ruler"]');
+  if (!header || !ruler) throw new Error('no Gantt ruler');
   const spans = [...ruler.querySelectorAll<HTMLElement>('span')];
   const rulerBottom = header.getBoundingClientRect().bottom;
   const boxes = spans.map((s) => {

@@ -22,37 +22,37 @@ Each cell is shown before the fix -> after the fix where it changed.
 
 ### 1280 x 800
 
-| Text  | Framing | Labels | Min pitch (px) | Widest glyph (px) | Overlapping pairs | Label bottom vs 34 px ruler (px) |
-| ----- | ------- | ------ | -------------- | ----------------- | ----------------- | -------------------------------- |
-| 100 % | arrival | 3 -> 3 | 92.5 -> 92.5   | 47.0              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Day     | 9 -> 9 | 742 -> 742     | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Week    | 9 -> 9 | 346.3 -> 346.3 | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Month   | 9 -> 9 | 114.2 -> 114.2 | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Quarter | 3 -> 3 | 92.5 -> 92.5   | 47.0              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Year    | 1 -> 1 | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
-| 200 % | arrival | 4 -> 3 | 108.3 -> 161.5 | 99.1 -> 94.1      | 0 -> 0            | -1 -> +3                         |
-| 200 % | Day     | 9 -> 9 | 1296 -> 1296   | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Week    | 9 -> 9 | 604.8 -> 604.8 | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Month   | 9 -> 9 | 199.4 -> 199.4 | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Quarter | 4 -> 3 | 108.3 -> 161.5 | 99.1 -> 94.1      | 0 -> 0            | -1 -> +3                         |
-| 200 % | Year    | 1 -> 0 | n/a -> n/a     | 89.3 -> 0         | 0 -> 0            | -1 -> n/a                        |
+| Text  | Framing | Labels  | Min pitch (px) | Widest glyph (px) | Overlapping pairs | Label bottom vs 34 px ruler (px) |
+| ----- | ------- | ------- | -------------- | ----------------- | ----------------- | -------------------------------- |
+| 100 % | arrival | 3 -> 3  | 92.5 -> 92.5   | 47.0              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Day     | 9 -> 9  | 742 -> 742     | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Week    | 9 -> 9  | 346.3 -> 346.3 | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Month   | 9 -> 9  | 114.2 -> 114.2 | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Quarter | 3 -> 3  | 92.5 -> 92.5   | 47.0              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Year    | 1 -> 1  | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
+| 200 % | arrival | 4 -> 3  | 108.3 -> 161.5 | 99.1 -> 94.1      | 0 -> 0            | -1 -> +3                         |
+| 200 % | Day     | 9 -> 9  | 1296 -> 1296   | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Week    | 9 -> 9  | 604.8 -> 604.8 | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Month   | 9 -> 9  | 199.4 -> 199.4 | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Quarter | 4 -> 3  | 108.3 -> 161.5 | 99.1 -> 94.1      | 0 -> 0            | -1 -> +3                         |
+| 200 % | Year    | 1 -> 1* | n/a -> n/a     | 89.3              | 0 -> 0            | -1 -> +3*                        |
 
 ### 1024 x 600
 
-| Text  | Framing | Labels | Min pitch (px) | Widest glyph (px) | Overlapping pairs | Label bottom vs 34 px ruler (px) |
-| ----- | ------- | ------ | -------------- | ----------------- | ----------------- | -------------------------------- |
-| 100 % | arrival | 1 -> 1 | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Day     | 9 -> 9 | 230 -> 230     | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Week    | 9 -> 9 | 107.3 -> 107.3 | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Month   | 4 -> 4 | 77.1 -> 77.1   | 49.6              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Quarter | 1 -> 1 | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
-| 100 % | Year    | 1 -> 1 | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
-| 200 % | arrival | 4 -> 1 | 65.5 -> n/a    | 99.1 -> 89.3      | **3 -> 0**        | -1 -> +3                         |
-| 200 % | Day     | 9 -> 9 | 784 -> 784     | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Week    | 9 -> 9 | 365.9 -> 365.9 | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Month   | 9 -> 9 | 120.6 -> 120.6 | 99.1              | 0 -> 0            | -1 -> +3                         |
-| 200 % | Quarter | 4 -> 1 | 65.5 -> n/a    | 99.1 -> 89.3      | **3 -> 0**        | -1 -> +3                         |
-| 200 % | Year    | 1 -> 0 | n/a -> n/a     | 89.3 -> 0         | 0 -> 0            | -1 -> n/a                        |
+| Text  | Framing | Labels  | Min pitch (px) | Widest glyph (px) | Overlapping pairs | Label bottom vs 34 px ruler (px) |
+| ----- | ------- | ------- | -------------- | ----------------- | ----------------- | -------------------------------- |
+| 100 % | arrival | 1 -> 1  | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Day     | 9 -> 9  | 230 -> 230     | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Week    | 9 -> 9  | 107.3 -> 107.3 | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Month   | 4 -> 4  | 77.1 -> 77.1   | 49.6              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Quarter | 1 -> 1  | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
+| 100 % | Year    | 1 -> 1  | n/a -> n/a     | 44.7              | 0 -> 0            | +17 -> +19                       |
+| 200 % | arrival | 4 -> 1  | 65.5 -> n/a    | 99.1 -> 89.3      | **3 -> 0**        | -1 -> +3                         |
+| 200 % | Day     | 9 -> 9  | 784 -> 784     | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Week    | 9 -> 9  | 365.9 -> 365.9 | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Month   | 9 -> 9  | 120.6 -> 120.6 | 99.1              | 0 -> 0            | -1 -> +3                         |
+| 200 % | Quarter | 4 -> 1  | 65.5 -> n/a    | 99.1 -> 89.3      | **3 -> 0**        | -1 -> +3                         |
+| 200 % | Year    | 1 -> 1* | n/a -> n/a     | 89.3              | 0 -> 0            | -1 -> +3*                        |
 
 The 100 % "label bottom" moves from +17 to +19 because the label's line height is now its font size
 (`leading-none`), which lifts the glyph 2 px; the label's top inset is unchanged.
@@ -76,9 +76,11 @@ the ruler's bottom border onto the first bar row. At 100 % the label ends 17 px 
   `ResizeObserver` (on mount and when the text size changes, not per render); the pitch is that width plus 14 px,
   never below 64.
 - The label's line height is its font size (`leading-none`), which puts the 200 % glyph box 3 px inside the row.
-- One consequence to know: at 200 % the Year preset of a one-year plan now has no label, because the only labelled
-  step that fits is "every January" and no January falls in view. The month lines are still drawn. Before the fix that
-  cell showed one label that could not overlap anything.
+- A range whose step lands on no labelled month in view (the Year preset of a one-year plan at 200 %, where the
+  only fitting step is "every January") would have been left with bare month lines. `buildRulerTicks` now labels the
+  first month start in view when nothing else is labelled; one label cannot overprint. This changes the printed
+  programme only where it had no label at all. (*) The Year cells' after-fix reading of 1 label is the fallback's
+  documented behaviour, pinned by unit tests; it is to be re-measured at the next database run.
 
 Held by `apps/web/e2e-gantt/month-labels.spec.ts` (1024 x 600, 200 % text, arrival and every preset: 0 overlapping
 pairs and the label inside the ruler), which failed on the unfixed ruler with 3 overlapping pairs.

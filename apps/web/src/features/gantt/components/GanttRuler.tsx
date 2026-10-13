@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   buildRulerTicks,
@@ -6,15 +6,21 @@ import {
   monthLabelSamples,
 } from '../layout/ruler-ticks';
 
-/** Height of the ruler band, in pixels. */
+/**
+ * Height of the ruler band, in pixels. Fixed, so a reader's own line-height override (WCAG 1.4.12)
+ * can push a label's box past the row; nothing clips it, because no ancestor hides overflow.
+ */
 export const RULER_HEIGHT = 34;
 
 /**
- * What sits between one label's right edge and the next label's left edge: the label's 4 px
- * `left-1` inset plus about 10 px so neighbours read as two words. The same 14 px that
- * {@link MONTH_LABEL_MIN_PITCH_PX} carries at the default text size, on top of a measured width.
+ * What separates one label's right edge from the next label's left edge, so neighbours read as two
+ * words rather than one string. The labels' common `left-1` inset cancels in a left-to-left pitch,
+ * so the pitch is the measured width plus this gap alone. At the default size it is the 14 px
+ * {@link MONTH_LABEL_MIN_PITCH_PX} carries over a 49.6 px label.
  */
 const LABEL_GAP_PX = 14;
+
+const MONTH_LABEL_SAMPLES = monthLabelSamples();
 
 export interface GanttRulerProps {
   /** The chart's x = 0 date. */
@@ -45,11 +51,12 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
   const probeRef = useRef<HTMLDivElement>(null);
   const [labelPitchPx, setLabelPitchPx] = useState(MONTH_LABEL_MIN_PITCH_PX);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const probe = probeRef.current;
     if (!probe || typeof ResizeObserver === 'undefined') return;
     const measure = (): void => {
-      // Never below the default: the constant already covers the default size, and a zero read
+      // Read before first paint (layout effect), so a 200 % correction never flashes the overprinted
+      // labels. Never below the default: the constant already covers the default size, and a zero read
       // from a not-yet-laid-out probe must not lift the floor off the labels.
       setLabelPitchPx(
         Math.max(
@@ -71,7 +78,7 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
 
   return (
     <>
-      <div className="relative h-full" aria-hidden="true">
+      <div className="relative h-full" aria-hidden="true" data-testid="gantt-ruler">
         {ticks.map((tick) => (
           <div
             key={`${tick.major ? 'm' : 'd'}-${tick.x}`}
@@ -93,11 +100,12 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
       <div
         ref={probeRef}
         aria-hidden="true"
+        // Absolute, so it anchors to the nearest positioned ancestor and takes no layout of its own.
         // One grid cell holds every label, so the box is as wide as the widest and one line high:
         // a stacked list would add its height to the scroll container.
         className="text-micro pointer-events-none invisible absolute top-0 left-0 grid whitespace-nowrap [&>span]:col-start-1 [&>span]:row-start-1"
       >
-        {monthLabelSamples().map((label) => (
+        {MONTH_LABEL_SAMPLES.map((label) => (
           <span key={label}>{label}</span>
         ))}
       </div>
