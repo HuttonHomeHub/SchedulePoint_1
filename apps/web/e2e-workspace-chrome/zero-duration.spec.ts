@@ -6,6 +6,7 @@ import {
   createHierarchy,
   diagramList,
   ensurePen,
+  findBarInRow,
   findBarWide,
   linkActivities,
   newPlan,
@@ -284,6 +285,16 @@ test.describe('Make milestone… (M4)', () => {
     expect(before.get('Succ')?.earlyStart?.slice(0, 10)).toBe('2026-01-12');
     const dock = page.getByRole('toolbar', { name: /^Actions for / });
 
+    // A bar's lane, and so its y, does not change with the viewport width, so the full two-axis
+    // sweep runs once per activity and every later selection sweeps only that row (#506). The
+    // sweep is still pointer-driven: selection by click is how the dock appears in this journey.
+    const rows = new Map<string, number>();
+    const selectBar = async (id: string): Promise<void> => {
+      const known = rows.get(id);
+      if (known === undefined) rows.set(id, (await findBarWide(page, id)).y);
+      else await findBarInRow(page, id, known);
+    };
+
     // 1646 FIRST (the config's own viewport), then 1920. Shrinking 1920 → 1646 mid-test left
     // Chromium's hit-testing with no viewport: `document.elementsFromPoint` returned [] for a point
     // well inside 1646 × 1097, `innerWidth` read 1646, and every canvas click timed out behind
@@ -291,13 +302,13 @@ test.describe('Make milestone… (M4)', () => {
     for (const width of [1646, 1920]) {
       await test.step(`viewport ${String(width)}`, async () => {
         await page.setViewportSize({ width, height: 1097 });
-        await test.step('select Pre', () => findBarWide(page, pre.id));
+        await test.step('select Pre', () => selectBar(pre.id));
         await expect(dock.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
         // Absent for an ordinary task: it does not apply (ADR-0082's omit clause).
         await expect(dock.getByRole('button', { name: MAKE_MILESTONE })).toHaveCount(0);
         const ordinary = await footRowHeight(page);
 
-        await test.step('select Loose event', () => findBarWide(page, loose.id));
+        await test.step('select Loose event', () => selectBar(loose.id));
         const button = dock.getByRole('button', { name: MAKE_MILESTONE });
         await expect(button).toBeVisible();
         expect(await footRowHeight(page), `foot row at ${String(width)}`).toBe(ordinary);
@@ -329,7 +340,7 @@ test.describe('Make milestone… (M4)', () => {
 
     // The placed one: its predecessor makes Finish the default.
     await test.step('convert Pour slab', async () => {
-      await test.step('select Pour slab', () => findBarWide(page, z.id));
+      await test.step('select Pour slab', () => selectBar(z.id));
       await dock.getByRole('button', { name: MAKE_MILESTONE }).click();
       const dialog = page.getByRole('dialog', { name: /milestone/ });
       await expect(dialog).toBeVisible();
