@@ -30,7 +30,10 @@
 - **The URL version and the package version are two numbers.** `/api/v1` moves only for a breaking REST change.
   The `@repo/api` package version (0.x today) is what Changesets bumps. From 1.0 a breaking change to the public
   contract bumps the package's **major** and does not by itself change the URL; what the contract covers is
-  ADR-0190 D1 and [`RELEASE_1_0.md`](RELEASE_1_0.md).
+  ADR-0190 D1 and [`RELEASE_1_0.md`](RELEASE_1_0.md). After 1.0, a breaking change to `/api/v1` may be made in
+  place only with a package major bump, a migration note in the CHANGELOG and an ADR; `/api/v2` is introduced only
+  when a program outside this repository depends on v1 (none does today). Removing the four deprecated fields
+  below at the 1.0 cut is covered by ADR-0190, which is the ADR this section asks for.
 
 ### Deprecated fields
 

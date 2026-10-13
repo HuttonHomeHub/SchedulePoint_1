@@ -21,14 +21,20 @@ say what a major means.
 
 ## Decision
 
-**D1 — the public contract.** From 1.0 the contract is: the REST API under `/api/v1` as described by its OpenAPI
-document, including the guest share endpoints (`/api/v1/share/*`); the export file formats and the inert
+**D1 — the public contract.** From 1.0 the contract is: the REST API under `/api/v1` — its controllers and DTOs as
+documented in `docs/API.md`, with the OpenAPI document generated from them and served on non-production servers
+only (`apps/api/src/main.ts:36-50`; no spec file is exported and no CI check diffs it, `docs/TECH_DEBT.md` #507) —
+including the guest share endpoints (`/api/v1/share/*`) and the health probes (`/api/v1/health`,
+`/api/v1/health/ready`); the export file formats and the inert
 SchedulePoint layout field (ADR-0156); and the operator's configuration surface (the environment variables in
-`.env.example` and the Docker Compose files). **Not** the contract: `/api/v1/staff/*` (declared outside it in
+`.env.example` and the Docker Compose files). **Not** the contract: `/api/auth/*` (Better Auth, outside `/api/v1`; the web app is its only client), `/api/v1/staff/*` (declared outside it in
 `docs/API.md`, "The staff console"), the database schema, and the internal `@repo/*` packages.
 
-**D2 — after 1.0.** A breaking change to D1 bumps the affected package's **major**. The URL version moves only for
-a breaking REST change, and per `docs/API.md` that needs its own ADR and a migration note. Package major and URL
+**D2 — after 1.0.** A breaking change to D1 bumps the affected package's **major**. After 1.0, a breaking change to `/api/v1` may be made in
+place only with a package major bump, a migration note in the CHANGELOG and an ADR; `/api/v2` is introduced only
+when a program outside this repository depends on v1 (none does today). This ADR is the ADR that `docs/API.md`
+"Deprecated fields" requires for removing the four deprecated revision-comparison fields at the cut. `.setVersion('1.0')`
+in `main.ts:40` labels the URL version, not the package. Package major and URL
 version are separate numbers that move for different reasons; a change's changeset and ADR say which it moves.
 
 **D3 — `web`'s major.** The web app has no programmatic contract. Its major moves when a capability users rely on is
@@ -38,9 +44,10 @@ removed, or when saved links (plan URLs, share links) stop resolving.
 The owner decides when, and `docs/RELEASE_1_0.md` is the gate: every line is evidence-backed, owner-decided or "not
 for 1.0". The owner's answers of 2026-10-13 fix three required lines (tested backup and restore, whole-organisation
 export, the 90-day clear-out turned on and proven), each specified on its own after the batch that wrote this down,
-and collaborative editing is not in 1.0 (`docs/DECISIONS.md`, 2026-10-12). The deprecated revision-comparison fields
-(`docs/API.md`, "Deprecated fields") are removed at the cut by default, since a 1.0 cut is the last cheap moment to
-do so. Internal packages are private and stay 0.x.
+and collaborative editing is not in 1.0 (`docs/DECISIONS.md`, 2026-10-12). Removing the deprecated revision-comparison fields (`docs/API.md`, "Deprecated fields") is the owner's call, with
+the default of removing them at the cut as a separate release (`revision-delta.ts:235-244`, `revision-compare.dto.ts:139`,
+`cross-plan-revision-compare.dto.ts:215-236`, `packages/types/src/index.ts:3186-3192`, web test fixtures, the
+`docs/API.md` table). Internal packages are private and stay 0.x.
 
 **Mechanics, checked rather than assumed.** A dry run on a throwaway branch on 2026-10-13 (`@changesets/cli`
 3.0.3, command `pnpm changeset version` with a `major` changeset for both apps, then discarded) moved `@repo/api`
@@ -48,9 +55,11 @@ from 0.89.3 to **1.0.0** and `@repo/web` from 0.190.1 to **1.0.0**, changed only
 two `CHANGELOG.md` files, and left every internal package untouched; the changeset's text appeared under "Major
 Changes". On the Release path the tags are `api-v1.0.0` and `web-v1.0.0` (`.github/workflows/release.yml:139-158`)
 and the images carry `1.0.0`, `latest`, `sha-…` and `main` (`.github/workflows/docker-publish.yml:128-139`); the
-`type=semver` patterns on lines 129-130 act only on the legacy `v*.*.*` tag trigger (`:4-10`), so no `:1` or `:1.0`
-image tags appear. The host follows `latest` by default (`docker-compose.release.yml:74`), so 1.0 changes nothing
-there.
+`type=semver` patterns on lines 129-130 are read, not exercised, to act only on the legacy `v*.*.*` tag trigger
+(`:4-10`), so there is no major-only `:1` tag on any path. The host follows `latest` by default (`docker-compose.release.yml:74`, `:161`); with the ADR-0047 updater on, merging
+the Version Packages pull request is the production deploy and the image self-migrates (ADR-0018). Rollback is
+pinning `API_IMAGE_TAG` and `WEB_IMAGE_TAG` to the previous versions; migrations are not reversed. The field removal
+and turning on the clear-out should each be their own release.
 
 ## Alternatives considered
 

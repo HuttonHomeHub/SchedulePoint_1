@@ -11627,3 +11627,11 @@ Forced-colours mode (a Windows contrast theme) overrides author colours and, in 
 In a local `web:workspace-chrome` run the test hit its 240 s timeout inside `findBarWide`, and the next test in the file did not run. Re-running the whole file passed all three tests, with this one taking about 3.9 minutes of its 4. The ruler change being tested did not touch it, and it was not timed on `main`. So the test is slow enough that ordinary machine load can push it over, rather than shown to be wrong.
 
 **Next:** time it on `main` and find where the minutes go (it onboards, builds a hierarchy and checks two widths), then split it or shorten its set-up rather than raise the limit. **Trigger:** a timeout in CI, or a second local timeout. Not work now.
+
+### 507. There is no exported OpenAPI file and no breaking-change check in CI
+
+**Status:** open · **Verified:** 2026-10-13 (`apps/api/src/main.ts:36-50`, `docs/TECH_DEBT.md` row 15 in the early table) · **Raised:** 2026-10-13 (the 1.0 checklist review) · **Size:** M · **Owner:** api
+
+`docs/RELEASE_1_0.md` and ADR-0190 call the REST API a contract, and nothing machine-checks that it did not change. The OpenAPI document is generated at start-up and served at `/api/docs` **only when the server is not production** (`apps/api/src/main.ts:36-50`); no spec file is written out, committed or diffed in CI. `main.ts:40` sets `.setVersion('1.0')`, a label for the URL version that will read as the package version once 1.0 ships, so `info.version` needs a decision when the file exists. Row 15 (OpenAPI accuracy gaps) means the document describes bare DTOs rather than the `{ data, meta }` envelope, so a diff of it would miss envelope changes.
+
+**Next:** export the document to a committed file from a script, fix `info.version`, and diff it in CI against `main` so a removed field or changed type fails with a message. **Trigger:** the owner decides 1.0 waits on it (checklist line 12), or a program outside this repository starts to depend on `/api/v1`. Not work now.
