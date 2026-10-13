@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.190.0
+
+### Minor Changes
+
+- [#969](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/969) [`2ff581e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2ff581ed14b1a1ab34b81d3aae9dae1bde3956ca) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Zoom out and Zoom in are now in the View menu's Zoom section, beside Fit to plan. They work when a side panel has squeezed the diagram until its corner zoom buttons are hidden; the side panel closes first, as it already did for Fit to plan. Zooming from either place is now announced to screen readers.
+
+### Patch Changes
+
+- [#967](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/967) [`264837e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/264837e5ed7aeacac55b6bfa5d3d4f02731ebf79) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the Gantt, a mouse press on the left edge of a row's three-dots menu or on the Float left heading no longer moves the divider between the table and the chart instead. The three dots now sit inside the table, with a small empty margin at its right edge, so nothing in the table lies under the divider's grab area. The table is 48 px wider by default and the Activity column keeps its width. The time-scale presets (Month, Quarter) now frame the chart's width less those 48 px, so each day is slightly narrower than before and the same stretch of the plan fits in view.
+
 ## 0.189.2
 
 ### Patch Changes
