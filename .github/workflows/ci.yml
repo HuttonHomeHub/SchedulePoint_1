@@ -405,7 +405,7 @@ jobs:
     # for a `vite build` the file does not record. Every shard also pays a ~114 s fixed cost (setup,
     # install, browser install; median of twelve shard-runs, 90-174 s, no shard-specific overhead), so
     # the projected wall time is ~1,050 s a shard. This pack REPLACED the 2026-10-12 one (893/891/891/892 s
-    # on one run), whose shard 4 then measured 1,064-1,157 s on three runs because `workspace-chrome`,
+    # on one run), whose shard 4 then measured 1,064-1,178 s on four runs because `workspace-chrome`,
     # `workspace-fit` and `gantt-editing` had grown past the figures it was packed from.
     #
     # **Four, not five, by the owner's decision of 2026-10-12** ("just rebalance four"). The

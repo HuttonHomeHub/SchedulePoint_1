@@ -49,14 +49,12 @@ const NAME = 'check:e2e-roster';
 /**
  * Suite seconds one web shard may hold before the web side takes the critical path back.
  *
- * Derived, not chosen: the API job less a web shard's fixed cost (setup + browser install). On run
- * 38290423490 the API job measured 857 s and the four shards' fixed costs were 109/102/94/117 s
- * (mean ~105 s), so `857 − 105 ≈ 752`. It was 593 (`690 − 97`) until 2026-10-12, when the API
- * suite had grown to 857 s and the figure had stopped describing anything.
- * **Printed, never asserted** — see the summary below. A four-way pack of today's 3,567 s is ~892 s
- * a shard, ABOVE this figure; the owner accepted that on 2026-10-12 ("just rebalance four") and the
- * printed gap is the standing evidence for the five-shard alternative, documented in
- * `docs/specs/e2e-fifth-shard/`.
+ * A reference figure from 2026-10-12, kept as it was: the API job less a web shard's fixed cost
+ * (setup + browser install), 857 − ~105 ≈ 752 s on run 38290423490. **Printed, never asserted** — see
+ * the summary below. It no longer drives any decision: a four-way pack is now ~940 s a shard, above
+ * it, and that gap is expected. The five-shard alternative in `docs/specs/e2e-fifth-shard/` is
+ * triggered by ADR-0138's amendment of 2026-10-13 (the slowest web shard's median over three
+ * consecutive runs above 1,250 s, or any shard cancelled by its 30-minute timeout), not by this figure.
  */
 const SHARD_BUDGET_SECONDS = 752;
 
