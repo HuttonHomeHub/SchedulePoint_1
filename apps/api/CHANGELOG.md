@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.89.4
+
+### Patch Changes
+
+- [#976](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/976) [`057d6ba`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/057d6ba88d31e4badf4f29994db66fb7b3ef1eb0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undoing or redoing the deletion of a summary activity no longer fails with a server error while a bar move is still saving.
+
 ## 0.89.3
 
 ### Patch Changes
