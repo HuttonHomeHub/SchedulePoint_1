@@ -83,3 +83,38 @@ describe('the forced-colors focus ring', () => {
     expect(block).not.toContain('box-shadow');
   });
 });
+
+/**
+ * The shaded-control rule joins the ring's unlayered block (`docs/TECH_DEBT.md` #505).
+ *
+ * Forced colours greys only the `disabled` attribute; this product shades with `aria-disabled`
+ * (ADR-0082/0083), which keeps `ButtonText`, so a refused action looked available. The remedy is
+ * one `GrayText` rule, and it is unlayered for the ring's reason: a layered rule loses to the
+ * layered colour utility on the control. Because it sits in the first `forced-colors` block, the
+ * layer case above governs it too.
+ */
+describe('the forced-colors shaded-control rule', () => {
+  const block =
+    /@media\s*\(\s*forced-colors:\s*active\s*\)\s*\{([\s\S]*?)\n\}/.exec(CODE)?.[1] ?? '';
+  const rule = /\)\[aria-disabled='true'\]([^{]*)\{([^}]*)\}/.exec(block);
+
+  it('is declared in the unlayered forced-colors block, for GrayText', () => {
+    expect(rule, 'the shaded-control rule is missing from the forced-colors block').not.toBeNull();
+    expect(rule?.[2]).toMatch(/color:\s*GrayText/);
+  });
+
+  it('excludes a pressed member, whose shaded fill is GrayText with Canvas ink', () => {
+    expect(rule?.[1]).toContain(":not([aria-pressed='true'])");
+  });
+
+  it('is limited to interactive roles, so a shaded group does not grey its children', () => {
+    const selector = /:is\(([\s\S]*?)\)\[aria-disabled='true'\]/.exec(block)?.[1] ?? '';
+    expect(selector).toContain("[role='menuitem']");
+    expect(selector).toContain('button');
+    expect(selector).not.toMatch(/(^|,)\s*(div|\*|\[aria-disabled)/);
+  });
+
+  it('sets no box-shadow, which forced colours computes to none whatever is written', () => {
+    expect(rule?.[2]).not.toContain('box-shadow');
+  });
+});
