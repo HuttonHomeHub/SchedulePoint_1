@@ -2144,6 +2144,38 @@ const VIEW_FOLDED_SECTIONS: ReadonlySet<ViewToggleGroupId> = new Set([
   'columns',
 ]);
 
+/** An icon-only zoom step in the View panel: named by `aria-label` and a tooltip (ADR-0117). */
+function ZoomStepButton({
+  label,
+  icon,
+  aria,
+  onPress,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  aria: { 'aria-disabled': true | undefined; 'aria-describedby': string | undefined };
+  onPress: () => void;
+}): React.ReactElement {
+  const { triggerProps, tooltip } = useTooltip({ content: label, purpose: 'name-echo' });
+  return (
+    <>
+      <Button
+        {...triggerProps}
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={label}
+        {...aria}
+        onClick={onPress}
+        className="w-(--control-h-sm) shrink-0 px-0"
+      >
+        {icon}
+      </Button>
+      {tooltip}
+    </>
+  );
+}
+
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   const zoomReasonId = useId();
   const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
@@ -2199,42 +2231,49 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     // the panel says it once and all three point at it; the cluster keeps its per-button strings.
     const zoomReason =
       id === 'zoom' ? canvasViewportReason(ctx, PANEL_ZOOM_NO_DIAGRAM_REASON) : undefined;
-    // **Zoom out and Zoom in beside Fit to plan**, for the same reason Fit is here: the cluster's two
-    // steps were the part of #480 with no route while a dock squeezes the stage. `ctx.stepZoom` is
-    // wrapped like `ctx.fit`, so a step closes the dock first. Same names as the cluster's buttons on
-    // purpose (ADR-0117) — one command, one name — so a journey scopes its locator to this panel.
-    const zoomButton = (
-      label: string,
-      icon: React.ReactNode,
-      run: () => void,
-    ): React.ReactElement => (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-disabled={zoomReason !== undefined || undefined}
-        aria-describedby={zoomReason !== undefined ? zoomReasonId : undefined}
-        onClick={() => {
-          if (zoomReason === undefined) run();
-        }}
-        className="justify-start"
-      >
-        {icon}
-        {label}
-      </Button>
-    );
+    // **Zoom out, Zoom in and Fit to plan in ONE row**, like the cluster (minus, plus, fit): the steps
+    // were the part of #480 with no route while a dock squeezes the stage, and stacked as three rows
+    // they took View ▾ past its 420 px budget at the floor. `ctx.stepZoom` is wrapped like `ctx.fit`,
+    // so a step closes the dock first. The steps are icon-only with the cluster's names (ADR-0117);
+    // Fit keeps its label.
+    const zoomAria = {
+      'aria-disabled': zoomReason !== undefined ? (true as const) : undefined,
+      'aria-describedby': zoomReason !== undefined ? zoomReasonId : undefined,
+    };
     const fitRow =
       id === 'zoom' ? (
         <div className="flex flex-col gap-1">
-          {zoomButton('Zoom out', <Minus aria-hidden="true" className="size-4" />, () =>
-            ctx.stepZoom(0.5),
-          )}
-          {zoomButton('Zoom in', <Plus aria-hidden="true" className="size-4" />, () =>
-            ctx.stepZoom(2),
-          )}
-          {zoomButton('Fit to plan', <Fullscreen aria-hidden="true" className="size-4" />, () =>
-            ctx.fit(),
-          )}
+          <div className="flex flex-wrap items-center gap-1">
+            <ZoomStepButton
+              label="Zoom out"
+              icon={<Minus aria-hidden="true" className="size-4" />}
+              aria={zoomAria}
+              onPress={() => {
+                if (zoomReason === undefined) ctx.stepZoom(0.5);
+              }}
+            />
+            <ZoomStepButton
+              label="Zoom in"
+              icon={<Plus aria-hidden="true" className="size-4" />}
+              aria={zoomAria}
+              onPress={() => {
+                if (zoomReason === undefined) ctx.stepZoom(2);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              {...zoomAria}
+              onClick={() => {
+                if (zoomReason === undefined) ctx.fit();
+              }}
+              className="justify-start"
+            >
+              <Fullscreen aria-hidden="true" className="size-4" />
+              Fit to plan
+            </Button>
+          </div>
           {zoomReason !== undefined ? (
             <p id={zoomReasonId} className="text-muted-foreground text-xs">
               {zoomReason}
