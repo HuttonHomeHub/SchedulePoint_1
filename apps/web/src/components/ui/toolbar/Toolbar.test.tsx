@@ -625,8 +625,34 @@ describe('Toolbar — a later item survives an earlier one appearing', () => {
     const { rerender } = render(<Toolbar items={lateItems} context={{ show: false }} label="T" />);
     const later = screen.getByRole('button', { name: 'Later' });
     later.focus();
-    rerender(<Toolbar items={lateItems} context={{ show: true }} label="T" />);
-    expect(screen.getByRole('button', { name: 'Later' })).toBe(later);
-    expect(document.activeElement).toBe(later);
+    for (const show of [true, false]) {
+      rerender(<Toolbar items={lateItems} context={{ show }} label="T" />);
+      expect(screen.getByRole('button', { name: 'Later' })).toBe(later);
+      expect(document.activeElement).toBe(later);
+    }
+  });
+
+  it('keeps a cluster member, and its focus, when the cluster loses its first member', () => {
+    const cluster = { id: 'kinds', kind: 'joined' } as const;
+    const clustered = defineToolbar<{ show: boolean }>([
+      {
+        id: 'kind-a',
+        group: 'frame',
+        order: 1,
+        label: 'Kind A',
+        cluster,
+        isVisible: (ctx) => ctx.show,
+        onActivate: () => {},
+      },
+      { id: 'kind-b', group: 'frame', order: 2, label: 'Kind B', cluster, onActivate: () => {} },
+    ]);
+    const { rerender } = render(<Toolbar items={clustered} context={{ show: true }} label="T" />);
+    const kindB = screen.getByRole('button', { name: 'Kind B' });
+    kindB.focus();
+    for (const show of [false, true]) {
+      rerender(<Toolbar items={clustered} context={{ show }} label="T" />);
+      expect(screen.getByRole('button', { name: 'Kind B' })).toBe(kindB);
+      expect(document.activeElement).toBe(kindB);
+    }
   });
 });

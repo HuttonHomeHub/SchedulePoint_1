@@ -986,4 +986,60 @@ describe('Deck — a later item survives an earlier one appearing and disappeari
       expect(document.activeElement).toBe(link);
     }
   });
+
+  /** **Verified red** by keying the track by its first member's id: hiding that member re-creates it. */
+  it('keeps a cluster member, and its focus, when the cluster loses its first member', () => {
+    const cluster = { id: 'kinds', kind: 'joined' } as const;
+    const clustered = defineToolbar<ShowCtx>([
+      { id: 'add', group: 'tools', order: 0, label: 'Add', onActivate: () => {} },
+      {
+        id: 'kind-a',
+        group: 'tools',
+        order: 1,
+        label: 'Kind A',
+        cluster,
+        isVisible: (ctx) => ctx.show,
+        onActivate: () => {},
+      },
+      { id: 'kind-b', group: 'tools', order: 1.1, label: 'Kind B', cluster, onActivate: () => {} },
+    ]);
+    const { rerender } = render(
+      <Deck items={clustered} context={{ show: true }} label="Plan commands" />,
+    );
+    const kindB = screen.getByRole('button', { name: 'Kind B' });
+    kindB.focus();
+    for (const show of [false, true]) {
+      rerender(<Deck items={clustered} context={{ show }} label="Plan commands" />);
+      expect(screen.getByRole('button', { name: 'Kind B' })).toBe(kindB);
+      expect(document.activeElement).toBe(kindB);
+    }
+  });
+
+  /**
+   * **Verified red** by rendering the run bare when it leads its section and in a `span` otherwise:
+   * the element type at the key changes when the pen toggles, and the item is re-created.
+   */
+  it('keeps a ruleBefore item, and its focus, when a run before it toggles', () => {
+    const ruled = defineToolbar<ShowCtx>([
+      {
+        id: 'pen',
+        group: 'tools',
+        order: -1,
+        label: 'Pen',
+        isVisible: (ctx) => ctx.show,
+        onActivate: () => {},
+      },
+      { id: 'add', group: 'tools', order: 0, label: 'Add', ruleBefore: true, onActivate: () => {} },
+    ]);
+    const { rerender } = render(
+      <Deck items={ruled} context={{ show: false }} label="Plan commands" />,
+    );
+    const add = screen.getByRole('button', { name: 'Add' });
+    add.focus();
+    for (const show of [true, false]) {
+      rerender(<Deck items={ruled} context={{ show }} label="Plan commands" />);
+      expect(screen.getByRole('button', { name: 'Add' })).toBe(add);
+      expect(document.activeElement).toBe(add);
+    }
+  });
 });

@@ -1,6 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ClusterTrack } from './ClusterTrack';
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
 import {
   clusterRuns,
@@ -12,6 +11,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { renderRun } from './toolbar-runs';
 import { resolveLabelVisibility, TOOLBAR_TRACK, TOOLBAR_TRACK_SWITCH } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 import { useToolbarFocusHandoff } from './use-focus-handoff';
@@ -378,24 +378,7 @@ export function Toolbar<Ctx>({
    * of one unclustered item is the control itself.
    */
   const renderRuns = (entries: readonly (typeof resolved)[number][]): React.ReactNode =>
-    clusterRuns(entries).map((run) => {
-      const first = run.entries[0];
-      if (first === undefined) return null;
-      // Keyed by the item: an unkeyed array is keyed by its index among the runs, so a run appearing
-      // before it would re-create the control under whoever was focused on it (`docs/TECH_DEBT.md` #504).
-      if (run.cluster === undefined)
-        return <Fragment key={first.item.id}>{run.entries.map(renderItem)}</Fragment>;
-      const lead = run.entries.filter((r) => r.item.presentational);
-      return (
-        <ClusterTrack
-          key={first.item.id}
-          cluster={run.cluster}
-          {...(lead.length > 0 ? { lead: lead.map(renderItem) } : {})}
-        >
-          {run.entries.filter((r) => !r.item.presentational).map(renderItem)}
-        </ClusterTrack>
-      );
-    });
+    clusterRuns(entries).map((run) => renderRun(run, renderItem));
 
   return (
     <div

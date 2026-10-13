@@ -2,4 +2,4 @@
 '@repo/web': patch
 ---
 
-When the window is resized, the toolbar no longer briefly loses keyboard focus or wrongly announces that Link activities is unavailable.
+Resizing the window no longer drops keyboard focus from a toolbar button or wrongly announces that it is unavailable.
