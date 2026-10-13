@@ -68,7 +68,7 @@ export async function acquirePlanWriteLocks(
   if (ordered.length === 0) return;
   await db.$executeRaw`
     SELECT pg_advisory_xact_lock(hashtext(${PLAN_LOCK_NAMESPACE}), hashtext(id))
-    FROM (SELECT unnest(${ordered}::text[]) AS id ORDER BY 1 COLLATE "C") AS ordered`;
+    FROM (SELECT t.id FROM unnest(${ordered}::text[]) AS t(id) ORDER BY t.id COLLATE "C") AS ordered`;
 }
 
 /**

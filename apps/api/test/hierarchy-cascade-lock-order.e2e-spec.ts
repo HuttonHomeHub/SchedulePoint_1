@@ -242,6 +242,12 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     // order and a delete that locked them in creation order would pass. The second plan is inserted
     // with an explicit id BELOW the first's, so the plan created first has the HIGHER id and only a
     // delete that sorts takes the lower one first.
+    //
+    // The delete reads its plans in heap order, which earlier cases in this file can scramble by
+    // leaving free slots that a later insert reuses. Compacting the (empty) table first makes the
+    // inserts append, and the precondition below fails loudly if the plans still do not come back
+    // higher-first, rather than letting the case pass without being able to fail.
+    await prisma.$executeRawUnsafe('VACUUM FULL plans');
     const first = await createPlan(projectId, 'Plan C1');
     const template = await prisma.plan.findUniqueOrThrow({ where: { id: first.planId } });
     const lowerId = '00000000-0000-4000-8000-000000000001';
@@ -250,6 +256,14 @@ describe.skipIf(!hasDatabase)('Hierarchy cascade lock order (e2e)', () => {
     const higher = first.planId;
     const lower = lowerId;
     expect(lower < higher).toBe(true);
+    const scanned = await prisma.plan.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true },
+    });
+    expect(
+      scanned.map((p) => p.id),
+      'precondition: the unsorted scan is higher-first',
+    ).toEqual([higher, lower]);
 
     const holder = await hold((tx) => acquirePlanWriteLock(tx, lower));
     let status: Promise<number> | undefined;
