@@ -132,6 +132,26 @@ async function readColumn(page: Page): Promise<ColumnReading> {
   });
 }
 
+/**
+ * Read the column once the canvas width has stopped changing. The canvas resizes a frame or more
+ * after the shell does (a viewport change, the panel opening), so a reading taken straight after the
+ * click can catch it mid-resize and make the gain below look wrong (TECH_DEBT #497). Two readings a
+ * frame apart must agree.
+ */
+async function readSettledColumn(page: Page): Promise<ColumnReading> {
+  let last = await readColumn(page);
+  await expect
+    .poll(async () => {
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+      const next = await readColumn(page);
+      const settled = next.canvas === last.canvas && next.stage === last.stage;
+      last = next;
+      return settled;
+    })
+    .toBe(true);
+  return last;
+}
+
 /** Fold the Explorer to its spine and read it; leaves the spine showing. */
 async function foldToSpine(page: Page): Promise<{
   expanded: ColumnReading;
@@ -142,7 +162,7 @@ async function foldToSpine(page: Page): Promise<{
   const show = page.getByRole('button', { name: 'Show Project Explorer' });
   if (await show.isVisible()) await show.click();
   await page.getByRole('button', { name: 'Hide Project Explorer' }).waitFor();
-  const expanded = await readColumn(page);
+  const expanded = await readSettledColumn(page);
   await page.getByRole('button', { name: 'Hide Project Explorer' }).click();
   await show.waitFor();
   const collapsed = await readColumn(page);
@@ -3134,9 +3154,13 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       expect(collapsed.stage - expanded.stage, `the stage's gain from folding ${at}`).toBe(
         expanded.column - collapsed.column,
       );
-      expect(collapsed.canvas - expanded.canvas, `the canvas's gain from folding ${at}`).toBe(
-        expanded.column - collapsed.column,
-      );
+      // Polled, not read once: the canvas follows the column a frame or more later. The gain asked
+      // for is unchanged; only the wait for it to arrive is new.
+      await expect
+        .poll(() => readColumn(page).then((r) => r.canvas - expanded.canvas), {
+          message: `the canvas's gain from folding ${at}`,
+        })
+        .toBe(expanded.column - collapsed.column);
       const targets = await sweep(page, '[data-panel-border]');
       expect(
         targets.length,
@@ -3249,9 +3273,13 @@ test.describe('The collapsed spine, under a mouse', () => {
       expect(collapsed.stage - expanded.stage, `the stage's gain from folding ${at}`).toBe(
         expanded.column - collapsed.column,
       );
-      expect(collapsed.canvas - expanded.canvas, `the canvas's gain from folding ${at}`).toBe(
-        expanded.column - collapsed.column,
-      );
+      // Polled, not read once: the canvas follows the column a frame or more later. The gain asked
+      // for is unchanged; only the wait for it to arrive is new.
+      await expect
+        .poll(() => readColumn(page).then((r) => r.canvas - expanded.canvas), {
+          message: `the canvas's gain from folding ${at}`,
+        })
+        .toBe(expanded.column - collapsed.column);
       const links = await page
         .locator('[data-panel-border] nav[aria-label="Organisation"] a')
         .evaluateAll((els) =>
