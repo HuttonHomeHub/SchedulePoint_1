@@ -1,7 +1,7 @@
 # Implementation Plan: Pre-1.0 hardening pass
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner on 2026-10-13, all nine milestones.
+- **Status:** Accepted — shipped (ADR-0138 and ADR-0056 amendments) 2026-10-13 (api 0.89.3, web 0.190.0 and 0.190.1). Approved by the product owner on 2026-10-13, all nine milestones.
 - **Owner:** product owner; implementation by the **builder** agent (Sonnet), one PR per milestone.
 
 ## Breakdown
