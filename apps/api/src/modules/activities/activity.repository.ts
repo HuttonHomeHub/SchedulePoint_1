@@ -384,8 +384,8 @@ export class ActivityRepository {
    * Callers MUST hold the plan advisory lock — this writes the parent tree, whose acyclicity is a
    * read-then-write invariant (ADR-0038 (a)); see `ActivitiesService.assertValidParent`.
    *
-   * lock-order: plan-lock — the plan advisory lock excludes the recalculation, so no row pre-lock
-   * is needed (`activity-row-lock.structural.spec.ts` reads this declaration).
+   * The rows are locked in id order first: the plan lock excludes the recalculation but not the
+   * placement writers, which take the pen and not the plan lock (`docs/TECH_DEBT.md` #492).
    */
   async updateParents(
     organizationId: string,
@@ -399,6 +399,7 @@ export class ActivityRepository {
     const parentIds = parents.map((p) => p.parentId ?? '');
     const versions = parents.map((p) => p.version);
 
+    await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     return db.$executeRaw`
       UPDATE activities AS a
       SET parent_id = NULLIF(v.parent_id, '')::uuid,

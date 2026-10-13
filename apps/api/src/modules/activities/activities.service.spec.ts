@@ -1256,19 +1256,35 @@ describe('ActivitiesService', () => {
     /** The tx client's `findMany` — the children before, and the promoted rows after. */
     let txFindMany: ReturnType<typeof vi.fn>;
 
+    /** The id-order row lock (`lockActivityRowsInIdOrder`), a raw `SELECT … FOR NO KEY UPDATE`. */
+    let txQueryRaw: ReturnType<typeof vi.fn>;
+
     beforeEach(() => {
+      txQueryRaw = vi.fn().mockResolvedValue([]);
       txUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
       txFindFirst = vi.fn().mockResolvedValue({ parentId: null });
       txFindMany = vi.fn().mockResolvedValue([]);
       prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
+          $queryRaw: txQueryRaw,
           activity: {
             updateMany: txUpdateMany,
             findFirst: txFindFirst,
             findMany: txFindMany,
           },
         }),
+      );
+    });
+
+    it('locks the summary and its children in id order before promoting them (#492)', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(summary());
+      txFindMany.mockResolvedValue([{ id: 'child-1' }]);
+      await service.dissolveSummary(principalWith(ALL), 'acme', ACTIVITY_ID);
+
+      expect(txQueryRaw).toHaveBeenCalledTimes(1);
+      expect(txQueryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        txUpdateMany.mock.invocationCallOrder[0] ?? Infinity,
       );
     });
 

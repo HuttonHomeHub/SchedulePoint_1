@@ -576,11 +576,10 @@ export class HierarchyLifecycleService {
    * deleted root carries (or by the id of a root proven deleted by `loadDeletedRoot`), so each
    * target is soft-deleted by construction; a `deletedAt` guard would only restate that.
    *
-   * lock-order: no row pre-lock, and none is needed. Every writer that locks activity rows in id
-   * order (the placement batches, the recalculation's result write, the delete cascade) selects only
-   * ACTIVE rows (`deleted_at IS NULL`), and this method writes only SOFT-DELETED ones, so the two
-   * row sets are disjoint and neither side can hold what the other wants. The plan advisory lock is
-   * the caller's, for the writers that exclude each other by it (`docs/TECH_DEBT.md` #492).
+   * lock-order: disjoint-rows — every writer that locks activity rows in id order (the placement
+   * writers and the recalculation engine's result write, and the delete cascade) selects only
+   * ACTIVE rows, and this method writes only SOFT-DELETED ones, so the two row sets are disjoint
+   * and neither side can hold what the other wants (`docs/TECH_DEBT.md` #492).
    */
   async restoreBatch(
     tx: Prisma.TransactionClient,

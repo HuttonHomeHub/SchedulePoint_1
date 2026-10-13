@@ -13,6 +13,7 @@ import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { chunkIds } from '../../common/db/id-chunks';
 import { lockActivityVersion, assertVersionMatches } from '../../common/db/locked-version';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
@@ -1910,6 +1911,13 @@ export class ActivitiesService {
         where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
         select: { id: true },
       });
+      // The children and the summary go in as one id-ordered set, because the cascade below
+      // stamps the summary next and a second, separate sorted pass would not be one total order
+      // against a placement batch (`docs/TECH_DEBT.md` #492).
+      await lockActivityRowsInIdOrder(tx, organization.id, existing.planId, [
+        activityId,
+        ...rows.map((row) => row.id),
+      ]);
       await tx.activity.updateMany({
         where: { organizationId: organization.id, parentId: activityId, deletedAt: null },
         data: {
