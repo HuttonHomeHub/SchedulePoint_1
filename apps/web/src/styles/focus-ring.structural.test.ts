@@ -109,8 +109,29 @@ describe('the forced-colors shaded-control rule', () => {
 
   it('is limited to interactive roles, so a shaded group does not grey its children', () => {
     const selector = /:is\(([\s\S]*?)\)\[aria-disabled='true'\]/.exec(block)?.[1] ?? '';
-    expect(selector).toContain("[role='menuitem']");
+    for (const role of [
+      'button',
+      'link',
+      'menuitem',
+      'option',
+      'tab',
+      'treeitem',
+      'gridcell',
+      'checkbox',
+      'switch',
+      'combobox',
+      'spinbutton',
+      'slider',
+    ]) {
+      expect(selector, `${role} is an interactive role a shaded control can carry`).toContain(
+        `[role='${role}']`,
+      );
+    }
     expect(selector).toContain('button');
+    // Containers stay out: colour inherits, so greying one would grey its live children.
+    for (const container of ['row', 'group', 'toolbar', 'menu', 'listbox', 'treegrid', 'dialog']) {
+      expect(selector).not.toContain(`[role='${container}']`);
+    }
     expect(selector).not.toMatch(/(^|,)\s*(div|\*|\[aria-disabled)/);
   });
 

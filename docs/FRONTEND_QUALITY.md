@@ -36,7 +36,12 @@ A Windows contrast theme is emulated in Chromium (`forcedColors: 'active'`; real
   shaded-control rule with its pressed exclusion and no `box-shadow`). Fails in milliseconds, reads source.
 - **The focus ring in a real bundle:** `apps/web/e2e-forced-colors/` (production preview, pixels).
 - **A toolbar switch's chosen member:** `e2e-workspace-fit/deck-tracks-forced-colors.spec.ts`.
-- **The Gantt, a row menu's shaded item and a shaded `Button`:** `e2e-gantt/forced-colors.spec.ts`.
+- **The Gantt, a row menu's shaded item and a shaded `Button`:** `e2e-gantt/forced-colors.spec.ts`. It also checks
+  that the selected row is a `Highlight` edge with nothing inside it un-forced, that a focus ring inside the selected
+  row differs from what it is drawn on, that the armed outline and grips paint, that an open cell's ink differs from its
+  fill, and that a summary with progress keeps its left edge.
+- **The forms' placement:** `GanttPanel.forced-colors.test.tsx` asserts the exported class constants of
+  `components/ui/forced-colors.ts` on the right elements.
 
 A check lives in the suite of the surface it tests, asserts the **computed system colour** first (compared with the
 same colour resolved from a probe), uses a **screenshot difference** from the same box without the mark only as

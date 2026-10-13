@@ -723,36 +723,6 @@ utility. And a control whose indicator must differ in **shape or position** (not
 the one case the universal rule cannot serve, and is the trigger to revisit the per-primitive
 migration that was withdrawn with it.
 
-#### Forced colours (ADR-0191, `docs/TECH_DEBT.md` #505)
-
-A Windows contrast theme is the reader's palette, so the product draws with system colours there and
-does not argue. The facts that govern every rule below were measured, and are gathered here from the
-places they used to be scattered (the focus ring above; the toolbar's pressed member, `deck-tracks-forced-colors.spec.ts`;
-the viewport notice's card; the conflict readout's icon):
-
-- **What the mode does.** It replaces author `color`, `background-color` and `border-color`, computes
-  `box-shadow` to `none`, and leaves `opacity` and a native `outline` alone. A `forced-color-adjust: none`
-  element keeps its author colours, so a fill that must show (a `Highlight` backplate, a solid bar) opts out,
-  and the opt-out **inherits**.
-- **The focus ring** is the unlayered `:focus-visible` outline in `Highlight` (above).
-- **A shaded control is `GrayText`.** The same unlayered block carries one rule for `aria-disabled='true'` on
-  interactive roles (`button`, `a`, form controls, `menuitem*`, `option`, `tab`, `radio`, `checkbox`, `switch`,
-  `role=button`), setting `color` and `border-color` to `GrayText` and `opacity` to 1. It is limited to interactive
-  roles because colour inherits, and it excludes `[aria-pressed='true']` because the toolbar's pressed-and-shaded
-  member paints a `GrayText` fill with `Canvas` ink. **A new shaded primitive needs nothing**; a component that
-  paints its own shaded state under `forced-color-adjust: none` excludes itself by state and says so.
-- **A mark that carries meaning by fill** (a bar, a selection, a chosen switch member) gets a `forced-colors:` form
-  that carries it by system colour and by shape: `CanvasText` and `Canvas` for marks, `Highlight` / `HighlightText`
-  for a selection, with `forced-color-adjust: none` when the colour is a fill. The Gantt's table is in ADR-0191 D2.
-  A mark that is already a border or an outline needs nothing.
-- **A card with no edge of its own** takes `border` and `CanvasText` so it does not dissolve into the ground
-  (`viewport-notice.tsx`); **an icon that carried status by hue** takes `CanvasText` and keeps its shape
-  (`conflict-readout.ts`).
-- **A canvas bitmap keeps its own palette** (ADR-0191 D3): the TSLD diagram is not repainted from system colours.
-  It stays visible; `docs/TECH_DEBT.md` #508 tracks the choice.
-- **Checks** live in the suite of the surface they test, assert computed system colours first and a screenshot
-  difference second, and have a `forcedColors: 'none'` control (`docs/FRONTEND_QUALITY.md`).
-
 - **Focus management:** move focus on route change, dialog open/close; return
   focus to the trigger on close.
 - **Contrast:** ≥ 4.5:1 body text, ≥ 3:1 large text and UI component boundaries.
@@ -777,6 +747,46 @@ the viewport notice's card; the conflict readout's icon):
 Tooling: `eslint-plugin-jsx-a11y` (CI), automated a11y assertions in Playwright
 journeys, and manual keyboard + screen-reader checks for significant UI. The
 **Accessibility Reviewer** agent audits non-trivial UI.
+
+#### Forced colours (ADR-0191, `docs/TECH_DEBT.md` #505)
+
+A Windows contrast theme is the reader's palette, so the product draws with system colours there and
+does not argue. The facts that govern every rule below were measured, and are gathered here from the
+places they used to be scattered (the focus ring above; the toolbar's pressed member, `deck-tracks-forced-colors.spec.ts`;
+the viewport notice's card; the conflict readout's icon):
+
+- **What the mode does.** It replaces author `color`, `background-color` and `border-color`, computes
+  `box-shadow` to `none`, and leaves `opacity` and a native `outline` alone. A `forced-color-adjust: none`
+  element keeps its author colours, so a fill that must show (a solid bar, a `Highlight` backplate) opts out,
+  and the opt-out **inherits**: put it on a fill and never on a container that holds controls.
+- **The focus ring** is the unlayered `:focus-visible` outline in `Highlight` (above). A `Highlight` mark behind
+  a control would hide it, which is why a selection is an edge and not a fill.
+- **A shaded control is `GrayText`.** The same unlayered block carries one rule for `aria-disabled='true'` on
+  interactive roles, setting `color` and `border-color` to `GrayText` and `opacity` to 1. The roles are
+  `button`, `a`, `input`, `select`, `textarea`, `summary`, and `role` button, link, menuitem (and its radio and
+  checkbox forms), option, tab, treeitem, gridcell, radio, checkbox, switch, combobox, spinbutton and slider.
+  Containers (`row`, `group`, `toolbar`, `menu`, `listbox`, `tablist`, `grid`, `treegrid`, `tree`, `dialog`) are
+  left out because colour inherits and greying one would grey its live children. It excludes
+  `[aria-pressed='true']` because the toolbar's pressed-and-shaded member paints a `GrayText` fill with `Canvas`
+  ink. **A new shaded primitive needs nothing**; a component that paints its own shaded state under
+  `forced-color-adjust: none` excludes itself by state and says so. The role list is
+  `focus-ring.structural.test.ts`'s, and `docs/COMPONENT_LIBRARY.md` links here.
+- **A mark that carries meaning by fill** (a bar, a chosen switch member) gets a `forced-colors:` form that carries
+  it by system colour and by shape. The vocabulary is `components/ui/forced-colors.ts`. The Gantt: a task bar is a
+  1 px `CanvasText` edge on `Canvas`; a critical bar's edge is 3 px (wider, not double: a double border at 14 px is
+  1 px lines that anti-alias to grey); a summary bar and a milestone are solid `CanvasText` (the summary keeps an
+  edge); progress is a band held 1 px inside the edge so a finished task still reads as outlined; the armed outline
+  and grips are `CanvasText`.
+- **A selection is an edge, not a fill.** The Gantt's selected row is a 4 px `Highlight` pseudo-element on its
+  sticky first cell. A `Highlight` fill needs `forced-color-adjust: none`, which un-forces every control inside it
+  (ADR-0191 D2).
+- **A card with no edge of its own** takes `border` and `CanvasText` so it does not dissolve into the ground
+  (`viewport-notice.tsx`, via `FORCED_EDGED_CARD`); **an icon that carried status by hue** takes `CanvasText` and
+  keeps its shape (`conflict-readout.ts`).
+- **A canvas bitmap keeps its own palette** (ADR-0191 D3): the TSLD diagram is not repainted from system colours.
+  It stays visible; `docs/TECH_DEBT.md` #508 tracks the choice.
+- **Checks** live in the suite of the surface they test, assert computed system colours first and a screenshot
+  difference second, and have a `forcedColors: 'none'` control (`docs/FRONTEND_QUALITY.md`).
 
 ---
 

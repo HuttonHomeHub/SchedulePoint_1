@@ -6,6 +6,7 @@ import { BANNER_TEXT, useViewportNotice, type ViewportNoticeState } from './use-
 
 import { BrandCard } from '@/components/layout/brand-card';
 import { Button } from '@/components/ui/button';
+import { FORCED_EDGED_CARD } from '@/components/ui/forced-colors';
 import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
@@ -215,7 +216,7 @@ function PageContent({
       // An opaque system-colour card under forced colours: the brand surface's navy and wash are
       // backgrounds, which that mode replaces, and a card with no edge of its own would dissolve
       // into the ground.
-      className="forced-colors:border forced-colors:border-[CanvasText] forced-colors:bg-[Canvas]"
+      className={FORCED_EDGED_CARD}
       columnClassName="gap-3 p-4 md:p-6"
     >
       <DevicesPictogram className="text-primary tall:block hidden h-14 w-auto self-start" />

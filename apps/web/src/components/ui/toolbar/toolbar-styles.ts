@@ -455,11 +455,12 @@ export const toolbarControlVariants = cva(
        * a 2 px underline in the same ink (compound variant below): the fill is gone, and without a
        * mark a reader could not tell an engaged lens from a free one. And **forced colours**: the mode
        * overrides `color` to `CanvasText` for every control, so `opacity-50` used to be the only thing
-       * that survived to say "shut"; `GrayText` is the system colour for exactly that, and an author-
-       * specified system colour is kept (the same device `viewport-notice.tsx` uses).
+       * that survived to say "shut". `GrayText` now comes from the one global rule for `aria-disabled`
+       * interactive roles in `globals.css` (ADR-0191 D1), which every shaded toolbar control matches,
+       * so it is not restated here.
        */
       disabled: {
-        true: 'cursor-default bg-transparent text-muted-foreground shadow-none forced-colors:[color:GrayText]',
+        true: 'cursor-default bg-transparent text-muted-foreground shadow-none',
         false: '',
       },
     },
@@ -567,7 +568,8 @@ export type ToolbarControlState = NonNullable<VariantProps<typeof toolbarControl
  *
  * `forced-colors:text-inherit` keeps the author colour from replacing a shaded control's `GrayText`
  * with `CanvasText` on the glyph: forced colours override an author `color`, and inheriting is what
- * lets the control's system colour reach the glyph.
+ * lets the control's system colour reach the glyph. The glyph is an `svg`, which the global
+ * `aria-disabled` rule (ADR-0191 D1) does not match, so this inheritance is still needed.
  */
 export function toolbarIconClass(
   labelState: ToolbarLabelState,

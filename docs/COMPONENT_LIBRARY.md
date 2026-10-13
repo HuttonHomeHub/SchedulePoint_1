@@ -129,7 +129,7 @@ error, empty, and selected/active. A missing state is an incomplete component.
 **A new shaded primitive needs no forced-colours code (ADR-0191 D1).** Shade it with `aria-disabled`, as ADR-0082 and
 ADR-0083 require, on an interactive role, and the unlayered rule in `globals.css` makes it `GrayText` under a contrast
 theme. Do not restate `forced-colors:[color:GrayText]` on it. A primitive that paints its own shaded state under
-`forced-color-adjust: none` (the toolbar's pressed member) must be excluded by state in that rule and say so.
+`forced-color-adjust: none` (the toolbar's pressed member) must be excluded by state in that rule and say so. The roles it covers, and the containers it leaves out, are listed in `docs/DESIGN_SYSTEM.md` §Forced colours; the system-colour class vocabulary for a mark that was a fill is `components/ui/forced-colors.ts`.
 
 ## Primitive: `Menu` / `MenuItem` (`components/ui/menu.tsx`)
 

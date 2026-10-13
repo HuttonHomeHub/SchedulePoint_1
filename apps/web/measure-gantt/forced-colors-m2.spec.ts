@@ -1,9 +1,11 @@
 import { type Locator, type Page } from '@playwright/test';
 
 import {
+  colourBehind,
   computed,
   differsFromAbsent,
   marksOf,
+  pseudoOf,
   systemColours,
   type Computed,
 } from '../e2e-gantt/forced-colors-support';
@@ -40,10 +42,14 @@ import { clearMeasurement, writeMeasurement } from '../measure-toolbar/output';
  *    task and on a summary, the baseline ghost where the plan draws one): computed `color`,
  *    `background-color`, border, `box-shadow`, `opacity`, `forced-color-adjust`, and whether the
  *    mark's box differs from the same box with the mark hidden (the "does it vanish" question).
- * 2. The selected row, its name cell, and a coloured-text descendant (the variance value and the
- *    critical name), because `forced-color-adjust: none` inherits and the row may paint author text
- *    colours on `Highlight`; and a focused control inside the selected row (does the ring, which is
- *    `Highlight` and unlayered, still show on a `Highlight` fill).
+ * 2. The selected row. The `Highlight` FILL was tried first and withdrawn (ADR-0191 D2): it needs
+ *    `forced-color-adjust: none`, which inherits and un-forces every control and cell inside the row,
+ *    and a descendant's `Highlight` focus ring sits on a `Highlight` fill. So this reads the shipped
+ *    form, a 4 px `Highlight` pseudo-element edge on the sticky first cell, plus the row, its name
+ *    cell, a menu trigger and a bar inside it (all expected in the reader's own colours,
+ *    `forced-color-adjust: auto`), and a focused control inside it (does the `Highlight` ring show
+ *    against what is behind it).
+ *
  * 3. A dependency arrow's stroke with the logic links on.
  * 4. A row menu with a shaded item and an available one; a `Button` shaded by an in-flight save
  *    (default variant, live) and an outline-variant clone of the dialog's Cancel button with
@@ -173,8 +179,16 @@ test('M2-T1: contrast-theme readings of the Gantt, shaded controls and existing 
 
     // ------------------------------------------------------------------------- selected row
     const nameCell = selected.row.getByRole('gridcell', { name: new RegExp(`^${PLAN.task}`) });
+    const sticky = selected.row.getByRole('gridcell').first().locator('xpath=..');
     reading.selectedRow = {
       row: await limb(() => computed(selected.row)),
+      stickyCell: await limb(() => computed(sticky)),
+      edge: await limb(() => pseudoOf(sticky, '::before')),
+      armedBar: await limb(() => computed(selected.bar)),
+      grip: await limb(() => computed(selected.bar.locator('[data-bar-grip] > span').first())),
+      behindTrigger: await limb(() =>
+        colourBehind(selected.row.getByRole('button', { name: /^Actions for/ })),
+      ),
       nameCell: await limb(() => computed(nameCell)),
       // Descendants with their own colour classes, the risk named in spec §4.1: the variance
       // value (`text-destructive` when late) and the row menu trigger.

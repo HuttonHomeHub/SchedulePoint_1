@@ -1845,7 +1845,9 @@
    * ring's reason: unlayered, so it beats a component's layered colour utility.
    *
    * - Interactive roles only. Colour inherits, so `[aria-disabled]` on a group would grey every
-   *   child in it.
+   *   child in it. Left out on purpose: `row`, `group`, `toolbar`, `menu`, `listbox`, `tablist`,
+   *   `grid`, `treegrid`, `tree` and `dialog`, which are containers (a shaded one would grey its
+   *   live children), and `separator`, which is not operable.
    * - `:not([aria-pressed='true'])`: the toolbar's pressed-and-shaded member paints a `GrayText`
    *   fill with `Canvas` ink under `forced-color-adjust: none` (`toolbar-styles.ts`); `GrayText`
    *   ink on that fill would erase the label.
@@ -1859,15 +1861,22 @@
       input,
       select,
       textarea,
+      summary,
       [role='button'],
+      [role='link'],
       [role='menuitem'],
       [role='menuitemradio'],
       [role='menuitemcheckbox'],
       [role='option'],
       [role='tab'],
+      [role='treeitem'],
+      [role='gridcell'],
       [role='radio'],
       [role='checkbox'],
-      [role='switch']
+      [role='switch'],
+      [role='combobox'],
+      [role='spinbutton'],
+      [role='slider']
     )[aria-disabled='true']:not([aria-pressed='true']) {
     color: GrayText;
     border-color: GrayText;

@@ -50,6 +50,10 @@ export interface Computed {
   forcedColorAdjust: string;
   outlineStyle: string;
   outlineColor: string;
+  outlineWidth: string;
+  borderLeftWidth: string;
+  left: string;
+  top: string;
 }
 
 /** The computed properties a forced-colours rule can change, from the live element. */
@@ -67,6 +71,10 @@ export function computed(target: Locator): Promise<Computed> {
       forcedColorAdjust: style.forcedColorAdjust,
       outlineStyle: style.outlineStyle,
       outlineColor: style.outlineColor,
+      outlineWidth: style.outlineWidth,
+      borderLeftWidth: style.borderLeftWidth,
+      left: style.left,
+      top: style.top,
     };
   });
 }
@@ -114,4 +122,34 @@ export async function differsFromAbsent(page: Page, target: Locator): Promise<bo
     (node as HTMLElement).style.visibility = '';
   });
   return !present.equals(absent);
+}
+
+/** A pseudo-element's computed paint: the selected row's edge is one, so it has no locator of its own. */
+export function pseudoOf(
+  target: Locator,
+  which: '::before' | '::after',
+): Promise<{ backgroundColor: string; width: string; position: string; content: string }> {
+  return target.evaluate((node, pseudo) => {
+    const style = getComputedStyle(node, pseudo);
+    return {
+      backgroundColor: style.backgroundColor,
+      width: style.width,
+      position: style.position,
+      content: style.content,
+    };
+  }, which);
+}
+
+/**
+ * The colour a control is painted on: the first non-transparent `background-color` walking up from
+ * it. A focus ring is only a ring if it differs from this (WCAG 2.2 §2.4.11, §1.4.11).
+ */
+export function colourBehind(target: Locator): Promise<string> {
+  return target.evaluate((node) => {
+    for (let el = node.parentElement; el !== null; el = el.parentElement) {
+      const bg = getComputedStyle(el).backgroundColor;
+      if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+    }
+    return 'rgba(0, 0, 0, 0)';
+  });
 }

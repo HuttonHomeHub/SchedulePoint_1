@@ -85,6 +85,16 @@ import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import {
+  FORCED_ARMED_OUTLINE,
+  FORCED_BAND_IN_OUTLINED_BAR,
+  FORCED_BAND_IN_SOLID_BAR,
+  FORCED_EDGED_SOLID_BAR,
+  FORCED_HEAVY_EDGE_BAR,
+  FORCED_OUTLINED_BAR,
+  FORCED_SELECTED_EDGE,
+  FORCED_SOLID_MARK,
+} from '@/components/ui/forced-colors';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
@@ -177,32 +187,6 @@ const DEFAULT_HIDDEN_SET: ReadonlySet<GanttColumnKey> = new Set(DEFAULT_HIDDEN_C
  * itself is carried by {@link OFF_FLOAT_PATH_LABEL} in words, never by this.
  */
 const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
-
-/**
- * **A contrast theme draws the selected row in `Highlight`** (`docs/TECH_DEBT.md` #505, ADR-0191).
- *
- * `bg-accent` is a background, which forced colours replaces with `Canvas`, so the selected row
- * was marked by nothing. `forced-color-adjust: none` is what lets a system colour fill reach the
- * screen (`toolbar-styles.ts` learned the same the hard way) and it inherits, so the descendants'
- * own text colours are reset to the row's `HighlightText`, except a shaded control, which keeps the
- * global `GrayText` rule. The bars and marks below set their own forced colours for the same reason.
- */
-const FORCED_SELECTED_ROW_CLASS =
-  'forced-colors:bg-[Highlight] forced-colors:[color:HighlightText] forced-colors:[forced-color-adjust:none] forced-colors:[&_*:not([aria-disabled=true])]:text-inherit';
-
-/**
- * **A bar and its marks in system colours** (#505, ADR-0191 D2). Fill and ring are the two things
- * forced colours removes, so shape carries what they carried: a task bar is a 1 px `CanvasText`
- * edge on `Canvas`, a critical bar's edge is 2 px (the width is the cue, as `ring-2` against
- * `ring-1` is today), and a summary bar and a milestone are solid `CanvasText`. Float, baseline
- * ghost and the armed outline are borders and an outline, which survive, so they have no entry.
- */
-const FORCED_TASK_BAR_CLASS =
-  'forced-colors:border forced-colors:border-[CanvasText] forced-colors:bg-[Canvas]';
-const FORCED_CRITICAL_BAR_CLASS =
-  'forced-colors:border-2 forced-colors:border-[CanvasText] forced-colors:bg-[Canvas]';
-const FORCED_SOLID_MARK_CLASS =
-  'forced-colors:bg-[CanvasText] forced-colors:[forced-color-adjust:none]';
 
 /**
  * **The disclosure slot: a 24 × 24 box, drawn on every row of the Activity column** (ADR-0177
@@ -1821,6 +1805,9 @@ function GanttRowView({
   });
   const moveRefusal = moveGate !== null && !moveGate.movable ? moveGate.reason : null;
   const armed = isSelected && moveGate?.movable === true;
+  // A summary draws solid unless it is critical, in which case the critical branch below wins and it
+  // is an outlined bar; the forced-colours band inside it follows the same branch.
+  const solidSummaryBar = !activity.isCritical && activity.type === 'WBS_SUMMARY';
 
   /**
    * The finish-edge resize: the start is held and the duration is the WORKING days from it to
@@ -2067,7 +2054,7 @@ function GanttRowView({
       className={cn(
         'absolute left-0 flex items-center outline-none',
         'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset',
-        isSelected ? ['bg-accent', FORCED_SELECTED_ROW_CLASS] : 'hover:bg-muted/50',
+        isSelected ? 'bg-accent' : 'hover:bg-muted/50',
         // De-emphasis only — the row keeps its tab stop, its `aria-rowindex` and its activation.
         // `visibility: hidden` or a native `disabled` would take it out of the tab order, which is
         // the ADR-0063 M6 defect exactly. The word in the first cell is what carries the meaning
@@ -2079,7 +2066,7 @@ function GanttRowView({
       <div
         className={cn(
           'border-border sticky left-0 z-10 flex h-full shrink-0 items-center border-r',
-          isSelected ? ['bg-accent', FORCED_SELECTED_ROW_CLASS] : 'bg-background',
+          isSelected ? ['bg-accent', FORCED_SELECTED_EDGE] : 'bg-background',
           !rowHasOpenCell && SELECT_NONE_AFTER_TOUCH,
         )}
         style={{ width: gridWidth }}
@@ -2280,7 +2267,7 @@ function GanttRowView({
             aria-hidden="true"
             className={cn(
               'bg-foreground absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45',
-              FORCED_SOLID_MARK_CLASS,
+              FORCED_SOLID_MARK,
             )}
             style={{ left: geometry.x }}
           />
@@ -2300,22 +2287,19 @@ function GanttRowView({
                 // Criticality is carried by BOTH a fill and an outline: colour alone would fail
                 // WCAG 1.4.1, and this is the exact defect class ADR-0055 was written about.
                 activity.isCritical
-                  ? [
-                      'bg-destructive/70 ring-destructive ring-2 ring-inset',
-                      FORCED_CRITICAL_BAR_CLASS,
-                    ]
-                  : activity.type === 'WBS_SUMMARY'
-                    ? ['bg-foreground/70', FORCED_SOLID_MARK_CLASS]
+                  ? ['bg-destructive/70 ring-destructive ring-2 ring-inset', FORCED_HEAVY_EDGE_BAR]
+                  : solidSummaryBar
+                    ? ['bg-foreground/70', FORCED_EDGED_SOLID_BAR]
                     : [
                         'bg-canvas-bar/60 ring-canvas-bar/70 ring-1 ring-inset',
-                        FORCED_TASK_BAR_CLASS,
+                        FORCED_OUTLINED_BAR,
                       ],
                 // The armed state: a selected, movable bar is the one a finger may drag. An OUTLINE
                 // (a shape, offset from the bar) plus grip marks below — never a colour change
                 // alone (WCAG 1.4.1) — and an outline, not a ring, so it composes with the critical
                 // bar's own ring instead of replacing it. `pan-y` lets a vertical swipe scroll and
                 // costs pinch-zoom over this one bar (ADR-0177 D2); it is read at `pointerdown`.
-                armed && 'outline-ring outline-2 outline-offset-1',
+                armed && ['outline-ring outline-2 outline-offset-1', FORCED_ARMED_OUTLINE],
                 armed && 'touch-pan-y',
               )}
               data-bar-armed={armed ? 'true' : undefined}
@@ -2339,11 +2323,10 @@ function GanttRowView({
                 <span
                   className={cn(
                     'bg-foreground/45 absolute inset-y-0 left-0',
-                    // The ink of the bar it sits in, inverted: `CanvasText` on a task bar's
-                    // `Canvas`, `Canvas` on a summary's solid `CanvasText`.
-                    activity.type === 'WBS_SUMMARY'
-                      ? 'forced-colors:bg-[Canvas] forced-colors:[forced-color-adjust:none]'
-                      : FORCED_SOLID_MARK_CLASS,
+                    // The ink of the bar it sits in, inverted: `CanvasText` on an outlined bar,
+                    // `Canvas` on a solid summary. Keyed on the same branch as the bar's own
+                    // form, so a critical summary (an outlined bar) gets the outlined band.
+                    solidSummaryBar ? FORCED_BAND_IN_SOLID_BAR : FORCED_BAND_IN_OUTLINED_BAR,
                   )}
                   style={{ width: `${geometry.progress * 100}%` }}
                 />
@@ -2357,7 +2340,10 @@ function GanttRowView({
                   className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5"
                 >
                   {GRIP_MARKS.map((mark) => (
-                    <span key={mark} className="bg-foreground/70 h-2 w-px" />
+                    <span
+                      key={mark}
+                      className={cn('bg-foreground/70 h-2 w-px', FORCED_SOLID_MARK)}
+                    />
                   ))}
                 </span>
               ) : null}
