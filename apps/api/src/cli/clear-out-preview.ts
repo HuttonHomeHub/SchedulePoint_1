@@ -296,6 +296,12 @@ export async function openReadOnlyClient(databaseUrl: string): Promise<PrismaCli
   return client;
 }
 
+/** A Prisma error's code (initialisation errors name it `errorCode`), else the error's class. */
+function errorCode(error: unknown): string {
+  const { code, errorCode: initCode } = error as { code?: string; errorCode?: string };
+  return code ?? initCode ?? (error instanceof Error ? error.name : 'unknown');
+}
+
 /** Entry point. Exit codes: 0 report printed, 1 database trouble, 2 invalid settings. */
 export async function main(): Promise<number> {
   let env: ReturnType<typeof validateEnv>;
@@ -310,7 +316,7 @@ export async function main(): Promise<number> {
   try {
     client = await openReadOnlyClient(env.DATABASE_URL);
   } catch (error) {
-    const code = (error as { code?: string }).code ?? 'unknown';
+    const code = errorCode(error);
     process.stderr.write(
       `Could not reach the database (error ${code}). Nothing has been changed.\n`,
     );
@@ -326,7 +332,7 @@ export async function main(): Promise<number> {
     return 0;
   } catch (error) {
     // The class of failure only: a Prisma message can quote the query, and names stay off the log.
-    const code = (error as { code?: string }).code ?? 'unknown';
+    const code = errorCode(error);
     process.stderr.write(
       `The preview could not be completed (database error ${code}). Nothing has been changed.\n`,
     );
