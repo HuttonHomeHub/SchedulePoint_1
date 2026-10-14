@@ -108,6 +108,42 @@ describe('NavigatorCrud coordinator', () => {
     );
   });
 
+  it('tells the planner about the period when the server has the clear-out on', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/organizations'
+          ? [{ id: 'o1', name: 'Acme', slug: 'acme', retentionActive: true, retentionDays: 90 }]
+          : undefined,
+      ),
+    );
+    renderCoordinator();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/organizations'));
+    fireEvent.click(screen.getByText('del-plan'));
+    await waitFor(() =>
+      expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
+        'Delete “Overall Schedule”? You can restore it from Recently deleted for 90 days; ' +
+          'after that it is permanently removed.',
+      ),
+    );
+  });
+
+  it('makes no deadline claim when the server has the clear-out off', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/organizations'
+          ? [{ id: 'o1', name: 'Acme', slug: 'acme', retentionActive: false, retentionDays: 90 }]
+          : undefined,
+      ),
+    );
+    renderCoordinator();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/organizations'));
+    fireEvent.click(screen.getByText('del-plan'));
+    expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
+      'Delete “Overall Schedule”? You can restore it from Recently deleted.',
+    );
+    expect(screen.getByRole('alertdialog')).not.toHaveTextContent(/permanently/);
+  });
+
   it('opens the create-client dialog from the root affordance', () => {
     renderCoordinator();
     fireEvent.click(screen.getByText('create-client'));

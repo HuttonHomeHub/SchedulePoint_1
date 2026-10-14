@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { MenuItem } from '@/components/ui/menu';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useDeleteRetention } from '@/features/organizations';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
 
 /**
@@ -32,6 +33,7 @@ export function ProjectsTable({
 }): React.ReactElement {
   const projects = useProjects(orgSlug, clientId);
   const deleteProject = useDeleteProject(orgSlug, clientId);
+  const retention = useDeleteRetention(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,7 +163,7 @@ export function ProjectsTable({
             }}
             onConfirm={confirmDelete}
             title="Delete project"
-            description={deleting ? deleteCascadeWarning('project', deleting.name) : ''}
+            description={deleting ? deleteCascadeWarning('project', deleting.name, retention) : ''}
             pending={deleteProject.isPending}
             pendingLabel="Deleting…"
             error={deleteError}
