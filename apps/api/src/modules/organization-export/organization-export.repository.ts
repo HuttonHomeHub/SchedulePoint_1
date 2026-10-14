@@ -28,11 +28,12 @@ export const EXPORT_BATCH_ROWS = 1_000;
  * The longest one export may hold its snapshot and its pooled connection, in milliseconds.
  *
  * Prisma's own default (5 s) would kill any export that is not trivial, and the global 15 s ceiling
- * is sized for a write. This is set from the measurement in
- * `docs/specs/organisation-export/m2-measurements.md`: about five times the time measured for the
- * brief's typical organisation, which the spec's own bound (five minutes at the upper size) sits
- * well inside. The figure is a ceiling that frees the connection if something wedges, not a budget
- * the export is expected to approach.
+ * is sized for a write. The plan's rule was "about five times the measured ten-plan time, capped at ten
+ * minutes", which is two minutes (25 s measured). That would refuse the brief's upper bound, which the
+ * same measurement extrapolates to 4.0 to 5.2 minutes (`docs/specs/organisation-export/m2-measurements.md`),
+ * and a slow client holds the snapshot open as well, so the ceiling is the cap. It is there to free the
+ * connection if something wedges, not as a budget the export is expected to approach: an export that
+ * hits it fails loudly (`timeout` on the audit row) rather than hanging.
  */
 export const EXPORT_TRANSACTION_TIMEOUT_MS = 10 * 60_000;
 
