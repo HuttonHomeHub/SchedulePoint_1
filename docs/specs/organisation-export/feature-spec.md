@@ -565,6 +565,12 @@ visible text in both rail forms (WCAG 2.5.3). **Rail height:** seven destination
 before the link is accepted (plan M3-T2, ADR-0113: measure the problem); if they do not fit, the fallback is a
 **Export data** link inside the **Members** page header for Org Admins, which needs no rail change.
 
+**Measured 2026-10-14 (M3-T2, [`m3-rail-measurement.md`](m3-rail-measurement.md)): the rail link ships; the
+fallback is not used.** At 1024 × 600, fine and coarse pointer, expanded and collapsed, all seven destinations are
+inside the window with no scrolling: the tree keeps 251 px (fine) and 131 px (coarse) against its 128 px floor, and
+the seventh row costs 30 px (fine) or 46 px (coarse). The coarse, expanded rail is therefore full at seven, with 3 px
+to spare.
+
 ### 4.8 Implementation approach & alternatives
 
 **Chosen:** synchronous, streamed ZIP of JSON + CSV, generated per request inside one read-only snapshot, Org Admin

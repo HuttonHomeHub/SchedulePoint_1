@@ -2413,7 +2413,8 @@ const COARSE_SURFACES: readonly CoarseSurface[] = [
   // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
   // an optional surface silently covers nothing the day its selector changes, which is the hole
   // this file's pinned positives exist to close.
-  // 13, so 14 swept: the six organisation destinations, the rail's two controls, and the tree's
+  // 13, so 15 swept for the Org Admin this suite signs in as: the seven organisation destinations
+  // (Export data joined the six, ADR-0194), the rail's two controls, and the tree's
   // three rows with their three `⋯` (dense-row-touch-targets M2 took the tree off the exemption
   // list). The tree has its own entry below as well, so a tree that sweeps to nothing cannot hide
   // behind the destinations; this aggregate is what proves the two surfaces are swept together.

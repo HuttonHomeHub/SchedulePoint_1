@@ -14,7 +14,7 @@ import { downloadBlob } from '@/lib/download-blob';
  * Collecting them is also what lets the page count what has arrived and offer **Cancel** — and what
  * lets a mid-stream failure read as "stopped, nothing saved" instead of a truncated file on disk.
  * The cost is the whole ZIP in browser memory; the trigger to replace this with a navigation-based
- * download is recorded in `docs/TECH_DEBT.md`.
+ * download is `docs/TECH_DEBT.md` #515.
  *
  * It deliberately does not use `apiFetch`, which forces a JSON content type and unwraps a JSON
  * envelope: the success body is a binary stream. Refusals before the first byte are the standard
