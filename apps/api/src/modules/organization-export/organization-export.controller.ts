@@ -7,6 +7,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiPayloadTooLargeResponse,
   ApiProduces,
   ApiTags,
   ApiTooManyRequestsResponse,
@@ -68,7 +69,8 @@ export class OrganizationExportController {
       'Nothing is stored: the file is generated on the request. Takes no body. There is no ' +
       '`Content-Length`, and **once the first byte is sent an error is a destroyed connection, not an ' +
       'error envelope** — a client must treat a truncated download as a failure. Every export that ' +
-      'starts is recorded in the audit log as `privacy.exported`.',
+      'finishes, or fails inside the process, is recorded in the audit log as `privacy.exported`; a ' +
+      'process crash mid-stream leaves no row.',
   })
   @ApiParam({ name: 'orgSlug', description: 'The organisation’s URL slug.' })
   @ApiProduces('application/zip')
@@ -79,8 +81,10 @@ export class OrganizationExportController {
   @ApiForbiddenResponse({ description: 'Only an Org Admin may export the organisation.' })
   @ApiConflictResponse({
     description:
-      'Another export of this organisation is running (`details.reason`: EXPORT_IN_PROGRESS).',
+      'Another export of this organisation is running (`details.reason`: EXPORT_IN_PROGRESS), or ' +
+      'this API process is already running its maximum of 2 exports (`EXPORT_BUSY`).',
   })
+  @ApiPayloadTooLargeResponse({ description: 'A stray body over the 64 KB default cap.' })
   @ApiTooManyRequestsResponse({ description: 'More than 3 exports in 10 minutes.' })
   async export(
     @CurrentUser() principal: Principal,

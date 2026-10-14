@@ -1293,7 +1293,10 @@ of JSON and CSV. The files, columns, value types and the compatibility promise a
 | Permission   | `organization:export` — **Org Admin only**. Resolved from the caller's own memberships first: a slug that is not yours answers **404**, never 403, so it is not an existence oracle. A member without the permission gets 403.              |
 | Request      | **No body, no query.** Any body is ignored, and the route keeps the 64 KB default body cap rather than the 512 KB org-scoped allowance, since it has no DTO to need it. There are no options: a shape that varies is a shape to promise.    |
 | 200          | `Content-Type: application/zip`, `Content-Disposition: attachment; filename="schedulepoint-export-<slug>-<UTC yyyymmddThhmmZ>.zip"` (readable cross-origin; it is in `exposedHeaders`), `Cache-Control: no-store`. **No `Content-Length`.** |
+| `403`        | A member of the organisation who is not an Org Admin.                                                                                                                                                                                       |
 | `409`        | `error.details.reason` **`EXPORT_IN_PROGRESS`**: another export of this organisation is running. One at a time per organisation; a different organisation is unaffected.                                                                    |
+| `409`        | `error.details.reason` **`EXPORT_BUSY`**: this API process is already running 2 exports (for any organisations). Per process, which is the whole cap while the deployment runs one API container. Retry shortly.                            |
+| `413`        | A stray request body over the 64 KB default cap. The route reads no body, but the parser runs first.                                                                                                                                        |
 | `429`        | **3 requests per 10 minutes**, per client address and for this route alone (the global limit does not apply).                                                                                                                               |
 | `401`, `404` | As every `:orgSlug` route.                                                                                                                                                                                                                  |
 
@@ -1319,8 +1322,9 @@ change, so a failure — or the server being replaced mid-download — resets th
 client must treat a truncated or reset download as failed. A ZIP's end-of-central-directory record is
 written last, so a file that has one is complete and one that does not is not.
 
-**Every export that starts is audited as `privacy.exported`** (ADR-0085 D5), written after the stream
-ends and outside the snapshot. `SUCCESS` means the last byte was handed to the proxy, not that the
+**Every export that finishes, or fails inside the process, is audited as `privacy.exported`**
+(ADR-0085 D5), written best-effort after the stream ends and outside the snapshot. A process crash
+mid-stream, or an audit write that fails, leaves no row. `SUCCESS` means the last byte was handed to the proxy, not that the
 browser received it. A download that began and did not finish is `FAILURE` with
 `changes.after.reason`: `client_aborted` (the connection closed first), `timeout` or `error`. A
 refusal before the first byte records nothing. `changes.after` also carries `formatVersion`, `files`

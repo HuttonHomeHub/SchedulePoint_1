@@ -12,7 +12,7 @@ import type { AuditService } from '../audit/audit.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
 import type { OrganizationExportRepository } from './organization-export.repository';
-import { OrganizationExportService } from './organization-export.service';
+import { MAX_CONCURRENT_EXPORTS, OrganizationExportService } from './organization-export.service';
 
 const ORG = { id: 'org-1', slug: 'acme', name: 'Acme' };
 const CONTEXT: RequestContext = {
@@ -132,6 +132,64 @@ describe('OrganizationExportService', () => {
     expect(res.headers.size).toBe(0);
     expect(res.headersSent).toBe(false);
     expect(audit.recordBestEffort).not.toHaveBeenCalled();
+  });
+
+  describe('the process-wide cap', () => {
+    /** Holds `reading` open until released, so exports overlap. */
+    function hold(): { release: () => void } {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      repository.reading = vi.fn(async () => {
+        await gate;
+        return { summary: { files: 0, rows: 0, entries: [] }, bytes: 0 };
+      });
+      return { release };
+    }
+
+    it('refuses the export beyond the cap with EXPORT_BUSY before opening a transaction', async () => {
+      const gate = hold();
+      const running = Array.from({ length: MAX_CONCURRENT_EXPORTS }, () => run(new FakeResponse()));
+      await vi.waitFor(() =>
+        expect(repository.reading).toHaveBeenCalledTimes(MAX_CONCURRENT_EXPORTS),
+      );
+
+      const refused = run(new FakeResponse());
+      await expect(refused).rejects.toBeInstanceOf(ConflictError);
+      await expect(refused).rejects.toMatchObject({ details: { reason: 'EXPORT_BUSY' } });
+      expect(repository.reading).toHaveBeenCalledTimes(MAX_CONCURRENT_EXPORTS);
+
+      gate.release();
+      await Promise.all(running);
+    });
+
+    it('gives the slot back after a success', async () => {
+      await run(new FakeResponse());
+      const gate = hold();
+      const running = Array.from({ length: MAX_CONCURRENT_EXPORTS }, () => run(new FakeResponse()));
+      await vi.waitFor(() =>
+        expect(repository.reading).toHaveBeenCalledTimes(MAX_CONCURRENT_EXPORTS),
+      );
+      gate.release();
+      await Promise.all(running);
+    });
+
+    it('gives the slot back after a failure and after the per-organisation 409', async () => {
+      for (const failure of [
+        new Error('boom'),
+        new ConflictError('busy', { reason: 'EXPORT_IN_PROGRESS' }),
+      ]) {
+        for (let i = 0; i < MAX_CONCURRENT_EXPORTS + 1; i += 1) {
+          repository.reading.mockRejectedValueOnce(failure);
+          await expect(run(new FakeResponse())).rejects.toBe(failure);
+        }
+      }
+      repository.reading = vi.fn((_org: string, read: (db: unknown) => Promise<unknown>) =>
+        read({}),
+      );
+      await expect(run(new FakeResponse())).resolves.toBeUndefined();
+    });
   });
 
   it('sets the headers only inside the snapshot, after the scope is read', async () => {

@@ -8,7 +8,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Principal } from '../../common/auth/principal';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ForbiddenError } from '../../common/errors/domain-errors';
+import { ConflictError, ForbiddenError } from '../../common/errors/domain-errors';
 import { VersionService } from '../../version/version.service';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
@@ -55,6 +55,14 @@ class ByteCounter extends Transform {
   }
 }
 
+/**
+ * Exports running at once in this process. One pins a pooled connection and a snapshot for up to ten
+ * minutes, and the per-organisation lock and per-address throttle do not stop several organisations
+ * (anyone can create one) from pinning enough connections to starve ordinary reads. In-process, so
+ * per API process: the deployment runs one API container, which makes it the whole cap.
+ */
+export const MAX_CONCURRENT_EXPORTS = 2;
+
 /** `20261014T0930Z`, the stamp in the download's name. UTC, so two admins in two zones agree. */
 function fileStamp(at: Date): string {
   return `${at.toISOString().slice(0, 16).replace(/[-:]/g, '')}Z`;
@@ -90,6 +98,8 @@ function isTimeout(error: unknown): boolean {
  */
 @Injectable()
 export class OrganizationExportService {
+  private running = 0;
+
   constructor(
     private readonly organizations: OrganizationsService,
     private readonly repository: OrganizationExportRepository,
@@ -107,6 +117,9 @@ export class OrganizationExportService {
     // Org scope from the caller's OWN memberships (anti-IDOR: a non-member 404s the org), and only
     // then the permission, checked against that organisation.
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    // Repeats the route's @RequirePermissions on purpose: the decorator runs before the org is
+    // resolved, so alone it would answer 403 for a foreign slug where this must answer 404 first.
+    // Do not remove it in favour of the decorator.
     if (!principal.can('organization:export', organization.id)) {
       this.logger.warn(
         {
@@ -118,6 +131,13 @@ export class OrganizationExportService {
       );
       throw new ForbiddenError('You do not have permission to perform this action.');
     }
+
+    if (this.running >= MAX_CONCURRENT_EXPORTS) {
+      throw new ConflictError('Exports are busy; try again in a few minutes.', {
+        reason: 'EXPORT_BUSY',
+      });
+    }
+    this.running += 1;
 
     const startedAt = Date.now();
     const generatedAt = new Date(startedAt);
@@ -132,6 +152,8 @@ export class OrganizationExportService {
 
     let outcome: ExportOutcome | undefined;
     let failure: ExportStreamFailed | undefined;
+    // The slot is held for the snapshot only, and given back on every path out of it: success, a
+    // broken stream, a client that left, and the per-organisation lock refusing.
     try {
       outcome = await this.repository.reading(organization.id, async (db) => {
         const scope = await this.repository.loadScope(db, organization.id);
@@ -201,6 +223,8 @@ export class OrganizationExportService {
         // Nothing was sent: 409, 500 or the like, as the standard envelope.
         throw error;
       }
+    } finally {
+      this.running -= 1;
     }
 
     const durationMs = Date.now() - startedAt;
