@@ -11,8 +11,8 @@ set -e
 # container exits before `prisma migrate deploy` and the database is left as it was; Docker restarts
 # the container, so fixing the cause (usually disk space) lets the update finish by itself. Removing
 # `set -e` would silently remove the hold. Its start-up cost with nothing pending is one query. A
-# copy of a large database lengthens the boot, past the image's 40 s healthcheck start period; the
-# container then reports `unhealthy` until it serves, which nothing acts on (docs/specs/database-backup).
+# copy of a large database lengthens the boot; the image's healthcheck start period (300 s) is sized
+# for that, so `web`, which waits for this container to be healthy, is not left behind by a long copy.
 echo "[entrypoint] checking whether a copy is needed before the database changes..."
 sh /app/backup/schedulepoint-backup.sh pre-migrate
 

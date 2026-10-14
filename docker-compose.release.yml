@@ -189,6 +189,8 @@ services:
     restart: unless-stopped
     # The script is PID 1's only child; `init` reaps `sleep` and forwards `docker stop` to it.
     init: true
+    # The folder is owned by uid 1000 (the guide's first step); say so rather than rely on the image.
+    user: '1000:1000'
     logging:
       driver: json-file
       options:
@@ -221,12 +223,11 @@ services:
       test: ['CMD', 'sh', '/app/backup/schedulepoint-backup.sh', 'health']
       interval: 5m
       timeout: 20s
-      # Until the first copy exists the service cannot be healthy, so check every 10 seconds during
-      # the start period: `up --wait` and Dockge then report it within the first minute instead of
-      # after the first 5-minute interval. `start_interval` needs Docker Engine 25 or newer, which
-      # the Watchtower API pin below (1.44) already assumes.
+      # The first check runs one interval (5 minutes) after start, so a new service reads `starting`
+      # until then. Deliberately no `start_interval`: it would show healthy within the first minute,
+      # but an older Compose plugin rejects the whole file on a key it does not know, and the host's
+      # version is not known. docker-compose.yml (development and CI) uses it.
       start_period: 10m
-      start_interval: 10s
 
   web:
     image: ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-${IMAGE_TAG:-latest}}

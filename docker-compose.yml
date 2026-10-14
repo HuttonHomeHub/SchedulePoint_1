@@ -26,8 +26,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
       POSTGRES_DB: ${POSTGRES_DB:-app}
+    # Loopback only: local development reaches the database from the host (`.env.example`), and
+    # nothing else on the network needs to.
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -37,6 +39,8 @@ services:
       retries: 5
 
   api:
+    # One image for api and backup: the same Dockerfile, so it is built once and both run that build.
+    image: schedulepoint-api:local
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -127,12 +131,15 @@ services:
   # Create the folder first so it is yours (`mkdir backups`): Docker creates a missing one as root,
   # which this container cannot write to, and the service then shows unhealthy. Nothing else depends on it.
   backup:
+    # One image for api and backup: the same Dockerfile, so it is built once and both run that build.
+    image: schedulepoint-api:local
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     # The script is the container's main process; `init` reaps `sleep` and forwards `docker stop` to it.
     init: true
+    user: '1000:1000'
     logging:
       driver: json-file
       options:
