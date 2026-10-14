@@ -18,7 +18,7 @@ step is a thing to copy and paste, and each one says what you should see and wha
 
 **You cannot break anything by following Part 1.** Everything in it can be undone: paste back the
 spare copy of your compose text (step 3) and remove the folder. Nothing in this guide deletes your
-data, except the two places that say so plainly: Part 3 step 8 and Part 4 step 2 (old copies).
+data, except the two places that say so plainly: Part 3 step 9 and Part 4 step 2 (old copies).
 
 **Words used here**
 
@@ -328,7 +328,7 @@ day or two.
 ## Part 3: Restore (about 15 minutes for a small database, longer on a large one)
 
 Read this now. Do it only when you need it. A restore **replaces the live database**. Work done after
-the copy was made is not in it. SchedulePoint is unavailable from step 2 to step 5, so do it out of
+the copy was made is not in it. SchedulePoint is unavailable from step 2 to step 6, so do it out of
 hours if you can.
 
 It is safe to start. Before anything changes, the command loads the copy into a new database and checks
@@ -361,7 +361,22 @@ database you had is **kept**, not deleted.
    common reasons are that something is still connected (do step 2 again) and that the copy was made by a
    newer version of SchedulePoint than the one installed (update SchedulePoint first).
 
-5. Start SchedulePoint again. In Dockge click **Start**. Or run:
+5. **If the recycle bin's clear-out is on, and you are restoring to get back something it removed,
+   switch it off first.** Skip this step if you never switched the clear-out on. If you came from Part 4 of the clear-out guide, you have already done this: check the line says `false`, then go on. In Dockge, open the
+   stack's `.env` (the "Env" box) and set this line, then click **Save** (do not Deploy yet; step 6
+   applies it):
+
+   ```text
+   RETENTION_HIERARCHY_ENABLED=false
+   ```
+
+   **Why:** SchedulePoint looks for overdue deleted items every time it starts. The restored database
+   holds the item in **Recently deleted**, still older than 90 days, so with the clear-out on,
+   SchedulePoint would remove it **again** within a minute of starting. Once you have restored the item
+   from **Recently deleted** you can switch the clear-out on again; see
+   [`switch-on-the-clear-out.md`](./switch-on-the-clear-out.md), Part 4. (1 minute)
+
+6. Start SchedulePoint again. In Dockge click **Start**. Or run:
 
    ```bash
    docker compose up -d
@@ -371,10 +386,10 @@ database you had is **kept**, not deleted.
    version, SchedulePoint brings it up to date as it starts. It takes a copy of the restored database
    first, so that step can be undone too. (2 minutes)
 
-6. Sign in and open a plan you know. Check that the work you expect is there. (5 minutes)
-7. If something is wrong, do not delete anything. The database from before the restore is kept. Tell
+7. Sign in and open a plan you know. Check that the work you expect is there. (5 minutes)
+8. If something is wrong, do not delete anything. The database from before the restore is kept. Tell
    the maintainers; they can swap it back in one step.
-8. **Write down now** the name of the kept database that step 4 printed. It contains `_before_restore_`.
+9. **Write down now** the name of the kept database that step 4 printed. It contains `_before_restore_`.
    If you did not, list the databases later:
 
    ```bash
