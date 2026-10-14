@@ -36,13 +36,16 @@
 # removes the newest of each.
 #
 # CONNECTION  PGHOST/PGUSER/PGPASSWORD/PGDATABASE when PGHOST is set (the backup service); otherwise
-# DATABASE_URL with its query string removed (the API container — Prisma's `?schema=public` is not a
-# libpq parameter).
+# DATABASE_URL (the API container), which is parsed into PG* variables so the credential is never on a
+# command line; Prisma-only query parameters such as `?schema=public` are dropped, libpq ones such as
+# `sslmode` are kept.
 #
 # SETTINGS  BACKUP_KEEP_DAYS (1-3650, default 30) is the only operator setting. Test-only: BACKUP_ROOT
 # (the folder, default /backups), MIGRATIONS_DIR (default /app/prisma/migrations),
 # BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800),
-# BACKUP_SCHEDULE_ITERATIONS (stop `schedule` after this many polls; 0, the default, never stops).
+# BACKUP_SCHEDULE_ITERATIONS (stop `schedule` after this many polls; 0, the default, never stops),
+# BACKUP_POLL_SECONDS (the poll interval, default 300), BACKUP_NOW (an epoch second standing in for
+# "now" when deciding whether a nightly copy is due and naming copies).
 
 set -eu
 umask 077
@@ -59,16 +62,17 @@ PRE_MIGRATE_RE='^schedulepoint-pre-migrate-.*\.dump$'
 PRE_RESTORE_RE='^schedulepoint-pre-restore-.*\.dump$'
 ANY_RE='^schedulepoint-.*\.dump$'
 # The poll interval and the hour after which a missing nightly copy is due.
-POLL_SECONDS=300
+POLL_SECONDS="${BACKUP_POLL_SECONDS:-300}"
+# After a failed nightly attempt, wait this long before the next: a failure at 02:05 is usually a
+# full disk or a stopped database, and retrying every five minutes all day only fills the log.
+RETRY_BACKOFF_SECONDS=3600
 NIGHTLY_HOUR=2
 # 24 hours plus two of slack.
 HEALTHY_MINUTES=1560
 
 PARTIALS=""
 SCRATCH_DB=""
-MODE=""
 DBNAME=""
-BASE_URL=""
 COPY_ERR=""
 COPY_FILE=""
 COPY_BYTES=0
@@ -77,21 +81,35 @@ VERIFY_ERR=""
 
 # --- small helpers ----------------------------------------------------------
 
+# Defence in depth: a connection string with a password in it must never reach a log or a file the
+# operator reads, whatever an error message happens to quote.
+redact() { sed 's#://[^@/ ]*@#://[redacted]@#g'; }
+
 die() {
-  printf '%s\n' "$*" >&2
+  printf '%s\n' "$*" | redact >&2
   exit 1
 }
 
-first_line() { printf '%s' "$1" | sed -n '1p'; }
+first_line() { printf '%s' "$1" | sed -n '1p' | redact; }
 
-json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n\t' '  '; }
+# One line, every control character dropped (a raw one is invalid in JSON and a log-forging vector).
+json_str() {
+  printf '%s' "$1" | redact | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n\t\r' '   ' | tr -d '\000-\037\177'
+}
+
+# The wall clock the nightly decision and copy names use. BACKUP_NOW is test-only.
+now_epoch() { printf '%s' "${BACKUP_NOW:-$(date +%s)}"; }
+now_fmt() { date -u -d "@$(now_epoch)" "+$1"; }
 
 # emit <event> [key value]... — one JSON object per line, the shape the API's own logs use.
 emit() {
   ev=$1
   shift
   lvl=info
-  case $ev in *failed) lvl=error ;; esac
+  case $ev in
+    *failed) lvl=error ;;
+    *permissions) lvl=warn ;;
+  esac
   line="{\"level\":\"$lvl\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"$ev\""
   while [ $# -ge 2 ]; do
     case $2 in
@@ -111,6 +129,10 @@ human_size() {
     else printf "%d bytes", b
   }'
 }
+
+# A file's size from its inode. Not `wc -c`: busybox's reads the whole file, which on a multi-gigabyte
+# dump is minutes of I/O for a number the filesystem already has.
+file_bytes() { stat -c %s "$1"; }
 
 # Free kilobytes on the backups folder's filesystem (POSIX `df -P`, same in busybox).
 free_kb() { df -Pk "$ROOT" | awk 'NR == 2 { print $4 }'; }
@@ -137,19 +159,72 @@ newest_of() { kind_list "$1" | tail -1; }
 
 # --- connection -------------------------------------------------------------
 
-init_conn() {
-  if [ -n "${PGHOST:-}" ]; then
-    MODE=pg
-    DBNAME="${PGDATABASE:-}"
-    [ -n "$DBNAME" ] || die "PGDATABASE is not set."
-  elif [ -n "${DATABASE_URL:-}" ]; then
-    MODE=url
-    BASE_URL=$(printf '%s' "$DATABASE_URL" | sed 's/?.*$//')
-    DBNAME=$(printf '%s' "$BASE_URL" | sed 's#^[a-z]*://[^/]*/##')
-    [ -n "$DBNAME" ] || die "DATABASE_URL names no database."
-  else
-    die "No database is configured (set PGHOST and PGDATABASE, or DATABASE_URL)."
+# urldecode — %XX escapes to bytes (awk only: dash's printf has no \x, busybox's differs).
+urldecode() {
+  printf '%s' "$1" | awk '
+    function hexval(c) { return index("0123456789ABCDEF", toupper(c)) - 1 }
+    { s = $0; out = ""
+      while ((i = index(s, "%")) > 0) {
+        h = substr(s, i + 1, 2)
+        if (h ~ /^[0-9A-Fa-f][0-9A-Fa-f]$/) {
+          out = out substr(s, 1, i - 1) sprintf("%c", hexval(substr(h, 1, 1)) * 16 + hexval(substr(h, 2, 1)))
+          s = substr(s, i + 3)
+        } else { out = out substr(s, 1, i); s = substr(s, i + 1) }
+      }
+      printf "%s", out s }'
+}
+
+# parse_database_url — DATABASE_URL into PG* variables. Nothing here puts the credential on a command
+# line, and a query parameter is passed on only when it is a libpq one: Prisma's own (`schema`,
+# `connection_limit`, `pool_timeout`, `pgbouncer`, …) are dropped, `sslmode` and its siblings are not.
+parse_database_url() {
+  rest=${DATABASE_URL#*://}
+  authority=${rest%%/*}
+  pathq=${rest#*/}
+  db=${pathq%%\?*}
+  query=""
+  case $pathq in *\?*) query=${pathq#*\?} ;; esac
+  userinfo=""
+  case $authority in *@*) userinfo=${authority%@*} ;; esac
+  hostport=${authority##*@}
+  host=${hostport%%:*}
+  port=5432
+  case $hostport in *:*) port=${hostport#*:} ;; esac
+  user=${userinfo%%:*}
+  pass=""
+  case $userinfo in *:*) pass=${userinfo#*:} ;; esac
+  [ -n "$host" ] && [ -n "$db" ] || die "DATABASE_URL must name a host and a database."
+  export PGHOST="$host" PGPORT="$port" PGDATABASE="$db"
+  if [ -n "$user" ]; then
+    user=$(urldecode "$user")
+    export PGUSER="$user"
   fi
+  if [ -n "$pass" ]; then
+    pass=$(urldecode "$pass")
+    export PGPASSWORD="$pass"
+  fi
+  oldifs=$IFS
+  IFS='&'
+  for kv in $query; do
+    val=$(urldecode "${kv#*=}")
+    case ${kv%%=*} in
+      sslmode) export PGSSLMODE="$val" ;;
+      sslrootcert) export PGSSLROOTCERT="$val" ;;
+      sslcert) export PGSSLCERT="$val" ;;
+      sslkey) export PGSSLKEY="$val" ;;
+      connect_timeout) export PGCONNECT_TIMEOUT="$val" ;;
+    esac
+  done
+  IFS=$oldifs
+}
+
+init_conn() {
+  if [ -z "${PGHOST:-}" ]; then
+    [ -n "${DATABASE_URL:-}" ] || die "No database is configured (set PGHOST and PGDATABASE, or DATABASE_URL)."
+    parse_database_url
+  fi
+  DBNAME="${PGDATABASE:-}"
+  [ -n "$DBNAME" ] || die "PGDATABASE is not set."
   # Database names reach SQL as identifiers and a rename must fit Postgres's 63 bytes
   # (<name>_before_restore_YYYYMMDDHHMM adds 28).
   case $DBNAME in
@@ -158,14 +233,9 @@ init_conn() {
   [ "${#DBNAME}" -le 35 ] || die "The database name '$DBNAME' is longer than 35 characters."
 }
 
-# target <database> — the string every libpq tool accepts as its database argument.
-target() {
-  if [ "$MODE" = url ]; then
-    printf '%s' "$BASE_URL" | sed "s#^\\([a-z]*://[^/]*\\)/.*#\\1/$1#"
-  else
-    printf '%s' "$1"
-  fi
-}
+# target <database> — the database argument every libpq tool accepts. The connection itself is the PG*
+# environment; only a name is ever passed.
+target() { printf '%s' "$1"; }
 
 # sql <database> <statement> — tuples only, stops on the first error (stderr carries it).
 sql() { psql -X -q -At -v ON_ERROR_STOP=1 -d "$(target "$1")" -c "$2"; }
@@ -220,7 +290,7 @@ trap 'exit 143' TERM
 trap 'exit 130' INT
 
 unique_stamp() {
-  base=$(date +%s)
+  base=$(now_epoch)
   i=0
   while :; do
     s=$(date -u -d "@$((base + i * 60))" +%Y-%m-%dT%H%MZ)
@@ -228,6 +298,22 @@ unique_stamp() {
     i=$((i + 1))
   done
   printf '%s' "$s"
+}
+
+# folder_warning — text when the backups folder is open to other users on this server, else nothing.
+# A warning, never a refusal: the copies hold password hashes, but a folder an operator made
+# world-readable is still better backed up than not.
+folder_warning() {
+  mode=$(stat -c %a "$ROOT" 2>/dev/null || true)
+  case $mode in
+    '' | *00) return 0 ;;
+  esac
+  printf 'WARNING: the backups folder is accessible to other users on this server (mode %s). Copies contain password hashes; run: chmod 700 <backups folder>' "$mode"
+}
+
+warn_folder() {
+  w=$(folder_warning)
+  if [ -n "$w" ]; then emit backup.folder_permissions mode "$(stat -c %a "$ROOT")"; fi
 }
 
 # take_copy <name prefix> — on failure COPY_ERR holds the reason; the folder is left as it was.
@@ -255,10 +341,16 @@ take_copy() {
   last=$(newest_any)
   need_kb=$MIN_FREE_KB
   if [ -n "$last" ]; then
-    last_bytes=$(wc -c <"$ROOT/$last")
+    last_bytes=$(file_bytes "$ROOT/$last")
     need_kb=$((last_bytes * 2 / 1024))
   fi
   have_kb=$(free_kb)
+  if [ "$have_kb" -lt "$need_kb" ]; then
+    # Old copies are the cheapest space there is, and prune never removes the newest of each kind.
+    # Only with a valid retention setting: a mistyped one must not decide what is deleted.
+    if (validate_keep_days) >/dev/null 2>&1; then prune; fi
+    have_kb=$(free_kb)
+  fi
   if [ "$have_kb" -lt "$need_kb" ]; then
     COPY_ERR="disk nearly full (needs $(human_size $((need_kb * 1024))), $(human_size $((have_kb * 1024))) free)"
     return 1
@@ -282,16 +374,20 @@ take_copy() {
     return 1
   fi
   hash=$(sha256sum "$partial" | cut -d ' ' -f 1)
+  # Flush before the renames: a name that exists must be a whole file even across a power cut.
+  sync
   if ! { printf '%s  %s\n' "$hash" "$name" >"$sum_partial" \
     && mv "$sum_partial" "$ROOT/$name.sha256" \
     && mv "$partial" "$ROOT/$name"; }; then
     COPY_ERR="the copy could not be finalised in $ROOT"
     drop_partials
+    # A checksum with no dump beside it would be an orphan.
+    rm -f "$ROOT/$name.sha256"
     return 1
   fi
   PARTIALS=""
   COPY_FILE=$name
-  COPY_BYTES=$(wc -c <"$ROOT/$name")
+  COPY_BYTES=$(file_bytes "$ROOT/$name")
   COPY_SECS=$(($(date +%s) - started))
   return 0
 }
@@ -331,21 +427,26 @@ write_status_ok() {
     if [ -e "$ROOT/UPDATE-HELD.txt" ]; then
       printf 'NOTE: an update is being held — see UPDATE-HELD.txt in this folder.\n'
     fi
-  } | write_file_atomic "$ROOT/LAST-BACKUP.txt" 2>/dev/null || true
+    folder_warning
+    printf '\n'
+  } | sed '/^$/d' | write_file_atomic "$ROOT/LAST-BACKUP.txt" 2>/dev/null || true
 }
 
 write_status_failed() {
   good=$(newest_of "$NIGHTLY_RE")
   {
-    printf 'FAILED — %s. Reason: %s. Newest good copy: %s.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "$COPY_ERR" "${good:-none}"
+    printf 'FAILED — %s. Reason: %s. Newest good copy: %s.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "$(printf '%s' "$COPY_ERR" | redact)" "${good:-none}"
     if [ -e "$ROOT/UPDATE-HELD.txt" ]; then
       printf 'NOTE: an update is being held — see UPDATE-HELD.txt in this folder.\n'
     fi
-  } | write_file_atomic "$ROOT/LAST-BACKUP.txt" 2>/dev/null || true
+    folder_warning
+    printf '\n'
+  } | sed '/^$/d' | write_file_atomic "$ROOT/LAST-BACKUP.txt" 2>/dev/null || true
 }
 
 # run_copy — the nightly / `now` copy: take, prune, report.
 run_copy() {
+  warn_folder
   if take_copy schedulepoint-; then
     emit backup.succeeded file "$COPY_FILE" bytes "$COPY_BYTES" seconds "$COPY_SECS"
     prune
@@ -361,8 +462,8 @@ run_copy() {
 
 nightly_due() {
   [ -n "$(newest_of "$NIGHTLY_RE")" ] || return 0
-  [ "$(date -u +%H)" -ge "$NIGHTLY_HOUR" ] || return 1
-  today=$(date -u +%Y-%m-%d)
+  [ "$(now_fmt %H)" -ge "$NIGHTLY_HOUR" ] || return 1
+  today=$(now_fmt %Y-%m-%d)
   kind_list "$NIGHTLY_RE" | grep -q "^schedulepoint-$today" && return 1
   return 0
 }
@@ -372,9 +473,10 @@ cmd_schedule() {
   rm -f "$ROOT"/schedulepoint-*.partial 2>/dev/null || true
   emit backup.started keep_days "$KEEP_DAYS" folder "$ROOT"
   polls=0
+  retry_after=0
   while :; do
-    if nightly_due; then
-      run_copy || true
+    if [ "$(date +%s)" -ge "$retry_after" ] && nightly_due; then
+      if ! run_copy; then retry_after=$(($(date +%s) + RETRY_BACKOFF_SECONDS)); fi
     fi
     polls=$((polls + 1))
     if [ "${BACKUP_SCHEDULE_ITERATIONS:-0}" -gt 0 ] && [ "$polls" -ge "$BACKUP_SCHEDULE_ITERATIONS" ]; then
@@ -408,7 +510,7 @@ cmd_list() {
       schedulepoint-pre-migrate-*) label="  (before an update)" ;;
       schedulepoint-pre-restore-*) label="  (before a restore)" ;;
     esac
-    printf '  %s  %s  %s%s\n' "$f" "$(human_size "$(wc -c <"$ROOT/$f")")" "$(stamp_to_text "$f")" "$label"
+    printf '  %s  %s  %s%s\n' "$f" "$(human_size "$(file_bytes "$ROOT/$f")")" "$(stamp_to_text "$f")" "$label"
   done
 }
 
@@ -597,7 +699,7 @@ cmd_restore() {
 # --- the copy before an update (spec §4.12) ----------------------------------
 
 hold() {
-  reason=$1
+  reason=$(printf '%s' "$1" | redact)
   msg="UPDATE HELD — SchedulePoint did not update the database because the safety copy could not be made: $reason. Your data has NOT been changed. Fix that (for a full disk, free some space) and SchedulePoint will carry on by itself, or go back to the previous version. See the backup guide, \"If an update is held\"."
   emit backup.pre_migrate_failed reason "$reason"
   printf '%s\n' "$msg"
@@ -610,6 +712,7 @@ cmd_pre_migrate() {
     emit backup.pre_migrate_skipped reason not_enabled
     return 0
   fi
+  warn_folder
   out=$(sql "$DBNAME" "SELECT to_regclass('public._prisma_migrations') IS NOT NULL" 2>&1) \
     || hold "the database could not be asked what is pending: $(first_line "$out")"
   if [ "$out" != t ]; then

@@ -39,7 +39,9 @@ check a copy against the migrations of the version that will boot it.
 --lock-wait-timeout=60s`, at 02:00 UTC with catch-up (a 5-minute poll; at once when no copy exists), written as
 `<name>.partial`, validated with `pg_restore --list`, given a `.sha256`, then renamed — a name that exists is a whole
 file. Pruning runs only after a good copy, removes only the three name patterns below older than `BACKUP_KEEP_DAYS`, and
-never the newest of each. A failed night deletes nothing. Names: `schedulepoint-<UTC stamp>.dump` (nightly and `now`),
+never the newest of each. A failed night deletes nothing, and is not retried for an hour (a failure at 02:05 is usually a full disk or a stopped
+database; retrying every five minutes all day only fills the log). When the free-space guard trips, old copies are pruned
+first — the cheapest space there is, and the newest of each kind still survives — and the check is repeated before failing. Names: `schedulepoint-<UTC stamp>.dump` (nightly and `now`),
 `schedulepoint-pre-migrate-<stamp>.dump` (D9) and `schedulepoint-pre-restore-<stamp>.dump` (D3's safety copy).
 
 **D3: restore loads into a NEW database and swaps by rename; the old database is kept; a copy newer than the image is
@@ -70,7 +72,9 @@ its roster from that prefix.
 promises" item 3), so the names are chosen to last. `BACKUP_DIR` is a host path read by compose interpolation only;
 `BACKUP_KEEP_DAYS` is an integer 1–3650, default 30, and anything else refuses the start. There is no schedule setting
 (02:00 UTC is fixed) and no enable setting (an operator who wants none removes the service); both are additive later.
-`BACKUP_ROOT`, `MIGRATIONS_DIR` and `BACKUP_MIN_FREE_KB` exist for the test harness and are not settings.
+`BACKUP_ROOT`, `MIGRATIONS_DIR`, `BACKUP_MIN_FREE_KB`, `BACKUP_SCHEDULE_ITERATIONS`, `BACKUP_POLL_SECONDS` and
+`BACKUP_NOW` exist for the test harness and are not settings (the last is an injectable clock, so both sides of 02:00 UTC
+are tested on every run).
 
 **D7: an off-site copy is a later copier of finished files.** Each copy is one finished file with its checksum beside it
 and an unfinished copy only ever exists as `.partial`, so an off-site copy is any tool that copies finished
@@ -110,6 +114,14 @@ procedure uses) is unaffected. The dev stack keeps its port, which local develop
 - An update that carries a database change is down for as long as the pre-update copy takes — the same figure
   `LAST-BACKUP.txt` reports for each nightly copy. A broken or full backups folder **and** such an update coincide to hold
   it; the first is normally visible a day ahead because the nightly copy is failing for the same reason.
+- **Copies are a second copy of everything, including what the application later removes.** The newest copy of each
+  kind is never pruned, so data erased or soft-deleted since (and the password hashes of removed accounts) persists in it
+  however old, until an operator deletes the file; the `<db>_before_restore_*` databases a restore keeps stay until
+  removed by hand; and copies are **unencrypted at rest** (the folder is mode 700 and the script warns, without
+  refusing, when it is more open). A right-to-erasure request (ADR-0085) therefore has a step it did not have before.
+- **The backups folder is trusted input.** A dump is restored by the connecting role, which on the Compose stack is a
+  superuser, and a hostile dump can carry code that runs as that role. The script verifies the checksum a copy was
+  written with, not who wrote the file: only copies from the operator's own folder should ever be restored.
 - Copies sit on the same disk as the database and do not survive losing the server. This is the owner's decision and the
   guide says so plainly; D7 is how that is improved later.
 - The copies contain credentials (password hashes, sessions, verification tokens): the folder is mode 700, files 600

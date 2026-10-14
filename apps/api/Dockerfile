@@ -65,7 +65,8 @@ COPY --chown=node:node --from=build /out/prisma ./prisma
 COPY --chown=node:node --from=build /out/docker-entrypoint.sh ./docker-entrypoint.sh
 # The backup command (ADR-0192). `/backups` is deliberately NOT created here: its absence is how
 # `pre-migrate` knows the operator has not switched backups on, so only a mount may create it.
-COPY --chown=node:node apps/api/backup/ ./backup/
+# Root-owned and read+execute only: the unprivileged user that runs it cannot rewrite it.
+COPY --chmod=0555 apps/api/backup/ ./backup/
 EXPOSE 3000
 # Health is served under the global /api prefix + URI versioning (/api/v1/health).
 # Longer start period to cover the migrate-then-boot entrypoint on first run.
