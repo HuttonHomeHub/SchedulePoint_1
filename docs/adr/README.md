@@ -217,3 +217,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0191](0191-a-contrast-theme-is-the-readers-palette.md)                                         | A contrast theme is the reader's palette                                                   | Accepted           |
 | [0192](0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)              | A backup is a file the image writes, and a restore never overwrites                        | Accepted           |
 | [0193](0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)                    | A permanent delete is previewed by the code that performs it, and arming is a host act     | Accepted           |
+| [0194](0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)            | An organisation's export is a promised format, streamed on the request                     | Proposed           |

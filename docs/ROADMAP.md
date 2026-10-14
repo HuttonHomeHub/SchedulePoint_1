@@ -712,7 +712,10 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
 
 What 1.0 requires and promises is written down in [`RELEASE_1_0.md`](RELEASE_1_0.md) (ADR-0190); it has **not**
 been cut. Required before it, each to be specified on its own: a tested database backup and restore, a
-whole-organisation export, and the recycle bin's 90-day permanent clear-out turned on and proven
+whole-organisation export (specified and approved 2026-10-14,
+[ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md); spec and plan at
+[`docs/specs/organisation-export/`](specs/organisation-export/); its format, census and permission are built, the
+endpoint and page are not), and the recycle bin's 90-day permanent clear-out turned on and proven
 (specified and approved 2026-10-14, [ADR-0193](adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md);
 spec and plan at [`docs/specs/recycle-bin-clear-out/`](specs/recycle-bin-clear-out/); its preview command and
 restore-race fix are built, the switch-on is the owner's). Collaborative
