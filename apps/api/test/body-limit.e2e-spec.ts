@@ -200,6 +200,17 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
     expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
 
+  it('holds the organisation export, which takes no body, to the 64 KB default rather than 512 KB', async () => {
+    const { agent } = await signedInPlan();
+    // A signed-in Org Admin, so the route would otherwise answer 200 and start streaming. The export
+    // reads no body, so granting it the org-scoped 512 KB buffer would be a cap with no reason.
+    const res = await agent
+      .post('/api/v1/organizations/acme/export')
+      .send({ padding: 'x'.repeat(100 * 1024) })
+      .expect(413);
+    expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
   it('does not let a differently-cased path slip past the 64 KB cap', async () => {
     const res = await request(server())
       .post('/API/V1/Invitations/preview')
