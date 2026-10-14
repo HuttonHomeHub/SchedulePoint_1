@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { canExportSchedule, canManageHierarchy, canWriteNotes } from './rbac';
+import {
+  canExportOrganization,
+  canExportSchedule,
+  canManageHierarchy,
+  canWriteNotes,
+} from './rbac';
 
 describe('canManageHierarchy', () => {
   it('allows writers (Planner, Org Admin)', () => {
@@ -35,5 +40,18 @@ describe('canExportSchedule', () => {
 
   it('denies the absent (signed-out / unknown) role', () => {
     expect(canExportSchedule(undefined)).toBe(false);
+  });
+});
+
+describe('canExportOrganization', () => {
+  it('allows the Org Admin only (the export carries cost and every member’s email)', () => {
+    expect(canExportOrganization('ORG_ADMIN')).toBe(true);
+    for (const role of ['PLANNER', 'CONTRIBUTOR', 'VIEWER'] as const) {
+      expect(canExportOrganization(role)).toBe(false);
+    }
+  });
+
+  it('denies the absent role, so a still-loading role never shows the link', () => {
+    expect(canExportOrganization(undefined)).toBe(false);
   });
 });

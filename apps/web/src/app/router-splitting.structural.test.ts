@@ -113,10 +113,10 @@ describe('S1 — route code splitting is the rule, and eager is the named except
   });
 
   it('S1b — the pinned positive case: the census finds the routes that exist', () => {
-    // Without this, S1a passes just as happily over a census that matched nothing. 23 routes
-    // carry a `component` (24 `createRoute` calls, and the index route has none).
+    // Without this, S1a passes just as happily over a census that matched nothing. 24 routes
+    // carry a `component` (25 `createRoute` calls, and the index route has none).
     const { routes } = census(ROUTER);
-    expect(routes.length).toBe(23);
+    expect(routes.length).toBe(24);
     const byComponent = new Map(routes.map((r) => [r.component, r.name]));
     expect(byComponent.get('SignInScreen')).toBe('signInRoute');
     expect(byComponent.get('AccountScreen')).toBe('accountRoute');

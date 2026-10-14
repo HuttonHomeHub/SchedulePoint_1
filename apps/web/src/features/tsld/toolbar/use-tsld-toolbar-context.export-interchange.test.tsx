@@ -27,7 +27,7 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
 // The browser download shim — spied so we can assert the file (and the opt-in report) download without a
 // real object URL (jsdom has no `URL.createObjectURL`, so the real shim is a silent no-op).
 const downloadBlob = vi.hoisted(() => vi.fn());
-vi.mock('../export/download', () => ({ downloadBlob }));
+vi.mock('@/lib/download-blob', () => ({ downloadBlob }));
 
 // The export fetch — the one seam we drive per test; everything else in the interchange barrel stays real
 // (so the notice's `downloadReport` runs the REAL `formatReportText` + `exportReportFilename`).

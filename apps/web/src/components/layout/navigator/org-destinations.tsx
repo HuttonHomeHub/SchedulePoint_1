@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import {
   Building2,
   CalendarDays,
+  Download,
   ScrollText,
   Trash2,
   Users,
@@ -10,7 +11,12 @@ import {
 } from 'lucide-react';
 
 import { AUDIT_LOG_ENABLED, RESOURCES_ENABLED } from '@/config/env';
-import { canManageHierarchy, canReadAuditLog, useOrgRole } from '@/hooks/use-org-role';
+import {
+  canExportOrganization,
+  canManageHierarchy,
+  canReadAuditLog,
+  useOrgRole,
+} from '@/hooks/use-org-role';
 import { cn } from '@/lib/utils';
 
 /**
@@ -60,7 +66,7 @@ interface Destination {
   label: string;
   /**
    * A literal union, never `string`. `Link`'s `to` accepts a bare `string`, so typing this field
-   * loosely would silently give up the router's compile-time route checking for all six — and a
+   * loosely would silently give up the router's compile-time route checking for every destination — and a
    * typo'd destination is a link that renders, looks right and 404s.
    */
   to:
@@ -69,7 +75,8 @@ interface Destination {
     | '/orgs/$orgSlug/resources'
     | '/orgs/$orgSlug/members'
     | '/orgs/$orgSlug/audit-log'
-    | '/orgs/$orgSlug/recently-deleted';
+    | '/orgs/$orgSlug/recently-deleted'
+    | '/orgs/$orgSlug/export';
   Icon: LucideIcon;
   /** Withheld entirely when false — a flag that is off, or a role that has no such place. */
   visible: boolean;
@@ -101,6 +108,13 @@ function useDestinations(orgSlug: string): Destination[] {
       to: '/orgs/$orgSlug/recently-deleted',
       Icon: Trash2,
       visible: canManageHierarchy(role),
+    },
+    // Org Admin only (ADR-0194). A courtesy, not the control: the API answers 403 regardless.
+    {
+      label: 'Export data',
+      to: '/orgs/$orgSlug/export',
+      Icon: Download,
+      visible: canExportOrganization(role),
     },
   ];
   return all.filter((destination) => destination.visible);

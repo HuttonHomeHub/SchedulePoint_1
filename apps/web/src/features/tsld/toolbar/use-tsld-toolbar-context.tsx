@@ -1,7 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { useMemo, useState } from 'react';
 
-import { downloadBlob } from '../export/download';
 import { buildScheduleCsv } from '../export/export-csv';
 import type { ExportExtent } from '../export/export-image';
 import { buildExportFilename } from '../export/filename';
@@ -58,6 +57,7 @@ import type { PenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
+import { downloadBlob } from '@/lib/download-blob';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */

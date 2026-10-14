@@ -47,6 +47,7 @@ const SURFACE = [
   'routes/resources.tsx',
   'routes/members.tsx',
   'routes/audit-log.tsx',
+  'routes/organization-export.tsx',
   'routes/recently-deleted.tsx',
   'routes/my-activity.tsx',
   'routes/org-not-found.tsx',

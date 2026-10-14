@@ -3,6 +3,9 @@
  * behind `VITE_EXPORT_PRINT`). The only IO here is an object-URL + a synthetic anchor click; kept
  * isolated so the pure serialisers (`export-csv.ts` et al.) stay DOM-free and unit-testable. Triggered
  * by a real toolbar button, so the download is keyboard-operable.
+ *
+ * Lives in `lib/` because a second feature now saves a Blob (the organisation export); it was
+ * `features/tsld/export/download.ts` while the diagram was the only caller.
  */
 
 /**

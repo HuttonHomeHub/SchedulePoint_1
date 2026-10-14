@@ -48,6 +48,10 @@ const AcceptInviteScreen = lazyRouteComponent(
   'AcceptInviteScreen',
 );
 const AuditLogScreen = lazyRouteComponent(() => import('@/routes/audit-log'), 'AuditLogScreen');
+const OrganizationExportScreen = lazyRouteComponent(
+  () => import('@/routes/organization-export'),
+  'OrganizationExportScreen',
+);
 const CalendarsScreen = lazyRouteComponent(() => import('@/routes/calendars'), 'CalendarsScreen');
 const ClientDetailScreen = lazyRouteComponent(
   () => import('@/routes/client-detail'),
@@ -368,6 +372,18 @@ const auditLogRoute = createRoute({
 });
 
 /**
+ * The organisation export (ADR-0194). No flag (ADR-0088 D1). Membership is checked in `beforeLoad`
+ * like every `:orgSlug` route; `organization:export` is NOT — the screen says why a non-admin
+ * cannot use it, and the API answers 403 regardless.
+ */
+const organizationExportRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/orgs/$orgSlug/export',
+  beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
+  component: OrganizationExportScreen,
+});
+
+/**
  * The caller's own audit events (behind `AUDIT_LOG_ENABLED`).
  *
  * Deliberately NOT org-scoped: the events span every organisation the reader belongs to, and the
@@ -656,6 +672,7 @@ const routeTree = rootRoute.addChildren([
     projectDetailRoute,
     planDetailRoute,
     recentlyDeletedRoute,
+    organizationExportRoute,
     orgNotFoundRoute,
     // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
     // app is byte-identical when off (no route, no nav link, no row action).

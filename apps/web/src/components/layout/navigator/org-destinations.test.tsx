@@ -47,14 +47,23 @@ describe('OrgDestinations', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Clients', 'Calendars', 'Resources', 'Members', 'Audit log', 'Recently deleted']);
+    ).toEqual([
+      'Clients',
+      'Calendars',
+      'Resources',
+      'Members',
+      'Audit log',
+      'Recently deleted',
+      'Export data',
+    ]);
   });
 
-  it('withholds the audit log from everyone but an Org Admin', () => {
-    // Hiding it is a courtesy, not the control — the API answers 403 either way (ADR-0072).
+  it('withholds the audit log and the export from everyone but an Org Admin', () => {
+    // Hiding them is a courtesy, not the control — the API answers 403 either way (ADR-0072, 0194).
     renderDestinations('PLANNER');
     const nav = screen.getByRole('navigation', { name: 'Organisation' });
     expect(within(nav).queryByRole('link', { name: 'Audit log' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Export data' })).toBeNull();
     expect(within(nav).getByRole('link', { name: 'Recently deleted' })).toBeInTheDocument();
   });
 
