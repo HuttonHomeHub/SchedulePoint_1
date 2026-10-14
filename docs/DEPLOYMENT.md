@@ -394,6 +394,38 @@ you; without it, invitations to external clients will land in spam.
   exactly. In Nginx Proxy Manager: the HTTPS host → Advanced →
   `proxy_set_header X-Forwarded-Proto $scheme;`, with Force SSL on. See `docs/TECH_DEBT.md` #89.
 
+### The organisation export through a proxy (ADR-0194)
+
+`POST /api/v1/organizations/:orgSlug/export` streams a ZIP while it reads the database, for as long as
+the organisation is large (about 25 s for 272,000 rows on the reference machine; extrapolated to several
+minutes at the brief's upper bound, `docs/specs/organisation-export/m2-measurements.md`). What that asks
+of each hop in front of the API:
+
+- **The web container's nginx is already set for it.** `apps/web/nginx.conf` has a dedicated location for
+  exactly this route with `proxy_buffering off` (so the ZIP is not spooled to the container's disk,
+  which would defeat "nothing is stored on the server") and a 660 s read and send timeout: the API's
+  10-minute transaction ceiling (`EXPORT_TRANSACTION_TIMEOUT_MS`) plus a minute of margin. Every other
+  `/api/` route keeps nginx's defaults.
+- **A proxy or CDN in front of the host may still cut a long export.** Cloudflare's default is to drop a
+  connection that has been idle for about 100 seconds, and raising that limit is an Enterprise-plan
+  feature (Cloudflare's documentation; not measured here). The export sends its headers first and then
+  streams, so the exposure is a long gap between chunks, not the total time. A small or medium organisation finishes inside that. A very large one
+  may not, and the symptom is the page saying `The download stopped before it finished` with the Audit
+  log recording a failed `privacy.exported` row (`client_aborted`). Nginx Proxy Manager is plain nginx
+  with its defaults unless you changed them (60 s read timeout); if you see the cut at about a minute
+  rather than at about 100 seconds, raise `proxy_read_timeout` on that proxy host (Advanced tab). If it
+  is Cloudflare, the options are an export when the organisation is smaller, or reaching the origin
+  directly for the export; the page-memory and streaming trade-offs are `docs/TECH_DEBT.md` #515.
+- **An export holds a database snapshot for up to 10 minutes.** It reads inside one repeatable-read
+  transaction so the file is consistent, and that snapshot is released when the response ends, the
+  client goes away, or the 10-minute ceiling is reached. A slow client therefore delays the database's
+  clean-up of old row versions for that long, no more (at most two exports run per API process, which
+  bounds the effect; `docs/TECH_DEBT.md` #517). Set `idle_in_transaction_session_timeout` on the
+  database if you want a tighter limit.
+
+The plain-English version for the owner is in
+[`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), "If it stops".
+
 ### Content-Security-Policy
 
 The web container serves a CSP (ADR-0074, `docs/TECH_DEBT.md` #8). **Both the header name and the
