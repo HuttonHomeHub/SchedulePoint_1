@@ -3211,8 +3211,8 @@ test.describe('The plan command surface, under a coarse pointer', () => {
       const targets = await sweep(page, '[data-panel-border]');
       expect(
         targets.length,
-        `the spine sweeps its button and six links ${at}`,
-      ).toBeGreaterThanOrEqual(7);
+        `the spine sweeps its button and seven links ${at}`,
+      ).toBeGreaterThanOrEqual(8);
       const belowHouse = targets.filter(
         (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
       );
@@ -3336,7 +3336,7 @@ test.describe('The collapsed spine, under a mouse', () => {
           ),
         );
       expect(links, `a mouse's spine links keep their 36 px size ${at}`).toEqual(
-        Array(6).fill('36x36'),
+        Array(7).fill('36x36'),
       );
       await page.getByRole('button', { name: 'Show Project Explorer' }).click();
       await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
