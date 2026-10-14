@@ -48,6 +48,12 @@ RUN pnpm --filter @repo/types build \
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# The PostgreSQL client tools the backup command runs (`pg_dump`, `pg_restore`, `psql`;
+# ADR-0192). The major is pinned to the `db` image's (`postgres:17-alpine`): a `pg_dump`
+# refuses a server newer than itself, so a `db` move to 18 must bump this line in the same
+# release — the script fails loudly with both versions rather than writing a bad copy. This
+# runs as root, before the drop to `node` below.
+RUN apk add --no-cache postgresql17-client
 # Run as the built-in unprivileged `node` user.
 USER node
 COPY --chown=node:node --from=build /out/dist ./dist
@@ -57,6 +63,9 @@ COPY --chown=node:node --from=build /out/package.json ./package.json
 # database on startup (the image ships the Prisma CLI as a prod dependency).
 COPY --chown=node:node --from=build /out/prisma ./prisma
 COPY --chown=node:node --from=build /out/docker-entrypoint.sh ./docker-entrypoint.sh
+# The backup command (ADR-0192). `/backups` is deliberately NOT created here: its absence is how
+# `pre-migrate` knows the operator has not switched backups on, so only a mount may create it.
+COPY --chown=node:node apps/api/backup/ ./backup/
 EXPOSE 3000
 # Health is served under the global /api prefix + URI versioning (/api/v1/health).
 # Longer start period to cover the migrate-then-boot entrypoint on first run.
