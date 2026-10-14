@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.93.0
+
+### Minor Changes
+
+- [#996](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/996) [`1293204`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/129320416bf1d065514c69835ac7172b4433be41) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every organisation response (`GET /organizations`, `GET /organizations/{orgSlug}`, and the create and accept-invitation replies) now carries `retentionActive` and `retentionDays`: whether the recycle bin's clear-out is on for this server, and its period in days. Both are additive and need a signed-in user; the public `/version` route does not carry them.
+
+### Patch Changes
+
+- [#993](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/993) [`c48f142`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c48f1429d183c9997ba04d54caebf4a615744b45) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A second `backup restore` within the same minute no longer fails. The database kept aside from before a restore is named by the minute, and two restores in one minute both tried to use the same name, so the second one stopped at the swap (nothing was lost; it simply refused). The kept name now moves on a minute when the first is already taken.
+
 ## 0.92.0
 
 ### Minor Changes
