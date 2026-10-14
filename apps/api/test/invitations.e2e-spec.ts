@@ -126,6 +126,10 @@ describe.skipIf(!hasDatabase)('Invitations API (e2e)', () => {
       .send({ token })
       .expect(200);
     expect(accepted.body.data).toMatchObject({ slug: 'acme', role: 'CONTRIBUTOR' });
+    // The reply is the same organisation shape as the list, so it carries the clear-out
+    // configuration too (TECH_DEBT #140).
+    expect(typeof accepted.body.data.retentionActive).toBe('boolean');
+    expect(Number.isInteger(accepted.body.data.retentionDays)).toBe(true);
 
     // The invitee is now a member.
     const orgs = await invitee.agent.get('/api/v1/organizations').expect(200);

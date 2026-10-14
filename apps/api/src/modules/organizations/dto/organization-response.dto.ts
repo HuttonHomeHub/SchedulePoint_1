@@ -34,11 +34,17 @@ export class OrganizationResponseDto implements OrganizationSummary {
     description:
       "Whether the recycle bin's clear-out is switched on for this installation (ADR-0096). " +
       'Installation configuration repeated on each organisation so the shell, which already ' +
-      'reads this list, can word a delete confirmation honestly (docs/TECH_DEBT.md #140).',
+      'reads this list, can word a delete confirmation honestly (docs/TECH_DEBT.md #140). ' +
+      '`false` means deleted items are kept indefinitely, so `retentionDays` alone must never ' +
+      'be shown as a countdown.',
   })
   retentionActive!: boolean;
 
-  @ApiProperty({ description: "The SERVER's period, in days, a deleted item is kept." })
+  @ApiProperty({
+    type: 'integer',
+    description:
+      "The SERVER's period, in days, a deleted item is kept (meaningful only when retentionActive).",
+  })
   retentionDays!: number;
 
   static from(

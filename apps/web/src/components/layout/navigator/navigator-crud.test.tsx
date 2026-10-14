@@ -11,6 +11,7 @@ import {
   type NodeActionTarget,
   type UseExpansionState,
 } from '@/features/navigator';
+import { organizationKeys } from '@/features/organizations';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 const navigate = vi.fn();
@@ -74,6 +75,14 @@ function renderCoordinator() {
       </AnnouncerProvider>
     </QueryClientProvider>,
   );
+  return client;
+}
+
+/** The organisation list has resolved, so a sentence read now is the settled one, not the loading one. */
+async function orgListSettled(client: QueryClient): Promise<void> {
+  await waitFor(() =>
+    expect(client.getQueryState(organizationKeys.list())?.status).toBe('success'),
+  );
 }
 
 describe('NavigatorCrud coordinator', () => {
@@ -116,13 +125,13 @@ describe('NavigatorCrud coordinator', () => {
           : undefined,
       ),
     );
-    renderCoordinator();
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/organizations'));
+    const client = renderCoordinator();
+    await orgListSettled(client);
     fireEvent.click(screen.getByText('del-plan'));
     await waitFor(() =>
       expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
-        'Delete “Overall Schedule”? You can restore it from Recently deleted for 90 days; ' +
-          'after that it is permanently removed.',
+        'Delete “Overall Schedule”? You can restore it from Recently deleted. ' +
+          'Deleted items stay in Recently deleted for 90 days, then are permanently removed.',
       ),
     );
   });
@@ -135,13 +144,45 @@ describe('NavigatorCrud coordinator', () => {
           : undefined,
       ),
     );
-    renderCoordinator();
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/organizations'));
+    const client = renderCoordinator();
+    await orgListSettled(client);
     fireEvent.click(screen.getByText('del-plan'));
     expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
       'Delete “Overall Schedule”? You can restore it from Recently deleted.',
     );
     expect(screen.getByRole('alertdialog')).not.toHaveTextContent(/permanently/);
+  });
+
+  it('makes no deadline claim while the organisation list is still loading', () => {
+    vi.mocked(apiFetch).mockImplementation(() => new Promise(() => undefined));
+    renderCoordinator();
+    fireEvent.click(screen.getByText('del-plan'));
+    expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(
+      'Delete “Overall Schedule”? You can restore it from Recently deleted.',
+    );
+    expect(screen.getByRole('alertdialog')).not.toHaveTextContent(/permanently/);
+  });
+
+  it('keeps the same sentence when the organisation list is refetched', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/organizations'
+          ? [{ id: 'o1', name: 'Acme', slug: 'acme', retentionActive: true, retentionDays: 90 }]
+          : undefined,
+      ),
+    );
+    const client = renderCoordinator();
+    await orgListSettled(client);
+    fireEvent.click(screen.getByText('del-plan'));
+    const sentence =
+      'Delete “Overall Schedule”? You can restore it from Recently deleted. ' +
+      'Deleted items stay in Recently deleted for 90 days, then are permanently removed.';
+    await waitFor(() =>
+      expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(sentence),
+    );
+
+    await client.refetchQueries({ queryKey: organizationKeys.list() });
+    expect(screen.getByRole('alertdialog', { name: 'Delete plan' })).toHaveTextContent(sentence);
   });
 
   it('opens the create-client dialog from the root affordance', () => {

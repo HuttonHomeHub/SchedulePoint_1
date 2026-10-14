@@ -27,13 +27,14 @@ describe('the delete confirmation sentence', () => {
   it("states the SERVER's period and the permanence when the clear-out is on", () => {
     expect(deleteCascadeWarning('client', 'Northgate', { active: true, days: 90 })).toBe(
       'Delete “Northgate” and all its projects and plans? ' +
-        'You can restore it from Recently deleted for 90 days; after that it is permanently removed.',
+        'You can restore it from Recently deleted. ' +
+        'Deleted items stay in Recently deleted for 90 days, then are permanently removed.',
     );
     expect(deleteCascadeWarning('plan', 'Programme A', { active: true, days: 3650 })).toContain(
-      'for 3650 days; after that it is permanently removed.',
+      'Deleted items stay in Recently deleted for 3650 days, then are permanently removed.',
     );
     expect(deleteCascadeWarning('project', 'Riverside', { active: true, days: 1 })).toContain(
-      'for 1 day; after that',
+      'for 1 day, then',
     );
   });
 

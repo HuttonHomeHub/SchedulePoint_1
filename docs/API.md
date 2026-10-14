@@ -1335,7 +1335,10 @@ which already reads that list, can word the delete confirmations without a reque
 (`docs/TECH_DEBT.md` #140). They are **additive** (`retentionActive: boolean`,
 `retentionDays: integer`), authenticated like the rest of the response, and are the same installation
 values `…/deleted` serves, repeated per organisation rather than per member. They are never on
-`/version`, which is `@Public()`.
+`/version`, which is `@Public()`. They sit on the organisation deliberately, only because the shell already
+loads that list; they become part of `/api/v1` at 1.0, and any further installation-wide setting goes on
+a dedicated endpoint, not on the organisation. `retentionActive: false` means items are kept
+indefinitely, so `retentionDays` alone is never a countdown.
 
 ### The organisation overview (ADR-0098)
 

@@ -122,6 +122,11 @@ describe.skipIf(!hasDatabase)('Organizations API (e2e)', () => {
     expect(created.body.data).toMatchObject(expected);
     expect(list.body.data[0]).toMatchObject(expected);
     expect(one.body.data).toMatchObject(expected);
+    // An allow-list: installation configuration must not leak onto the organisation any other way.
+    const keys = ['createdAt', 'id', 'name', 'retentionActive', 'retentionDays', 'role', 'slug'];
+    for (const body of [created.body.data, list.body.data[0], one.body.data]) {
+      expect(Object.keys(body).sort()).toEqual(keys);
+    }
     expect(typeof one.body.data.retentionActive).toBe('boolean');
     expect(Number.isInteger(one.body.data.retentionDays)).toBe(true);
 

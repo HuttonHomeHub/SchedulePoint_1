@@ -207,7 +207,7 @@ async function deleteFromTable(
   // (`docs/TECH_DEBT.md` #140). This suite's API is armed at 3,650 days, so a client constant
   // (90) or an unconditional sentence would fail here; the number is read off the organisation list.
   await expect(confirm).toContainText(
-    'You can restore it from Recently deleted for 3650 days; after that it is permanently removed.',
+    'Deleted items stay in Recently deleted for 3650 days, then are permanently removed.',
   );
   await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirm).toBeHidden();

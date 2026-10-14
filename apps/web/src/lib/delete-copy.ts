@@ -17,8 +17,8 @@
  * **The fix is to say only what is true everywhere, and more only when the server says so.**
  * Without a {@link DeleteRetention} the sentence makes no claim about a deadline. The organisation
  * list — authenticated, and already read by the shell — carries `retentionActive` and
- * `retentionDays`; when the server says the clear-out is on, the sentence names the SERVER's period
- * and says the removal is permanent (`docs/TECH_DEBT.md` #140). `/version` is `@Public()` and
+ * `retentionDays`; when the server says the clear-out is on, a second sentence, worded as the
+ * Recently deleted page words its rule, names the SERVER's period and says the removal is permanent (`docs/TECH_DEBT.md` #140). `/version` is `@Public()` and
  * putting installation configuration on an unauthenticated route to improve a sentence is the
  * wrong trade, so it is not there.
  */
@@ -48,7 +48,8 @@ export interface DeleteRetention {
 }
 
 function recoveryClause(retention: DeleteRetention | undefined): string {
-  if (!retention?.active) return 'You can restore it from Recently deleted.';
+  const restore = 'You can restore it from Recently deleted.';
+  if (!retention?.active) return restore;
   const period = `${retention.days} ${retention.days === 1 ? 'day' : 'days'}`;
-  return `You can restore it from Recently deleted for ${period}; after that it is permanently removed.`;
+  return `${restore} Deleted items stay in Recently deleted for ${period}, then are permanently removed.`;
 }

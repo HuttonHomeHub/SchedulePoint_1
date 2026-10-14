@@ -103,6 +103,7 @@ not built here; the operator documents state it.
   allowlist dropped it from every stored row. The audit screen's wording does not show it yet.
 - A restore that loses the race answers 404 as before, but now writes no `*.restored` row (`docs/API.md`).
 - The preview can list an item the sweep removes a second later (a run in progress); its output is stamped with the time.
+- The organisation responses carry `retentionActive` and `retentionDays` (plan M3) so delete confirmations can state the period on an armed server. They sit on the organisation only because the shell already loads that list; they are part of `/api/v1` from 1.0, and any further installation-wide setting needs a dedicated endpoint.
 - It does not fix per-organisation fairness of the run budget (`docs/TECH_DEBT.md` #141), which stays open: one
   organisation in practice.
 - The sweep's run budgets (`ACTIVITY_BUDGET_PER_RUN`, `SCOPE_BUDGET_PER_RUN`) moved to the selector's file so the preview
