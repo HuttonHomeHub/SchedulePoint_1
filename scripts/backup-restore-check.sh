@@ -427,6 +427,15 @@ expect "...and it is the tampered one, untouched" \
   target_unchanged "$KEPT"
 expect "a safety copy was taken first" test -n "$(files_matching "$MAIN" '^schedulepoint-pre-restore-.*\.dump$')"
 
+# A second restore straight after the first: the first kept database already holds this minute's
+# name, so the second must pick another rather than fail the swap (seen on the CI image job).
+OUT="$( (export PGDATABASE="$TARGET"; bk restore "$COPY" --yes) 2>&1)" && RC=0 || RC=$?
+expect "a second restore in the same minute succeeds" succeeded_with "RESTORE FINISHED"
+KEPT2="$(dbq postgres "SELECT datname FROM pg_database WHERE datname LIKE '${TARGET}_before_restore_%' AND datname <> '$KEPT'")"
+[ -z "$KEPT2" ] || MADE_DBS+=("$KEPT2")
+expect "...and keeps its database under a different name" test -n "$KEPT2"
+expect "...and leaves the first kept database untouched" target_unchanged "$KEPT"
+
 # --- 3. health, list, validation, status, pruning ----------------------------
 
 echo "==> health, list, settings, pruning"

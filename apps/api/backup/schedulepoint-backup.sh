@@ -697,7 +697,17 @@ cmd_restore() {
   printf 'Safety copy: %s\n' "$COPY_FILE"
   conns=$(live_connections 2>&1) || fail "cannot reach the database: $(first_line "$conns")"
   [ "$conns" -eq 0 ] || fail "something connected to the database while the copy was loading."
-  kept="${DBNAME}_before_restore_$(date -u +%Y%m%d%H%M)"
+  # A minute-stamped name, moved on a minute while one is taken: two restores in the same minute
+  # must not collide on the name the first one kept, and a longer stamp would not fit 63 bytes.
+  base=$(now_epoch)
+  i=0
+  while :; do
+    kept="${DBNAME}_before_restore_$(date -u -d "@$((base + i * 60))" +%Y%m%d%H%M)"
+    taken=$(sql postgres "SELECT 1 FROM pg_database WHERE datname = '$kept'" 2>&1) \
+      || fail "cannot reach the database: $(first_line "$taken")"
+    [ -n "$taken" ] || break
+    i=$((i + 1))
+  done
   # One statement batch is one transaction: both renames happen or neither does.
   if ! out=$(sql postgres "ALTER DATABASE \"$DBNAME\" RENAME TO \"$kept\"; ALTER DATABASE \"$restoring\" RENAME TO \"$DBNAME\";" 2>&1); then
     fail "the swap failed: $(first_line "$out")"
