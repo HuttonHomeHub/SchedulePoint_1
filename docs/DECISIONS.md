@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-14 — Database backup is approved, with a copy before each update and the database port closed
+
+**What was decided.** The product owner approved the spec and plan in `docs/specs/database-backup/` (pre-1.0
+requirement (a), `docs/RELEASE_1_0.md` row 5), with these answers: the practice on the server is the safe `check`
+only, and the full restore is proved by CI; copies go to a `./backups` folder on the same server; a copy is taken
+**automatically just before an update changes the database**, and if that copy cannot be made the update is held
+with the database untouched; and the release stack **stops publishing the database port**.
+
+**Why.** Updates install themselves and change the database unattended, so the nightly copy alone could be a day
+old when a bad release lands. The open database port was found while reading for backups and costs one deleted
+line to close.
+
+**Consequences.** Two items move into scope (spec §4.10 and §4.12; plan M1 and M2). A full disk can now stop an
+update that changes the database, by design; the guide tells the owner how to free space or go back a version. A
+database tool connected from another computer stops working. Setting a database password stays optional, because
+on an existing installation it needs a command as well as an `.env` edit.
+
+---
+
 ## 2026-10-13 — Pre-1.0 batch 2 is approved, and 1.0 requires backups, the organisation export and the clear-out
 
 **What was decided.** The product owner chose four items for the next batch (#505 contrast themes, defining what 1.0
