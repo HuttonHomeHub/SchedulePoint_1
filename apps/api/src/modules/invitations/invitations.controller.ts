@@ -14,6 +14,7 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
+import { AppConfigService } from '../../config/app-config.service';
 import { OrganizationResponseDto } from '../organizations/dto/organization-response.dto';
 
 import { InvitationPreviewDto } from './dto/invitation-preview.dto';
@@ -28,7 +29,10 @@ import { InvitationsService } from './invitations.service';
 @ApiTags('invitations')
 @Controller({ path: 'invitations', version: '1' })
 export class InvitationsController {
-  constructor(private readonly service: InvitationsService) {}
+  constructor(
+    private readonly service: InvitationsService,
+    private readonly config: AppConfigService,
+  ) {}
 
   @Post('preview')
   @Public()
@@ -58,6 +62,6 @@ export class InvitationsController {
     @RequestContext() context: RequestContext,
   ): Promise<OrganizationResponseDto> {
     const { organization, role } = await this.service.accept(principal, dto.token, context);
-    return OrganizationResponseDto.from(organization, role);
+    return OrganizationResponseDto.from(organization, role, this.config);
   }
 }

@@ -104,6 +104,31 @@ describe.skipIf(!hasDatabase)('Organizations API (e2e)', () => {
     expect(one.body.data).toMatchObject({ slug: 'acme', role: 'ORG_ADMIN' });
   });
 
+  it("carries the server's clear-out configuration on every organisation read (TECH_DEBT #140)", async () => {
+    // Read from the running app's own config, not from literals: the test must hold on a host
+    // that arms the clear-out as well as on the default one.
+    const { AppConfigService } = await import('../src/config/app-config.service');
+    const config = app.get(AppConfigService);
+    const expected = {
+      retentionActive: config.retentionHierarchyEnabled,
+      retentionDays: config.retentionHierarchyDays,
+    };
+
+    const agent = await signedInAgent('ada@example.com');
+    const created = await agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+    const list = await agent.get('/api/v1/organizations').expect(200);
+    const one = await agent.get('/api/v1/organizations/acme').expect(200);
+
+    expect(created.body.data).toMatchObject(expected);
+    expect(list.body.data[0]).toMatchObject(expected);
+    expect(one.body.data).toMatchObject(expected);
+    expect(typeof one.body.data.retentionActive).toBe('boolean');
+    expect(Number.isInteger(one.body.data.retentionDays)).toBe(true);
+
+    // Authenticated only: installation configuration is never served to an anonymous caller.
+    await request(server()).get('/api/v1/organizations').expect(401);
+  });
+
   it('404s when a non-member fetches an organisation by slug (anti-enumeration)', async () => {
     const owner = await signedInAgent('owner@example.com');
     await owner.post('/api/v1/organizations').send({ name: 'Private Co' }).expect(201);

@@ -96,6 +96,13 @@ export interface OrganizationSummary {
   /** The requesting user's role in this organisation. */
   role: OrganizationRole;
   createdAt: string;
+  /**
+   * Whether the recycle bin's clear-out is on for this installation. Installation configuration
+   * carried here only because this authenticated list is already read by the shell (TECH_DEBT #140).
+   */
+  retentionActive: boolean;
+  /** The server's period, in days, a deleted client/project/plan is kept. */
+  retentionDays: number;
 }
 
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED';
