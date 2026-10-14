@@ -531,6 +531,11 @@ BK_MIGS="$real_migrations"
 BK_DIR=""
 run_bk pre-migrate
 expect "not enabled: exits 0 and says why" succeeded_with "\"reason\":\"not_enabled\""
+expect "...at warn level, so a lost mount shows in the API's log" out_has '"level":"warn"'
+RC=0
+OUT="$( (export PGDATABASE='not-a-valid-name'; bk pre-migrate) 2>&1)" || RC=$?
+expect "...decided before the connection is validated, so a server that never opted in still updates" \
+  succeeded_with "\"reason\":\"not_enabled\""
 
 FRESH="bkt_fresh_$$"
 make_db "$FRESH"

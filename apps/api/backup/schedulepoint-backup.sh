@@ -101,15 +101,11 @@ json_str() {
 now_epoch() { printf '%s' "${BACKUP_NOW:-$(date +%s)}"; }
 now_fmt() { date -u -d "@$(now_epoch)" "+$1"; }
 
-# emit <event> [key value]... — one JSON object per line, the shape the API's own logs use.
-emit() {
-  ev=$1
-  shift
-  lvl=info
-  case $ev in
-    *failed) lvl=error ;;
-    *permissions) lvl=warn ;;
-  esac
+# emit_at <level> <event> [key value]... — one JSON object per line, the shape the API's own logs use.
+emit_at() {
+  lvl=$1
+  ev=$2
+  shift 2
   line="{\"level\":\"$lvl\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"$ev\""
   while [ $# -ge 2 ]; do
     case $2 in
@@ -119,6 +115,15 @@ emit() {
     shift 2
   done
   printf '%s}\n' "$line"
+}
+
+# emit <event> [key value]... — the level follows the event's name.
+emit() {
+  case $1 in
+    *failed) emit_at error "$@" ;;
+    *permissions) emit_at warn "$@" ;;
+    *) emit_at info "$@" ;;
+  esac
 }
 
 human_size() {
@@ -708,10 +713,6 @@ hold() {
 }
 
 cmd_pre_migrate() {
-  if [ ! -d "$ROOT" ]; then
-    emit backup.pre_migrate_skipped reason not_enabled
-    return 0
-  fi
   warn_folder
   out=$(sql "$DBNAME" "SELECT to_regclass('public._prisma_migrations') IS NOT NULL" 2>&1) \
     || hold "the database could not be asked what is pending: $(first_line "$out")"
@@ -775,6 +776,19 @@ esac
 
 case $cmd in
   list | health) ;;
+  pre-migrate)
+    # Decided before anything else is validated: a server that has not mounted the folder must update
+    # exactly as it always has, even if something below (a database name this script refuses, a
+    # missing tool) would otherwise stop the API from starting. warn, not info: no setting switches
+    # the copy off, so a missing folder is either a server that has not opted in or a mount that was
+    # lost, and only the log can tell them apart.
+    if [ ! -d "$ROOT" ]; then
+      emit_at warn backup.pre_migrate_skipped reason not_enabled
+      exit 0
+    fi
+    need_tools
+    init_conn
+    ;;
   *)
     need_tools
     init_conn
