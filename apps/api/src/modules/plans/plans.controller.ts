@@ -94,6 +94,11 @@ export class PlansController {
   @ApiOkResponse({ type: PlanResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'The parent project is still deleted (restore it first).' })
+  @ApiNotFoundResponse({
+    description:
+      'Organisation or plan not found (or the caller is not a member), including when the retention ' +
+      'expiry permanently removed the plan in the same instant. Gone: do not retry.',
+  })
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

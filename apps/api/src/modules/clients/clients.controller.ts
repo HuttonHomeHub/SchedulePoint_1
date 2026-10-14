@@ -139,6 +139,11 @@ export class ClientsController {
   @ApiOkResponse({ type: ClientResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'A restored name would collide with an active client.' })
+  @ApiNotFoundResponse({
+    description:
+      'Organisation or client not found (or the caller is not a member), including when the retention ' +
+      'expiry permanently removed the client in the same instant. Gone: do not retry.',
+  })
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

@@ -100,6 +100,11 @@ export class ProjectsController {
   @ApiOkResponse({ type: ProjectResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'The parent client is still deleted (restore it first).' })
+  @ApiNotFoundResponse({
+    description:
+      'Organisation or project not found (or the caller is not a member), including when the retention ' +
+      'expiry permanently removed the project in the same instant. Gone: do not retry.',
+  })
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

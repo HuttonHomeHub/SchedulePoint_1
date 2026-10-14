@@ -36,6 +36,18 @@ describe('the countdown', () => {
     expect(expirySentence(daysAgo(30), 45, true, NOW)).toBe('Expires in 15 days');
   });
 
+  it('counts 90 x 24 hours across the UK clock change, the instants the API suite pins', () => {
+    // The sweep keeps a row deleted exactly one period ago and removes one a millisecond older
+    // (`apps/api/test/hierarchy-expiry.e2e-spec.ts`, run there under TZ=Europe/London too). The
+    // countdown is millisecond arithmetic with no calendar day in it, so the answers below do not
+    // depend on the zone the test runs in; they are the same instants that suite uses.
+    const now = new Date('2026-10-25T01:30:00.000Z').getTime();
+    const cutoff = now - 90 * 24 * 60 * 60 * 1000;
+    expect(daysUntilExpiry(new Date(cutoff + 1).toISOString(), 90, now)).toBe(0);
+    expect(daysUntilExpiry(new Date(cutoff).toISOString(), 90, now)).toBe(0);
+    expect(daysUntilExpiry(new Date(cutoff - 1).toISOString(), 90, now)).toBe(-1);
+  });
+
   it('degrades to the full period on an unparseable date rather than throwing', () => {
     expect(daysUntilExpiry('not-a-date', 90, NOW)).toBe(90);
   });

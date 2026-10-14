@@ -637,6 +637,22 @@ export class HierarchyLifecycleService {
         counts.plans = (
           await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
+        // **The root itself must have been reactivated.** `loadDeletedRoot` read it without a lock,
+        // so the retention expiry can claim and delete it between that read and these updates; the
+        // updates then match nothing and the caller would answer 200 for a restore that did not
+        // happen. Only the three expirable levels: an activity or link batch is never swept, and a
+        // link batch can legitimately restore zero rows (endpoint guard).
+        const rootRestored =
+          entity === 'client'
+            ? counts.clients
+            : entity === 'project'
+              ? counts.projects
+              : entity === 'plan'
+                ? counts.plans
+                : 1;
+        if (rootRestored === 0) {
+          throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
+        }
         if (knockOn) {
           // The same statement, returning the ids it reactivated: the caller tells the survivors by
           // what is NOT among them.
@@ -745,6 +761,11 @@ export class HierarchyLifecycleService {
         throw new ConflictError('A sibling with this name already exists.', {
           reason: HIERARCHY_CONFLICT.NAME_TAKEN,
         });
+      }
+      // The legacy path (no batch id) updates by id, which raises P2025 rather than counting zero
+      // when the retention expiry removed the row first.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
       }
       throw error;
     }

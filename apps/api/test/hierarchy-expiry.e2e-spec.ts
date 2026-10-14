@@ -1,10 +1,22 @@
+import { randomUUID } from 'node:crypto';
+
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import {
+  collectPreview,
+  main,
+  openReadOnlyClient,
+  renderPreview,
+} from '../src/cli/clear-out-preview';
+import * as claim from '../src/common/hierarchy/hierarchy-expiry.claim';
+import * as runner from '../src/common/hierarchy/hierarchy-expiry.runner';
+import { HierarchyExpiryService } from '../src/common/hierarchy/hierarchy-expiry.service';
+import { HierarchyLifecycleService } from '../src/common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
@@ -21,9 +33,11 @@ import { clearBaselineTree } from './clear-baseline-tree';
  * plans a real customer has. Deriving the scope from **ownership** is what fixes it, and only a
  * real database can tell the two apart.
  *
- * It drives the runner **directly**. No timer is created and none is needed: the service is a
- * provider its own module deliberately does not export (`hierarchy-expiry.structural.spec.ts`),
- * and the schedule is proven with a faked clock in `hierarchy-expiry.service.spec.ts`.
+ * The first four tests drive the runner **directly**. The rest drive the **sweep itself**
+ * (`sweepNow`, obtained from the Nest container — the structural gate scans `src/` only), so the
+ * selection, the claim, the audit row and the restore race are proven against Postgres rather than
+ * a mocked Prisma. No timer is created and none is needed: the schedule is proven with a faked
+ * clock in `hierarchy-expiry.service.spec.ts`.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -38,6 +52,8 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let deleteExpiredScope: typeof import('../src/common/hierarchy/hierarchy-expiry.runner').deleteExpiredScope;
+  let sweeper: HierarchyExpiryService;
+  let lifecycle: HierarchyLifecycleService;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -52,10 +68,17 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    // `strict: false` because the module deliberately does not export the expiry service.
+    sweeper = app.get(HierarchyExpiryService, { strict: false });
+    lifecycle = app.get(HierarchyLifecycleService, { strict: false });
   });
 
   afterAll(async () => {
     await app?.close();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   beforeEach(async () => {
@@ -345,5 +368,550 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await actor.agent
       .post(`/api/v1/organizations/acme/plans/${downPlanId}/schedule/recalculate`)
       .expect(200);
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // The sweep itself, on a real database (docs/specs/recycle-bin-clear-out, M1)
+  // ---------------------------------------------------------------------------------------------
+
+  const DAY_MS = 86_400_000;
+
+  /** The period the running API was configured with; 90 unless the environment says otherwise. */
+  const retentionDays = () => Number(process.env.RETENTION_HIERARCHY_DAYS ?? 90);
+  const cutoffFor = (now: Date) => new Date(now.getTime() - retentionDays() * DAY_MS);
+  const pastPeriod = (now: Date, extraDays = 1) =>
+    new Date(now.getTime() - (retentionDays() + extraDays) * DAY_MS);
+
+  /** Date every row of a deletion batch, as if it had been deleted at `at`. */
+  async function backdate(root: { client?: string; project?: string; plan?: string }, at: Date) {
+    const row = root.client
+      ? await prisma.client.findUniqueOrThrow({ where: { id: root.client } })
+      : root.project
+        ? await prisma.project.findUniqueOrThrow({ where: { id: root.project } })
+        : await prisma.plan.findUniqueOrThrow({ where: { id: root.plan! } });
+    expect(row.deleteBatchId, 'the root must be soft-deleted first').not.toBeNull();
+    const where = { deleteBatchId: row.deleteBatchId };
+    await prisma.client.updateMany({ where, data: { deletedAt: at } });
+    await prisma.project.updateMany({ where, data: { deletedAt: at } });
+    await prisma.plan.updateMany({ where, data: { deletedAt: at } });
+  }
+
+  const exists = {
+    client: async (id: string) => (await prisma.client.count({ where: { id } })) === 1,
+    project: async (id: string) => (await prisma.project.count({ where: { id } })) === 1,
+    plan: async (id: string) => (await prisma.plan.count({ where: { id } })) === 1,
+  };
+
+  const expiredRows = () => prisma.auditEvent.findMany({ where: { action: 'hierarchy.expired' } });
+
+  /** The mixed picture the sweep-level tests share. Returns the ids by role. */
+  async function seedMix(actor: Actor, orgId: string, now: Date) {
+    const old = pastPeriod(now, 10);
+    const soon = new Date(now.getTime() - (retentionDays() - 3) * DAY_MS);
+
+    // An expired CLIENT with a project and a plan beneath it, all deleted together.
+    const expiredClient = await createClient(actor, 'Northgate');
+    const expiredClientProject = await createProject(actor, expiredClient, 'Riverside');
+    const expiredClientPlan = await createPlan(actor, expiredClientProject, 'Baseline');
+    await createActivity(orgId, expiredClientPlan, 'Excavate');
+    await actor.agent.delete(`/api/v1/organizations/acme/clients/${expiredClient}`).expect(204);
+    await backdate({ client: expiredClient }, old);
+
+    // A live client holding: an expired PROJECT (with its plan), an expired PLAN on a live project,
+    // a plan due in three days, and live work that must survive.
+    const liveClient = await createClient(actor, 'Southgate');
+    const expiredProject = await createProject(actor, liveClient, 'Hillside');
+    const expiredProjectPlan = await createPlan(actor, expiredProject, 'Hill plan');
+    await actor.agent.delete(`/api/v1/organizations/acme/projects/${expiredProject}`).expect(204);
+    await backdate({ project: expiredProject }, old);
+
+    const liveProject = await createProject(actor, liveClient, 'Quayside');
+    const expiredPlan = await createPlan(actor, liveProject, 'Old base');
+    const duePlan = await createPlan(actor, liveProject, 'Due soon');
+    const livePlan = await createPlan(actor, liveProject, 'Live plan');
+    await createActivity(orgId, livePlan, 'Pour');
+    await actor.agent.delete(`/api/v1/organizations/acme/plans/${expiredPlan}`).expect(204);
+    await backdate({ plan: expiredPlan }, old);
+    await actor.agent.delete(`/api/v1/organizations/acme/plans/${duePlan}`).expect(204);
+    await backdate({ plan: duePlan }, soon);
+
+    // An ORG calendar the expiring project must not take.
+    const orgCalendar = await prisma.calendar.create({
+      data: { organizationId: orgId, name: 'Standard week', scope: 'ORG' },
+      select: { id: true },
+    });
+
+    return {
+      expiredClient,
+      expiredClientProject,
+      expiredClientPlan,
+      expiredProject,
+      expiredProjectPlan,
+      expiredPlan,
+      duePlan,
+      liveClient,
+      liveProject,
+      livePlan,
+      orgCalendar: orgCalendar.id,
+    };
+  }
+
+  describe('the sweep, end to end (P5)', () => {
+    it('takes all three levels, once each, and leaves everything else alone', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      const ids = await seedMix(actor, orgId, now);
+
+      await sweeper.sweepNow(now);
+
+      expect(await exists.client(ids.expiredClient)).toBe(false);
+      expect(await exists.project(ids.expiredClientProject)).toBe(false);
+      expect(await exists.plan(ids.expiredClientPlan)).toBe(false);
+      expect(await exists.project(ids.expiredProject)).toBe(false);
+      expect(await exists.plan(ids.expiredProjectPlan)).toBe(false);
+      expect(await exists.plan(ids.expiredPlan)).toBe(false);
+
+      // Not yet due, and live: untouched. The ORG calendar outlives the project beside it.
+      expect(await exists.plan(ids.duePlan)).toBe(true);
+      expect(await exists.client(ids.liveClient)).toBe(true);
+      expect(await exists.project(ids.liveProject)).toBe(true);
+      expect(await exists.plan(ids.livePlan)).toBe(true);
+      expect(await prisma.activity.count({ where: { planId: ids.livePlan } })).toBe(1);
+      expect(await prisma.calendar.count({ where: { id: ids.orgCalendar } })).toBe(1);
+
+      // **Exactly one row per ROOT.** The expired client's project and plan are also past their
+      // period, and attempting them again would write a second, all-zero row for each.
+      const rows = await expiredRows();
+      expect(rows.map((r) => `${r.subjectType}:${r.subjectId}`).sort()).toEqual(
+        [
+          `client:${ids.expiredClient}`,
+          `project:${ids.expiredProject}`,
+          `plan:${ids.expiredPlan}`,
+        ].sort(),
+      );
+    });
+
+    it('a second sweep finds nothing and writes nothing', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      await seedMix(actor, orgId, now);
+      await sweeper.sweepNow(now);
+      const before = (await expiredRows()).length;
+
+      await sweeper.sweepNow(now);
+
+      expect((await expiredRows()).length).toBe(before);
+    });
+  });
+
+  describe.each(['UTC', 'Europe/London'])('the exact period boundary under TZ=%s (P6)', (zone) => {
+    const priorTz = process.env.TZ;
+    beforeAll(() => {
+      process.env.TZ = zone;
+    });
+    afterAll(() => {
+      if (priorTz === undefined) delete process.env.TZ;
+      else process.env.TZ = priorTz;
+    });
+
+    // 2026-10-25 01:30Z is inside the hour the UK repeats when summer time ends; the March date is
+    // the hour it skips.
+    it.each([new Date('2026-10-25T01:30:00.000Z'), new Date('2026-03-29T01:30:00.000Z')])(
+      'keeps a plan deleted AT the cutoff and removes one a millisecond older (now %s)',
+      async (now) => {
+        const { actor } = await adminWithOrg();
+        const clientId = await createClient(actor, 'Northgate');
+        const projectId = await createProject(actor, clientId, 'Riverside');
+        const atCutoff = await createPlan(actor, projectId, 'At the cutoff');
+        const justOlder = await createPlan(actor, projectId, 'A millisecond older');
+        const cutoff = cutoffFor(now);
+        for (const [planId, at] of [
+          [atCutoff, cutoff],
+          [justOlder, new Date(cutoff.getTime() - 1)],
+        ] as const) {
+          await prisma.plan.update({
+            where: { id: planId },
+            data: { deletedAt: at, deleteBatchId: randomUUID() },
+          });
+        }
+
+        await sweeper.sweepNow(now);
+
+        expect(await exists.plan(atCutoff)).toBe(true);
+        expect(await exists.plan(justOlder)).toBe(false);
+      },
+    );
+  });
+
+  describe('a restore and the sweep never both win (P7)', () => {
+    /** Wait until some other session is blocked on a lock — proof both sides are in play. */
+    async function waitForLockWait(): Promise<void> {
+      for (let i = 0; i < 100; i += 1) {
+        const rows = await prisma.$queryRaw<{ n: bigint }[]>`
+          SELECT count(*)::bigint AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+        if (Number(rows[0]?.n ?? 0) > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error('nothing ever blocked on a lock: the race was not exercised');
+    }
+
+    /**
+     * Run `gap` after the sweep has chosen a root and opened its transaction, and before the claim
+     * touches the row — the window in which a restore must win.
+     */
+    function inTheGap(gap: () => Promise<void>) {
+      const original = claim.claimExpiredRoot;
+      vi.spyOn(claim, 'claimExpiredRoot').mockImplementation(async (tx, root, cutoff) => {
+        await gap();
+        return original(tx, root, cutoff);
+      });
+    }
+
+    async function expiredPlanOf(actor: Actor, now: Date) {
+      const clientId = await createClient(actor, 'Northgate');
+      const projectId = await createProject(actor, clientId, 'Riverside');
+      const planId = await createPlan(actor, projectId, 'Race');
+      await actor.agent.delete(`/api/v1/organizations/acme/plans/${planId}`).expect(204);
+      await backdate({ plan: planId }, pastPeriod(now));
+      return { clientId, projectId, planId };
+    }
+
+    it('a restore committed between selection and the transaction removes nothing', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      const { planId } = await expiredPlanOf(actor, now);
+      await createActivity(orgId, planId, 'Excavate');
+      inTheGap(async () => {
+        await actor.agent.post(`/api/v1/organizations/acme/plans/${planId}/restore`).expect(200);
+      });
+
+      await sweeper.sweepNow(now);
+
+      expect(await exists.plan(planId), 'the restored plan must survive').toBe(true);
+      expect((await prisma.plan.findUniqueOrThrow({ where: { id: planId } })).deletedAt).toBeNull();
+      expect(await prisma.activity.count({ where: { planId } })).toBe(1);
+      expect(await expiredRows()).toEqual([]);
+    });
+
+    it('restore-then-delete-again in the gap leaves the new deletion alone', async () => {
+      const { actor } = await adminWithOrg();
+      const now = new Date();
+      const { planId } = await expiredPlanOf(actor, now);
+      inTheGap(async () => {
+        await actor.agent.post(`/api/v1/organizations/acme/plans/${planId}/restore`).expect(200);
+        await actor.agent.delete(`/api/v1/organizations/acme/plans/${planId}`).expect(204);
+      });
+
+      await sweeper.sweepNow(now);
+
+      // Deleted again just now, so a fresh `deletedAt`: in the bin, not removed.
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+      expect(plan.deletedAt).not.toBeNull();
+      expect(await expiredRows()).toEqual([]);
+    });
+
+    it('a root that keeps its id and its old date but changed deletion batch is not removed', async () => {
+      // Only the batch id differs: pins that predicate of the claim on its own.
+      const { actor } = await adminWithOrg();
+      const now = new Date();
+      const { planId } = await expiredPlanOf(actor, now);
+      inTheGap(async () => {
+        await prisma.plan.update({ where: { id: planId }, data: { deleteBatchId: randomUUID() } });
+      });
+
+      await sweeper.sweepNow(now);
+
+      expect(await exists.plan(planId), 'a different batch is a different deletion').toBe(true);
+      expect(await expiredRows()).toEqual([]);
+    });
+
+    it('a restore that holds the row first is not undone by the sweep waiting behind it', async () => {
+      const { actor } = await adminWithOrg();
+      const now = new Date();
+      const { planId } = await expiredPlanOf(actor, now);
+      let release!: () => void;
+      const hold = new Promise<void>((resolve) => (release = resolve));
+      let restoreHolding!: () => void;
+      const holding = new Promise<void>((resolve) => (restoreHolding = resolve));
+
+      // A real restore transaction that has changed the row and not yet committed.
+      const restoring = prisma.$transaction(
+        async (tx) => {
+          await lifecycle.restoreBatch(tx, 'plan', planId, actor.userId);
+          restoreHolding();
+          await hold;
+        },
+        { timeout: 30_000 },
+      );
+      await holding;
+
+      const sweeping = sweeper.sweepNow(now);
+      try {
+        await waitForLockWait();
+      } finally {
+        // Always let go, or a failed wait leaves a transaction holding the row for the next test.
+        release();
+      }
+      const settled = await Promise.allSettled([restoring, sweeping]);
+      expect(settled.map((o) => o.status)).toEqual(['fulfilled', 'fulfilled']);
+
+      // Without the claim the sweep's id-keyed delete waits for the same lock, re-reads the row,
+      // finds it still there and removes the plan the planner had just brought back.
+      expect(await exists.plan(planId), 'the restored plan must survive').toBe(true);
+      expect((await prisma.plan.findUniqueOrThrow({ where: { id: planId } })).deletedAt).toBeNull();
+      expect(await expiredRows()).toEqual([]);
+    });
+
+    it.each(['client', 'project', 'plan'] as const)(
+      'a %s restore that loses to a claimed deletion answers 404 and the subtree stays gone',
+      async (kind) => {
+        const { actor } = await adminWithOrg();
+        const now = new Date();
+        const { clientId, projectId, planId } = await expiredPlanOf(actor, now);
+        const rootId = { client: clientId, project: projectId, plan: planId }[kind];
+        // `expiredPlanOf` deleted the plan; for the higher levels, bring it back and delete the
+        // level under test instead, so that level is the expiring root.
+        if (kind !== 'plan') {
+          await actor.agent.post(`/api/v1/organizations/acme/plans/${planId}/restore`).expect(200);
+          await actor.agent.delete(`/api/v1/organizations/acme/${kind}s/${rootId}`).expect(204);
+          await backdate({ [kind]: rootId }, pastPeriod(now));
+        }
+
+        // Hold the deleting transaction open after it has claimed and deleted, so a restore arrives
+        // while the row is locked and then finds it gone.
+        let release!: () => void;
+        const hold = new Promise<void>((resolve) => (release = resolve));
+        let deleted!: () => void;
+        const deletedSignal = new Promise<void>((resolve) => (deleted = resolve));
+        const realDelete = runner.deleteExpiredScope;
+        vi.spyOn(runner, 'deleteExpiredScope').mockImplementation(async (tx, scope) => {
+          const counts = await realDelete(tx, scope);
+          deleted();
+          await hold;
+          return counts;
+        });
+
+        const sweeping = sweeper.sweepNow(now);
+        let response: Promise<{ status: number; body: { error?: unknown } }> | undefined;
+        try {
+          await deletedSignal;
+          response = actor.agent
+            .post(`/api/v1/organizations/acme/${kind}s/${rootId}/restore`)
+            .then((r) => r);
+          await waitForLockWait();
+        } finally {
+          release();
+          await Promise.allSettled([sweeping, response]);
+        }
+        const result = await response;
+
+        expect(result.status).toBe(404);
+        expect(result.body.error).toBeDefined();
+        // The service records `<kind>.restored` inside the restore transaction. A restore that
+        // restored nothing must not leave that row behind: the 404 alone is only the controller's
+        // later re-read, after the transaction has committed.
+        expect(await prisma.auditEvent.count({ where: { action: `${kind}.restored` } })).toBe(0);
+        expect(await exists[kind](rootId)).toBe(false);
+        const rows = await expiredRows();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.subjectType).toBe(kind);
+      },
+    );
+  });
+
+  describe('the preview lists exactly what the sweep deletes (P8)', () => {
+    const settings = () => ({
+      enabled: false,
+      retentionDays: retentionDays(),
+      sweepIntervalMinutes: 60,
+    });
+
+    it('names the same roots the sweep then removes, and the next-seven-days list is the rest', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      const ids = await seedMix(actor, orgId, now);
+
+      const preview = await collectPreview(prisma, now, settings());
+      const listed = preview.due.map((i) => `${i.kind}:${i.id}`).sort();
+      const binned = [
+        ...(await prisma.client.findMany({ where: { deletedAt: { not: null } } })).map(
+          (r) => `client:${r.id}`,
+        ),
+        ...(await prisma.project.findMany({ where: { deletedAt: { not: null } } })).map(
+          (r) => `project:${r.id}`,
+        ),
+        ...(await prisma.plan.findMany({ where: { deletedAt: { not: null } } })).map(
+          (r) => `plan:${r.id}`,
+        ),
+      ];
+
+      await sweeper.sweepNow(now);
+
+      const gone: string[] = [];
+      for (const key of binned) {
+        const [kind, id] = key.split(':') as ['client' | 'project' | 'plan', string];
+        if (!(await exists[kind](id))) gone.push(key);
+      }
+      // Everything that went was a listed root or sat under one, and every listed root went. Both
+      // directions, or the preview is lying one way.
+      const underListed = new Set([
+        `project:${ids.expiredClientProject}`,
+        `plan:${ids.expiredClientPlan}`,
+        `plan:${ids.expiredProjectPlan}`,
+      ]);
+      expect(gone.filter((k) => !underListed.has(k)).sort()).toEqual(listed);
+      expect(listed).toEqual(
+        [
+          `client:${ids.expiredClient}`,
+          `project:${ids.expiredProject}`,
+          `plan:${ids.expiredPlan}`,
+        ].sort(),
+      );
+      expect(preview.dueSoon.map((i) => i.id)).toEqual([ids.duePlan]);
+      expect(await exists.plan(ids.duePlan)).toBe(true);
+
+      // The preview counted what the sweep then took out of the client's subtree.
+      const clientItem = preview.due.find((i) => i.id === ids.expiredClient)!;
+      expect(clientItem).toMatchObject({ projects: 1, plans: 1, activities: 1, name: 'Northgate' });
+      expect(preview.organizations.get(orgId)).toBe('Acme');
+    });
+
+    it('renders what the operator reads, and an emptied bin says so', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      await seedMix(actor, orgId, now);
+      const text = renderPreview(await collectPreview(prisma, now, settings()));
+      expect(text).toContain('The clear-out is OFF on this server.');
+      expect(text).toContain('Organisation "Acme"');
+      expect(text).toContain('Client  "Northgate"');
+      expect(text).toContain('Plan    "Due soon"');
+      expect(text).toContain('Nothing has been changed.');
+
+      await sweeper.sweepNow(now);
+      const after = renderPreview(await collectPreview(prisma, now, settings()));
+      expect(after).toContain('Nothing is past its');
+      expect(after).not.toContain('Northgate');
+    });
+
+    it('through a read-only session: lists the same, and refuses every write', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      await seedMix(actor, orgId, now);
+      const viaApp = await collectPreview(prisma, now, settings());
+
+      const readOnly = await openReadOnlyClient(process.env.DATABASE_URL!);
+      try {
+        const viaReadOnly = await collectPreview(readOnly, now, settings());
+        expect(viaReadOnly.due.map((i) => i.id).sort()).toEqual(viaApp.due.map((i) => i.id).sort());
+
+        const before = await prisma.organization.count();
+        await expect(
+          readOnly.organization.create({ data: { name: 'Nope', slug: 'nope' } }),
+        ).rejects.toThrow(/read-only/i);
+        await expect(readOnly.$executeRaw`DELETE FROM "plans"`).rejects.toThrow(/read-only/i);
+        await expect(
+          readOnly.plan.updateMany({ where: {}, data: { deletedAt: null } }),
+        ).rejects.toThrow(/read-only/i);
+        expect(await prisma.organization.count()).toBe(before);
+        expect(await prisma.plan.count({ where: { deletedAt: { not: null } } })).toBeGreaterThan(0);
+      } finally {
+        await readOnly.$disconnect();
+      }
+    });
+
+    it('the command itself prints the report and changes nothing', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const now = new Date();
+      const ids = await seedMix(actor, orgId, now);
+      const written: string[] = [];
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        written.push(String(chunk));
+        return true;
+      });
+
+      let code: number;
+      try {
+        code = await main();
+      } finally {
+        spy.mockRestore();
+      }
+
+      expect(code).toBe(0);
+      expect(written.join('')).toContain('Client  "Northgate"');
+      expect(await exists.client(ids.expiredClient)).toBe(true);
+      expect(await expiredRows()).toEqual([]);
+    });
+  });
+
+  describe('the audit row the sweep leaves (P9)', () => {
+    it('is a SYSTEM row in the right organisation, with every count, readable by an Org Admin only', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const clientId = await createClient(actor, 'Northgate');
+      const projectId = await createProject(actor, clientId, 'Riverside');
+      const planId = await createPlan(actor, projectId, 'Baseline');
+      const activityId = await createActivity(orgId, planId, 'Excavate');
+      await createActivity(orgId, planId, 'Backfill');
+      for (const name of ['name', 'durationMinutes']) {
+        await prisma.activityHistoryEntry.create({
+          data: {
+            organizationId: orgId,
+            activityId,
+            actorUserId: actor.userId,
+            scope: 'DEFINITION',
+            firstRecordedAt: new Date('2026-02-01T10:00:00.000Z'),
+            lastRecordedAt: new Date('2026-02-01T10:00:00.000Z'),
+            hasNonCostChange: true,
+            changes: { [name]: { from: 1, to: 2 } },
+          },
+        });
+      }
+      await actor.agent.delete(`/api/v1/organizations/acme/clients/${clientId}`).expect(204);
+      const now = new Date();
+      const deletedAt = pastPeriod(now, 5);
+      await backdate({ client: clientId }, deletedAt);
+
+      await sweeper.sweepNow(now);
+
+      const [stored] = await expiredRows();
+      expect(stored).toMatchObject({
+        actorType: 'SYSTEM',
+        organizationId: orgId,
+        subjectType: 'client',
+        subjectId: clientId,
+        subjectLabel: 'Northgate',
+        outcome: 'SUCCESS',
+      });
+
+      const planner = await signUp('planner@example.com');
+      await prisma.orgMember.create({
+        data: { organizationId: orgId, userId: planner.userId, role: 'PLANNER' },
+      });
+
+      const read = await actor.agent
+        .get('/api/v1/organizations/acme/audit-events?action=hierarchy.expired')
+        .expect(200);
+      const rows = read.body.data as Array<{
+        actorType: string;
+        changes: { after: Record<string, unknown> };
+      }>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.actorType).toBe('SYSTEM');
+      expect(rows[0]?.changes.after).toMatchObject({
+        name: 'Northgate',
+        retentionDays: retentionDays(),
+        deletedAt: deletedAt.toISOString(),
+        clientCount: 1,
+        projectCount: 1,
+        planCount: 1,
+        activityCount: 2,
+        // Allowlisted in the redactor: this field was recorded and then dropped from every row.
+        activityHistoryCount: 2,
+      });
+
+      await planner.agent
+        .get('/api/v1/organizations/acme/audit-events?action=hierarchy.expired')
+        .expect(403);
+    });
   });
 });

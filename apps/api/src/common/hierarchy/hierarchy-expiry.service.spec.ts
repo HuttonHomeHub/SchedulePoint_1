@@ -13,7 +13,7 @@ import { HISTORY_ROWS_PER_ACTIVITY, HierarchyExpiryService } from './hierarchy-e
  * so a unit test here could not tell a correct foreign-key order from a wrong one, and the wrong
  * one is the failure mode this feature has.
  */
-const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
 
 const NOW = new Date('2026-08-18T12:00:00.000Z');
 /** 91 days before NOW — past a 90-day period. */
@@ -28,6 +28,8 @@ function build(
     projects?: Row[];
     plans?: Row[];
     activitiesPerPlan?: number;
+    /** Rows the claim statement matches: 0 means the root was restored since the scan. */
+    claimed?: number;
   } = {},
 ) {
   const clients = options.clients ?? [];
@@ -42,6 +44,12 @@ function build(
 
   // The candidate scans are the top-level `findMany`s; the descendant lookups filter the same
   // arrays, which is what a real query would do.
+  const claimed = { count: options.claimed ?? 1 };
+  const tx = {
+    client: { updateMany: vi.fn(() => Promise.resolve(claimed)) },
+    project: { updateMany: vi.fn(() => Promise.resolve(claimed)), findMany: vi.fn() },
+    plan: { updateMany: vi.fn(() => Promise.resolve(claimed)), findMany: vi.fn() },
+  };
   const prisma = {
     client: { findMany: vi.fn(() => Promise.resolve(clients)) },
     project: {
@@ -61,7 +69,8 @@ function build(
         return Promise.resolve(plans.filter((p) => ids.includes(p['projectId'] as string)));
       }),
     },
-    $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn({})),
+    // The claim is the transaction's first statement; `claimed` stands for what Postgres counts.
+    $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(tx)),
   } as unknown as PrismaService;
 
   const record = vi.fn((_event: unknown, _tx?: unknown) => Promise.resolve());
@@ -71,7 +80,10 @@ function build(
     { record } as unknown as AuditService,
     logger as never,
   );
-  return { service, prisma, record };
+  // The scope is resolved inside the transaction, after the claim: the same lookups, via `tx`.
+  Object.assign(tx.project, { findMany: prisma.project.findMany });
+  Object.assign(tx.plan, { findMany: prisma.plan.findMany });
+  return { service, prisma, record, tx };
 }
 
 function client(id: string, over: Row = {}): Row {
@@ -113,12 +125,61 @@ afterEach(() => {
 });
 
 describe('arming', () => {
-  it('starts no timer at all when the expiry is disabled', () => {
+  it('starts no timer at all and deletes nothing when the expiry is disabled', async () => {
     const { service, prisma } = build({ enabled: false, clients: [client('c1')] });
     service.onApplicationBootstrap();
-    expect(prisma.client.findMany).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
-    // The M3 state, and the one an operator must be able to confirm from a log alone.
+    // The state an operator must be able to confirm from a log alone.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'hierarchy_expiry.disabled' }),
+      expect.any(String),
+    );
+  });
+
+  it('says on the not-armed line how many roots are past their period, by level and never by name', async () => {
+    const { service } = build({
+      enabled: false,
+      clients: [client('c1')],
+      // proj-1 is under the expiring client, so it is not a root of its own.
+      projects: [project('proj-1', 'c1'), project('proj-2', 'c-live')],
+      plans: [plan('p1', 'proj-2'), plan('p2', 'proj-live')],
+    });
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(0);
+    const [fields] = logger.info.mock.calls.find(
+      ([f]) => (f as { event: string }).event === 'hierarchy_expiry.disabled',
+    ) as [Record<string, unknown>];
+    expect(fields['pastPeriod']).toEqual({ clients: 1, projects: 1, plans: 1 });
+    expect(JSON.stringify(fields)).not.toContain('client c1');
+  });
+
+  it('bounds the boot count and says "at least" when a scan hit the limit', async () => {
+    const plans = Array.from({ length: 5_000 }, (_, i) => plan(`p${i}`, `proj-${i}`));
+    const { service, prisma } = build({ enabled: false, plans });
+    (prisma.plan.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+      (args: { take?: number }) => plans.slice(0, args.take ?? plans.length),
+    );
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prisma.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 5_000 }));
+    const [fields] = logger.info.mock.calls.find(
+      ([f]) => (f as { event: string }).event === 'hierarchy_expiry.disabled',
+    ) as [Record<string, unknown>];
+    expect(fields['pastPeriod']).toEqual({ clients: 0, projects: 0, plans: 5_000 });
+    expect(fields['pastPeriodIsAtLeast']).toBe(true);
+  });
+
+  it('still logs the not-armed line when the count fails, rather than blocking boot', async () => {
+    const { service, prisma } = build({ enabled: false });
+    (prisma.client.findMany as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('db down'));
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'hierarchy_expiry.past_period_count_failed' }),
+      expect.any(String),
+    );
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'hierarchy_expiry.disabled' }),
       expect.any(String),
@@ -200,6 +261,43 @@ describe('which subtrees expire', () => {
   });
 });
 
+describe('the claim', () => {
+  it('deletes nothing and writes no audit row when the root was restored since the scan', async () => {
+    const { service, record } = build({ plans: [plan('p1', 'proj-1')], claimed: 0 });
+    await service.sweepNow(NOW);
+    expect(deleteScope).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'hierarchy_expiry.skipped_restored', rootId: 'p1' }),
+      expect.any(String),
+    );
+  });
+
+  it('claims by id, the cutoff and the batch id it saw, before it deletes', async () => {
+    const { service, tx } = build({ plans: [plan('p1', 'proj-1', { deleteBatchId: 'b-1' })] });
+    await service.sweepNow(NOW);
+    expect(tx.plan.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'p1',
+        deletedAt: { lt: new Date('2026-05-20T12:00:00.000Z') },
+        deleteBatchId: 'b-1',
+      },
+      data: { deleteBatchId: 'b-1' },
+    });
+    expect(tx.plan.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteScope.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('carries on to the next root after a skipped one', async () => {
+    const { service, tx } = build({ plans: [plan('p1', 'proj-1'), plan('p2', 'proj-2')] });
+    tx.plan.updateMany.mockResolvedValueOnce({ count: 0 });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+    expect(deleteScope.mock.calls[0]![1]).toMatchObject({ planIds: ['p2'] });
+  });
+});
+
 describe('the budget and the failure path', () => {
   it('stops once the activity budget is spent, leaving the rest for the next tick', async () => {
     deleteScope.mockResolvedValue({
@@ -271,8 +369,7 @@ describe('the budget and the failure path', () => {
     const first = service.sweepNow(NOW);
     // Let the first run reach its candidate scans before the overlapping tick arrives — otherwise
     // this asserts the guard against a run that has not started, which passes for the wrong reason.
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     await service.sweepNow(NOW); // the overlapping tick
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'hierarchy_expiry.overlapped' }),
