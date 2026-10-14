@@ -203,6 +203,12 @@ async function deleteFromTable(
     .click();
   await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
   const confirm = page.getByRole('alertdialog');
+  // **The confirmation tells the planner the server's period at the moment of deciding**
+  // (`docs/TECH_DEBT.md` #140). This suite's API is armed at 3,650 days, so a client constant
+  // (90) or an unconditional sentence would fail here; the number is read off the organisation list.
+  await expect(confirm).toContainText(
+    'Deleted items stay in Recently deleted for 3650 days, then are permanently removed.',
+  );
   await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirm).toBeHidden();
 }

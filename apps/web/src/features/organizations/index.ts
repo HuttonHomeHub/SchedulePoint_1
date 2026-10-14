@@ -1,6 +1,7 @@
 /** Public surface of the organizations feature. */
 export {
   useOrganizations,
+  useDeleteRetention,
   useCreateOrganization,
   organizationsQueryOptions,
   organizationKeys,

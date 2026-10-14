@@ -13,6 +13,7 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
+import { AppConfigService } from '../../config/app-config.service';
 
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { OrganizationResponseDto } from './dto/organization-response.dto';
@@ -28,7 +29,10 @@ import { OrganizationsService } from './organizations.service';
 @ApiUnauthorizedResponse({ description: 'No valid session.' })
 @Controller({ path: 'organizations', version: '1' })
 export class OrganizationsController {
-  constructor(private readonly service: OrganizationsService) {}
+  constructor(
+    private readonly service: OrganizationsService,
+    private readonly config: AppConfigService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -41,7 +45,7 @@ export class OrganizationsController {
     @RequestContext() context: RequestContext,
   ): Promise<OrganizationResponseDto> {
     const { organization, role } = await this.service.create(principal, dto, context);
-    return OrganizationResponseDto.from(organization, role);
+    return OrganizationResponseDto.from(organization, role, this.config);
   }
 
   // Unpaginated by design: the set is inherently bounded (the caller's own
@@ -51,7 +55,9 @@ export class OrganizationsController {
   @ApiOkResponse({ type: OrganizationResponseDto, isArray: true })
   async list(@CurrentUser() principal: Principal): Promise<OrganizationResponseDto[]> {
     const scoped = await this.service.list(principal);
-    return scoped.map(({ organization, role }) => OrganizationResponseDto.from(organization, role));
+    return scoped.map(({ organization, role }) =>
+      OrganizationResponseDto.from(organization, role, this.config),
+    );
   }
 
   @Get(':orgSlug')
@@ -63,6 +69,6 @@ export class OrganizationsController {
     @Param('orgSlug') slug: string,
   ): Promise<OrganizationResponseDto> {
     const { organization, role } = await this.service.resolveScope(principal, slug);
-    return OrganizationResponseDto.from(organization, role);
+    return OrganizationResponseDto.from(organization, role, this.config);
   }
 }

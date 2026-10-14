@@ -1,5 +1,5 @@
 {
-  "compactTableRatchet": 43,
+  "compactTableRatchet": 42,
   "_compactTableRatchet": [
     "The compact one-line table is FROZEN (product-owner decision, 2026-08-30): no new row may join",
     "that format, and the existing ones convert to detailed rows opportunistically. This number may",

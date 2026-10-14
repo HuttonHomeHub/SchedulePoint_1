@@ -14,15 +14,19 @@
  * deleted screen withholds every expiry sentence unless the server says `retentionActive` — while
  * these five dialogs asserted it unconditionally, in the same commit.
  *
- * **The fix is to say only what is true everywhere**, not to guess. The limit is stated where it
- * can be stated honestly: on Recently deleted, which prints the rule with the SERVER's period and
- * counts each deletion down individually. The accepted cost is that on an armed host the delete
- * dialog no longer mentions the deadline — recorded rather than waved away. Gating this sentence
- * on the real fact needs an authenticated carrier for the retention configuration that these
- * screens already fetch; `/version` is `@Public()` and putting installation configuration on an
- * unauthenticated route to improve a sentence is the wrong trade (`docs/TECH_DEBT.md` #140).
+ * **The fix is to say only what is true everywhere, and more only when the server says so.**
+ * Without a {@link DeleteRetention} the sentence makes no claim about a deadline. The organisation
+ * list — authenticated, and already read by the shell — carries `retentionActive` and
+ * `retentionDays`; when the server says the clear-out is on, a second sentence, worded as the
+ * Recently deleted page words its rule, names the SERVER's period and says the removal is permanent (`docs/TECH_DEBT.md` #140). `/version` is `@Public()` and
+ * putting installation configuration on an unauthenticated route to improve a sentence is the
+ * wrong trade, so it is not there.
  */
-export function deleteCascadeWarning(kind: 'client' | 'project' | 'plan', name: string): string {
+export function deleteCascadeWarning(
+  kind: 'client' | 'project' | 'plan',
+  name: string,
+  retention?: DeleteRetention,
+): string {
   const subject = `“${name}”`;
   const cascade =
     kind === 'client'
@@ -30,5 +34,22 @@ export function deleteCascadeWarning(kind: 'client' | 'project' | 'plan', name: 
       : kind === 'project'
         ? ` and all its plans`
         : '';
-  return `Delete ${subject}${cascade}? You can restore it from Recently deleted.`;
+  return `Delete ${subject}${cascade}? ${recoveryClause(retention)}`;
+}
+
+/**
+ * The server's clear-out configuration as the organisation list carries it. Absent while that list
+ * is loading or when the organisation is not in it — and absent means the unconditional sentence,
+ * which is the one that is true on every host.
+ */
+export interface DeleteRetention {
+  active: boolean;
+  days: number;
+}
+
+function recoveryClause(retention: DeleteRetention | undefined): string {
+  const restore = 'You can restore it from Recently deleted.';
+  if (!retention?.active) return restore;
+  const period = `${retention.days} ${retention.days === 1 ? 'day' : 'days'}`;
+  return `${restore} Deleted items stay in Recently deleted for ${period}, then are permanently removed.`;
 }

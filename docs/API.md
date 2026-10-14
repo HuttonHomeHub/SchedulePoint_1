@@ -1329,6 +1329,17 @@ together: `retentionActive: false` is the shipped default, and it means deleted 
 indefinitely — a countdown rendered from `retentionDays` alone would state a consequence the
 installation does not deliver.
 
+The same two fields ride on every **organisation** response — `GET /organizations`,
+`GET /organizations/:orgSlug`, `POST /organizations` and `POST /invitations/accept` — so the shell,
+which already reads that list, can word the delete confirmations without a request of its own
+(`docs/TECH_DEBT.md` #140). They are **additive** (`retentionActive: boolean`,
+`retentionDays: integer`), authenticated like the rest of the response, and are the same installation
+values `…/deleted` serves, repeated per organisation rather than per member. They are never on
+`/version`, which is `@Public()`. They sit on the organisation deliberately, only because the shell already
+loads that list; they become part of `/api/v1` at 1.0, and any further installation-wide setting goes on
+a dedicated endpoint, not on the organisation. `retentionActive: false` means items are kept
+indefinitely, so `retentionDays` alone is never a countdown.
+
 ### The organisation overview (ADR-0098)
 
 `GET /api/v1/organizations/:orgSlug/overview` — the screen every sign-in already lands on.

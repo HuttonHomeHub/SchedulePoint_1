@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { MenuItem } from '@/components/ui/menu';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { useDeleteRetention } from '@/features/organizations';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -34,6 +35,7 @@ export function PlansTable({
 }): React.ReactElement {
   const plans = usePlans(orgSlug, projectId);
   const deletePlan = useDeletePlan(orgSlug, projectId);
+  const retention = useDeleteRetention(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export function PlansTable({
             }}
             onConfirm={confirmDelete}
             title="Delete plan"
-            description={deleting ? deleteCascadeWarning('plan', deleting.name) : ''}
+            description={deleting ? deleteCascadeWarning('plan', deleting.name, retention) : ''}
             pending={deletePlan.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

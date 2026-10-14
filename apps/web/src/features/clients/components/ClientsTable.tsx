@@ -16,6 +16,7 @@ import { MenuItem } from '@/components/ui/menu';
 import { SectionCard } from '@/components/ui/page';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SearchField } from '@/components/ui/search-field';
+import { useDeleteRetention } from '@/features/organizations';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
@@ -46,6 +47,7 @@ export function ClientsTable({
   // renders `search` and stays instant. The same split the two library screens use.
   const debouncedSearch = useDebouncedValue(search);
   const clients = useClients(orgSlug, debouncedSearch);
+  const retention = useDeleteRetention(orgSlug);
   const searchId = useId();
   const filtered = search.trim() !== '';
   const deleteClient = useDeleteClient(orgSlug);
@@ -306,7 +308,7 @@ export function ClientsTable({
               }}
               onConfirm={confirmDelete}
               title="Delete client"
-              description={deleting ? deleteCascadeWarning('client', deleting.name) : ''}
+              description={deleting ? deleteCascadeWarning('client', deleting.name, retention) : ''}
               pending={deleteClient.isPending}
               pendingLabel="Deleting…"
               error={deleteError}

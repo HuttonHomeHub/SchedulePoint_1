@@ -18,6 +18,26 @@ describe('the delete confirmation sentence', () => {
     }
   });
 
+  it('makes no deadline claim when the clear-out is off or the configuration is not known yet', () => {
+    const off = deleteCascadeWarning('plan', 'Programme A', { active: false, days: 90 });
+    expect(off).toBe('Delete “Programme A”? You can restore it from Recently deleted.');
+    expect(deleteCascadeWarning('plan', 'Programme A', undefined)).toBe(off);
+  });
+
+  it("states the SERVER's period and the permanence when the clear-out is on", () => {
+    expect(deleteCascadeWarning('client', 'Northgate', { active: true, days: 90 })).toBe(
+      'Delete “Northgate” and all its projects and plans? ' +
+        'You can restore it from Recently deleted. ' +
+        'Deleted items stay in Recently deleted for 90 days, then are permanently removed.',
+    );
+    expect(deleteCascadeWarning('plan', 'Programme A', { active: true, days: 3650 })).toContain(
+      'Deleted items stay in Recently deleted for 3650 days, then are permanently removed.',
+    );
+    expect(deleteCascadeWarning('project', 'Riverside', { active: true, days: 1 })).toContain(
+      'for 1 day, then',
+    );
+  });
+
   it('names the cascade for a client and a project, and not for a plan', () => {
     expect(deleteCascadeWarning('client', 'Northgate')).toBe(
       'Delete “Northgate” and all its projects and plans? You can restore it from Recently deleted.',

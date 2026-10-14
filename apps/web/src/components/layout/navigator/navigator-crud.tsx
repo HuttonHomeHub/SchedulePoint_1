@@ -14,9 +14,10 @@ import {
   type NodeActionTarget,
   type UseExpansionState,
 } from '@/features/navigator';
+import { useDeleteRetention } from '@/features/organizations';
 import { PlanFormDialog, plansQueryOptions, useDeletePlan } from '@/features/plans';
 import { ProjectFormDialog, projectsQueryOptions, useDeleteProject } from '@/features/projects';
-import { deleteCascadeWarning } from '@/lib/delete-copy';
+import { deleteCascadeWarning, type DeleteRetention } from '@/lib/delete-copy';
 
 /** The dialog the coordinator is currently showing (one at a time). */
 type CrudDialog =
@@ -33,8 +34,11 @@ const KIND_NOUN: Record<NodeActionTarget['kind'], string> = {
 };
 
 /** Kind-appropriate cascade warning — one shared sentence; see `delete-copy.ts` for why it is one. */
-function deleteDescription(target: NodeActionTarget): string {
-  return deleteCascadeWarning(target.kind, target.name);
+function deleteDescription(
+  target: NodeActionTarget,
+  retention: DeleteRetention | undefined,
+): string {
+  return deleteCascadeWarning(target.kind, target.name, retention);
 }
 
 /**
@@ -64,6 +68,7 @@ export function NavigatorCrud({
   const [dialog, setDialog] = useState<CrudDialog | null>(null);
   const [afterDelete, setAfterDelete] = useState<AfterDeleteSignal | null>(null);
   const org = orgSlug ?? '';
+  const retention = useDeleteRetention(orgSlug);
 
   const closeDialog = useCallback(() => setDialog(null), []);
 
@@ -173,7 +178,7 @@ export function NavigatorCrud({
           onClose={closeDelete}
           onConfirm={confirmDelete}
           title={`Delete ${KIND_NOUN[del.kind]}`}
-          description={deleteDescription(del)}
+          description={deleteDescription(del, retention)}
           pending={activeDelete.isPending}
           error={activeDelete.isError ? activeDelete.error.message : null}
         />

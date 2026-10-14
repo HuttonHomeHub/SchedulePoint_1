@@ -27,6 +27,25 @@ export function useOrganizations(): UseQueryResult<OrganizationSummary[]> {
   return useQuery(organizationsQueryOptions);
 }
 
+/**
+ * The clear-out configuration the delete confirmations word themselves from, or `undefined` while
+ * the list is loading or the slug is not in it (the confirmation then makes no claim about a
+ * deadline). Installation configuration, read off the organisation list because that is an
+ * authenticated response every screen has already fetched (`docs/TECH_DEBT.md` #140).
+ */
+export function useDeleteRetention(
+  orgSlug: string | undefined,
+): { active: boolean; days: number } | undefined {
+  const { data } = useQuery({
+    ...organizationsQueryOptions,
+    select: (organizations) => {
+      const org = organizations.find((o) => o.slug === orgSlug);
+      return org ? { active: org.retentionActive, days: org.retentionDays } : undefined;
+    },
+  });
+  return data;
+}
+
 /** Create an organisation, then refresh the org list and the session (memberships). */
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
