@@ -233,6 +233,20 @@ describe('the coverage rung’s detail lines', () => {
     expect(messy).toContain('7 findings');
   });
 
+  it('sizes an export by its records, and says why only when it did not finish', () => {
+    expect(detail('privacy.exported', { after: { rows: 1234, files: 56, bytes: 90 } })).toBe(
+      `${(1234).toLocaleString()} records`,
+    );
+    const aborted = detail('privacy.exported', {
+      after: { rows: 1, reason: 'client_aborted' },
+    });
+    expect(aborted).toContain('1 record');
+    expect(aborted).toContain('cancelled');
+    expect(detail('privacy.exported', { after: { reason: 'something_new' } })).toBe(
+      'Stopped before it finished',
+    );
+  });
+
   it('withholds a detail line rather than inventing one when the payload is empty', () => {
     // Every branch must tolerate a row whose payload the redactor stripped: a half-sentence is
     // worse than no sentence, and an audit row that pads is an audit row that can mislead.

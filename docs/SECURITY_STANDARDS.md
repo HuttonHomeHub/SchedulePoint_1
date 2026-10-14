@@ -245,13 +245,22 @@ remaining ADR-0072 items are tracked in [`TECH_DEBT.md`](TECH_DEBT.md).
   logger — see [`OBSERVABILITY.md`](OBSERVABILITY.md)). The application stores
   little personal data: an account's name and email, and authorship attribution
   on the rows a user creates.
-- **Erasure/export for privacy requests is _not yet implemented_, and
-  [ADR-0085](adr/0085-privacy-operations.md) says why and what shape it must
-  take.** Deletion throughout the app is a **soft** delete (recoverable by
-  design — see [`DATABASE.md`](DATABASE.md)); there is no hard-delete path and
-  no export endpoint.
+- **The organisation export exists; erasure does not.**
+  [ADR-0085](adr/0085-privacy-operations.md) says what shape both must take, and
+  [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md) built the
+  export: `POST /api/v1/organizations/:orgSlug/export` streams one ZIP of JSON and CSV (the format is
+  [`ORGANISATION_EXPORT_FORMAT.md`](ORGANISATION_EXPORT_FORMAT.md)). It is **Org Admin only**
+  (`organization:export`, its own permission because the file carries everyone's work, cost, names and
+  emails), scoped from the caller's own memberships (a foreign slug is a 404), **a POST** (the session
+  cookie is `SameSite=Lax`, which a browser sends on a cross-site GET and not a cross-site POST),
+  throttled to 3 per 10 minutes, one at a time per organisation, and **audited as `privacy.exported`**.
+  Nothing is stored. It leaves out credentials (password hashes, sessions, invitation and share-link
+  token digests), the audit log's IP addresses and browser details, other organisations' people, live
+  editing locks and the installation's own telemetry; a census derived from the schema fails the build
+  when a model or column has no decision. **Deletion throughout the app is still a soft delete**
+  (recoverable by design — see [`DATABASE.md`](DATABASE.md)); there is no erasure path.
 
-  The constraint to know before writing either: **`audit_events` refuses
+  The constraint to know before writing erasure: **`audit_events` refuses
   `UPDATE` and `DELETE` in the database**, by `ENABLE ALWAYS` triggers the
   application role cannot bypass, and it holds the address a failed sign-in
   named. An erasure path that relaxes those triggers converts ADR-0072's

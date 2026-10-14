@@ -198,6 +198,11 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   facts, and a table a member can cause rows in is the wrong place to keep the difference: it
   //   would make the log the oracle the uniform 404 exists to deny.
   'staff.access_denied': [],
+  // — Privacy operations (ADR-0085 D5, ADR-0194). Flattened scalars: the format version, how many
+  //   entries the manifest lists, how many records the JSON files hold, how many bytes were handed
+  //   to the proxy, and — only when it did not finish — why. Counts, never contents: the export is
+  //   a copy of everything, and a copy of it must not land in the table that refuses DELETE.
+  'privacy.exported': ['formatVersion', 'files', 'rows', 'bytes', 'includesDeleted', 'reason'],
 };
 
 /**

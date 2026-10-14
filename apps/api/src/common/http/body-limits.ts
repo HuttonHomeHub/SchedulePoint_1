@@ -17,3 +17,11 @@ export const DEFAULT_JSON_LIMIT = DEFAULT_JSON_LIMIT_BYTES;
 
 /** The path prefix under which the larger cap applies (URI-versioned, before the global prefix). */
 export const ORG_SCOPED_PATH_PREFIX = '/api/v1/organizations';
+
+/**
+ * Org-scoped routes that read no body at all and so keep the default cap (ADR-0194): the 512 KB
+ * allowance exists for the four batch DTOs, and a route with no DTO has no use for it. Matched on the
+ * path under {@link ORG_SCOPED_PATH_PREFIX} (`/:orgSlug/export`), case-insensitively because Express
+ * routes are, so a differently-cased path cannot buy the larger buffer.
+ */
+export const BODYLESS_ORG_ROUTE = /^\/[^/]+\/export\/?$/i;

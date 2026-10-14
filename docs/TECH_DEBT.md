@@ -11667,3 +11667,32 @@ Not built on purpose. A setting to skip the copy once would be a 1.0-promised se
 With no `POSTGRES_PASSWORD` set, the password is `app`. Closing the published port (ADR-0192 D10) makes that matter much less, since only containers on the server can reach the database, but it is still a default. Changing it on an existing installation is an `ALTER USER` command as well as an `.env` edit; an `.env` edit alone takes SchedulePoint down. The backup guide gives it as an optional section. It is not a required step.
 
 **Next:** the security-reviewer revisits whether it should be required, and whether the compose file should stop defaulting the password for new installations. **Trigger:** the next security review of the deployment.
+
+### 515. The Export data page will hold the whole ZIP in browser memory, and the upper bound is 300 to 450 MB
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`docs/specs/organisation-export/m2-measurements.md` "Extrapolation": 30 MB measured at ten plans, 315 to 442 MB extrapolated at the brief's upper bound)
+**Raised:** 2026-10-14 (organisation export M2) · **Size:** M · **Owner:** web
+
+Milestone 3's hook builds a `Blob` from the response and saves it, so the browser holds the entire archive. That is comfortable at the measured sizes (30 MB) and at the brief's typical organisation (about 25 MB), and the plan set ~250 MB as the line where it stops being comfortable on a tablet. The extrapolated upper bound is above it. The alternative is a navigation-based download, an HTML form `POST` to the same route (the route takes no body and answers `Content-Disposition: attachment`), which streams to disk with no page memory at all; it gives up the progress line and the in-page error messages, because a form navigation cannot read the response.
+
+**Next:** none until the trigger. **Trigger:** an organisation whose export is over about 150 MB (the manifest's `files[].bytes` and the ZIP size on the audit row's `bytes` say so), or a report of the page failing on a large download.
+
+### 516. The organisation export reads every table twice, and its multi-organisation cost is unmeasured
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`m2-measurements.md` "Where the time goes": one read and serialise pass 12.0 s, the whole writer 23.2 s; `EXPLAIN` of every read)
+**Raised:** 2026-10-14 (organisation export M2) · **Size:** M · **Owner:** api
+
+A ZIP writes its entries one after another, so a table's JSON file and its CSV file are two reads of the same rows, and that doubling is most of the export's time. At the brief's upper bound it is the difference between 2.6 and 5.2 minutes (extrapolated), against a 5-minute line, and the added memory (+273 to +292 MB on a fresh process, bounded by V8's garbage collection and not by the size) sits just over its 256 MB line. Separately: the large org-level tables are read by a primary-key scan filtered on `organization_id`, which the planner chose and which is cheap with one organisation; on a server where many organisations' rows interleave, that filter reads the others' rows as well. Measured with two organisations it removed about as many rows as it returned. A composite index would be a schema change and goes through database-architect.
+
+**Added by the review fold (2026-10-14):** a small organisation on a large multi-tenant database may full-scan the primary-key-ordered pages and filter by `organization_id` (`organization-export.repository.ts:133`, the `org` filter on every page read). A composite `(organization_id, id)` index would fix it, but it is a schema change for database-architect, and the `EXPLAIN` harness must be re-run on a multi-tenant host first.
+
+**Next:** the owner's decision on the upper-bound figures (the measurement record's verdict), then, if wanted, the single-read variant (a worker thread for the CSV pass, ADR-0194 D3's second rung) and an `EXPLAIN` on a many-organisation fixture. **Trigger:** an organisation's export measured over five minutes, or a server with more than a handful of organisations each holding a hundred thousand rows.
+
+### 517. The organisation export's throttle is per address and runs before sign-in, and a slow client holds a snapshot
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`apps/api/src/app.module.ts:158-161`, guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
+**Raised:** 2026-10-14 (organisation export M2 review) · **Size:** S · **Owner:** api
+
+Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:159-160`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
+
+**Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.

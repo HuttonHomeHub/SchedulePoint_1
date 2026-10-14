@@ -138,6 +138,10 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/interchange/commit': [
     'interchange.imported',
   ],
+  // — ADR-0085 D5 / ADR-0194: a privacy operation. A READ that is audited anyway, like the staff
+  //   console, because the read IS the act: it takes everybody's work, cost and names out of the
+  //   tenant boundary in one file. Written after the stream ends, outside the snapshot.
+  'POST /api/v1/organizations/:orgSlug/export': ['privacy.exported'],
 };
 
 /**

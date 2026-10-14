@@ -6,6 +6,7 @@ import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
 import {
+  BODYLESS_ORG_ROUTE,
   DEFAULT_JSON_LIMIT,
   DEFAULT_JSON_LIMIT_BYTES,
   ORG_SCOPED_JSON_LIMIT,
@@ -138,12 +139,15 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // than capped. A form-encoded body now reaches its handler unparsed (`req.body` undefined).
   // Multipart is multer's, capped per route.
   //
+  // The organisation export (`/:orgSlug/export`) reads no body, so it keeps the 64 KB default
+  // (`BODYLESS_ORG_ROUTE`).
+  //
   // Mounted first: body-parser skips a request an earlier parser already read
   // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
   // below never sees a body the large one handled.
   const orgScopedJson = json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT });
   const orgScoped: RequestHandler = (req, res, next) => {
-    if (presentsCredentials(req)) {
+    if (presentsCredentials(req) && !BODYLESS_ORG_ROUTE.test(req.path)) {
       orgScopedJson(req, res, next);
     } else {
       next();

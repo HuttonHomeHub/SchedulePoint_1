@@ -23,7 +23,8 @@
     "@tanstack/react-query": "5.104.1",
     "body-parser": "2.3.0",
     "eslint": "9.39.5",
-    "@prisma/client": "6.19.3"
+    "@prisma/client": "6.19.3",
+    "yazl": "3.3.1"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -1427,6 +1428,62 @@
       "lines": "72-82",
       "anchor": "throw new common_1.NotFoundException(`Cannot ${method} ${url}`)",
       "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
+    },
+    {
+      "ref": "index.js:59-78",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "59-78",
+      "anchor": "ZipFile.prototype.addReadStreamLazy = function(metadataPath, options, getReadStreamFunction) {",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:175",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "175",
+      "anchor": "new zlib.DeflateRaw({level:entry.compressionLevel})",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:177-181",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "177-181",
+      "anchor": "readStream.pipe(crc32Watcher)",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:184-186",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "184-186",
+      "anchor": "entry.uncompressedSize = uncompressedSizeCounter.byteCount;",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:219-235",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "219-235",
+      "anchor": "if (entry.state === Entry.FILE_DATA_IN_PROGRESS) return; // we'll get there",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:318-327",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "318-327",
+      "anchor": "if (self.forceZip64Eocd || self.offsetOfStartOfCentralDirectory >= 0xffffffff) {",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "index.js:491-498",
+      "package": "yazl",
+      "path": "index.js",
+      "lines": "491-498",
+      "anchor": "(this.relativeOffsetOfLocalHeader != null && this.relativeOffsetOfLocalHeader > 0xfffffffe)",
+      "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
     }
   ]
 }

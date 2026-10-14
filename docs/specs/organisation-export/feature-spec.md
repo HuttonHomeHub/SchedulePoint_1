@@ -264,6 +264,15 @@ measurements.**
 Baselines dominate the upper bound because each one copies every activity and link of its plan
 (`baseline_activities`, `baseline_dependencies`, ADR-0025/ADR-0126).
 
+**Measured 2026-10-14 (M2-T4, [`m2-measurements.md`](m2-measurements.md)): the estimates above were low.**
+Ten plans of 2,000 activities with two baselines each (273 k rows) came to 331 MB of JSON and CSV and a
+**30 MB ZIP** (10.5× deflate, as estimated; about 1.1 kB of JSON per activity, inside the 1 to 2 kB
+estimate) and took **24 to 27 s**. Extrapolated by row count, the typical organisation is 21 to 27 MB and
+15 to 19 s, and the upper bound is **3.3 to 4.6 GB of text, a 315 to 442 MB ZIP, in 4.0 to 5.2 minutes**:
+1.5 to 2× the table's figures for size, because the two baselines copy every link; the time is not
+"one to a few minutes" but at its upper edge. Almost all of the time is reading each table twice (once for the
+JSON, once for the CSV).
+
 **Time.** Reading a few million rows through Prisma and serialising them is single-digit to tens of seconds; deflate
 runs on Node's zlib (`yazl` passes compression to `node:zlib`, read from the project README 2026-10-14), i.e. on the
 libuv thread pool rather than the event loop. A reasoned upper-bound total of **one to a few minutes**, and a typical

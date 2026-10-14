@@ -1840,11 +1840,11 @@ describe('soft-delete scanner — raw SQL predicates', () => {
   });
 });
 
-// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04); 30 covering 83 with the second milestone's plan join in the probe and the restore's returning statement (2026-10-04); 31 covering 84 with the scheduling-input stamp's plan update (2026-10-04); 34 covering 87 with the three history diagnostics' activities joins (2026-10-05); `_count` selections 1 once the baseline list's moved to a keyed `groupBy` (2026-10-11, TECH_DEBT #441); 33 covering 86 once the schedule-freshness stamp filters deleted plans instead of declaring itself any-state (2026-10-13, TECH_DEBT #492); the sweep's selection moved into `resolveExpiryScope` and the clear-out preview added two (35 covering 88, 2026-10-14).
+// Measured 2026-10-03: 10 to-many selections, 2 of them `_count`; 27 declarations covering 76 calls on main; 33 covering 83 with the activity history's six; 30 covering 81 once its name reads moved into the probe (2026-10-04); 30 covering 83 with the second milestone's plan join in the probe and the restore's returning statement (2026-10-04); 31 covering 84 with the scheduling-input stamp's plan update (2026-10-04); 34 covering 87 with the three history diagnostics' activities joins (2026-10-05); `_count` selections 1 once the baseline list's moved to a keyed `groupBy` (2026-10-11, TECH_DEBT #441); 33 covering 86 once the schedule-freshness stamp filters deleted plans instead of declaring itself any-state (2026-10-13, TECH_DEBT #492); the sweep's selection moved into `resolveExpiryScope` and the clear-out preview added two (35 covering 88, 2026-10-14); the organisation export's page reader and scope load added two (37 covering 111, 2026-10-14).
 const NESTED_READS_FLOOR = 9;
 const COUNTS_FLOOR = 1;
-const DECLARATIONS = 35;
-const COVERED = 88;
+const DECLARATIONS = 37;
+const COVERED = 111;
 
 describe('soft-delete gate — the repository tree', () => {
   const result = scanTree();
@@ -1899,6 +1899,9 @@ describe('soft-delete gate — the repository tree', () => {
       'recycle-bin statement': 2,
       'activity-history statement': 4,
       summarise: 2,
+      // The organisation export (ADR-0194) reads every state by design: the recycle bin is in it.
+      readPage: 20,
+      loadScope: 3,
     });
     expect(result.declarations, 'declarations').toHaveLength(DECLARATIONS);
     expect(covered, 'calls covered by declarations').toBe(COVERED);
