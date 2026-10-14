@@ -11,7 +11,7 @@
 # the container crash-loops before it can serve health. This is NOT a production
 # profile; real deployment is described in docs/DEPLOYMENT.md.
 #
-# The backups folder (`./backups`, or BACKUP_DIR) must exist and belong to uid 1000 before `up`; the
+# The backups folder (`./backups`, or BACKUP_DIR — CI sets it outside the checkout) must exist and belong to uid 1000 before `up`; the
 # CI job's first step does that. See the `image` job in .github/workflows/ci.yml.
 
 services:

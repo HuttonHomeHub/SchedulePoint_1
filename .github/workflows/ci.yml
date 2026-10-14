@@ -1203,6 +1203,12 @@ jobs:
     name: Build & smoke-boot images
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # ADR-0192: the backups folder lives OUTSIDE the checkout. Inside it, the build context would
+    # include a folder only uid 1000 may open, and BuildKit descends into excluded folders whenever
+    # .dockerignore has a `!` exception (it does), so the build fails with "permission denied".
+    # Both compose files mount `${BACKUP_DIR:-./backups}`, so this one variable moves it everywhere.
+    env:
+      BACKUP_DIR: /tmp/schedulepoint-backups
     steps:
       - uses: actions/checkout@v7
 
@@ -1211,7 +1217,7 @@ jobs:
       # which neither can write to — the exact mistake an operator can make, and the one the guide's
       # first step prevents — so the job creates it the way the guide says to.
       - name: Create the backups folder, owned by the container's user
-        run: sudo install -d -o 1000 -g 1000 -m 700 backups
+        run: sudo install -d -o 1000 -g 1000 -m 700 "$BACKUP_DIR"
 
       # ADR-0192 D10: the release compose file is never booted by this job (it pulls published images),
       # so its shape is asserted from `config`, which resolves it without pulling anything. A
@@ -1350,7 +1356,7 @@ jobs:
           grep -q 'BACKUP FINISHED' <<<"$out" || fail 'backup now did not finish'
           out=$($c run --rm -T backup check); echo "$out"
           grep -qx 'CHECK PASSED' <<<"$out" || fail 'check did not pass on a fresh copy'
-          newest=$(sudo ls -1t backups | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p || true)
+          newest=$(sudo ls -1t "$BACKUP_DIR" | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p || true)
           [ -n "$newest" ] || fail 'no copy in the backups folder'
 
           rc=0; out=$($c run --rm -T backup restore --yes "$newest" 2>&1) || rc=$?
@@ -1391,7 +1397,7 @@ jobs:
           fail() { echo "FAIL: $*"; exit 1; }
           sql() { $c exec -T db psql -U app -d app -Atc "$1"; }
           mark() { sleep 1; date -u +%Y-%m-%dT%H:%M:%SZ; sleep 1; }
-          pre_migrate_copies() { sudo find backups -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' | wc -l; }
+          pre_migrate_copies() { sudo find "$BACKUP_DIR" -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' | wc -l; }
           probe_rows() { sql "SELECT count(*) FROM _prisma_migrations WHERE migration_name = '$probe'"; }
           restarts() { docker inspect -f '{{.RestartCount}}' "$($c ps -q api)"; }
           wait_healthy() { # <service> <seconds>
@@ -1419,7 +1425,7 @@ jobs:
           [ "$(pre_migrate_copies)" = 0 ] || fail 'a copy was taken with nothing pending'
 
           # Held: a change is pending and the folder cannot be written. The database must not change.
-          sudo chmod 500 backups
+          sudo chmod 500 "$BACKUP_DIR"
           since=$(mark)
           $c -f "$probe_compose" up -d api
           held=0
@@ -1442,23 +1448,23 @@ jobs:
           [ "$(restarts)" -ge 1 ] || fail 'Docker did not restart the held API'
 
           # Taken, by itself: make the folder writable and do nothing else. This is the owner's fix.
-          sudo chmod 700 backups
+          sudo chmod 700 "$BACKUP_DIR"
           # A stale hold note, so that its removal below proves the successful copy cleared it (without
           # a seed the file never existed here: the folder was unwritable when the update was held).
-          sudo install -m 600 -o 1000 -g 1000 /dev/null backups/UPDATE-HELD.txt
+          sudo install -m 600 -o 1000 -g 1000 /dev/null "$BACKUP_DIR/UPDATE-HELD.txt"
           began=$(date +%s)
           wait_healthy api 300 || fail 'the API did not carry on by itself once the folder was writable'
           echo "The held API carried on by itself after $(($(date +%s) - began)) seconds."
           [ "$(pre_migrate_copies)" = 1 ] || fail 'expected exactly one copy before the update'
-          copy=$(sudo find backups -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' -printf '%f\n')
+          copy=$(sudo find "$BACKUP_DIR" -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' -printf '%f\n')
           out=$($c run --rm -T backup check "$copy"); echo "$out"
           grep -qx 'CHECK PASSED' <<<"$out" || fail 'the copy taken before the update does not pass check'
           started=$(sql "SELECT floor(extract(epoch FROM started_at))::bigint FROM _prisma_migrations WHERE migration_name = '$probe'")
           [ -n "$started" ] || fail 'the probe was not applied once the copy existed'
-          [ "$(sudo stat -c %Y "backups/$copy")" -le "$started" ] \
+          [ "$(sudo stat -c %Y "$BACKUP_DIR/$copy")" -le "$started" ] \
             || fail 'the copy is newer than the migration it was meant to precede'
-          [ "$(sudo stat -c %a "backups/$copy")" = 600 ] || fail 'a copy is readable by someone other than its owner'
-          sudo test ! -e backups/UPDATE-HELD.txt || fail 'UPDATE-HELD.txt was not cleared by the successful copy'
+          [ "$(sudo stat -c %a "$BACKUP_DIR/$copy")" = 600 ] || fail 'a copy is readable by someone other than its owner'
+          sudo test ! -e "$BACKUP_DIR/UPDATE-HELD.txt" || fail 'UPDATE-HELD.txt was not cleared by the successful copy'
           log=$($c logs --no-color --since "$since" api)
           grep 'backup.pre_migrate_taken' <<<"$log"
           curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health/ready
@@ -1467,8 +1473,8 @@ jobs:
         if: failure()
         run: |
           docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
-          sudo ls -la backups || true
-          sudo cat backups/LAST-BACKUP.txt backups/UPDATE-HELD.txt || true
+          sudo ls -la "$BACKUP_DIR" || true
+          sudo cat "$BACKUP_DIR/LAST-BACKUP.txt" "$BACKUP_DIR/UPDATE-HELD.txt" || true
 
       - name: Tear down
         if: always()
