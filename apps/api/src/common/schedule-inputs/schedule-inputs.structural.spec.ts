@@ -87,10 +87,12 @@ describe('the writers of plans.schedule_inputs_changed_at', () => {
       .map((file) => relative(SRC, file))
       .sort();
     // The readers: the shared "edited since calculated" rule, the overview, and the plan response
-    // that carries the rule's answer to the workspace (`docs/TECH_DEBT.md` #452).
+    // that carries the rule's answer to the workspace (`docs/TECH_DEBT.md` #452), and the
+    // organisation export's column registry, which names the column so the copy is complete.
     expect(mentions).toEqual([
       'common/schedule-inputs/edited-since-calculated.ts',
       'common/schedule-inputs/mark-schedule-inputs-changed.ts',
+      'modules/organization-export/export-columns.ts',
       'modules/overview/overview.repository.ts',
       'modules/plans/dto/plan-response.dto.ts',
     ]);
