@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 26 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1644 web
+> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1654 web
 > source files with 47 Playwright suites beside the base journey, and
 > 194 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -686,7 +686,8 @@ A lighter-weight running log of smaller decisions is in
   pass; both had shipped. The log is ADR-0072/0073 — `audit_events`, append-only
   in the database. Export is `GET …/plans/:id/export/:format` for XER and MSPDI
   (ADR-0050 M4) plus the TSLD's CSV/PNG/PDF and the printed programme
-  (ADR-0059 M4). Neither is an org-wide account export, which is still absent.)
+  (ADR-0059 M4). The org-wide export is **Export data** in the rail, `POST …/organizations/:slug/export`
+  (ADR-0194), built and not yet used on the owner's server.)
 - **Hosting is decided** (settled 2026-08-01, `docs/TECH_DEBT.md` #5): Docker
   Compose on the product owner's host, with releases pulled automatically. A
   _different_ target — managed host, or self-hosted Kubernetes — has not been

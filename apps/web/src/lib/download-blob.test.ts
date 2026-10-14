@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { downloadBlob } from './download';
+import { downloadBlob } from './download-blob';
 
 // jsdom does not implement `URL.createObjectURL` / `revokeObjectURL`, so stub them (the module no-ops
 // without them). `HTMLAnchorElement.prototype.click` is a jsdom no-op, so spy it to capture the anchor.

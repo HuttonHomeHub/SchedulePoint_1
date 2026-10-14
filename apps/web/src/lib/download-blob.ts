@@ -1,8 +1,8 @@
 /**
- * The thin browser **download** shim for the TSLD export deliverables (spec `docs/specs/export-print/`,
- * behind `VITE_EXPORT_PRINT`). The only IO here is an object-URL + a synthetic anchor click; kept
- * isolated so the pure serialisers (`export-csv.ts` et al.) stay DOM-free and unit-testable. Triggered
- * by a real toolbar button, so the download is keyboard-operable.
+ * The thin browser **download** shim: save a `Blob` as a file. The only IO here is an object-URL + a
+ * synthetic anchor click; kept isolated so the pure serialisers (the TSLD's `export-csv.ts`, the
+ * organisation export's byte formatter) stay DOM-free and unit-testable. Triggered by a real button,
+ * so the download is keyboard-operable.
  */
 
 /**

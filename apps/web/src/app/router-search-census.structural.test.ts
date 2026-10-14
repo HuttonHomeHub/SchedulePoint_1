@@ -90,7 +90,7 @@ const KNOWN_VALIDATORS = [
  * The count of routes in the tree with every gating flag on. Absolute rather than "at least", so a
  * route *leaving* the tree fails here instead of quietly narrowing what the census covers.
  */
-const EXPECTED_ROUTE_COUNT = 23;
+const EXPECTED_ROUTE_COUNT = 24;
 
 describe('Gate A — the route search census', () => {
   it('A1 — every route declaring validateSearch is exercised in router-search.test.ts', () => {

@@ -122,6 +122,19 @@ export function canReadAuditLog(role: OrganizationRole | undefined): boolean {
 }
 
 /**
+ * Roles allowed to export everything the organisation holds (mirrors the API's
+ * `organization:export` — Org Admin only, ADR-0194).
+ *
+ * Its own predicate rather than {@link canReadAuditLog}, though the roster is the same today: the
+ * API grants the two in separate bundles on purpose (the export carries cost and every member's
+ * email), so the gates must be able to diverge without touching call sites. Hiding the link is a
+ * courtesy; the API answers 403.
+ */
+export function canExportOrganization(role: OrganizationRole | undefined): boolean {
+  return role === 'ORG_ADMIN';
+}
+
+/**
  * Roles allowed to see and revoke this organisation's pending invitations (mirrors the API's
  * `invitation:read` and `invitation:revoke` — Org Admin only).
  *

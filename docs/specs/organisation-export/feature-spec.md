@@ -215,7 +215,7 @@ Three for the owner, each with a default; they are in §6. Everything else is de
 | Not a member / org deleted            | `resolveScope`                    | "This organisation was not found."                                                           | 404                                 |
 | Member without `organization:export`  | permission check                  | "Only an Org Admin can export this organisation's data."                                     | 403                                 |
 | Another export of this org is running | `pg_try_advisory_xact_lock` fails | "An export is already being prepared for this organisation. Try again when it finishes."     | 409                                 |
-| Throttled                             | `@Throttle` (3 / 10 min)          | "Too many exports in a short time. Try again in a few minutes."                              | 429                                 |
+| Throttled                             | `@Throttle` (3 / 10 min)          | "Too many exports in a short time. Try again in about 10 minutes."                           | 429                                 |
 | Failure before the first byte         | exception in setup                | "The export could not be prepared. Try again; if it keeps failing, tell your administrator." | 500 (standard `{ error }` envelope) |
 | Failure after streaming started       | exception / timeout mid-stream    | socket destroyed → "The download stopped before it finished. Nothing was saved. Try again."  | (connection reset)                  |
 | Client aborts                         | `res` `close` before `finish`     | (the user did it) — on the page, **Cancel** returns to idle with "Export cancelled."         | —                                   |
@@ -564,6 +564,12 @@ via tokens only; the page reflows at 1024 × 600 and below (ADR-0179); the rail 
 visible text in both rail forms (WCAG 2.5.3). **Rail height:** seven destinations at 1024 × 600 must be measured
 before the link is accepted (plan M3-T2, ADR-0113: measure the problem); if they do not fit, the fallback is a
 **Export data** link inside the **Members** page header for Org Admins, which needs no rail change.
+
+**Measured 2026-10-14 (M3-T2, [`m3-rail-measurement.md`](m3-rail-measurement.md)): the rail link ships; the
+fallback is not used.** At 1024 × 600, fine and coarse pointer, expanded and collapsed, all seven destinations are
+inside the window with no scrolling: the tree keeps 251 px (fine) and 131 px (coarse) against its 128 px floor, and
+the seventh row costs 30 px (fine) or 46 px (coarse). The coarse, expanded rail is therefore full at seven, with 3 px
+to spare.
 
 ### 4.8 Implementation approach & alternatives
 
