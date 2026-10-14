@@ -101,6 +101,10 @@ const TITLES: Record<AuditAction, string> = {
   // from a label that a staff console exists. "Refused" is what happened; the surface is the
   // subject, and the subject is not spelt out here.
   'staff.access_denied': 'Staff surface refused',
+  // "exported", not "downloaded": the row is written when the last byte was handed to the proxy, which
+  // is the server's fact; whether the browser kept the file is the person's. Its outcome column says
+  // whether it finished.
+  'privacy.exported': 'Organisation data exported',
 };
 
 /** One "3 plans" fragment, or null when the count is absent or zero — zero is not worth a word. */
@@ -290,6 +294,17 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     case 'staff.probe_recorded':
     case 'staff.access_denied':
       return null;
+    case 'privacy.exported': {
+      // The size of what left, then — only when it did not finish — why. `reason` is absent on a
+      // success, so a clean row stays one short fragment.
+      const records = count(changes?.after, 'rows');
+      const reason = field(changes?.after, 'reason');
+      const parts = [
+        records === null ? null : plural(records, 'record', 'records'),
+        reason === null ? null : (EXPORT_STOPPED[reason] ?? 'Stopped before it finished'),
+      ].filter((part) => part !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
+    }
     case 'interchange.imported': {
       // The filename first — it is the only surviving link to the source, and the upload itself is
       // not kept. The finding count is included ONLY when it is non-zero: "0 findings" on a clean
@@ -370,6 +385,12 @@ function reparentDestination(changes: AuditChanges | null): string {
   if (parents !== null && parents > 1) return `moved to ${String(parents)} different groups`;
   return 'moved to the top level';
 }
+
+/** Why an export that began did not finish, in words. An unlisted reason falls back to a generic line. */
+const EXPORT_STOPPED: Record<string, string> = {
+  client_aborted: 'The download was cancelled or the connection dropped',
+  timeout: 'Stopped: it took longer than the limit',
+};
 
 /** The expiry date in the reader's own locale. Date only — the hour a link dies is not a fact
  *  anyone acts on, and a full timestamp crowds the row. */

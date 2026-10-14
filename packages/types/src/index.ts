@@ -2485,6 +2485,13 @@ export const AUDIT_ACTIONS = [
   //   deliberately `USER` rather than `STAFF` — recording a prober as staff would be a lie, and it
   //   would put them in the console's own "what staff have done" panel.
   'staff.access_denied',
+  // — Privacy operations (ADR-0085 D5). The whole-organisation export (ADR-0194) is a bulk read of
+  //   everybody's work, cost and names, which is the ADR-0073 blast-radius shape even though nothing
+  //   is written. Recorded AFTER the stream ends and outside the read-only snapshot, so the row
+  //   never rolls back with the thing it describes. `SUCCESS` means the last byte was handed to the
+  //   proxy, not that the browser received it; a download that began and did not finish is `FAILURE`
+  //   with a `reason`. A refusal before the first byte (403, 409, 429) is not recorded.
+  'privacy.exported',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -2601,6 +2608,8 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // the `staff.` namespace (ADR-0086 D8), never on this category.
   'staff.probe_recorded': 'access',
   'staff.access_denied': 'access',
+  // Who took the organisation's data out is an access question, beside who was let in.
+  'privacy.exported': 'access',
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
   'calendar.scope_changed': 'settings',

@@ -30,6 +30,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MeModule } from './modules/me/me.module';
 import { MembersModule } from './modules/members/members.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { OrganizationExportModule } from './modules/organization-export/organization-export.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { OverviewModule } from './modules/overview/overview.module';
 import { PlacementMigrationModule } from './modules/placement-migration/placement-migration.module';
@@ -116,6 +117,7 @@ function isPrettyLoggingAvailable(): boolean {
     VersionModule,
     MeModule,
     OrganizationsModule,
+    OrganizationExportModule,
     MembersModule,
     InvitationsModule,
     ClientsModule,
