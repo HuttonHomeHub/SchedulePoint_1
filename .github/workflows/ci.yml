@@ -394,6 +394,26 @@ jobs:
       - name: Pairwise differential (seed catalogue)
         run: pnpm --filter @repo/api test:e2e:pairwise
 
+      # ADR-0192 / `docs/specs/database-backup/`: a backup is only a backup once it has been
+      # restored. **The two steps below run LAST, in this order, on purpose.** The API suite and the
+      # pairwise differential both sweep their rows away when they finish, so by now the database holds
+      # no plans at all (measured while building this: plans, activities, dependencies and baselines all
+      # 0) and a round trip against it would prove nothing. The first step seeds a database worth
+      # restoring over real HTTP and, unlike every other spec, deliberately LEAVES it.
+      - name: Seed the backup fixture
+        run: pnpm --filter @repo/api test:e2e:backup-fixture
+
+      # The round trip drives the SHIPPED script (inside `postgres:17-alpine`, the image's userland) and
+      # compares per-table counts and content checksums, sequences, trigger states, extensions, indexes
+      # and constraints; proves the audit log still refuses an UPDATE; runs `prisma migrate deploy` and
+      # the drift check against the restored copy; proves the comparison can fail (one altered row, one
+      # disabled trigger); walks the `pre-migrate` decision table; and does a real `restore`. What it
+      # cannot see: the compose service, the entrypoint call and the owner's host. No compose file or
+      # entrypoint runs the command yet, so none of them is in reach of this step. Its exit status is
+      # the only result. Not a `check:*` gate (ADR-0160): it needs a database.
+      - name: Backup and restore round trip
+        run: scripts/backup-restore-check.sh
+
   e2e-web:
     name: End-to-end tests (web shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
@@ -1203,6 +1223,22 @@ jobs:
 
       - name: Smoke-test the web app
         run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null http://localhost:8080/
+
+      # ADR-0192: the backup command ships in THIS image's Alpine userland, which is not the one the
+      # `e2e-api` round trip runs in (that uses `postgres:17-alpine`). This proves the shipped tools
+      # exist, are PostgreSQL 17, that the script parses and runs under the image's busybox `sh`, that
+      # it is root-owned and read-only to the `node` user, and that the image does NOT create
+      # `/backups` (its absence is how `pre-migrate` knows backups are not switched on). The last line
+      # holds only while this stack mounts no backups folder; the milestone that adds the mount to
+      # `docker-compose.ci.yml` must move it to the image rather than the container.
+      - name: The backup command is in the built API image
+        run: |
+          set -euo pipefail
+          compose="docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T api"
+          $compose pg_dump --version | grep -q ' 17\.' || { echo 'pg_dump is not PostgreSQL 17'; exit 1; }
+          $compose sh /app/backup/schedulepoint-backup.sh help 2>&1 | grep -q 'pre-migrate'
+          test "$($compose stat -c '%U %a' /app/backup/schedulepoint-backup.sh)" = 'root 555'
+          $compose test ! -e /backups
 
       # The nginx config is an envsubst TEMPLATE (ADR-0074 §4), so these assertions are about the
       # RENDERED config rather than the file in git — and the failure they exist to catch is the

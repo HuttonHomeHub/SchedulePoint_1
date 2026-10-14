@@ -215,3 +215,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0189](0189-a-shape-on-the-toolbar-is-a-control.md)                                             | A shape on the toolbar is a control                                                        | Accepted           |
 | [0190](0190-what-1-0-promises.md)                                                               | What 1.0 promises                                                                          | Accepted           |
 | [0191](0191-a-contrast-theme-is-the-readers-palette.md)                                         | A contrast theme is the reader's palette                                                   | Accepted           |
+| [0192](0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)              | A backup is a file the image writes, and a restore never overwrites                        | Accepted           |

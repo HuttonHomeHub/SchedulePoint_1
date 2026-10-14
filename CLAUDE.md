@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1644 web
 > source files with 47 Playwright suites beside the base journey, and
-> 191 ADRs.
+> 192 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -420,7 +420,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0015** _(Superseded by ADR-0057)_ — Template-driven feature development → [`0015-template-driven-feature-development.md`](docs/adr/0015-template-driven-feature-development.md)
 - **ADR-0016** _(Accepted)_ — Core identity & tenancy model + organisation role set → [`0016-core-identity-tenancy-role-model.md`](docs/adr/0016-core-identity-tenancy-role-model.md)
 - **ADR-0017** _(Accepted; single-aggregate-tag scheme superseded by ADR-0027)_ — Release tagging & image publishing via GitHub Actions → [`0017-release-tagging-and-image-publishing.md`](docs/adr/0017-release-tagging-and-image-publishing.md)
-- **ADR-0018** _(Accepted)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
+- **ADR-0018** _(Accepted; amended by ADR-0192)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
 - **ADR-0019** _(Accepted)_ — Shared workspace packages ship compiled output → [`0019-shared-package-build-contract.md`](docs/adr/0019-shared-package-build-contract.md)
 - **ADR-0020** _(Accepted)_ — CI builds and smoke-boots the container images → [`0020-ci-image-smoke-boot.md`](docs/adr/0020-ci-image-smoke-boot.md)
 - **ADR-0021** _(Accepted)_ — Activity dependency graph — the DAG invariant & service-layer cycle prevention → [`0021-dependency-graph-dag-invariant.md`](docs/adr/0021-dependency-graph-dag-invariant.md)
@@ -594,6 +594,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0189** _(Accepted; amends ADR-0185 D3 and D8 V1–V4)_ — A shape on the toolbar is a control → [`0189-a-shape-on-the-toolbar-is-a-control.md`](docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md)
 - **ADR-0190** _(Accepted)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
 - **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
+- **ADR-0192** _(Accepted; amends ADR-0018)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

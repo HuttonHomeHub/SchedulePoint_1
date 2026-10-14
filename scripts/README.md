@@ -6,9 +6,10 @@ Repository automation and developer-convenience scripts. Keep scripts:
 - **idempotent** — safe to run more than once,
 - **documented** — a header comment explaining purpose and usage.
 
-| Script     | Purpose                                                     |
-| ---------- | ----------------------------------------------------------- |
-| `setup.sh` | Bootstrap local development (deps, `.env`, local Postgres). |
+| Script                    | Purpose                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `setup.sh`                | Bootstrap local development (deps, `.env`, local Postgres).                                            |
+| `backup-restore-check.sh` | Prove a backup of the e2e database restores identically (ADR-0192); run through `e2e-local.sh backup`. |
 
 Prefer adding cross-cutting commands as `package.json` scripts (run via
 Turborepo) so they are discoverable and cached; reserve this directory for
