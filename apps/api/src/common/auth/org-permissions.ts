@@ -164,7 +164,12 @@ export type OrgPermission =
   // not expect a peer to read. Widening it later is then a deliberate one-line move rather than
   // an accident of bundle membership. A member's own history is NOT gated by this: it is scoped
   // by identity at `GET /me/audit-events` with no permission code at all (ADR-0051's pattern).
-  | 'audit:read';
+  | 'audit:read'
+  // Export everything the organisation holds as one file (ADR-0194, ADR-0085 D4). **Org Admin
+  // ONLY**, in its own bundle: the file carries every member's name and email, cost (which
+  // Viewer and Contributor may not read) and the audit log. Not `interchange:export` (every
+  // member, one plan) and not `audit:read` (ADR-0085 D4 and ADR-0072 decided separately).
+  | 'organization:export';
 
 /** Read the hierarchy — every member (Viewer upward) may browse the tree and its logic. */
 const HIERARCHY_READ: readonly OrgPermission[] = [
@@ -286,6 +291,13 @@ const SHARE_MANAGE: readonly OrgPermission[] = ['plan:share'];
  */
 const AUDIT_READ: readonly OrgPermission[] = ['audit:read'];
 
+/**
+ * Export the whole organisation as one ZIP of JSON and CSV (ADR-0194) — **Org Admin ONLY**.
+ * Its own bundle beside `AUDIT_READ`, for the same reason: the file carries everyone's work,
+ * cost and other members' names and emails, so widening it is a one-line move that shows in a diff.
+ */
+const ORGANIZATION_EXPORT: readonly OrgPermission[] = ['organization:export'];
+
 /** Read access to the organisation and its member roster — every member has it. */
 const MEMBER_BASELINE: readonly OrgPermission[] = ['organization:read', 'member:read'];
 
@@ -337,6 +349,7 @@ const ROLE_PERMISSIONS: Record<OrganizationRole, readonly OrgPermission[]> = {
     ...INTERCHANGE,
     ...SHARE_MANAGE,
     ...AUDIT_READ,
+    ...ORGANIZATION_EXPORT,
   ],
 };
 
