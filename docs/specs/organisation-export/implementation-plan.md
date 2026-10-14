@@ -112,7 +112,7 @@ column without a decision about the export.
 
 - **Description:** `docs/ORGANISATION_EXPORT_FORMAT.md` (files, columns, types, versioning rule, exclusions; plain
   enough for the owner's README to quote). A structural test asserts the document names every registry file and
-  column. Draft **ADR-0193** from spec §4.9 (status Proposed until M2 lands it as Accepted); add its one line to
+  column. Draft **ADR-0194** from spec §4.9 (status Proposed until M2 lands it as Accepted); add its one line to
   `CLAUDE.md` §16 (`check:adr-coverage`).
 - **Complexity:** S
 - **Dependencies:** 1.2
@@ -230,7 +230,7 @@ non-production OpenAPI page) only.
 - **Complexity:** S
 - **Dependencies:** 2.1
 - **Risks:** the numbers fail the spec's thresholds (§1 success criteria) → **stop before M3** and bring the owner
-  the options in ADR-0193 D3 (tune; worker thread; ADR-0009/0011); a read needs an index → stop for
+  the options in ADR-0194 D3 (tune; worker thread; ADR-0009/0011); a read needs an index → stop for
   database-architect.
 - **Testing:** this is the measurement; it is not a CI test.
 - **Development steps:**
@@ -242,8 +242,8 @@ non-production OpenAPI page) only.
 
 - **Description:** `docs/API.md` section for the route (method, auth, throttle, headers, errors, "no envelope after
   the first byte", link to the format doc); `docs/SECURITY_STANDARDS.md` "Data protection & privacy" (the export
-  exists, its exclusions, POST and why); `docs/PROJECT_BRIEF.md` §14 line 212 amended to cite ADR-0193;
-  `docs/BACKLOG.md` privacy-operations line (export half done; erasure still waits on ADR-0085 D6); ADR-0193 status
+  exists, its exclusions, POST and why); `docs/PROJECT_BRIEF.md` §14 line 212 amended to cite ADR-0194;
+  `docs/BACKLOG.md` privacy-operations line (export half done; erasure still waits on ADR-0085 D6); ADR-0194 status
   **Accepted** and its §16 line updated; changeset **`api` minor** ("Org Admins can export the whole organisation").
 - **Complexity:** S
 - **Dependencies:** 2.1-2.4
@@ -360,7 +360,7 @@ CSV in Excel, on the Surface or the PC.
 
 1. **M1** is pure and dark: the format and its census can merge on their own and protect the schema from that day.
 2. **M2** is the endpoint, dark to users; its measurement (2.4) is the go/no-go for M3. If it fails, M3 waits and the
-   owner chooses among ADR-0193 D3's options.
+   owner chooses among ADR-0194 D3's options.
 3. **M3** is the first user-facing milestone and carries the journey (ADR-0081).
 4. **M4** is the owner's step. The export must be in a release **before the 1.0 cut**, so that format `1.0` is what
    1.0 promises.
@@ -393,4 +393,4 @@ e2e half run locally where named, and the check runs on the PR's current head re
 | Browser memory for a very large ZIP (`Blob`) on a tablet                            | low        | med    | Fine at measured typical sizes; trigger and alternative (form-POST navigation download) recorded if the upper bound exceeds ~250 MB.                                                      |
 | `yazl` does not behave as its README says                                           | low        | med    | Claims registered and checked (`pnpm check:claims`); fallback writer over `node:zlib` behind the same interface.                                                                          |
 | Seven rail links do not fit at 1024 × 600                                           | med        | low    | Measured in M3-T2; fallback entry point on the Members page.                                                                                                                              |
-| The brief's "async / job-queue" line is read as a requirement later                 | low        | low    | ADR-0193 D3 records the decision, its evidence and its reopen trigger; the brief is amended to cite it.                                                                                   |
+| The brief's "async / job-queue" line is read as a requirement later                 | low        | low    | ADR-0194 D3 records the decision, its evidence and its reopen trigger; the brief is amended to cite it.                                                                                   |

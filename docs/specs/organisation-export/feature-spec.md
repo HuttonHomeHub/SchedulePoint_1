@@ -7,8 +7,7 @@
   owner on 2026-10-13 (`docs/DECISIONS.md`, entry "2026-10-13 — Pre-1.0 batch 2 is approved, and 1.0 requires
   backups, the organisation export and the clear-out", lines 32-45).
 - **Roadmap link:** the 1.0 entry in `docs/ROADMAP.md`.
-- **Related ADR(s):** one **new** ADR proposed (§4.9; number taken at landing, **0193** today, since `docs/adr/` ends
-  at 0192). It implements ADR-0085 D4 and D5 and amends `docs/PROJECT_BRIEF.md` §14 (line 212). Cited: ADR-0009,
+- **Related ADR(s):** one **new** ADR proposed (§4.9; number **0194**, since 0193 went to the clear-out). It implements ADR-0085 D4 and D5 and amends `docs/PROJECT_BRIEF.md` §14 (line 212). Cited: ADR-0009,
   ADR-0011, ADR-0012, ADR-0016, ADR-0028, ADR-0050, ADR-0051, ADR-0058, ADR-0059, ADR-0066, ADR-0072, ADR-0073,
   ADR-0076, ADR-0081, ADR-0083, ADR-0085, ADR-0086, ADR-0088 D1, ADR-0096, ADR-0105, ADR-0113, ADR-0131, ADR-0132,
   ADR-0142, ADR-0156, ADR-0172, ADR-0174, ADR-0179, ADR-0190, ADR-0192.
@@ -571,7 +570,7 @@ schema by a census.
 | **Re-import** of the export                                               | **Out of scope for 1.0.** The backup (ADR-0192) is the restore path. The format keeps every id and a version so an importer is possible later; nothing promises one.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **A "subject export"** (everything about me)                              | ADR-0085 D4 deliberately chose the organisation export first and named the subject export as later, smaller work. Not this spec.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
-### 4.9 ADR required — outline (ADR-0193, number taken at landing)
+### 4.9 ADR required — outline (ADR-0194, number taken at landing)
 
 **Title:** "An organisation's export is a promised format, streamed on the request."
 
@@ -622,7 +621,7 @@ job-queue backed" (`PROJECT_BRIEF.md:212`); it decides what leaves the tenant bo
 - Related docs updated by this change: `docs/ORGANISATION_EXPORT_FORMAT.md` (new), `docs/API.md`,
   `docs/SECURITY_STANDARDS.md`, `docs/PROJECT_BRIEF.md` §14, `docs/RELEASE_1_0.md` row 6, `docs/BACKLOG.md`,
   `docs/guides/export-your-organisation.md` (new, for the owner), `CLAUDE.md` §16, §17 and the stage-banner counts,
-  ADR-0193 (new).
+  ADR-0194 (new).
 
 ## 6. Critical questions for the product owner
 
