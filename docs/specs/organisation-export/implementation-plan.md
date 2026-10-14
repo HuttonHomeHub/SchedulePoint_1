@@ -1,7 +1,7 @@
 # Implementation Plan: Whole-organisation export
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — with the spec, awaiting the product owner's approval. Not started.
+- **Status:** Approved — with the spec, by the product owner, 2026-10-14. Starts after the clear-out.
 - **Owner:** product owner; implementation by the **builder** agent (Sonnet), one PR per milestone.
 
 ## Breakdown

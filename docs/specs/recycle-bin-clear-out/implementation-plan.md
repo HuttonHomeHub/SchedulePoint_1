@@ -1,7 +1,7 @@
 # Implementation Plan: The recycle bin's 90-day clear-out, switched on and proven
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved — with the spec, by the product owner, 2026-10-14; M3 is in scope.
 - **Owner:** product owner (approval, host steps M5); maintainers (M1–M4)
 
 ## Breakdown

@@ -1,6 +1,6 @@
 # Feature Spec: Whole-organisation export
 
-- **Status:** Draft — awaiting the product owner's approval. Nothing below is built.
+- **Status:** Approved — by the product owner, 2026-10-14, with every default in §6 (recycle-bin items, removed members and withdrawn invitations included with their deletion dates; the audit log as the Audit log screen shows it, without IP addresses or browser details; an "Export data" rail link for Org Admins, with the Members page as the fallback). Built after the clear-out.
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-10-14
 - **Tracking issue / epic:** pre-1.0 requirement (b), `docs/RELEASE_1_0.md` row 6 (line 46). Required for 1.0 by the

@@ -1,6 +1,6 @@
 # Feature Spec: The recycle bin's 90-day clear-out, switched on and proven
 
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-14, with every default in §6 (switched on by a host `.env` setting; a preview command; the 90-day note in delete confirmations, so M3 is in scope; no organisation needs extra notice). Built before the organisation export.
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-10-14
 - **Tracking issue / epic:** pre-1.0 requirement (c), `docs/RELEASE_1_0.md` row 7. Required for 1.0 by the owner on
