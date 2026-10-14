@@ -17,6 +17,8 @@ import {
   requirePlacement,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+import { PROMOTION_LADDER } from '../src/features/tsld/toolbar/promotion-ladder';
+import { PROMOTION_STAGES } from '../src/lib/breakpoints';
 
 import { expectDividersOnlyBetweenGroups } from './deck-dividers';
 import { deckStops, expectTracks, lapDeck } from './deck-tracks';
@@ -2146,6 +2148,46 @@ test.describe('The plan command surface', () => {
       await page.waitForTimeout(600);
       await expect(gear, `${String(from)} -> ${String(to)}`).toBeFocused();
       await expect(page.getByTestId('announcer')).not.toContainText('no longer available');
+    }
+  });
+
+  /**
+   * **Link keeps focus when an Add kind is promoted ahead of it, and nothing is announced as gone**
+   * (`docs/TECH_DEBT.md` #504). Start milestone is promoted at `PROMOTION_LADDER.P2`'s stage; the run it
+   * adds sat before Link's, whose position was its key, so the control was re-created under the reader
+   * and the handoff announced "Link … is no longer available" about a control still on the bar.
+   *
+   * The announcer is checked to exist first, so the absence below is a claim about a live region that
+   * carries handoff sentences (`peer-unmount-focus.spec.ts` asserts one there) and not about a locator
+   * that matches nothing. **Verified red** is owed: it needs the keying removed in `toolbar-runs.tsx`.
+   */
+  test('Link keeps focus across a resize over the Add-milestone stage, and nothing is announced as gone', async () => {
+    test.setTimeout(120_000);
+    await ensurePen(page);
+    const stage = PROMOTION_STAGES.find(({ name }) => name === PROMOTION_LADDER.P2.fine);
+    if (!stage) throw new Error('P2 names a stage that PROMOTION_STAGES does not declare');
+    const edge = stage.rem * 16;
+    const link = page
+      .getByRole('toolbar', { name: 'Plan commands', exact: true })
+      .locator('[data-toolbar-item="link-tool"]')
+      .first();
+    const milestone = page.locator('[data-toolbar-item="add-start-milestone"]');
+    const announcer = page.getByTestId('announcer');
+    await expect(announcer).toBeAttached();
+    for (const [from, to, promoted] of [
+      [edge - 100, edge + 100, 1],
+      [edge + 100, edge - 100, 0],
+    ] as const) {
+      await page.setViewportSize({ width: from, height: 800 });
+      await expect(milestone).toHaveCount(1 - promoted);
+      await link.focus();
+      await page.setViewportSize({ width: to, height: 800 });
+      await expect(milestone, `${String(from)} -> ${String(to)}`).toHaveCount(promoted);
+      await expect(link, `${String(from)} -> ${String(to)}`).toBeFocused();
+      // About Link, not about anything: the live region keeps the last sentence it was given, and an
+      // earlier test in this file leaves a true one there ("Colour by: Criticality is no longer on the
+      // toolbar. Moved into the View menu.").
+      await expect(announcer).not.toContainText(/Link.*no longer/);
     }
   });
 

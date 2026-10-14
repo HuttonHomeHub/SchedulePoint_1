@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { ClusterTrack } from './ClusterTrack';
 import {
   containerShouldStandDown,
   rovingIndexFor,
@@ -14,9 +13,9 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { renderRun } from './toolbar-runs';
 import {
   DECK_GROUP_DIVIDER,
-  DECK_RULE_BEFORE,
   DECK_TRAILING_SPACER,
   resolveLabelVisibility,
   TOOLBAR_INSET_RULE,
@@ -634,38 +633,16 @@ export function Deck<Ctx>({
                         >
                           {clusterRuns(section).map((run, runIndex) => {
                             const first = run.entries[0];
-                            if (first === undefined) return null;
-                            const lead = run.entries.filter((r) => r.item.presentational);
-                            // A set's caption is presentational and leads the unit; the controls are the track.
-                            const body =
-                              run.cluster === undefined ? (
-                                run.entries.map(renderControl)
-                              ) : (
-                                <ClusterTrack
-                                  key={first.item.id}
-                                  cluster={run.cluster}
-                                  {...(lead.length > 0 ? { lead: lead.map(renderControl) } : {})}
-                                >
-                                  {run.entries
-                                    .filter((r) => !r.item.presentational)
-                                    .map(renderControl)}
-                                </ClusterTrack>
-                              );
                             // `ruleBefore` draws its inset rule on a wrapper round the whole run, from
                             // `--container-roomy` only: below it the wrapper is `display: contents`, so it
-                            // has no box and the 1024 floor is what it was (`DECK_RULE_BEFORE`).
-                            // Not for the first run of a section: a predicate can hide what the item
-                            // follows, and the section or group rule is then already in that gap.
-                            return first.item.ruleBefore && runIndex > 0 ? (
-                              <span
-                                key={first.item.id}
-                                data-deck-rule-before
-                                className={DECK_RULE_BEFORE}
-                              >
-                                {body}
-                              </span>
-                            ) : (
-                              body
+                            // has no box and the 1024 floor is what it was (`DECK_RULE_BEFORE`). Not drawn
+                            // for the first run of a section: a predicate can hide what the item follows,
+                            // and the section or group rule is then already in that gap. The wrapper
+                            // itself stays either way (`renderRun`).
+                            return renderRun(
+                              run,
+                              renderControl,
+                              first?.item.ruleBefore ? (runIndex > 0 ? 'draw' : 'hold') : undefined,
                             );
                           })}
                         </div>

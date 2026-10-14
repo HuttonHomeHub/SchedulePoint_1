@@ -287,6 +287,7 @@ So, for any command surface:
   **band only** (the deck and the page header's two toolbars); the selection bar and the diagram-corner cluster
   keep today's ink. `command-surface.spec.ts` reads every colour a deck control paints at 1912 × 1080, pen held
   and nothing armed, and asserts that none but the pen's has OKLCH chroma above 0.06.
+- **A toolbar run or cluster is keyed by a stable identity** (the item's id, the cluster's id), never by position and never by a changing element type: React re-creates positionally keyed siblings and the focus handoff (ADR-0135/ADR-0111) then announces a still-present control as gone. See `docs/TECH_DEBT.md` #504.
 - **Two marks between controls, and one is a placement the registry declares** (toolbar-grid M3, D-4). The
   full-height divider is the boundary between deck groups; the short **inset rule** is the finer mark inside
   one: between a group's sections, before the tools that follow the pen, before the history track, and before the
