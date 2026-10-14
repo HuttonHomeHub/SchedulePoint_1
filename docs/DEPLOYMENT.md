@@ -1167,7 +1167,8 @@ None needs an outside service. A ping to an external monitor after each good cop
 
 ### Commands
 
-`docker compose -f docker-compose.release.yml run --rm backup <command>`:
+`docker compose run --rm backup <command>`, run in the folder that holds the compose file (add `-f <name>` after
+`docker compose` only if the file is not called `compose.yaml` or `docker-compose.yml`):
 
 | Command                  | What it does                                                                                         |
 | ------------------------ | ---------------------------------------------------------------------------------------------------- |
@@ -1276,7 +1277,7 @@ exist and is refused by design (ADR-0096 D1), so there is no button anywhere tha
 setting does on a timer.
 
 **Precondition: a same-day copy that has passed `check` on this host** (ADR-0192 D8). Run
-`docker compose -f docker-compose.release.yml run --rm backup check` and see `CHECK PASSED` for a copy
+`docker compose run --rm backup check` (in the stack folder) and see `CHECK PASSED` for a copy
 made today before you set `RETENTION_HIERARCHY_ENABLED=true`. This switch destroys work with no way
 back except a copy, and a copy nobody has tested is not yet a backup.
 
