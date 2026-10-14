@@ -70,6 +70,15 @@ does not bring them up again until the owner does. When the owner returns to one
   ordered lock is not in the locked set (pre-existing, unchanged; the plan lock is what excludes it).
 - Older open rows are unchanged; see `docs/TECH_DEBT.md`.
 
+## Owner's host steps for database backups (database-backup M4)
+
+Not done by any session. The guide is [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md):
+Part 1 (about 25 minutes: make the folder with `sudo install -d -o 1000 -g 1000 -m 700 backups`, paste the
+`backup` block, add the API's volume lines, delete the `db` port lines, update the stack, confirm
+`LAST-BACKUP.txt` says OK, save `.env` in a password manager), then Part 2's `check`. Done when the owner
+reports one `CHECK PASSED` with its date and file name; record it in `docs/RELEASE_1_0.md` row 5 and
+`docs/DECISIONS.md`.
+
 ## Suggested next
 
 Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering, in this

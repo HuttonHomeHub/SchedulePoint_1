@@ -609,6 +609,13 @@ A lighter-weight running log of smaller decisions is in
   `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
   is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
   opposite of the mistake the bullet below this one records.
+- **Backups are built and not running until the operator does the host steps** (ADR-0192, 2026-10-14).
+  The `backup` service, the API's `/backups` mount and the closed database port exist only in a compose
+  file the operator edits by hand (`docs/guides/back-up-and-restore.md`); without the mount an update
+  migrates exactly as before and no copy is taken. Copies live on the same disk as the database, and
+  with the mount an update that changes the database is **held** if its copy cannot be made. Do not
+  read "shipped" as "in use", and do not arm `RETENTION_HIERARCHY_ENABLED` before a same-day `check`
+  has passed on the host.
 - **Retention now covers customer hierarchy too, and it is off.** ADR-0096's expiry
   permanently deletes soft-deleted clients/projects/plans past
   `RETENTION_HIERARCHY_DAYS` (90) — see the hard-delete bullet below for what that
