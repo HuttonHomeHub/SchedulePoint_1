@@ -1224,6 +1224,22 @@ jobs:
       - name: Smoke-test the web app
         run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 -o /dev/null http://localhost:8080/
 
+      # ADR-0192: the backup command ships in THIS image's Alpine userland, which is not the one the
+      # `e2e-api` round trip runs in (that uses `postgres:17-alpine`). This proves the shipped tools
+      # exist, are PostgreSQL 17, that the script parses and runs under the image's busybox `sh`, that
+      # it is root-owned and read-only to the `node` user, and that the image does NOT create
+      # `/backups` (its absence is how `pre-migrate` knows backups are not switched on). The last line
+      # holds only while this stack mounts no backups folder; the milestone that adds the mount to
+      # `docker-compose.ci.yml` must move it to the image rather than the container.
+      - name: The backup command is in the built API image
+        run: |
+          set -euo pipefail
+          compose="docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T api"
+          $compose pg_dump --version | grep -q ' 17\.' || { echo 'pg_dump is not PostgreSQL 17'; exit 1; }
+          $compose sh /app/backup/schedulepoint-backup.sh help 2>&1 | grep -q 'pre-migrate'
+          test "$($compose stat -c '%U %a' /app/backup/schedulepoint-backup.sh)" = 'root 555'
+          $compose test ! -e /backups
+
       # The nginx config is an envsubst TEMPLATE (ADR-0074 §4), so these assertions are about the
       # RENDERED config rather than the file in git — and the failure they exist to catch is the
       # quiet one: an unfiltered envsubst run replaces nginx's own `$host`/`$scheme` with empty
