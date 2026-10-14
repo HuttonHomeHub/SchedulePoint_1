@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.190.2
+
+### Patch Changes
+
+- [#978](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/978) [`2cbe896`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2cbe896a81bcccde7d046e6bbf1f2a2f353976f4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Under a Windows contrast theme, greyed-out menu items and buttons now look greyed out, and the Gantt's bars, milestones, progress and selected row stay visible.
+
+- [#981](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/981) [`b735e61`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b735e61b56075797e1fafdcf4420cdf2063d8a6e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The month names along the Gantt's date ruler no longer print over one another, or hang below the ruler, when the browser's text size is set to 200 %. The ruler now shows every second month, or only quarters, when the names would not fit. When the spacing would leave no month named at all, the first month in view is still labelled. At the normal text size nothing else changes, and the printed programme changes only where it used to show no month name.
+
+- [#980](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/980) [`7dcf0b9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7dcf0b9c91583678daecae289fef64f417ab1dff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Resizing the window no longer drops keyboard focus from a toolbar button or wrongly announces that it is unavailable.
+
 ## 0.190.1
 
 ### Patch Changes
