@@ -10,6 +10,26 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-14 — The clear-out and the organisation export are approved, the clear-out first
+
+**What was decided.** The product owner approved the specs and plans in `docs/specs/recycle-bin-clear-out/` (pre-1.0
+requirement (c), `docs/RELEASE_1_0.md` row 7) and `docs/specs/organisation-export/` (requirement (b), row 6), each with
+every default. For the clear-out: it is switched on by one line in the server's `.env` on a day the owner chooses, and
+the shipped default stays off; a preview command lists what the first run would remove; delete confirmations say
+that items are removed after 90 days on a server where the clear-out is on (plan M3); no organisation needs extra
+notice. For the export: recycle-bin items, removed members and withdrawn invitations are included, each with its
+deletion date; the audit log is included as the Audit log screen shows it, without IP addresses or browser details;
+the entry point is an "Export data" rail link for Org Admins, with the Members page as the fallback. The clear-out is
+built first.
+
+**Why.** The clear-out is smaller, fixes a restore-versus-sweep race found while specifying it, and cannot be
+switched on until the owner's backup check passes, so it is built while the owner sets up backups.
+
+**Consequences.** The clear-out reaches every server switched off; nothing is permanently deleted until the owner
+edits `.env`. The export format becomes a 1.0 promise once 1.0 is cut, so it ships before the cut.
+
+---
+
 ## 2026-10-14 — Database backup is approved, with a copy before each update and the database port closed
 
 **What was decided.** The product owner approved the spec and plan in `docs/specs/database-backup/` (pre-1.0
