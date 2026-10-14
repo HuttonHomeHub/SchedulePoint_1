@@ -127,6 +127,17 @@ procedure uses) is unaffected. The dev stack keeps its port, which local develop
 - The copies contain credentials (password hashes, sessions, verification tokens): the folder is mode 700, files 600
   (`umask 077`), and the backup container receives database credentials only.
 - An operator who connected a database tool from another computer loses that access once the port is closed (D10).
+- **The script reads test-only environment variables in production, and they are not a secret-free surface.**
+  `BACKUP_ROOT`, `BACKUP_NOW`, `BACKUP_SCHEDULE_ITERATIONS`, `BACKUP_POLL_SECONDS`, `BACKUP_FIRST_RETRY_SECONDS`,
+  `MIGRATIONS_DIR` and `BACKUP_MIN_FREE_KB` exist so CI can drive the shipped script rather than a copy of its logic.
+  Anything that can set them changes where copies are written, what "pending" means, or the free-space floor, so none
+  may be passed through from an untrusted source (a compose `environment:` entry built from user input, a
+  `.env` an unprivileged party can edit). The compose files set none of them.
+- **A migration on update can wait behind a running nightly copy.** `pg_dump` holds `ACCESS SHARE` locks; a migration
+  that alters a table needs `ACCESS EXCLUSIVE` on it and queues until the dump releases the table. The update is
+  therefore slower by up to one dump's duration; it does not fail (the migration has no lock timeout that the dump
+  could trip), and meanwhile the owner sees the API on "applying migrations" in `docker compose logs api`. Nothing is
+  coded for this; the pre-update copy itself uses `--lock-wait-timeout=60s` and so fails rather than waits.
 
 ## Evidence (ADR-0076)
 

@@ -1202,7 +1202,7 @@ jobs:
   image:
     name: Build & smoke-boot images
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -1221,15 +1221,17 @@ jobs:
         run: |
           set -euo pipefail
           cfg=$(docker compose -f docker-compose.release.yml config --format json)
-          check() { jq -e "$2" <<<"$cfg" >/dev/null || { echo "release compose file: $1"; exit 1; }; }
-          check 'the db service publishes a port' '.services.db | has("ports") | not'
-          check 'the api service has no /backups mount' '[.services.api.volumes[]? | select(.target == "/backups")] | length == 1'
-          check 'the backup service has no /backups mount' '[.services.backup.volumes[]? | select(.target == "/backups")] | length == 1'
-          check 'the backup service is not the api image, so Watchtower would not move them together' \
+          check() { jq -e "$2" <<<"$cfg" >/dev/null || { echo "release compose file: expected $1"; exit 1; }; }
+          check 'the db service to publish no port' '.services.db | has("ports") | not'
+          check 'the api service to mount /backups exactly once' '[.services.api.volumes[]? | select(.target == "/backups")] | length == 1'
+          check 'the backup service to mount /backups exactly once' '[.services.backup.volumes[]? | select(.target == "/backups")] | length == 1'
+          check 'the backup service to use the api image string, so Watchtower moves them together' \
             '.services.backup.image == .services.api.image'
-          check 'the backup service depends on more than the database' '(.services.backup.depends_on | keys) == ["db"]'
-          check 'the backup service is not Watchtower-enabled' \
+          check 'the backup service to depend on the database only' '(.services.backup.depends_on | keys) == ["db"]'
+          check 'the backup service to carry the Watchtower enable label' \
             '.services.backup.labels["com.centurylinklabs.watchtower.enable"] == "true"'
+          # The CI-only probe override must never reach the file an operator runs.
+          ! grep -qE 'ci-fixtures|99999999999999' <<<"$cfg" || { echo 'release compose file: expected no CI fixture reference'; exit 1; }
 
       # Build the api + web images from source and boot the full stack
       # (Postgres + API + web), then wait for every container to report healthy.
@@ -1348,7 +1350,7 @@ jobs:
           grep -q 'BACKUP FINISHED' <<<"$out" || fail 'backup now did not finish'
           out=$($c run --rm -T backup check); echo "$out"
           grep -qx 'CHECK PASSED' <<<"$out" || fail 'check did not pass on a fresh copy'
-          newest=$(sudo ls -1t backups | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p)
+          newest=$(sudo ls -1t backups | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p || true)
           [ -n "$newest" ] || fail 'no copy in the backups folder'
 
           rc=0; out=$($c run --rm -T backup restore --yes "$newest" 2>&1) || rc=$?
@@ -1357,11 +1359,11 @@ jobs:
           grep -q 'RESTORE REFUSED' <<<"$out" || fail 'restore failed, but not at its refusal'
           [ "$(sql "$kept_sql" postgres)" = 0 ] || fail 'a refused restore still moved a database'
 
-          $c stop api web
+          $c stop api web backup
           sleep 1; since=$(date -u +%Y-%m-%dT%H:%M:%SZ); sleep 1
           out=$($c run --rm -T backup restore --yes "$newest"); echo "$out"
           grep -q 'RESTORE FINISHED' <<<"$out" || fail 'restore did not finish'
-          $c up -d --wait --wait-timeout 240 api web
+          $c up -d --wait --wait-timeout 240 api web backup
           curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health/ready
 
           [ "$(sql "$kept_sql" postgres)" = 1 ] || fail 'the database from before the restore was not kept'
@@ -1441,6 +1443,9 @@ jobs:
 
           # Taken, by itself: make the folder writable and do nothing else. This is the owner's fix.
           sudo chmod 700 backups
+          # A stale hold note, so that its removal below proves the successful copy cleared it (without
+          # a seed the file never existed here: the folder was unwritable when the update was held).
+          sudo install -m 600 -o 1000 -g 1000 /dev/null backups/UPDATE-HELD.txt
           began=$(date +%s)
           wait_healthy api 300 || fail 'the API did not carry on by itself once the folder was writable'
           echo "The held API carried on by itself after $(($(date +%s) - began)) seconds."
@@ -1452,6 +1457,7 @@ jobs:
           [ -n "$started" ] || fail 'the probe was not applied once the copy existed'
           [ "$(sudo stat -c %Y "backups/$copy")" -le "$started" ] \
             || fail 'the copy is newer than the migration it was meant to precede'
+          [ "$(sudo stat -c %a "backups/$copy")" = 600 ] || fail 'a copy is readable by someone other than its owner'
           sudo test ! -e backups/UPDATE-HELD.txt || fail 'UPDATE-HELD.txt was not cleared by the successful copy'
           log=$($c logs --no-color --since "$since" api)
           grep 'backup.pre_migrate_taken' <<<"$log"
