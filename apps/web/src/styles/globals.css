@@ -1836,4 +1836,50 @@
     outline: 2px solid Highlight;
     outline-offset: 2px;
   }
+
+  /*
+   * A shaded control reads shaded: `GrayText`, the reader's own colour for "unavailable"
+   * (`docs/TECH_DEBT.md` #505, ADR-0191). Shaded here is `aria-disabled`, never the `disabled`
+   * attribute (ADR-0082, ADR-0083), and forced colours only greys the latter; the former kept
+   * `ButtonText`, so a shaded menu item or button looked available. It joins this block for the
+   * ring's reason: unlayered, so it beats a component's layered colour utility.
+   *
+   * - Interactive roles only. Colour inherits, so `[aria-disabled]` on a group would grey every
+   *   child in it. Left out on purpose: `row`, `group`, `toolbar`, `menu`, `listbox`, `tablist`,
+   *   `grid`, `treegrid`, `tree` and `dialog`, which are containers (a shaded one would grey its
+   *   live children), and `separator`, which is not operable.
+   * - `:not([aria-pressed='true'])`: the toolbar's pressed-and-shaded member paints a `GrayText`
+   *   fill with `Canvas` ink under `forced-color-adjust: none` (`toolbar-styles.ts`); `GrayText`
+   *   ink on that fill would erase the label.
+   * - `opacity: 1`: `Button` also dims a shaded control to 60 % and forced colours leaves opacity
+   *   alone, so `GrayText` alone carries the state, as Windows' own controls do.
+   * - No `box-shadow`: forced colours computes it to `none` whatever is set (the ring's finding).
+   */
+  :is(
+      button,
+      a,
+      input,
+      select,
+      textarea,
+      summary,
+      [role='button'],
+      [role='link'],
+      [role='menuitem'],
+      [role='menuitemradio'],
+      [role='menuitemcheckbox'],
+      [role='option'],
+      [role='tab'],
+      [role='treeitem'],
+      [role='gridcell'],
+      [role='radio'],
+      [role='checkbox'],
+      [role='switch'],
+      [role='combobox'],
+      [role='spinbutton'],
+      [role='slider']
+    )[aria-disabled='true']:not([aria-pressed='true']) {
+    color: GrayText;
+    border-color: GrayText;
+    opacity: 1;
+  }
 }

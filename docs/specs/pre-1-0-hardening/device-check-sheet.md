@@ -219,11 +219,24 @@ to turn it on, choose **Yes**. Reload the page.
       so Tab will skip along it quickly; that is expected.
       Correct: every control you land on has a visible ring in the theme's highlight colour.
       Wrong: at any point you cannot tell where you are. Times you lost your place: ____
-- [ ] **22. Open a menu and a dialog.** Record what you see: do the menu and dialog have a clear edge? In a
-      menu with a shaded (unavailable) item, does the shaded item look different from an available one?
-      Answer: ____________ (A shaded item that looks the same is worth knowing; we may fix it.)
-- [ ] **23. Look at the Gantt and the diagram.** Record what you see: are the Gantt bars visible? Is the
-      diagram visible, and can you tell which activity is selected?
+- [ ] **22. Open a menu and a dialog.** Open a row's `⋯` menu in the Gantt that has a greyed-out (unavailable)
+      item, and look at a dialog.
+      (a) Does the menu or dialog have a clear edge? Yes / No
+      (b) Is the greyed-out item in the theme's grey text colour, and the available items in its normal text
+      colour? Yes / No
+      (c) Is a greyed-out button the same grey? Yes / No
+      Wrong: a greyed-out item or button looks the same as an available one.
+      Answer: ____________
+- [ ] **23. Look at the Gantt, then the diagram.** Switch to the Gantt and click one row.
+      (a) Does every bar have a line around it in the theme's text colour? Yes / No
+      (b) Are the critical (red in normal colours) bars' lines clearly thicker than the others? Yes / No
+      (c) Does the selected row have a coloured bar down its left edge, and when you Tab to a control in that
+      row can you still see which one has focus? Yes / No
+      (d) Does a finished task (all filled in) still look different from a summary bar (solid)? Yes / No
+      (e) The diagram keeps its normal colours on purpose. Can you still read it and tell which activity is
+      selected? Yes / No (tell us if you can't)
+      Wrong: a bar's start or end can't be seen, a milestone or a bar can't be seen at all, or you lose track
+      of which control has focus in the selected row.
       Answer: ____________
 - [ ] **24. Turn the theme off** (Settings › Contrast themes › **None** › Apply, or the same keyboard
       shortcut and **Yes**), and reload.
@@ -305,4 +318,7 @@ Zoom group, the Gantt's row menus, the diagram ruler, the gear's place, a landma
 viewport notice) updates this file in the same pull request, and the hand-off says so. Steps 12 to 14
 refer to Gantt sheet items 6, 25b and 29 by number so the wording is not copied; if those items are
 renumbered, update this file. Answers are recorded in `device-check-results.md` beside this file, and each
-"wrong" becomes a `TECH_DEBT.md` row or a fix. Step 22 and 23 are expected to confirm TECH_DEBT #505.
+"wrong" becomes a `TECH_DEBT.md` row or a fix. Steps 22 and 23 confirm TECH_DEBT #505 on a real theme: they describe what the fix shows (a global `GrayText`
+rule for shaded controls and `forced-colors:` variants on the Gantt's marks, ADR-0191), so a change to either
+updates their yes/no lines in the same pull request. The diagram's colours are deliberately unchanged
+(#508); if it is reported unreadable there, that row's trigger has fired.

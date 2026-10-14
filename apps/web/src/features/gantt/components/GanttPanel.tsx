@@ -85,6 +85,16 @@ import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import {
+  FORCED_ARMED_OUTLINE,
+  FORCED_BAND_IN_OUTLINED_BAR,
+  FORCED_BAND_IN_SOLID_BAR,
+  FORCED_EDGED_SOLID_BAR,
+  FORCED_HEAVY_EDGE_BAR,
+  FORCED_OUTLINED_BAR,
+  FORCED_SELECTED_EDGE,
+  FORCED_SOLID_MARK,
+} from '@/components/ui/forced-colors';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
@@ -1795,6 +1805,9 @@ function GanttRowView({
   });
   const moveRefusal = moveGate !== null && !moveGate.movable ? moveGate.reason : null;
   const armed = isSelected && moveGate?.movable === true;
+  // A summary draws solid unless it is critical, in which case the critical branch below wins and it
+  // is an outlined bar; the forced-colours band inside it follows the same branch.
+  const solidSummaryBar = !activity.isCritical && activity.type === 'WBS_SUMMARY';
 
   /**
    * The finish-edge resize: the start is held and the duration is the WORKING days from it to
@@ -2053,7 +2066,7 @@ function GanttRowView({
       <div
         className={cn(
           'border-border sticky left-0 z-10 flex h-full shrink-0 items-center border-r',
-          isSelected ? 'bg-accent' : 'bg-background',
+          isSelected ? ['bg-accent', FORCED_SELECTED_EDGE] : 'bg-background',
           !rowHasOpenCell && SELECT_NONE_AFTER_TOUCH,
         )}
         style={{ width: gridWidth }}
@@ -2252,7 +2265,10 @@ function GanttRowView({
         {geometry === null ? null : geometry.milestone ? (
           <span
             aria-hidden="true"
-            className="bg-foreground absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45"
+            className={cn(
+              'bg-foreground absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45',
+              FORCED_SOLID_MARK,
+            )}
             style={{ left: geometry.x }}
           />
         ) : (
@@ -2271,16 +2287,19 @@ function GanttRowView({
                 // Criticality is carried by BOTH a fill and an outline: colour alone would fail
                 // WCAG 1.4.1, and this is the exact defect class ADR-0055 was written about.
                 activity.isCritical
-                  ? 'bg-destructive/70 ring-destructive ring-2 ring-inset'
-                  : activity.type === 'WBS_SUMMARY'
-                    ? 'bg-foreground/70'
-                    : 'bg-canvas-bar/60 ring-canvas-bar/70 ring-1 ring-inset',
+                  ? ['bg-destructive/70 ring-destructive ring-2 ring-inset', FORCED_HEAVY_EDGE_BAR]
+                  : solidSummaryBar
+                    ? ['bg-foreground/70', FORCED_EDGED_SOLID_BAR]
+                    : [
+                        'bg-canvas-bar/60 ring-canvas-bar/70 ring-1 ring-inset',
+                        FORCED_OUTLINED_BAR,
+                      ],
                 // The armed state: a selected, movable bar is the one a finger may drag. An OUTLINE
                 // (a shape, offset from the bar) plus grip marks below — never a colour change
                 // alone (WCAG 1.4.1) — and an outline, not a ring, so it composes with the critical
                 // bar's own ring instead of replacing it. `pan-y` lets a vertical swipe scroll and
                 // costs pinch-zoom over this one bar (ADR-0177 D2); it is read at `pointerdown`.
-                armed && 'outline-ring outline-2 outline-offset-1',
+                armed && ['outline-ring outline-2 outline-offset-1', FORCED_ARMED_OUTLINE],
                 armed && 'touch-pan-y',
               )}
               data-bar-armed={armed ? 'true' : undefined}
@@ -2302,7 +2321,13 @@ function GanttRowView({
             >
               {geometry.progress > 0 ? (
                 <span
-                  className="bg-foreground/45 absolute inset-y-0 left-0"
+                  className={cn(
+                    'bg-foreground/45 absolute inset-y-0 left-0',
+                    // The ink of the bar it sits in, inverted: `CanvasText` on an outlined bar,
+                    // `Canvas` on a solid summary. Keyed on the same branch as the bar's own
+                    // form, so a critical summary (an outlined bar) gets the outlined band.
+                    solidSummaryBar ? FORCED_BAND_IN_SOLID_BAR : FORCED_BAND_IN_OUTLINED_BAR,
+                  )}
                   style={{ width: `${geometry.progress * 100}%` }}
                 />
               ) : null}
@@ -2315,7 +2340,10 @@ function GanttRowView({
                   className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-0.5"
                 >
                   {GRIP_MARKS.map((mark) => (
-                    <span key={mark} className="bg-foreground/70 h-2 w-px" />
+                    <span
+                      key={mark}
+                      className={cn('bg-foreground/70 h-2 w-px', FORCED_SOLID_MARK)}
+                    />
                   ))}
                 </span>
               ) : null}

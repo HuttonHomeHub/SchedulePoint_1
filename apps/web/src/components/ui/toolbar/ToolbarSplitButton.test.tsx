@@ -85,7 +85,9 @@ describe('ToolbarSplitButton — per-half gating', () => {
     expect(caret.className).not.toMatch(/hover:bg-muted/);
     // The quiet ink, not an alpha (M6): `opacity-*` is a value nobody gated.
     expect(caret.className).not.toMatch(/opacity-/);
-    expect(caret.className).toMatch(/forced-colors:\[color:GrayText\]/);
+    // `GrayText` under forced colours comes from the global rule for `aria-disabled` (ADR-0191 D1).
+    expect(caret).toHaveAttribute('aria-disabled', 'true');
+    expect(caret.className).not.toMatch(/GrayText/);
     cleanup();
     const live = renderSplit({});
     expect(live.caret.className).toMatch(/hover:bg-muted/);

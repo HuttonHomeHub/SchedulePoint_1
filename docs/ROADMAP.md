@@ -752,6 +752,12 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
+- **A contrast theme is the reader's palette.** **Approved 2026-10-13; built as `pre-1-0-batch-2` M2; measured and
+  journey-tested in emulation, real Windows still on the device check sheet** ([ADR-0191](adr/0191-a-contrast-theme-is-the-readers-palette.md); spec and plan at
+  [`docs/specs/pre-1-0-batch-2/`](specs/pre-1-0-batch-2/)). Under a Windows contrast theme a greyed-out menu item or
+  button now looks greyed out, and the Gantt's bars, milestones, progress and selected row stay visible. The diagram keeps
+  its own colours by the owner's decision (`docs/TECH_DEBT.md` #508).
+
 - **A minimum screen size — designed for a laptop or 11-inch tablet and up.** **Approved 2026-10-08; M0 (floor
   readings) and M1 (rules, ADR-0179 Accepted) landed, M2 next** ([ADR-0179](adr/0179-the-layout-is-designed-from-a-laptop-up.md); spec and plan at
   [`docs/specs/minimum-viewport/`](specs/minimum-viewport/)). The product owner, 2026-10-08: phones

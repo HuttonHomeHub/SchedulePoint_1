@@ -75,13 +75,14 @@ describe('toolbarLabelMinWidthClass', () => {
 /**
  * **A shaded control survives forced colours, and a shaded lens still says it is on** (M6 review A1,
  * U2). The mode overrides `color` to `CanvasText` on every control, and `opacity-50` — which survived
- * it — was replaced by quiet ink, so without a `forced-colors:` branch a shut control was
- * indistinguishable from a live one. Verified red by deleting `forced-colors:[color:GrayText]` from the
- * `disabled` branch (the first case fails) and the `selected` compound (the second).
+ * it — was replaced by quiet ink. The `GrayText` for a shut control is now the one global rule for
+ * `aria-disabled` in `globals.css` (ADR-0191 D1; its shape is pinned by
+ * `focus-ring.structural.test.ts`), so the variant must NOT restate it. The `selected` compound still
+ * keeps its underline.
  */
 describe('a shaded control', () => {
-  it('takes GrayText in forced colours', () => {
-    expect(toolbarControlVariants({ disabled: true })).toMatch(/forced-colors:\[color:GrayText\]/);
+  it('leaves GrayText to the global aria-disabled rule', () => {
+    expect(toolbarControlVariants({ disabled: true })).not.toMatch(/GrayText/);
     expect(toolbarControlVariants({ disabled: false })).not.toMatch(/GrayText/);
   });
 

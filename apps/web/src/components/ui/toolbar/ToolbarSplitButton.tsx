@@ -266,8 +266,9 @@ export function ToolbarSplitButton({
           // caret shaded beside a live primary looked identical to a live one. It is the shaded ink
           // every other control wears (the glyph is already `--muted-foreground`, so no `opacity-50`,
           // an ungated alpha), and what separates it from a live caret is what a shaded control
-          // never has: the hover wash, and a pointer that says "go". Forced colours take `GrayText`.
-          caretOff ? 'cursor-default forced-colors:[color:GrayText]' : 'hover:bg-muted',
+          // never has: the hover wash, and a pointer that says "go". Forced colours take `GrayText`
+          // from the global `aria-disabled` rule (ADR-0191 D1), which this button matches.
+          caretOff ? 'cursor-default' : 'hover:bg-muted',
         )}
       >
         <ChevronDown aria-hidden="true" className="size-3.5" />
