@@ -362,7 +362,7 @@ database you had is **kept**, not deleted.
    newer version of SchedulePoint than the one installed (update SchedulePoint first).
 
 5. **If the recycle bin's clear-out is on, and you are restoring to get back something it removed,
-   switch it off first.** Skip this step if you never switched the clear-out on. In Dockge, open the
+   switch it off first.** Skip this step if you never switched the clear-out on. If you came from Part 4 of the clear-out guide, you have already done this: check the line says `false`, then go on. In Dockge, open the
    stack's `.env` (the "Env" box) and set this line, then click **Save** (do not Deploy yet; step 6
    applies it):
 

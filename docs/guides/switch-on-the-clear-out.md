@@ -14,15 +14,15 @@ can bring it back afterwards.** Only a backup copy can.
 
 **Read these four facts before you start**
 
-1. **The 90 days count from the day each item was deleted**, not from the day you switch it on. If
-   your server has been running for a year, everything already older than 90 days is removed
-   **within about a minute of the switch**, in one go. There is no grace period. That is why Part 1
-   has you read the list first.
+1. **The 90 days count from the day each item was deleted**, not from the day you switch it on.
+   Everything already older than 90 days starts to be removed **within about a minute of the
+   switch**. A small list is gone in that minute; a large one clears over several hours, an hour's
+   share at a time. There is no grace period. That is why Part 1 has you read the list first.
 2. **You can look before you leap.** Part 1 prints the exact list of what would go, and changes
    nothing.
 3. **You need a tested backup.** Part 2 is only for a server where the backup guide's Part 1 and
-   Part 2 are done and you wrote down `CHECK PASSED`. If not, do that first:
-   [`back-up-and-restore.md`](./back-up-and-restore.md).
+   Part 2 are done and you wrote down `CHECK PASSED`. If not, do that first, using the backup guide
+   ([`back-up-and-restore.md`](./back-up-and-restore.md)).
 4. **Switching it off again is easy, but it brings nothing back.** Part 3.
 
 **Time needed:** Part 1 (the preview) about 20 to 40 minutes, on any day. Part 2 (switch-on day)
@@ -38,6 +38,8 @@ back) about 15 minutes, for the day you need it. Read Parts 3 and 4 once now.
   (`cd /opt/stacks/YOUR-STACK-NAME`), and a word in angle brackets is a blank for you to fill in,
   including the brackets. If a Docker command says `permission denied`, put `sudo` in front of it.
   Only if your compose file has another name, add `-f <name>` after `docker compose` in every command.
+- **Deploy and Update (Dockge):** **Deploy** applies your saved settings and nothing else. **Update**
+  also downloads and installs new versions. For this guide, only ever click **Deploy**.
 - **Copy:** one backup file that holds the whole database as it was at one moment.
 
 **Keep current:** if a name, command or message in this guide stops matching the product, fix the guide
@@ -48,12 +50,25 @@ the decision is [ADR-0193](../adr/0193-a-permanent-delete-is-previewed-by-the-co
 
 ## Part 1: Look at the list (about 20 to 40 minutes, on any day before switch-on)
 
-Nothing in this part changes anything. The command only reads.
+**Nothing in this part changes anything. The command only reads. Do not add or change any setting in
+Part 1:** the clear-out stays off until Part 2 step 5.
 
-1. Check the update has arrived (2 minutes). In Dockge, open the SchedulePoint stack. The command in
-   step 2 only exists in a recent version of the `api` container. If step 2 says it cannot find the
-   file, the update has not arrived yet: wait, or ask the maintainers.
-2. Open a terminal on the server, in the folder with your compose file, and run the preview (5
+1. Check the update has arrived (2 minutes). In Dockge, open the SchedulePoint stack. The `api` box
+   should be running and green. The command in step 3 only exists in a recent version of `api`. If
+   step 3 says `Cannot find module` or `service "api" is not running`, the update has not arrived or
+   `api` is down: **do not click Update**; ask the maintainers.
+2. Check your compose file passes the setting through (3 minutes). In Dockge, open the stack and click
+   **Edit**. Under `api:` then `environment:`, look for this line:
+
+   ```text
+   RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}
+   ```
+
+   **If it is not there, stop** and ask the maintainers. Without it, the setting never reaches
+   SchedulePoint and switching on would do nothing. Do not edit the file yourself. Close the editor
+   without saving.
+
+3. Open a terminal on the server, in the folder with your compose file, and run the preview (5
    minutes):
 
    ```bash
@@ -76,16 +91,17 @@ Nothing in this part changes anything. The command only reads.
    `Nothing is past its 90 days. Nothing would be removed if it were switched on now.`
 
    **If not:**
-   - `The clear-out is ON on this server`: it is already switched on. Do not carry on with Part 2;
-     tell the maintainers.
+   - `The clear-out is ON on this server`: **it is already on and removing items.** Do not continue
+     with Part 2. Tell the maintainers today, and if you did not expect it, switch it off (Part 3).
+   - `Cannot find module` or `service "api" is not running`: see step 1.
    - `Could not reach the database` or `The preview could not be completed`: nothing was changed.
      Send the line to the maintainers.
    - A message about invalid settings: send it to the maintainers.
 
-3. Read the list (5 to 15 minutes). It has two parts:
-   - **"If it were switched on now, these would be permanently removed":** everything here goes
-     within a minute of switch-on. It is every organisation on the server, with what is inside each
-     item.
+4. Read the list (5 to 15 minutes). It has two parts:
+   - **"If it were switched on now, these would be permanently removed":** everything here starts to
+     go within a minute of switch-on (a large list over several hours). It is every organisation on
+     the server, with what is inside each item.
    - **"Due within the next 7 days":** these go in the week after switch-on, one hourly run at a
      time.
 
@@ -93,20 +109,21 @@ Nothing in this part changes anything. The command only reads.
    counts all of them. If it says the first run takes only part of it, a large list simply clears
    over several hours; that is expected.
 
-4. **For anything you want to keep, restore it.** Sign in, open **Recently deleted** in that
+5. **For anything you want to keep, restore it.** Sign in, open **Recently deleted** in that
    organisation, and press **Restore** on the item. If it is in an organisation you are not a member
-   of, ask that organisation's admin. (2 to 5 minutes per item.) Run the command from step 2 again:
+   of, ask that organisation's admin. (2 to 5 minutes per item.) Run the command from step 3 again:
    a restored item has gone from the list.
-5. Optional: tell your users the date you plan to switch it on, so nobody is surprised. (5 minutes)
-6. **The day before switch-on (2 minutes):** tell the maintainers the date, so that no new version of
+6. Optional: tell your users the date you plan to switch it on, so nobody is surprised. (5 minutes)
+7. **The day before switch-on (2 minutes):** tell the maintainers the date, so that no new version of
    SchedulePoint is released that day. The switch should be the only thing that changes.
 
 ---
 
 ## Part 2: Switch-on day (about 45 to 60 minutes; do it at a quiet time)
 
-**Stop here unless you have `CHECK PASSED` from today** (step 2). This switch permanently destroys
-work, and a copy is the only way back.
+**STOP: do not go past step 2 unless you see `CHECK PASSED`.** This switch permanently destroys work,
+and a copy is the only way back. Nothing in steps 1 to 4 changes anything. **Step 5 is the only step
+that switches the clear-out on**, and Part 3 switches it off again at any time.
 
 1. Open a terminal in the folder with your compose file. Take a fresh copy (2 to 10 minutes):
 
@@ -116,7 +133,8 @@ work, and a copy is the only way back.
 
    **You should see:** a line starting `BACKUP FINISHED` with the copy's name.
 
-   **If not:** stop. Send the output to the maintainers, and see the backup guide, Part 1 step 6.
+   **If not:** stop. Send the output to the maintainers, and see the backup guide's Part 1 step 6
+   ([`back-up-and-restore.md`](./back-up-and-restore.md)).
 
 2. Check the copy (3 to 10 minutes):
 
@@ -124,10 +142,14 @@ work, and a copy is the only way back.
    docker compose run --rm backup check
    ```
 
-   **You should see:** a table, and at the end the line `CHECK PASSED`. **If you do not see
-   `CHECK PASSED`, stop here** and send the output to the maintainers. Write down the copy's name
-   (for example `schedulepoint-2026-10-20T0915Z.dump`): it is the way back if anything is removed that
-   should not have been. Part 4 uses it.
+   **You should see:** a table, and at the end the line `CHECK PASSED`.
+
+   **If you do not see `CHECK PASSED`: STOP.** Do not do steps 3 to 10 today. Send the output to the
+   maintainers. Do **not** fall back to an older copy: it is not today's.
+
+   **If you do see it,** write down the copy's name (for example
+   `schedulepoint-2026-10-20T0915Z.dump`): it is the way back if anything is removed that should not
+   have been. Part 4 uses it.
 
 3. Run the preview again and read it once more (3 to 10 minutes). Someone may have deleted something
    since Part 1. Restore anything you have changed your mind about.
@@ -136,17 +158,13 @@ work, and a copy is the only way back.
    docker compose exec api node dist/cli/clear-out-preview.js
    ```
 
-   Keep this output. You will send it to the maintainers in step 11.
+   Keep this output. You will send it to the maintainers in step 10.
 
-4. Check your compose file passes the setting through (3 minutes). In Dockge, open the stack and click
-   **Edit**. Under `api:` then `environment:`, look for this line:
+4. Check again that the `RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}` line is
+   in your compose file, as in Part 1 step 2. If it is not, stop. (1 minute)
 
-   ```text
-   RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}
-   ```
-
-   **If it is not there, stop** and ask the maintainers. Without it, the setting never reaches
-   SchedulePoint and nothing will happen.
+   **Before you go on:** have you got `CHECK PASSED` from today (step 2), and have you read the list
+   in step 3? If not, stop.
 
 5. Switch it on (3 minutes). In Dockge, open the stack's `.env` (the "Env" box), add this line, click
    **Save**, then click **Deploy**:
@@ -156,23 +174,25 @@ work, and a copy is the only way back.
    ```
 
    **Do not click Update.** Update also installs new versions, and the switch should be the only
-   change today. The only values accepted are `true` and `false`; anything else stops SchedulePoint
-   from starting. SchedulePoint restarts and is unavailable for about a minute.
+   change today. In a terminal, `docker compose up -d` does the same as **Deploy**; do not run
+   `docker compose pull`. The only values accepted are `true` and `false`; anything else stops
+   SchedulePoint from starting. SchedulePoint restarts and is unavailable for about a minute.
 
 6. Read the log (5 minutes). In Dockge, click the `api` box and read its log, or run:
 
    ```bash
-   docker compose logs --tail 100 api
+   docker compose logs --since 10m api | grep -E "ARMED|not armed|expired a deleted|NEVER|failed"
    ```
 
    **You should see, within about two minutes:** a line containing `hierarchy expiry ARMED` (it is
    logged as a warning, on purpose), and then one line containing `expired a deleted subtree` for each
-   item the list showed.
+   item removed in that run. A large list takes hours, so the log may show fewer of these lines than
+   the preview listed; the rest follow in the next hourly runs.
 
    **If not:** a line containing `hierarchy expiry is not armed` means the setting did not reach
-   SchedulePoint. Check step 4 and step 5, or switch it off again (Part 3) and tell the maintainers.
-   A line containing `can NEVER expire` or `hierarchy expiry failed` means one item could not be
-   removed. Nothing else is harmed. Send the line to the maintainers.
+   SchedulePoint. Check Part 1 step 2 and step 5, or switch it off again (Part 3) and tell the
+   maintainers. A line containing `can NEVER expire` or `hierarchy expiry failed` means one item could
+   not be removed. Nothing else is harmed. Send the line to the maintainers.
 
 7. Run the preview a third time (3 minutes):
 
@@ -188,8 +208,8 @@ work, and a copy is the only way back.
 
 8. Check it in the product (5 minutes). Sign in. Open your organisation's **Audit log** and find a
    **Permanently deleted** row, by **System**, for each item that was removed. Then open **Recently
-   deleted**: it now says "Deleted items are kept for 90 days, then permanently removed", and each row
-   shows how many days it has left.
+   deleted**: it now says "Deleted items are kept for 90 days, then permanently removed" (or the
+   number in your `RETENTION_HIERARCHY_DAYS`), and each row shows how many days it has left.
 
 9. Write down the date and the copy's name from step 2.
 
@@ -205,8 +225,10 @@ In Dockge, open the stack's `.env`, change the line to:
 RETENTION_HIERARCHY_ENABLED=false
 ```
 
-Click **Save**, then **Deploy** (not Update). Or delete the line: off is the default. The log then
-shows `hierarchy expiry is not armed`, and nothing is removed from then on.
+Click **Save**, then **Deploy** (not Update). Or delete the line: off is the default. In a terminal,
+`docker compose up -d` does the same as **Deploy**. SchedulePoint restarts and is unavailable for
+about a minute. The log then shows `hierarchy expiry is not armed`, and nothing is removed from then
+on.
 
 **Switching it off brings nothing back.** Items already removed are gone from the live database.
 Part 4 is the only way to get one back. Items still in Recently deleted stay there and are never
@@ -227,8 +249,9 @@ dated before the 90 days. If the clear-out were still on, SchedulePoint would re
 within a minute.
 
 1. **Switch the clear-out off first.** Part 3 above. Wait for the Deploy to finish.
-2. Restore the copy: the backup guide's **Part 3**
-   ([`back-up-and-restore.md`](./back-up-and-restore.md)). Use the copy name you wrote down.
+2. Restore the copy: the backup guide's **Part 3** in
+   [`back-up-and-restore.md`](./back-up-and-restore.md) (its step 5 repeats the switching-off; you
+   have already done it). Use the copy name you wrote down.
 3. Sign in, open **Recently deleted** in the organisation, and **Restore** the item. It is now a
    normal item again.
 4. Decide whether to switch the clear-out on again. If you do, restore everything else you want to
@@ -242,8 +265,8 @@ within a minute.
 
 **It means removed from the live database. It does not mean removed from your backups.**
 
-- Nightly copies are kept 30 days (`BACKUP_KEEP_DAYS`), so a removed item stays in the copies for **at
-  least 30 days after it is removed**.
+- Nightly copies are kept 30 days (`BACKUP_KEEP_DAYS`). Copies made before an item was removed still
+  hold it until each is deleted; the last of them goes about 30 days after the removal.
 - **Sometimes much longer.** Pruning never deletes the newest copy of each kind. The newest "before an
   update" copy can be months old if no update has changed the database since, and still holds
   everything as it was then.
@@ -256,5 +279,5 @@ within a minute.
   is not built; ask the maintainers before you promise anyone otherwise
   (`docs/adr/0085-privacy-operations.md`).
 
-The same fact is the safety net: for at least 30 days after an item is removed, a copy can bring it
-back, at the cost of all work done since that copy (Part 4).
+The same fact is the safety net: for about 30 days after an item is removed, a copy made before it can
+bring it back, at the cost of all work done since that copy (Part 4).

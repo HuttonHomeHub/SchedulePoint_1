@@ -1317,14 +1317,14 @@ Five things to know **before** you set it to `true`:
    off turned it on (ADR-0096 D10).
 
 4. **"Permanently removed" means removed from the live database, not from the backups.** Nightly
-   copies are kept `BACKUP_KEEP_DAYS` (30) days, so a removed item stays in copies for **at least 30
-   days after it is removed**. Pruning never deletes the newest copy of each kind, so the newest
+   copies are kept `BACKUP_KEEP_DAYS` (30) days, so copies made before an item was removed still hold
+   it until each is deleted; the last of them goes about 30 days after the removal. Pruning never deletes the newest copy of each kind, so the newest
    "before an update" copy can be months old and still hold everything as it was then. A restore also
    keeps the replaced database as `<db>_before_restore_<stamp>` until someone drops it by hand. And
    the `hierarchy.expired` audit row keeps the item's **name** for ever (ADR-0085 D1). Erasing a
    client's data completely therefore needs the live removal **and** deleting or waiting out the
-   copies; that is ADR-0085's territory and is not built here. The converse is the safety net: for at
-   least 30 days after removal a copy can bring the item back, at the cost of all work done since
+   copies; that is ADR-0085's territory and is not built here. The converse is the safety net: for about
+   30 days after removal a copy made before it can bring the item back, at the cost of all work done since
    that copy.
 
 5. **Switch it off before restoring a copy to recover something it removed.** The sweep runs at
