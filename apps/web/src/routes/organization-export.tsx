@@ -1,5 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
+import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { KeyValueList, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
@@ -42,7 +43,7 @@ const INCLUDED = [
 
 const NOT_INCLUDED = [
   'Passwords, sign-in sessions and the secret parts of invitation and share links.',
-  'The pen: who is editing right now.',
+  'Who has a plan open for editing right now.',
   'Internet addresses and browser details in the audit log, which the Audit log screen never shows either.',
   'People and events of other organisations.',
   'The server’s own technical records: mail delivery, browser security reports and performance measurements.',
@@ -51,7 +52,7 @@ const NOT_INCLUDED = [
 /**
  * The Export data page (`/orgs/$orgSlug/export`, ADR-0194) — Org Admin only.
  *
- * Same three-branch shape as the audit log, for the same reason: the role comes from the
+ * The audit log's three branches plus a failed-query branch, for the same reason: the role comes from the
  * organisations query, which starts undefined, so asking `canExportOrganization` before it resolves
  * answers "no" — and rendering the refusal on that would state something false for as long as the
  * request takes (the ADR-0060 defect). Loading is its own branch, not a default.
@@ -59,7 +60,7 @@ const NOT_INCLUDED = [
 export function OrganizationExportScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
-  const { isPending } = useOrganizations();
+  const { isPending, isError, data, refetch } = useOrganizations();
   const role = useOrgRole(orgSlug);
   const allowed = canExportOrganization(role);
 
@@ -73,6 +74,22 @@ export function OrganizationExportScreen(): React.ReactElement {
         <div className="mt-6 p-6">
           <Spinner label="Checking your access…" />
         </div>
+      ) : isError && data === undefined ? (
+        // The role is unknown, not "not an admin": the refusal below would tell an admin whose
+        // request merely failed that they may not do the thing they came to do.
+        <NoticeStrip
+          className="mt-6"
+          tone="destructive"
+          emphasis="solid"
+          density="comfortable"
+          messageFit="grow"
+          role="alert"
+          message="We couldn’t check your access to this organisation. It may have been a temporary problem."
+        >
+          <Button variant="outline" onClick={() => void refetch()}>
+            Try again
+          </Button>
+        </NoticeStrip>
       ) : allowed ? (
         <ExportBody orgSlug={orgSlug} />
       ) : (
@@ -102,7 +119,7 @@ function ExportBody({ orgSlug }: { orgSlug: string }): React.ReactElement {
     <div className="mt-6 flex flex-col gap-6">
       <SectionCard
         title="Download"
-        description="The file shows the organisation as it stood when you pressed the button. A large organisation can take a few minutes: keep this page open until it says Downloaded."
+        description="The file shows the organisation as it stood when you pressed the button. A large organisation can take a few minutes: keep this page open until it says Downloaded. Leaving the page cancels the download."
       >
         <ExportAction state={state} onStart={start} onCancel={cancel} />
       </SectionCard>

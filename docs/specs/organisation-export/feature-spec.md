@@ -215,7 +215,7 @@ Three for the owner, each with a default; they are in §6. Everything else is de
 | Not a member / org deleted            | `resolveScope`                    | "This organisation was not found."                                                           | 404                                 |
 | Member without `organization:export`  | permission check                  | "Only an Org Admin can export this organisation's data."                                     | 403                                 |
 | Another export of this org is running | `pg_try_advisory_xact_lock` fails | "An export is already being prepared for this organisation. Try again when it finishes."     | 409                                 |
-| Throttled                             | `@Throttle` (3 / 10 min)          | "Too many exports in a short time. Try again in a few minutes."                              | 429                                 |
+| Throttled                             | `@Throttle` (3 / 10 min)          | "Too many exports in a short time. Try again in about 10 minutes."                           | 429                                 |
 | Failure before the first byte         | exception in setup                | "The export could not be prepared. Try again; if it keeps failing, tell your administrator." | 500 (standard `{ error }` envelope) |
 | Failure after streaming started       | exception / timeout mid-stream    | socket destroyed → "The download stopped before it finished. Nothing was saved. Try again."  | (connection reset)                  |
 | Client aborts                         | `res` `close` before `finish`     | (the user did it) — on the page, **Cancel** returns to idle with "Export cancelled."         | —                                   |

@@ -2,7 +2,7 @@ import type { ApiError } from '@repo/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { API_BASE_URL } from '@/config/env';
-import { parseContentDispositionFilename } from '@/features/interchange/api/use-export-plan';
+import { parseContentDispositionFilename } from '@/lib/content-disposition';
 import { downloadBlob } from '@/lib/download-blob';
 
 /**
@@ -30,9 +30,9 @@ export type OrganizationExportState =
   | { status: 'error'; message: string };
 
 /**
- * How often the byte count may change on screen. The status line is a live region, so every update
- * is a possible announcement; two seconds keeps a screen reader from being flooded by a stream that
- * delivers hundreds of chunks a second.
+ * How often the byte count may change on screen. The count sits beside the status line rather than
+ * in it, so it is never announced; two seconds keeps it readable rather than a blur for a stream
+ * that delivers hundreds of chunks a second.
  */
 export const PROGRESS_INTERVAL_MS = 2000;
 
@@ -58,7 +58,7 @@ export function organizationExportErrorMessage(status: number, reason?: string):
         ? 'The server is busy with other exports right now. Try again in a few minutes.'
         : 'An export is already being prepared for this organisation. Try again when it finishes.';
     case 429:
-      return 'Too many exports in a short time. Try again in a few minutes.';
+      return 'Too many exports in a short time. Try again in about 10 minutes.';
     default:
       return 'The export could not be prepared. Try again; if it keeps failing, tell your administrator.';
   }
@@ -127,7 +127,6 @@ export function useExportOrganization(orgSlug: string): UseExportOrganization {
       const chunks: Uint8Array[] = [];
       let bytes = 0;
       let lastShown = Date.now();
-      setState({ status: 'busy', bytes: 0 });
       try {
         const reader = response.body?.getReader();
         if (reader === undefined) {

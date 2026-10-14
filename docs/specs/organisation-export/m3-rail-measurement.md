@@ -26,8 +26,8 @@ config (real API, real database): sign up an Org Admin, create an organisation, 
 each link; then set `display: none` on the seventh link and read the same again, which gives the six-link
 baseline **on the same page with the same fonts**; then press **Hide Project Explorer** and repeat for the
 icon strip. Fine pointer is a plain context; coarse is `hasTouch: true`, checked with
-`matchMedia('(pointer: coarse)')` before reading. The tree held no clients (its region is a flex fill with
-a 128 px floor, so its contents do not change its height until they exceed it).
+`matchMedia('(pointer: coarse)')` before reading. The tree held no clients and the user had one organisation (the
+region is a flex fill with a 128 px floor, so its contents do not change its height until they exceed it).
 
 ## Results (CSS px, 1024 × 600)
 
@@ -50,9 +50,15 @@ a 128 px floor, so its contents do not change its height until they exceed it).
 | coarse  | **7** | 44        | 329          | 477    | no      | yes              |
 
 The seventh row costs 30 px on the fine rail (28 + the 2 px gap) and 46 px on the coarse rail (44 + 2), and the
-numbers above agree with that to the pixel (225 − 195, 337 − 291). The six-link block reads 195 and 291, the
-figures `navigator-rail.tsx:123-124` and `minimum-viewport/m4-measurement.md` record, so the baseline is
-the one already in the repository's evidence.
+numbers above agree with that to the pixel (225 − 195, 337 − 291). The six-link block reads 195 and 291. The 195 is the `py-1` row height `minimum-viewport/m4-measurement.md`
+records for windows under 704 px tall (it says "195 px (was 219)"); the 219 in `navigator-rail.tsx`'s comment
+about the original six links is the earlier, taller row height. The coarse figure, 291, is the same in both. So the
+baseline here is the one already in the repository's evidence, and the figures are for the `<nav>` alone: the
+rail's header, the tree and the version footer are not in them.
+
+**Conditions of the reading:** the tree was empty and the signed-in user had one organisation, so the tree
+region is exactly its flex-fill height and not its contents'. A populated tree changes none of the heights above
+until its contents exceed the region, at which point the tree scrolls inside it.
 
 ## Decision: the rail link ships
 

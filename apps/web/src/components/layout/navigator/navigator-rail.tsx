@@ -131,10 +131,13 @@ export function NavigatorRail({
     // `Surface` throws on, correctly (ADR-0097). The container owns the scope: the drawer at `lg`+,
     // and the `Sheet` below it.
     // `overflow-y-auto` and the tree's `min-h-32` are the floor's fix (ADR-0179). The header, the
-    // destinations (219 px fine, 291 coarse) and the footer hold their height, so in a 600 px window
-    // they left the tree 0 to 81 px and pushed the footer past the shell's `overflow-hidden`, where
-    // nothing could reach it. The tree keeps four rows and the column scrolls as a whole when the
-    // sum is still too tall; at 948 px and up everything fits and neither rule does anything.
+    // destinations and the footer hold their height, so in a 600 px window the original six links
+    // (the `<nav>` alone: 219 px fine, 291 coarse) left the tree 0 to 81 px and pushed the footer past
+    // the shell's `overflow-hidden`, where nothing could reach it. Today's seven, measured at
+    // 1024 × 600 with an empty tree and the fine rows at `py-1`, are 225 px fine and 337 coarse
+    // (`docs/specs/organisation-export/m3-rail-measurement.md`). The tree keeps four rows and the
+    // column scrolls as a whole when the sum is still too tall; at 948 px and up everything fits and
+    // neither rule does anything.
     <Root
       {...(landmark ? { 'aria-label': 'Project Explorer' } : {})}
       className="border-border flex h-full min-h-0 flex-col overflow-y-auto"
@@ -192,7 +195,7 @@ export function NavigatorRail({
         <HierarchyTree orgSlug={orgSlug} expansion={expansion} onNavigate={onNavigate} />
       </div>
       {/* **The destinations, at every width** (workspace redesign M3-T2). They are the
-          organisation's six fixed places (ADR-0097 Landing D1) and that decision's argument was
+          organisation's fixed places (ADR-0097 Landing D1) and that decision's argument was
           always that they belong to the persistent navigator: "the tree above says where you are in
           the work, and these say where you are in everything around it. One navigator instead of
           two."

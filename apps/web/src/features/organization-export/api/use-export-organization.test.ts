@@ -70,7 +70,9 @@ describe('organizationExportErrorMessage', () => {
   it('maps the other refusals to the spec copy', () => {
     expect(organizationExportErrorMessage(403)).toMatch(/Only an Org Admin/);
     expect(organizationExportErrorMessage(404)).toBe('This organisation was not found.');
-    expect(organizationExportErrorMessage(429)).toMatch(/Too many exports/);
+    expect(organizationExportErrorMessage(429)).toBe(
+      'Too many exports in a short time. Try again in about 10 minutes.',
+    );
     expect(organizationExportErrorMessage(500)).toMatch(/could not be prepared/);
     expect(organizationExportErrorMessage(503)).toMatch(/could not be prepared/);
     expect(organizationExportErrorMessage(0)).toMatch(/reach the server/);

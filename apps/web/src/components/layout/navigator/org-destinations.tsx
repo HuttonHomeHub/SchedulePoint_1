@@ -22,7 +22,8 @@ import { cn } from '@/lib/utils';
 /**
  * The organisation's **destinations** — the rail's bottom zone (ADR-0097 Landing D1).
  *
- * These six links lived in the app header until 2026-08-19. They belong here because they are
+ * Six of these links lived in the app header until 2026-08-19 (Export data, the seventh, arrived
+ * with ADR-0194). They belong here because they are
  * *places in the organisation*, and the rail is where "where am I in this organisation" is
  * answered — the tree above says where you are in the work, and these say where you are in
  * everything around it. One navigator instead of two.
@@ -36,7 +37,7 @@ import { cn } from '@/lib/utils';
  * these are destinations a planner reads down a list, not a toolbar of glyphs. Every icon is
  * `aria-hidden` and no link depends on one to be identifiable. The collapsed rail has no room for
  * text and therefore carries the label on `aria-label` instead — which is why the destinations are
- * **one array rendered two ways** rather than two lists. Two lists is how a seventh destination
+ * **one array rendered two ways** rather than two lists. Two lists is how a new destination
  * arrives in one of them and not the other, and the reader who would notice is the one who
  * collapsed the rail.
  *
@@ -53,7 +54,7 @@ const DESTINATION_CLASS =
 
 /**
  * `pointer-coarse:min-h-(--control-h)` on both forms (ADR-0118 M3). Measured at 1646 with a coarse
- * pointer, these six rows were **259 x 32** — the largest single group of controls under the house
+ * pointer, the six rows then were **259 x 32** — the largest single group of controls under the house
  * rule anywhere in the product, and the one a planner reaches for first, since they are how you
  * leave a plan. The fine form is unchanged at 32: the row rhythm is a density choice, and the axis
  * is the input device rather than the screen.
@@ -144,16 +145,16 @@ export function OrgDestinations({ orgSlug }: { orgSlug: string }): React.ReactEl
 }
 
 /**
- * The same six destinations as an **icon strip**, for the collapsed rail (ADR-0097 Landing D1).
+ * The same destinations as an **icon strip**, for the collapsed rail (ADR-0097 Landing D1).
  *
  * Owed by the landing rather than optional: before D1 the organisation nav lived in the header and
  * survived a rail collapse, so collapsing the rail — which is exactly what a planner does to gain
- * canvas width, the thing this whole epic chases — would otherwise have put all six destinations
+ * canvas width, the thing this whole epic chases — would otherwise have put every destination
  * behind a toggle they were never behind before. `migration.md` records that D1 does not ship
  * without it.
  *
  * The text becomes `aria-label` and `title`: an icon with no accessible name is not a link anyone
- * can use, and a sighted planner who has not learnt six glyphs needs the tooltip. The accessible
+ * can use, and a sighted planner who has not learnt seven glyphs needs the tooltip. The accessible
  * name is the same string the expanded rail shows, so WCAG 2.5.3 Label in Name holds across the
  * collapse and a speech-input user says the same word either way.
  */

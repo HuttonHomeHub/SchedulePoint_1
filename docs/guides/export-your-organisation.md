@@ -26,9 +26,9 @@ The file is made fresh each time and is not kept on the server.
   one, so you can tell the copy is complete.
 - **Audit log:** SchedulePoint's list of what was removed or changed. Each export is recorded there.
 
-**Keep current:** if a name or message in this guide stops matching the product, fix the guide in the same
-change. The reference version is [`docs/ORGANISATION_EXPORT_FORMAT.md`](../ORGANISATION_EXPORT_FORMAT.md)
-(the file's exact layout) and [`docs/DEPLOYMENT.md`](../DEPLOYMENT.md), "The organisation export".
+<!-- Maintainers: if a name or message in this guide stops matching the product, fix the guide in the same
+change. The reference version is docs/ORGANISATION_EXPORT_FORMAT.md (the file's exact layout) and
+docs/DEPLOYMENT.md, "The organisation export". -->
 
 ---
 
@@ -53,15 +53,15 @@ two lists below it: **What is included** and **What is not included**.
 
 ### Step 2. Press Download export
 
-Click **Download export**, then wait. Do not close the page or go to another page until it is finished.
+Click **Download export**, then wait. Do not close the page or go to another page until it is finished: leaving the page cancels the download.
 
 **You should see:**
 
 - The button changes to **Cancel**.
-- A line under it says `Preparing your export… 3.2 MB received`, and the number goes up every couple of
-  seconds.
-- When it is finished, the line says `Downloaded schedulepoint-export-… .zip` and your browser saves the
-  file in your Downloads folder.
+- A line under it says `Preparing your export…`, and beside it a number such as `3.2 MB received` that goes
+  up every couple of seconds.
+- When it is finished, the line says `Downloaded schedulepoint-export-… .zip (12.3 MB). Your browser has
+saved it.` Your browser puts the file where it keeps downloads, usually the Downloads folder.
 
 The file is named like this: `schedulepoint-export-acme-20261014T0930Z.zip`. The last part is the date and
 time (in UTC) when the export was made, so each export has its own name.
@@ -75,7 +75,7 @@ do while it is downloading is not in it, and it does not stop them working.
 
 ### Step 3. Check that you have it
 
-Open your Downloads folder and look for the file. A small organisation is a few megabytes. A large one can
+Open your browser's downloads (usually your Downloads folder) and look for the file. A small organisation is a few megabytes. A large one can
 be tens of megabytes.
 
 **You should see:** a file whose name starts `schedulepoint-export-` and ends `.zip`.
@@ -136,7 +136,7 @@ assignments, baselines, the share links that exist, and the organisation's audit
   credentials belonging to individuals, not your organisation's work.
 - **The internet addresses and browser details** in the audit log. The Audit log screen never shows
   them either.
-- **The pen**: who is editing right now. It lasts for minutes and describes the present, not stored work.
+- **Who has a plan open for editing right now.** It lasts for minutes and describes the present, not stored work.
 - **The server's own technical records** (mail delivery, browser security reports and performance
   measurements). They belong to the server, not to your organisation.
 - **Other organisations' people and events.** You only ever get your own.
@@ -157,24 +157,28 @@ Nothing is saved when an export stops, and nothing is damaged. Read what the pag
 | `This organisation was not found.`                                                           | You are not a member of it, or it was deleted. Check the organisation name at the top of the left panel.             |
 | `An export is already being prepared for this organisation. Try again when it finishes.`     | Someone (possibly you, in another tab) has an export running. Wait a few minutes and try again.                      |
 | `The server is busy with other exports right now. Try again in a few minutes.`               | Other organisations are exporting at the same time. Wait a few minutes and try again.                                |
-| `Too many exports in a short time. Try again in a few minutes.`                              | You can start 3 exports in 10 minutes. Wait 10 minutes.                                                              |
+| `Too many exports in a short time. Try again in about 10 minutes.`                           | You can start 3 exports in 10 minutes. Wait 10 minutes.                                                              |
 | `The download stopped before it finished. Nothing was saved. Try again.`                     | The connection dropped part-way. See "A long export stops part-way" below.                                           |
 | `The export could not be prepared. Try again; if it keeps failing, tell your administrator.` | The server had a problem before it began. Try once more. If it fails again, send the maintainers the time you tried. |
 | `Couldn't reach the server. Check your connection and try again.`                            | Your internet connection, or SchedulePoint is down. Check you can still load another page in SchedulePoint.          |
 
 ### A long export stops part-way
 
-A large organisation can take several minutes to export. Two things can cut it short, and both are on the
-server side, so this part is for whoever runs the server.
+A large organisation can take several minutes to export. If the page says `The download stopped before it
+finished. Nothing was saved. Try again.` and it was not your connection, tell whoever runs your server
+about it: the two likely causes are in the next part.
+
+#### For whoever runs the server
 
 - **A service in front of SchedulePoint gives up waiting.** If you use Cloudflare, its default is to cut a
   connection that has been quiet for about 100 seconds. SchedulePoint's own web container waits up to 11
   minutes, so the cut is Cloudflare's. In practice a small or medium organisation finishes well inside
   100 seconds and is not affected. If a big one keeps stopping near the 100 second mark, tell the
   maintainers which service is in front of your server, and what plan it is on.
-- **The server was restarted during the export.** An automatic update (Watchtower) or a restart in Dockge
-  during the export drops the download. Check Dockge for a recent restart of the stack, wait for it to
-  settle, and try again.
+- **The server was restarted during the export.** An automatic update (Watchtower) or a restart drops
+  the download. To check: in Dockge, open the SchedulePoint stack and look at the status of the `api`
+  container in the list. `Up 3 minutes` with a time later than when the export started means it was
+  recreated, and the export was cut by that. Wait for it to settle and try again.
 
 Every attempt that started is recorded in the Audit log as **Organisation data exported**, with the
 outcome **Succeeded** or **Failed**. A failed row says it stopped before it finished, which is also what

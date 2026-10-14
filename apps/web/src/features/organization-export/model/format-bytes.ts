@@ -1,3 +1,6 @@
+/** At most one decimal, in the reader's own locale ("3,2 MB" in de-DE), so it matches the rest of their screen. */
+const ONE_DECIMAL = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+
 /**
  * A byte count in the units a person reads ("3.2 MB"), for the export's progress line. Decimal
  * (1 MB = 1,000,000 bytes) because that is what a download list and a file manager show, so the
@@ -12,5 +15,5 @@ export function formatBytes(bytes: number): string {
     value /= 1000;
     unit += 1;
   }
-  return `${value.toFixed(1)} ${units[unit]}`;
+  return `${ONE_DECIMAL.format(value)} ${units[unit]}`;
 }
