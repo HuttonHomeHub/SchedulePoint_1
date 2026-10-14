@@ -452,6 +452,7 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                            |
 | 2   | `pnpm test`                                                 | always                                                                                            |
 | 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                            |
+| 3a  | `scripts/e2e-local.sh api backup`                           | you touched `apps/api/backup/`, either compose file's `backup` block, or a migration (ADR-0192)   |
 | 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives              |
 | 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                            |
 | 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))              |

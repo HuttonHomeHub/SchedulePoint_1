@@ -15,6 +15,7 @@
 #   scripts/e2e-local.sh web             # the base Playwright journey (the shipped default)
 #   scripts/e2e-local.sh web:wbs         # one flag-on Playwright suite
 #   scripts/e2e-local.sh api web:wbs     # both
+#   scripts/e2e-local.sh api backup      # the backup round trip (ADR-0192); seeds its own fixture
 #   scripts/e2e-local.sh --db-only       # just bring the database up
 #
 # A `web:<name>` target maps to `pnpm --filter @repo/web test:e2e:<name>`.
@@ -160,6 +161,18 @@ for target in "${targets[@]}"; do
       log "API end-to-end (Supertest)"
       pnpm --filter @repo/api test:e2e
       ;;
+    backup)
+      # **Prove a backup of THIS database restores identically** (ADR-0192, `scripts/backup-restore-check.sh`).
+      # A round trip against an empty database proves nothing, and the API suite sweeps its rows away when
+      # it finishes — so this seeds its own (`test:e2e:backup-fixture`, which deliberately LEAVES its rows
+      # and resets first), exactly as CI does, then checks. That leaves the fixture in `app_test`; every
+      # API spec clears the tables it needs, but run `api` BEFORE `backup` when you want both. The check
+      # uses Docker (`postgres:17-alpine`, the image's own userland) when there is a daemon, otherwise
+      # local client tools at least as new as the server, and refuses when neither exists.
+      log "Backup and restore round trip"
+      pnpm --filter @repo/api test:e2e:backup-fixture
+      scripts/backup-restore-check.sh
+      ;;
     web)
       # **The base journey — the one covering the SHIPPED default configuration**, and until
       # 2026-08-18 the only suite this script could not run: every other target maps to
@@ -210,7 +223,7 @@ for target in "${targets[@]}"; do
       pnpm --filter @repo/web "measure:${name}"
       ;;
     *)
-      echo "Unknown target '${target}'. Use 'api', 'web', 'web:<suite>', 'measure:<name>', or --db-only." >&2
+      echo "Unknown target '${target}'. Use 'api', 'backup', 'web', 'web:<suite>', 'measure:<name>', or --db-only." >&2
       exit 2
       ;;
   esac

@@ -394,6 +394,26 @@ jobs:
       - name: Pairwise differential (seed catalogue)
         run: pnpm --filter @repo/api test:e2e:pairwise
 
+      # ADR-0192 / `docs/specs/database-backup/`: a backup is only a backup once it has been
+      # restored. **The two steps below run LAST, in this order, on purpose.** The API suite and the
+      # pairwise differential both sweep their rows away when they finish, so by now the database holds
+      # no plans at all (measured while building this: plans, activities, dependencies and baselines all
+      # 0) and a round trip against it would prove nothing. The first step seeds a database worth
+      # restoring over real HTTP and, unlike every other spec, deliberately LEAVES it.
+      - name: Seed the backup fixture
+        run: pnpm --filter @repo/api test:e2e:backup-fixture
+
+      # The round trip drives the SHIPPED script (inside `postgres:17-alpine`, the image's userland) and
+      # compares per-table counts and content checksums, sequences, trigger states, extensions, indexes
+      # and constraints; proves the audit log still refuses an UPDATE; runs `prisma migrate deploy` and
+      # the drift check against the restored copy; proves the comparison can fail (one altered row, one
+      # disabled trigger); walks the `pre-migrate` decision table; and does a real `restore`. What it
+      # cannot see: the compose service, the entrypoint call and the owner's host. No compose file or
+      # entrypoint runs the command yet, so none of them is in reach of this step. Its exit status is
+      # the only result. Not a `check:*` gate (ADR-0160): it needs a database.
+      - name: Backup and restore round trip
+        run: scripts/backup-restore-check.sh
+
   e2e-web:
     name: End-to-end tests (web shard ${{ matrix.shard }})
     runs-on: ubuntu-latest

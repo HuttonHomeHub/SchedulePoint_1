@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.mts",
     "test:e2e:pairwise": "vitest run --config vitest.pairwise.config.mts",
+    "test:e2e:backup-fixture": "vitest run --config vitest.backup-fixture.config.mts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
