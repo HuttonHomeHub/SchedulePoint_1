@@ -1236,8 +1236,12 @@ jobs:
           check 'the backup service to depend on the database only' '(.services.backup.depends_on | keys) == ["db"]'
           check 'the backup service to carry the Watchtower enable label' \
             '.services.backup.labels["com.centurylinklabs.watchtower.enable"] == "true"'
-          # The CI-only probe override must never reach the file an operator runs.
-          ! grep -qE 'ci-fixtures|99999999999999' <<<"$cfg" || { echo 'release compose file: expected no CI fixture reference'; exit 1; }
+          # ADR-0193: the clear-out ships OFF, and the setting must reach the api for the owner's switch to
+          # do anything (a compose file that drops the line makes the switch inert, silently).
+          check 'the api service to receive RETENTION_HIERARCHY_ENABLED, defaulting to false' \
+            '.services.api.environment.RETENTION_HIERARCHY_ENABLED == "false"'
+          # The CI-only probe and armed overrides must never reach the file an operator runs.
+          ! grep -qE 'ci-fixtures|99999999999999|clear-out-armed' <<<"$cfg" || { echo 'release compose file: expected no CI fixture reference'; exit 1; }
 
       # Build the api + web images from source and boot the full stack
       # (Postgres + API + web), then wait for every container to report healthy.
@@ -1385,6 +1389,175 @@ jobs:
           ! grep -q 'have been applied' <<<"$log" || fail 'the API applied migrations to the restored database'
           [ "$(sql 'SELECT count(*) FROM _prisma_migrations')" = "$migrations" ] \
             || fail 'the restored database does not hold one row per migration'
+
+      # ADR-0193 / docs/specs/recycle-bin-clear-out (M2): the shipped image, with the 90-day clear-out
+      # switched ON, removes a back-dated deleted subtree at boot, and a restored copy behaves the way
+      # the owner's guide will say. The switch is turned on only here, by scripts/ci-fixtures/
+      # clear-out-armed.compose.yml, which no shipped file references; the step ends disarmed.
+      #
+      # The fixture is made through the public API (so the cascade stamps a real delete batch) and only
+      # then back-dated with SQL, which is the one thing the API cannot do: no migration, no code path
+      # that ages data. It runs BEFORE "Copy before an update" because that step leaves a migration
+      # applied that this image does not have, which `restore` would refuse as "newer".
+      #
+      # The pass condition is the audit row, polled, never a log line: a log is asserted after, once the
+      # row proves the sweep ran. Logs of a recreated container start again, so each phase asserts on
+      # the lines since its own mark. The removal is the case that can fail (ADR-0110): drop the
+      # RETENTION_HIERARCHY_ENABLED line from the api's environment and the armed boot logs `disabled`
+      # and removes nothing, which the polling loop below reports by name.
+      - name: The recycle bin's clear-out removes a back-dated subtree, and a restored copy is removed again
+        run: |
+          set -euo pipefail
+          c='docker compose -f docker-compose.yml -f docker-compose.ci.yml'
+          armed_compose=scripts/ci-fixtures/clear-out-armed.compose.yml
+          origin=http://localhost:8080
+          jar="$RUNNER_TEMP/clear-out.cookies"
+          fail() { echo "FAIL: $*"; exit 1; }
+          sql() { $c exec -T db psql -U app -d app -Atc "$1"; }
+          mark() { sleep 1; date -u +%Y-%m-%dT%H:%M:%SZ; sleep 1; }
+          # Pino's JSON lines since a mark, without compose's `api-1  | ` prefix; anything else is dropped.
+          events() { $c logs --no-color --since "$1" api | sed 's/^[^{]*//' | jq -cR 'fromjson? | select(type == "object")'; }
+          wait_healthy() { # <service> <seconds>
+            local id
+            for _ in $(seq 1 $(($2 / 5))); do
+              id=$($c ps -q "$1")
+              if [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ]; then return 0; fi
+              sleep 5
+            done
+            return 1
+          }
+          api() { # <method> <path> [json body]
+            if [ -n "${3:-}" ]; then
+              curl -fsS -X "$1" -b "$jar" -c "$jar" -H "Origin: $origin" -H 'Content-Type: application/json' -d "$3" "http://localhost:3000$2"
+            else
+              curl -fsS -X "$1" -b "$jar" -c "$jar" -H "Origin: $origin" "http://localhost:3000$2"
+            fi
+          }
+          # The cascade's own batch id, read from the client row, ages the whole subtree and nothing else.
+          backdate() { # <client id>
+            sql "UPDATE activities SET deleted_at = now() - interval '100 days'
+                   WHERE deleted_at IS NOT NULL AND delete_batch_id = (SELECT delete_batch_id FROM clients WHERE id = '$1');
+                 UPDATE plans SET deleted_at = now() - interval '100 days'
+                   WHERE deleted_at IS NOT NULL AND delete_batch_id = (SELECT delete_batch_id FROM clients WHERE id = '$1');
+                 UPDATE projects SET deleted_at = now() - interval '100 days'
+                   WHERE deleted_at IS NOT NULL AND delete_batch_id = (SELECT delete_batch_id FROM clients WHERE id = '$1');
+                 UPDATE clients SET deleted_at = now() - interval '100 days'
+                   WHERE id = '$1' AND deleted_at IS NOT NULL" > /dev/null
+          }
+          expired_rows() { sql "SELECT count(*) FROM audit_events WHERE action = 'hierarchy.expired' AND subject_id = '$1'"; }
+          rows_left() {
+            sql "SELECT (SELECT count(*) FROM clients WHERE id = '$1')
+                      + (SELECT count(*) FROM projects WHERE client_id = '$1')
+                      + (SELECT count(*) FROM plans WHERE project_id IN (SELECT id FROM projects WHERE client_id = '$1'))
+                      + (SELECT count(*) FROM activities WHERE plan_id IN
+                          (SELECT id FROM plans WHERE project_id IN (SELECT id FROM projects WHERE client_id = '$1')))"
+          }
+          # Arm the stack and wait for the sweep's audit row; the sweep starts at boot, so three minutes is generous.
+          arm_and_wait() { # <client id>
+            $c -f "$armed_compose" up -d api
+            for _ in $(seq 1 60); do
+              if [ "$(expired_rows "$1")" = 1 ]; then return 0; fi
+              sleep 3
+            done
+            return 1
+          }
+
+          # 1. The command is in the image and owned like the rest of dist (nothing else copies it there).
+          $c exec -T api test -f dist/cli/clear-out-preview.js || fail 'dist/cli/clear-out-preview.js is not in the built image'
+          [ "$($c exec -T api stat -c %U dist/cli/clear-out-preview.js)" = "$($c exec -T api stat -c %U dist/main.js)" ] \
+            || fail 'the preview command is not owned like the rest of dist'
+
+          # 2. The stack, as shipped, is NOT armed.
+          log=$($c logs --no-color api)
+          grep -q '"event":"hierarchy_expiry.disabled"' <<<"$log" || fail 'the running API did not log hierarchy_expiry.disabled'
+          ! grep -q '"event":"hierarchy_expiry.armed"' <<<"$log" || fail 'the API is armed without the switch'
+
+          # 3. A client with a project, a plan and an activity, deleted through the API.
+          curl -fsS -c "$jar" -H "Origin: $origin" -H 'Content-Type: application/json' \
+            -d '{"name":"clear-out-ci","email":"clear-out-ci@example.com","password":"clear-out-ci-pass-1"}' \
+            http://localhost:3000/api/auth/sign-up/email > /dev/null
+          org=$(api POST /api/v1/organizations '{"name":"Clear-out CI"}')
+          org_id=$(jq -er .data.id <<<"$org"); slug=$(jq -er .data.slug <<<"$org")
+          base="/api/v1/organizations/$slug"
+          client_id=$(api POST "$base/clients" '{"name":"Clear-out CI client"}' | jq -er .data.id)
+          project_id=$(api POST "$base/clients/$client_id/projects" '{"name":"Clear-out CI project"}' | jq -er .data.id)
+          plan_id=$(api POST "$base/projects/$project_id/plans" '{"name":"Clear-out CI plan","plannedStart":"2026-01-05"}' | jq -er .data.id)
+          api POST "$base/plans/$plan_id/activities" '{"name":"Clear-out CI activity"}' > /dev/null
+          api DELETE "$base/clients/$client_id" > /dev/null
+          [ "$(sql "SELECT count(*) FROM clients WHERE id = '$client_id' AND deleted_at IS NOT NULL")" = 1 ] \
+            || fail 'the client was not soft-deleted'
+          backdate "$client_id"
+
+          # 4. Switch OFF: the preview lists it, says it is OFF and changes nothing.
+          out=$($c exec -T api node dist/cli/clear-out-preview.js); echo "$out"
+          grep -q 'The clear-out is OFF on this server' <<<"$out" || fail 'the preview did not say the clear-out is OFF'
+          grep -q 'Clear-out CI client' <<<"$out" || fail 'the preview did not list the back-dated client'
+          grep -q 'with 1 project, 1 plan, 1 activity' <<<"$out" || fail 'the preview did not count the subtree'
+          grep -q 'Nothing has been changed' <<<"$out" || fail 'the preview did not end with its promise'
+          [ "$(rows_left "$client_id")" = 4 ] || fail 'the preview (or the disarmed API) removed rows'
+
+          # 5. A copy taken now holds the subtree in the bin; step 7 restores it.
+          out=$($c run --rm -T backup now); echo "$out"
+          grep -q 'BACKUP FINISHED' <<<"$out" || fail 'backup now did not finish'
+          copy=$(sudo ls -1t "$BACKUP_DIR" | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p || true)
+          [ -n "$copy" ] || fail 'no copy in the backups folder'
+          out=$($c run --rm -T backup check "$copy"); echo "$out"
+          grep -qx 'CHECK PASSED' <<<"$out" || fail 'the copy does not pass check'
+
+          # 6. Switch ON: the boot removes the whole subtree, writes the audit row and logs both events.
+          since=$(mark)
+          arm_and_wait "$client_id" || fail 'the armed API never removed the back-dated client (no hierarchy.expired row)'
+          wait_healthy api 180 || fail 'the armed API did not become healthy'
+          log=$(events "$since")
+          grep -q '"event":"hierarchy_expiry.armed"' <<<"$log" || fail 'no hierarchy_expiry.armed line'
+          ! grep -q '"event":"hierarchy_expiry.disabled"' <<<"$log" || fail 'the armed boot also logged disabled'
+          jq -e --arg id "$client_id" 'select(.event == "hierarchy_expiry.batch" and .rootId == $id and .rootKind == "client")' <<<"$log" > /dev/null \
+            || fail 'no hierarchy_expiry.batch line for the client'
+          ! grep -qE '"event":"hierarchy_expiry\.(failed|permanent_failure)"' <<<"$log" || fail 'the sweep logged a failure'
+          [ "$(rows_left "$client_id")" = 0 ] || fail 'rows of the expired subtree are still in the database'
+          [ "$(sql "SELECT actor_type::text || ':' || subject_type || ':' || organization_id::text FROM audit_events WHERE action = 'hierarchy.expired' AND subject_id = '$client_id'")" = "SYSTEM:client:$org_id" ] \
+            || fail 'the hierarchy.expired row is not a SYSTEM row for the client in its organisation'
+          out=$($c exec -T api node dist/cli/clear-out-preview.js); echo "$out"
+          grep -q 'The clear-out is ON on this server' <<<"$out" || fail 'the armed preview did not say the clear-out is ON'
+          grep -q 'Nothing is waiting to be removed' <<<"$out" || fail 'the preview still lists work after the removal'
+          ! grep -q 'Clear-out CI client' <<<"$out" || fail 'the preview still names the removed client'
+
+          # 7. A restored copy, switch OFF: the work is back in the bin, and a planner can restore it.
+          $c stop api web backup
+          out=$($c run --rm -T backup restore --yes "$copy"); echo "$out"
+          grep -q 'RESTORE FINISHED' <<<"$out" || fail 'restore did not finish'
+          since=$(mark)
+          $c up -d --wait --wait-timeout 240 api web backup
+          [ "$(rows_left "$client_id")" = 4 ] || fail 'the restored database does not hold the subtree'
+          [ "$(expired_rows "$client_id")" = 0 ] || fail 'the restored database already carries the expiry row'
+          disabled=''
+          for _ in $(seq 1 12); do
+            disabled=$(events "$since" | jq -c 'select(.event == "hierarchy_expiry.disabled")')
+            if [ -n "$disabled" ]; then break; fi
+            sleep 5
+          done
+          [ -n "$disabled" ] || fail 'the disarmed restored API never logged hierarchy_expiry.disabled'
+          [ "$(jq -r .pastPeriod.clients <<<"$disabled")" = 1 ] || fail 'the disabled line did not count the client past its period'
+          [ "$(sql "SELECT count(*) FROM clients WHERE id = '$client_id'")" = 1 ] || fail 'a disarmed boot removed the client'
+          api POST "$base/clients/$client_id/restore" > /dev/null
+          [ "$(sql "SELECT count(*) FROM clients WHERE id = '$client_id' AND deleted_at IS NULL")" = 1 ] \
+            || fail 'the client was not restorable from the bin of the restored database'
+
+          # 8. Switch ON again: the recovered client, deleted again and past its period, goes at boot.
+          api DELETE "$base/clients/$client_id" > /dev/null
+          backdate "$client_id"
+          since=$(mark)
+          arm_and_wait "$client_id" || fail 'the armed API did not remove the recovered client again'
+          wait_healthy api 180 || fail 'the re-armed API did not become healthy'
+          events "$since" | jq -e --arg id "$client_id" 'select(.event == "hierarchy_expiry.batch" and .rootId == $id)' > /dev/null \
+            || fail 'no hierarchy_expiry.batch line after the second arming'
+          [ "$(rows_left "$client_id")" = 0 ] || fail 'rows of the recovered subtree are still in the database'
+
+          # 9. Leave the stack as it was shipped: disarmed.
+          $c up -d api
+          wait_healthy api 180 || fail 'the API did not come back disarmed'
+          out=$($c exec -T api node dist/cli/clear-out-preview.js)
+          grep -q 'The clear-out is OFF on this server' <<<"$out" || fail 'the stack was left armed'
 
       # ADR-0192 D9 / spec §4.12: the copy before an update that changes the database, in the real
       # entrypoint against a real database. It runs AFTER the restore step: once the probe below is
