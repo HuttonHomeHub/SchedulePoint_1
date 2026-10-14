@@ -18,3 +18,7 @@
 **/*.md
 !README.md
 docs/
+
+# The backups folder (ADR-0192): database copies that hold password hashes. Never an image layer, and
+# on the CI runner it belongs to uid 1000, which the build client could not read anyway.
+/backups

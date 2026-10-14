@@ -1,0 +1,11 @@
+# CI ONLY — layer on docker-compose.yml + docker-compose.ci.yml in the `image` job's "Copy before an
+# update" step (ADR-0192, spec §4.7 step 2). It makes ONE extra migration visible to the built api
+# image, without a migration ever being committed under apps/api/prisma/migrations/: the folder beside
+# this file holds `SELECT 1;`, which changes nothing, but is a migration the database has not had, so
+# the api's start-up sees a change pending. The name sorts after every real migration.
+#
+# Relative paths in a layered file resolve against the FIRST -f file's directory (the repository root).
+services:
+  api:
+    volumes:
+      - ./scripts/ci-fixtures/backup-pending-probe:/app/prisma/migrations/99999999999999_ci_pending_probe:ro

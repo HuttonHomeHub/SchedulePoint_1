@@ -44,7 +44,8 @@
 # (the folder, default /backups), MIGRATIONS_DIR (default /app/prisma/migrations),
 # BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800),
 # BACKUP_SCHEDULE_ITERATIONS (stop `schedule` after this many polls; 0, the default, never stops),
-# BACKUP_POLL_SECONDS (the poll interval, default 300), BACKUP_NOW (an epoch second standing in for
+# BACKUP_POLL_SECONDS (the poll interval, default 300), BACKUP_FIRST_RETRY_SECONDS (the wait after a
+# failed attempt while no nightly copy exists yet, default 60), BACKUP_NOW (an epoch second standing in for
 # "now" when deciding whether a nightly copy is due and naming copies).
 
 set -eu
@@ -66,6 +67,7 @@ POLL_SECONDS="${BACKUP_POLL_SECONDS:-300}"
 # After a failed nightly attempt, wait this long before the next: a failure at 02:05 is usually a
 # full disk or a stopped database, and retrying every five minutes all day only fills the log.
 RETRY_BACKOFF_SECONDS=3600
+FIRST_COPY_RETRY_SECONDS="${BACKUP_FIRST_RETRY_SECONDS:-60}"
 NIGHTLY_HOUR=2
 # 24 hours plus two of slack.
 HEALTHY_MINUTES=1560
@@ -101,15 +103,11 @@ json_str() {
 now_epoch() { printf '%s' "${BACKUP_NOW:-$(date +%s)}"; }
 now_fmt() { date -u -d "@$(now_epoch)" "+$1"; }
 
-# emit <event> [key value]... — one JSON object per line, the shape the API's own logs use.
-emit() {
-  ev=$1
-  shift
-  lvl=info
-  case $ev in
-    *failed) lvl=error ;;
-    *permissions) lvl=warn ;;
-  esac
+# emit_at <level> <event> [key value]... — one JSON object per line, the shape the API's own logs use.
+emit_at() {
+  lvl=$1
+  ev=$2
+  shift 2
   line="{\"level\":\"$lvl\",\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"$ev\""
   while [ $# -ge 2 ]; do
     case $2 in
@@ -119,6 +117,15 @@ emit() {
     shift 2
   done
   printf '%s}\n' "$line"
+}
+
+# emit <event> [key value]... — the level follows the event's name.
+emit() {
+  case $1 in
+    *failed) emit_at error "$@" ;;
+    *permissions) emit_at warn "$@" ;;
+    *) emit_at info "$@" ;;
+  esac
 }
 
 human_size() {
@@ -323,7 +330,7 @@ take_copy() {
   started=$(date +%s)
 
   if ! { [ -d "$ROOT" ] && touch "$ROOT/.write-test" 2>/dev/null && rm -f "$ROOT/.write-test"; }; then
-    COPY_ERR="cannot write to $ROOT — see the backup guide, step 1"
+    COPY_ERR="cannot write to $ROOT — see the backup guide, \"Turn backups on\", step 2"
     return 1
   fi
 
@@ -476,7 +483,15 @@ cmd_schedule() {
   retry_after=0
   while :; do
     if [ "$(date +%s)" -ge "$retry_after" ] && nightly_due; then
-      if ! run_copy; then retry_after=$(($(date +%s) + RETRY_BACKOFF_SECONDS)); fi
+      if ! run_copy; then
+        # Until a first good copy exists, retry soon: the service starts beside the database and the
+        # api, and a first attempt can lose a race with the database's start or its first migration.
+        if [ -z "$(newest_of "$NIGHTLY_RE")" ]; then
+          retry_after=$(($(date +%s) + FIRST_COPY_RETRY_SECONDS))
+        else
+          retry_after=$(($(date +%s) + RETRY_BACKOFF_SECONDS))
+        fi
+      fi
     fi
     polls=$((polls + 1))
     if [ "${BACKUP_SCHEDULE_ITERATIONS:-0}" -gt 0 ] && [ "$polls" -ge "$BACKUP_SCHEDULE_ITERATIONS" ]; then
@@ -708,10 +723,6 @@ hold() {
 }
 
 cmd_pre_migrate() {
-  if [ ! -d "$ROOT" ]; then
-    emit backup.pre_migrate_skipped reason not_enabled
-    return 0
-  fi
   warn_folder
   out=$(sql "$DBNAME" "SELECT to_regclass('public._prisma_migrations') IS NOT NULL" 2>&1) \
     || hold "the database could not be asked what is pending: $(first_line "$out")"
@@ -775,6 +786,19 @@ esac
 
 case $cmd in
   list | health) ;;
+  pre-migrate)
+    # Decided before anything else is validated: a server that has not mounted the folder must update
+    # exactly as it always has, even if something below (a database name this script refuses, a
+    # missing tool) would otherwise stop the API from starting. warn, not info: no setting switches
+    # the copy off, so a missing folder is either a server that has not opted in or a mount that was
+    # lost, and only the log can tell them apart.
+    if [ ! -d "$ROOT" ]; then
+      emit_at warn backup.pre_migrate_skipped reason not_enabled
+      exit 0
+    fi
+    need_tools
+    init_conn
+    ;;
   *)
     need_tools
     init_conn

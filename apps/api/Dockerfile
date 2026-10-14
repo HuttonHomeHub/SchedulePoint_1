@@ -69,8 +69,10 @@ COPY --chown=node:node --from=build /out/docker-entrypoint.sh ./docker-entrypoin
 COPY --chmod=0555 apps/api/backup/ ./backup/
 EXPOSE 3000
 # Health is served under the global /api prefix + URI versioning (/api/v1/health).
-# Longer start period to cover the migrate-then-boot entrypoint on first run.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+# Long start period to cover the entrypoint: it may take a copy of the database before migrating
+# (ADR-0192 D9), and `web` waits for this container to be healthy. A start period only ignores
+# failures; the first successful check still counts at once, so a normal boot is not slower.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # Apply pending migrations, then start (see docker-entrypoint.sh).
 CMD ["sh", "docker-entrypoint.sh"]

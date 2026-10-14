@@ -1202,9 +1202,42 @@ jobs:
   image:
     name: Build & smoke-boot images
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    # ADR-0192: the backups folder lives OUTSIDE the checkout. Inside it, the build context would
+    # include a folder only uid 1000 may open, and BuildKit descends into excluded folders whenever
+    # .dockerignore has a `!` exception (it does), so the build fails with "permission denied".
+    # Both compose files mount `${BACKUP_DIR:-./backups}`, so this one variable moves it everywhere.
+    env:
+      BACKUP_DIR: /tmp/schedulepoint-backups
     steps:
       - uses: actions/checkout@v7
+
+      # ADR-0192: the api's backups mount (docker-compose.ci.yml) and the `backup` service both write
+      # here as uid 1000 (`node`). A folder Docker creates for a missing bind mount is owned by root,
+      # which neither can write to — the exact mistake an operator can make, and the one the guide's
+      # first step prevents — so the job creates it the way the guide says to.
+      - name: Create the backups folder, owned by the container's user
+        run: sudo install -d -o 1000 -g 1000 -m 700 "$BACKUP_DIR"
+
+      # ADR-0192 D10: the release compose file is never booted by this job (it pulls published images),
+      # so its shape is asserted from `config`, which resolves it without pulling anything. A
+      # published database port, or a backups folder missing from either service, would otherwise reach
+      # an operator's server without any test having looked at the file.
+      - name: The release compose file closes the database port and mounts the backups folder
+        run: |
+          set -euo pipefail
+          cfg=$(docker compose -f docker-compose.release.yml config --format json)
+          check() { jq -e "$2" <<<"$cfg" >/dev/null || { echo "release compose file: expected $1"; exit 1; }; }
+          check 'the db service to publish no port' '.services.db | has("ports") | not'
+          check 'the api service to mount /backups exactly once' '[.services.api.volumes[]? | select(.target == "/backups")] | length == 1'
+          check 'the backup service to mount /backups exactly once' '[.services.backup.volumes[]? | select(.target == "/backups")] | length == 1'
+          check 'the backup service to use the api image string, so Watchtower moves them together' \
+            '.services.backup.image == .services.api.image'
+          check 'the backup service to depend on the database only' '(.services.backup.depends_on | keys) == ["db"]'
+          check 'the backup service to carry the Watchtower enable label' \
+            '.services.backup.labels["com.centurylinklabs.watchtower.enable"] == "true"'
+          # The CI-only probe override must never reach the file an operator runs.
+          ! grep -qE 'ci-fixtures|99999999999999' <<<"$cfg" || { echo 'release compose file: expected no CI fixture reference'; exit 1; }
 
       # Build the api + web images from source and boot the full stack
       # (Postgres + API + web), then wait for every container to report healthy.
@@ -1218,6 +1251,13 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.ci.yml
           up -d --build --wait --wait-timeout 240
 
+      # Kept now because "Back up, restore and boot" recreates the api container, and a recreated
+      # container's logs start again: the first boot's `fresh` line would be gone by "Copy before an update".
+      - name: Keep the first boot's API log
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color api
+          > "$RUNNER_TEMP/first-boot-api.log"
+
       - name: Smoke-test the API health endpoint
         run: curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health
 
@@ -1227,10 +1267,11 @@ jobs:
       # ADR-0192: the backup command ships in THIS image's Alpine userland, which is not the one the
       # `e2e-api` round trip runs in (that uses `postgres:17-alpine`). This proves the shipped tools
       # exist, are PostgreSQL 17, that the script parses and runs under the image's busybox `sh`, that
-      # it is root-owned and read-only to the `node` user, and that the image does NOT create
-      # `/backups` (its absence is how `pre-migrate` knows backups are not switched on). The last line
-      # holds only while this stack mounts no backups folder; the milestone that adds the mount to
-      # `docker-compose.ci.yml` must move it to the image rather than the container.
+      # it is root-owned and read-only to the `node` user, and that the IMAGE does not create `/backups`
+      # (its absence is how `pre-migrate` knows backups are not switched on, so only a mount may create
+      # it). The last check runs the image rather than the running container, which has the folder
+      # mounted since the CI override mounts it; the container's folder must instead be the job's, owned
+      # by uid 1000 and writable, which is what the mount is for.
       - name: The backup command is in the built API image
         run: |
           set -euo pipefail
@@ -1238,7 +1279,11 @@ jobs:
           $compose pg_dump --version | grep -q ' 17\.' || { echo 'pg_dump is not PostgreSQL 17'; exit 1; }
           $compose sh /app/backup/schedulepoint-backup.sh help 2>&1 | grep -q 'pre-migrate'
           test "$($compose stat -c '%U %a' /app/backup/schedulepoint-backup.sh)" = 'root 555'
-          $compose test ! -e /backups
+          image=$(docker inspect -f '{{.Image}}' "$(docker compose -f docker-compose.yml -f docker-compose.ci.yml ps -q api)")
+          docker run --rm --entrypoint sh "$image" -c 'test ! -e /backups' \
+            || { echo 'the image itself creates /backups: pre-migrate could not tell "not enabled" from "enabled"'; exit 1; }
+          test "$($compose stat -c '%u' /backups)" = 1000
+          $compose sh -c 'touch /backups/.write-test && rm /backups/.write-test'
 
       # The nginx config is an envsubst TEMPLATE (ADR-0074 §4), so these assertions are about the
       # RENDERED config rather than the file in git — and the failure they exist to catch is the
@@ -1295,9 +1340,148 @@ jobs:
             done
           done
 
+      # ADR-0192 / spec §4.7 step 2: the owner's exact restore commands, run against the BUILT image on
+      # a real database. The database here holds only migrations (no plans), so this proves the
+      # MECHANICS — the script runs under the shipped userland, the swap works, and the API boots and
+      # answers ready on the restored database — while `e2e-api`'s round trip proves the CONTENT.
+      # docs/guides/back-up-and-restore.md prints these commands, so they are tested commands.
+      #
+      # The `backup` service's own first copy can predate the API's migrations (it starts beside the
+      # API, on a database that is still empty), so the copy used here is taken explicitly once the
+      # stack is healthy. The first restore is attempted while the API is still connected and MUST be
+      # refused: that is this step failing red if the refusal were ever removed (ADR-0110).
+      - name: Back up, restore and boot
+        run: |
+          set -euo pipefail
+          c='docker compose -f docker-compose.yml -f docker-compose.ci.yml'
+          fail() { echo "FAIL: $*"; exit 1; }
+          sql() { $c exec -T db psql -U app -d "${2:-app}" -Atc "$1"; }
+          kept_sql="SELECT count(*) FROM pg_database WHERE position('_before_restore_' in datname) > 0"
+          migrations=$(find apps/api/prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)
+
+          out=$($c run --rm -T backup now); echo "$out"
+          grep -q 'BACKUP FINISHED' <<<"$out" || fail 'backup now did not finish'
+          out=$($c run --rm -T backup check); echo "$out"
+          grep -qx 'CHECK PASSED' <<<"$out" || fail 'check did not pass on a fresh copy'
+          newest=$(sudo ls -1t "$BACKUP_DIR" | grep -E '^schedulepoint-2.*\.dump$' | sed -n 1p || true)
+          [ -n "$newest" ] || fail 'no copy in the backups folder'
+
+          rc=0; out=$($c run --rm -T backup restore --yes "$newest" 2>&1) || rc=$?
+          echo "$out"
+          [ "$rc" -ne 0 ] || fail 'restore ran while the API was connected'
+          grep -q 'RESTORE REFUSED' <<<"$out" || fail 'restore failed, but not at its refusal'
+          [ "$(sql "$kept_sql" postgres)" = 0 ] || fail 'a refused restore still moved a database'
+
+          $c stop api web backup
+          sleep 1; since=$(date -u +%Y-%m-%dT%H:%M:%SZ); sleep 1
+          out=$($c run --rm -T backup restore --yes "$newest"); echo "$out"
+          grep -q 'RESTORE FINISHED' <<<"$out" || fail 'restore did not finish'
+          $c up -d --wait --wait-timeout 240 api web backup
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health/ready
+
+          [ "$(sql "$kept_sql" postgres)" = 1 ] || fail 'the database from before the restore was not kept'
+          log=$($c logs --no-color --since "$since" api)
+          grep -q '"reason":"none_pending"' <<<"$log" || fail 'the API did not find the restored database up to date'
+          ! grep -q 'have been applied' <<<"$log" || fail 'the API applied migrations to the restored database'
+          [ "$(sql 'SELECT count(*) FROM _prisma_migrations')" = "$migrations" ] \
+            || fail 'the restored database does not hold one row per migration'
+
+      # ADR-0192 D9 / spec §4.12: the copy before an update that changes the database, in the real
+      # entrypoint against a real database. It runs AFTER the restore step: once the probe below is
+      # applied it is a migration this image does not have, which `restore` would rightly refuse as
+      # "newer". Each case is asserted on the API's log event, on the folder AND on `_prisma_migrations`.
+      #
+      # The probe is a migration that changes nothing (`SELECT 1;`, scripts/ci-fixtures), mounted by a
+      # CI-only override and never committed under apps/api/prisma/migrations/. The held case is the one
+      # that can fail (ADR-0110): delete the `pre-migrate` call from docker-entrypoint.sh and the probe
+      # is applied although the copy could not be written, which the loop below reports by name.
+      - name: Copy before an update
+        run: |
+          set -euo pipefail
+          c='docker compose -f docker-compose.yml -f docker-compose.ci.yml'
+          probe_compose=scripts/ci-fixtures/backup-pending-probe.compose.yml
+          probe=99999999999999_ci_pending_probe
+          fail() { echo "FAIL: $*"; exit 1; }
+          sql() { $c exec -T db psql -U app -d app -Atc "$1"; }
+          mark() { sleep 1; date -u +%Y-%m-%dT%H:%M:%SZ; sleep 1; }
+          pre_migrate_copies() { sudo find "$BACKUP_DIR" -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' | wc -l; }
+          probe_rows() { sql "SELECT count(*) FROM _prisma_migrations WHERE migration_name = '$probe'"; }
+          restarts() { docker inspect -f '{{.RestartCount}}' "$($c ps -q api)"; }
+          wait_healthy() { # <service> <seconds>
+            local id
+            for _ in $(seq 1 $(($2 / 5))); do
+              id=$($c ps -q "$1")
+              if [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ]; then return 0; fi
+              sleep 5
+            done
+            return 1
+          }
+
+          # Fresh: the stack's first boot found an empty database and took no copy.
+          log=$(cat "$RUNNER_TEMP/first-boot-api.log")
+          grep -q '"event":"backup.pre_migrate_skipped","reason":"fresh"' <<<"$log" \
+            || fail 'the first boot did not log pre_migrate_skipped/fresh'
+          [ "$(pre_migrate_copies)" = 0 ] || fail 'a copy was taken before anything existed to save'
+
+          # Nothing pending: an ordinary restart costs one query and writes nothing.
+          since=$(mark)
+          $c restart api
+          wait_healthy api 180 || fail 'the API did not come back after a restart'
+          log=$($c logs --no-color --since "$since" api)
+          grep -q '"reason":"none_pending"' <<<"$log" || fail 'a restart with nothing pending did not log none_pending'
+          [ "$(pre_migrate_copies)" = 0 ] || fail 'a copy was taken with nothing pending'
+
+          # Held: a change is pending and the folder cannot be written. The database must not change.
+          sudo chmod 500 "$BACKUP_DIR"
+          since=$(mark)
+          $c -f "$probe_compose" up -d api
+          held=0
+          for _ in $(seq 1 60); do
+            [ "$(probe_rows)" = 0 ] || fail 'probe applied although the copy failed'
+            log=$($c logs --no-color --since "$since" api)
+            if grep -q 'UPDATE HELD' <<<"$log"; then held=1; break; fi
+            sleep 3
+          done
+          [ "$held" = 1 ] || fail 'the API never reported UPDATE HELD'
+          grep 'UPDATE HELD' <<<"$log"
+          grep -q '"event":"backup.pre_migrate_failed"' <<<"$log" || fail 'no backup.pre_migrate_failed event'
+          ! grep -q 'starting API' <<<"$log" || fail 'the API started although the update was held'
+          [ "$(probe_rows)" = 0 ] || fail 'probe applied although the copy failed'
+          [ "$(pre_migrate_copies)" = 0 ] || fail 'a copy exists although the folder was not writable'
+          for _ in $(seq 1 20); do
+            if [ "$(restarts)" -ge 1 ]; then break; fi
+            sleep 3
+          done
+          [ "$(restarts)" -ge 1 ] || fail 'Docker did not restart the held API'
+
+          # Taken, by itself: make the folder writable and do nothing else. This is the owner's fix.
+          sudo chmod 700 "$BACKUP_DIR"
+          # A stale hold note, so that its removal below proves the successful copy cleared it (without
+          # a seed the file never existed here: the folder was unwritable when the update was held).
+          sudo install -m 600 -o 1000 -g 1000 /dev/null "$BACKUP_DIR/UPDATE-HELD.txt"
+          began=$(date +%s)
+          wait_healthy api 300 || fail 'the API did not carry on by itself once the folder was writable'
+          echo "The held API carried on by itself after $(($(date +%s) - began)) seconds."
+          [ "$(pre_migrate_copies)" = 1 ] || fail 'expected exactly one copy before the update'
+          copy=$(sudo find "$BACKUP_DIR" -maxdepth 1 -name 'schedulepoint-pre-migrate-*.dump' -printf '%f\n')
+          out=$($c run --rm -T backup check "$copy"); echo "$out"
+          grep -qx 'CHECK PASSED' <<<"$out" || fail 'the copy taken before the update does not pass check'
+          started=$(sql "SELECT floor(extract(epoch FROM started_at))::bigint FROM _prisma_migrations WHERE migration_name = '$probe'")
+          [ -n "$started" ] || fail 'the probe was not applied once the copy existed'
+          [ "$(sudo stat -c %Y "$BACKUP_DIR/$copy")" -le "$started" ] \
+            || fail 'the copy is newer than the migration it was meant to precede'
+          [ "$(sudo stat -c %a "$BACKUP_DIR/$copy")" = 600 ] || fail 'a copy is readable by someone other than its owner'
+          sudo test ! -e "$BACKUP_DIR/UPDATE-HELD.txt" || fail 'UPDATE-HELD.txt was not cleared by the successful copy'
+          log=$($c logs --no-color --since "$since" api)
+          grep 'backup.pre_migrate_taken' <<<"$log"
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health/ready
+
       - name: Dump container logs on failure
         if: failure()
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color
+          sudo ls -la "$BACKUP_DIR" || true
+          sudo cat "$BACKUP_DIR/LAST-BACKUP.txt" "$BACKUP_DIR/UPDATE-HELD.txt" || true
 
       - name: Tear down
         if: always()

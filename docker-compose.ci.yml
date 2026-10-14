@@ -10,6 +10,9 @@
 # than that — so this override must supply a long-enough secret of its own or
 # the container crash-loops before it can serve health. This is NOT a production
 # profile; real deployment is described in docs/DEPLOYMENT.md.
+#
+# The backups folder (`./backups`, or BACKUP_DIR — CI sets it outside the checkout) must exist and belong to uid 1000 before `up`; the
+# CI job's first step does that. See the `image` job in .github/workflows/ci.yml.
 
 services:
   api:
@@ -20,3 +23,8 @@ services:
       # Throwaway CI-only secret, ≥16 chars to satisfy the unconditional length
       # check. Never a real credential — the smoke test creates no real users.
       BETTER_AUTH_SECRET: ci-smoke-boot-secret-not-a-real-credential
+    # The api's backups folder, exactly as docker-compose.release.yml mounts it (ADR-0192 D9), so the
+    # `image` job runs the real copy-before-an-update path. The job creates the folder owned by uid 1000
+    # before the first `up`; left to Docker it would be created owned by root and hold every update.
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
