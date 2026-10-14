@@ -12,7 +12,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    passWithNoTests: true,
     include: ['test/backup-fixture/**/*.e2e-spec.ts'],
     root: '.',
     testTimeout: 300_000,

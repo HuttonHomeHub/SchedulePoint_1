@@ -61,7 +61,7 @@
     "api": {
       "test:e2e": 652,
       "test:e2e:pairwise": 141,
-      "test:e2e:backup-fixture": 14
+      "test:e2e:backup-fixture": 16
     }
   }
 }

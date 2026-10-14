@@ -10,17 +10,21 @@
 # inside `postgres:17-alpine` when Docker is available (the same busybox userland and PostgreSQL 17
 # tools the API image has), otherwise with local client tools at least as new as the server (the
 # script refuses a client older than the server). Neither available: refuse, say so.
+# `BACKUP_CHECK_TOOLS=local` forces the local tools. **Linux only**: the Docker path uses `--network host`
+# to reach the database on localhost, which Docker Desktop (macOS, Windows) does not provide — use
+# `BACKUP_CHECK_TOOLS=local` there.
 #
 # What it asserts, against the database `DATABASE_URL` names — which must already hold real data
 # (CI: after the API e2e suite and the pairwise differential; locally: run `scripts/e2e-local.sh api`
 # first, or `scripts/e2e-local.sh api backup`):
 #   1. a `now` copy restores into a scratch database IDENTICAL to the source: per-table row count and
-#      content checksum, sequences, triggers with their enabled state, extensions, index and
-#      constraint counts;
+#      content checksum, trigger definitions and enabled state, function bodies, extensions, and the
+#      DEFINITION of every index and constraint (not their counts), plus table ACLs;
 #   2. the audit log still refuses an UPDATE (SQLSTATE 0A000) in the restored database;
 #   3. `prisma migrate deploy` and `prisma:check-drift` are clean against the restored database;
-#   4. the comparison is not vacuous (nine tables non-empty, _prisma_migrations = migration folders)
-#      and CAN fail (one altered row and one disabled trigger must both be reported — ADR-0110);
+#   4. the comparison is not vacuous (sixteen tables non-empty, _prisma_migrations = migration folders;
+#      the tables still empty are listed) and CAN fail (an altered row, a deleted row, a disabled
+#      trigger and an extra index must each be reported — ADR-0110);
 #   5. `pre-migrate` decides correctly in each branch (spec §4.12): not enabled, fresh, none pending,
 #      taken, held on an unwritable folder, held on an unreachable database, held on a full disk;
 #   6. pruning, the status file, `health`, `list`, and every refusal `check` and `restore` make;
@@ -44,7 +48,7 @@ export PGPORT="${BASH_REMATCH[5]:-5432}" PGDATABASE="${BASH_REMATCH[6]}"
 export PGOPTIONS="-c client_min_messages=warning"
 SRC_DB="$PGDATABASE"
 
-if docker info >/dev/null 2>&1; then
+if [ "${BACKUP_CHECK_TOOLS:-}" != local ] && docker info >/dev/null 2>&1; then
   TOOLS=docker
 elif command -v psql >/dev/null && command -v pg_dump >/dev/null && command -v pg_restore >/dev/null; then
   TOOLS=local
@@ -98,7 +102,7 @@ BK_MIGS="$real_migrations"
 bk() {
   if [ "$TOOLS" = docker ]; then
     local -a a=(run --rm -i --network host --user "$(id -u):$(id -g)"
-      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB -e BACKUP_SCHEDULE_ITERATIONS -e DATABASE_URL
+      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB -e BACKUP_SCHEDULE_ITERATIONS -e BACKUP_POLL_SECONDS -e BACKUP_NOW -e DATABASE_URL
       -v "$work/schedulepoint-backup.sh:/app/backup/schedulepoint-backup.sh:ro"
       -v "$BK_MIGS:/app/prisma/migrations:ro")
     if [ -n "$BK_DIR" ]; then
@@ -108,14 +112,23 @@ bk() {
   else
     local root="${BK_DIR:-/nonexistent-backups}"
     local -a runner=(env)
-    if [ "$BK_RO" = 1 ] && [ "$(id -u)" -eq 0 ]; then
-      # Root ignores a read-only mode, so drop to an unprivileged user for the unwritable-folder case.
-      runner=(setpriv --reuid=65534 --regid=65534 --clear-groups env)
+    if [ "$BK_RO" = 1 ] && [ -n "$BK_DIR" ]; then
+      if [ "$(id -u)" -eq 0 ]; then
+        # Root ignores a mode, so drop to an unprivileged user — who must still be able to enter and
+        # read the folder, or the failure would be "cannot enter" rather than "cannot write".
+        chmod 755 "$BK_DIR"
+        runner=(setpriv --reuid=65534 --regid=65534 --clear-groups env)
+      else
+        chmod 500 "$BK_DIR"
+      fi
     fi
     # BACKUP_CHECK_PATH_PREFIX puts another userland (for example a busybox applet directory) ahead of
     # the host's for the script only, to run it as the Alpine image would without Docker.
+    local rc=0
     "${runner[@]}" PATH="${BACKUP_CHECK_PATH_PREFIX:+$BACKUP_CHECK_PATH_PREFIX:}$PATH" \
-      BACKUP_ROOT="$root" MIGRATIONS_DIR="$BK_MIGS" sh "$work/schedulepoint-backup.sh" "$@"
+      BACKUP_ROOT="$root" MIGRATIONS_DIR="$BK_MIGS" sh "$work/schedulepoint-backup.sh" "$@" || rc=$?
+    [ "$BK_RO" = 1 ] && [ -n "$BK_DIR" ] && chmod 700 "$BK_DIR"
+    return "$rc"
   fi
 }
 
@@ -187,7 +200,8 @@ hold_connection() { # <database> — an idle-but-connected session, until releas
     [ "$(dbq postgres "SELECT count(*) FROM pg_stat_activity WHERE datname='$1' AND backend_type='client backend'")" -ge 1 ] && return 0
     sleep 0.5
   done
-  return 1
+  echo "Could not hold a connection to $1 open (waited 10 s); the restore-refusal case cannot be set up." >&2
+  exit 1
 }
 release_connection() {
   [ -n "$HOLD_ID" ] || return 0
@@ -212,18 +226,29 @@ SELECT string_agg(
   E' UNION ALL ' ORDER BY c.relname) || ' ORDER BY 1'
 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
 \gexec
+-- Reserved: the schema has no sequences today (every key is a client-generated id). If one is ever
+-- added, this section is what carries its position through the round trip.
 SELECT '## sequences';
 SELECT sequencename || '=' || coalesce(last_value::text, 'unused') FROM pg_sequences WHERE schemaname = 'public' ORDER BY 1;
-SELECT '## triggers (table.name=enabled state)';
-SELECT c.relname || '.' || t.tgname || '=' || t.tgenabled::text FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+SELECT '## triggers (definition and enabled state)';
+SELECT c.relname || '.' || t.tgname || '=' || t.tgenabled::text || ' ' || pg_get_triggerdef(t.oid) FROM pg_trigger t
+  JOIN pg_class c ON c.oid = t.tgrelid
   WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace ORDER BY 1;
+SELECT '## functions (name, md5 of source — the audit trigger function lives here)';
+SELECT p.proname || '=' || md5(p.prosrc) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace ORDER BY 1;
 SELECT '## extensions';
 SELECT extname || ' ' || extversion FROM pg_extension ORDER BY 1;
-SELECT '## indexes per table';
-SELECT tablename || '=' || count(*) FROM pg_indexes WHERE schemaname = 'public' GROUP BY tablename ORDER BY 1;
-SELECT '## constraints per table';
-SELECT t || '=' || n FROM (SELECT conrelid::regclass::text AS t, count(*) AS n FROM pg_constraint
-  WHERE connamespace = 'public'::regnamespace AND conrelid <> 0 GROUP BY 1) c ORDER BY 1;
+SELECT '## index definitions';
+SELECT tablename || '|' || indexname || '|' || indexdef FROM pg_indexes WHERE schemaname = 'public' ORDER BY 1;
+SELECT '## constraint definitions';
+SELECT conrelid::regclass::text || '|' || conname || '|' || pg_get_constraintdef(oid) FROM pg_constraint
+  WHERE connamespace = 'public'::regnamespace AND conrelid <> 0 ORDER BY 1;
+-- ACLs are compared (not just restored) because the round trip restores with --no-privileges, so it
+-- would silently drop a GRANT. None exist today; the day a migration adds one this section goes red,
+-- which is the prompt to decide between keeping --no-privileges and dropping it, not a bug.
+SELECT '## table ACLs';
+SELECT c.relname || '=' || coalesce(c.relacl::text, '') FROM pg_class c
+  WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'S', 'v') ORDER BY 1;
 SQL
 }
 
@@ -239,6 +264,8 @@ present() { grep -Eq -- "$1" <<<"$2"; }
 absent() { ! present "$1" "$2"; }
 all_present() { local l="$1" r; shift; for r in "$@"; do present "$r" "$l" || return 1; done; }
 
+redacted_only() { contains "$OUT" "[redacted]" && ! contains "$OUT" s3cr3t; }
+no_secret() { ! grep -rq "s3cr3t" "$1" && ! contains "$OUT" s3cr3t; }
 same_as_source() { # <database> — 0 when its fingerprint equals the source's
   fingerprint "$1" >"$work/fp.$1" && diff -q "$work/fp.source" "$work/fp.$1" >/dev/null
 }
@@ -249,14 +276,26 @@ echo "==> source database: $SRC_DB"
 others="$(dbq postgres "SELECT count(*) FROM pg_stat_activity WHERE datname='$SRC_DB' AND backend_type='client backend' AND pid <> pg_backend_pid()")"
 [ "$others" -eq 0 ] || { echo "Something else is connected to $SRC_DB ($others sessions); the comparison needs a quiet database." >&2; exit 1; }
 
-for t in organizations users plans activities dependencies calendars calendar_shifts baselines audit_events; do
-  n="$(dbq "$SRC_DB" "SELECT count(*) FROM public.$t")"
-  [ "$n" -gt 0 ] || { echo "Non-vacuity: $t is empty in $SRC_DB. Run the API end-to-end suite first (scripts/e2e-local.sh api backup)." >&2; exit 1; }
+# A run killed half-way (a cancelled job, a Ctrl-C) leaves scratch databases behind; clear ours, and only
+# ours, by name: bkt_* and <source>_check_<n> / <source>_restoring.
+for d in $(dbq postgres "SELECT datname FROM pg_database WHERE datname LIKE 'bkt\\_%' OR datname ~ '^${SRC_DB}_(check_[0-9]+|restoring)$'"); do
+  dbq postgres "DROP DATABASE IF EXISTS \"$d\" WITH (FORCE)" >/dev/null
 done
+
+for t in organizations users plans activities dependencies calendars calendar_shifts baselines audit_events \
+  notes plan_shares calendar_exceptions activity_steps resources resource_assignments baseline_activities; do
+  n="$(dbq "$SRC_DB" "SELECT count(*) FROM public.$t")"
+  [ "$n" -gt 0 ] || { echo "Non-vacuity: $t is empty in $SRC_DB. The backup fixture must run first (scripts/e2e-local.sh backup)." >&2; exit 1; }
+done
+# Informational: the comparison says nothing about a table with no rows in it.
+empty="$(dbq "$SRC_DB" "SELECT string_agg(relname, ' ' ORDER BY relname) FROM pg_class
+  WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'
+    AND (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM public.%I', relname), false, true, '')))[1]::text::int = 0")"
+echo "    tables still empty (not covered by the content comparison): ${empty:-none}"
 want="$(find "$real_migrations" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
 have="$(dbq "$SRC_DB" "SELECT count(*) FROM _prisma_migrations")"
 [ "$want" = "$have" ] || { echo "Non-vacuity: _prisma_migrations has $have rows, the repository has $want migrations." >&2; exit 1; }
-ok "the source is real: nine tables non-empty, $have migrations applied"
+ok "the source is real: sixteen tables non-empty, $have migrations applied"
 
 fingerprint "$SRC_DB" >"$work/fp.source"
 
@@ -313,6 +352,12 @@ dbq "$RESTORED" "ALTER TABLE audit_events DISABLE TRIGGER trg_audit_events_appen
 fingerprint "$RESTORED" >"$work/fp.disabled"
 expect "negative control: one disabled trigger is caught" \
   trigger_difference "$work/fp.altered" "$work/fp.disabled"
+dbq "$RESTORED" "DELETE FROM notes WHERE id = (SELECT id FROM notes ORDER BY id LIMIT 1)" >/dev/null
+fingerprint "$RESTORED" >"$work/fp.deleted"
+expect "negative control: one deleted row is caught" differs "$work/fp.disabled" "$work/fp.deleted"
+dbq "$RESTORED" "CREATE INDEX zz_probe_idx ON organizations (slug)" >/dev/null
+fingerprint "$RESTORED" >"$work/fp.indexed"
+expect "negative control: an extra index is caught (definitions are compared)" differs "$work/fp.deleted" "$work/fp.indexed"
 
 # --- 2. the refusals check and restore make ---------------------------------
 
@@ -331,6 +376,14 @@ expect "check refuses a damaged copy" failed_with "CHECK FAILED: the file is dam
 rm -f "$DMG/$COPY.sha256"
 run_bk check "$COPY"
 expect "check refuses a copy with no checksum file" failed_with "CHECK FAILED"
+
+UNREADABLE="$(newdir)"
+printf 'this is not a database copy\n' >"$UNREADABLE/schedulepoint-2026-01-01T0200Z.dump"
+(cd "$UNREADABLE" && sha256sum schedulepoint-2026-01-01T0200Z.dump >schedulepoint-2026-01-01T0200Z.dump.sha256)
+BK_DIR="$UNREADABLE"
+run_bk check schedulepoint-2026-01-01T0200Z.dump
+expect "check refuses a copy whose checksum is right but pg_restore cannot read it" \
+  failed_with "CHECK FAILED" "cannot be read"
 
 OLDER="$work/migs-older"
 cp -r "$real_migrations" "$OLDER"
@@ -394,33 +447,50 @@ for v in 0 abc 3651 -5 007; do
 done
 expect "...and nothing was written" test -z "$(ls -A "$EMPTY")"
 
-# The loop: the first poll takes a copy at once when there is none, a stale .partial is cleared at
-# start, and a night is due only from 02:00 UTC and only when no copy carries today's date.
+# The loop, on an injected clock so both sides of 02:00 UTC are exercised on every run: the first poll
+# takes a copy at once when there is none, a stale .partial is cleared at start, and a night is due only
+# from 02:00 UTC and only when no copy carries today's date.
 nightly_count() { files_matching "$1" '^schedulepoint-2.*\.dump$' | grep -c . || true; }
+T_BEFORE="$(date -u -d '2026-10-14 01:30:00' +%s)"
+T_AFTER="$(date -u -d '2026-10-14 03:00:00' +%s)"
+schedule_once() { # <BACKUP_NOW> — one poll of the loop
+  RC=0
+  OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1 BACKUP_NOW="$1"; bk schedule) 2>&1)" || RC=$?
+}
 SCHED="$(newdir)"
 BK_DIR="$SCHED"
 touch "$SCHED/schedulepoint-2026-01-01T0200Z.dump.partial"
-RC=0
-OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
-expect "schedule: with no copy at all, the first poll takes one at once" succeeded_with "backup.started" "backup.succeeded"
+schedule_once "$T_BEFORE"
+expect "schedule: with no copy at all, the first poll takes one at once, even before 02:00" \
+  succeeded_with "backup.started" "backup.succeeded"
 expect "schedule: a stale .partial is removed at start" test ! -e "$SCHED/schedulepoint-2026-01-01T0200Z.dump.partial"
-expect "schedule: exactly one copy" test "$(nightly_count "$SCHED")" -eq 1
-RC=0
-OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
-expect "schedule: a copy dated today means no second one" test "$(nightly_count "$SCHED")" -eq 1
+expect "schedule: exactly one copy, dated by the injected clock" test -f "$SCHED/schedulepoint-2026-10-14T0130Z.dump"
+schedule_once "$T_AFTER"
+expect "schedule: a copy dated today means no second one, even after 02:00" test "$(nightly_count "$SCHED")" -eq 1
 YEST="$(newdir)"
 BK_DIR="$YEST"
-touch "$YEST/schedulepoint-$(date -u -d yesterday +%Y-%m-%d)T0200Z.dump"
+touch "$YEST/schedulepoint-2026-10-13T0200Z.dump"
+schedule_once "$T_BEFORE"
+expect "schedule: yesterday's copy only, before 02:00 UTC: not yet due" test "$(nightly_count "$YEST")" -eq 1
+schedule_once "$T_AFTER"
+expect "schedule: yesterday's copy only, after 02:00 UTC: the night is taken" test "$(nightly_count "$YEST")" -eq 2
+BACKOFF="$(newdir)"
+BK_DIR="$BACKOFF"
 RC=0
-OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
-if [ "$((10#$(date -u +%H)))" -ge 2 ]; then
-  expect "schedule: yesterday's copy only, after 02:00 UTC: the night is taken" test "$(nightly_count "$YEST")" -eq 2
-else
-  expect "schedule: yesterday's copy only, before 02:00 UTC: not yet due" test "$(nightly_count "$YEST")" -eq 1
-fi
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=3 BACKUP_POLL_SECONDS=1 BACKUP_NOW="$T_AFTER" PGPORT=1; bk schedule) 2>&1)" || RC=$?
+expect "schedule: after a failed night it does not retry on the next poll (backoff)" \
+  test "$(grep -c 'backup.failed' <<<"$OUT")" -eq 1
 BK_DIR="$MAIN"
 run_bk check
 expect "check with no file argument checks the newest copy" succeeded_with "CHECK PASSED"
+
+OPEN="$(newdir)"
+chmod 755 "$OPEN"
+BK_DIR="$OPEN"
+run_bk now
+expect "a group/world-accessible folder still gets its copy" succeeded_with "BACKUP FINISHED"
+expect "...with a warning in the log" out_has "backup.folder_permissions"
+expect "...and a warning line in LAST-BACKUP.txt" grep -q 'WARNING: the backups folder is accessible' "$OPEN/LAST-BACKUP.txt"
 
 PRUNE="$(newdir)"
 old() { touch -d "$1 days ago" "$PRUNE/$2"; }
@@ -485,6 +555,28 @@ OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL; 
 expect "DATABASE_URL (with Prisma's ?schema=public) is understood: none pending" \
   succeeded_with "\"reason\":\"none_pending\""
 
+url_pre_migrate() { # <url> — pre-migrate connecting ONLY through this DATABASE_URL
+  RC=0
+  OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$1"; bk pre-migrate) 2>&1)" || RC=$?
+}
+base_url="postgresql://$PGUSER:%61pp@$PGHOST:$PGPORT/$SRC_DB"
+url_pre_migrate "$base_url?schema=public&sslmode=disable"
+expect "DATABASE_URL: a percent-encoded password and sslmode=disable are understood" \
+  succeeded_with "\"reason\":\"none_pending\""
+url_pre_migrate "$base_url?schema=public&sslmode=verify-full"
+expect "DATABASE_URL: sslmode is passed on, not dropped (verify-full with no root certificate must hold)" \
+  failed_with "UPDATE HELD"
+secret_url="postgresql://$PGUSER:s3cr3t-pw@$PGHOST:1/$SRC_DB?schema=public"
+REDACT="$(newdir)"
+BK_DIR="$REDACT"
+url_pre_migrate "$secret_url"
+expect "a credential-bearing URL never reaches the output or UPDATE-HELD.txt" \
+  no_secret "$REDACT"
+
+RC=0
+OUT="$( (export PGDATABASE="postgresql://$PGUSER:s3cr3t-pw@$PGHOST/x"; bk now) 2>&1)" || RC=$?
+expect "an error that quotes a connection string is redacted" redacted_only
+
 BK_MIGS="$EXTRA"
 HELD="$(newdir)"
 BK_DIR="$HELD"
@@ -500,7 +592,22 @@ RC=0
 OUT="$( (export BACKUP_MIN_FREE_KB=999999999999; bk pre-migrate) 2>&1)" || RC=$?
 expect "held, disk nearly full: exits non-zero and says so" \
   failed_with "UPDATE HELD" "disk nearly full"
+expect "held, disk nearly full: UPDATE-HELD.txt says so" grep -q 'disk nearly full' "$DISK/UPDATE-HELD.txt"
 expect "held, disk nearly full: no copy left behind" test -z "$(files_matching "$DISK" 'dump|partial')"
+
+# When the guard trips, old copies are pruned first (never the newest of each kind) and the check is
+# repeated. Sparse 4 TB "copies" make the guard trip for real; pruning the older one cannot free enough,
+# so the update is still held, but the prune must have happened and the newest must have survived.
+GUARD="$(newdir)"
+for f in schedulepoint-pre-migrate-2026-01-01T0300Z.dump schedulepoint-pre-migrate-2026-01-05T0300Z.dump; do
+  truncate -s 4T "$GUARD/$f"
+  touch -d "90 days ago" "$GUARD/$f"
+done
+BK_DIR="$GUARD"
+run_bk pre-migrate
+expect "disk guard: tripped and still held when pruning cannot free enough" failed_with "UPDATE HELD" "disk nearly full"
+expect "disk guard: the older old copy was pruned first" test ! -e "$GUARD/schedulepoint-pre-migrate-2026-01-01T0300Z.dump"
+expect "disk guard: the newest copy of its kind was kept" test -e "$GUARD/schedulepoint-pre-migrate-2026-01-05T0300Z.dump"
 
 RO="$(newdir)"
 BK_DIR="$RO"

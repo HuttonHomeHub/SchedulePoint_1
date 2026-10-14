@@ -2,7 +2,7 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { pairwiseSuite } from '@repo/seed';
-import { SeedClient, seedPlan } from '@repo/seed-http';
+import { PenHolder, SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 
@@ -94,8 +94,35 @@ describe.skipIf(!hasDatabase)('Backup fixture (e2e)', () => {
       planIds.push(seeded.planId!);
     }
 
-    await client.post(`/api/v1/organizations/${ORG}/plans/${planIds[0]}/baselines`, {
-      name: 'Backup fixture baseline',
+    // One row in each table the generated plans do not reach, written through the same API a planner
+    // uses (and under the pen, as any plan edit is). The round trip requires each of these non-empty.
+    const org = `/api/v1/organizations/${ORG}`;
+    const planId = planIds[0]!;
+    await PenHolder.withPen(client, ORG, planId, async () => {
+      const activities = await client.get<{ id: string; version: number }[]>(
+        `${org}/plans/${planId}/activities?limit=100`,
+      );
+      const activity = activities[0];
+      expect(activity, 'the first fixture plan has an activity').toBeDefined();
+      await client.post(`${org}/plans/${planId}/notes`, { body: 'Backup fixture: a plan note' });
+      await client.post(`${org}/activities/${activity!.id}/notes`, {
+        body: 'Backup fixture: an activity note',
+      });
+      await client.put(`${org}/activities/${activity!.id}/steps`, {
+        version: activity!.version,
+        steps: [
+          { name: 'Prepare', weight: 1, percentComplete: 100 },
+          { name: 'Install', weight: 3, percentComplete: 25 },
+        ],
+      });
+      const calendars = await client.get<{ id: string }[]>(`${org}/calendars?limit=100`);
+      await client.post(`${org}/calendars/${calendars[0]!.id}/exceptions`, {
+        date: '2026-12-25',
+        label: 'Backup fixture holiday',
+      });
+      await client.post(`${org}/plans/${planId}/shares`, { label: 'Backup fixture link' });
+      // After the edits above, so the baseline snapshots the plan as it ends up.
+      await client.post(`${org}/plans/${planId}/baselines`, { name: 'Backup fixture baseline' });
     });
 
     // The round trip asserts these again against the source; asserting here puts the failure in the
@@ -110,6 +137,13 @@ describe.skipIf(!hasDatabase)('Backup fixture (e2e)', () => {
       calendarShifts: await prisma.calendarShift.count(),
       baselines: await prisma.baseline.count(),
       auditEvents: await prisma.auditEvent.count(),
+      notes: await prisma.note.count(),
+      planShares: await prisma.planShare.count(),
+      calendarExceptions: await prisma.calendarException.count(),
+      activitySteps: await prisma.activityStep.count(),
+      resources: await prisma.resource.count(),
+      resourceAssignments: await prisma.resourceAssignment.count(),
+      baselineActivities: await prisma.baselineActivity.count(),
     };
     for (const [table, n] of Object.entries(counts)) {
       expect(n, `${table} is not empty`).toBeGreaterThan(0);
