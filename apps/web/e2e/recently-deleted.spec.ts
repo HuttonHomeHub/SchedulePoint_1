@@ -70,6 +70,12 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
   await navLink(page, 'Clients').click();
   await page.getByRole('button', { name: 'Actions for Northgate in Clients' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
+  // This suite's API leaves the clear-out off (the default), so the sentence promises no deadline
+  // (`docs/TECH_DEBT.md` #140); `e2e-recently-deleted` pins the armed wording.
+  await expect(page.getByRole('alertdialog')).toContainText(
+    'You can restore it from Recently deleted.',
+  );
+  await expect(page.getByRole('alertdialog')).not.toContainText('permanently');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/No clients yet/)).toBeVisible();
 
