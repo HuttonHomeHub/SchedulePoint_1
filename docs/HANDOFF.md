@@ -3,83 +3,87 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-13. The session planned, built and shipped the **pre-1.0 hardening pass**
-(`docs/specs/pre-1-0-hardening/`, approved by the owner 2026-10-13, all nine milestones). Every PR
-was squash-merged with all ten checks green on the pinned head.
+**Written:** 2026-10-14. The session planned, built and shipped **pre-1.0 batch 2**
+(`docs/specs/pre-1-0-batch-2/`, approved by the owner 2026-10-13, all six milestones). Every PR was
+squash-merged with all ten checks green on the pinned head.
 
 ## Where things stand
 
-- **Releases this session:** `api` 0.89.3 (#965), `web` 0.190.0 (#968), and `web` 0.190.1
-  (#971) for the ruler fix.
-- **Hardening pass, by milestone:**
+- **Releases this session:** `api` 0.89.4 (#977) and `web` 0.190.2 (#979, carrying #978, #980, #981).
+  Tags `api-v0.89.4` and `web-v0.190.2` confirmed.
+- **Batch 2, by milestone:**
 
-  | M   | What                                                     | PR(s) | Release     |
-  | --- | -------------------------------------------------------- | ----- | ----------- |
-  | 0   | Spec and plan, approved                                  | #960  | —           |
-  | 1   | Re-pack the four web e2e shards (ADR-0138 amendment)     | #962  | —           |
-  | 2   | Deletes and restores take the plan lock in order (#492)  | #964  | api 0.89.3  |
-  | 3   | Collapsed-spine journeys wait for the canvas (#497)      | #963  | —           |
-  | 4   | Revision-delta spec picks its change set fixedly (#496)  | #966  | —           |
-  | 5   | Gantt ⋯ menus and Float left clear of the divider (#494) | #967  | web 0.190.0 |
-  | 6   | Zoom out / Zoom in in View ▾ › Zoom (#480)               | #969  | web 0.190.0 |
-  | 7   | Ruler day numbers thinned at 200 % text (#478)           | #970  | web 0.190.1 |
-  | 8   | Device check sheet, shard acceptance, new rows           | #972  | —           |
-  | 9   | Owner's alerts guide (`docs/guides/set-up-alerts.md`)    | #961  | —           |
+  | M   | What                                                              | PR(s) | Release     |
+  | --- | ----------------------------------------------------------------- | ----- | ----------- |
+  | 0   | Spec and plan, approved, with the owner's answers                 | #974  | —           |
+  | 1   | What 1.0 means: `docs/RELEASE_1_0.md`, ADR-0190, row #507         | #975  | —           |
+  | 2   | Contrast themes: shaded controls and Gantt marks (#505, ADR-0191) | #978  | web 0.190.2 |
+  | 3   | Summary redo locks its subtree in id order (#500)                 | #976  | api 0.89.4  |
+  | 4   | Toolbar runs keyed by identity, so focus survives a resize (#504) | #980  | web 0.190.2 |
+  | 5   | Gantt month labels thinned by measured width at 200 % text (#501) | #981  | web 0.190.2 |
+  | 6   | Make-milestone journey from ~190 s to ~30 s (#506)                | #982  | —           |
 
 - **What changed for planners:**
-  - deleting a plan, project or client no longer fails when a recalculation or a bar drag is running;
-  - in the Gantt the ⋯ menus sit inside the table (48 px wider), clear of the divider, and the
-    "vs baseline" values line up under their header; the zoom presets frame on the new width;
-  - View ▾ › Zoom has Zoom out, Zoom in and Fit to plan in one row, usable when a dock has squeezed
-    the diagram; zoom steps are announced ("Zoomed in." / "Zoomed out.");
-  - at large text the diagram ruler shows every second calendar day (odd days, the 1st always) or
-    only Mondays rather than overprinting, and re-measures when the text size changes.
-- **CI shards:** the 2026-10-13 re-pack brought the slowest web shard to 1,047–1,067 s on four `main`
-  runs (was up to 1,178 s). The four still finish up to ~235 s apart, with the short shard rotating —
-  row #502. The fifth-shard trigger is now **slowest shard above 1,250 s (median of three runs) or a
-  30-minute timeout** (owner, 2026-10-13; ADR-0138).
+  - under a Windows contrast theme, greyed-out menu items and buttons look greyed out, and the Gantt's
+    bars, milestones, progress and selected row (a coloured left edge) stay visible; the diagram keeps
+    its own colours by decision (#508);
+  - undoing or redoing the deletion of a summary no longer risks a server error while a drag saves;
+  - resizing the window no longer drops focus from a toolbar button or wrongly announces it gone;
+  - at 200 % text the Gantt's month names no longer overprint, and at least one is always shown.
+- **What 1.0 means** is now written down in `docs/RELEASE_1_0.md` (ADR-0190). Its short answer is
+  "not yet": the owner made three things **required** before 1.0 (2026-10-13, `docs/DECISIONS.md`):
+  a tested database backup and restore, a whole-organisation export, and the recycle bin's 90-day
+  clear-out working (built, off on the host). Each needs its own spec. The owner said **do not cut 1.0
+  yet**; the cut is a separate step after the checklist is done.
 
 ## Parked by the owner (2026-10-13) — keep, do not raise
 
-The owner parked these at the end of the session (`docs/DECISIONS.md`, 2026-10-13). They are not work for
-a session, and a session does not bring them up again until the owner does. When the owner returns to
-one, the steps are ready:
+The owner parked these (`docs/DECISIONS.md`, 2026-10-13). They are not work for a session, and a session
+does not bring them up again until the owner does. When the owner returns to one, the steps are ready:
 
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
 - **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
   sittings). The owner replies with one line per step; record the answers in a `device-check-results.md`
-  beside the sheet and turn each "wrong" into a row or a fix. Its contrast-theme steps confirm #505.
+  beside the sheet and turn each "wrong" into a row or a fix. Steps 22–23 (contrast theme) were reworded
+  this session into plain yes/no lines and now confirm the #505 fix rather than the fault.
 - Older parked items, unchanged: the toolbar "minor tweaks" (#499 — ask which before building), SC-16
   photos, 72 rem confirmation, Surface sheet steps 25, 18b, 25b, 26–28, the history count on or after
   1 November, Gantt hands-on readings, header at 320/640.
-- **Decided, do not reopen:** collaborative editing is not in 1.0; four web shards; `Start editing`
-  stays plain while the pen is not held.
+- **Decided, do not reopen:** collaborative editing is not in 1.0; four web shards (fifth-shard trigger:
+  slowest shard above 1,250 s, median of three runs, or a 30-minute timeout); `Start editing` stays plain
+  while the pen is not held; the diagram keeps its own colours under a contrast theme (#508).
+- The 1.0 checklist lists both parked jobs as "the owner's call" with no position; keep it that way.
 
 ## Open rows worth knowing
 
-- **New this session:** #500 (dissolve/remove with `?version=` lock the summary before the ordered
-  lock), #501 (Gantt month labels at 200 % text, unmeasured), #502 (shard spread), #503 (one
-  narrow-shell banner flicker, not reproduced), #504 (link-tool has no `lostReason`), #505 (forced
-  colours: shaded menu items and Gantt bars — likely real, confirm via the device sheet), #506 (the
-  Make-milestone journey runs within seconds of its 4-minute limit).
-- **Narrowed:** #496 is now only the unexplained 401 mid-seed (suspected: a second process sharing
-  `app_test`).
-- **Closed this session:** #492, #494, #497, #480, #478.
+- **New this session:** #507 (no exported OpenAPI file and no breaking-change check in CI; owner's call
+  whether 1.0 waits on it, default no), #508 (the diagram's own colours under a contrast theme, by
+  decision).
+- **Closed this session:** #500, #501, #504, #505, #506.
+- **Deferred review nits from #978** (not rows; small): assert the summary band's 1 px inset in
+  `e2e-gantt/forced-colors.spec.ts`; a computed check that a finished task differs from a summary; a
+  comment on the journey's `colourBehind`; optionally a hairline marking the selected row across the
+  Gantt's chart half.
+- **Not folded from #976's review:** the ordered lock now returns `{id, version}` to every caller (a
+  small payload cost, unmeasured); a child filed under a summary between its unlocked read and the
+  ordered lock is not in the locked set (pre-existing, unchanged; the plan lock is what excludes it).
 - Older open rows are unchanged; see `docs/TECH_DEBT.md`.
 
 ## Suggested next
 
-Nothing is in flight: no open PRs, no wake-ups armed, every release tagged (`api-v0.89.3`,
-`web-v0.190.0`, `web-v0.190.1`). Ask the owner what to take next, offering, in this order:
+Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering, in this
+order:
 
-1. **#505**: forced-colours rules for shaded menu items (`GrayText`) and the Gantt's bars. This is the
-   most likely real accessibility defect left before 1.0, and it can be fixed from the code without
-   waiting for the device sheet.
-2. **#504** (give the Link tool a `lostReason`) and **#500** (lock order on the `?version=` delete and
-   dissolve paths). Both are small.
-3. **A reconciliation pass** (`docs/RECONCILE.md`). One is due at this epic boundary; the last was
-   2026-10-12.
+1. **The three 1.0 requirements**, each as its own spec through the feature-analyst:
+   (a) a written, tested database backup and restore (the brief promised a daily snapshot kept 30 days;
+   nothing documents one); (b) a whole-organisation export; (c) turning on and proving the recycle bin's
+   90-day clear-out (`RETENTION_HIERARCHY_ENABLED`, irreversible hard delete — keep it a release of its
+   own, `docs/RELEASE_1_0.md`). (a) is the smallest and the most important.
+2. **A reconciliation pass** (`docs/RECONCILE.md`). The last was 2026-10-12; two ADRs (0190, 0191) have
+   landed since, so `check:reconcile-due` is not yet triggered (threshold 8), but one is due at this epic
+   boundary if the owner wants it.
+3. The deferred nits above, as one small test PR.
 
 ## Environment notes a new session would otherwise rediscover
 
@@ -182,3 +186,20 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
   main checkout (`pnpm exec prettier --write`, `pnpm exec commitlint --edit`) before committing.
 - **`changeset-release/main` is updated 1–10 minutes after a merge**; poll it with `git ls-remote` rather
   than listing workflow runs. The tag (`web-vX.Y.Z`) lands about a minute after the Version Packages merge.
+
+- **Batch-2 lessons (2026-10-14):**
+  - **A reviewer pass before the database run saves a round.** Every milestone's first design had a
+    blocking finding (#978's Highlight-filled selected row failed three reviewers at once); folding
+    reviews while another builder held the database kept the queue moving.
+  - **Merging one web PR conflicts the next** on `CLAUDE.md`'s web file count and `docs/TECH_DEBT.md`'s
+    open sections. Resolve the register by deleting both closed rows' open sections (both ledger lines
+    already exist) and let `pnpm check:counts` name the right banner number.
+  - **Hold the Version Packages PR open to batch** several web patches into one release; re-read its
+    `get_files` after the last merge and pin the merge to its head SHA.
+  - **`get_check_runs` answers for the PR's current head**; confirm the head with `pull_request_read get`
+    when a push and a check start are seconds apart.
+  - **A builder's notification can arrive without its report**; read the branch with `git ls-remote` and
+    `git log` rather than waiting.
+  - **`cd`-ing into a builder's worktree** moves the Stop hook's checked directory; `cd` back at once.
+  - **Long `vitest run` and `turbo run test` exceed the 10-minute foreground limit**; run them in the
+    background.
