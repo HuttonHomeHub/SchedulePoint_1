@@ -165,8 +165,8 @@ for target in "${targets[@]}"; do
       # **Prove a backup of THIS database restores identically** (ADR-0192, `scripts/backup-restore-check.sh`).
       # A round trip against an empty database proves nothing, and the API suite sweeps its rows away when
       # it finishes — so this seeds its own (`test:e2e:backup-fixture`, which deliberately LEAVES its rows
-      # and resets first), exactly as CI does, then checks. That leaves the fixture in `app_test`; every
-      # API spec clears the tables it needs, but run `api` BEFORE `backup` when you want both. The check
+      # and resets first), exactly as CI does, then checks. That leaves the fixture in `app_test`, so run
+      # `api` BEFORE `backup` when you want both (`e2e-local.sh api backup`). The check
       # uses Docker (`postgres:17-alpine`, the image's own userland) when there is a daemon, otherwise
       # local client tools at least as new as the server, and refuses when neither exists.
       log "Backup and restore round trip"
