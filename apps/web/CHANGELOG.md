@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.191.0
+
+### Minor Changes
+
+- [#996](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/996) [`1293204`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/129320416bf1d065514c69835ac7172b4433be41) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The delete confirmations for a client, project and plan now say how long the item can be restored from Recently deleted, and that it is permanently removed after that. They say it only on a server where the 90-day clear-out is switched on; on any other server the sentence is unchanged.
+
 ## 0.190.2
 
 ### Patch Changes
