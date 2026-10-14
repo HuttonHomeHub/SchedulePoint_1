@@ -94,3 +94,6 @@ apps/web/bundle-report.json
 
 # The activities-panel measurement harness keeps its seeded org/plan ids here between runs.
 apps/web/.tmp/
+
+# Database copies written by the `backup` service (ADR-0192): they hold password hashes and sessions.
+backups/

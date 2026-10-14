@@ -21,6 +21,15 @@
 #
 # 4. Open http://localhost:8080 — the web app talks to the API on :3000.
 #
+# What this stack publishes: the web app on :8080 and the API on :3000. The DATABASE publishes nothing
+# (ADR-0192 D10): only the other services reach it, and `docker compose exec db psql` still works.
+#
+# Backups (ADR-0192): before step 3, create the backups folder owned by the containers' user, or Docker
+# creates it owned by root and every update that changes the database is held:
+#      sudo install -d -o 1000 -g 1000 -m 700 backups      # or the folder BACKUP_DIR names
+# The `backup` service then writes a copy every night (kept BACKUP_KEEP_DAYS, default 30), and the API
+# writes one before an update that changes the database. See docs/guides/back-up-and-restore.md.
+#
 # NODE_ENV defaults to `development` here: the API's production config guards
 # (strong secret, trusted proxies, non-localhost CORS) intentionally refuse to
 # boot with local values, so a local test run uses the development profile.
@@ -60,8 +69,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
       POSTGRES_DB: ${POSTGRES_DB:-app}
-    ports:
-      - '5432:5432'
+    # No `ports:` — the database is reachable only from the stack's own network (ADR-0192 D10).
+    # The api and backup services reach it as `db:5432`, and `docker compose exec db psql` goes
+    # through Docker, not a published port, so none of the procedures in docs/DEPLOYMENT.md changes.
+    # A database tool on ANOTHER computer can no longer connect; re-adding `- '5432:5432'` here
+    # undoes it and is not recommended. docker-compose.yml (local development) keeps its port.
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -154,8 +166,67 @@ services:
       # mail variables and did not sweep for.
       RATE_LIMIT_TTL: ${RATE_LIMIT_TTL:-60}
       RATE_LIMIT_LIMIT: ${RATE_LIMIT_LIMIT:-100}
+    # The copy taken before an update that changes the database is written here (ADR-0192 D9).
+    # This mount IS the switch: with no `/backups` the entrypoint logs a warning and migrates as
+    # before; with it, a copy that cannot be made HOLDS the update and the database is not changed.
+    # The folder must exist and belong to uid 1000 (`node`) BEFORE the stack starts, or Docker
+    # creates it owned by root and every update with a database change is held:
+    #   sudo install -d -o 1000 -g 1000 -m 700 backups
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
     ports:
       - '3000:3000'
+
+  # The nightly database copy (ADR-0192). The SAME image as the api, so Watchtower moves them together
+  # and the script is checked against the migrations of the version that will boot it. It depends on
+  # the database only: copies must keep running while the api is crash-looping, which is when they
+  # matter most. One copy a day at 02:00 UTC (taken at once when none exists), kept BACKUP_KEEP_DAYS.
+  # Healthy = a nightly copy under 26 hours old; unhealthy shows in Dockge and `docker compose ps`.
+  # Commands: docker compose -f docker-compose.release.yml run --rm backup list | check | now | restore.
+  # See docs/guides/back-up-and-restore.md. The folder needs the same one-time setup as the api's.
+  backup:
+    image: ghcr.io/huttonhomehub/schedulepoint_1/api:${API_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    restart: unless-stopped
+    # The script is PID 1's only child; `init` reaps `sleep` and forwards `docker stop` to it.
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    labels:
+      com.centurylinklabs.watchtower.enable: 'true'
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ['sh', '/app/backup/schedulepoint-backup.sh']
+    command: ['schedule']
+    # Database credentials only: no auth secret, no mail settings, no URLs.
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-app}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-app}
+      PGDATABASE: ${POSTGRES_DB:-app}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'sh', '/app/backup/schedulepoint-backup.sh', 'health']
+      interval: 5m
+      timeout: 20s
+      # Until the first copy exists the service cannot be healthy, so check every 10 seconds during
+      # the start period: `up --wait` and Dockge then report it within the first minute instead of
+      # after the first 5-minute interval. `start_interval` needs Docker Engine 25 or newer, which
+      # the Watchtower API pin below (1.44) already assumes.
+      start_period: 10m
+      start_interval: 10s
 
   web:
     image: ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-${IMAGE_TAG:-latest}}
