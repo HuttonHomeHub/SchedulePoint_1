@@ -100,8 +100,9 @@ services:
       # arming it is a deliberate operator act.
       #
       # The clock is RETROACTIVE (D3): the day this is set to true, everything already older than
-      # the period below goes on the first tick. Read the recycle bin's countdown BEFORE arming —
-      # it ships one release ahead of this switch for exactly that reason (D4).
+      # the period below goes on the first tick. List what that would be BEFORE arming, with
+      # `docker compose exec api node dist/cli/clear-out-preview.js` (ADR-0193): the recycle bin's
+      # countdown is not shown while this is off, so it is not a preview.
       #
       # Only the literal strings `true` and `false` are accepted; anything else fails the boot.
       RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}

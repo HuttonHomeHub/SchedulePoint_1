@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 25 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1644 web
 > source files with 47 Playwright suites beside the base journey, and
-> 192 ADRs.
+> 193 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -494,7 +494,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted; D5 amended by ADR-0186)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
 - **ADR-0095** _(Accepted; amended by ADR-0170 and ADR-0177)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
-- **ADR-0096** _(Accepted)_ — Deleted work expires, and purge is refused structurally → [`0096-deleted-work-expires-and-purge-is-refused.md`](docs/adr/0096-deleted-work-expires-and-purge-is-refused.md)
+- **ADR-0096** _(Accepted; D4 and D9 amended by ADR-0193)_ — Deleted work expires, and purge is refused structurally → [`0096-deleted-work-expires-and-purge-is-refused.md`](docs/adr/0096-deleted-work-expires-and-purge-is-refused.md)
 - **ADR-0097** _(Accepted)_ — The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped → [`0097-a-theme-is-a-system-not-a-palette.md`](docs/adr/0097-a-theme-is-a-system-not-a-palette.md)
 - **ADR-0098** _(Accepted)_ — The landing is the organisation overview → [`0098-the-landing-is-the-organisation-overview.md`](docs/adr/0098-the-landing-is-the-organisation-overview.md)
 - **ADR-0099** _(Accepted)_ — Graphite — workstation density in rail chrome → [`0099-graphite-the-workstation-in-rail-chrome.md`](docs/adr/0099-graphite-the-workstation-in-rail-chrome.md)
@@ -595,6 +595,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0190** _(Accepted)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
 - **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
 - **ADR-0192** _(Accepted; amends ADR-0018)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
+- **ADR-0193** _(Accepted; amends ADR-0096 D4 and D9)_ — A permanent delete is previewed by the code that performs it, and arming is a host act → [`0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md`](docs/adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

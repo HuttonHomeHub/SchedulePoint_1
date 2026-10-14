@@ -1286,11 +1286,24 @@ Three things to know **before** you set it to `true`:
 1. **The clock is retroactive.** It counts from when each item was deleted, not from when you armed
    the switch. On a host that has been running for a year, the first tick — which happens at boot,
    not an hour later — permanently deletes everything already older than the period. There is no
-   grace window and no dry run.
-2. **Look at Recently deleted first.** That screen ships one release ahead of this switch for
-   exactly this reason (ADR-0096 D4). It shows each deletion's countdown and what would go with it,
-   using **this host's** `RETENTION_HIERARCHY_DAYS` rather than a number baked into the app. Read it,
-   restore anything that should not go, then arm.
+   grace window.
+2. **Run the preview first.** There is a command that lists, without changing anything, every
+   deleted client, project and plan on this server that is past the period (so would go on the first
+   tick), with what goes with each, and what falls due in the next 7 days. From the stack folder:
+
+   ```sh
+   docker compose exec api node dist/cli/clear-out-preview.js
+   ```
+
+   Its first line says whether the clear-out is on or off **on this server**, so it also shows
+   whether your compose file passes the setting through. It uses this host's
+   `RETENTION_HIERARCHY_DAYS`, lists every organisation (it reads the database directly, like
+   `psql`), prints names to your terminal only and never to the log, and runs on a read-only
+   database session. It selects with the same code the sweep does (ADR-0193 D1). Read it, restore
+   anything that should not go from **Recently deleted** (or ask that organisation's admin), then
+   arm. The **Recently deleted** screen does _not_ show a countdown while the switch is off
+   (ADR-0096 D11), so it is not a preview.
+
 3. **Only `true` and `false` are accepted.** Any other value fails the boot rather than being
    guessed at — including the empty string. This is stricter than the other switches on purpose: an
    earlier version used a coercion that read `'false'` as **true**, so the documented way to turn it
@@ -1308,12 +1321,13 @@ What to watch in the log:
 
 | Event                                            | What it means                                                                                                                                    |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `hierarchy_expiry.disabled` (info)               | No timer exists. The default.                                                                                                                    |
+| `hierarchy_expiry.disabled` (info)               | No timer exists. The default. Carries `pastPeriod` (how many clients, projects and plans are already past the period; counts only, no names).    |
 | `hierarchy_expiry.armed` (**warn**)              | Permanent deletion is live from this boot. Logged at warn deliberately: it belongs in a log an operator skims, not one they grep.                |
 | `hierarchy_expiry.batch` (info)                  | One subtree expired, with its counts and its duration — so the per-run caps can be re-derived from your data rather than from a bench.           |
 | `hierarchy_expiry.overlapped` (warn)             | A run was still going when the next tick fired, and the tick was skipped. Occasional is fine; repeated means the interval is shorter than a run. |
 | `hierarchy_expiry.permanent_failure` (**error**) | One subtree **can never expire** and will be retried hourly forever. Not transient — it needs a code fix.                                        |
 | `hierarchy_expiry.failed` (error)                | One subtree failed for some other reason; the next tick retries it.                                                                              |
+| `hierarchy_expiry.skipped_restored` (debug)      | A planner restored (or re-deleted) an item after the sweep chose it and before it was deleted; nothing was removed. Only at `LOG_LEVEL=debug`.   |
 
 A run is bounded twice — by activities and by number of deletions — so a large backlog is worked
 through over several ticks rather than in one. That is by design, and it is why the first ticks after

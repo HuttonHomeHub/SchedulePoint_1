@@ -2,7 +2,9 @@
 
 - **Status:** Accepted (M0–M5 landed 2026-08-18. The expiry ships **disarmed** —
   `RETENTION_HIERARCHY_ENABLED` defaults to `false` — so nothing has been permanently deleted on any
-  host until an operator opts in, deliberately, having read the countdown a release ahead of it.)
+  host until an operator opts in, deliberately, having read the countdown a release ahead of it.
+  **D4 and D9 amended by [ADR-0193](0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)**:
+  the preview an operator reads before arming is a command, not the countdown.)
 - **Date:** 2026-08-18
 - **Supersedes:** nothing
 - **Amends:** ADR-0087 (narrows its scheduler to a second job with a different cost profile),
