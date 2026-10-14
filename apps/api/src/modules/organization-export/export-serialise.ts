@@ -195,7 +195,7 @@ export function buildReadme(): string {
     '  Calendar days are YYYY-MM-DD.',
     '  Money and quantities are decimal strings, never rounded. Money is in the minor unit of the',
     "  plan's currency (cents, pence); a plan with no currency has none stated.",
-    '  Durations and lags are in minutes, as stored.',
+    '  Durations, lags and floats are whole numbers in the unit their name ends with (Minutes or Days).',
     '  A missing value is null in JSON and an empty cell in CSV.',
     '  In CSV, text that starts with = + - or @ is prefixed with an apostrophe so a spreadsheet does',
     '  not run it as a formula. The JSON keeps the exact text.',

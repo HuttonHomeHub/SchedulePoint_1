@@ -42,7 +42,7 @@ file is present even when it has no rows: its JSON is `[]` and its CSV is a head
 | json       | nested JSON                                  | compact JSON text in one cell       |
 | any, empty | `null`                                       | an empty cell                       |
 
-- **Ids** are opaque text (UUIDs). Treat them as strings: compare them, never parse or order them for meaning.
+- **Ids** are opaque text (UUIDs) and carry no order. Treat them as strings: compare them, never parse or order them for meaning.
 - **Money** amounts are whole numbers (bigint) of the minor unit (cents, pence) of the plan's currency; a
   rate such as a resource's `costPerUnit` is a decimal in the same unit. A plan with no currency states none.
 - **Units are in the name.** Every duration, lag, float and delay column ends in `Minutes` or `Days`, and the
@@ -52,7 +52,8 @@ file is present even when it has no rows: its JSON is `[]` and its CSV is a head
   last day**: the day the work finishes on, not the day after.
 - **Computed and layout columns** (early and late dates, float, criticality, lane and placement columns) are
   exported as stored; the export never recalculates. Their meaning follows the scheduling engine of the
-  version in the manifest's `generator.apiVersion`.
+  version in the manifest's `generator.apiVersion`. That field is the product's version, not a property of
+  the format; the format's version is `formatVersion`.
 - **Keys** are camelCase. Each row carries the ids that join it to others.
 - **CSV** is UTF-8 with a byte-order mark, comma-separated, CRLF line ends, RFC 4180 quoting, and a header
   row of the same keys as the JSON. A spreadsheet cell holds at most 32,767 characters, so a longer value is
@@ -62,11 +63,19 @@ file is present even when it has no rows: its JSON is `[]` and its CSV is a head
   spreadsheet does not run it. Numbers, dates and the other types are never prefixed: `-5.25` stays a number.
   **A CSV text cell may therefore begin with an apostrophe the data does not have; the JSON keeps the exact
   text.**
-- **Order** is deterministic: rows by plan id, then row id (creation order).
+- **Order carries no meaning and is not promised.** Rows within a file are in a stable order for one
+  export, but a reader must sort by whatever it needs and must not rely on the order, between files or
+  between two exports.
 - **Deleted items are included.** A client, project, plan or activity in the recycle bin, a removed member
   and a withdrawn invitation are exported with their `deletedAt` set.
 - **One snapshot.** The export is one consistent read taken when it starts; edits made while it runs are
   not in it.
+
+## Values that are open sets
+
+`audit-events.action` and `audit-events.subjectType` are text drawn from vocabularies that grow. A new value
+is a minor change, so a reader must tolerate values it does not know. `actorLabel` and `subjectLabel` are
+free text copied at the time of the event.
 
 ## JSON columns
 
@@ -111,11 +120,14 @@ version.
   no options, so they cannot vary. They exist so a later version that adds one has somewhere to say so.
 - `files[].stability` is `promised` or `informational` (see below). `files[].file` is the file's name as in
   the list below; no database name appears in the manifest.
-- `excluded[].scope` is one of `record-type`, `column` or `rows` and is a closed set. `name` and `reason` are
-  for a person to read and may be reworded.
+- `excluded[].scope` is one of `record-type`, `column` or `rows` and is a closed set. For scope `column`,
+  `name` is always `<file>.<field>`: the exported file's name and the name of the omitted column, a stable
+  form. For the other scopes `name` and every `reason` are for a person to read and may be reworded.
 
 ## Versioning
 
+- **To check compatibility, compare the major of `formatVersion` only** (the `1` of `1.0`). A reader written
+  for `1.0` reads `1.4`; it does not read `2.0`.
 - Adding a file or a column, or a new value of an enum, is a **minor** change (`1.1`).
 - **New columns are appended at the end** of a file's column list, so a reader that takes columns by
   position keeps working within a major version.
@@ -143,35 +155,50 @@ The manifest lists every one of these with its reason.
 
 ## Enumerations
 
-The values an enum column may hold today. A newer minor version may add values.
+The values each enum column may hold today, by `file.column`. A newer minor version may add values.
 
-- `AccrualType`: START, UNIFORM, END
-- `ActivityHistoryOrigin`: ACTIVITY_DELETED, ACTIVITY_RESTORED, SUMMARY_DISSOLVED
-- `ActivityHistoryScope`: DEFINITION, PROGRESS, PLACEMENT, LOGIC, RESOURCES
-- `ActivityStatus`: NOT_STARTED, IN_PROGRESS, COMPLETE
-- `ActivityType`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
-- `AuditActorType`: USER, GUEST, SYSTEM, ANONYMOUS, STAFF
-- `AuditOutcome`: SUCCESS, DENIED, FAILURE
-- `BaselineCostSnapshotLevel`: ACTIVITY, ASSIGNMENT
-- `CalendarScope`: ORG, PROJECT
-- `ConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
-- `CriticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
-- `DependencyType`: FS, SS, FF, SF
-- `DurationType`: FIXED_DURATION_AND_UNITS_TIME, FIXED_DURATION_AND_UNITS, FIXED_UNITS, FIXED_UNITS_TIME
-- `EacMethod`: CPI, REMAINING_AT_BUDGET, CPI_TIMES_SPI
-- `InvitationStatus`: PENDING, ACCEPTED, REVOKED
-- `LagCalendarSource`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
-- `NoteEntityType`: PLAN, ACTIVITY
-- `OrganizationRole`: VIEWER, CONTRIBUTOR, PLANNER, ORG_ADMIN
-- `PercentCompleteType`: DURATION, UNITS, PHYSICAL
-- `PlacementSnapshotLevel`: NONE, FULL
-- `PlanStatus`: DRAFT, ACTIVE, ARCHIVED
-- `ProgressRecalcMode`: RETAINED_LOGIC, PROGRESS_OVERRIDE, ACTUAL_DATES
-- `ResourceCurveType`: UNIFORM, BELL, FRONT_LOADED, BACK_LOADED, DOUBLE_PEAK
-- `ResourceKind`: LABOUR, EQUIPMENT, MATERIAL, GROUP
-- `RevisionSnapshotLevel`: NONE, FULL
-- `TotalFloatMode`: START, FINISH, SMALLEST
-- `VisualConflictReason`: EARLIER_THAN_LOGIC, LATER_THAN_BOUND
+- `members.role`: VIEWER, CONTRIBUTOR, PLANNER, ORG_ADMIN
+- `invitations.role`: VIEWER, CONTRIBUTOR, PLANNER, ORG_ADMIN
+- `invitations.status`: PENDING, ACCEPTED, REVOKED
+- `plans.status`: DRAFT, ACTIVE, ARCHIVED
+- `plans.progressRecalcMode`: RETAINED_LOGIC, PROGRESS_OVERRIDE, ACTUAL_DATES
+- `plans.criticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
+- `plans.totalFloatMode`: START, FINISH, SMALLEST
+- `plans.eacMethod`: CPI, REMAINING_AT_BUDGET, CPI_TIMES_SPI
+- `plans.scheduleCriticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
+- `plans.scheduleTotalFloatMode`: START, FINISH, SMALLEST
+- `activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
+- `activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
+- `activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
+- `activities.durationType`: FIXED_DURATION_AND_UNITS_TIME, FIXED_DURATION_AND_UNITS, FIXED_UNITS, FIXED_UNITS_TIME
+- `activities.status`: NOT_STARTED, IN_PROGRESS, COMPLETE
+- `activities.percentCompleteType`: DURATION, UNITS, PHYSICAL
+- `activities.accrualType`: START, UNIFORM, END
+- `activities.visualConflictReason`: EARLIER_THAN_LOGIC, LATER_THAN_BOUND
+- `dependencies.type`: FS, SS, FF, SF
+- `dependencies.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
+- `cross-plan-dependencies.type`: FS, SS, FF, SF
+- `cross-plan-dependencies.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
+- `calendars.scope`: ORG, PROJECT
+- `baselines.costSnapshotLevel`: ACTIVITY, ASSIGNMENT
+- `baselines.revisionSnapshotLevel`: NONE, FULL
+- `baselines.placementSnapshotLevel`: NONE, FULL
+- `baselines.criticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
+- `baselines.totalFloatMode`: START, FINISH, SMALLEST
+- `baseline-activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
+- `baseline-activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
+- `baseline-activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
+- `baseline-dependencies.type`: FS, SS, FF, SF
+- `baseline-dependencies.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
+- `records-placement-migrations.priorConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
+- `records-cross-plan-lags.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
+- `resources.kind`: LABOUR, EQUIPMENT, MATERIAL, GROUP
+- `assignments.curveType`: UNIFORM, BELL, FRONT_LOADED, BACK_LOADED, DOUBLE_PEAK
+- `activity-history.scope`: DEFINITION, PROGRESS, PLACEMENT, LOGIC, RESOURCES
+- `activity-history.origin`: ACTIVITY_DELETED, ACTIVITY_RESTORED, SUMMARY_DISSOLVED
+- `notes.entityType`: PLAN, ACTIVITY
+- `audit-events.outcome`: SUCCESS, DENIED, FAILURE
+- `audit-events.actorType`: USER, GUEST, SYSTEM, ANONYMOUS, STAFF
 
 ## Files
 
@@ -325,70 +352,70 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/activities.json` and `csv/activities.csv`.
 
-| Column                     | Type    | Notes              |
-| -------------------------- | ------- | ------------------ |
-| `id`                       | text    |                    |
-| `organizationId`           | text    |                    |
-| `planId`                   | text    |                    |
-| `code`                     | text    |                    |
-| `name`                     | text    |                    |
-| `description`              | text    |                    |
-| `type`                     | enum    |                    |
-| `durationMinutes`          | int     | minutes            |
-| `calendarId`               | text    |                    |
-| `constraintType`           | enum    |                    |
-| `constraintDate`           | date    |                    |
-| `secondaryConstraintType`  | enum    |                    |
-| `secondaryConstraintDate`  | date    |                    |
-| `externalEarlyStart`       | instant |                    |
-| `externalLateFinish`       | instant |                    |
-| `durationType`             | enum    |                    |
-| `laneIndex`                | int     |                    |
-| `scheduleAsLateAsPossible` | boolean |                    |
-| `levelingPriority`         | int     |                    |
-| `status`                   | enum    |                    |
-| `percentComplete`          | int     |                    |
-| `actualStart`              | date    |                    |
-| `actualFinish`             | date    | inclusive last day |
-| `remainingDurationMinutes` | int     | minutes            |
-| `suspendDate`              | date    |                    |
-| `resumeDate`               | date    |                    |
-| `expectedFinish`           | date    | inclusive last day |
-| `percentCompleteType`      | enum    |                    |
-| `physicalPercentComplete`  | int     |                    |
-| `budgetedExpense`          | bigint  |                    |
-| `actualExpense`            | bigint  |                    |
-| `accrualType`              | enum    |                    |
-| `parentId`                 | text    |                    |
-| `earlyStart`               | date    |                    |
-| `earlyFinish`              | date    | inclusive last day |
-| `lateStart`                | date    |                    |
-| `lateFinish`               | date    | inclusive last day |
-| `totalFloatMinutes`        | int     | minutes            |
-| `freeFloatMinutes`         | int     | minutes            |
-| `isCritical`               | boolean |                    |
-| `isNearCritical`           | boolean |                    |
-| `constraintViolated`       | boolean |                    |
-| `externalDriven`           | boolean |                    |
-| `loeNoSpan`                | boolean |                    |
-| `resourceDriverMissing`    | boolean |                    |
-| `visualStart`              | date    |                    |
-| `visualEffectiveStart`     | date    |                    |
-| `visualEffectiveFinish`    | date    | inclusive last day |
-| `visualConflict`           | boolean |                    |
-| `visualDriftDays`          | int     | days               |
-| `visualConflictReason`     | enum    |                    |
-| `remainingFloatMinutes`    | int     | minutes            |
-| `leveledStart`             | date    |                    |
-| `leveledFinish`            | date    | inclusive last day |
-| `levelingDelayMinutes`     | int     | minutes            |
-| `levelingWindowExceeded`   | boolean |                    |
-| `selfOverAllocated`        | boolean |                    |
-| `createdAt`                | instant |                    |
-| `updatedAt`                | instant |                    |
-| `createdBy`                | text    |                    |
-| `updatedBy`                | text    |                    |
-| `deletedAt`                | instant |                    |
+| Column                     | Type    | Notes                                                 |
+| -------------------------- | ------- | ----------------------------------------------------- |
+| `id`                       | text    |                                                       |
+| `organizationId`           | text    |                                                       |
+| `planId`                   | text    |                                                       |
+| `code`                     | text    |                                                       |
+| `name`                     | text    |                                                       |
+| `description`              | text    |                                                       |
+| `type`                     | enum    |                                                       |
+| `durationMinutes`          | int     | minutes                                               |
+| `calendarId`               | text    |                                                       |
+| `constraintType`           | enum    |                                                       |
+| `constraintDate`           | date    |                                                       |
+| `secondaryConstraintType`  | enum    |                                                       |
+| `secondaryConstraintDate`  | date    |                                                       |
+| `externalEarlyStart`       | instant |                                                       |
+| `externalLateFinish`       | instant |                                                       |
+| `durationType`             | enum    |                                                       |
+| `laneIndex`                | int     | diagram row number; 0 is the first row                |
+| `scheduleAsLateAsPossible` | boolean |                                                       |
+| `levelingPriority`         | int     | lower number = higher priority; empty = no preference |
+| `status`                   | enum    |                                                       |
+| `percentComplete`          | int     | whole percent, 0 to 100                               |
+| `actualStart`              | date    |                                                       |
+| `actualFinish`             | date    | inclusive last day                                    |
+| `remainingDurationMinutes` | int     | minutes                                               |
+| `suspendDate`              | date    |                                                       |
+| `resumeDate`               | date    |                                                       |
+| `expectedFinish`           | date    | inclusive last day                                    |
+| `percentCompleteType`      | enum    |                                                       |
+| `physicalPercentComplete`  | int     | whole percent, 0 to 100                               |
+| `budgetedExpense`          | bigint  |                                                       |
+| `actualExpense`            | bigint  |                                                       |
+| `accrualType`              | enum    |                                                       |
+| `parentId`                 | text    |                                                       |
+| `earlyStart`               | date    |                                                       |
+| `earlyFinish`              | date    | inclusive last day                                    |
+| `lateStart`                | date    |                                                       |
+| `lateFinish`               | date    | inclusive last day                                    |
+| `totalFloatMinutes`        | int     | minutes                                               |
+| `freeFloatMinutes`         | int     | minutes                                               |
+| `isCritical`               | boolean |                                                       |
+| `isNearCritical`           | boolean |                                                       |
+| `constraintViolated`       | boolean |                                                       |
+| `externalDriven`           | boolean |                                                       |
+| `loeNoSpan`                | boolean |                                                       |
+| `resourceDriverMissing`    | boolean |                                                       |
+| `visualStart`              | date    |                                                       |
+| `visualEffectiveStart`     | date    |                                                       |
+| `visualEffectiveFinish`    | date    | inclusive last day                                    |
+| `visualConflict`           | boolean |                                                       |
+| `visualDriftDays`          | int     | days                                                  |
+| `visualConflictReason`     | enum    |                                                       |
+| `remainingFloatMinutes`    | int     | minutes                                               |
+| `leveledStart`             | date    |                                                       |
+| `leveledFinish`            | date    | inclusive last day                                    |
+| `levelingDelayMinutes`     | int     | minutes                                               |
+| `levelingWindowExceeded`   | boolean |                                                       |
+| `selfOverAllocated`        | boolean |                                                       |
+| `createdAt`                | instant |                                                       |
+| `updatedAt`                | instant |                                                       |
+| `createdBy`                | text    |                                                       |
+| `updatedBy`                | text    |                                                       |
+| `deletedAt`                | instant |                                                       |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -442,21 +469,21 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/calendars.json` and `csv/calendars.csv`.
 
-| Column               | Type    | Notes   |
-| -------------------- | ------- | ------- |
-| `id`                 | text    |         |
-| `organizationId`     | text    |         |
-| `name`               | text    |         |
-| `description`        | text    |         |
-| `scope`              | enum    |         |
-| `projectId`          | text    |         |
-| `hoursPerDayMinutes` | int     | minutes |
-| `archivedAt`         | instant |         |
-| `createdAt`          | instant |         |
-| `updatedAt`          | instant |         |
-| `createdBy`          | text    |         |
-| `updatedBy`          | text    |         |
-| `deletedAt`          | instant |         |
+| Column           | Type    | Notes                                                        |
+| ---------------- | ------- | ------------------------------------------------------------ |
+| `id`             | text    |                                                              |
+| `organizationId` | text    |                                                              |
+| `name`           | text    |                                                              |
+| `description`    | text    |                                                              |
+| `scope`          | enum    |                                                              |
+| `projectId`      | text    |                                                              |
+| `workdayMinutes` | int     | minutes in a standard working day (converts days to minutes) |
+| `archivedAt`     | instant |                                                              |
+| `createdAt`      | instant |                                                              |
+| `updatedAt`      | instant |                                                              |
+| `createdBy`      | text    |                                                              |
+| `updatedBy`      | text    |                                                              |
+| `deletedAt`      | instant |                                                              |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -484,56 +511,56 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row belonging to the organisation’s calendars. Files `json/calendar-shifts.json` and `csv/calendar-shifts.csv`.
 
-| Column        | Type    | Notes                  |
-| ------------- | ------- | ---------------------- |
-| `id`          | text    |                        |
-| `calendarId`  | text    |                        |
-| `weekday`     | int     |                        |
-| `startMinute` | int     | minutes after midnight |
-| `endMinute`   | int     | minutes after midnight |
-| `createdAt`   | instant |                        |
-| `updatedAt`   | instant |                        |
+| Column        | Type    | Notes                             |
+| ------------- | ------- | --------------------------------- |
+| `id`          | text    |                                   |
+| `calendarId`  | text    |                                   |
+| `weekday`     | int     | Monday = 0 … Sunday = 6           |
+| `startMinute` | int     | minutes after midnight, 0 to 1440 |
+| `endMinute`   | int     | minutes after midnight, 0 to 1440 |
+| `createdAt`   | instant |                                   |
+| `updatedAt`   | instant |                                   |
 
 ### `calendar-exception-windows`
 
 Rows: every row belonging to the organisation’s calendars. Files `json/calendar-exception-windows.json` and `csv/calendar-exception-windows.csv`.
 
-| Column                | Type    | Notes                  |
-| --------------------- | ------- | ---------------------- |
-| `id`                  | text    |                        |
-| `calendarExceptionId` | text    |                        |
-| `startMinute`         | int     | minutes after midnight |
-| `endMinute`           | int     | minutes after midnight |
-| `createdAt`           | instant |                        |
-| `updatedAt`           | instant |                        |
+| Column                | Type    | Notes                             |
+| --------------------- | ------- | --------------------------------- |
+| `id`                  | text    |                                   |
+| `calendarExceptionId` | text    |                                   |
+| `startMinute`         | int     | minutes after midnight, 0 to 1440 |
+| `endMinute`           | int     | minutes after midnight, 0 to 1440 |
+| `createdAt`           | instant |                                   |
+| `updatedAt`           | instant |                                   |
 
 ### `baselines`
 
 Rows: every row of the organisation. Files `json/baselines.json` and `csv/baselines.csv`.
 
-| Column                          | Type    | Notes              |
-| ------------------------------- | ------- | ------------------ |
-| `id`                            | text    |                    |
-| `organizationId`                | text    |                    |
-| `planId`                        | text    |                    |
-| `name`                          | text    |                    |
-| `isActive`                      | boolean |                    |
-| `capturedAt`                    | instant |                    |
-| `dataDate`                      | date    |                    |
-| `capturedProjectFinish`         | date    | inclusive last day |
-| `hoursPerDayMinutes`            | int     | minutes            |
-| `costSnapshotLevel`             | enum    |                    |
-| `revisionSnapshotLevel`         | enum    |                    |
-| `placementSnapshotLevel`        | enum    |                    |
-| `criticalPathDefinition`        | enum    |                    |
-| `criticalFloatThresholdMinutes` | int     | minutes            |
-| `totalFloatMode`                | enum    |                    |
-| `makeOpenEndsCritical`          | boolean |                    |
-| `createdAt`                     | instant |                    |
-| `updatedAt`                     | instant |                    |
-| `createdBy`                     | text    |                    |
-| `updatedBy`                     | text    |                    |
-| `deletedAt`                     | instant |                    |
+| Column                          | Type    | Notes                                                        |
+| ------------------------------- | ------- | ------------------------------------------------------------ |
+| `id`                            | text    |                                                              |
+| `organizationId`                | text    |                                                              |
+| `planId`                        | text    |                                                              |
+| `name`                          | text    |                                                              |
+| `isActive`                      | boolean |                                                              |
+| `capturedAt`                    | instant |                                                              |
+| `dataDate`                      | date    |                                                              |
+| `capturedProjectFinish`         | date    | inclusive last day                                           |
+| `workdayMinutes`                | int     | minutes in a standard working day (converts days to minutes) |
+| `costSnapshotLevel`             | enum    |                                                              |
+| `revisionSnapshotLevel`         | enum    |                                                              |
+| `placementSnapshotLevel`        | enum    |                                                              |
+| `criticalPathDefinition`        | enum    |                                                              |
+| `criticalFloatThresholdMinutes` | int     | minutes                                                      |
+| `totalFloatMode`                | enum    |                                                              |
+| `makeOpenEndsCritical`          | boolean |                                                              |
+| `createdAt`                     | instant |                                                              |
+| `updatedAt`                     | instant |                                                              |
+| `createdBy`                     | text    |                                                              |
+| `updatedBy`                     | text    |                                                              |
+| `deletedAt`                     | instant |                                                              |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -541,42 +568,42 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/baseline-activities.json` and `csv/baseline-activities.csv`.
 
-| Column                    | Type    | Notes              |
-| ------------------------- | ------- | ------------------ |
-| `id`                      | text    |                    |
-| `organizationId`          | text    |                    |
-| `baselineId`              | text    |                    |
-| `sourceActivityId`        | text    |                    |
-| `code`                    | text    |                    |
-| `name`                    | text    |                    |
-| `type`                    | enum    |                    |
-| `durationMinutes`         | int     | minutes            |
-| `baselineStart`           | date    |                    |
-| `baselineFinish`          | date    | inclusive last day |
-| `lateStart`               | date    |                    |
-| `lateFinish`              | date    | inclusive last day |
-| `totalFloatMinutes`       | int     | minutes            |
-| `isCritical`              | boolean |                    |
-| `budgetedCost`            | bigint  |                    |
-| `budgetedExpense`         | bigint  |                    |
-| `laneIndex`               | int     |                    |
-| `parentId`                | text    |                    |
-| `calendarId`              | text    |                    |
-| `constraintType`          | enum    |                    |
-| `constraintDate`          | date    |                    |
-| `secondaryConstraintType` | enum    |                    |
-| `secondaryConstraintDate` | date    |                    |
-| `percentComplete`         | int     |                    |
-| `actualStart`             | date    |                    |
-| `actualFinish`            | date    | inclusive last day |
-| `placedStart`             | date    |                    |
-| `placedFinish`            | date    | inclusive last day |
-| `visualStart`             | date    |                    |
-| `createdAt`               | instant |                    |
-| `updatedAt`               | instant |                    |
-| `createdBy`               | text    |                    |
-| `updatedBy`               | text    |                    |
-| `deletedAt`               | instant |                    |
+| Column                    | Type    | Notes                                  |
+| ------------------------- | ------- | -------------------------------------- |
+| `id`                      | text    |                                        |
+| `organizationId`          | text    |                                        |
+| `baselineId`              | text    |                                        |
+| `sourceActivityId`        | text    |                                        |
+| `code`                    | text    |                                        |
+| `name`                    | text    |                                        |
+| `type`                    | enum    |                                        |
+| `durationMinutes`         | int     | minutes                                |
+| `baselineStart`           | date    |                                        |
+| `baselineFinish`          | date    | inclusive last day                     |
+| `lateStart`               | date    |                                        |
+| `lateFinish`              | date    | inclusive last day                     |
+| `totalFloatMinutes`       | int     | minutes                                |
+| `isCritical`              | boolean |                                        |
+| `budgetedCost`            | bigint  |                                        |
+| `budgetedExpense`         | bigint  |                                        |
+| `laneIndex`               | int     | diagram row number; 0 is the first row |
+| `parentId`                | text    |                                        |
+| `calendarId`              | text    |                                        |
+| `constraintType`          | enum    |                                        |
+| `constraintDate`          | date    |                                        |
+| `secondaryConstraintType` | enum    |                                        |
+| `secondaryConstraintDate` | date    |                                        |
+| `percentComplete`         | int     | whole percent, 0 to 100                |
+| `actualStart`             | date    |                                        |
+| `actualFinish`            | date    | inclusive last day                     |
+| `placedStart`             | date    |                                        |
+| `placedFinish`            | date    | inclusive last day                     |
+| `visualStart`             | date    |                                        |
+| `createdAt`               | instant |                                        |
+| `updatedAt`               | instant |                                        |
+| `createdBy`               | text    |                                        |
+| `updatedBy`               | text    |                                        |
+| `deletedAt`               | instant |                                        |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -757,20 +784,20 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/activity-steps.json` and `csv/activity-steps.csv`.
 
-| Column            | Type    | Notes |
-| ----------------- | ------- | ----- |
-| `id`              | text    |       |
-| `organizationId`  | text    |       |
-| `activityId`      | text    |       |
-| `seq`             | int     |       |
-| `name`            | text    |       |
-| `weight`          | decimal |       |
-| `percentComplete` | int     |       |
-| `createdAt`       | instant |       |
-| `updatedAt`       | instant |       |
-| `createdBy`       | text    |       |
-| `updatedBy`       | text    |       |
-| `deletedAt`       | instant |       |
+| Column            | Type    | Notes                                |
+| ----------------- | ------- | ------------------------------------ |
+| `id`              | text    |                                      |
+| `organizationId`  | text    |                                      |
+| `activityId`      | text    |                                      |
+| `seq`             | int     | position in the checklist, 1 upwards |
+| `name`            | text    |                                      |
+| `weight`          | decimal |                                      |
+| `percentComplete` | int     | whole percent, 0 to 100              |
+| `createdAt`       | instant |                                      |
+| `updatedAt`       | instant |                                      |
+| `createdBy`       | text    |                                      |
+| `updatedBy`       | text    |                                      |
+| `deletedAt`       | instant |                                      |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -818,21 +845,21 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/audit-events.json` and `csv/audit-events.csv`.
 
-| Column           | Type    | Notes                  |
-| ---------------- | ------- | ---------------------- |
-| `id`             | text    |                        |
-| `occurredAt`     | instant |                        |
-| `organizationId` | text    |                        |
-| `action`         | text    |                        |
-| `outcome`        | enum    |                        |
-| `actorType`      | enum    |                        |
-| `actorUserId`    | text    |                        |
-| `actorLabel`     | text    |                        |
-| `subjectType`    | text    |                        |
-| `subjectId`      | text    |                        |
-| `subjectLabel`   | text    |                        |
-| `changes`        | json    | JSON; see JSON columns |
-| `correlationId`  | text    |                        |
+| Column           | Type    | Notes                                 |
+| ---------------- | ------- | ------------------------------------- |
+| `id`             | text    |                                       |
+| `occurredAt`     | instant |                                       |
+| `organizationId` | text    |                                       |
+| `action`         | text    | open set; may grow in a minor version |
+| `outcome`        | enum    |                                       |
+| `actorType`      | enum    |                                       |
+| `actorUserId`    | text    |                                       |
+| `actorLabel`     | text    | free text, copied at the time         |
+| `subjectType`    | text    | open set; may grow in a minor version |
+| `subjectId`      | text    |                                       |
+| `subjectLabel`   | text    | free text, copied at the time         |
+| `changes`        | json    | JSON; see JSON columns                |
+| `correlationId`  | text    |                                       |
 
 Not exported: `ipAddress`, `userAgent`.
 

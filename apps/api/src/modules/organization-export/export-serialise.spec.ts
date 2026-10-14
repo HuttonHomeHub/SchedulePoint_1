@@ -204,6 +204,12 @@ describe('manifest and README', () => {
     ]);
     const tables = EXPORT_FILES.map((f) => f.table).concat(EXCLUDED_MODELS.map((m) => m.table));
     for (const entry of excluded) expect(tables).not.toContain(entry.name);
+    // A `column` exclusion is always `<exported file>.<field>`, a stable form.
+    const files = EXPORT_FILES.map((f) => f.file);
+    for (const entry of excluded.filter((e) => e.scope === 'column')) {
+      expect(files).toContain(entry.name.split('.')[0]);
+      expect(entry.name).toMatch(/^[a-z-]+\.\w+$/);
+    }
     expect(JSON.stringify(manifest)).not.toMatch(/"table"/);
   });
 

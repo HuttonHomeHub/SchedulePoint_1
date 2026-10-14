@@ -60,7 +60,7 @@ describe('the organisation export format document', () => {
 
       // The unit is stated for every column that has one, and a finish date says it is inclusive.
       for (const [, field = '', kind = '', note = ''] of rows) {
-        if (/Minutes$/.test(field)) expect(note).toBe('minutes');
+        if (/Minutes$/.test(field)) expect(note).toMatch(/^minutes/);
         if (/Days$/.test(field)) expect(note).toBe('days');
         if (kind === 'date' && (/Finish$/.test(field) || field === 'endDate')) {
           expect(note).toBe('inclusive last day');
@@ -90,25 +90,48 @@ describe('the organisation export format document', () => {
     expect(DOC).not.toMatch(/^Table `/m);
   });
 
-  it('lists every enum an exported column uses, with its current values', () => {
+  it('lists every enum column by file.column, with its current values', () => {
     const { models, enums } = Prisma.dmmf.datamodel;
-    const used = new Set<string>();
+    const expected = new Map<string, string[]>();
     for (const file of EXPORT_FILES) {
       const model = models.find((m) => m.name === file.model);
       for (const column of file.columns.filter((c) => c.kind === 'enum')) {
-        used.add(model?.fields.find((f) => f.name === (column.source ?? column.field))?.type ?? '');
+        const type = model?.fields.find((f) => f.name === (column.source ?? column.field))?.type;
+        expected.set(
+          `${file.file}.${column.field}`,
+          enums.find((e) => e.name === type)?.values.map((v) => v.name) ?? [],
+        );
       }
     }
-    const section = DOC.slice(DOC.indexOf('\n## Enumerations\n'), DOC.indexOf('\n## Files\n'));
     const listed = new Map(
-      [...section.matchAll(/^- `(\w+)`: (.+)$/gm)].map((m) => [m[1], (m[2] ?? '').split(', ')]),
+      [...DOC.matchAll(/^- `([\w-]+\.\w+)`: ([A-Z_0-9, ]+)$/gm)].map((m) => [
+        m[1],
+        (m[2] ?? '').split(', '),
+      ]),
     );
-    expect(used.size).toBeGreaterThan(15);
-    expect([...listed.keys()].sort()).toEqual([...used].sort());
-    for (const name of used) {
-      expect(listed.get(name)).toEqual(
-        enums.find((e) => e.name === name)?.values.map((v) => v.name),
-      );
+    expect(expected.size).toBeGreaterThan(30);
+    expect([...listed.keys()]).toEqual([...expected.keys()]);
+    for (const [key, values] of expected) expect(listed.get(key)).toEqual(values);
+  });
+
+  it('states the conventions a reader cannot infer', () => {
+    const rowNote = (file: string, column: string): string =>
+      new RegExp(`^\\| \`${column}\`\\s+\\| \\w+\\s+\\| (.*?)\\s*\\|$`, 'm').exec(
+        sections().get(file) ?? '',
+      )?.[1] ?? '';
+    expect(rowNote('calendar-shifts', 'weekday')).toBe('Monday = 0 … Sunday = 6');
+    expect(rowNote('activities', 'percentComplete')).toBe('whole percent, 0 to 100');
+    expect(rowNote('activities', 'physicalPercentComplete')).toBe('whole percent, 0 to 100');
+    expect(rowNote('activities', 'laneIndex')).toContain('0 is the first row');
+    expect(rowNote('activities', 'levelingPriority')).toContain('lower number = higher priority');
+    expect(rowNote('activity-steps', 'seq')).toContain('1 upwards');
+    expect(rowNote('calendars', 'workdayMinutes')).toContain('minutes');
+    for (const column of ['action', 'subjectType']) {
+      expect(rowNote('audit-events', column)).toContain('open set');
     }
+    expect(DOC).toContain('compare the major of `formatVersion` only');
+    expect(DOC).toContain('not a property of\n  the format');
+    expect(DOC).toContain('Order carries no meaning and is not promised');
+    expect(DOC).not.toMatch(/deterministic|creation order/);
   });
 });

@@ -172,6 +172,11 @@ non-production OpenAPI page) only.
   3. Writer: registry-driven, one entry at a time.
   4. Controller and service; error mapping; Pino lines `org_export.started|completed|failed`.
 
+**Row order (Task 2.1):** the format promises no order (`docs/ORGANISATION_EXPORT_FORMAT.md`). Read each file
+`ORDER BY id` (within a plan batch for per-plan files, and by keyset for paging) so one export is stable and
+pages do not skip or repeat; do not sort for any other reason. Ids are random UUIDs, so this order means
+nothing. The e2e suite sorts before comparing.
+
 **Security checklist for Task 2.1 (from the M1 review; each is a test or a line the reviewer should find):**
 
 - `resolveScope` first, then `can('organization:export')`; a foreign slug answers 404, not 403.

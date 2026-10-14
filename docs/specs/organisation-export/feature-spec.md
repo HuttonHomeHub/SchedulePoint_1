@@ -523,7 +523,8 @@ schedulepoint-export-acme-20261014T0930Z.zip
   lifted to `@repo/interchange` so the web and API share one guard). Numeric, date and boolean columns are never
   prefixed — `-5.0000` must stay a number. **JSON is authoritative; CSV is a spreadsheet view** and says so in the
   README.
-- **Order:** rows by plan id, then row id (UUID v7, so creation order) — deterministic, which the tests rely on.
+- **Order:** none promised. Rows within a file are in a stable order for one export (by id), which carries
+  no meaning; the tests sort before comparing.
 - **manifest.json:**
   `{ "format": "schedulepoint.organisation-export", "formatVersion": "1.0", "generatedAt", "generator": { "product":
 "SchedulePoint", "apiVersion" }, "organization": { "id", "slug", "name" }, "exportedBy": { "userId", "name" },
