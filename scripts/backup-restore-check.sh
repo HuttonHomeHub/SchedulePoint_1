@@ -98,7 +98,7 @@ BK_MIGS="$real_migrations"
 bk() {
   if [ "$TOOLS" = docker ]; then
     local -a a=(run --rm -i --network host --user "$(id -u):$(id -g)"
-      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB
+      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB -e BACKUP_SCHEDULE_ITERATIONS -e DATABASE_URL
       -v "$work/schedulepoint-backup.sh:/app/backup/schedulepoint-backup.sh:ro"
       -v "$BK_MIGS:/app/prisma/migrations:ro")
     if [ -n "$BK_DIR" ]; then
@@ -394,6 +394,34 @@ for v in 0 abc 3651 -5 007; do
 done
 expect "...and nothing was written" test -z "$(ls -A "$EMPTY")"
 
+# The loop: the first poll takes a copy at once when there is none, a stale .partial is cleared at
+# start, and a night is due only from 02:00 UTC and only when no copy carries today's date.
+nightly_count() { files_matching "$1" '^schedulepoint-2.*\.dump$' | grep -c . || true; }
+SCHED="$(newdir)"
+BK_DIR="$SCHED"
+touch "$SCHED/schedulepoint-2026-01-01T0200Z.dump.partial"
+RC=0
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
+expect "schedule: with no copy at all, the first poll takes one at once" succeeded_with "backup.started" "backup.succeeded"
+expect "schedule: a stale .partial is removed at start" test ! -e "$SCHED/schedulepoint-2026-01-01T0200Z.dump.partial"
+expect "schedule: exactly one copy" test "$(nightly_count "$SCHED")" -eq 1
+RC=0
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
+expect "schedule: a copy dated today means no second one" test "$(nightly_count "$SCHED")" -eq 1
+YEST="$(newdir)"
+BK_DIR="$YEST"
+touch "$YEST/schedulepoint-$(date -u -d yesterday +%Y-%m-%d)T0200Z.dump"
+RC=0
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=1; bk schedule) 2>&1)" || RC=$?
+if [ "$((10#$(date -u +%H)))" -ge 2 ]; then
+  expect "schedule: yesterday's copy only, after 02:00 UTC: the night is taken" test "$(nightly_count "$YEST")" -eq 2
+else
+  expect "schedule: yesterday's copy only, before 02:00 UTC: not yet due" test "$(nightly_count "$YEST")" -eq 1
+fi
+BK_DIR="$MAIN"
+run_bk check
+expect "check with no file argument checks the newest copy" succeeded_with "CHECK PASSED"
+
 PRUNE="$(newdir)"
 old() { touch -d "$1 days ago" "$PRUNE/$2"; }
 for f in schedulepoint-2026-01-01T0200Z.dump schedulepoint-2026-01-02T0200Z.dump schedulepoint-pre-migrate-2026-01-01T0300Z.dump \
@@ -451,6 +479,12 @@ run_bk pre-migrate
 expect "none pending: skipped" succeeded_with "\"reason\":\"none_pending\""
 expect "none pending: no copy was written" test -z "$(ls -A "$BK_DIR")"
 
+# The API container has no PG* variables; it has Prisma's DATABASE_URL, query string and all.
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL; bk pre-migrate) 2>&1)" || RC=$?
+expect "DATABASE_URL (with Prisma's ?schema=public) is understood: none pending" \
+  succeeded_with "\"reason\":\"none_pending\""
+
 BK_MIGS="$EXTRA"
 HELD="$(newdir)"
 BK_DIR="$HELD"
@@ -477,6 +511,13 @@ expect "held, folder not writable: exits non-zero with the UPDATE HELD line" \
   failed_with "UPDATE HELD" "cannot write to"
 expect "held, folder not writable: nothing was written" test -z "$(ls -A "$RO")"
 
+BK_DIR="$HELD"
+URLDIR="$(newdir)"
+BK_DIR="$URLDIR"
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL; bk pre-migrate) 2>&1)" || RC=$?
+expect "taken, connecting through DATABASE_URL as the API container does" \
+  succeeded_with "backup.pre_migrate_taken"
 BK_DIR="$HELD"
 run_bk pre-migrate
 expect "taken: exits 0 and logs backup.pre_migrate_taken naming the pending migration" \

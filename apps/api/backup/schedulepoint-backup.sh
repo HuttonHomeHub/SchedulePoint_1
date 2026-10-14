@@ -41,7 +41,8 @@
 #
 # SETTINGS  BACKUP_KEEP_DAYS (1-3650, default 30) is the only operator setting. Test-only: BACKUP_ROOT
 # (the folder, default /backups), MIGRATIONS_DIR (default /app/prisma/migrations),
-# BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800).
+# BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800),
+# BACKUP_SCHEDULE_ITERATIONS (stop `schedule` after this many polls; 0, the default, never stops).
 
 set -eu
 umask 077
@@ -370,9 +371,14 @@ cmd_schedule() {
   validate_keep_days
   rm -f "$ROOT"/schedulepoint-*.partial 2>/dev/null || true
   emit backup.started keep_days "$KEEP_DAYS" folder "$ROOT"
+  polls=0
   while :; do
     if nightly_due; then
       run_copy || true
+    fi
+    polls=$((polls + 1))
+    if [ "${BACKUP_SCHEDULE_ITERATIONS:-0}" -gt 0 ] && [ "$polls" -ge "$BACKUP_SCHEDULE_ITERATIONS" ]; then
+      return 0
     fi
     sleep "$POLL_SECONDS" &
     wait $! || true
