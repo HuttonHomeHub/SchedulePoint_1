@@ -637,6 +637,22 @@ export class HierarchyLifecycleService {
         counts.plans = (
           await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
+        // **The root itself must have been reactivated.** `loadDeletedRoot` read it without a lock,
+        // so the retention expiry can claim and delete it between that read and these updates; the
+        // updates then match nothing and the caller would answer 200 for a restore that did not
+        // happen. Only the three expirable levels: an activity or link batch is never swept, and a
+        // link batch can legitimately restore zero rows (endpoint guard).
+        const rootRestored =
+          entity === 'client'
+            ? counts.clients
+            : entity === 'project'
+              ? counts.projects
+              : entity === 'plan'
+                ? counts.plans
+                : 1;
+        if (rootRestored === 0) {
+          throw new NotFoundError(`This ${entity} is no longer in Recently deleted.`);
+        }
         if (knockOn) {
           // The same statement, returning the ids it reactivated: the caller tells the survivors by
           // what is NOT among them.

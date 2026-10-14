@@ -98,6 +98,9 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
     'projectCount',
     'planCount',
     'activityCount',
+    // The sweep has always recorded it (it is what the run budget charges history rows by), but
+    // it was never allowlisted, so the redactor dropped it from every stored row.
+    'activityHistoryCount',
   ],
   // — Destructive and structural acts inside a plan (ADR-0073 family D). Same flattened-count
   //   shape as above, for the same reason.

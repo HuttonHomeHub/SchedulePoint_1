@@ -9,21 +9,15 @@ import { AppConfigService } from '../../config/app-config.service';
 import { AuditService } from '../../modules/audit/audit.service';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
 
-import { deleteExpiredScope, type ExpiryCounts } from './hierarchy-expiry.runner';
-
-/**
- * Activities permanently deleted per run before the sweep stops and waits for the next tick.
- *
- * **Measured in ACTIVITIES, not batches**, because a batch is one activity or forty thousand and a
- * batch count therefore bounds nothing. At ~59 µs/activity with the FK indexes in place, 20,000 is
- * about 1.1 s of database work an hour.
- *
- * **No cap bounds the largest single batch, and that is stated rather than promised away.** A batch
- * cannot be split — expiring half of one leaves an unrestorable remnant — so a 200,000-activity
- * client cascade extrapolates to roughly 12 s in one transaction. The cap limits how many batches
- * follow it, never how big the first one is.
- */
-const ACTIVITY_BUDGET_PER_RUN = 20_000;
+import {
+  ACTIVITY_BUDGET_PER_RUN,
+  SCOPE_BUDGET_PER_RUN,
+  resolveExpiryScope,
+  selectExpiryCandidates,
+  type ExpiryRoot,
+} from './hierarchy-expiry.candidates';
+import { claimExpiredRoot } from './hierarchy-expiry.claim';
+import { deleteExpiredScope, type ExpiryCounts, type ExpiryScope } from './hierarchy-expiry.runner';
 
 /**
  * How many history rows cost as much, in the activity budget, as one activity (ADR-0174 D8).
@@ -46,22 +40,6 @@ export const HISTORY_ROWS_PER_ACTIVITY = 5;
 function budgetCharge(counts: ExpiryCounts): number {
   return counts.activities + Math.ceil(counts.activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY);
 }
-
-/**
- * The most scopes one run will expire, however small each one is.
- *
- * The activity budget bounds the **big-batch** case and says nothing about the mirror one, which is
- * the shape a real backlog actually has: hundreds of ordinary deletions carrying no activities at
- * all. Measured at ~10.2 ms per empty plan-scope (one transaction, one audit insert, the real
- * client) — so 100,000 of them would run for about **17 minutes** with the activity budget never
- * moving, on a job whose interval can be configured down to five. That is the case D3 guarantees
- * happens on every installation's first armed tick.
- *
- * 2,000 scopes is about 20 s. The remainder is not lost — the next tick takes it — and the two caps
- * are deliberately different quantities rather than one fudged number, because they bound different
- * failure modes. Found by the ADR-0096 backend-performance review.
- */
-const SCOPE_BUDGET_PER_RUN = 2_000;
 
 /**
  * The most candidate rows one scan will pull into memory, per level.
@@ -122,9 +100,8 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
 
   onApplicationBootstrap(): void {
     if (!this.config.retentionHierarchyEnabled) {
-      // No timer at all when disabled — the ADR-0087 D5 shape. This is also the M3 state: the
-      // countdown ships one release before anything is deleted (ADR-0096 D4).
-      this.logger.info({ event: 'hierarchy_expiry.disabled' }, 'hierarchy expiry is not armed');
+      // No timer at all when disabled — the ADR-0087 D5 shape.
+      void this.logDisabled();
       return;
     }
     this.logger.warn(
@@ -143,6 +120,39 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
     );
     this.timer.unref();
     void this.sweepNow();
+  }
+
+  /**
+   * The not-armed boot line, with how many roots are already past their period, so an operator
+   * reading Dockge sees a number before switching on. **Counts only, never a name**: the log is a
+   * rotated file on the host and customer names have no business in it (the preview command prints
+   * them to the terminal instead). A failed count is logged and the line still goes out — this
+   * must never be the reason an API does not start.
+   */
+  private async logDisabled(): Promise<void> {
+    let pastPeriod: { clients: number; projects: number; plans: number } | undefined;
+    try {
+      const roots = await selectExpiryCandidates(this.prisma, { cutoff: this.cutoff(new Date()) });
+      pastPeriod = { clients: 0, projects: 0, plans: 0 };
+      for (const root of roots) {
+        if (root.kind === 'client') pastPeriod.clients += 1;
+        else if (root.kind === 'project') pastPeriod.projects += 1;
+        else pastPeriod.plans += 1;
+      }
+    } catch (error) {
+      this.logger.warn(
+        { err: error, event: 'hierarchy_expiry.past_period_count_failed' },
+        'could not count deleted work past its retention period; continuing',
+      );
+    }
+    this.logger.info(
+      { event: 'hierarchy_expiry.disabled', ...(pastPeriod ? { pastPeriod } : {}) },
+      'hierarchy expiry is not armed',
+    );
+  }
+
+  private cutoff(now: Date): Date {
+    return new Date(now.getTime() - this.config.retentionHierarchyDays * 86_400_000);
   }
 
   onApplicationShutdown(): void {
@@ -176,134 +186,42 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
   }
 
   /**
-   * soft-delete: any-state — the subtree lookups under an expiring client or project take every
-   * project and plan beneath it, active ones included, because the expiry deletes by ownership scope
-   * rather than by deletion state (ADR-0096 D5). The candidates themselves are `deletedAt: { lt }`.
-   * (TECH_DEBT #139 concerns two other tables, which the runner's own label cites.)
+   * Selection lives in {@link selectExpiryCandidates}, shared with the operator's preview; this
+   * method owns only the budgets and the loop.
    */
   private async sweep(now: Date): Promise<void> {
-    const cutoff = new Date(now.getTime() - this.config.retentionHierarchyDays * 86_400_000);
+    const cutoff = this.cutoff(now);
     let activityBudget = ACTIVITY_BUDGET_PER_RUN;
     let scopeBudget = SCOPE_BUDGET_PER_RUN;
 
-    // **All three levels, not just clients.** A plan deleted on its own never had a deleted client
-    // above it, so a client-only scan would leave it in the bin forever while its countdown said
-    // otherwise — a screen that lies rather than a sweep that misses.
-    //
-    // A descendant whose ancestor is ALSO expiring is skipped: the ancestor's own pass takes it,
-    // and selecting both would attempt the same rows twice. The second attempt is harmless (the
-    // rows are gone) but the counts a reader sees would be wrong.
-    const [clients, projects, plans] = await Promise.all([
-      this.prisma.client.findMany({
-        where: { deletedAt: { lt: cutoff } },
-        select: {
-          id: true,
-          name: true,
-          organizationId: true,
-          deletedAt: true,
-          deleteBatchId: true,
-        },
-        orderBy: { deletedAt: 'asc' },
-        take: CANDIDATE_SCAN_LIMIT,
-      }),
-      this.prisma.project.findMany({
-        where: { deletedAt: { lt: cutoff } },
-        select: {
-          id: true,
-          name: true,
-          organizationId: true,
-          deletedAt: true,
-          deleteBatchId: true,
-          clientId: true,
-        },
-        orderBy: { deletedAt: 'asc' },
-        take: CANDIDATE_SCAN_LIMIT,
-      }),
-      this.prisma.plan.findMany({
-        where: { deletedAt: { lt: cutoff } },
-        select: {
-          id: true,
-          name: true,
-          organizationId: true,
-          deletedAt: true,
-          deleteBatchId: true,
-          projectId: true,
-        },
-        orderBy: { deletedAt: 'asc' },
-        take: CANDIDATE_SCAN_LIMIT,
-      }),
-    ]);
-
-    const expiringClients = new Set(clients.map((c) => c.id));
-    const expiringProjects = new Set(projects.map((p) => p.id));
-
-    for (const client of clients) {
+    const roots = await selectExpiryCandidates(this.prisma, {
+      cutoff,
+      limit: CANDIDATE_SCAN_LIMIT,
+    });
+    for (const root of roots) {
       if (activityBudget <= 0 || scopeBudget <= 0) return;
       scopeBudget -= 1;
-      const projectRows = await this.prisma.project.findMany({
-        where: { clientId: client.id },
-        select: { id: true },
-      });
-      const projectIds = projectRows.map((p) => p.id);
-      const planRows =
-        projectIds.length === 0
-          ? []
-          : await this.prisma.plan.findMany({
-              where: { projectId: { in: projectIds } },
-              select: { id: true },
-            });
-      const counts = await this.expireScope(client, 'client', {
-        clientIds: [client.id],
-        projectIds,
-        planIds: planRows.map((p) => p.id),
-      });
-      if (counts) activityBudget -= budgetCharge(counts);
-    }
-
-    for (const project of projects) {
-      if (activityBudget <= 0 || scopeBudget <= 0) return;
-      if (expiringClients.has(project.clientId)) continue; // its client's pass takes it
-      scopeBudget -= 1;
-      const planRows = await this.prisma.plan.findMany({
-        where: { projectId: project.id },
-        select: { id: true },
-      });
-      const counts = await this.expireScope(project, 'project', {
-        clientIds: [],
-        projectIds: [project.id],
-        planIds: planRows.map((p) => p.id),
-      });
-      if (counts) activityBudget -= budgetCharge(counts);
-    }
-
-    for (const plan of plans) {
-      if (activityBudget <= 0 || scopeBudget <= 0) return;
-      if (expiringProjects.has(plan.projectId)) continue; // its project's pass takes it
-      scopeBudget -= 1;
-      const counts = await this.expireScope(plan, 'plan', {
-        clientIds: [],
-        projectIds: [],
-        planIds: [plan.id],
-      });
+      const scope = await resolveExpiryScope(this.prisma, root);
+      const counts = await this.expireScope(root, scope, cutoff);
       if (counts) activityBudget -= budgetCharge(counts);
     }
   }
 
   private async expireScope(
-    root: {
-      id: string;
-      name: string;
-      organizationId: string;
-      deletedAt: Date | null;
-      deleteBatchId: string | null;
-    },
-    kind: 'client' | 'project' | 'plan',
-    scope: { clientIds: string[]; projectIds: string[]; planIds: string[] },
+    root: ExpiryRoot,
+    scope: ExpiryScope,
+    cutoff: Date,
   ): Promise<ExpiryCounts | null> {
+    const kind = root.kind;
     const startedAt = Date.now();
     try {
       const counts = await this.prisma.$transaction(
         async (tx) => {
+          // **First statement, before anything is deleted**: the scan was a while ago, and a planner
+          // may have restored this root since. Nothing has been written when the claim fails, so
+          // there is nothing to undo and no audit row to retract.
+          if (!(await claimExpiredRoot(tx, root, cutoff))) return null;
+
           const result = await deleteExpiredScope(tx, scope);
 
           // **Inside the transaction, with the tx passed**, so an unwritable audit row rolls the
@@ -325,7 +243,7 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
               after: {
                 name: root.name,
                 deleteBatchId: root.deleteBatchId,
-                deletedAt: root.deletedAt?.toISOString() ?? null,
+                deletedAt: root.deletedAt.toISOString(),
                 retentionDays: this.config.retentionHierarchyDays,
                 // Flattened scalars, never nested: the redactor reduces any non-scalar to a type
                 // marker by design, so a nested shape would record that a batch happened and nothing
@@ -343,6 +261,14 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
         },
         { timeout: BATCH_TRANSACTION_TIMEOUT_MS },
       );
+
+      if (counts === null) {
+        this.logger.debug(
+          { event: 'hierarchy_expiry.skipped_restored', rootKind: kind, rootId: root.id },
+          'a deleted root was restored or re-deleted since the scan; nothing was removed',
+        );
+        return null;
+      }
 
       // The count WITH the duration, so the cap can be re-derived from production rather than from
       // a seeded bench — the only place the real distribution of batch sizes exists.

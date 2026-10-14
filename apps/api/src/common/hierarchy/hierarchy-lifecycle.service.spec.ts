@@ -487,6 +487,32 @@ describe('HierarchyLifecycleService', () => {
   });
 
   describe('restoreBatch', () => {
+    // A restore normally reactivates its own root; the cases that matter override this.
+    beforeEach(() => {
+      tx.project.updateMany.mockResolvedValue({ count: 1 });
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it.each(['client', 'project', 'plan'] as const)(
+      'answers 404 when the %s root was removed between the read and the update',
+      async (entity) => {
+        // The retention expiry claimed and deleted the root after `loadDeletedRoot` read it, so every
+        // update matches nothing. Answering 200 would tell a planner their work was back (US-2).
+        tx.client.findFirst.mockResolvedValue({ deleteBatchId: 'batch-x', id: 'c0' });
+        tx.project.findFirst.mockResolvedValue({ deleteBatchId: 'batch-x', clientId: 'c0' });
+        tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-x', projectId: 'pr0' });
+        tx.client.updateMany.mockResolvedValue({ count: 0 });
+        tx.project.updateMany.mockResolvedValue({ count: 0 });
+        tx.plan.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(service.restoreBatch(asTx(), entity, 'x', ACTOR)).rejects.toThrow(
+          NotFoundError,
+        );
+        // …and nothing below the root was touched.
+        expect(tx.activity.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
     it('restores only batch links whose BOTH endpoints are active (endpoint-guarded)', async () => {
       tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
       tx.project.findFirst.mockResolvedValue({ id: 'pr1' }); // parent project active
