@@ -44,7 +44,8 @@
 # (the folder, default /backups), MIGRATIONS_DIR (default /app/prisma/migrations),
 # BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800),
 # BACKUP_SCHEDULE_ITERATIONS (stop `schedule` after this many polls; 0, the default, never stops),
-# BACKUP_POLL_SECONDS (the poll interval, default 300), BACKUP_NOW (an epoch second standing in for
+# BACKUP_POLL_SECONDS (the poll interval, default 300), BACKUP_FIRST_RETRY_SECONDS (the wait after a
+# failed attempt while no nightly copy exists yet, default 60), BACKUP_NOW (an epoch second standing in for
 # "now" when deciding whether a nightly copy is due and naming copies).
 
 set -eu
@@ -66,6 +67,7 @@ POLL_SECONDS="${BACKUP_POLL_SECONDS:-300}"
 # After a failed nightly attempt, wait this long before the next: a failure at 02:05 is usually a
 # full disk or a stopped database, and retrying every five minutes all day only fills the log.
 RETRY_BACKOFF_SECONDS=3600
+FIRST_COPY_RETRY_SECONDS="${BACKUP_FIRST_RETRY_SECONDS:-60}"
 NIGHTLY_HOUR=2
 # 24 hours plus two of slack.
 HEALTHY_MINUTES=1560
@@ -328,7 +330,7 @@ take_copy() {
   started=$(date +%s)
 
   if ! { [ -d "$ROOT" ] && touch "$ROOT/.write-test" 2>/dev/null && rm -f "$ROOT/.write-test"; }; then
-    COPY_ERR="cannot write to $ROOT — see the backup guide, step 1"
+    COPY_ERR="cannot write to $ROOT — see the backup guide, \"Turn backups on\", step 2"
     return 1
   fi
 
@@ -481,7 +483,15 @@ cmd_schedule() {
   retry_after=0
   while :; do
     if [ "$(date +%s)" -ge "$retry_after" ] && nightly_due; then
-      if ! run_copy; then retry_after=$(($(date +%s) + RETRY_BACKOFF_SECONDS)); fi
+      if ! run_copy; then
+        # Until a first good copy exists, retry soon: the service starts beside the database and the
+        # api, and a first attempt can lose a race with the database's start or its first migration.
+        if [ -z "$(newest_of "$NIGHTLY_RE")" ]; then
+          retry_after=$(($(date +%s) + FIRST_COPY_RETRY_SECONDS))
+        else
+          retry_after=$(($(date +%s) + RETRY_BACKOFF_SECONDS))
+        fi
+      fi
     fi
     polls=$((polls + 1))
     if [ "${BACKUP_SCHEDULE_ITERATIONS:-0}" -gt 0 ] && [ "$polls" -ge "$BACKUP_SCHEDULE_ITERATIONS" ]; then

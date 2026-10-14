@@ -102,7 +102,7 @@ BK_MIGS="$real_migrations"
 bk() {
   if [ "$TOOLS" = docker ]; then
     local -a a=(run --rm -i --network host --user "$(id -u):$(id -g)"
-      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB -e BACKUP_SCHEDULE_ITERATIONS -e BACKUP_POLL_SECONDS -e BACKUP_NOW -e DATABASE_URL
+      -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGOPTIONS -e BACKUP_KEEP_DAYS -e BACKUP_MIN_FREE_KB -e BACKUP_SCHEDULE_ITERATIONS -e BACKUP_POLL_SECONDS -e BACKUP_FIRST_RETRY_SECONDS -e BACKUP_NOW -e DATABASE_URL
       -v "$work/schedulepoint-backup.sh:/app/backup/schedulepoint-backup.sh:ro"
       -v "$BK_MIGS:/app/prisma/migrations:ro")
     if [ -n "$BK_DIR" ]; then
@@ -479,6 +479,21 @@ BK_DIR="$BACKOFF"
 RC=0
 OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=3 BACKUP_POLL_SECONDS=1 BACKUP_NOW="$T_AFTER" PGPORT=1; bk schedule) 2>&1)" || RC=$?
 expect "schedule: after a failed night it does not retry on the next poll (backoff)" \
+  test "$(grep -c 'backup.failed' <<<"$OUT")" -eq 1
+# The first copy can lose a race with the database or the API's first migration, so while no nightly
+# copy exists a failed attempt is retried after a minute, not after the hour a failed night waits.
+FIRSTRETRY="$(newdir)"
+BK_DIR="$FIRSTRETRY"
+RC=0
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=3 BACKUP_POLL_SECONDS=2 BACKUP_FIRST_RETRY_SECONDS=1 BACKUP_NOW="$T_AFTER" PGPORT=1; bk schedule) 2>&1)" || RC=$?
+expect "schedule: with no copy yet, a failed attempt is retried soon" \
+  test "$(grep -c 'backup.failed' <<<"$OUT")" -ge 2
+LATERETRY="$(newdir)"
+touch "$LATERETRY/schedulepoint-2026-10-13T0200Z.dump"
+BK_DIR="$LATERETRY"
+RC=0
+OUT="$( (export BACKUP_SCHEDULE_ITERATIONS=3 BACKUP_POLL_SECONDS=2 BACKUP_FIRST_RETRY_SECONDS=1 BACKUP_NOW="$T_AFTER" PGPORT=1; bk schedule) 2>&1)" || RC=$?
+expect "schedule: once a copy exists, a failed night still waits out the backoff" \
   test "$(grep -c 'backup.failed' <<<"$OUT")" -eq 1
 BK_DIR="$MAIN"
 run_bk check
