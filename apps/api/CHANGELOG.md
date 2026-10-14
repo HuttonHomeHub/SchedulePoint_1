@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.90.0
+
+### Minor Changes
+
+- [#985](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/985) [`88ac701`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/88ac701b14b2b9746bb941fe2be9cbbfe68a8fdc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The API image now carries a database backup command (`schedulepoint-backup`) and the PostgreSQL 17 client tools it runs: a copy every night kept 30 days, `check` to load a copy into a scratch database without touching live data, `restore` to swap a copy in while keeping the current database aside, and a copy taken before an update that changes the database. Nothing runs it yet; the compose service and the start-up call arrive with the next release's changes.
+
 ## 0.89.4
 
 ### Patch Changes
