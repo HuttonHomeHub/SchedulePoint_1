@@ -209,7 +209,7 @@ Baselines (accessibility, general performance, security, observability) come fro
   - Plan open → interactive: P95 < 1.5s at 500 activities.
   - Activity create / move / dependency add → visual feedback: < 100ms.
   - CPM recalc after edit: P95 < 500ms at 500 activities.
-- **Background processing:** CPM recalculation is synchronous in v1 (fast enough at target scale); export generation is async / job-queue backed.
+- **Background processing:** CPM recalculation is synchronous in v1 (fast enough at target scale); the whole-organisation export is generated synchronously and streamed on the request, not queued (amended by [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md) D3, which records the measurement and the trigger that reopens a job queue).
 
 ## 15. Technical Requirements
 

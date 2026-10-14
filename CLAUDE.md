@@ -596,7 +596,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
 - **ADR-0192** _(Accepted; amends ADR-0018)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
 - **ADR-0193** _(Accepted; amends ADR-0096 D4 and D9)_ — A permanent delete is previewed by the code that performs it, and arming is a host act → [`0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md`](docs/adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)
-- **ADR-0194** _(Proposed; implements ADR-0085 D4 and D5)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
+- **ADR-0194** _(Accepted; implements ADR-0085 D4 and D5)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

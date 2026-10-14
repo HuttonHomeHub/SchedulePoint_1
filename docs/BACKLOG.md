@@ -309,7 +309,8 @@ narrowed one, which the Background-processing entry now states.**
   requires file upload yet.
 - `M` **Metrics & tracing** — OpenTelemetry (ADR-0013). Includes choosing the
   backend, which is the actual decision.
-- `M` **Privacy operations** — **shaped by [ADR-0085](adr/0085-privacy-operations.md); do not start
+- `M` **Privacy operations** — **the export half is built on the API (ADR-0194; the page is its next
+  milestone); erasure still waits on ADR-0085 D6's trigger.** **Shaped by [ADR-0085](adr/0085-privacy-operations.md); do not start
   from this line.** That ADR reads the schema and finds the work is not "a hard-delete path": it is
   actor **anonymisation** (a hard delete would either cascade across 54 attribution columns or leave
   dangling ids), and it may not touch the audit log's append-only triggers. **Trigger to build:** the

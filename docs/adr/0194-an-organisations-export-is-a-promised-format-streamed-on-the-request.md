@@ -1,10 +1,11 @@
 # ADR-0194: An organisation's export is a promised format, streamed on the request
 
-- **Status:** Proposed — 2026-10-14. The spec was approved by the product owner on 2026-10-14 with every default in
+- **Status:** Accepted — 2026-10-14. The spec was approved by the product owner on 2026-10-14 with every default in
   its §6 (recycle-bin items, removed members and withdrawn invitations included with their deletion dates; the audit
   log as the Audit log screen shows it, without IP addresses or browser details; an "Export data" rail link for Org
-  Admins, with the Members page as the fallback). Milestone 1 is built (the registry, the census, the permission and
-  the format document); the endpoint (M2) and the page (M3) are not. It becomes Accepted when M2 lands.
+  Admins, with the Members page as the fallback). Milestone 1 built the registry, the census, the permission and the
+  format document; milestone 2 built the endpoint, its audit row and the measurement D3 rests on
+  ([`m2-measurements.md`](../specs/organisation-export/m2-measurements.md)). The page (M3) is not built.
 - **Spec:** [`docs/specs/organisation-export/feature-spec.md`](../specs/organisation-export/feature-spec.md) §4.4,
   §4.9 · **Plan:** [`implementation-plan.md`](../specs/organisation-export/implementation-plan.md) ·
   **Format:** [`docs/ORGANISATION_EXPORT_FORMAT.md`](../ORGANISATION_EXPORT_FORMAT.md)
@@ -65,6 +66,18 @@ of 2,000 activities) measured at more than 5 minutes, or more than 256 MB added 
 read's p95 above 1 s while it runs; or an organisation outgrowing the brief's data-scale target. Then tune (compression
 level, batch size), then a worker thread, then ADR-0009 and ADR-0011.
 
+**Measured at M2** ([`m2-measurements.md`](../specs/organisation-export/m2-measurements.md), ADR-0142): ten
+plans of 2,000 activities with two baselines each (273 k rows, a 30 MB ZIP) export in **24 to 27 s**, add
+**+273 to +292 MB** to a freshly started API (a plateau of about 540 MB resident, with a live heap flat
+at 72 to 80 MB, so it does not grow with the size) and leave an ordinary read's p95 at **61 to 94 ms**.
+The brief's typical organisation extrapolates to 15 to 19 s. **The upper bound extrapolates to 4.0
+minutes at the fixture's 1.6 links per activity and 5.2 minutes at the brief's four, and to a 315 to
+442 MB ZIP**, so the first two triggers are within 10 % of their thresholds rather than clear of them.
+Nearly all of the time is the two reads of every table (the JSON and the CSV); compression is not the
+cost, and the tuning tried (level, page size, text pieces, reading ahead) moved time or memory by at most
+a fifth in one direction at the price of the other. The decision on those two figures is the owner's, with
+the options in the measurement record's verdict; `docs/TECH_DEBT.md` #515 and #516 carry the triggers.
+
 **D4 — Org Admin only, by POST, audited as `privacy.exported`, throttled, single-flight.** A new permission
 `organization:export` is granted to Org Admin and nobody else, in its own bundle beside `audit:read`, pinned by a
 structural spec asserting its holders are exactly `[ORG_ADMIN]`. It is not `interchange:export` (every member, one
@@ -98,9 +111,12 @@ importer is possible later; nothing promises one.
   census fail and the sentence that says what to do.
 - A format change is now a versioned, documented event. Removing or renaming an exported column after 1.0 is a major.
 - The shared CSV guard lives in `@repo/interchange`, so the browser and the API cannot drift on it.
-- Milestone 1 ships nothing a user can reach. `docs/PROJECT_BRIEF.md` §14, `docs/SECURITY_STANDARDS.md`,
-  `docs/RELEASE_1_0.md` row 6, `docs/BACKLOG.md` and `CLAUDE.md` §17 are updated when the endpoint lands.
-- New debt: none. The cost at scale is reasoned, not measured, until M2's measurement.
+- Milestones 1 and 2 ship nothing a user can reach through the app: the route exists and is audited, and the page
+  that calls it is milestone 3. `docs/PROJECT_BRIEF.md` §14, `docs/SECURITY_STANDARDS.md` and `docs/BACKLOG.md`
+  are updated with the endpoint; `docs/RELEASE_1_0.md` row 6 and `CLAUDE.md` §17 change when the page lands.
+- New debt: `docs/TECH_DEBT.md` #515 (a browser `Blob` for a ZIP of 300 to 450 MB) and #516 (the export reads every
+  table twice, and the unmeasured multi-organisation case). The cost at the upper bound is extrapolated from a
+  ten-plan measurement, not run.
 
 ## References
 
