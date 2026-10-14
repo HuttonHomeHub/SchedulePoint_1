@@ -13,12 +13,18 @@ export interface RulerTick {
 }
 
 /**
- * The least pixel distance between two month labels' left edges. The widest label is "Sept 2027"
- * (en-GB spells September with four letters): nine glyphs at the `text-micro` size (10 px) average
- * about 5.5 px, so roughly 50 px, plus the 4 px `left-1` inset the label sits at, plus a gap of
- * about 10 px so neighbours read as two words rather than one string. Reasoned from the type size,
- * not measured in a browser. The chosen step is judged on an average month, and a 59-day pair is
- * 3% shorter than that, which the gap absorbs.
+ * The least pixel distance between two month labels' left edges at the default text size, and the
+ * pitch the printed document always uses (paper does not scale with the reader's text setting). The
+ * widest label is "Sept 2027" (en-GB spells September with four letters): measured at 49.6 px at
+ * the `text-micro` size (10 px), plus a gap of about 14 px so neighbours read as two words rather
+ * than one string (the labels' common `left-1` inset cancels in a left-to-left pitch). The chosen step is judged on
+ * an average month, and a 59-day pair is 3% shorter than that, which the gap absorbs.
+ *
+ * **This is only right at 16 px text.** `text-micro` is in `rem`, so at 200 % text the same label
+ * is 99.1 px wide, and a 65.5 px pitch overprinted three of four neighbours at 1024 x 600
+ * (`docs/specs/pre-1-0-batch-2/m5-measurement.md`, #501). The on-screen ruler therefore measures
+ * its widest label and passes the result as `minLabelPitchPx`; this constant is that argument's
+ * default.
  */
 export const MONTH_LABEL_MIN_PITCH_PX = 64;
 
@@ -41,15 +47,15 @@ const MONTH_FORMAT = new Intl.DateTimeFormat(undefined, {
  * every `years`-th January. Aligned to the calendar (Jan/Apr/Jul/Oct for a quarter) rather than
  * counted from the first visible month, so labels stay put while the chart scrolls.
  */
-function labelStep(pxPerDay: number): { months: number; years: number } {
+function labelStep(pxPerDay: number, minLabelPitchPx: number): { months: number; years: number } {
   for (const months of MONTH_STEPS) {
-    if (months * AVG_MONTH_DAYS * pxPerDay >= MONTH_LABEL_MIN_PITCH_PX) {
+    if (months * AVG_MONTH_DAYS * pxPerDay >= minLabelPitchPx) {
       return { months, years: 1 };
     }
   }
   // Even a yearly label collides: thin the Januaries, and accept the last step if nothing fits.
   const years =
-    YEAR_STEPS.find((k) => k * AVG_YEAR_DAYS * pxPerDay >= MONTH_LABEL_MIN_PITCH_PX) ??
+    YEAR_STEPS.find((k) => k * AVG_YEAR_DAYS * pxPerDay >= minLabelPitchPx) ??
     YEAR_STEPS[YEAR_STEPS.length - 1]!;
   return { months: 12, years };
 }
@@ -66,14 +72,26 @@ function labelStep(pxPerDay: number): { months: number; years: number } {
  *
  * Iteration is bounded by the rendered width, not by the plan's duration, so a ten-year programme
  * costs the same as a ten-week one — the horizontal extent is what is drawn.
+ *
+ * `minLabelPitchPx` is the least distance between two labels' left edges. The on-screen ruler
+ * passes its measured widest label plus a gap so text scaling thins labels; the print document
+ * passes nothing, because its type does not scale.
  */
-export function buildRulerTicks(anchorIso: string, widthPx: number, pxPerDay: number): RulerTick[] {
+export function buildRulerTicks(
+  anchorIso: string,
+  widthPx: number,
+  pxPerDay: number,
+  minLabelPitchPx: number = MONTH_LABEL_MIN_PITCH_PX,
+): RulerTick[] {
   if (widthPx <= 0 || pxPerDay <= 0) return [];
 
   const totalDays = Math.ceil(widthPx / pxPerDay);
   const showDays = pxPerDay >= DAY_TICK_MIN_PX;
-  const step = labelStep(pxPerDay);
+  const step = labelStep(pxPerDay, minLabelPitchPx);
   const ticks: RulerTick[] = [];
+  let firstMonthIso: string | null = null;
+  let firstMonthTick: RulerTick | null = null;
+  let anyLabel = false;
 
   for (let day = 0; day <= totalDays; day += 1) {
     const iso = addCalendarDays(anchorIso, day);
@@ -82,15 +100,38 @@ export function buildRulerTicks(anchorIso: string, widthPx: number, pxPerDay: nu
       const year = Number(iso.slice(0, 4));
       const monthIndex = Number(iso.slice(5, 7)) - 1;
       const labelled = monthIndex % step.months === 0 && year % step.years === 0;
-      ticks.push({
+      const tick: RulerTick = {
         x: daysBetween(anchorIso, iso) * pxPerDay,
         label: labelled ? MONTH_FORMAT.format(new Date(`${iso}T00:00:00Z`)) : '',
         major: true,
-      });
+      };
+      if (labelled) anyLabel = true;
+      if (firstMonthTick === null) {
+        firstMonthTick = tick;
+        firstMonthIso = iso;
+      }
+      ticks.push(tick);
     } else if (showDays) {
       ticks.push({ x: day * pxPerDay, label: '', major: false });
     }
   }
 
+  // A coarse step can land on no labelled month in view (a year-long range at a half-year step with
+  // no January or July in it), leaving a ruler of bare lines. One label cannot overprint anything,
+  // so the first month start in view carries it.
+  if (!anyLabel && firstMonthTick !== null && firstMonthIso !== null) {
+    firstMonthTick.label = MONTH_FORMAT.format(new Date(`${firstMonthIso}T00:00:00Z`));
+  }
+
   return ticks;
+}
+
+/**
+ * One label per month of a year, so a caller can measure the widest the locale produces rather
+ * than assuming English's "Sept". The year's digits are the same width in every month.
+ */
+export function monthLabelSamples(): string[] {
+  return Array.from({ length: 12 }, (_, month) =>
+    MONTH_FORMAT.format(new Date(Date.UTC(2027, month, 1))),
+  );
 }
