@@ -450,7 +450,9 @@ secret manager — never baked into images or committed. See
 ## Database migrations
 
 - Applied with `prisma migrate deploy` as part of the release/deploy step,
-  before the new API version serves traffic.
+  before the new API version serves traffic. Where backups are switched on, the entrypoint
+  first takes a copy when a migration is pending, and a failed copy holds the update (see
+  [Backups](#backups)).
 - Migrations are backward-compatible where feasible (expand/contract) so a
   rollout can proceed without downtime and a rollback stays safe.
 
@@ -814,7 +816,9 @@ Two ways to run it:
    cached image — so restarting a `latest` stack does **not** pick up a new
    release. Always pull.
 3. The **API self-migrates** on startup (`prisma migrate deploy`, ADR-0018), so a
-   version bump applies pending DB migrations automatically before it serves.
+   version bump applies pending DB migrations automatically before it serves. Where the
+   backups folder is mounted on the `api` service, a copy of the database is taken first
+   (ADR-0192 D9, [Backups](#backups)).
 4. Hard-refresh the browser (Ctrl/Cmd-F5) to drop the cached old web bundle.
 
 **Rollback:** pin the previous version tag and Update (plus any compensating
@@ -1098,6 +1102,120 @@ If step 4 produces nothing, the cron stays. The script is not elegant, but it is
 actually have until something replaces it, and removing it on the strength of a merged pull request
 is how an installation ends up with no alerting at all and no one aware of it.
 
+## Backups
+
+The owner's step-by-step version is [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md).
+This section is the reference. Design and decisions: ADR-0192 and
+[`docs/specs/database-backup/`](specs/database-backup/feature-spec.md).
+
+### What runs
+
+- **The `backup` service** (`docker-compose.release.yml`, and `docker-compose.yml` for development)
+  runs the API image's `schedulepoint-backup` script (`apps/api/backup/`), so it moves with the API
+  image (same tag, Watchtower label) and depends on `db` only: copies continue while the API is
+  crash-looping. It takes a copy at 02:00 UTC every day, and at once when no copy exists, then prunes.
+  The container is `read_only`, drops all capabilities and holds only the database credentials.
+- **The copy before an update** is taken by the API's entrypoint
+  (`apps/api/docker-entrypoint.sh`, `schedulepoint-backup pre-migrate`) just before
+  `prisma migrate deploy`.
+- **The database publishes no port** in the release stack (ADR-0192 D10). `docker compose exec db psql`
+  is unaffected; a database tool on another computer can no longer connect. `docker-compose.yml`
+  keeps its port for local development.
+
+### Settings
+
+| Setting            | Default     | Meaning                                                                          |
+| ------------------ | ----------- | -------------------------------------------------------------------------------- |
+| `BACKUP_DIR`       | `./backups` | Host folder for the copies (compose interpolation, relative to the compose file) |
+| `BACKUP_KEEP_DAYS` | `30`        | Whole days 1 to 3650; older copies are deleted after a good copy                 |
+
+Both are part of the 1.0 promise. There is no setting for the schedule (02:00 UTC) and none for the
+pre-update copy: it is on exactly when the `api` service mounts `/backups`, and removing that one
+volume line switches it off. A server that has not mounted the folder logs
+`backup.pre_migrate_skipped` (reason `not_enabled`) and migrates as it always did.
+
+**The folder must exist and belong to uid 1000 (`node`) before the stack starts:**
+`sudo install -d -o 1000 -g 1000 -m 700 backups`. Otherwise Docker creates it owned by root and every
+update with a database change is held. Copies are written mode 600 under `umask 077`.
+
+### Files in the folder
+
+| File                                              | What                                                      |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `schedulepoint-YYYY-MM-DDTHHMMZ.dump`             | A nightly (or `now`) copy, `pg_dump` custom format        |
+| `schedulepoint-pre-migrate-YYYY-MM-DDTHHMMZ.dump` | The copy taken before an update that changes the database |
+| `schedulepoint-pre-restore-YYYY-MM-DDTHHMMZ.dump` | The safety copy `restore` takes of the database it swaps  |
+| `<copy>.sha256`                                   | Its checksum (`sha256sum -c` works from the folder)       |
+| `LAST-BACKUP.txt`                                 | Plain-English outcome of the latest nightly copy          |
+| `UPDATE-HELD.txt`                                 | Present only while an update is held                      |
+
+A copy is written as `.partial` and renamed only when finished and readable. Pruning deletes only
+these file kinds, only after a good copy, and never the newest nightly copy nor the newest pre-update
+copy.
+
+### Signals
+
+1. **Container health.** `backup` is healthy only while the newest nightly copy is under 26 hours
+   old. `docker compose ps` and Dockge show `unhealthy` otherwise.
+2. **`LAST-BACKUP.txt`**: starts `OK` or `FAILED`, with the reason and the newest good copy.
+3. **Log lines** (one JSON object per line): `backup.succeeded`, `backup.failed`, `backup.pruned` in
+   `docker compose logs backup`; `backup.pre_migrate_skipped` (reason `not_enabled`, `fresh` or
+   `none_pending`), `backup.pre_migrate_taken` and `backup.pre_migrate_failed` in
+   `docker compose logs api`.
+
+None needs an outside service. A ping to an external monitor after each good copy is not built.
+
+### Commands
+
+`docker compose -f docker-compose.release.yml run --rm backup <command>`:
+
+| Command                  | What it does                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `list`                   | The copies, newest first                                                                             |
+| `now`                    | Take a copy immediately                                                                              |
+| `check [file] [--keep]`  | Load a copy into a scratch database, print counts beside the live ones, drop it. Ends `CHECK PASSED` |
+| `restore <file> [--yes]` | Replace the live database with a copy; needs the API stopped. Ends `RESTORE FINISHED`                |
+| `health`                 | Exit 0 when a nightly copy is under 26 hours old (the healthcheck)                                   |
+| `pre-migrate`            | What the API's entrypoint calls; not for hand use                                                    |
+
+File arguments must be `schedulepoint-*.dump` names inside the backups folder.
+
+### Restore semantics
+
+`restore` refuses if anything else is connected, if the copy is damaged (checksum or
+`pg_restore --list`), or if the copy holds a migration this image does not know (a copy from a newer
+version). It loads the copy into a new `<db>_restoring` database from `template0`, checks it, takes a
+`pre-restore` safety copy of the live database, and swaps by renaming. The previous database is kept
+as `<db>_before_restore_<stamp>` and never dropped by the tool. Because nothing is updated or deleted
+during the load, the append-only triggers on `audit_events` (ADR-0072) have nothing to refuse. The
+live database is untouched until the final rename. Restoring an older copy and then starting the
+current API applies the newer migrations as any update does, with a pre-update copy first.
+
+### The hold
+
+If the copy before an update cannot be made, or the database cannot be asked what is pending, the API
+container prints an `UPDATE HELD` line, writes `UPDATE-HELD.txt` and exits non-zero **before**
+`prisma migrate deploy`. `set -e` in the entrypoint is what makes that a hold; removing it removes the
+hold. The database is unchanged. Docker restarts the container, so once the cause is fixed (usually
+disk space) the update completes by itself and `UPDATE-HELD.txt` is removed. The other ways out are
+pinning `API_IMAGE_TAG` to the previous version (valid because nothing was migrated) or removing the
+`/backups` volume line from `api`. Pending is decided by comparing the migration directories in
+`/app/prisma/migrations` with applied rows of `_prisma_migrations`, never by the exit code of
+`prisma migrate status`. A copy of a large database lengthens the boot of an update that carries a
+change; that time is unmeasured on the production data (`docs/TECH_DEBT.md` #511).
+
+### Client and server major
+
+The image carries PostgreSQL 17 client tools and the `db` image is `postgres:17-alpine`. The script
+refuses, with a plain message, to copy a server whose major version is newer than its tools. Moving
+`db` to a newer major means updating the client in `apps/api/Dockerfile` first.
+
+### Limits
+
+Copies live on the same disk as the database, so losing the disk loses both; `BACKUP_DIR` can point at
+a second disk or a network folder, and an off-site copier is `docs/TECH_DEBT.md` #509. Copies are not
+encrypted and contain password hashes and session tokens. The `.env` file is not in them.
+
 ## Retention — what gets deleted, and when
 
 ADR-0087. Two tables documented a period, and until this shipped **nothing enforced either**:
@@ -1156,6 +1274,11 @@ plans under a client, the activities in those plans, their logic, notes, baselin
 assignments. Nothing brings it back. Nothing in the product can, either: `POST …/purge` does not
 exist and is refused by design (ADR-0096 D1), so there is no button anywhere that does what this
 setting does on a timer.
+
+**Precondition: a same-day copy that has passed `check` on this host** (ADR-0192 D8). Run
+`docker compose -f docker-compose.release.yml run --rm backup check` and see `CHECK PASSED` for a copy
+made today before you set `RETENTION_HIERARCHY_ENABLED=true`. This switch destroys work with no way
+back except a copy, and a copy nobody has tested is not yet a backup.
 
 Three things to know **before** you set it to `true`:
 

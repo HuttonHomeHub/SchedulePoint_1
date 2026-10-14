@@ -11613,3 +11613,57 @@ The test read its banner-flicker counter as 1 where it asserts 0, once, in a loc
 Under `forced-colors: active` the Gantt and every shaded control follow the reader's theme (#505). The diagram does not: it is a canvas bitmap with its own palette, which a contrast theme does not recolour, so it stays visible but in our colours, not the reader's. The owner chose that on 2026-10-13 and ADR-0191 D3 records it as a decision, not an omission. Repainting the canvas from system colours means reading the system colours into the painter's scene (`Canvas`, `CanvasText`, `Highlight`, `GrayText` per mark class), keeping the class cues of ADR-0157 (hue and shape) and re-checking each mark; that is a piece of work of its own.
 
 **Next:** none now. **Trigger:** a contrast-theme user reports the diagram unreadable or out of step with the rest of the app (device check sheet step 23 is where it would be seen), or the owner reverses the Q4 answer. Then spec it (a painter change is a component contract, ADR-0105).
+
+### 509. Backup copies are only on the server's own disk, with no off-site copy
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`docker-compose.release.yml` `backup` service writes to `${BACKUP_DIR:-./backups}` beside the database volume; owner's answer 2, `docs/specs/database-backup/feature-spec.md` §6)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** M · **Owner:** ops
+
+Losing the server's disk loses the database and every copy. The owner accepted that on 2026-10-14 and `docs/guides/back-up-and-restore.md` says so plainly. The design leaves the door open (spec §4.8): each copy is one finished `schedulepoint-*.dump` with a `.sha256` beside it, so any tool that copies those files out can do it. Two rules for the later spec: the copies must be encrypted before they leave (they hold password hashes and session tokens), and an off-site copy needs its own `check`, since a copy nobody has restored is not a backup.
+
+**Next:** spec it (a second compose service or a host sync is a new operator surface, ADR-0105). **Trigger:** the owner wants protection against losing the disk, or the data becomes hard to rebuild. Not work now.
+
+### 510. The backup service connects as the database owner, not a read-only role
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`docker-compose.release.yml` `backup` environment: `PGUSER: ${POSTGRES_USER:-app}`)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** S · **Owner:** api
+
+The service needs only to read, but it uses the same database user as the API, so a flaw in it could write. A dedicated role with `pg_read_all_data` would remove that. `restore` needs more than read (it creates and renames databases), so the role would cover `schedule`, `now` and `check` only, and the split is a design decision.
+
+**Next:** none now. **Trigger:** the security-reviewer or the owner asks for least privilege on the backup path, or a second operator is given access to the backup service.
+
+### 511. The copy before an update is unmeasured on a large database
+
+**Status:** open · **Verified:** 2026-10-14 (`apps/api/docker-entrypoint.sh` runs `pre-migrate` before `prisma migrate deploy`; CI's database holds only migrations)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** S · **Owner:** api
+
+An update that carries a database change now waits for one full `pg_dump` before the migration. How long that is on the owner's data is not known; `LAST-BACKUP.txt` reports the nightly copy's duration, which is the same cost, so it can be read in advance. While it runs the API container may report `unhealthy` until it serves (the image healthcheck start period is a fixed number of seconds), which nothing acts on, and a nightly copy running at the same moment makes it slower.
+
+**Next:** read the duration from the first real `LAST-BACKUP.txt` and the first real pre-update copy, and compare it with the API healthcheck start period. **Trigger:** a copy takes longer than the start period, or `web` fails to start after an API recreate.
+
+### 512. There is no backup status on the staff console
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`apps/api/src/modules/staff/`; the only signals are the container health, `LAST-BACKUP.txt` and logs)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** M · **Owner:** web/api
+
+Nobody is told when a nightly copy fails except by looking at Dockge or the status file. A line on the staff console would put it where the operator already looks. It is a new entry point and so needs its own spec (ADR-0105). It also needs the API to read a folder it only writes to today.
+
+**Next:** none now. **Trigger:** the alerting epic (`docs/TECH_DEBT.md` #100) is switched on and a ping after each good copy is wanted, or a failed copy goes unnoticed.
+
+### 513. A held update has no one-boot override
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (spec §4.12 "Not built: a setting to skip the copy for one boot"; `apps/api/backup/schedulepoint-backup.sh` `hold`)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** S · **Owner:** api
+
+Not built on purpose. A setting to skip the copy once would be a 1.0-promised setting for an escape the operator already has twice over: pin `API_IMAGE_TAG` to the previous version, or remove the `/backups` volume line from `api`. Recorded so the choice is visible if the two ways out prove too slow in a real hold.
+
+**Next:** none. **Trigger:** a real held update where neither way out was workable for the owner.
+
+### 514. An existing installation can still be running the default database password
+
+**Status:** open · **Verified:** 2026-10-14 (`docker-compose.release.yml`: `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}`; Postgres reads it only at first creation)
+**Raised:** 2026-10-14 (database-backup M3) · **Size:** S · **Owner:** ops
+
+With no `POSTGRES_PASSWORD` set, the password is `app`. Closing the published port (ADR-0192 D10) makes that matter much less, since only containers on the server can reach the database, but it is still a default. Changing it on an existing installation is an `ALTER USER` command as well as an `.env` edit; an `.env` edit alone takes SchedulePoint down. The backup guide gives it as an optional section. It is not a required step.
+
+**Next:** the security-reviewer revisits whether it should be required, and whether the compose file should stop defaulting the password for new installations. **Trigger:** the next security review of the deployment.
