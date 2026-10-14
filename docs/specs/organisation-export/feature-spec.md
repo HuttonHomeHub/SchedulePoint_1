@@ -527,8 +527,12 @@ schedulepoint-export-acme-20261014T0930Z.zip
 - **manifest.json:**
   `{ "format": "schedulepoint.organisation-export", "formatVersion": "1.0", "generatedAt", "generator": { "product":
 "SchedulePoint", "apiVersion" }, "organization": { "id", "slug", "name" }, "exportedBy": { "userId", "name" },
-"snapshot": "consistent", "includesDeleted": true, "files": [ { "path", "table", "kind": "json"|"csv", "rows",
-"bytes", "sha256" } ], "excluded": [ { "what", "reason" } ] }`.
+"snapshot": "consistent", "includesDeleted": true, "files": [ { "path", "file", "kind": "json"|"csv", "rows",
+"bytes", "sha256", "stability": "promised"|"informational" } ], "excluded": [ { "scope": "record-type"|"column"|"rows", "name", "reason" } ] }`.
+  No database name appears in the manifest (the layout is not promised); the three `records-*` files are
+  informational, and exported float columns are named `totalFloatMinutes`, `freeFloatMinutes` and
+  `remainingFloatMinutes` because the API serves the same names in working days. See
+  `docs/ORGANISATION_EXPORT_FORMAT.md` for the contract as built.
 - **Versioning rule** (the ADR's D2): adding a file or a column is a **minor** format change (`1.1`); removing,
   renaming, or changing a column's type or meaning is a **major** (`2.0`) and, after 1.0, an API major. Readers must
   ignore files and keys they do not know. The manifest's version is the contract, not the database layout, which 1.0

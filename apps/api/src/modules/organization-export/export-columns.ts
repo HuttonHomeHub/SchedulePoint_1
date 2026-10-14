@@ -17,8 +17,15 @@ export type ColumnKind =
   'text' | 'int' | 'bigint' | 'decimal' | 'instant' | 'date' | 'boolean' | 'enum' | 'json';
 
 export interface ExportColumn {
+  /** The key in the file. Every duration, lag and float column's name carries its unit (`…Minutes`, `…Days`). */
   readonly field: string;
   readonly kind: ColumnKind;
+  /**
+   * The Prisma field it is read from, when the exported name differs. The stored float columns are
+   * minutes while the API serves the same names in working days, so the file renames them rather
+   * than let a reader assume the API's unit.
+   */
+  readonly source?: string;
 }
 
 /**
@@ -39,21 +46,29 @@ export interface ExportFile {
   readonly columns: readonly ExportColumn[];
   /** Scalar fields deliberately not exported, each with the reason it is safe to omit. */
   readonly withheld: Readonly<Record<string, string>>;
+  /**
+   * `promised` files are inside the compatibility promise. `informational` files record what the
+   * product itself once did to the data; they may change or be dropped without a major version.
+   */
+  readonly stability: 'promised' | 'informational';
 }
 
 export interface ExcludedModel {
   readonly model: string;
   readonly table: string;
+  /** A human-readable name for the manifest; database names are not part of the promise. */
+  readonly label: string;
   readonly reason: string;
 }
 
-type ColumnSpec = `${string}:${ColumnKind}`;
+type ColumnSpec = `${string}:${ColumnKind}` | `${string}:${ColumnKind}=${string}`;
 
-/** Parse the compact `field:kind` form so a 60-column table is readable at a glance. */
+/** Parse the compact `field:kind` (or `field:kind=sourceField`) form so a 60-column table reads at a glance. */
 function columns(...specs: readonly ColumnSpec[]): readonly ExportColumn[] {
   return specs.map((spec) => {
-    const [field, kind] = spec.split(':') as [string, ColumnKind];
-    return { field, kind };
+    const [field, rest] = spec.split(':') as [string, string];
+    const [kind, source] = rest.split('=') as [ColumnKind, string | undefined];
+    return source ? { field, kind, source } : { field, kind };
   });
 }
 
@@ -74,6 +89,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'User',
     table: 'users',
     file: 'people',
+    stability: 'promised',
     read: 'via-members',
     columns: columns('id:text', 'name:text', 'email:text', 'createdAt:instant'),
     withheld: {
@@ -86,6 +102,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Organization',
     table: 'organizations',
     file: 'organization',
+    stability: 'promised',
     read: 'self',
     columns: columns(
       'id:text',
@@ -105,6 +122,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'OrgMember',
     table: 'org_members',
     file: 'members',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -125,6 +143,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Invitation',
     table: 'invitations',
     file: 'invitations',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -150,6 +169,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Client',
     table: 'clients',
     file: 'clients',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -171,6 +191,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Project',
     table: 'projects',
     file: 'projects',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -193,6 +214,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Plan',
     table: 'plans',
     file: 'plans',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -235,6 +257,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Activity',
     table: 'activities',
     file: 'activities',
+    stability: 'promised',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -274,8 +297,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'earlyFinish:date',
       'lateStart:date',
       'lateFinish:date',
-      'totalFloat:int',
-      'freeFloat:int',
+      'totalFloatMinutes:int=totalFloat',
+      'freeFloatMinutes:int=freeFloat',
       'isCritical:boolean',
       'isNearCritical:boolean',
       'constraintViolated:boolean',
@@ -288,7 +311,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'visualConflict:boolean',
       'visualDriftDays:int',
       'visualConflictReason:enum',
-      'remainingFloat:int',
+      'remainingFloatMinutes:int=remainingFloat',
       'leveledStart:date',
       'leveledFinish:date',
       'levelingDelayMinutes:int',
@@ -309,6 +332,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'ActivityDependency',
     table: 'dependencies',
     file: 'dependencies',
+    stability: 'promised',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -335,6 +359,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'CrossPlanDependency',
     table: 'cross_plan_dependencies',
     file: 'cross-plan-dependencies',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -361,6 +386,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Calendar',
     table: 'calendars',
     file: 'calendars',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -386,6 +412,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'CalendarException',
     table: 'calendar_exceptions',
     file: 'calendar-exceptions',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -409,6 +436,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'CalendarShift',
     table: 'calendar_shifts',
     file: 'calendar-shifts',
+    stability: 'promised',
     read: 'by-parent',
     columns: columns(
       'id:text',
@@ -425,6 +453,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'CalendarExceptionWindow',
     table: 'calendar_exception_windows',
     file: 'calendar-exception-windows',
+    stability: 'promised',
     read: 'by-parent',
     columns: columns(
       'id:text',
@@ -440,6 +469,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Baseline',
     table: 'baselines',
     file: 'baselines',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -473,6 +503,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'BaselineActivity',
     table: 'baseline_activities',
     file: 'baseline-activities',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -487,7 +518,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'baselineFinish:date',
       'lateStart:date',
       'lateFinish:date',
-      'totalFloat:int',
+      'totalFloatMinutes:int=totalFloat',
       'isCritical:boolean',
       'budgetedCost:bigint',
       'budgetedExpense:bigint',
@@ -519,6 +550,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'BaselineAssignment',
     table: 'baseline_assignments',
     file: 'baseline-assignments',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -544,6 +576,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'BaselineDependency',
     table: 'baseline_dependencies',
     file: 'baseline-dependencies',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -571,6 +604,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'PlanShare',
     table: 'plan_shares',
     file: 'shares',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -596,6 +630,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'PlacementMigration',
     table: 'placement_migrations',
     file: 'records-placement-migrations',
+    stability: 'informational',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -615,6 +650,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'FmDateMigration',
     table: 'finish_milestone_date_migrations',
     file: 'records-finish-milestone-dates',
+    stability: 'informational',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -632,6 +668,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'CrossPlanLagMigration',
     table: 'cross_plan_lag_migrations',
     file: 'records-cross-plan-lags',
+    stability: 'informational',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -651,6 +688,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Resource',
     table: 'resources',
     file: 'resources',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -679,6 +717,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'ResourceAssignment',
     table: 'resource_assignments',
     file: 'assignments',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -708,6 +747,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'ActivityStep',
     table: 'activity_steps',
     file: 'activity-steps',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -732,6 +772,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'ActivityHistoryEntry',
     table: 'activity_history_entries',
     file: 'activity-history',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -754,6 +795,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'Note',
     table: 'notes',
     file: 'notes',
+    stability: 'promised',
     read: 'per-plan',
     columns: columns(
       'id:text',
@@ -777,6 +819,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     model: 'AuditEvent',
     table: 'audit_events',
     file: 'audit-events',
+    stability: 'promised',
     read: 'org',
     columns: columns(
       'id:text',
@@ -804,38 +847,45 @@ export const EXPORT_FILES: readonly ExportFile[] = [
 export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
   {
     model: 'Session',
+    label: 'sign-in sessions',
     table: 'sessions',
     reason:
       'Bearer session tokens, addresses and browsers: credentials of individuals, not organisation data.',
   },
   {
     model: 'Account',
+    label: 'sign-in accounts and credentials',
     table: 'accounts',
     reason: 'Password hashes and sign-in provider tokens: credentials of individuals.',
   },
   {
     model: 'Verification',
+    label: 'verification and password-reset secrets',
     table: 'verifications',
     reason: 'Single-use verification and password-reset secrets; they belong to no organisation.',
   },
   {
     model: 'PlanLock',
+    label: 'live editing locks',
     table: 'plan_locks',
     reason:
       'The pen’s lease: expires in minutes and describes who is editing right now, not stored work.',
   },
   {
     model: 'MailEvent',
+    label: 'mail delivery telemetry',
     table: 'mail_events',
     reason: 'Installation telemetry with no organisation, readable by staff only.',
   },
   {
     model: 'CspReport',
+    label: 'browser security reports',
     table: 'csp_reports',
     reason: 'Installation telemetry with no organisation, readable by staff only.',
   },
   {
     model: 'PerfProbeResult',
+    label: 'performance measurements',
     table: 'perf_probe_results',
     reason: 'Staff’s measurements of the installation, not organisation data.',
   },

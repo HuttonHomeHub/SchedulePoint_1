@@ -172,6 +172,15 @@ non-production OpenAPI page) only.
   3. Writer: registry-driven, one entry at a time.
   4. Controller and service; error mapping; Pino lines `org_export.started|completed|failed`.
 
+**Security checklist for Task 2.1 (from the M1 review; each is a test or a line the reviewer should find):**
+
+- `resolveScope` first, then `can('organization:export')`; a foreign slug answers 404, not 403.
+- Every org-level read has `organizationId` in its `WHERE`; per-plan and by-parent ids come from org-scoped
+  queries, never from the request.
+- `via-members` reads people only through **this** organisation's `org_members`, including soft-deleted ones.
+- Every read carries the `// soft-delete: any-state` comment (ADR-0172).
+- Keep the `privacy.exported` audit row, the route in the audit-coverage census, and the request-body cap.
+
 ##### Task 2.2 — `privacy.exported` in the audit log (S)
 
 - **Description:** add `privacy.exported` to `AUDIT_ACTIONS` (`packages/types/src/index.ts:2352-2481`) with a

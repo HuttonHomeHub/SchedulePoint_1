@@ -52,7 +52,11 @@ and `Decimal` decimal strings, `null` is `null` or an empty cell. The CSV passes
 formula guard (now shared as `csvCell` in `@repo/interchange`), so a negative number stays a number; the JSON is
 authoritative and the CSV is a view. Adding a file or column is a minor format change, removing or retyping one is a
 major change and, after 1.0, an API major. Readers ignore what they do not know. The database layout stays unpromised,
-and there are no request options in v1, because each option multiplies the promised shapes. A test compares
+and there are no request options in v1, because each option multiplies the promised shapes. Every duration, lag and float column's name
+carries its unit (the stored floats are minutes while the API serves working days, so the file says
+`totalFloatMinutes`). New columns are appended at the end and a new enum value is a minor change. The three
+migration-record files are informational and outside the promise, and the keys inside the two JSON columns are
+informational too. No database name appears in the manifest. A test compares
 `docs/ORGANISATION_EXPORT_FORMAT.md` with the registry.
 
 **D3 — Generated synchronously and streamed; no job queue.** One read-only, repeatable-read snapshot, a per-organisation

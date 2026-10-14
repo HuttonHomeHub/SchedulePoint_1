@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -21,8 +22,11 @@ const DOC = readFileSync(
   'utf8',
 );
 
-const FILES_SECTION = DOC.slice(DOC.indexOf('\n## Files\n'), DOC.indexOf('\n## Excluded tables\n'));
-const EXCLUDED_SECTION = DOC.slice(DOC.indexOf('\n## Excluded tables\n'));
+const FILES_SECTION = DOC.slice(
+  DOC.indexOf('\n## Files\n'),
+  DOC.indexOf('\n## Excluded record types\n'),
+);
+const EXCLUDED_SECTION = DOC.slice(DOC.indexOf('\n## Excluded record types\n'));
 
 function sections(): Map<string, string> {
   const out = new Map<string, string>();
@@ -48,12 +52,22 @@ describe('the organisation export format document', () => {
     'lists %s’s columns, types and withheld fields exactly',
     (name, file) => {
       const section = sections().get(name) ?? '';
-      expect(section).toContain(`Table \`${file.table}\``);
       expect(section).toContain(`\`json/${file.file}.json\``);
       expect(section).toContain(`\`csv/${file.file}.csv\``);
 
-      const rows = [...section.matchAll(/^\| `(\w+)`\s+\| (\w+)\s+\|$/gm)].map((m) => [m[1], m[2]]);
-      expect(rows).toEqual(file.columns.map((c) => [c.field, c.kind]));
+      const rows = [...section.matchAll(/^\| `(\w+)`\s+\| (\w+)\s+\| (.*?)\s*\|$/gm)];
+      expect(rows.map((m) => [m[1], m[2]])).toEqual(file.columns.map((c) => [c.field, c.kind]));
+
+      // The unit is stated for every column that has one, and a finish date says it is inclusive.
+      for (const [, field = '', kind = '', note = ''] of rows) {
+        if (/Minutes$/.test(field)) expect(note).toBe('minutes');
+        if (/Days$/.test(field)) expect(note).toBe('days');
+        if (kind === 'date' && (/Finish$/.test(field) || field === 'endDate')) {
+          expect(note).toBe('inclusive last day');
+        }
+      }
+
+      expect(section.includes('Informational:')).toBe(file.stability === 'informational');
 
       const withheld = /Not exported: (.+)\.$/m.exec(section)?.[1];
       const named = withheld ? [...withheld.matchAll(/`(\w+)`/g)].map((m) => m[1]) : [];
@@ -61,8 +75,40 @@ describe('the organisation export format document', () => {
     },
   );
 
-  it('lists exactly the excluded tables', () => {
-    const named = [...EXCLUDED_SECTION.matchAll(/^\| `(\w+)`\s+\|/gm)].map((m) => m[1]);
-    expect(named).toEqual(EXCLUDED_MODELS.map((m) => m.table));
+  it('lists exactly the excluded record types, by their human names', () => {
+    const named = [...EXCLUDED_SECTION.matchAll(/^\| ([^|]+?)\s+\| (?!-)/gm)]
+      .map((m) => m[1])
+      .filter((name) => name !== 'Record type');
+    expect(named).toEqual(EXCLUDED_MODELS.map((m) => m.label));
+  });
+
+  it('puts no database table name in the promised format', () => {
+    const tables = [...EXPORT_FILES, ...EXCLUDED_MODELS]
+      .map((x) => x.table)
+      .filter((table) => table.includes('_'));
+    for (const table of tables) expect(DOC).not.toContain(table);
+    expect(DOC).not.toMatch(/^Table `/m);
+  });
+
+  it('lists every enum an exported column uses, with its current values', () => {
+    const { models, enums } = Prisma.dmmf.datamodel;
+    const used = new Set<string>();
+    for (const file of EXPORT_FILES) {
+      const model = models.find((m) => m.name === file.model);
+      for (const column of file.columns.filter((c) => c.kind === 'enum')) {
+        used.add(model?.fields.find((f) => f.name === (column.source ?? column.field))?.type ?? '');
+      }
+    }
+    const section = DOC.slice(DOC.indexOf('\n## Enumerations\n'), DOC.indexOf('\n## Files\n'));
+    const listed = new Map(
+      [...section.matchAll(/^- `(\w+)`: (.+)$/gm)].map((m) => [m[1], (m[2] ?? '').split(', ')]),
+    );
+    expect(used.size).toBeGreaterThan(15);
+    expect([...listed.keys()].sort()).toEqual([...used].sort());
+    for (const name of used) {
+      expect(listed.get(name)).toEqual(
+        enums.find((e) => e.name === name)?.values.map((v) => v.name),
+      );
+    }
   });
 });

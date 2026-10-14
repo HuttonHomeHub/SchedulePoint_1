@@ -52,7 +52,8 @@ export function jsonValue(kind: ColumnKind, value: unknown): unknown {
 /** One row as a JSON object with exactly the registry's columns, in the registry's order. */
 export function jsonObject(file: ExportFile, row: ExportRow): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const column of file.columns) out[column.field] = jsonValue(column.kind, row[column.field]);
+  for (const column of file.columns)
+    out[column.field] = jsonValue(column.kind, row[column.source ?? column.field]);
   return out;
 }
 
@@ -79,7 +80,8 @@ const CSV_EOL = '\r\n';
 function csvCellFor(column: ExportColumn, value: unknown): string {
   const cell = jsonValue(column.kind, value);
   if (cell === null) return '';
-  // JSON and booleans are written as the JSON text of the value; only `text` meets the formula guard.
+  // A `json` cell is compact JSON text and meets the formula guard like `text` does (a bare JSON `-5`
+  // becomes `'-5`); numbers, dates and the rest never do. The JSON file is authoritative.
   if (column.kind === 'json') return csvCell(JSON.stringify(cell));
   if (column.kind === 'text') return csvCell(cell as string);
   // The rest are strings already (bigint, decimal, instant, date, enum) or a number or boolean.
@@ -93,12 +95,13 @@ export function csvHeader(file: ExportFile): string {
 
 /** One CSV record, CRLF-terminated. */
 export function csvRecord(file: ExportFile, row: ExportRow): string {
-  return `${file.columns.map((c) => csvCellFor(c, row[c.field])).join(',')}${CSV_EOL}`;
+  return `${file.columns.map((c) => csvCellFor(c, row[c.source ?? c.field])).join(',')}${CSV_EOL}`;
 }
 
 export interface ManifestFileEntry {
   readonly path: string;
-  readonly table: string;
+  /** The file's stem, as in the registry: `clients` for `json/clients.json`. */
+  readonly file: string;
   readonly kind: 'json' | 'csv';
   readonly rows: number;
   readonly bytes: number;
@@ -113,28 +116,39 @@ export interface ManifestInput {
   readonly files: readonly ManifestFileEntry[];
 }
 
-/** What the export leaves out and why: the excluded tables, every withheld column, and two scope rules. */
-export function exclusions(): { what: string; reason: string }[] {
-  const out: { what: string; reason: string }[] = EXCLUDED_MODELS.map((m) => ({
-    what: m.table,
-    reason: m.reason,
-  }));
+/** What one `excluded` entry in the manifest is about. A closed set: readers may rely on it. */
+export type ExclusionScope = 'record-type' | 'column' | 'rows';
+
+/**
+ * What the export leaves out and why. `scope` is a stable enumeration; `name` and `reason` are for a
+ * person to read and may be reworded. No database table name appears: the layout is not promised.
+ */
+export function exclusions(): { scope: ExclusionScope; name: string; reason: string }[] {
+  const out: { scope: ExclusionScope; name: string; reason: string }[] = EXCLUDED_MODELS.map(
+    (m) => ({ scope: 'record-type', name: m.label, reason: m.reason }),
+  );
   for (const file of EXPORT_FILES) {
     for (const [field, reason] of Object.entries(file.withheld)) {
-      out.push({ what: `${file.table}.${field}`, reason });
+      out.push({ scope: 'column', name: `${file.file}.${field}`, reason });
     }
   }
   out.push(
     {
-      what: 'people of other organisations',
+      scope: 'rows',
+      name: 'people of other organisations',
       reason: 'Only people who are or were members of this organisation appear in people.',
     },
     {
-      what: 'audit_events with no organisation',
+      scope: 'rows',
+      name: 'audit events with no organisation',
       reason: 'Sign-in and account events belong to a person, not to an organisation.',
     },
   );
   return out;
+}
+
+function stabilityOf(file: string): ExportFile['stability'] {
+  return EXPORT_FILES.find((f) => f.file === file)?.stability ?? 'promised';
 }
 
 /** `manifest.json`, written last because it carries the counts and checksums only known at the end. */
@@ -149,7 +163,7 @@ export function buildManifest(input: ManifestInput): string {
       exportedBy: input.exportedBy,
       snapshot: 'consistent',
       includesDeleted: true,
-      files: input.files,
+      files: input.files.map((f) => ({ ...f, stability: stabilityOf(f.file) })),
       excluded: exclusions(),
     },
     null,
@@ -186,14 +200,23 @@ export function buildReadme(): string {
     '  In CSV, text that starts with = + - or @ is prefixed with an apostrophe so a spreadsheet does',
     '  not run it as a formula. The JSON keeps the exact text.',
     '  Every file begins with a header row in CSV and is a JSON array in JSON.',
+    '  Names carry their unit: ...Minutes, ...Days. Ids are opaque text; import id columns as text.',
+    '  A spreadsheet cell holds at most 32,767 characters; a longer value is complete only in the JSON.',
+    '  A CSV text cell may begin with an apostrophe the formula guard added. The JSON is exact.',
     '',
     'WHAT IS NOT IN IT',
     '  Passwords, sign-in sessions, invitation and share-link tokens, live editing locks, other',
     "  organisations' people, and the IP addresses and browser details of audit events. The",
     '  manifest lists each exclusion with its reason.',
     '',
+    'The three records-* files are informational: they note what the product once did to the data',
+    'and may change or disappear in a later version without notice.',
+    '',
     'FILES',
-    ...EXPORT_FILES.map((f) => `  ${jsonPath(f)}, ${csvPath(f)}  (${f.table})`),
+    ...EXPORT_FILES.map(
+      (f) =>
+        `  ${jsonPath(f)}, ${csvPath(f)}${f.stability === 'informational' ? '  (informational)' : ''}`,
+    ),
     '',
     'Readers should ignore files and keys they do not know: a newer format version may add them.',
     'The format is described in full in docs/ORGANISATION_EXPORT_FORMAT.md of the SchedulePoint',

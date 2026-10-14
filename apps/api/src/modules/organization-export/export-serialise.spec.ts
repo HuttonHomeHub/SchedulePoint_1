@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { EXPORT_FILES, type ExportFile } from './export-columns';
+import { EXCLUDED_MODELS, EXPORT_FILES, type ExportFile } from './export-columns';
 import {
   buildManifest,
   buildReadme,
@@ -21,6 +21,7 @@ const KINDS: ExportFile = {
   file: 'fakes',
   read: 'org',
   withheld: {},
+  stability: 'promised',
   columns: [
     { field: 'text', kind: 'text' },
     { field: 'int', kind: 'int' },
@@ -148,7 +149,7 @@ describe('manifest and README', () => {
       files: [
         {
           path: 'json/clients.json',
-          table: 'clients',
+          file: 'clients',
           kind: 'json',
           rows: 0,
           bytes: 3,
@@ -181,22 +182,122 @@ describe('manifest and README', () => {
   });
 
   it('declares every withheld credential as excluded', () => {
-    const excluded = (manifest['excluded'] as { what: string }[]).map((e) => e.what);
+    const excluded = (manifest['excluded'] as { name: string }[]).map((e) => e.name);
     expect(excluded).toEqual(
       expect.arrayContaining([
-        'accounts',
-        'sessions',
+        'sign-in accounts and credentials',
+        'sign-in sessions',
         'invitations.tokenHash',
-        'plan_shares.tokenHash',
-        'audit_events.ipAddress',
-        'audit_events.userAgent',
+        'shares.tokenHash',
+        'audit-events.ipAddress',
+        'audit-events.userAgent',
       ]),
     );
+  });
+
+  it('names no database table, and scopes every exclusion with a closed set', () => {
+    const excluded = manifest['excluded'] as { scope: string; name: string }[];
+    expect([...new Set(excluded.map((e) => e.scope))].sort()).toEqual([
+      'column',
+      'record-type',
+      'rows',
+    ]);
+    const tables = EXPORT_FILES.map((f) => f.table).concat(EXCLUDED_MODELS.map((m) => m.table));
+    for (const entry of excluded) expect(tables).not.toContain(entry.name);
+    expect(JSON.stringify(manifest)).not.toMatch(/"table"/);
+  });
+
+  it('carries each file’s stability, with the migration records informational', () => {
+    const entry = (manifest['files'] as Record<string, unknown>[])[0];
+    expect(entry).toEqual({
+      path: 'json/clients.json',
+      file: 'clients',
+      kind: 'json',
+      rows: 0,
+      bytes: 3,
+      sha256: 'ab',
+      stability: 'promised',
+    });
+    const informational = JSON.parse(
+      buildManifest({
+        generatedAt: new Date(0),
+        apiVersion: '0',
+        organization: { id: 'o', slug: 's', name: 'n' },
+        exportedBy: { userId: 'u', name: 'n' },
+        files: [
+          {
+            path: 'json/records-cross-plan-lags.json',
+            file: 'records-cross-plan-lags',
+            kind: 'json',
+            rows: 0,
+            bytes: 0,
+            sha256: '',
+          },
+        ],
+      }),
+    ) as { files: { stability: string }[] };
+    expect(informational.files[0]?.stability).toBe('informational');
   });
 
   it('writes a README that names every file and is stable between calls', () => {
     const readme = buildReadme();
     expect(buildReadme()).toBe(readme);
     for (const file of EXPORT_FILES) expect(readme).toContain(`json/${file.file}.json`);
+  });
+});
+
+describe('the format’s edge cases', () => {
+  it('pins the byte-order mark to the literal UTF-8 bytes EF BB BF', () => {
+    expect([...Buffer.from(CSV_BOM, 'utf8')]).toEqual([0xef, 0xbb, 0xbf]);
+  });
+
+  it('guards and quotes a HYPERLINK formula, and a formula after a line break', () => {
+    expect(csvRecord(KINDS, { ...NULLS, text: '=HYPERLINK("a","b")' })).toBe(
+      '"\'=HYPERLINK(""a"",""b"")",,,,,,,,\r\n',
+    );
+    // \s in the guard covers a leading line break, so this is guarded as well as quoted.
+    expect(csvRecord(KINDS, { ...NULLS, text: '\n=1+1' })).toBe('"\'\n=1+1",,,,,,,,\r\n');
+  });
+
+  it('applies the guard to a bare JSON number, which the JSON file keeps exact', () => {
+    expect(csvRecord(KINDS, { ...NULLS, blob: -5 })).toBe(",,,,,,,,'-5\r\n");
+    expect(jsonLine(KINDS, { ...NULLS, blob: -5 })).toContain('"blob":-5');
+  });
+
+  it('keeps emoji, U+2028 and a line break in text on one JSON line', () => {
+    const line = jsonLine(KINDS, { ...NULLS, text: 'a\n\u2028😀\r' });
+    expect(line).not.toMatch(/[\n\r]/);
+    expect((JSON.parse(line) as { text: string }).text).toBe('a\n\u2028😀\r');
+  });
+
+  it('keeps false, 0 and a negative BigInt, and treats undefined as null', () => {
+    const line = JSON.parse(jsonLine(KINDS, { ...NULLS, flag: false, int: 0, big: -7n })) as Record<
+      string,
+      unknown
+    >;
+    expect(line).toMatchObject({ flag: false, int: 0, big: '-7' });
+    expect(csvRecord(KINDS, { ...NULLS, flag: false, int: 0, big: -7n })).toBe(
+      ',0,-7,,,,false,,\r\n',
+    );
+    expect(jsonValue('int', undefined)).toBeNull();
+  });
+
+  it('never prints a Decimal in exponent form', () => {
+    expect(jsonValue('decimal', new Prisma.Decimal('1e21'))).toBe('1000000000000000000000');
+    expect(jsonValue('decimal', new Prisma.Decimal('1e-7'))).toBe('0.0000001');
+  });
+
+  it('writes a @db.Date read back at a non-midnight instant as its UTC day', () => {
+    expect(jsonValue('date', new Date('2026-10-14T23:59:59.999Z'))).toBe('2026-10-14');
+  });
+
+  it('reads a renamed column from its source field and writes it under the exported name', () => {
+    const renamed: ExportFile = {
+      ...KINDS,
+      columns: [{ field: 'totalFloatMinutes', kind: 'int', source: 'totalFloat' }],
+    };
+    expect(jsonLine(renamed, { totalFloat: 480 })).toBe('{"totalFloatMinutes":480}');
+    expect(csvHeader(renamed)).toBe(`${CSV_BOM}totalFloatMinutes\r\n`);
+    expect(csvRecord(renamed, { totalFloat: 480 })).toBe('480\r\n');
   });
 });
