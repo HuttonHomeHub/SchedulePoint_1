@@ -752,6 +752,12 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
+- **A database backup and restore.** **Approved 2026-10-14; milestone 1 built** ([ADR-0192](adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md); spec and plan at
+  [`docs/specs/database-backup/`](specs/database-backup/)). The API image now carries `schedulepoint-backup`
+  (a nightly copy kept 30 days, `check`, `restore`, and the copy taken before an update that changes the database),
+  proven on every pull request by a round trip on real data. Nothing runs it yet: the compose service, the entrypoint
+  call and the closed database port are milestone 2, the owner's guide milestone 3. Pre-1.0 requirement (a).
+
 - **A contrast theme is the reader's palette.** **Approved 2026-10-13; built as `pre-1-0-batch-2` M2; measured and
   journey-tested in emulation, real Windows still on the device check sheet** ([ADR-0191](adr/0191-a-contrast-theme-is-the-readers-palette.md); spec and plan at
   [`docs/specs/pre-1-0-batch-2/`](specs/pre-1-0-batch-2/)). Under a Windows contrast theme a greyed-out menu item or

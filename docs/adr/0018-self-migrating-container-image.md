@@ -1,8 +1,14 @@
 # ADR-0018: Self-migrating container image
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by [ADR-0192](0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md) — a copy is taken before a pending migration is applied)
 - **Date:** 2026-07-09
 - **Deciders:** Engineering
+
+> **Amended by [ADR-0192](0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md) (D9):** the entrypoint
+> now runs `schedulepoint-backup pre-migrate` before `prisma migrate deploy`. Where the operator has mounted a backups
+> folder and a migration is pending, a copy is written first, and if it cannot be written the entrypoint exits before the
+> database is touched. Where no folder is mounted, nothing changes. (The entrypoint call itself lands in the
+> milestone after the one that ships the command.)
 
 ## Context
 
