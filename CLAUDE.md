@@ -622,7 +622,8 @@ A lighter-weight running log of smaller decisions is in
   `RETENTION_HIERARCHY_DAYS` (90) — see the hard-delete bullet below for what that
   means. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so on any host
   that has not opted in, **nothing has ever been permanently deleted** and
-  Recently deleted's countdown is a preview rather than a promise. Do not read
+  Recently deleted shows no countdown (the preview is a command; the owner's steps are
+  [`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). Do not read
   "shipped" as "deleting" here.
 - **Retention is enforced on three tables and not on `audit_events`, and the difference is a
   decision.** `csp_reports` (30 days), `mail_events` (12 months) and `perf_probe_results`

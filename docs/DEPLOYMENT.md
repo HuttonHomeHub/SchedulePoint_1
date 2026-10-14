@@ -1192,6 +1192,10 @@ during the load, the append-only triggers on `audit_events` (ADR-0072) have noth
 live database is untouched until the final rename. Restoring an older copy and then starting the
 current API applies the newer migrations as any update does, with a pre-update copy first.
 
+If the recycle bin's clear-out is on (`RETENTION_HIERARCHY_ENABLED=true`), switch it off before
+restoring a copy to recover something it removed: the sweep runs at boot and would remove the
+recovered item again (see "Deleted work" below).
+
 ### The hold
 
 If the copy before an update cannot be made, or the database cannot be asked what is pending, the API
@@ -1276,12 +1280,15 @@ assignments. Nothing brings it back. Nothing in the product can, either: `POST �
 exist and is refused by design (ADR-0096 D1), so there is no button anywhere that does what this
 setting does on a timer.
 
+The owner's step-by-step version of everything below (preview, switch-on day, switching off,
+recovering something) is [`docs/guides/switch-on-the-clear-out.md`](guides/switch-on-the-clear-out.md).
+
 **Precondition: a same-day copy that has passed `check` on this host** (ADR-0192 D8). Run
 `docker compose run --rm backup check` (in the stack folder) and see `CHECK PASSED` for a copy
 made today before you set `RETENTION_HIERARCHY_ENABLED=true`. This switch destroys work with no way
 back except a copy, and a copy nobody has tested is not yet a backup.
 
-Three things to know **before** you set it to `true`:
+Five things to know **before** you set it to `true`:
 
 1. **The clock is retroactive.** It counts from when each item was deleted, not from when you armed
    the switch. On a host that has been running for a year, the first tick — which happens at boot,
@@ -1308,6 +1315,23 @@ Three things to know **before** you set it to `true`:
    guessed at — including the empty string. This is stricter than the other switches on purpose: an
    earlier version used a coercion that read `'false'` as **true**, so the documented way to turn it
    off turned it on (ADR-0096 D10).
+
+4. **"Permanently removed" means removed from the live database, not from the backups.** Nightly
+   copies are kept `BACKUP_KEEP_DAYS` (30) days, so a removed item stays in copies for **at least 30
+   days after it is removed**. Pruning never deletes the newest copy of each kind, so the newest
+   "before an update" copy can be months old and still hold everything as it was then. A restore also
+   keeps the replaced database as `<db>_before_restore_<stamp>` until someone drops it by hand. And
+   the `hierarchy.expired` audit row keeps the item's **name** for ever (ADR-0085 D1). Erasing a
+   client's data completely therefore needs the live removal **and** deleting or waiting out the
+   copies; that is ADR-0085's territory and is not built here. The converse is the safety net: for at
+   least 30 days after removal a copy can bring the item back, at the cost of all work done since
+   that copy.
+
+5. **Switch it off before restoring a copy to recover something it removed.** The sweep runs at
+   every boot. A restored database holds the item in **Recently deleted** still older than the
+   period, so with the switch on the sweep would remove it again within a minute of the API
+   starting. Set `RETENTION_HIERARCHY_ENABLED=false`, restore (`docs/guides/back-up-and-restore.md`
+   Part 3), restore the item from **Recently deleted**, then decide whether to switch it on again.
 
 Each permanent deletion writes one `hierarchy.expired` audit event naming the item and how much went
 with it. That row is in the organisation's own audit log, not the staff console, and it is the only
