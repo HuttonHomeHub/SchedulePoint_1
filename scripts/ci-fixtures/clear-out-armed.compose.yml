@@ -1,0 +1,9 @@
+# CI ONLY — layer on docker-compose.yml + docker-compose.ci.yml in the `image` job's "The recycle
+# bin's clear-out" step (ADR-0193, docs/specs/recycle-bin-clear-out/implementation-plan.md M2). It
+# switches the 90-day clear-out ON for the built api image, for that step alone: the shipped compose
+# files and .env.example keep their default of false, and the step recreates the api without this
+# file before it ends. The release compose file is asserted by the job never to mention it.
+services:
+  api:
+    environment:
+      RETENTION_HIERARCHY_ENABLED: 'true'
