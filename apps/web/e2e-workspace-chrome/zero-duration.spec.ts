@@ -285,14 +285,31 @@ test.describe('Make milestone… (M4)', () => {
     expect(before.get('Succ')?.earlyStart?.slice(0, 10)).toBe('2026-01-12');
     const dock = page.getByRole('toolbar', { name: /^Actions for / });
 
-    // A bar's lane, and so its y, does not change with the viewport width, so the full two-axis
-    // sweep runs once per activity and every later selection sweeps only that row (#506). The
-    // sweep is still pointer-driven: selection by click is how the dock appears in this journey.
+    // A bar's lane, and so its y, does not change with the viewport width, so a full two-axis sweep
+    // is paid at most once, for the first bar, and every other selection starts from a row (#506).
+    // The first sweep measured 11 s for lane 0, 52 s for lane 2 and 40 s for lane 1, because it
+    // restarts at the top of the canvas for each bar. Lane n sits `LANE_PITCH` below lane 0
+    // (`render/geometry.ts` LANE_HEIGHT), so that row is tried first; a miss falls back to the
+    // full sweep rather than failing, since a recalculation may re-lane a bar. Selection is still
+    // by clicking the canvas: that is how the dock appears in this journey.
+    const LANE_PITCH = 60;
     const rows = new Map<string, number>();
-    const selectBar = async (id: string): Promise<void> => {
-      const known = rows.get(id);
-      if (known === undefined) rows.set(id, (await findBarWide(page, id)).y);
-      else await findBarInRow(page, id, known);
+    let lane0: number | undefined;
+    const selectBar = async (id: string, lane: number): Promise<void> => {
+      let y = rows.get(id);
+      if (y === undefined && lane0 !== undefined) y = lane0 + lane * LANE_PITCH;
+      if (y !== undefined) {
+        try {
+          await findBarInRow(page, id, y);
+          rows.set(id, y);
+          return;
+        } catch {
+          // Not on the predicted row: sweep the whole canvas instead.
+        }
+      }
+      const hit = await findBarWide(page, id);
+      rows.set(id, hit.y);
+      if (lane === 0) lane0 = hit.y;
     };
 
     // 1646 FIRST (the config's own viewport), then 1920. Shrinking 1920 → 1646 mid-test left
@@ -302,13 +319,13 @@ test.describe('Make milestone… (M4)', () => {
     for (const width of [1646, 1920]) {
       await test.step(`viewport ${String(width)}`, async () => {
         await page.setViewportSize({ width, height: 1097 });
-        await test.step('select Pre', () => selectBar(pre.id));
+        await test.step('select Pre', () => selectBar(pre.id, 0));
         await expect(dock.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
         // Absent for an ordinary task: it does not apply (ADR-0082's omit clause).
         await expect(dock.getByRole('button', { name: MAKE_MILESTONE })).toHaveCount(0);
         const ordinary = await footRowHeight(page);
 
-        await test.step('select Loose event', () => selectBar(loose.id));
+        await test.step('select Loose event', () => selectBar(loose.id, 2));
         const button = dock.getByRole('button', { name: MAKE_MILESTONE });
         await expect(button).toBeVisible();
         expect(await footRowHeight(page), `foot row at ${String(width)}`).toBe(ordinary);
@@ -340,7 +357,7 @@ test.describe('Make milestone… (M4)', () => {
 
     // The placed one: its predecessor makes Finish the default.
     await test.step('convert Pour slab', async () => {
-      await test.step('select Pour slab', () => selectBar(z.id));
+      await test.step('select Pour slab', () => selectBar(z.id, 1));
       await dock.getByRole('button', { name: MAKE_MILESTONE }).click();
       const dialog = page.getByRole('dialog', { name: /milestone/ });
       await expect(dialog).toBeVisible();
