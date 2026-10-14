@@ -493,6 +493,17 @@ describe('HierarchyLifecycleService', () => {
       tx.plan.updateMany.mockResolvedValue({ count: 1 });
     });
 
+    it('answers not found when a legacy row with no batch id is removed before its update', async () => {
+      // The no-batch path updates by id, which raises P2025 instead of counting zero.
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: null, projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1' });
+      tx.plan.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('gone', { code: 'P2025', clientVersion: '6' }),
+      );
+
+      await expect(service.restoreBatch(asTx(), 'plan', 'x', ACTOR)).rejects.toThrow(NotFoundError);
+    });
+
     it.each(['client', 'project', 'plan'] as const)(
       'answers 404 when the %s root was removed between the read and the update',
       async (entity) => {

@@ -102,7 +102,8 @@ export class ProjectsController {
   @ApiConflictResponse({ description: 'The parent client is still deleted (restore it first).' })
   @ApiNotFoundResponse({
     description:
-      'Not in Recently deleted — including when the retention expiry removed it in the same instant.',
+      'Organisation or project not found (or the caller is not a member), including when the retention ' +
+      'expiry permanently removed the project in the same instant. Gone: do not retry.',
   })
   async restore(
     @CurrentUser() principal: Principal,

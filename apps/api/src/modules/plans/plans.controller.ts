@@ -96,7 +96,8 @@ export class PlansController {
   @ApiConflictResponse({ description: 'The parent project is still deleted (restore it first).' })
   @ApiNotFoundResponse({
     description:
-      'Not in Recently deleted — including when the retention expiry removed it in the same instant.',
+      'Organisation or plan not found (or the caller is not a member), including when the retention ' +
+      'expiry permanently removed the plan in the same instant. Gone: do not retry.',
   })
   async restore(
     @CurrentUser() principal: Principal,

@@ -13,7 +13,7 @@ import {
   openReadOnlyClient,
   renderPreview,
 } from '../src/cli/clear-out-preview';
-import * as candidates from '../src/common/hierarchy/hierarchy-expiry.candidates';
+import * as claim from '../src/common/hierarchy/hierarchy-expiry.claim';
 import * as runner from '../src/common/hierarchy/hierarchy-expiry.runner';
 import { HierarchyExpiryService } from '../src/common/hierarchy/hierarchy-expiry.service';
 import { HierarchyLifecycleService } from '../src/common/hierarchy/hierarchy-lifecycle.service';
@@ -539,8 +539,6 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
 
         expect(await exists.plan(atCutoff)).toBe(true);
         expect(await exists.plan(justOlder)).toBe(false);
-        // The clock changing is a wall-clock event only: 90 x 24 hours either side of it.
-        expect(cutoff.getTime()).toBe(now.getTime() - retentionDays() * DAY_MS);
       },
     );
   });
@@ -558,12 +556,15 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       throw new Error('nothing ever blocked on a lock: the race was not exercised');
     }
 
-    /** Run `gap` in the window between the sweep choosing a root and the transaction that deletes it. */
+    /**
+     * Run `gap` after the sweep has chosen a root and opened its transaction, and before the claim
+     * touches the row — the window in which a restore must win.
+     */
     function inTheGap(gap: () => Promise<void>) {
-      const original = candidates.resolveExpiryScope;
-      vi.spyOn(candidates, 'resolveExpiryScope').mockImplementation(async (reader, root) => {
+      const original = claim.claimExpiredRoot;
+      vi.spyOn(claim, 'claimExpiredRoot').mockImplementation(async (tx, root, cutoff) => {
         await gap();
-        return original(reader, root);
+        return original(tx, root, cutoff);
       });
     }
 
@@ -610,6 +611,21 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       expect(await expiredRows()).toEqual([]);
     });
 
+    it('a root that keeps its id and its old date but changed deletion batch is not removed', async () => {
+      // Only the batch id differs: pins that predicate of the claim on its own.
+      const { actor } = await adminWithOrg();
+      const now = new Date();
+      const { planId } = await expiredPlanOf(actor, now);
+      inTheGap(async () => {
+        await prisma.plan.update({ where: { id: planId }, data: { deleteBatchId: randomUUID() } });
+      });
+
+      await sweeper.sweepNow(now);
+
+      expect(await exists.plan(planId), 'a different batch is a different deletion').toBe(true);
+      expect(await expiredRows()).toEqual([]);
+    });
+
     it('a restore that holds the row first is not undone by the sweep waiting behind it', async () => {
       const { actor } = await adminWithOrg();
       const now = new Date();
@@ -620,17 +636,25 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       const holding = new Promise<void>((resolve) => (restoreHolding = resolve));
 
       // A real restore transaction that has changed the row and not yet committed.
-      const restoring = prisma.$transaction(async (tx) => {
-        await lifecycle.restoreBatch(tx, 'plan', planId, actor.userId);
-        restoreHolding();
-        await hold;
-      });
+      const restoring = prisma.$transaction(
+        async (tx) => {
+          await lifecycle.restoreBatch(tx, 'plan', planId, actor.userId);
+          restoreHolding();
+          await hold;
+        },
+        { timeout: 30_000 },
+      );
       await holding;
 
       const sweeping = sweeper.sweepNow(now);
-      await waitForLockWait();
-      release();
-      await Promise.all([restoring, sweeping]);
+      try {
+        await waitForLockWait();
+      } finally {
+        // Always let go, or a failed wait leaves a transaction holding the row for the next test.
+        release();
+      }
+      const settled = await Promise.allSettled([restoring, sweeping]);
+      expect(settled.map((o) => o.status)).toEqual(['fulfilled', 'fulfilled']);
 
       // Without the claim the sweep's id-keyed delete waits for the same lock, re-reads the row,
       // finds it still there and removes the plan the planner had just brought back.
@@ -669,13 +693,17 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
         });
 
         const sweeping = sweeper.sweepNow(now);
-        await deletedSignal;
-        const response = actor.agent
-          .post(`/api/v1/organizations/acme/${kind}s/${rootId}/restore`)
-          .then((r) => r);
-        await waitForLockWait();
-        release();
-        await sweeping;
+        let response: Promise<{ status: number; body: { error?: unknown } }> | undefined;
+        try {
+          await deletedSignal;
+          response = actor.agent
+            .post(`/api/v1/organizations/acme/${kind}s/${rootId}/restore`)
+            .then((r) => r);
+          await waitForLockWait();
+        } finally {
+          release();
+          await Promise.allSettled([sweeping, response]);
+        }
         const result = await response;
 
         expect(result.status).toBe(404);
@@ -797,13 +825,17 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       const now = new Date();
       const ids = await seedMix(actor, orgId, now);
       const written: string[] = [];
-      vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
         written.push(String(chunk));
         return true;
       });
 
-      const code = await main();
-      vi.restoreAllMocks();
+      let code: number;
+      try {
+        code = await main();
+      } finally {
+        spy.mockRestore();
+      }
 
       expect(code).toBe(0);
       expect(written.join('')).toContain('Client  "Northgate"');

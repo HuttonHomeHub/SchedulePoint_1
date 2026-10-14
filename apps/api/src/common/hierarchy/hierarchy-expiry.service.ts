@@ -14,10 +14,11 @@ import {
   SCOPE_BUDGET_PER_RUN,
   resolveExpiryScope,
   selectExpiryCandidates,
+  selectExpiryCandidatesBounded,
   type ExpiryRoot,
 } from './hierarchy-expiry.candidates';
 import { claimExpiredRoot } from './hierarchy-expiry.claim';
-import { deleteExpiredScope, type ExpiryCounts, type ExpiryScope } from './hierarchy-expiry.runner';
+import { deleteExpiredScope, type ExpiryCounts } from './hierarchy-expiry.runner';
 
 /**
  * How many history rows cost as much, in the activity budget, as one activity (ADR-0174 D8).
@@ -131,8 +132,16 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
    */
   private async logDisabled(): Promise<void> {
     let pastPeriod: { clients: number; projects: number; plans: number } | undefined;
+    let atLeast = false;
     try {
-      const roots = await selectExpiryCandidates(this.prisma, { cutoff: this.cutoff(new Date()) });
+      // **Bounded, like the sweep**: this runs at every boot, forever, on every host that has not
+      // armed — the one place a large bin must not be pulled into memory. The count is then "at
+      // least N" when a scan hit the limit, and says so; the preview command lists everything.
+      const { roots, truncated } = await selectExpiryCandidatesBounded(this.prisma, {
+        cutoff: this.cutoff(new Date()),
+        limit: CANDIDATE_SCAN_LIMIT,
+      });
+      atLeast = truncated;
       pastPeriod = { clients: 0, projects: 0, plans: 0 };
       for (const root of roots) {
         if (root.kind === 'client') pastPeriod.clients += 1;
@@ -146,7 +155,10 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
       );
     }
     this.logger.info(
-      { event: 'hierarchy_expiry.disabled', ...(pastPeriod ? { pastPeriod } : {}) },
+      {
+        event: 'hierarchy_expiry.disabled',
+        ...(pastPeriod ? { pastPeriod, ...(atLeast ? { pastPeriodIsAtLeast: true } : {}) } : {}),
+      },
       'hierarchy expiry is not armed',
     );
   }
@@ -201,17 +213,12 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
     for (const root of roots) {
       if (activityBudget <= 0 || scopeBudget <= 0) return;
       scopeBudget -= 1;
-      const scope = await resolveExpiryScope(this.prisma, root);
-      const counts = await this.expireScope(root, scope, cutoff);
+      const counts = await this.expireScope(root, cutoff);
       if (counts) activityBudget -= budgetCharge(counts);
     }
   }
 
-  private async expireScope(
-    root: ExpiryRoot,
-    scope: ExpiryScope,
-    cutoff: Date,
-  ): Promise<ExpiryCounts | null> {
+  private async expireScope(root: ExpiryRoot, cutoff: Date): Promise<ExpiryCounts | null> {
     const kind = root.kind;
     const startedAt = Date.now();
     try {
@@ -222,6 +229,10 @@ export class HierarchyExpiryService implements OnApplicationBootstrap, OnApplica
           // there is nothing to undo and no audit row to retract.
           if (!(await claimExpiredRoot(tx, root, cutoff))) return null;
 
+          // **Resolved here, after the claim**, so the descendant ids are read in the same
+          // transaction that deletes them rather than seconds earlier: a project or plan created or
+          // moved under the root in the gap is neither missed (a foreign-key failure) nor stale.
+          const scope = await resolveExpiryScope(tx, root);
           const result = await deleteExpiredScope(tx, scope);
 
           // **Inside the transaction, with the tx passed**, so an unwritable audit row rolls the

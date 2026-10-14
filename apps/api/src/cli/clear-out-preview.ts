@@ -148,6 +148,19 @@ export async function collectPreview(
   return { now, settings, organizations, due, dueSoon };
 }
 
+/**
+ * Text that came from a tenant, made safe to print on the operator's terminal.
+ *
+ * A client's, project's, plan's or organisation's name is typed by a customer, and this command
+ * prints it to a terminal. Control characters (a newline, an escape sequence that clears a line or
+ * moves the cursor) and bidirectional overrides could forge the report's own sentences — "Nothing is
+ * past its 90 days" — or hide an OVERDUE flag. Every control and format character (`\p{C}`, which
+ * includes U+202A–202E and U+2066–2069) becomes U+FFFD; everything else is kept.
+ */
+export function printable(text: string): string {
+  return text.replace(/\p{C}/gu, '\uFFFD');
+}
+
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -182,7 +195,7 @@ function renderList(data: PreviewData, items: PreviewItem[], due: boolean): stri
     byOrg.set(item.organizationId, list);
   }
   const lines: string[] = [];
-  const orgName = (id: string) => data.organizations.get(id) ?? id;
+  const orgName = (id: string) => printable(data.organizations.get(id) ?? id);
   for (const [orgId, list] of [...byOrg].sort((a, b) =>
     orgName(a[0]).localeCompare(orgName(b[0])),
   )) {
@@ -191,7 +204,7 @@ function renderList(data: PreviewData, items: PreviewItem[], due: boolean): stri
       const kind = item.kind.charAt(0).toUpperCase() + item.kind.slice(1);
       const flag = item.overdue ? '  OVERDUE — send this output to the maintainers' : '';
       lines.push(
-        `  ${kind.padEnd(7)} "${item.name}"  ${when(item, due)}  ${contents(item)}${flag}`,
+        `  ${kind.padEnd(7)} "${printable(item.name)}"  ${when(item, due)}  ${contents(item)}${flag}`,
       );
     }
   }
@@ -280,6 +293,9 @@ export function renderPreview(data: PreviewData): string {
 export async function openReadOnlyClient(databaseUrl: string): Promise<PrismaClient> {
   const url = new URL(databaseUrl);
   url.searchParams.set('connection_limit', '1');
+  // Every connection the pool might open starts read-only, whatever the SET below does: the SET
+  // protects the one session we hold, this protects any other.
+  url.searchParams.set('options', '-c default_transaction_read_only=on');
   const client = new PrismaClient({ datasourceUrl: url.toString(), log: [] });
   try {
     await client.$executeRaw`SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY`;

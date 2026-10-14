@@ -39,8 +39,8 @@ describe('the countdown', () => {
   it('counts 90 x 24 hours across the UK clock change, the instants the API suite pins', () => {
     // The sweep keeps a row deleted exactly one period ago and removes one a millisecond older
     // (`apps/api/test/hierarchy-expiry.e2e-spec.ts`, run there under TZ=Europe/London too). The
-    // countdown is millisecond arithmetic with no calendar day in it, so the repeated hour on
-    // 2026-10-25 moves nothing: the same three instants give the same answers in every zone.
+    // countdown is millisecond arithmetic with no calendar day in it, so the answers below do not
+    // depend on the zone the test runs in; they are the same instants that suite uses.
     const now = new Date('2026-10-25T01:30:00.000Z').getTime();
     const cutoff = now - 90 * 24 * 60 * 60 * 1000;
     expect(daysUntilExpiry(new Date(cutoff + 1).toISOString(), 90, now)).toBe(0);

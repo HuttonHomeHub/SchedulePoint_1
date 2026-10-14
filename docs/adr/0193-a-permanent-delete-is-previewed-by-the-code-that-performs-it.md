@@ -49,7 +49,9 @@ Three properties keep it from deleting, each pinned by a test and not by a habit
 2. Its session **refuses writes**: one connection (`connection_limit=1`), made read-only as its first statement and read
    back, failing closed if it did not take.
 3. It **writes only to the terminal**, never the application log. It prints customer names, and the log is a rotated
-   file on the host.
+   file on the host. Every tenant-typed name is passed through `printable()` first, so a name cannot carry a control or
+   bidirectional character that forges or hides a line of the report. Every connection also starts read-only
+   (`default_transaction_read_only`), not just the session it holds.
 
 - Rejected: a log line listing what is due (names would persist in the rotated log; kept as a **counts-only** field on the
   `hierarchy_expiry.disabled` line so Dockge shows a number); a staff-console panel (refused by ADR-0096 D9 and ADR-0086:
@@ -72,7 +74,8 @@ deleted, `claimExpiredRoot` runs `updateMany({ where: { id, deletedAt: { lt: cut
 { deleteBatchId: seen } })` on the root. It writes back the value it matched on, so its only effects are the lock and the
 count; a count of 0 means the root was restored or re-deleted since the scan, and the sweep deletes nothing and writes no
 audit row. A restore that arrives while the claim is held waits for the lock and then finds the row gone. Either order,
-exactly one side wins. A restore whose own root update matches nothing now throws `NotFoundError` from
+exactly one side wins. The subtree's ids are resolved inside that transaction, after the claim, so they are
+never stale. A restore whose own root update matches nothing now throws `NotFoundError` from
 `restoreBatch` itself, so the `*.restored` audit row is not written for a restore that did not happen.
 
 - Rejected: `SELECT … FOR UPDATE` (raw SQL is banned in the expiry directory by a structural test); a serializable
@@ -94,7 +97,8 @@ not built here; the operator documents state it.
 - The 1.0 row is met on the owner's host once the owner switches the setting on (milestone 5). A fresh installation is
   **not** armed by default.
 - The boot log's `hierarchy_expiry.disabled` line carries `pastPeriod: { clients, projects, plans }` (roots only, no
-  names). A failed count is logged and the line still goes out: it can never be the reason the API does not start.
+  names), counted with the sweep's own bounded scan and flagged `pastPeriodIsAtLeast` when a scan hit the limit, so a
+  large bin is never pulled into memory at boot. A failed count is logged and the line still goes out: it can never be the reason the API does not start.
 - The `hierarchy.expired` audit row now keeps `activityHistoryCount`. The sweep always recorded it; the redactor's
   allowlist dropped it from every stored row. The audit screen's wording does not show it yet.
 - A restore that loses the race answers 404 as before, but now writes no `*.restored` row (`docs/API.md`).

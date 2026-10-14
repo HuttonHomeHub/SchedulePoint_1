@@ -47,8 +47,8 @@ function build(
   const claimed = { count: options.claimed ?? 1 };
   const tx = {
     client: { updateMany: vi.fn(() => Promise.resolve(claimed)) },
-    project: { updateMany: vi.fn(() => Promise.resolve(claimed)) },
-    plan: { updateMany: vi.fn(() => Promise.resolve(claimed)) },
+    project: { updateMany: vi.fn(() => Promise.resolve(claimed)), findMany: vi.fn() },
+    plan: { updateMany: vi.fn(() => Promise.resolve(claimed)), findMany: vi.fn() },
   };
   const prisma = {
     client: { findMany: vi.fn(() => Promise.resolve(clients)) },
@@ -80,6 +80,9 @@ function build(
     { record } as unknown as AuditService,
     logger as never,
   );
+  // The scope is resolved inside the transaction, after the claim: the same lookups, via `tx`.
+  Object.assign(tx.project, { findMany: prisma.project.findMany });
+  Object.assign(tx.plan, { findMany: prisma.plan.findMany });
   return { service, prisma, record, tx };
 }
 
@@ -150,6 +153,22 @@ describe('arming', () => {
     ) as [Record<string, unknown>];
     expect(fields['pastPeriod']).toEqual({ clients: 1, projects: 1, plans: 1 });
     expect(JSON.stringify(fields)).not.toContain('client c1');
+  });
+
+  it('bounds the boot count and says "at least" when a scan hit the limit', async () => {
+    const plans = Array.from({ length: 5_000 }, (_, i) => plan(`p${i}`, `proj-${i}`));
+    const { service, prisma } = build({ enabled: false, plans });
+    (prisma.plan.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+      (args: { take?: number }) => plans.slice(0, args.take ?? plans.length),
+    );
+    service.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prisma.plan.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 5_000 }));
+    const [fields] = logger.info.mock.calls.find(
+      ([f]) => (f as { event: string }).event === 'hierarchy_expiry.disabled',
+    ) as [Record<string, unknown>];
+    expect(fields['pastPeriod']).toEqual({ clients: 0, projects: 0, plans: 5_000 });
+    expect(fields['pastPeriodIsAtLeast']).toBe(true);
   });
 
   it('still logs the not-armed line when the count fails, rather than blocking boot', async () => {

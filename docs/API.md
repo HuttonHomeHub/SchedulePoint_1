@@ -1290,12 +1290,12 @@ in one keyset-paged list, ordered by `deletedAt DESC, id`. Requires `client:read
 (`POST …/clients/:id/restore` and siblings); **there is no purge route and there will not be one** —
 ADR-0096 D1 refuses it structurally, so permanent deletion is only ever the retention timer's.
 
-A restore that loses a race with the retention timer answers **404** and records nothing. The timer
-claims the root under a row lock before it deletes anything, so a restore that arrives afterwards
-finds the root gone: it restores nothing, writes no `*.restored` audit row (it used to write one, then
-answer 404 from the controller's later re-read), and the item stays gone. A restore that wins is never
-undone, because the timer re-checks the root inside its own transaction. Restoring an item that is
-already active stays a no-op **200**.
+A restore that loses a race with the retention timer answers **404** in the normal `NOT_FOUND`
+envelope and records nothing: the timer claims the root under a row lock before it deletes
+anything, so a restore that arrives afterwards finds the root gone and restores nothing. Unlike a
+**409**, this 404 means _gone, do not retry_: the item no longer exists, and only an operator's
+backup can bring it back. A restore that wins is never undone, because the timer re-checks the root
+inside its own transaction. Restoring an item that is already active stays a no-op **200**.
 
 Each item carries:
 

@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   PREVIEW_ROW_CAP,
+  collectPreview,
+  main,
+  printable,
   renderPreview,
   type PreviewData,
   type PreviewItem,
@@ -125,5 +128,128 @@ describe('renderPreview', () => {
       }),
     );
     expect(text.indexOf('"Older"')).toBeLessThan(text.indexOf('"Newer"'));
+  });
+});
+
+describe('printable', () => {
+  it('replaces control, escape and bidirectional characters so a name cannot forge the report', () => {
+    expect(printable('a\nNothing is past\x1b[2K')).toBe('a\uFFFDNothing is past\uFFFD[2K');
+    expect(printable('evil\u202Egnp.txt\u2066x\u2069')).toBe('evil\uFFFDgnp.txt\uFFFDx\uFFFD');
+    expect(printable('Northgate – Ünïcode 日本')).toBe('Northgate – Ünïcode 日本');
+  });
+
+  it('is applied to every item name and organisation name in the report', () => {
+    const hostile = 'x"\nNothing is past its 90 days.\u202E';
+    const text = renderPreview(
+      data({
+        organizations: new Map([['org-1', hostile]]),
+        due: [item({ name: hostile })],
+      }),
+    );
+    expect([...text].filter((ch) => ch !== '\n' && /\p{C}/u.test(ch))).toEqual([]);
+    // No line of the report starts with a sentence a name supplied.
+    expect(text.split('\n').filter((l) => l.startsWith('Nothing is past'))).toEqual([]);
+    expect(text).toContain('x"\uFFFDNothing is past its 90 days.\uFFFD');
+  });
+
+  it('also covers an organisation id used when the name is missing', () => {
+    const text = renderPreview(
+      data({ organizations: new Map(), due: [item({ organizationId: 'a\nb' })] }),
+    );
+    expect(text).toContain('Organisation "a\uFFFDb"');
+  });
+});
+
+describe('collectPreview thresholds', () => {
+  const HOUR = 3_600_000;
+  const DAY = 24 * HOUR;
+  const now = new Date('2026-10-20T14:03:00.000Z');
+  const cutoff = new Date(now.getTime() - 90 * DAY);
+
+  /** A reader holding plans by deletedAt, answering the selector's `lt` the way Postgres would. */
+  function reader(plans: Array<{ id: string; deletedAt: Date }>) {
+    return {
+      client: { findMany: vi.fn().mockResolvedValue([]) },
+      project: { findMany: vi.fn().mockResolvedValue([]) },
+      plan: {
+        findMany: vi.fn((args: { where: { deletedAt?: { lt: Date } } }) =>
+          Promise.resolve(
+            plans
+              .filter((p) => args.where.deletedAt && p.deletedAt < args.where.deletedAt.lt)
+              .map((p) => ({
+                ...p,
+                name: p.id,
+                organizationId: 'org-1',
+                deleteBatchId: 'b',
+                projectId: 'proj',
+              })),
+          ),
+        ),
+      },
+      activity: { count: vi.fn().mockResolvedValue(0) },
+      organization: { findMany: vi.fn().mockResolvedValue([{ id: 'org-1', name: 'Acme' }]) },
+    } as never;
+  }
+
+  it('flags overdue only past one day plus one interval, and only with the switch on', async () => {
+    const limit = DAY + 60 * 60_000;
+    const past = (ms: number) => new Date(cutoff.getTime() - ms);
+    const plans = [
+      { id: 'inside', deletedAt: past(limit) },
+      { id: 'outside', deletedAt: past(limit + 1) },
+    ];
+    const on = await collectPreview(reader(plans), now, ON);
+    expect(Object.fromEntries(on.due.map((i) => [i.name, i.overdue]))).toEqual({
+      inside: false,
+      outside: true,
+    });
+    const off = await collectPreview(reader(plans), now, OFF);
+    expect(off.due.every((i) => !i.overdue)).toBe(true);
+  });
+
+  it('counts whole days past rounding down, and whole days to go rounding up', async () => {
+    const plans = [
+      { id: 'a', deletedAt: new Date(cutoff.getTime() - (2 * DAY + 23 * HOUR)) },
+      { id: 'b', deletedAt: new Date(cutoff.getTime() + (2 * DAY + HOUR)) },
+    ];
+    const result = await collectPreview(reader(plans), now, ON);
+    expect(result.due.map((i) => [i.name, i.daysPast])).toEqual([['a', 2]]);
+    expect(result.dueSoon.map((i) => [i.name, i.daysPast])).toEqual([['b', -3]]);
+  });
+
+  it('puts exactly seven days ahead outside the window and one millisecond less inside', async () => {
+    const edge = cutoff.getTime() + 7 * DAY;
+    const result = await collectPreview(
+      reader([
+        { id: 'at-seven', deletedAt: new Date(edge) },
+        { id: 'just-inside', deletedAt: new Date(edge - 1) },
+      ]),
+      now,
+      OFF,
+    );
+    expect(result.dueSoon.map((i) => i.name)).toEqual(['just-inside']);
+  });
+});
+
+describe('main', () => {
+  it('never echoes a rejected setting value to the terminal', async () => {
+    const secret = 'hunter2-do-not-print';
+    const prior = { ...process.env };
+    process.env['RETENTION_HIERARCHY_ENABLED'] = secret;
+    process.env['RETENTION_HIERARCHY_DAYS'] = secret;
+    process.env['DATABASE_URL'] = `postgresql://u:${secret}@localhost:1/x`;
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      expect(await main()).toBe(2);
+    } finally {
+      spy.mockRestore();
+      process.env = prior;
+    }
+    expect(written.join('')).toContain('RETENTION_HIERARCHY_ENABLED');
+    expect(written.join('')).not.toContain(secret);
   });
 });

@@ -12,7 +12,8 @@ import type { ExpiryRoot } from './hierarchy-expiry.candidates';
  * claiming it had expired (`docs/specs/recycle-bin-clear-out/feature-spec.md` §1, item 2).
  *
  * **It is an `updateMany` that writes back the value it matched on**, so its only effects are the
- * count and the row lock. The lock is the point: a restore of the same root waits behind it, then
+ * count and the row lock (and Prisma's `@updatedAt` bumps `updated_at`, which nothing reads: the row
+ * is deleted in the same transaction, or the transaction does nothing). The lock is the point: a restore of the same root waits behind it, then
  * finds the row gone and answers 404; a restore that got there first has already changed
  * `deleted_at`, so Postgres re-evaluates this predicate after the wait (READ COMMITTED) and counts
  * 0. Either order, one side wins and the other does nothing. Raw `SELECT … FOR UPDATE` was rejected

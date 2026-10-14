@@ -651,7 +651,7 @@ export class HierarchyLifecycleService {
                 ? counts.plans
                 : 1;
         if (rootRestored === 0) {
-          throw new NotFoundError(`This ${entity} is no longer in Recently deleted.`);
+          throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
         }
         if (knockOn) {
           // The same statement, returning the ids it reactivated: the caller tells the survivors by
@@ -761,6 +761,11 @@ export class HierarchyLifecycleService {
         throw new ConflictError('A sibling with this name already exists.', {
           reason: HIERARCHY_CONFLICT.NAME_TAKEN,
         });
+      }
+      // The legacy path (no batch id) updates by id, which raises P2025 rather than counting zero
+      // when the retention expiry removed the row first.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
       }
       throw error;
     }

@@ -114,6 +114,17 @@ export async function selectExpiryCandidates(
   reader: ExpiryReader,
   options: { cutoff: Date; limit?: number },
 ): Promise<ExpiryRoot[]> {
+  return (await selectExpiryCandidatesBounded(reader, options)).roots;
+}
+
+/**
+ * {@link selectExpiryCandidates}, also saying whether a scan stopped at `limit` — so a caller that
+ * counts (the boot log) can say "at least N" instead of presenting a truncated count as exact.
+ */
+export async function selectExpiryCandidatesBounded(
+  reader: ExpiryReader,
+  options: { cutoff: Date; limit?: number },
+): Promise<{ roots: ExpiryRoot[]; truncated: boolean }> {
   const { cutoff, limit } = options;
   const where = { deletedAt: { lt: cutoff } };
   // `id` breaks ties so a cursor page and a limited scan agree on the order of equal timestamps.
@@ -159,11 +170,16 @@ export async function selectExpiryCandidates(
     deleteBatchId: row.deleteBatchId,
   });
 
-  return [
-    ...clients.map((c) => toRoot('client', c)),
-    ...projects.filter((p) => !expiringClients.has(p.clientId)).map((p) => toRoot('project', p)),
-    ...plans.filter((p) => !expiringProjects.has(p.projectId)).map((p) => toRoot('plan', p)),
-  ];
+  return {
+    roots: [
+      ...clients.map((c) => toRoot('client', c)),
+      ...projects.filter((p) => !expiringClients.has(p.clientId)).map((p) => toRoot('project', p)),
+      ...plans.filter((p) => !expiringProjects.has(p.projectId)).map((p) => toRoot('plan', p)),
+    ],
+    truncated:
+      limit !== undefined &&
+      (clients.length >= limit || projects.length >= limit || plans.length >= limit),
+  };
 }
 
 /**
