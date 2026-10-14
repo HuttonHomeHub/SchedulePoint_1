@@ -2184,7 +2184,10 @@ test.describe('The plan command surface', () => {
       await page.setViewportSize({ width: to, height: 800 });
       await expect(milestone, `${String(from)} -> ${String(to)}`).toHaveCount(promoted);
       await expect(link, `${String(from)} -> ${String(to)}`).toBeFocused();
-      await expect(announcer).not.toContainText('no longer');
+      // About Link, not about anything: the live region keeps the last sentence it was given, and an
+      // earlier test in this file leaves a true one there ("Colour by: Criticality is no longer on the
+      // toolbar. Moved into the View menu.").
+      await expect(announcer).not.toContainText(/Link.*no longer/);
     }
   });
 
