@@ -70,6 +70,7 @@ const NOT_PLAN_AUTHORING = [
   'float-paths',
   'members',
   'navigator',
+  'organization-export',
   'organizations',
   'overview',
   'perf-probe',
