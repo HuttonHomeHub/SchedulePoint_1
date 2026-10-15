@@ -3,112 +3,100 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-14. The session built the owner's **three 1.0 requirements** (decided 2026-10-13):
-a tested database backup and restore, the recycle bin's 90-day clear-out made safe to switch on, and a
-whole-organisation export. Each had its own approved spec. Every PR was squash-merged with all its
-checks green on the pinned head. **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-15. A short session after the three 1.0 requirements. It verified the previous
+hand-off against `main`, ran the reconciliation pass, and landed two small test additions. **Nothing was
+released** (no changeset in either PR), and **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
 ## Where things stand
 
-- **Releases this session:** `api` 0.90.0 → 0.94.0 and `web` 0.191.0 and 0.192.0, every tag confirmed
-  with `git ls-remote --tags`.
-- **By requirement:**
-
-  | Requirement               | Spec                                | PRs                          | Releases                        | `RELEASE_1_0.md` row                  |
-  | ------------------------- | ----------------------------------- | ---------------------------- | ------------------------------- | ------------------------------------- |
-  | Backup and restore        | `docs/specs/database-backup/`       | #984, #985, #987, #989       | api 0.90.0, 0.91.0              | 5 — built, owner's check owed         |
-  | Recycle-bin clear-out     | `docs/specs/recycle-bin-clear-out/` | #990, #991, #993, #995, #996 | api 0.92.0, 0.93.0; web 0.191.0 | 7 — built, **off**; owner switches on |
-  | Whole-organisation export | `docs/specs/organisation-export/`   | #997, #998, #1000            | api 0.94.0; web 0.192.0         | 6 — built, owner's check owed         |
-
-- **What changed for the owner and planners:**
-  - **Backups:** a `backup` service takes a copy every night and keeps 30 days; the API takes one before
-    any update that changes the database and **holds the update** if it cannot; the database port is
-    closed in the release compose file; `restore` never overwrites (the old database is kept under a
-    new name). CI restores a copy on every change. Nothing runs on the owner's host until they do the
-    host steps (below). ADR-0192.
-  - **Clear-out:** still **off** (`RETENTION_HIERARCHY_ENABLED=false`). A read-only preview command lists
-    what the first run would delete, using the same selection code the delete uses; each delete
-    re-checks the item inside its transaction so a restore can never lose to it; when it is on, delete
-    confirmations say "…stay in Recently deleted for 90 days, then are permanently removed". ADR-0193.
-  - **Export:** an Org Admin presses **Export data** in the left rail → **Download export** and gets one
-    ZIP (JSON + CSV per table, `README.txt`, `manifest.json` with counts and checksums), streamed, never
-    stored, audited as `privacy.exported`, one at a time per organisation and two at a time per server.
-    Format promise: `docs/ORGANISATION_EXPORT_FORMAT.md`. ADR-0194.
+- **Latest releases are unchanged:** `api` 0.94.0 and `web` 0.192.0 (tags confirmed with
+  `git ls-remote --tags`).
+- **This session's PRs:**
+  - **#1003** `docs(docs): reconciliation pass after the 1.0 requirements`. The pass taught six reviewer
+    agents about ADR-0192 to ADR-0194 (none had heard of them) and corrected `docs/ARCHITECTURE.md`
+    (hosting "still open"; it was settled 2026-08-01), `README.md` (the Gantt start-edge resize
+    "absent"; it shipped in web 0.157.0) and several indexes. It also fixed `docs/RELEASE_1_0.md`: the
+    short answer had called backups and the export "missing", the "today" versions and rollback tags
+    were old, and row 5's practice-check time now matches the guide (10 to 15 minutes, plus about 15
+    to read Parts 3 and 4). Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md` (last full pass
+    2026-10-15).
+  - **#1004** `test(web): assert the 1024 x 600 rail fit and close the #978 forced-colour nits`. A committed journey `apps/web/e2e-audit/rail-1024.spec.ts` asserts
+    that at 1024 × 600 the expanded rail keeps all seven organisation links, the tree's 128 px floor
+    (measured 251 px fine, 131 px coarse) and the version footer, for fine and coarse pointers. It
+    also closes the three deferred #978 nits in `apps/web/e2e-gantt/forced-colors.spec.ts`: the
+    summary band's 1 px inset, a finished task against a summary under forced colours (the seed gained
+    "Echo finished task"), and a why-comment on `colourBehind`. The optional selected-row hairline was
+    not built.
+- **Not done from the pass, by choice** (recorded in the 2026-10-15 `DECISIONS.md` entry): the
+  specialist reviewer sweep over recent diffs (the export and backup PRs already had review passes in
+  their own session), a full register walk (sampled 15 rows), and step 5a. Proposed and not acted on:
+  cite code by symbol rather than line number in ungated prose (four documents had stale line
+  citations); a `mkdir backups` hint in `README.md`'s container quick-start.
 
 ## What the owner has to do (in this order)
 
-These are the only things between the three requirements and **Done**. None is a session's job; when the
-owner reports a result, record it in `docs/RELEASE_1_0.md` and `docs/DECISIONS.md`.
+Unchanged from the last hand-off. **The owner said on 2026-10-15 they will do these another day.** When
+they report a result, record it in `docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a
+guide is wrong or unclear on the real server, fix the guide.
 
 1. **Backups — host steps and one practice check** (row 5). Guide:
-   [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). Part 1 is about 25 minutes (make
-   the folder with `sudo install -d -o 1000 -g 1000 -m 700 backups`, paste the `backup` block, add the
-   API's volume lines, delete the `db` port lines, update the stack, confirm `LAST-BACKUP.txt` says OK,
-   save `.env` in a password manager); Part 2's `check` is 30–45 minutes. Done when the owner reports one
-   `CHECK PASSED` with its date and file name.
+   [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). About 25 minutes of set-up, a
+   10-minute wait for the first copy, 10 to 15 minutes for the `check`, and about 15 minutes to read
+   Parts 3 and 4 once: **about an hour**. Done when the owner reports one `CHECK PASSED` with its date
+   and the copy's file name. The guide's paste block was compared with `docker-compose.release.yml` on
+   2026-10-15 and matches (only comments differ).
 2. **Export — download once** (row 6). Guide:
-   [`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), about 10 minutes:
-   download your own organisation's export on the server and open one CSV in Excel. If the owner's host
-   sits behind Cloudflare or another proxy, a very long export can be cut at that proxy's idle limit
-   (`docs/DEPLOYMENT.md`, "The organisation export through a proxy").
-3. **Clear-out — switch on, only after step 1 has passed the same day** (row 7). Guide:
-   [`docs/guides/switch-on-the-clear-out.md`](guides/switch-on-the-clear-out.md). Irreversible; it ships
-   as its own release day by the owner's decision. Run the preview first.
+   [`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), about 10 minutes.
+3. **Clear-out — switch on, only on a day step 1 has passed** (row 7). Guide:
+   [`docs/guides/switch-on-the-clear-out.md`](guides/switch-on-the-clear-out.md). Irreversible; the owner
+   alone switches `RETENTION_HIERARCHY_ENABLED` on. Run the preview first.
 
-### One open call for the owner (export size)
+Walk the owner through them **one at a time, in plain English**, waiting for each result.
 
-Measured (`docs/specs/organisation-export/m2-measurements.md`): 10 plans × 2,000 activities exports in
-24–27 s as a 30 MB ZIP, with ordinary reads still at 61–94 ms p95. **Extrapolated, not run:** 100 such
-plans would take about 4–5 minutes and briefly add ~280 MB to the API's memory, both near the plan's
-limits (5 minutes, 256 MB). Typical organisations are far below that. The options, if the owner ever
-has an organisation that size: accept it; a Node memory flag on the API container; or a single-read
-export with a worker thread (`docs/TECH_DEBT.md` #515, #516). Default: accept, do nothing now.
+## Decided — do not re-ask
 
-## Parked by the owner (2026-10-13) — keep, do not raise
+- Do not cut 1.0 until the owner says.
+- The clear-out is switched on only by the owner, on a day a backup `check` has passed.
+- Export size: accept the current design; do nothing about the 100-plan estimate unless the owner raises
+  it (`docs/specs/organisation-export/m2-measurements.md`, #515, #516).
+- Collaborative editing is not in 1.0.
+- Four web e2e shards; the fifth-shard trigger is the slowest shard above 1,250 s (median of three runs)
+  or a 30-minute timeout.
+- The diagram keeps its own colours under a Windows contrast theme (#508).
+- `Start editing` stays plain while the pen is not held.
 
-The owner parked these (`docs/DECISIONS.md`, 2026-10-13). They are not work for a session, and a session
-does not bring them up again until the owner does. When the owner returns to one, the steps are ready:
+## Parked by the owner — keep, do not raise
+
+The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15). A session does not bring
+them up until the owner does. When the owner returns to one, the steps are ready:
 
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
 - **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
   sittings). The owner replies with one line per step; record the answers in a `device-check-results.md`
   beside the sheet and turn each "wrong" into a row or a fix.
-- Older parked items, unchanged: the toolbar "minor tweaks" (#499 — ask which before building), SC-16
-  photos, 72 rem confirmation, Surface sheet steps 25, 18b, 25b, 26–28, the history count on or after
-  1 November, Gantt hands-on readings, header at 320/640.
-- **Decided, do not reopen:** do not cut 1.0 until the owner says; collaborative editing is not in 1.0;
-  four web shards (fifth-shard trigger: slowest shard above 1,250 s, median of three runs, or a 30-minute
-  timeout); `Start editing` stays plain while the pen is not held; the diagram keeps its own colours
-  under a contrast theme (#508).
+- Older parked items, unchanged: the toolbar "minor tweaks" (#499 — ask which before building any),
+  SC-16 photos, 72 rem confirmation, Surface sheet steps 25, 18b, 25b, 26–28, the history count on or
+  after 1 November, Gantt hands-on readings, header at 320/640.
 - The 1.0 checklist lists both parked jobs as "the owner's call" with no position; keep it that way.
 
 ## Open rows worth knowing
 
-- **New this session:** #509–#514 (backup follow-ups: no off-site copy, owner-role connection, the
-  pre-update copy unmeasured on a large database, no staff-console status, no one-boot override for a
-  held update, a possible default database password on old installs),
-  #515 (the export builds one in-browser `Blob`; trigger ~250 MB), #516 (the export reads every table
-  twice, the unmeasured many-organisation case, and a possible `(organization_id, id)` index — a schema
-  change for database-architect), #517 (the export throttle is per address and runs before sign-in; a
-  slow client holds a database snapshot up to 10 minutes).
-- Still open from before: #507 (no exported OpenAPI file or breaking-change check; owner's call, default
-  not for 1.0), #508 (by decision), and the deferred #978 nits (summary band inset assertion, finished
-  vs summary computed check, `colourBehind` comment).
-- **Not folded from the export reviews, by choice:** a committed assertion that the rail's tree keeps
-  ≥ 128 px at 1024 × 600 with seven links (measured 131 px coarse; an eighth link would not fit), and a
-  leave-page guard during an export (the page says leaving cancels it).
+- #509–#514 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
+  call, default not for 1.0), #508 (by decision).
+- The #978 deferred nits are **closed** by #1004, and the rail's seven-link fit is now a committed
+  assertion (an eighth link will fail it on a coarse pointer).
+- **Not folded, by choice:** a leave-page guard during an export (the page says leaving cancels it).
 
 ## Suggested next
 
 Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering:
 
-1. **Wait for the owner's three host results above**, and record them as they come.
-2. **A reconciliation pass** (`docs/RECONCILE.md`): three ADRs (0192–0194) and a new module have landed
-   since the 2026-10-12 pass; due at this epic boundary.
-3. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
+1. **The owner's three host steps** above, when they are ready, recorded as they come.
+2. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
    to cut 1.0.
-4. The small deferred nits above, as one test PR.
+3. A small docs PR for the two proposals the pass left (symbol citations; `mkdir backups` in the README
+   quick-start), only if the owner wants it.
 
 ## Environment notes a new session would otherwise rediscover
 
@@ -244,3 +232,15 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
     `api` container loses its first-boot log, so the job saves it first.
   - **A second restore in the same minute** once collided on the kept database's name; the script now
     picks a free name (#993). Keep that regression case in `scripts/backup-restore-check.sh`.
+
+- **2026-10-15 lessons:**
+  - **The main checkout has no `node_modules`.** Run `pnpm prepush` and the e2e suites in a builder's
+    worktree, moved onto the exact head you will push (`git checkout --detach <sha>`), then `cd` back.
+  - **A builder's run script wrote `/api.pid` and `/vite.pid` at the filesystem root**, and the safety
+    check refuses any `rm` at `/`. They are harmless; brief builders to write pid files inside their
+    worktree or the scratchpad.
+  - **The Stop hook counts commits against the branch's old remote tip** after a squash-merge and a
+    reset, so it asks for a push while `pnpm prepush` is still running. Wait for the gate; push with
+    `--force-with-lease=<branch>:<old-sha>`.
+  - **A scheduled wake-up whose notes go stale can be corrected in place** with `update_trigger` (new
+    prompt), which avoids a second live trigger.
