@@ -10,6 +10,65 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-15 — Reconciliation pass: the reviewers had not heard of backups or the export, and a hosting decision was still open
+
+**What was done.** The pass in `docs/RECONCILE.md`, three days after the last, over ADR-0189 to ADR-0194 (the backup
+service, the clear-out preview, the organisation export) and the new `organization-export` module, `backup` compose
+service and `docs/guides/`. Every computed gate was green before it started (`check:counts`, `doc-links`,
+`adr-coverage`, `claims`, `flags`, `spec-status`, `playbook`, `debt-status`), so what follows is what they cannot see.
+
+**What was found wrong.**
+
+- **The agents again.** `grep -c '0192\|0193\|0194' .claude/agents/*.md` returned 0 for all
+  fifteen files. The six that police these surfaces now carry the standing facts: `security-reviewer` (the export
+  census and its exclusions; backups hold password hashes and session tokens; the release compose publishes no database
+  port), `devops-reviewer` (the `backup` service, the `/backups` mount as the switch for the pre-update copy, the hold),
+  `api-reviewer` (the one route with no envelope), `backend-performance-reviewer` (the 10-minute snapshot, two per
+  process; the unmeasured pre-update copy, #511), `database-architect` (a new model or column must be classified in
+  `export-columns.ts` or `export-census.structural.spec.ts` fails) and `test-engineer` (the backup round trip and the
+  export's structural suites).
+- **`ARCHITECTURE.md` section 11 still said the hosting platform is "still an open decision"**, which
+  `docs/TECH_DEBT.md` #5 settled on 2026-08-01 and `CLAUDE.md` section 17 has said since 2026-08-04. The mirror image of
+  the failure section 17 records, in the one section of that file nobody had reopened. It also made no mention of the
+  `backup` service or the closed database port. Section 2 named neither the export module nor the two operator commands
+  (`src/cli/clear-out-preview.ts`, `backup/schedulepoint-backup.sh`).
+- **`README.md` said the Gantt's start-edge resize "is deliberately absent (ADR-0095 D4)"**; ADR-0170 lifted that and it
+  shipped in `web` 0.157.0 (`apps/web/CHANGELOG.md:478`, `bar-drag.ts`). `CLAUDE.md` section 1 was corrected for exactly
+  this on 2026-09-23 and the front door was not looked at: the same sibling omission `RECONCILE.md` section 1 warns about.
+- **`docs/DEVELOPMENT.md` said `docker compose up -d` starts "db + api + web"** and now also starts `backup`, which
+  shows unhealthy if `./backups` does not exist as the developer's own folder (the dev compose file says so). It now
+  says so too. `docs/README.md` indexed none of `guides/`, `ORGANISATION_EXPORT_FORMAT.md`, `RELEASE_1_0.md` or
+  `HANDOFF.md`; `apps/api/README.md` listed neither `cli/` nor `backup/` nor the backup-fixture script.
+- **Moved line citations, three kinds.** `CLAUDE.md` section 17 cited `interchange.service.ts:1134-1139` for the
+  failure compensation, which is now `compensate` at `:1274-1311` (the code moved 150 lines; the copies in ADR-0096 and
+  an older `DECISIONS.md` entry are historical and left). `docs/RELEASE_1_0.md` cited `docker-compose.release.yml:74`
+  and `:161` for the image tags (now `:86` and `:234`), `CLAUDE.md:620`, `:660`, `:783` and `:789` (all pointing at
+  unrelated lines) and `packages/types/src/index.ts:3186-3192` (now `:3201-3207`). The `CLAUDE.md` citations now name
+  the section instead of a line, because that file is edited more often than any other.
+- **`docs/RELEASE_1_0.md` said backup and export were "missing"**, quoted `web` 0.190.2 / `api` 0.89.4 as today's
+  versions (they are 0.192.0 / 0.94.0) and gave row 5's time as "about 25 minutes, then 30 to 45" where the guide says
+  Part 2 takes 10 to 15 (`docs/guides/back-up-and-restore.md:16, 281`). All four corrected; the specs under
+  `docs/specs/database-backup/` are historical and untouched.
+- `docs/BACKEND_ARCHITECTURE.md` said "two jobs run today" without saying the heartbeat is a third timer of the same
+  shape (`ARCHITECTURE.md` section 10 says three), and held a "large payloads never stream through the API" standard
+  with no word that the export is the deliberate exception. `docs/DATABASE.md` said nothing about what a schema change
+  owes the backup or the export census. Both now do.
+
+**Negative results.** All gated counts agree (26 modules, 35 models, 74 migrations, 1654 files, 47 suites, 194 ADRs);
+the four unbuilt ADRs are still unbuilt (no `bullmq`, `ioredis`, `redis`, `@aws-sdk`, `@opentelemetry`, `@casl` or
+`@radix-ui` in any manifest); all eleven manifest descriptions are accurate; the three `REFERENCE_FEATURE` exemplars
+exist; `DEPLOYMENT.md` "Backups", "Retention" and the export proxy section, `API.md` "The organisation export" and
+`CLAUDE.md` section 17's backup, retention and export bullets all agree with the code (compose files, the
+`organization:export` permission, `MAX_CONCURRENT_EXPORTS = 2`, the 10-minute ceiling, the 3-per-10-minutes throttle,
+`Export data` in `org-destinations.tsx`). Register rows #507 to #517 and #492 were re-read against the lines they cite
+and are accurate.
+
+**Scope, stated honestly.** Steps 1 to 3, 5 (the documents the change touched) and 6 are complete. Step 4 is a sample
+(the eleven newest rows and #100, #492, #474, #16), not all 214. Step 5a was not run. Step 7 was not run by this pass: it had no way to launch reviewers, so the diff of
+`#985`/`#987`/`#991`/`#998`/`#1000` is left to the orchestrator.
+
+---
+
 ## 2026-10-14 — The clear-out and the organisation export are approved, the clear-out first
 
 **What was decided.** The product owner approved the specs and plans in `docs/specs/recycle-bin-clear-out/` (pre-1.0
