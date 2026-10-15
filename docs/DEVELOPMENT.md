@@ -40,10 +40,17 @@ pnpm --filter @repo/api dev
 Full stack in containers:
 
 ```bash
-docker compose up -d       # db + api + web
+mkdir -p backups           # once: the backup service writes here (see below)
+docker compose up -d       # db + api + web + backup
 docker compose logs -f api
 docker compose down        # add -v to also drop the database volume
 ```
+
+The fourth service, `backup`, takes a nightly database copy into `./backups` (ADR-0192). Create the
+folder first so it is yours: Docker creates a missing one as root, the container cannot write to it and
+the service then shows unhealthy, which stops nothing else. The `api` service does not mount it in
+development, so a migration you are writing is not held by a copy. The operator's side of this is
+[`DEPLOYMENT.md`](DEPLOYMENT.md#backups).
 
 ## Database & Prisma
 

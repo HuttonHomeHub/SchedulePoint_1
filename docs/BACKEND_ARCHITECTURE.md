@@ -130,7 +130,7 @@ The dotted edges are **decided, not built**. Everything solid is live.
 - Jobs carry the correlation ID; the worker can be split into its own
   deployment later without code changes.
 
-**Two jobs run today, and neither uses any of the above.** ADR-0087 **narrowed** ADR-0009 rather
+**Two jobs run today, and neither uses any of the above** (beside `HeartbeatService`'s outward ping, which is a third timer of the same shape but not a job on the database). ADR-0087 **narrowed** ADR-0009 rather
 than superseding it: `RetentionSweepService` (the `csp_reports`/`mail_events`/`perf_probe_results` sweep) and
 `HierarchyExpiryService` (ADR-0096's permanent deletion of expired recycle-bin rows) are each one
 `setInterval`, `.unref()`'d, with no timer at all when disabled — no Redis, no queue, no dependency.
@@ -140,6 +140,11 @@ tick, which is what makes those costs acceptable **for these two jobs specifical
 names the triggers to reopen ADR-0009 — durability, retries, exactly-once, fan-out,
 enqueue-from-a-request, or visible progress. Do not read "two schedulers exist" as "we have a
 scheduler"; a third job that needs any of those triggers needs BullMQ, not a third `setInterval`.
+
+**Neither the nightly backup nor the organisation export is a job on this list.** The backup is a
+loop inside the separate `backup` container (ADR-0192), which runs the API image's shell script and
+reports through its healthcheck; the export is generated synchronously on its request and streamed
+(ADR-0194 D3), with no queue.
 
 ## Caching strategy (ADR-0010) — _not yet built_
 
@@ -156,6 +161,11 @@ scheduler"; a third job that needs any of those triggers needs BullMQ, not a thi
   Postgres, bytes in the bucket.** Clients transfer via short-lived
   **pre-signed URLs**; large payloads never stream through the API. Private
   buckets, random keys, server-side content-type/size validation.
+
+**The one deliberate exception to "large payloads never stream through the API" is the organisation
+export (ADR-0194):** a ZIP generated on the request and streamed to the Org Admin who asked, stored
+nowhere, so it has no dependency on this section. It is bounded (one per organisation, two per
+process, a 10-minute snapshot ceiling) rather than offloaded.
 
 ## Authentication (ADR-0003)
 

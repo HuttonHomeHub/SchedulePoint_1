@@ -33,6 +33,8 @@ src/
   health/             # Liveness/readiness probes (@nestjs/terminus)
   version/            # Build/version endpoint
   modules/            # Feature modules — see docs/REFERENCE_FEATURE.md for the exemplars
+  cli/                # Operator commands run in the image, not routes (clear-out preview, ADR-0193)
+backup/               # schedulepoint-backup.sh: nightly copy, pre-update copy, check, restore (ADR-0192)
 prisma/
   schema.prisma       # Datasource, generator, models
   migrations/         # SQL migrations
@@ -41,15 +43,16 @@ test/                 # Supertest end-to-end specs (*.e2e-spec.ts)
 
 ## Scripts
 
-| Command               | Description                           |
-| --------------------- | ------------------------------------- |
-| `pnpm dev`            | Start Nest in watch mode              |
-| `pnpm build`          | Compile to `dist/`                    |
-| `pnpm test`           | Run unit tests (Vitest)               |
-| `pnpm test:e2e`       | Run HTTP end-to-end tests (Supertest) |
-| `pnpm prisma:migrate` | Create/apply a dev migration          |
-| `pnpm prisma:deploy`  | Apply migrations (production/CI)      |
-| `pnpm prisma:studio`  | Open Prisma Studio                    |
+| Command                        | Description                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| `pnpm dev`                     | Start Nest in watch mode                                 |
+| `pnpm build`                   | Compile to `dist/`                                       |
+| `pnpm test`                    | Run unit tests (Vitest)                                  |
+| `pnpm test:e2e`                | Run HTTP end-to-end tests (Supertest)                    |
+| `pnpm test:e2e:backup-fixture` | Restore round trip on a seeded database (needs Postgres) |
+| `pnpm prisma:migrate`          | Create/apply a dev migration                             |
+| `pnpm prisma:deploy`           | Apply migrations (production/CI)                         |
+| `pnpm prisma:studio`           | Open Prisma Studio                                       |
 
 ## Environment
 

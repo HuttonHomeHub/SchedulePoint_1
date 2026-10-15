@@ -69,6 +69,13 @@ There is deliberately **no cache, queue, or object store in the running system**
   is the only public write path in the API and it answers 204 whatever happens,
   because a report endpoint that returns errors tells a prober their probe was
   interesting and there is no caller who could act on the answer.
+- **`organization-export/` is the one module whose route has no envelope** (ADR-0194): it
+  streams a ZIP of JSON and CSV through `@Res()` inside one repeatable-read transaction, stores
+  nothing, and decides what leaves per model and per column in `export-columns.ts`, which a
+  structural census holds to the schema. The API image also carries two operator commands that are
+  not routes: `src/cli/clear-out-preview.ts`, a read-only preview that calls the clear-out's own
+  selector (ADR-0193), and `backup/schedulepoint-backup.sh`, the database backup (ADR-0192) run by
+  the `backup` compose service and by the entrypoint before an update.
 - Cross-cutting concerns live in `src/common/`: `auth/` (principal, permissions,
   guest principal, staff principal), `guards/`, `filters/`, `interceptors/`,
   `db/` (advisory-lock helpers), `hierarchy/` (the soft-delete cascade/restore
@@ -296,12 +303,12 @@ These ADRs record how we will do something when we need it. Nothing in the
 running system depends on them, and no dependency for them is installed. They
 are listed here so nobody reads an ADR and assumes the capability exists:
 
-| ADR      | Decision                                  | Reality                                                                                    |
-| -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. **Not "all work is synchronous"** — see below.                         |
-| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.                                                      |
-| ADR-0011 | File storage via an S3 abstraction        | No object store; no stored user files (import uploads are parsed in memory and discarded). |
-| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.                                                   |
+| ADR      | Decision                                  | Reality                                                                                                                                                                                                                 |
+| -------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ADR-0009 | Background processing with BullMQ + Redis | No queue, no Redis. **Not "all work is synchronous"** — see below.                                                                                                                                                      |
+| ADR-0010 | Caching strategy with Redis               | No cache layer. Reads go to Postgres.                                                                                                                                                                                   |
+| ADR-0011 | File storage via an S3 abstraction        | No object store; no stored user files (import uploads are parsed in memory and discarded, the organisation export is streamed and stored nowhere). Backup copies are database dumps on the host's disk, not user files. |
+| ADR-0013 | Observability with OpenTelemetry + Pino   | Pino is wired; **OpenTelemetry is not**.                                                                                                                                                                                |
 
 > **ADR-0009's row said "All work is synchronous" until 2026-08-18, and that has
 > been false since 2026-08-10.** ADR-0087 gave this application its first
@@ -352,10 +359,14 @@ precedent ADR-0006 set for its own never-adopted shadcn/ui + Radix clause.
 Two immutable images (`web`, `api`) published to GHCR, per-package tagged
 (`api-vX.Y.Z` / `web-vX.Y.Z`, ADR-0027) and promoted through environments. The
 API runs its migrations on start (ADR-0018). An opt-in host-side pull trigger
-can turn a published `:latest` into a deploy (ADR-0047). See
-[DEPLOYMENT.md](DEPLOYMENT.md). The concrete hosting platform is still an open
-decision (see [TECH_DEBT.md](TECH_DEBT.md)); the container-first foundation
-keeps it portable.
+can turn a published `:latest` into a deploy (ADR-0047). The target is decided:
+Docker Compose on the product owner's host (`docs/TECH_DEBT.md` #5; this section
+called the platform "still an open decision" until the 2026-10-15 pass). The
+release stack has a third service, `backup`, which runs the **API image** with a
+different entrypoint (ADR-0192); it publishes no database port, and where the
+operator mounts `/backups` on `api` an update that changes the database is
+preceded by a copy and held if the copy fails. See [DEPLOYMENT.md](DEPLOYMENT.md).
+The container-first foundation keeps the platform portable.
 
 ## 12. Cross-cutting principles
 

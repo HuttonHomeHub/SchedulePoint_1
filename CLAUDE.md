@@ -672,7 +672,7 @@ A lighter-weight running log of smaller decisions is in
   deleting transaction, and that row **outlives the thing it names permanently**,
   because `audit_events` refuses `DELETE` (ADR-0085 D1). **The second path is
   older, and this bullet said "there is no hard-delete path" until 2026-08-18:**
-  interchange's failure compensation (`interchange.service.ts:1134-1139`) issues
+  interchange's failure compensation (`InterchangeService.compensate`, `interchange.service.ts:1274-1311`) issues
   real `deleteMany`s across assignments, dependencies, activities and the plan
   lock when phase 2's recalculation fails, honouring the "nothing is created on
   failure" contract for a plan the importer had just created and nobody had yet
