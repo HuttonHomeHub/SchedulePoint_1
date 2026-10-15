@@ -25,8 +25,8 @@
 > public REST API (ADR-0066, and the [test playbook](docs/TEST_PLAYBOOK.md)). The
 > **Gantt view shipped** on 2026-07-28 (ADR-0059) and became a working surface on
 > 2026-08-17 (ADR-0095), substantially delivering the brief's last outstanding
-> Must-have — §8 words it "read-primary; edit supported", and the start-edge resize
-> is deliberately absent (ADR-0095 D4). An **append-only audit log** shipped 2026-08-03 (ADR-0072/0073),
+> Must-have — §8 words it "read-primary; edit supported" — and its start-edge resize
+> followed in `web` 0.157.0 (ADR-0170). An **append-only audit log** shipped 2026-08-03 (ADR-0072/0073),
 > closing the register's oldest row. It runs on Docker Compose with releases
 > pulled automatically (ADR-0047) — hosting is settled, not open. See the
 > [roadmap](docs/ROADMAP.md) and [project brief](docs/PROJECT_BRIEF.md).
@@ -68,6 +68,7 @@ apps/
   web/                  React + Vite client              (@repo/web)
   api/                  NestJS REST API                  (@repo/api)
     src/modules/schedule/engine/   The pure CPM/GPM engine
+    backup/             The database backup script the `backup` service runs (ADR-0192)
   seed-cli/             Test-catalogue seeder CLI        (@repo/seed-cli)
 packages/
   config/               Shared ESLint + tsconfig         (@repo/config)

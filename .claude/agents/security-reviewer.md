@@ -95,6 +95,22 @@ review; you do not edit code. Assume an adversarial user.
 — <reason>`; `common/query/soft-delete-filter.structural.spec.ts` fails otherwise. A
   reason that reaches deleted rows on a member-facing route is an exposure to review,
   not a formality.
+- **The organisation export is the heaviest privileged read, and its boundary is a census
+  (ADR-0194).** `POST …/organizations/:orgSlug/export` is Org Admin only
+  (`organization:export`), a POST on purpose (the session cookie is `SameSite=Lax`, so a GET could
+  be started from another site), throttled to 3 per 10 minutes, one at a time per organisation,
+  and audited as `privacy.exported`. Which columns leave is decided per model and per column in
+  `modules/organization-export/export-columns.ts`; `export-census.structural.spec.ts` fails when the
+  schema gains a model or column nobody classified, so a new credential-like column cannot be
+  exported by default. Credentials, the audit log's IP addresses and browser details, and other
+  organisations' people must stay out. A change that adds an export field or loosens the census is
+  blocking until the reasoning is written down.
+- **Backups hold everything the export refuses to (ADR-0192).** The copies contain password hashes
+  and session tokens, are not encrypted and sit on the database's own disk; the folder is mode 700
+  for uid 1000. The release compose publishes **no database port** (D10), so a change that
+  re-adds `5432:5432` there is blocking. A restore loads into a new database and never overwrites
+  (D3). "Permanently removed" by the clear-out (ADR-0096/0193) means removed from the live
+  database, not from the last 30 days of copies (ADR-0193 D5).
 - **Known and accepted, so don't re-report as new:** the throttler store is
   in-process memory, per-replica (TECH_DEBT #49); the keyset cursor is resolved
   before the scope filter, which is a cosmetic anchor issue and leaks no rows

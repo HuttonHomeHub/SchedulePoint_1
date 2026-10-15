@@ -69,6 +69,15 @@ not edit code.
   so ADR-0087 D2 (this said "ADR-0009 D2", which has no D2) names the trigger to reopen the queue question: durability across a
   restart, retries, exactly-once, fan-out, enqueue-from-a-request, or visible
   progress. Review a new periodic task against that list.
+- **The organisation export is a deliberate long read (ADR-0194 D3).** It runs synchronously on
+  the request inside one repeatable-read transaction with a 10-minute ceiling
+  (`EXPORT_TRANSACTION_TIMEOUT_MS`), at most two per API process and one per organisation, and
+  streams rather than buffering. That holds a snapshot (and delays row-version clean-up) for up
+  to that long; it is the stated cost, not a finding. A new table in the export must be read as a
+  stream, not loaded whole.
+- **The pre-update backup lengthens a boot that carries a migration (ADR-0192 D9).** It is
+  unmeasured on production-sized data (`docs/TECH_DEBT.md` #511); do not treat the added boot time
+  as a regression, do treat unbounded growth in how the entrypoint decides "pending" as one.
 - **Scalability:** stateless handlers; bounded connection use; backpressure
   (timeouts, payload/pagination caps) present.
 

@@ -2466,6 +2466,23 @@ reach it. Updatable, deletable, expirable. **Do not add a trigger to it.**
   it would put a named staff member's GPU string and user-agent outside this table's 365-day bound,
   which is the argument `RetentionSweepService` already makes about `mail_events`.
 
+## Backups and the export — what a schema change owes them
+
+Two things read the whole schema, and a schema change touches both.
+
+- **Backups (ADR-0192)** are whole-database `pg_dump` copies written by the API image's
+  `schedulepoint-backup` script, so a new table needs nothing from them. A restore loads into a new
+  database and swaps by rename, and the append-only triggers on `audit_events` (ADR-0072) have nothing
+  to refuse because nothing is updated or deleted during the load. Restoring an older copy and then
+  starting the current API applies the newer migrations as any update does. Operator detail:
+  [`DEPLOYMENT.md`](DEPLOYMENT.md#backups).
+- **The organisation export (ADR-0194)** decides per model and per column what leaves, in
+  `apps/api/src/modules/organization-export/export-columns.ts`. **A new model or column must be
+  classified there** (exported, or excluded with a reason), because
+  `export-census.structural.spec.ts` compares that registry with the Prisma DMMF and
+  `schema.prisma` and fails the build otherwise; `export-format-doc.structural.spec.ts` holds
+  [`ORGANISATION_EXPORT_FORMAT.md`](ORGANISATION_EXPORT_FORMAT.md) to the same registry.
+
 ## Testing & performance
 
 - Integration tests run against a **real Postgres** (see [`TESTING.md`](TESTING.md)).
