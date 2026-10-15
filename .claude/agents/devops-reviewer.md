@@ -25,6 +25,15 @@ not edit code.
 - **The image self-migrates** (ADR-0018): the entrypoint runs `prisma migrate deploy`,
   so a recreate _is_ the deploy. That makes migration-role permissions a deployment
   concern (`btree_gist` needs `CREATE`-on-database — TECH_DEBT #32).
+- **A `backup` service runs beside the API (ADR-0192).** It is the API image with a different
+  entrypoint (`apps/api/backup/schedulepoint-backup.sh`), not a second image, so Watchtower moves the
+  two together. It copies nightly, keeps `BACKUP_KEEP_DAYS` (30), and reports through its container
+  healthcheck and `LAST-BACKUP.txt` rather than an alert service. **Mounting `/backups` on `api` is the
+  switch for the pre-update copy**: with it, an update that changes the database is **held**
+  (`UPDATE HELD`, non-zero exit before `prisma migrate deploy`) when the copy cannot be made, and
+  the entrypoint's `set -e` is what makes it a hold. The release compose publishes no database
+  port. All three compose files (`docker-compose.yml`, `.release.yml`, `.ci.yml`) carry the
+  mount, so a change to one needs the others checked.
 - **Auto-deploy is ENABLED on the product owner's host** (ADR-0047). This section said
   the opposite — "ships dormant… enabled on no host… a release still does not reach
   users until an operator acts" — until the 2026-09-11 pass. `CLAUDE.md` §17 corrected

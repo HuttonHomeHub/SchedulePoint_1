@@ -36,6 +36,12 @@ predictable, and well-documented. You review; you do not edit code.
   already knows the value of (`archive`/`unarchive`).
 - **A write that mutates a sibling** (the duration-type triad, ADR-0040) documents
   it per-endpoint in the OpenAPI `description` and bumps the sibling's `version`.
+- **One route legitimately has no envelope (ADR-0194).** `POST /organizations/:orgSlug/export`
+  streams a ZIP through `@Res()`, so there is no `{ data }`, no `Content-Length`, and after the
+  first byte an error is a destroyed connection. Its refusals (404, 403, 409 with
+  `EXPORT_IN_PROGRESS` or `EXPORT_BUSY`, 429) are sent as ordinary envelopes **before** streaming
+  starts. Do not report the missing envelope; do check that any further refusal is still decided
+  before the first byte.
 - **Known gap, not a new finding:** 201s do not set `Location`, and the
   `@Api*Response` decorators declare the bare DTO rather than the envelope
   (TECH_DEBT #15).

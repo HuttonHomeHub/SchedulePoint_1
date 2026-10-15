@@ -61,6 +61,12 @@ exist** — ADR-0057 deleted them. Read real suites instead:
   prove nothing — dirty the scene _while_ hidden), and a toolbar overflow test that
   would have passed on a bar that never overflowed (assert the unsqueezed control
   too).
+- **Backups and the export have gates of their own.** The backup script is proven by an exact
+  restore round trip on real data (`pnpm --filter @repo/api test:e2e:backup-fixture`, run by the
+  `e2e-api` CI job, ADR-0192 D5), and the export by structural suites beside it
+  (`export-census`, `export-format-doc`) that read the Prisma schema and
+  `docs/ORGANISATION_EXPORT_FORMAT.md`. A new model needs the census row; a format change
+  needs the document. The round trip needs a database; the structural suites do not, so say which you ran.
 - **e2e is suite-scoped:** several dozen Playwright configs, each serving the app
   with a specific flag and environment set; a journey for a new capability gets its
   own suite and its own CI step. **Do not restate the count** — this bullet said "15"

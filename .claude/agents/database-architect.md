@@ -53,6 +53,13 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
   its name and unarchive/restore can never fail on a collision.
 - **Engine-owned columns are engine-owned** — computed CPM output is written only by
   the recalc pass.
+- **A new model or column must be classified for the organisation export (ADR-0194 D1).**
+  `modules/organization-export/export-columns.ts` decides, per model and per column, what
+  leaves in the export, and `export-census.structural.spec.ts` fails the build on anything
+  unclassified. State the classification in the design (exported, or excluded with a reason such as a
+  credential or personal data), and keep `docs/ORGANISATION_EXPORT_FORMAT.md` in step.
+  Backups (ADR-0192) are whole-database `pg_dump` copies, so a migration needs no backup change,
+  but a restore of an older copy applies newer migrations as any update does.
 - **Two migrations** when adding an enum label and using it: Postgres forbids both
   in one transaction.
 - **Measure before adding an index**, and record the measurement in the migration
