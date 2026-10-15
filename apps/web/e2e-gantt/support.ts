@@ -253,12 +253,13 @@ export const FORCED_COLOURS_PLAN = {
   summary: 'Phase summary',
   child: 'Phase child',
   milestone: 'Handover milestone',
+  finished: 'Echo finished task',
 } as const;
 
 /**
  * **One plan holding every mark the Gantt draws**, through the public API, for the forced-colours
  * journey and its measurement (`docs/TECH_DEBT.md` #505): an ordinary task with progress, a
- * critical task, a task with float (so a float tail), a summary with a child that has progress, a
+ * critical task, a task with float (so a float tail), a finished task (100 %, whose full band must not read as a summary), a summary with a child that has progress, a
  * finish milestone, FS links between them, and a captured baseline (so the variance column and the
  * ghost bar exist). The chain Alpha → Bravo → Handover is the longest path, so those three are
  * critical and the rest carry float; the journey asserts that rather than trusting this comment.
@@ -302,6 +303,10 @@ export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promis
           durationDays: 4,
           parentId: summary.id,
         });
+        const finished = await send('/activities', 'POST', {
+          name: names.finished,
+          durationDays: 3,
+        });
         const handover = await send('/activities', 'POST', {
           name: names.milestone,
           type: 'FINISH_MILESTONE',
@@ -322,6 +327,10 @@ export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promis
         await send(`/activities/${child.id}/progress`, 'PATCH', {
           version: child.version,
           percentComplete: 60,
+        });
+        await send(`/activities/${finished.id}/progress`, 'PATCH', {
+          version: finished.version,
+          percentComplete: 100,
         });
         await send('/schedule/recalculate', 'POST', {});
         // The engine does not roll a child's percent up into its summary, so a summary's progress

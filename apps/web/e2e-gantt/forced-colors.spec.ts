@@ -105,6 +105,8 @@ interface Readings {
   summary: Computed;
   summaryProgress: Computed;
   milestone: Computed;
+  finished: Computed;
+  finishedProgress: Computed;
   progressOnTask: Computed;
   floatTail: Computed;
   selectedRow: Computed;
@@ -126,6 +128,7 @@ async function readMarks(page: Page): Promise<Readings> {
   const summary = marksOf(page, PLAN.summary);
   const milestone = marksOf(page, PLAN.milestone);
   const child = marksOf(page, PLAN.child);
+  const finished = marksOf(page, PLAN.finished);
   const selected = marksOf(page, PLAN.task);
   const grip = selected.bar.locator('[data-bar-grip] > span').first();
   const sticky = selected.row.getByRole('gridcell').first().locator('xpath=..');
@@ -157,6 +160,8 @@ async function readMarks(page: Page): Promise<Readings> {
     summary: await computed(summary.bar),
     summaryProgress: await computed(summary.progress),
     milestone: await computed(milestone.milestone),
+    finished: await computed(finished.bar),
+    finishedProgress: await computed(finished.progress),
     progressOnTask: await computed(child.progress),
     floatTail: await computed(task.floatTail),
     selectedRow: await computed(selected.row),
@@ -214,6 +219,7 @@ test('a contrast theme keeps the Gantt readable and a shaded control shaded', as
   await expect(marksOf(page, PLAN.milestone).milestone).toHaveCount(1);
   await expect(marksOf(page, PLAN.child).progress, 'the child shows its 60 %').toHaveCount(1);
   await expect(marksOf(page, PLAN.task).progress, 'Alpha shows its 40 %').toHaveCount(1);
+  await expect(marksOf(page, PLAN.finished).progress, 'Echo is 100 % done').toHaveCount(1);
 
   // Select Alpha (a plain, movable task with progress): the selected row, and an armed bar with
   // grips. Turn the logic links on so the arrows exist to be looked at.
@@ -338,7 +344,25 @@ test('a contrast theme keeps the Gantt readable and a shaded control shaded', as
     expect(on.summaryProgress.backgroundColor, 'its progress is the page colour inside it').toBe(
       sys.Canvas,
     );
+    // The band is held 1 px inside the bar's edge on every side, or it would paint over the edge
+    // and the summary would lose its outline (`FORCED_BAND_IN_SOLID_BAR`).
+    expect(on.summaryProgress.left, 'inset from the left edge').toBe('1px');
+    expect(on.summaryProgress.top, 'inset from the top edge').toBe('1px');
+    expect(on.summaryProgress.bottom, 'inset from the bottom edge').toBe('1px');
+    expect(on.summaryProgress.maxWidth, 'inset 1 px from the right edge too').toBe(
+      'calc(100% - 2px)',
+    );
     expect(on.visible.summary).toBe(true);
+  });
+
+  await test.step('active: a finished task is not mistaken for a summary', () => {
+    // A task at 100 % is an outlined bar full of CanvasText; a summary is a CanvasText bar with a
+    // Canvas band. Drawn without the inset they are the same picture, so the two are inverses.
+    expect(on.finished.backgroundColor, 'a finished task is an outlined bar').toBe(sys.Canvas);
+    expect(on.finishedProgress.backgroundColor).toBe(sys.CanvasText);
+    expect(on.finished.backgroundColor).not.toBe(on.summary.backgroundColor);
+    expect(on.finishedProgress.backgroundColor).not.toBe(on.summaryProgress.backgroundColor);
+    expect(on.finishedProgress.left, 'the full band stays inside the edge').toBe('1px');
   });
 
   await test.step('active: a milestone is solid CanvasText', () => {

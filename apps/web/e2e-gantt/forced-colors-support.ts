@@ -54,6 +54,8 @@ export interface Computed {
   borderLeftWidth: string;
   left: string;
   top: string;
+  bottom: string;
+  maxWidth: string;
 }
 
 /** The computed properties a forced-colours rule can change, from the live element. */
@@ -75,6 +77,8 @@ export function computed(target: Locator): Promise<Computed> {
       borderLeftWidth: style.borderLeftWidth,
       left: style.left,
       top: style.top,
+      bottom: style.bottom,
+      maxWidth: style.maxWidth,
     };
   });
 }
@@ -142,7 +146,9 @@ export function pseudoOf(
 
 /**
  * The colour a control is painted on: the first non-transparent `background-color` walking up from
- * it. A focus ring is only a ring if it differs from this (WCAG 2.2 §2.4.11, §1.4.11).
+ * it. A focus ring is only a ring if it differs from this (WCAG 2.2 §2.4.11, §1.4.11). It exists
+ * because forced colours makes an element's own `background-color` say nothing about what is behind
+ * it: most ancestors are transparent, and the ring is judged against the first one that paints.
  */
 export function colourBehind(target: Locator): Promise<string> {
   return target.evaluate((node) => {
