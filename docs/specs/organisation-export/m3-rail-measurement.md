@@ -76,3 +76,10 @@ fallback is not used.
 slack. It passes, but the next destination added to this list would not (46 px more would take the tree to
 the floor and start scrolling the column, which `navigator-rail.tsx` already tolerates by design). That is
 the useful number for whoever adds an eighth: at the floor on a touch screen the rail is full at seven.
+
+## The rule is now a committed assertion
+
+The throwaway harness above is replaced by `apps/web/e2e-audit/rail-1024.spec.ts` (audit suite): at 1024 × 600,
+fine and coarse pointer, expanded rail, it asserts the tree region keeps its 128 px floor, all seven organisation
+links are inside the rail's window unscrolled, and the version footer is inside it. It read 251 px (fine) and
+131 px (coarse), matching the table. An eighth destination fails it on the coarse pointer first.
