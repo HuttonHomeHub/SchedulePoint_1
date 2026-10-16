@@ -440,6 +440,51 @@ test('the divider strip covers no table control: a press at the edge of a row me
   await chartMeetsGrid(page, 'after dragging the Grid width divider');
 });
 
+test('a zoom preset frames the chart that remains after the Grid width divider is dragged', async ({
+  page,
+}) => {
+  // `docs/TECH_DEBT.md` #437: framing read the default pane, so after a drag the preset sized the
+  // chart for room that was no longer there (45 px left of 163 assumed at 1024 wide).
+  test.setTimeout(240_000);
+  await ganttPlan(page);
+  const separator = page.getByRole('separator', { name: 'Grid width' });
+
+  await openView(page);
+  await page.getByRole('radio', { name: /^Quarter\b/ }).check();
+  await page.keyboard.press('Escape');
+
+  /**
+   * Timeline width over the room beside the pane. A preset multiplies one scale by the plan's span,
+   * so this ratio is the same at any width the pane is framed correctly for, whatever the span.
+   */
+  const framing = async (): Promise<{ pane: number; ratio: number }> => {
+    const pane = Number(await separator.getAttribute('aria-valuenow'));
+    const chart = (await ganttGrid(page).getByRole('columnheader').last().boundingBox())?.width;
+    const scroller = await page.getByTestId('gantt-scroll').evaluate((el) => el.clientWidth);
+    if (chart === undefined) throw new Error('no box for the Timeline header');
+    return { pane, ratio: chart / (scroller - pane) };
+  };
+
+  const before = await framing();
+  const line = await separator.boundingBox();
+  if (line === null) throw new Error('no box for the divider');
+  const y = line.y + line.height / 2;
+  await page.mouse.move(line.x + line.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(line.x + line.width / 2 + 80, y, { steps: 8 });
+  // Re-framing is live (ADR-0173 D5): the bars fit the room that remains while the pointer is still
+  // down, not only after release.
+  await expect
+    .poll(async () => Math.abs((await framing()).ratio / before.ratio - 1), {
+      message: 'mid-drag, the preset frames the chart for the pane before the drag',
+    })
+    .toBeLessThan(0.02);
+  await page.mouse.up();
+  await expect.poll(async () => (await framing()).pane - before.pane).toBeGreaterThanOrEqual(76);
+  expect(Math.abs((await framing()).ratio / before.ratio - 1)).toBeLessThan(0.02);
+  await chartMeetsGrid(page, 'after a preset re-framed for the dragged divider');
+});
+
 test('under a coarse pointer there are no edges, and the typed field is a 44 px target', async ({
   browser,
 }) => {

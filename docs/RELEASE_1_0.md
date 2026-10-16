@@ -77,7 +77,8 @@ rows below are the ones a person could meet, one line each, as read from each ro
   16,000).
 - **#419** — selecting an activity on the diagram takes about a quarter of a second on a 2,000-activity plan.
 - **#294** — a colleague's request for the pen costs the diagram 76 to 80 pixels of height.
-- **#437** — after dragging the Gantt's grid divider, a zoom preset frames the chart for the old width.
+- **#437** — after dragging the Gantt's grid divider, a zoom preset frames the chart for the old width. Closed
+  on 2026-10-16: the preset now frames the room beside the pane as it stands.
 - **#477** — on a very short, narrow window the command bar scrolls away and nothing hints how to get it back.
 - **#490** — at 320 pixels wide the app header takes four lines.
 - **#223** — the resource strip under the diagram is not in the exports or the printout.
