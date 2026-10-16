@@ -147,8 +147,7 @@ test('M1: the object bar on one line at 1646, and honest about 1440', async ({ p
     // the ambiguity that made the first M0 probe worthless.
     expect(read.selected, `${c.width}: an activity is selected`).toBe(1);
     expect(read.footH, `${c.width} (${c.note})`).toBe(c.expectFoot);
-    // The withdrawn control is gone in Early mode, and Zoom to selection is still reachable.
-    expect(read.itemIds).not.toContain('clear-visual-placement');
+    // Zoom to selection stays reachable on the object bar.
     expect(read.itemIds).toContain('zoom-to-selection');
   }
 

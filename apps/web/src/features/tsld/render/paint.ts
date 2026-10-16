@@ -1389,6 +1389,17 @@ export function paintScene(
   // comparing each `fillText`'s font cold and warm.
   const reservesTextRows = rowReservesTextRows();
   const withCodes = toggles.activityCodes === true;
+  // One measure for the row layout and the link facts; only the link facts are told it is absent
+  // when the context cannot draw or measure text.
+  const measureLabel = (t: string, f?: string): number =>
+    labelWidths.measure(
+      t,
+      (x) => {
+        ctx.font = f ?? LABEL_FONT;
+        return ctx.measureText(x).width;
+      },
+      f,
+    );
   const textLayout = layoutRowText({
     rows: frame.laneRows,
     view,
@@ -1396,15 +1407,7 @@ export function paintScene(
     toggles,
     visualRefresh: scene.visualRefresh === true,
     reservesTextRows,
-    measure: (t, f) =>
-      labelWidths.measure(
-        t,
-        (x) => {
-          ctx.font = f ?? LABEL_FONT;
-          return ctx.measureText(x).width;
-        },
-        f,
-      ),
+    measure: measureLabel,
     // The canvas label (NetPoint grammar M4-T1): the name, with the code before it only while
     // `View ▾ ▸ Markers ▸ Activity codes` is on (spec §4.2 G7).
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
@@ -1417,15 +1420,7 @@ export function paintScene(
     view,
     toggles,
     typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function'
-      ? (t, f) =>
-          labelWidths.measure(
-            t,
-            (x) => {
-              ctx.font = f ?? LABEL_FONT;
-              return ctx.measureText(x).width;
-            },
-            f,
-          )
+      ? measureLabel
       : null,
   );
   const { gapOf, plateTextOf } = linkFacts;

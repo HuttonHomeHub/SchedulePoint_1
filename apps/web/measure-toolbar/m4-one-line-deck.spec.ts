@@ -94,9 +94,7 @@ test('M0: the deck cards, the header sections, and the handle row', async ({ pag
       const header = document.querySelector('header');
       const headerChildren = [...(header?.firstElementChild?.children ?? [])];
       const identityBlock = document.querySelector('[data-plan-identity]');
-      const modeToolbar = document.querySelector(
-        '[role="toolbar"][aria-label="Plan mode and view"]',
-      );
+      const modeToolbar = document.querySelector('[role="toolbar"][aria-label="Plan view"]');
       const penCluster = document.querySelector('[data-plan-pen]');
 
       /** What a row REQUIRES: every child at natural width, gaps counted once, nothing shrunk. */

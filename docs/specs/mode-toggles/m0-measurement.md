@@ -1,5 +1,9 @@
 # M0-T2 — The mode divider, measured
 
+> **Harness retired 2026-10-16** (`docs/TECH_DEBT.md` #355): the `Early | Visual` pair was deleted by
+> one-planning-surface M-F-T5, so the divider this measured no longer exists and
+> `m0-mode-divider.spec.ts` went with its subject (ADR-0084 D5). The reading below stands as a record.
+
 **Run 2026-08-30**, Chromium, `apps/web/measure-toolbar/m0-mode-divider.spec.ts`, output
 `apps/web/measure-output/m0-mode-divider.json`. The verdict rule was committed **before** this ran
 (`falsification.md`, its own commit).

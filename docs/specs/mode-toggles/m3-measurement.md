@@ -1,5 +1,8 @@
 # M3-T4 — The divider, re-measured against the shipped build
 
+> **Harness retired 2026-10-16** (`docs/TECH_DEBT.md` #355): `m0-mode-divider.spec.ts` was deleted with
+> the divider it measured. The reading below stands as a record.
+
 **Run 2026-08-30**, Chromium, same harness and same fixture as M0
 (`apps/web/measure-toolbar/m0-mode-divider.spec.ts`, plan name
 `Riverside Quarter — Phase 2 Substructure`, real project crumb, pen held and re-taken after the

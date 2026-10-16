@@ -82,7 +82,7 @@ test('M0-T2: the merged row from ink, priced against the widest pen state', asyn
   ]);
   await recalculate(page, orgSlug);
   await ensurePen(page);
-  await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan view' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME };
 
@@ -173,9 +173,7 @@ test('M0-T2: the merged row from ink, priced against the widest pen state', asyn
         };
 
         const header = document.querySelector('header');
-        const modeToolbar = document.querySelector(
-          '[role="toolbar"][aria-label="Plan mode and view"]',
-        );
+        const modeToolbar = document.querySelector('[role="toolbar"][aria-label="Plan view"]');
         // The identity row is the mode toolbar's nearest ancestor spanning most of the header.
         let identityRow: Element | null = modeToolbar;
         const target = (header?.getBoundingClientRect().width ?? 0) * 0.8;
