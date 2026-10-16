@@ -180,6 +180,16 @@ for the same APG citation.
 - **Navigable and selectable are now two counts.** The result count and the empty state still speak only
   of options that can be chosen; with disabled options present the count reads "N results available, M
   unavailable.", and with none it reads exactly as before. Behaviour with no disabled option is unchanged.
+- **ArrowDown on open can land on a disabled first row.** That is APG-consistent: the first option is the
+  first option, shaded or not. Enter there is refused with the reason announced.
+- **The reason is `sr-only` by design**, with no visible text, exactly as `Menu`'s `disabledReason` is
+  (`menu.tsx` renders it in an `sr-only` span). A sighted reader sees the shaded row; making the reason
+  visible would be a separate design decision for both primitives.
+- **A pointer press on a disabled option announces the reason too**, as Enter does, and does not commit.
+- **A list of only disabled options says "No options available."** (row and announcement), never "No
+  matches.", because the rows are visible and reachable.
+- **Option ids are percent-encoded from `value`**, so a value containing whitespace cannot split an
+  `aria-describedby` or `aria-activedescendant` idref. Simple values keep their ids unchanged.
 - **Ships dark.** No production caller sets `ComboboxOption.disabled` (all five consumers pass only the
   control-level prop), so no screen reaches this yet; the first caller to shade an option owes the
   journey (ADR-0081 §1).

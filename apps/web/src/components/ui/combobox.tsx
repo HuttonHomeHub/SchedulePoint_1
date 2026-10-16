@@ -144,6 +144,16 @@ interface RenderRow {
   navIndex: number;
 }
 
+/** Said instead of "No matches." when rows exist (all disabled): they are visible, so "no matches" lies. */
+const ALL_UNAVAILABLE = 'No options available.';
+
+/**
+ * An id segment for an option. `value` is a consumer's id and may carry whitespace, which splits an
+ * `aria-describedby` / `aria-activedescendant` idref into two tokens; percent-encoding keeps simple
+ * values (`a`, a uuid) byte-identical and stays collision-free.
+ */
+const idSegment = (value: string): string => encodeURIComponent(value);
+
 const PLACEHOLDER_LOADING = 'Loading…';
 const PLACEHOLDER_UNAVAILABLE = 'Unavailable';
 
@@ -269,7 +279,7 @@ export function Combobox({
   const activeDescendantId = loadMoreActive
     ? loadMoreId
     : activeOption
-      ? `${id}-option-${activeOption.value}`
+      ? `${id}-option-${idSegment(activeOption.value)}`
       : undefined;
 
   // Announce the result count whenever the list changes while open — a filtered listbox that
@@ -278,21 +288,34 @@ export function Combobox({
   // `emptyOption` ("Inherit from plan") or a still-rendered current value always has something
   // selectable, and reporting "1 result" for a search that matched nothing would be a lie.
   const noResults = options.length === 0;
+  // Rows are on screen but none can be chosen (every option disabled).
+  const allUnavailable = !noResults && navCount > 0 && selectableCount === 0;
 
   const lastAnnounced = useRef<string>('');
   useEffect(() => {
     if (!open || loading) return;
     const message = noResults
       ? emptyMessage
-      : selectableCount === 0
-        ? emptyMessage
-        : `${selectableCount} result${selectableCount === 1 ? '' : 's'} available${
-            unavailableCount > 0 ? `, ${unavailableCount} unavailable` : ''
-          }.`;
+      : allUnavailable
+        ? ALL_UNAVAILABLE
+        : selectableCount === 0
+          ? emptyMessage
+          : `${selectableCount} result${selectableCount === 1 ? '' : 's'} available${
+              unavailableCount > 0 ? `, ${unavailableCount} unavailable` : ''
+            }.`;
     if (message === lastAnnounced.current) return;
     lastAnnounced.current = message;
     announce(message);
-  }, [open, loading, noResults, selectableCount, unavailableCount, emptyMessage, announce]);
+  }, [
+    open,
+    loading,
+    noResults,
+    allUnavailable,
+    selectableCount,
+    unavailableCount,
+    emptyMessage,
+    announce,
+  ]);
 
   // Close on a pointer press outside, and on Escape.
   //
@@ -335,8 +358,17 @@ export function Combobox({
     }
   }, [open, activeDescendantId]);
 
+  /** A disabled option is refused, not ignored: the reason is spoken and the popup stays open. */
+  const refuse = (option: ComboboxOption): void => {
+    // A screen reader does not reliably read an active descendant's description (ADR-0082 §2).
+    announce(option.disabledReason ?? 'Unavailable.');
+  };
+
   const commit = (option: ComboboxOption): void => {
-    if (option.disabled === true) return;
+    if (option.disabled === true) {
+      refuse(option);
+      return;
+    }
     onChange(option.value);
     // Clear the search on commit so reopening shows the full list rather than the stale term —
     // and so the closed input shows the SELECTION, not what was typed to find it.
@@ -396,12 +428,6 @@ export function Combobox({
         }
         if (activeOption === undefined) break;
         event.preventDefault();
-        if (activeOption.disabled === true) {
-          // Refused, not ignored: the popup stays open and the reason is spoken, because a screen
-          // reader does not reliably read an active descendant's description (ADR-0082 §2).
-          announce(activeOption.disabledReason ?? 'Unavailable.');
-          break;
-        }
         commit(activeOption);
         break;
       case 'Tab':
@@ -418,12 +444,12 @@ export function Combobox({
     const { option } = row;
     const isSelected = option.value === value;
     const isActive = row.navIndex === activeIndex;
-    const reasonId = `${id}-option-${option.value}-reason`;
+    const reasonId = `${id}-option-${idSegment(option.value)}-reason`;
     const reason = option.disabled === true ? option.disabledReason : undefined;
     return (
       <div
         key={option.value === '' ? '__empty__' : option.value}
-        id={`${id}-option-${option.value}`}
+        id={`${id}-option-${idSegment(option.value)}`}
         role="option"
         aria-selected={isSelected}
         {...(option.disabled === true ? { 'aria-disabled': true } : {})}
@@ -579,7 +605,7 @@ export function Combobox({
         {loading ? statusRow('Loading…') : null}
         {errored && !loading ? statusRow('Could not load options.') : null}
         {!loading && !errored && (noResults || selectableCount === 0)
-          ? statusRow(emptyMessage)
+          ? statusRow(allUnavailable ? ALL_UNAVAILABLE : emptyMessage)
           : null}
         {loadMoreVisible ? (
           // A real option (not a `tabIndex={-1}` button) so it sits in the arrow-key sequence and
