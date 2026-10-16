@@ -82,8 +82,9 @@ rows below are the ones a person could meet, one line each, as read from each ro
 - **#477** — on a very short, narrow window the command bar scrolls away and nothing hints how to get it back.
 - **#490** — at 320 pixels wide the app header takes four lines.
 - **#223** — the resource strip under the diagram is not in the exports or the printout.
-- **#229** and **#307** — two small keyboard and screen-reader details (a disabled option in a combo box, and
-  a focusable "loading" row in the project tree).
+- **#229** and **#307** — two small keyboard and screen-reader details (a menu that closes and reopens when its
+  own button is pressed, and a focusable "loading" row in the project tree). The combo-box half of #229 closed
+  on 2026-10-16.
 - **#500, #504, #505, #501** — the faults fixed or measured in this same batch. All four are now closed (#976, #980,
   #978, #981).
 

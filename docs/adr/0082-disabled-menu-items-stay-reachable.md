@@ -119,11 +119,11 @@ contract is the commit boundary plus the existing flag-off parity suite.
   to someone who merely lacks the lock is precisely the false-statement defect §2 records shipping
   twice already. Shading needs a gate that carries its own reason; giving the plan scope one is its
   own change. Filed rather than fudged (`docs/TECH_DEBT.md` #114).
-- **`Combobox` is knowingly left inconsistent.** It skips disabled options by arrow key, and the same
+- **`Combobox` was knowingly left inconsistent.** It skipped disabled options by arrow key, and the same
   APG list names _"Options in a Listbox"_ — but it is a separate primitive with its own consumers and
   tests, and changing it here widens the blast radius past what #111 needs. Filed as its own
   `docs/TECH_DEBT.md` entry with the citation. Noticing this and stepping over it silently would be
-  the ADR-0071 failure.
+  the ADR-0071 failure. **Closed 2026-10-16: see "Amendment" below.**
 - `menu.test.tsx`'s skip assertions are **rewritten**, and must read as a posture change carrying the
   APG citation rather than a test bent to fit new code.
 - **The journey step goes into the existing `e2e-edit/pen-handoff.spec.ts`, not a new suite** — no new
@@ -161,6 +161,39 @@ the **same** thing, so it is one sentence to correct rather than two mental mode
   row was focusable and an arrow-key stop. Preserved in §2 rather than silently deleted, because it
   is the second recorded instance of a docblock describing intent while the markup did something
   else, and the first was in the sibling primitive.
+
+## Amendment, 2026-10-16: `Combobox` now follows §1 and §2
+
+The primitive left inconsistent above (`docs/TECH_DEBT.md` #229, combobox half) follows the same rule,
+for the same APG citation.
+
+- **§1 applies.** A disabled option is a stop for arrow keys, Home and End, and takes the focus ring
+  (WCAG 2.4.7) without the selected tint. Opening upwards lands on the last real option, never on
+  "Load more", which stays the final stop.
+- **§2 applies.** `ComboboxOption.disabledReason` is rendered as an `sr-only` span inside the option and
+  referenced by `aria-describedby`, only when the option is disabled and a reason exists. The accessible
+  name stays `label` plus `badge`.
+- **Enter on a disabled option is refused, not ignored.** Nothing is committed, the popup stays open, and
+  the reason (or "Unavailable.") is announced politely. Whether a screen reader speaks an active
+  descendant's description varies and was not established, so the announcement is the dependable path.
+  Pointer presses stay ignored.
+- **Navigable and selectable are now two counts.** The result count and the empty state still speak only
+  of options that can be chosen; with disabled options present the count reads "N results available, M
+  unavailable.", and with none it reads exactly as before. Behaviour with no disabled option is unchanged.
+- **ArrowDown on open can land on a disabled first row.** That is APG-consistent: the first option is the
+  first option, shaded or not. Enter there is refused with the reason announced.
+- **The reason is `sr-only` by design**, with no visible text, exactly as `Menu`'s `disabledReason` is
+  (`menu.tsx` renders it in an `sr-only` span). A sighted reader sees the shaded row; making the reason
+  visible would be a separate design decision for both primitives.
+- **A pointer press on a disabled option announces the reason too**, as Enter does, and does not commit.
+- **A list of only disabled options says "No options available."** (row and announcement), never "No
+  matches.", because the rows are visible and reachable.
+- **Option ids are percent-encoded from `value`**, so a value containing whitespace cannot split an
+  `aria-describedby` or `aria-activedescendant` idref. Simple values keep their ids unchanged.
+- **Ships dark.** No production caller sets `ComboboxOption.disabled` (all five consumers pass only the
+  control-level prop), so no screen reaches this yet; the first caller to shade an option owes the
+  journey (ADR-0081 §1).
+- **The `Menu` outside-press defect stays open** in #229 and is not part of this amendment.
 
 ## Alternatives rejected
 
