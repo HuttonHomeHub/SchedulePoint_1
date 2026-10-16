@@ -3,48 +3,55 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-15. A short session after the three 1.0 requirements. It verified the previous
-hand-off against `main`, ran the reconciliation pass, and landed two small test additions. **Nothing was
-released** (no changeset in either PR), and **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-16. The owner parked the three host steps again and asked for backlog and
+tech-debt work instead. Four register rows were taken, all merged, and released together as
+**`api` 0.94.1 and `web` 0.192.1**. **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
 ## Where things stand
 
-- **Latest releases are unchanged:** `api` 0.94.0 and `web` 0.192.0 (tags confirmed with
+- **Latest releases:** `api` 0.94.1 and `web` 0.192.1 (Version Packages PR #1008; tags confirmed with
   `git ls-remote --tags`).
 - **This session's PRs:**
-  - **#1003** `docs(docs): reconciliation pass after the 1.0 requirements`. The pass taught six reviewer
-    agents about ADR-0192 to ADR-0194 (none had heard of them) and corrected `docs/ARCHITECTURE.md`
-    (hosting "still open"; it was settled 2026-08-01), `README.md` (the Gantt start-edge resize
-    "absent"; it shipped in web 0.157.0) and several indexes. It also fixed `docs/RELEASE_1_0.md`: the
-    short answer had called backups and the export "missing", the "today" versions and rollback tags
-    were old, and row 5's practice-check time now matches the guide (10 to 15 minutes, plus about 15
-    to read Parts 3 and 4). Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md` (last full pass
-    2026-10-15).
-  - **#1004** `test(web): assert the 1024 x 600 rail fit and close the #978 forced-colour nits`. A committed journey `apps/web/e2e-audit/rail-1024.spec.ts` asserts
-    that at 1024 × 600 the expanded rail keeps all seven organisation links, the tree's 128 px floor
-    (measured 251 px fine, 131 px coarse) and the version footer, for fine and coarse pointers. It
-    also closes the three deferred #978 nits in `apps/web/e2e-gantt/forced-colors.spec.ts`: the
-    summary band's 1 px inset, a finished task against a summary under forced colours (the seed gained
-    "Echo finished task"), and a why-comment on `colourBehind`. The optional selected-row hairline was
-    not built.
-- **Not done from the pass, by choice** (recorded in the 2026-10-15 `DECISIONS.md` entry): the
-  specialist reviewer sweep over recent diffs (the export and backup PRs already had review passes in
-  their own session), a full register walk (sampled 15 rows), and step 5a. Proposed and not acted on:
-  cite code by symbol rather than line number in ungated prose (four documents had stale line
-  citations); a `mkdir backups` hint in `README.md`'s container quick-start.
+  - **#1006** `docs(docs): re-verify the turbo lockfile cache row against turbo 2.11.7`. **#321's
+    diagnosis does not hold on turbo 2.11.7**: dry-run hashes show the lockfile reaching lint and
+    typecheck through `hashOfExternalDependencies` and `^build` dependents, so the "one-line fix" was
+    not made. The row is deferred on a trigger, and the lead hypothesis (unconfirmed) is `node_modules`
+    not reinstalled after a lockfile change; a prepush guard for that would be a shared-gate change
+    (ADR-0105) and needs its own spec.
+  - **#1007** `fix(api): stop the retention boot sweep cleanly when the app shuts down` (closes #303 and
+    #259's item). `PrismaService.registerShutdownDrain` lets a drain run before `$disconnect`, bounded
+    at 4 s; the sweep stops between tables and batches and reports `retention.sweep_abandoned` (info)
+    instead of a false `retention.sweep_failed`. A real failure still alerts. Does not depend on Nest
+    hook order, so it survives the NestJS 12 bump (#289).
+  - **#1009** `fix(web): frame a Gantt zoom preset for the pane width after the divider is dragged`
+    (closes #437). Bar region = scroller width minus the rendered pane, computed in render. ADR-0173
+    D5 rewritten: the Activity column's edge is the pane, so it re-frames; other columns and hiding a
+    column do not. Re-framing is **live while dragging** (no drag-end signal exists; adding one is an
+    ADR-0105 trigger).
+  - **#1010** `fix(api): warn at start-up when the database password is the built-in default` (closes
+    #514). Security review tier (b), the owner's choice: one WARN `database.default_password` (never the
+    password), silent under `NODE_ENV=test`; the backup guide now says "recommended" and makes the
+    `.env` check the sure test. Making the password **required** was considered and not done — it
+    would stop compose commands on an existing install (`docs/DECISIONS.md`, 2026-10-16).
+- **The fifth-shard trigger technically fired, and was not acted on.** On #1006, web shard 4 was
+  cancelled by its 30-minute timeout. The cause was `playwright install --with-deps` taking 12 m 43 s
+  on a slow apt mirror (114 MB at 156 kB/s); every suite passed at its usual speed and the single
+  re-run took 1,048 s. A fifth shard would not have helped, so none was added; recorded under
+  `docs/TECH_DEBT.md` #502. **Whether that counts is the owner's call**; it was reported to them.
 
 ## What the owner has to do (in this order)
 
-Unchanged from the last hand-off. **The owner said on 2026-10-15 they will do these another day.** When
-they report a result, record it in `docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a
-guide is wrong or unclear on the real server, fix the guide.
+Unchanged. **The owner parked these again on 2026-10-16.** When they report a result, record it in
+`docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on
+the real server, fix the guide.
 
 1. **Backups — host steps and one practice check** (row 5). Guide:
    [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). About 25 minutes of set-up, a
    10-minute wait for the first copy, 10 to 15 minutes for the `check`, and about 15 minutes to read
    Parts 3 and 4 once: **about an hour**. Done when the owner reports one `CHECK PASSED` with its date
-   and the copy's file name. The guide's paste block was compared with `docker-compose.release.yml` on
-   2026-10-15 and matches (only comments differ).
+   and the copy's file name. The guide's paste block matched `docker-compose.release.yml` on
+   2026-10-16. While there, the owner can check the Env box for a `POSTGRES_PASSWORD` line (the guide's
+   "Set a database password", now recommended, ~10 minutes); after `api` 0.94.1 the API log says so too.
 2. **Export — download once** (row 6). Guide:
    [`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), about 10 minutes.
 3. **Clear-out — switch on, only on a day step 1 has passed** (row 7). Guide:
@@ -61,15 +68,18 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
   it (`docs/specs/organisation-export/m2-measurements.md`, #515, #516).
 - Collaborative editing is not in 1.0.
 - Four web e2e shards; the fifth-shard trigger is the slowest shard above 1,250 s (median of three runs)
-  or a 30-minute timeout.
+  or a 30-minute timeout. (One timeout on 2026-10-16 was a setup stall, not suite time; see above.)
 - The diagram keeps its own colours under a Windows contrast theme (#508).
 - `Start editing` stays plain while the pen is not held.
+- The default database password is warned about, not refused (2026-10-16).
 
 ## Parked by the owner — keep, do not raise
 
-The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15). A session does not bring
-them up until the owner does. When the owner returns to one, the steps are ready:
+The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15 and 2026-10-16). A session
+does not bring them up until the owner does. When the owner returns to one, the steps are ready:
 
+- **The three host steps above** (backups, export, clear-out) — parked again on 2026-10-16; offer them
+  when the owner is ready, do not press.
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
 - **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
@@ -82,10 +92,9 @@ them up until the owner does. When the owner returns to one, the steps are ready
 
 ## Open rows worth knowing
 
-- #509–#514 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
-  call, default not for 1.0), #508 (by decision).
-- The #978 deferred nits are **closed** by #1004, and the rail's seven-link fit is now a committed
-  assertion (an eighth link will fail it on a coarse pointer).
+- #509–#513 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
+  call, default not for 1.0), #508 (by decision). #514 is closed by #1010.
+- #321 is deferred on a trigger (see #1006 above); #502 carries the 2026-10-16 shard-4 note.
 - **Not folded, by choice:** a leave-page guard during an export (the page says leaving cancels it).
 
 ## Suggested next
@@ -93,10 +102,14 @@ them up until the owner does. When the owner returns to one, the steps are ready
 Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering:
 
 1. **The owner's three host steps** above, when they are ready, recorded as they come.
-2. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
+2. **More small register rows**, of the kind this session took (fix or tidy, no new surface). Candidates
+   checked on 2026-10-16: #481 (one focus hand-off hook instead of three copies; S, web), #477 (the
+   wheel cannot bring back a scrolled-away command band at short windows; needs an owner choice between
+   two remedies), #419 (selection cost at 2,000 activities; needs a reading on the owner's machine,
+   which needs a new probe scene and so a spec), and the docs tidy offered on 2026-10-16 and not taken
+   (cite code by symbol rather than line number; `mkdir backups` in the README quick-start).
+3. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
    to cut 1.0.
-3. A small docs PR for the two proposals the pass left (symbol citations; `mkdir backups` in the README
-   quick-start), only if the owner wants it.
 
 ## Environment notes a new session would otherwise rediscover
 
@@ -244,3 +257,19 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
     `--force-with-lease=<branch>:<old-sha>`.
   - **A scheduled wake-up whose notes go stale can be corrected in place** with `update_trigger` (new
     prompt), which avoids a second live trigger.
+
+- **2026-10-16 lessons:**
+  - **A worktree agent that finishes with no changes has its worktree removed.** Resuming it with
+    `SendMessage` lands it in an empty folder (every tracked file shows as deleted). Start a fresh
+    builder instead of asking it to restore the tree; nothing was lost.
+  - **Two background runs writing one log file interleave.** Give every gate run its own log name
+    (`prepush-<row>.log`), or a finished first run's tail is read as the second run's result.
+  - **A stalled `playwright install --with-deps` can time a shard out** (12 m 43 s on 2026-10-16 against
+    ~2 minutes). Read the job log before treating a 30-minute cancel as suite time; one re-run is
+    allowed because no test body was slow.
+  - **Two API fixes touching `OperationalModule` and `PrismaService`** were each tested on their own
+    base; the second was re-run (full API e2e, unit, prepush) on top of the first before it was pushed.
+    Do that whenever two parallel branches touch the same module.
+  - **`docs/TECH_DEBT.md`'s closed ledger conflicts on every second closing PR**; keep both rows.
+  - **A test that overrides `PrismaService` with a bare `PrismaClient`** (`activity-history-statements`)
+    breaks when `PrismaService` grows a method a constructor calls; give the stub the method.

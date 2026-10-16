@@ -11461,12 +11461,23 @@ On signing off the built toolbar after seeing the after photographs, the owner a
 
 ### 502. The four web shards finish up to ~235 s apart after the 2026-10-13 re-pack
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-13 (ADR-0138 "Acceptance reading, 2026-10-13": `ci.yml` push runs 38362835289, 38371797515, 38379361804 and 38388415840 on `main`; per-shard job wall read from the run's jobs)
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-16 (job logs of run 38931889491, below); 2026-10-13 (ADR-0138 "Acceptance reading, 2026-10-13": `ci.yml` push runs 38362835289, 38371797515, 38379361804 and 38388415840 on `main`; per-shard job wall read from the run's jobs)
 **Raised:** 2026-10-13 (pre-1-0-hardening M1 acceptance) · **Size:** S · **Owner:** web/ci
 
 ADR-0138's re-pack projected an 18 s spread and measured 36 / 206 / 235 / 210 s. The slowest shard is 1,047 to 1,067 s on all four runs, so the point of the re-pack (a shorter wait) is met; the plan's "four within ~120 s" is not. The shortest shard rotates (shard 4, 4, 2, 2), which reads as run-to-run variation in the suites rather than a shard the pack under-filled, so no second re-pack was made on one reading (plan Task 1.2 step 4).
 
 **Next:** if the same shard is shortest or longest again, re-derive `scripts/e2e-durations.json` from more than three runs before packing. **Trigger:** the same shard is the shortest, or the longest, on three consecutive `main` runs, or ADR-0138's fifth-shard trigger fires. Not work now.
+
+> **2026-10-16 — the 30-minute half of the fifth-shard trigger fired, and was not a suite-time
+> reading.** On #1006 (a docs-only PR) web shard 4, job 117077669490 of run 38931889491, was
+> cancelled at 30 m 18 s. Its log shows `playwright install --with-deps` took **763 s** (apt fetched
+> 114 MB in 12 m 11 s at 156 kB/s, one 250 s stall between two packages) against the ~114 s fixed
+> cost this row's measurements assume. Every suite passed close to its recorded time (11 suites, 943 s
+> against 880 s recorded); `test:e2e:public`, the shard's last, was ~48 s into a ~55 s run. The single
+> re-run (job 117091779498) passed in **1,048 s**, inside the slowest-shard figure above. A fifth shard
+> would not have prevented it, because the time was lost before any test ran, so none was added; the
+> owner was told and the call is theirs. **If a second setup stall times a shard out**, the remedy to
+> cost is caching the browser's system dependencies, not a fifth shard.
 
 ### 503. A narrow-shell journey once counted a banner flicker that should be zero
 
