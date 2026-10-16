@@ -30,8 +30,12 @@ import { cn } from '@/lib/utils';
  *   pointer-only button, so page 2+ of a server-searched library is reachable without a mouse.
  * - **Grouped options** (`group`) render as `role="group"` with a visible, associated label —
  *   used for the ADR-0053 tier groups ("Organisation" / "This project").
- * - **Disabled options** are announced (`aria-disabled`) and skipped by keyboard navigation,
- *   so an unusable choice stays discoverable without being operable.
+ * - **Disabled options** are announced (`aria-disabled`) and **reached by keyboard navigation** but
+ *   never committed (ADR-0082 §1, which reversed the same skip in {@link Menu}): the APG's
+ *   "Options in a Listbox" keeps a shaded option focusable so its `disabledReason` is readable.
+ *   Enter on one announces the reason and leaves the popup open. Navigation (`navIndex`) and
+ *   selection (`selectableCount`) are therefore two different counts — the announced result count
+ *   and the empty state still speak only of options that can be chosen.
  * - **The listbox is positioned in-flow (absolute), not portalled** — unlike `Menu`. Its main
  *   consumers live inside the native `<dialog>` used by {@link Dialog}, and a portal to
  *   `document.body` would render *behind* the dialog's top layer.
@@ -59,8 +63,16 @@ export interface ComboboxOption {
   badge?: string;
   /** Tree depth, rendered as indentation. Never the only cue — pair it with a `badge` or group. */
   depth?: number;
-  /** Present but not selectable (`aria-disabled`); skipped by arrow keys, ignored on click. */
+  /**
+   * Present but not selectable (`aria-disabled`); reached by arrow keys, Home and End, ignored on
+   * click, and refused on Enter with its `disabledReason` announced.
+   */
   disabled?: boolean;
+  /**
+   * Why a `disabled` option is unavailable. Exposed as the option's DESCRIPTION, never folded into
+   * its name (the {@link Menu} `disabledReason` shape, ADR-0082 §2), and announced on Enter.
+   */
+  disabledReason?: string;
 }
 
 export interface ComboboxProps {
@@ -125,8 +137,11 @@ export interface ComboboxProps {
 /** A row in the rendered list: a real option, or one of the non-selectable status rows. */
 interface RenderRow {
   option: ComboboxOption;
-  /** Index among the SELECTABLE options — the `activeIndex` space. `-1` = not selectable. */
-  activeIndex: number;
+  /**
+   * Position among EVERY real option, disabled ones included — the `activeIndex` space, so arrow
+   * keys and `aria-activedescendant` address exactly the rows a user can land on.
+   */
+  navIndex: number;
 }
 
 const PLACEHOLDER_LOADING = 'Loading…';
@@ -193,9 +208,10 @@ export function Combobox({
   }, [value, options, emptyOption, selectedLabel, loading]);
 
   // Rows in DOM order: the empty option, then the selected-but-missing row, then ungrouped
-  // options, then each group. Selectable rows are numbered so `activeIndex` — and therefore
-  // `aria-activedescendant` — addresses exactly the rows the arrow keys can reach.
-  const { rows, groups, selectableCount } = useMemo(() => {
+  // options, then each group. Every real option is numbered (`navIndex`) so `activeIndex` — and
+  // therefore `aria-activedescendant` — addresses exactly the rows the arrow keys can reach;
+  // `selectableCount` separately counts the ones that can be CHOSEN.
+  const { rows, groups, navCount, selectableCount } = useMemo(() => {
     const leading: ComboboxOption[] = [];
     if (emptyOption) leading.push({ value: '', label: emptyOption.label });
     // The `''` selection is ALREADY the empty-option row above — re-adding it would render a
@@ -218,23 +234,25 @@ export function Combobox({
     }
 
     let next = 0;
-    const toRow = (option: ComboboxOption): RenderRow => ({
-      option,
-      activeIndex: option.disabled === true ? -1 : next++,
-    });
+    let selectable = 0;
+    const toRow = (option: ComboboxOption): RenderRow => {
+      if (option.disabled !== true) selectable++;
+      return { option, navIndex: next++ };
+    };
 
     const flat = [...leading, ...ungrouped].map(toRow);
     const groupRows = [...grouped.entries()].map(([key, members]) => ({
       key,
       rows: members.map(toRow),
     }));
-    return { rows: flat, groups: groupRows, selectableCount: next };
+    return { rows: flat, groups: groupRows, navCount: next, selectableCount: selectable };
   }, [emptyOption, selectedOption, options]);
 
-  const selectable = useMemo(
-    () => [...rows, ...groups.flatMap((group) => group.rows)].filter((row) => row.activeIndex >= 0),
+  const navigable = useMemo(
+    () => [...rows, ...groups.flatMap((group) => group.rows)],
     [rows, groups],
   );
+  const unavailableCount = navCount - selectableCount;
 
   // "Load more" is the LAST row in the arrow-key sequence, not a pointer-only affordance: it is
   // the only way to reach page 2+ of a server-searched library, so leaving it off the keyboard
@@ -242,12 +260,12 @@ export function Combobox({
   // `role="option"` so `aria-activedescendant` can address it, but activating it loads a page
   // instead of committing a value — the popup stays open and the selection is untouched.
   const loadMoreVisible = hasMore && !loading;
-  const loadMoreIndex = loadMoreVisible ? selectableCount : -1;
-  const navigableCount = selectableCount + (loadMoreVisible ? 1 : 0);
+  const loadMoreIndex = loadMoreVisible ? navCount : -1;
+  const navigableCount = navCount + (loadMoreVisible ? 1 : 0);
   const loadMoreId = `${id}-load-more`;
   const loadMoreActive = loadMoreIndex >= 0 && activeIndex === loadMoreIndex;
 
-  const activeOption = selectable.find((row) => row.activeIndex === activeIndex)?.option;
+  const activeOption = navigable.find((row) => row.navIndex === activeIndex)?.option;
   const activeDescendantId = loadMoreActive
     ? loadMoreId
     : activeOption
@@ -268,11 +286,13 @@ export function Combobox({
       ? emptyMessage
       : selectableCount === 0
         ? emptyMessage
-        : `${selectableCount} result${selectableCount === 1 ? '' : 's'} available.`;
+        : `${selectableCount} result${selectableCount === 1 ? '' : 's'} available${
+            unavailableCount > 0 ? `, ${unavailableCount} unavailable` : ''
+          }.`;
     if (message === lastAnnounced.current) return;
     lastAnnounced.current = message;
     announce(message);
-  }, [open, loading, noResults, selectableCount, emptyMessage, announce]);
+  }, [open, loading, noResults, selectableCount, unavailableCount, emptyMessage, announce]);
 
   // Close on a pointer press outside, and on Escape.
   //
@@ -351,7 +371,7 @@ export function Combobox({
         event.preventDefault();
         // Opening upwards lands on the last real OPTION, never the trailing "Load more" action —
         // APG's "moves focus to the last option", and an action is a poor first thing to meet.
-        if (!open) openList(selectableCount - 1);
+        if (!open) openList(navCount - 1);
         else setActiveIndex(activeIndex <= 0 ? last : activeIndex - 1);
         break;
       case 'Home':
@@ -376,6 +396,12 @@ export function Combobox({
         }
         if (activeOption === undefined) break;
         event.preventDefault();
+        if (activeOption.disabled === true) {
+          // Refused, not ignored: the popup stays open and the reason is spoken, because a screen
+          // reader does not reliably read an active descendant's description (ADR-0082 §2).
+          announce(activeOption.disabledReason ?? 'Unavailable.');
+          break;
+        }
         commit(activeOption);
         break;
       case 'Tab':
@@ -391,7 +417,9 @@ export function Combobox({
   const renderOption = (row: RenderRow): React.ReactElement => {
     const { option } = row;
     const isSelected = option.value === value;
-    const isActive = row.activeIndex >= 0 && row.activeIndex === activeIndex;
+    const isActive = row.navIndex === activeIndex;
+    const reasonId = `${id}-option-${option.value}-reason`;
+    const reason = option.disabled === true ? option.disabledReason : undefined;
     return (
       <div
         key={option.value === '' ? '__empty__' : option.value}
@@ -399,6 +427,8 @@ export function Combobox({
         role="option"
         aria-selected={isSelected}
         {...(option.disabled === true ? { 'aria-disabled': true } : {})}
+        // Only when a reason renders: a dangling `aria-describedby` reads as an empty description.
+        {...(reason ? { 'aria-describedby': reasonId } : {})}
         // The option carries its badge in the accessible name, so the visible badge span is
         // hidden from AT to avoid announcing it twice.
         aria-label={optionText(option)}
@@ -418,9 +448,10 @@ export function Combobox({
           option.disabled === true && 'text-muted-foreground cursor-default',
           // The active option is highlighted with a ring as well as a tint: `bg-accent` alone is
           // ~1.09:1 on the popover surface and fails WCAG 1.4.11 (the `MenuItem` precedent).
-          isActive &&
-            option.disabled !== true &&
-            'bg-accent text-accent-foreground ring-ring ring-2 ring-inset',
+          // A disabled active row keeps the ring but not the tint: it is focused (WCAG 2.4.7) yet
+          // must not look choosable.
+          isActive && option.disabled !== true && 'bg-accent text-accent-foreground',
+          isActive && 'ring-ring ring-2 ring-inset',
         )}
       >
         <span
@@ -432,6 +463,11 @@ export function Combobox({
         {option.badge ? (
           <span aria-hidden="true" className="text-muted-foreground shrink-0 text-xs">
             {option.badge}
+          </span>
+        ) : null}
+        {reason ? (
+          <span id={reasonId} className="sr-only">
+            {reason}
           </span>
         ) : null}
       </div>

@@ -217,7 +217,9 @@ describe('Combobox', () => {
       { value: 'c', label: 'Charlie' },
     ];
 
-    it('marks them disabled and skips them when arrowing', () => {
+    // A posture change, not a bent test: the APG's "Options in a Listbox" keeps an unavailable
+    // option focusable so its reason can be read, and ADR-0082 §1 reversed the same skip in Menu.
+    it('marks them disabled and reaches them when arrowing', () => {
       render(<Harness options={withDisabled} />);
       openWithKeyboard();
       expect(screen.getByRole('option', { name: 'Bravo' })).toHaveAttribute(
@@ -225,7 +227,105 @@ describe('Combobox', () => {
         'true',
       );
       fireEvent.keyDown(input(), { key: 'ArrowDown' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-b');
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
       expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-c');
+    });
+
+    it('shows the focus ring on a disabled active option', () => {
+      render(<Harness options={withDisabled} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
+      const bravo = screen.getByRole('option', { name: 'Bravo' });
+      expect(bravo).toHaveClass('ring-2');
+      expect(bravo).not.toHaveClass('bg-accent');
+    });
+
+    it('reaches a disabled first and last option with Home and End', () => {
+      const edges: ComboboxOption[] = [
+        { value: 'a', label: 'Alpha', disabled: true },
+        { value: 'b', label: 'Bravo' },
+        { value: 'c', label: 'Charlie', disabled: true },
+      ];
+      render(<Harness options={edges} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'End' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-c');
+      fireEvent.keyDown(input(), { key: 'Home' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-a');
+    });
+
+    it('opens upwards onto a disabled last option, never Load more', () => {
+      const tail: ComboboxOption[] = [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Bravo', disabled: true },
+      ];
+      render(<Harness options={tail} hasMore onLoadMore={vi.fn()} />);
+      fireEvent.keyDown(input(), { key: 'ArrowUp' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-option-b');
+    });
+
+    it('keeps Load more last in the sequence after disabled options', () => {
+      render(<Harness options={withDisabled} hasMore onLoadMore={vi.fn()} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'End' });
+      expect(input()).toHaveAttribute('aria-activedescendant', 'cb-load-more');
+    });
+
+    it('describes a disabled option by its reason without changing its name', () => {
+      const reasoned: ComboboxOption[] = [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Bravo', disabled: true, disabledReason: 'Archived calendar' },
+      ];
+      render(<Harness options={reasoned} />);
+      openWithKeyboard();
+      const bravo = screen.getByRole('option', { name: 'Bravo' });
+      expect(bravo).toHaveAccessibleDescription('Archived calendar');
+    });
+
+    it('does not describe an enabled option or an unreasoned disabled one', () => {
+      render(<Harness options={withDisabled} />);
+      openWithKeyboard();
+      for (const name of ['Alpha', 'Bravo', 'Charlie']) {
+        expect(screen.getByRole('option', { name })).not.toHaveAttribute('aria-describedby');
+      }
+    });
+
+    it('refuses Enter on a disabled option: no commit, stays open, reason announced', async () => {
+      const onChange = vi.fn();
+      const reasoned: ComboboxOption[] = [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Bravo', disabled: true, disabledReason: 'Archived calendar' },
+      ];
+      render(<Harness options={reasoned} onChange={onChange} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
+      fireEvent.keyDown(input(), { key: 'Enter' });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+      await vi.waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent('Archived calendar'),
+      );
+    });
+
+    it('announces "Unavailable." on Enter when no reason was given', async () => {
+      render(<Harness options={withDisabled} />);
+      openWithKeyboard();
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
+      fireEvent.keyDown(input(), { key: 'Enter' });
+      await vi.waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent('Unavailable.'),
+      );
+    });
+
+    it('counts only choosable options, and says how many are unavailable', async () => {
+      render(<Harness options={withDisabled} />);
+      openWithKeyboard();
+      await vi.waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent(
+          '2 results available, 1 unavailable.',
+        ),
+      );
     });
 
     it('ignores a pointer press on them', () => {

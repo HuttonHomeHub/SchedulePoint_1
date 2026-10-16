@@ -6150,76 +6150,34 @@ _visible_ to the parity gate rather than leaving it as an absence. Widening the 
 `stripRef` is the smaller half; the honest half is that a gate keyed on one ref name will go blind
 again the next time a layer gets its own ref.
 
-### 229. Two latent primitive keyboard residuals, carried out of #196
+### 229. `Menu`'s outside-press listener closes the menu when its own trigger is pressed
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
+**Status:** open · **Verified:** 2026-10-16 · **Raised:** 2026-08-31 (register verification sweep; carried out of #196) · **Size:** S
 
-#196 closed on its headline — the `preventDefault` + `stopPropagation` ordering, and the third and
-fourth clamp copies moving to `overlay-position.ts`. These two survived it, and are recorded rather
-than lost with the row:
+This row held two residuals. **The combobox half is closed** (2026-10-16): `Combobox` now reaches
+disabled options by arrow key, Home and End, takes an optional `ComboboxOption.disabledReason` as the
+option's description, refuses Enter on a disabled option with the reason announced, and counts
+navigable and selectable options separately (ADR-0082, Combobox amendment). What is left is the Menu
+half.
 
-- **`combobox.tsx:223` assigns `activeIndex` to disabled options**, so arrow keys skip them — which
-  is exactly what ADR-0082 stopped `Menu` doing, for the reason that a shaded option's REASON then
-  becomes unreachable by keyboard. Latent only because no production caller sets
-  `ComboboxOption.disabled` today; the day one does, the defect is live and nothing reports it.
-- **`menu.tsx:189`'s outside-pointerdown handler does not exclude its own trigger**, so a press on
-  the trigger closes and reopens rather than toggling.
+`menu.tsx`'s document-level `pointerdown` handler closes the menu on any press outside the panel, and
+the trigger is outside it, so a press on the trigger closes and reopens rather than toggling.
 
-**Verified 2026-09-01, and BOTH are bigger than "XS each".**
+**The obvious fix is wrong.** Excluding `restoreFocusRef.current` fails, because that ref is not always
+the opener: `selection-actions.tsx` and `tsld-toolbar-items.tsx` (twice) pass `mainButtonRef`, and
+`tsld-toolbar-authoring.test.tsx` records why: for a split button the **caret** opens the menu and is
+`tabIndex={-1}`, so the focus-restore target is the main button. Excluding it would stop a press on the
+main button (a separate command) from closing the menu, and still not fix the caret. The correct fix
+needs the opener's element, which is a **new optional prop on `Menu`**: a component's public contract on
+a primitive with about ten consumers, and an ADR-0105 trigger.
 
-- The combobox half is real (`combobox.tsx:223` assigns `-1`; `:235` filters on `>= 0`), but
-  `activeIndex` is doing **double duty**: the same counter yields `selectableCount`, which is the
-  number announced as "N results available" (`:271`), the `Load more` row's position (`:245`) and
-  the empty-state test (`:545`) — and `:261`'s own comment says counting non-selectable rows "would
-  be a lie". So the fix is **splitting navigable from selectable**, a refactor of the primitive's
-  internals rather than a one-line change.
-- The menu half is real (`menu.tsx:190` closes on any pointerdown outside the panel, and the trigger
-  is outside it) — but **the obvious fix is wrong**. Excluding `restoreFocusRef.current` fails,
-  because that ref is not always the opener: `selection-actions.tsx:329` and
-  `tsld-toolbar-items.tsx:770,945` pass `mainButtonRef`, and `tsld-toolbar-authoring.test.tsx:263`
-  records why — for a split button the **caret** opens the menu and is `tabIndex={-1}`, so the
-  focus-restore target is the main button instead. Excluding it would stop a press on the main
-  button (a separate command) from closing the menu, and still not fix the caret. The correct fix
-  needs the opener's element, i.e. a **new optional prop** — a component's public contract, and an
-  ADR-0105 trigger.
+**Deferred, and the reason is the decision.** The owner approved the combobox change on 2026-10-16 and did
+not select this half. It needs its own spec, and CLAUDE.md §19.13 requires accessibility-reviewer (and
+component-reviewer) before it ships, because this class shipped wrong twice in two days (#189, then #192
+inside its fix).
 
-**Both are primitive keyboard-model changes**, so CLAUDE.md §19.13 requires accessibility-reviewer
-(and component-reviewer) BEFORE either ships — that rule exists because this exact class shipped
-wrong twice in two days (#189, then #192 inside its fix). They belong with #197's shared-contract
-slice rather than alone.
-
-> **Five of the six citations were wrong, and only one of them had DRIFTED** (2026-09-13). That
-> distinction is the finding, and the first draft of this note got it wrong by assuming the usual
-> cause. Checked against `ec1227a8`, the commit that set this row's previous `Verified: 2026-09-10`:
->
-> - `menu.tsx:188` and `:189` — **already wrong that day**. That file has not been touched since
->   2026-09-01, and at `ec1227a8` those lines already read `};` and `const onPointer` exactly as they
->   do now. `:188` is the **closing brace of the _keydown_ handler**, so a reader following it landed
->   on a different listener entirely.
-> - `tsld-toolbar-items.tsx:707` — **already wrong that day** (a docblock line about the withdrawn
->   mode statement).
-> - `tsld-toolbar-items.tsx:875` — imprecise that day (it pointed at `const mainButtonRef = useRef(…)`,
->   the declaration, not the `restoreFocusRef=` pass this row is about), then moved to `:945`.
-> - `selection-actions.tsx:320` — **correct that day**, and the only genuine drift: the file was
->   edited on 2026-09-11 and the line is now `:329`.
->
-> So a verification pass bumped this row's date without resolving three of the five citations under
-> it. `#246`'s thesis says a diagnosis survives while its citations decay; this is the sharper case —
-> **a citation can be wrong at the moment somebody writes "Verified"**, and re-reading the prose is
-> what a verification feels like, so nothing about the act catches it. The diagnosis was re-derived
-> from the code here and is intact: `combobox.tsx:223` still assigns `-1`, `:235` still filters
-> `>= 0`, and `:245`/`:261`/`:271` are exact — the combobox half needed no correction at all.
->
-> **The latency claim is the one that mattered and it holds**: no production caller sets
-> `ComboboxOption.disabled`. Checked against all five call sites — `PlanCalendarPicker`,
-> `ActivityCombobox`, `ActivityCalendarField`, `ActivityResourcesPanel`, `ResourceFormDialog` —
-> every `disabled` in them is the **control-level** prop, not the option-level one. So the defect is
-> still latent, which is what the row says nothing would report.
->
-> None of this was self-inflicted by the 2026-09-13 toolbar commit in this register: its lowest
-> touched line in `tsld-toolbar-items.tsx` is 2167 (`git diff -U0`), and it does not touch `menu.tsx`
-> or `selection-actions.tsx` at all. And every one of
-> these lines still **exists** — which is why a mechanical similarity measure cannot see any of them.
+Locate the handler by symbol (`onPointer` in `Menu`), not by line: this row's earlier line citations were
+wrong at the moment they were written "Verified".
 
 ### 270. The frame count a run actually achieved is measured, carried, and then discarded
 
