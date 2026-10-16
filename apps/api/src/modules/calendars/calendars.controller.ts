@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -29,7 +30,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CalendarsService } from './calendars.service';
 import { CalendarListQueryDto } from './dto/calendar-list-query.dto';
@@ -117,7 +117,7 @@ export class CalendarsController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
   ): Promise<CalendarDetailResponseDto> {
     return CalendarDetailResponseDto.fromDetail(
       await this.service.get(principal, orgSlug, calendarId),
@@ -149,7 +149,7 @@ export class CalendarsController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
     @Body() dto: UpdateCalendarDto,
     @RequestContext() context: RequestContext,
   ): Promise<CalendarDetailResponseDto> {
@@ -175,7 +175,7 @@ export class CalendarsController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, calendarId, context);
@@ -202,7 +202,7 @@ export class CalendarsController {
   async archive(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
@@ -227,7 +227,7 @@ export class CalendarsController {
   async unarchive(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
     @Body() dto: ArchiveActionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
@@ -244,7 +244,7 @@ export class CalendarsController {
   async addException(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
     @Body() dto: CreateCalendarExceptionDto,
     @RequestContext() context: RequestContext,
   ): Promise<CalendarExceptionResponseDto> {
@@ -278,8 +278,8 @@ export class CalendarsController {
   async updateException(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
-    @Param('exceptionId', ParseUuidPipe) exceptionId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
+    @Param('exceptionId', ParseUUIDPipe) exceptionId: string,
     @Body() dto: UpdateCalendarExceptionDto,
     @RequestContext() context: RequestContext,
   ): Promise<CalendarExceptionResponseDto> {
@@ -296,8 +296,8 @@ export class CalendarsController {
   async removeException(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('calendarId', ParseUuidPipe) calendarId: string,
-    @Param('exceptionId', ParseUuidPipe) exceptionId: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
+    @Param('exceptionId', ParseUUIDPipe) exceptionId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.removeException(principal, orgSlug, calendarId, exceptionId, context);

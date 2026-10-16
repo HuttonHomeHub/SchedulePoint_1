@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -11,7 +11,6 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { PlacementMigrationReportDto } from './dto/placement-migration-report.dto';
 import { PlacementMigrationService } from './placement-migration.service';
@@ -52,7 +51,7 @@ export class PlacementMigrationController {
   async report(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlacementMigrationReportDto> {
     return PlacementMigrationReportDto.from(await this.service.report(principal, orgSlug, planId));
   }

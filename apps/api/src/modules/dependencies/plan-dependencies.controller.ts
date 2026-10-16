@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -18,7 +28,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { DependenciesService } from './dependencies.service';
 import { CreateDependencyDto } from './dto/create-dependency.dto';
@@ -46,7 +55,7 @@ export class PlanDependenciesController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<DependencyResponseDto>> {
     const { items, meta } = await this.service.listByPlan(principal, orgSlug, planId, query);
@@ -72,7 +81,7 @@ export class PlanDependenciesController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: CreateDependencyDto,
     @RequestContext() context: RequestContext,
   ): Promise<DependencyResponseDto> {

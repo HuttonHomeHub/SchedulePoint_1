@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -26,7 +27,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { MemberResponseDto } from './dto/member-response.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
@@ -75,7 +75,7 @@ export class MembersController {
   async changeRole(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('memberId', ParseUuidPipe) memberId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
     @Body() dto: UpdateMemberRoleDto,
     @RequestContext() context: RequestContext,
   ): Promise<MemberResponseDto> {
@@ -93,7 +93,7 @@ export class MembersController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('memberId', ParseUuidPipe) memberId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, memberId, context);

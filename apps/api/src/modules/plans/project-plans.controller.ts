@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -15,7 +25,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { PlanResponseDto } from './dto/plan-response.dto';
@@ -43,7 +52,7 @@ export class ProjectPlansController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<PlanResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, projectId, query);
@@ -62,7 +71,7 @@ export class ProjectPlansController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: CreatePlanDto,
   ): Promise<PlanResponseDto> {
     return PlanResponseDto.from(await this.service.create(principal, orgSlug, projectId, dto));

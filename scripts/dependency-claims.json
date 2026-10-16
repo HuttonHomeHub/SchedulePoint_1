@@ -1177,7 +1177,7 @@
       "path": "pipes/parse-uuid.pipe.js",
       "lines": "37-52",
       "anchor": "isUUID(str, version = 'all') {",
-      "citedBy": ["apps/api/src/common/validation/uuid.ts", "docs/TECH_DEBT.md"]
+      "citedBy": ["apps/api/src/common/validation/uuid.ts"]
     },
     {
       "ref": "eslint-plugin-react-hooks.development.js:55415-55418",

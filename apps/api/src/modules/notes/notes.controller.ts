@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -14,7 +23,6 @@ import {
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { NoteResponseDto } from './dto/note-response.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
@@ -48,7 +56,7 @@ export class NotesController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('noteId', ParseUuidPipe) noteId: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
     @Body() dto: UpdateNoteDto,
   ): Promise<NoteResponseDto> {
     const { note, authorName } = await this.service.update(principal, orgSlug, noteId, dto);
@@ -65,7 +73,7 @@ export class NotesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('noteId', ParseUuidPipe) noteId: string,
+    @Param('noteId', ParseUUIDPipe) noteId: string,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, noteId);
   }

@@ -523,12 +523,15 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     await outsider.agent
       .post(`/api/v1/organizations/other/plans/${planId}/schedule/recalculate`)
       .expect(404);
-    // A well-formed but unknown plan id → 404.
+    // A well-formed but unknown plan id → 404 (a v7 id must pass the pipe).
     await actor.agent.post(recalcUrl('00000000-0000-7000-8000-000000000000')).expect(404);
-    // A malformed plan id → 400 (ParseUuidPipe rejects the path param).
-    await actor.agent
+    // A malformed plan id → 400 in the standard envelope (Nest's ParseUUIDPipe rejects the path
+    // param; the global filter, not the pipe, decides the body — TECH_DEBT #340).
+    const malformed = await actor.agent
       .post('/api/v1/organizations/acme/plans/not-a-uuid/schedule/recalculate')
       .expect(400);
+    expect(malformed.body.error).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(malformed.body.error.message).toContain('uuid is expected');
   });
 
   it('401s without a session', async () => {
@@ -1100,7 +1103,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
   it('404s an unknown plan (and hides another org’s plan) from the Earned-Value read', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
-    // A well-formed but unknown plan id → 404.
+    // A well-formed but unknown plan id → 404 (a v7 id must pass the pipe).
     await actor.agent.get(earnedValueUrl('00000000-0000-7000-8000-000000000000')).expect(404);
 
     // A member of another org cannot reach acme's plan (anti-IDOR).

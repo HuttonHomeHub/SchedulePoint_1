@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiCreatedResponse,
@@ -15,7 +25,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivityNoteCountResponseDto } from './dto/activity-note-count-response.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
@@ -43,7 +52,7 @@ export class PlanNotesController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<NoteResponseDto>> {
     const { items, meta } = await this.service.listByPlan(principal, orgSlug, planId, query);
@@ -62,7 +71,7 @@ export class PlanNotesController {
   async activityCounts(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<ActivityNoteCountResponseDto[]> {
     const counts = await this.service.countByActivityForPlan(principal, orgSlug, planId);
     return counts.map((entry) => ActivityNoteCountResponseDto.from(entry));
@@ -79,7 +88,7 @@ export class PlanNotesController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: CreateNoteDto,
   ): Promise<NoteResponseDto> {
     const { note, authorName } = await this.service.createForPlan(principal, orgSlug, planId, dto);

@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -16,7 +26,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CrossPlanDependenciesService } from './cross-plan-dependencies.service';
 import { CreateCrossPlanDependencyDto } from './dto/create-cross-plan-dependency.dto';
@@ -70,7 +79,7 @@ export class CrossPlanDependenciesController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('id', ParseUuidPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CrossPlanDependencyResponseDto> {
     return CrossPlanDependencyResponseDto.from(await this.service.get(principal, orgSlug, id));
   }
@@ -84,7 +93,7 @@ export class CrossPlanDependenciesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('id', ParseUuidPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, id);
   }

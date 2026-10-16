@@ -1,4 +1,13 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -16,7 +25,6 @@ import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
 import { LevellingApplicationDto } from './dto/levelling-application.dto';
@@ -118,7 +126,7 @@ export class ScheduleController {
   async recalculate(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanScheduleSummaryDto> {
     return PlanScheduleSummaryDto.from(await this.service.recalculate(principal, orgSlug, planId));
   }
@@ -154,7 +162,7 @@ export class ScheduleController {
   async recalculateProgramme(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<ProgrammeScheduleResultDto> {
     return ProgrammeScheduleResultDto.from(
       await this.service.recalculateProgramme(principal, orgSlug, planId),
@@ -167,7 +175,7 @@ export class ScheduleController {
   async summary(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanScheduleSummaryDto> {
     return PlanScheduleSummaryDto.from(await this.service.summary(principal, orgSlug, planId));
   }
@@ -203,7 +211,7 @@ export class ScheduleController {
   async floatPaths(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: FloatPathsQueryDto,
   ): Promise<PlanFloatPathsDto> {
     return PlanFloatPathsDto.from(
@@ -238,7 +246,7 @@ export class ScheduleController {
   async healthCheck(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<ScheduleHealthReportDto> {
     return ScheduleHealthReportDto.from(
       await this.service.getHealthCheck(principal, orgSlug, planId),
@@ -289,7 +297,7 @@ export class ScheduleController {
   async revisionCompare(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: RevisionCompareQueryDto,
   ): Promise<RevisionCompareDto> {
     return RevisionCompareDto.from(
@@ -348,7 +356,7 @@ export class ScheduleController {
   async criticalPathTest(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<HealthMetricResultDto> {
     return HealthMetricResultDto.from(
       await this.service.getCriticalPathTest(principal, orgSlug, planId),
@@ -399,7 +407,7 @@ export class ScheduleController {
   async levellingApplication(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<LevellingApplicationDto> {
     return LevellingApplicationDto.from(
       await this.service.getLevellingApplication(principal, orgSlug, planId),
@@ -430,7 +438,7 @@ export class ScheduleController {
   async earnedValue(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEarnedValueDto> {
     return PlanEarnedValueDto.from(await this.service.getEarnedValue(principal, orgSlug, planId));
   }
@@ -459,7 +467,7 @@ export class ScheduleController {
   async resourceHistogram(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: ResourceHistogramQueryDto,
   ): Promise<Paginated<ResourceHistogramSeriesDto, ResourceHistogramMetaDto>> {
     const result = await this.service.getResourceHistogram(

@@ -7,6 +7,7 @@ import {
   Post,
   UploadedFile,
   UseInterceptors,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -30,7 +31,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { InterchangeCommitResponseDto } from './dto/interchange-commit-response.dto';
 import { InterchangeImportOptionsDto } from './dto/interchange-import-options.dto';
@@ -104,7 +104,7 @@ export class InterchangeController {
   async dryRun(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @UploadedFile() file: UploadedInterchangeFile | undefined,
     @Body() options: InterchangeImportOptionsDto,
   ): Promise<InterchangeReportResponseDto> {
@@ -162,7 +162,7 @@ export class InterchangeController {
   async commit(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @UploadedFile() file: UploadedInterchangeFile | undefined,
     @Body() options: InterchangeImportOptionsDto,
     @RequestContext() context: RequestContext,

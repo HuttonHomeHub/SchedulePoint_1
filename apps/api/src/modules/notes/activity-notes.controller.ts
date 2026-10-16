@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiCreatedResponse,
@@ -15,7 +25,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateNoteDto } from './dto/create-note.dto';
 import { NoteResponseDto } from './dto/note-response.dto';
@@ -43,7 +52,7 @@ export class ActivityNotesController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<NoteResponseDto>> {
     const { items, meta } = await this.service.listByActivity(
@@ -69,7 +78,7 @@ export class ActivityNotesController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: CreateNoteDto,
   ): Promise<NoteResponseDto> {
     const { note, authorName } = await this.service.createForActivity(

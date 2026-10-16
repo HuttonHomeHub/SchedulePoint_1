@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -27,7 +28,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { CreatedInvitationDto, InvitationResponseDto } from './dto/invitation-response.dto';
@@ -87,7 +87,7 @@ export class OrgInvitationsController {
   async revoke(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('invitationId', ParseUuidPipe) invitationId: string,
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.revoke(principal, orgSlug, invitationId, context);
