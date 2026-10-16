@@ -479,8 +479,12 @@ Do this if your `.env` has no `POSTGRES_PASSWORD` line. Then the database passwo
 the database door closed, only containers on the server can reach it, so nothing is urgent.
 
 **To check whether you have the line:** open the stack's **Env** box in Dockge and look for
-`POSTGRES_PASSWORD`, or run `grep POSTGRES_PASSWORD .env` in the stack's folder. If it shows nothing, you
-are on the default. The other way to tell is the API's log. Run this:
+`POSTGRES_PASSWORD`, or run `grep POSTGRES_PASSWORD .env` in the stack's folder. This is the sure test: if
+it shows nothing, you are on the default.
+
+The second way to tell is the API's log. SchedulePoint prints the warning once each time it starts, so on
+a server that has run for a long time the line may have scrolled out of the log. Restart the API first
+(Dockge: **Deploy**; or `docker compose restart api`), then run this:
 
 ```bash
 docker compose logs api | grep "built-in default"
@@ -492,7 +496,7 @@ docker compose logs api | grep "built-in default"
 The database password is the built-in default.
 ```
 
-**No line** means you have already set one.
+**No line** is not proof that you have set one. Use the `.env` check above.
 
 **Do not just change `POSTGRES_PASSWORD` in `.env`.** The database reads that setting only when it is
 first created. On an existing installation, changing the file alone leaves the database's real password
