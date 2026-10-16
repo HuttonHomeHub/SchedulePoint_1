@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-16 — The default database password is made visible, not refused (tech debt #514)
+
+**What was decided.** The product owner chose the warning tier of the security review of #514. The API logs one
+`database.default_password` WARN at start-up when the password in `DATABASE_URL` is `app` (silent under
+`NODE_ENV=test`, never logs the password or the URL), and the backup guide's password section is now
+recommended and says how to check. `POSTGRES_PASSWORD` is **not** made required in the compose file and nothing
+refuses to boot.
+
+**Why.** The database port is closed (ADR-0192 D10), so only containers in the stack reach `db`; the one scenario a
+strong password stops is lateral movement from the web container. A required variable (`${POSTGRES_PASSWORD:?}`)
+would stop every compose command on an existing installation that never set one, and changing the password there
+is an `ALTER USER` as well as an `.env` edit.
+
+**Consequence.** Making it required for new installations only stays an option if the warning is ignored in
+practice; it is not a tracked row.
+
+---
+
 ## 2026-10-15 — Reconciliation pass: the reviewers had not heard of backups or the export, and a hosting decision was still open
 
 **What was done.** The pass in `docs/RECONCILE.md`, three days after the last, over ADR-0189 to ADR-0194 (the backup

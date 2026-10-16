@@ -38,6 +38,9 @@
 Structured, data-free logs on the paths where "what happened?" is hard to
 reconstruct afterwards:
 
+- **`database.default_password`** (`docs/TECH_DEBT.md` #514): one WARN at start-up while the password in
+  `DATABASE_URL` is the built-in `app`. Never carries the password or the URL; silent under
+  `NODE_ENV=test`; non-fatal everywhere.
 - **CPM recalculation** (ADR-0022): every recalculation emits
   `'schedule recalculated'` with `{ organizationId, planId, userId,
 activityCount, criticalCount, constraintViolationCount, constraintWarningCount,

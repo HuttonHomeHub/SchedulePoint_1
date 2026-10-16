@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 
+import { DatabasePasswordWarningService } from './database-password-warning.service';
 import { HeartbeatService } from './heartbeat.service';
 import { OperationalAlertService } from './operational-alert.service';
 import { RetentionStatusStore } from './retention-status.store';
@@ -24,6 +25,7 @@ import { RetentionSweepService } from './retention-sweep.service';
 @Module({
   providers: [
     OperationalAlertService,
+    DatabasePasswordWarningService,
     HeartbeatService,
     RetentionSweepRunner,
     RetentionStatusStore,
