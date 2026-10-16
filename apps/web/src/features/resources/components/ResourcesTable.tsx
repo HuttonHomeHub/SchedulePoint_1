@@ -371,8 +371,8 @@ export function ResourcesTable({
     },
     {
       header: 'Calendar',
-      headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap md:table-cell',
+      headClassName: 'hidden md:table-cell',
+      cellClassName: 'hidden whitespace-nowrap md:table-cell',
       cell: ({ resource }) => {
         // A group has no calendar by construction (ADR-0053 §3) — say so rather than showing the
         // same "—" that means "inherits the plan calendar" for a real resource.
@@ -393,8 +393,8 @@ export function ResourcesTable({
   columns.push({
     header: 'Actions',
     srHeader: true,
-    headClassName: 'py-2 font-medium',
-    cellClassName: 'py-2 text-right whitespace-nowrap',
+    headClassName: 'pr-0',
+    cellClassName: 'pr-0 text-right whitespace-nowrap',
     cell: ({ resource }) =>
       canWrite ? (
         <div className="flex items-center justify-end gap-1">

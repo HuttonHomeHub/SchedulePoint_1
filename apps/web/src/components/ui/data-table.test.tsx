@@ -637,3 +637,79 @@ describe('DataTable — Column.wrap', () => {
     expect(head).not.toContain('wrap-anywhere');
   });
 });
+
+/**
+ * `headClassName`/`cellClassName` extend the default rather than replacing it (`docs/TECH_DEBT.md`
+ * #335). **Verified red** by restoring `column.cellClassName ?? CELL_DEFAULT`: the three merge
+ * cases fail (the padding disappears, so `pr-0` has nothing to remove). The skeleton case pins
+ * parity with the settled classes and holds under either implementation.
+ */
+describe('DataTable — class overrides merge with the default', () => {
+  const rows = [{ id: '1', name: 'Alpha' }];
+
+  const settled = (column: Partial<Column<Row>>) => {
+    const view = render(
+      <DataTable
+        {...common}
+        columns={[{ header: 'Name', cell: (row: Row) => row.name, ...column }]}
+        query={query({ data: rows })}
+      />,
+    );
+    const out = {
+      cell: screen.getAllByRole('cell')[0]!.className,
+      head: screen.getAllByRole('columnheader')[0]!.className,
+    };
+    view.unmount();
+    return out;
+  };
+
+  const skeleton = (column: Partial<Column<Row>>) => {
+    const view = render(
+      <DataTable
+        {...common}
+        columns={[{ header: 'Name', cell: (row: Row) => row.name, ...column }]}
+        query={query({ isPending: true })}
+      />,
+    );
+    const out = {
+      cell: view.container.querySelector('tbody td')!.className,
+      head: view.container.querySelector('thead th')!.className,
+    };
+    view.unmount();
+    return out;
+  };
+
+  it('keeps the padding and weight when a caller adds one class', () => {
+    const { cell, head } = settled({ cellClassName: 'text-right', headClassName: 'text-right' });
+    expect(cell.split(' ')).toEqual(expect.arrayContaining(['py-2', 'pr-4', 'text-right']));
+    expect(head.split(' ')).toEqual(
+      expect.arrayContaining(['py-2', 'pr-4', 'font-medium', 'text-right']),
+    );
+  });
+
+  it('lets a caller remove part of the default explicitly with `pr-0`', () => {
+    const { cell, head } = settled({ cellClassName: 'pr-0', headClassName: 'pr-0' });
+    expect(cell.split(' ')).toContain('py-2');
+    expect(cell.split(' ')).not.toContain('pr-4');
+    expect(head.split(' ')).not.toContain('pr-4');
+    expect(head.split(' ')).toContain('font-medium');
+  });
+
+  it('keeps a responsive `hidden … lg:table-cell` pair', () => {
+    const { cell } = settled({ cellClassName: 'hidden lg:table-cell' });
+    expect(cell.split(' ')).toEqual(expect.arrayContaining(['hidden', 'lg:table-cell', 'pr-4']));
+  });
+
+  it('gives the skeleton the settled classes minus the width and wrap presets', () => {
+    const column: Partial<Column<Row>> = {
+      cellClassName: 'text-right whitespace-nowrap',
+      headClassName: 'pr-0',
+    };
+    const plain = settled(column);
+    const withPresets = settled({ ...column, width: 'fit', wrap: 'anywhere' });
+    const loading = skeleton({ ...column, width: 'fit', wrap: 'anywhere' });
+    expect(loading.cell).toBe(plain.cell);
+    expect(loading.head).toBe(plain.head);
+    expect(withPresets.cell).not.toBe(loading.cell);
+  });
+});

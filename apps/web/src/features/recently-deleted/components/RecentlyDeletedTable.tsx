@@ -250,8 +250,8 @@ export function RecentlyDeletedTable({
       // Every label in this cell is now bounded (see the blocker sub-line in `Name`), so the column
       // can take its minimum width and hand the surplus to the names — which is what `fit` is for.
       width: 'fit',
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       cell: (group) =>
         group.canRestore ? (
           <Button

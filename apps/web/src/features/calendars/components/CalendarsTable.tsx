@@ -262,8 +262,8 @@ export function CalendarsTable({
   columns.push({
     header: 'Actions',
     srHeader: true,
-    headClassName: 'py-2 font-medium',
-    cellClassName: 'py-2 text-right whitespace-nowrap',
+    headClassName: 'pr-0',
+    cellClassName: 'pr-0 text-right whitespace-nowrap',
     cell: (calendar) =>
       canWrite ? (
         /* **The primary action stays visible; the rest move behind a `⋯`** (ADR-0097 Landing F1).

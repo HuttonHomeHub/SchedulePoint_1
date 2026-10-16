@@ -183,8 +183,8 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
     {
       header: 'Actions',
       srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right',
       cell: (invitation) => (
         <Button
           variant="ghost"

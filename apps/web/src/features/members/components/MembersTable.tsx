@@ -110,8 +110,8 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
     {
       header: 'Actions',
       srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right',
       cell: (member) => (
         <Button
           variant="ghost"

@@ -236,7 +236,7 @@ function ShareLinksBody({
     {
       header: 'Actions',
       srHeader: true,
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       cell: (s) =>
         s.revokedAt === null ? (
           <Button

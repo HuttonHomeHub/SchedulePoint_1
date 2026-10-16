@@ -37,7 +37,13 @@ export interface Column<T> {
    * accessible name, which is what the hidden text would have been for.
    */
   srHeader?: boolean;
+  /**
+   * **Extends the default `py-2 pr-4 font-medium`; it does not replace it** (`docs/TECH_DEBT.md`
+   * #335). Composed with `cn`, so a class that conflicts with a default wins: removing part of the
+   * default is written explicitly — `pr-0` for an actions column that sits flush to the edge.
+   */
   headClassName?: string;
+  /** Extends the default `py-2 pr-4`, the same way as {@link headClassName}. */
   cellClassName?: string;
   /**
    * How wide this column may grow, declared as a PROPERTY OF THE CONTENT rather than as a number.
@@ -65,13 +71,8 @@ export interface Column<T> {
    * So the columns shrink to fit on a desktop and are free to wrap below the breakpoint. "This is a
    * desktop app" is a design stance; WCAG 2.2 §1.4.10 Reflow is a merge requirement (CLAUDE.md §13).
    *
-   * **It composes with `cellClassName` rather than replacing it**, which is what lets a caller
-   * declare a width without restating `py-2 pr-4` — `docs/TECH_DEBT.md` #335's actual ask. The
-   * blunter fix that row proposes (merge the override into the default with `cn` instead of
-   * replacing it with `??`) is **deliberately not taken here**: ADR-0145 M4 declined it because
-   * seven overrides omit `py-2` on purpose, and this epic re-took that decision rather than
-   * inheriting it. Composing the width alone reaches #335's goal at no blast radius, so the risky
-   * merge buys nothing this needs.
+   * **It composes with `cellClassName`**, and since #335 so does `cellClassName` with the default,
+   * so a caller declares a width without restating `py-2 pr-4`.
    */
   width?: 'fit' | 'bounded' | 'auto';
   /**
@@ -81,8 +82,7 @@ export interface Column<T> {
    * **`anywhere` and not `break-words`, for the reason `CardTitle` records:** only `anywhere` lowers
    * the cell's min-content width, which is what decides a table column's width, so only it keeps
    * such a value from widening the whole table past its scroll region. Composed like `width` — the
-   * class is appended to the column's own classes rather than replacing them — and it is **not** a
-   * `cellClassName` merge, which ADR-0145 M4 declined for seven deliberate overrides.
+   * class is appended to the column's own classes rather than replacing them.
    */
   wrap?: 'anywhere';
 }
@@ -127,6 +127,14 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
   auto: '',
 };
 
+/**
+ * The classes every head and cell starts from. A caller's `headClassName`/`cellClassName` is merged
+ * onto these with `cn` rather than replacing them (#335), so each is written once and the four
+ * places that need it — settled head, settled cell and both skeleton branches — cannot drift.
+ */
+const HEAD_DEFAULT = 'py-2 pr-4 font-medium';
+const CELL_DEFAULT = 'py-2 pr-4';
+
 /** A column's head classes, its declared width composed with whatever the caller passed. */
 /**
  * **The width preset is composed LAST, so it wins a same-modifier collision.**
@@ -145,7 +153,8 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
  */
 function headClassesOf<T>(column: Column<T>): string {
   return cn(
-    column.headClassName ?? 'py-2 pr-4 font-medium',
+    HEAD_DEFAULT,
+    column.headClassName,
     WIDTH_CLASSES[column.width ?? 'auto'],
     column.wrap === 'anywhere' && 'wrap-anywhere',
   );
@@ -154,7 +163,8 @@ function headClassesOf<T>(column: Column<T>): string {
 /** A column's cell classes, its declared width composed with whatever the caller passed. */
 function cellClassesOf<T>(column: Column<T>): string {
   return cn(
-    column.cellClassName ?? 'py-2 pr-4',
+    CELL_DEFAULT,
+    column.cellClassName,
     WIDTH_CLASSES[column.width ?? 'auto'],
     column.wrap === 'anywhere' && 'wrap-anywhere',
   );
@@ -181,8 +191,8 @@ function cellClassesOf<T>(column: Column<T>): string {
  */
 function skeletonClassesOf<T>(column: Column<T>, kind: 'head' | 'cell'): string {
   return kind === 'head'
-    ? (column.headClassName ?? 'py-2 pr-4 font-medium')
-    : (column.cellClassName ?? 'py-2 pr-4');
+    ? cn(HEAD_DEFAULT, column.headClassName)
+    : cn(CELL_DEFAULT, column.cellClassName);
 }
 
 /**

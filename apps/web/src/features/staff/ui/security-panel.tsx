@@ -47,7 +47,7 @@ const COLUMNS: Column<CspReportRow>[] = [
     header: 'Times',
     cell: (row) => String(row.count),
     width: 'fit',
-    cellClassName: 'py-2 pr-4 tabular-nums',
+    cellClassName: 'tabular-nums',
   },
   { header: 'Last seen', cell: (row) => formatTimestamp(row.lastSeenAt), width: 'fit' },
 ];

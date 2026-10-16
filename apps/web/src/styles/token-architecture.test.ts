@@ -646,7 +646,9 @@ describe('weight is a governed axis', () => {
   // ...and 160 -> 158 (staff console redesign M2, ADR-0178): the two hand-rolled `font-medium`
   // sub-headings in `diagnostics-panel.tsx` and `performance-probe-panel.tsx` became `SubSection`,
   // which places the weight once (the primitives' ceiling below rises for it).
-  const SCREEN_WEIGHT_CEILING = 158;
+  // ...and 158 -> 137 (2026-10-16, `docs/TECH_DEBT.md` #335): `DataTable` now merges a column's
+  // `headClassName` onto its own `font-medium` default, so eighteen callers stopped restating it (155 measured before, 137 after).
+  const SCREEN_WEIGHT_CEILING = 137;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

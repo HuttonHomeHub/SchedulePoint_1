@@ -97,8 +97,8 @@ function scheduleColumn(
   const show = hideBelow === 'md' ? 'md:table-cell' : 'lg:table-cell';
   return {
     header,
-    headClassName: `hidden py-2 pr-4 font-medium ${show}`,
-    cellClassName: `hidden py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground ${show}`,
+    headClassName: `hidden ${show}`,
+    cellClassName: `hidden whitespace-nowrap tabular-nums text-muted-foreground ${show}`,
     cell: (activity) => formatCalendarDate(get(activity)),
   };
 }
@@ -710,8 +710,8 @@ export function ActivitiesTable({
               header: 'Select',
               // No `srHeader`: `headerCell` wins the render, so it was never reachable
               // (`docs/TECH_DEBT.md` #73). `SelectAllCheckbox` carries its own accessible name.
-              headClassName: 'py-2 pr-3 font-medium',
-              cellClassName: 'py-2 pr-3',
+              headClassName: 'pr-3',
+              cellClassName: 'pr-3',
               headerCell: () => <SelectAllControl store={store} selectableIds={selectableIds} />,
               cell: (activity: ActivitySummary) =>
                 // A summary has no checkbox at all rather than a disabled one: "you may not file this
@@ -843,8 +843,8 @@ export function ActivitiesTable({
       // columns to keep narrow screens legible — the edit dialog still shows it there.
       {
         header: 'Constraint',
-        headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-        cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
         cell: (activity) => {
           const constraint = formatConstraint(activity);
           // `aria-label` on a plain span (role generic) isn't reliably honoured; instead show the
@@ -871,8 +871,8 @@ export function ActivitiesTable({
         ? [
             {
               header: 'Calendar',
-              headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-              cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+              headClassName: 'hidden lg:table-cell',
+              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
               cell: (activity: ActivitySummary) => {
                 if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
                 const name = calendarNameById.get(activity.calendarId);
@@ -895,8 +895,8 @@ export function ActivitiesTable({
         ? [
             {
               header: 'WBS',
-              headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-              cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+              headClassName: 'hidden lg:table-cell',
+              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
               cell: (activity: ActivitySummary) => {
                 const parentLabel = wbsParentLabelById.get(activity.id);
                 return parentLabel ? (
@@ -922,12 +922,12 @@ export function ActivitiesTable({
         // the reason the Gantt's twin records: the number is plausible under either meaning, so a
         // bare `Float` heading changing origin is invisible to the reader it misleads.
         header: 'Float left',
-        cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
+        cellClassName: 'whitespace-nowrap tabular-nums text-muted-foreground',
         cell: (activity) => formatRemainingFloat(activity.remainingFloat),
       },
       {
         header: 'Critical path',
-        cellClassName: 'py-2 pr-4 whitespace-nowrap',
+        cellClassName: 'whitespace-nowrap',
         cell: (activity) => {
           const flag = criticality(activity);
           return flag ? (
@@ -951,8 +951,8 @@ export function ActivitiesTable({
         const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
         return {
           header,
-          headClassName: `py-2 pr-4 font-medium${show}`,
-          cellClassName: `py-2 pr-4 whitespace-nowrap tabular-nums${show}`,
+          headClassName: show,
+          cellClassName: `whitespace-nowrap tabular-nums${show}`,
           cell: (activity) => {
             const row = varianceByActivityId.get(activity.id);
             if (!row) return <span className="text-muted-foreground">—</span>;
@@ -975,8 +975,8 @@ export function ActivitiesTable({
       cols.push({
         header: 'Actions',
         srHeader: true,
-        headClassName: 'py-2 font-medium',
-        cellClassName: 'py-2 text-right whitespace-nowrap',
+        headClassName: 'pr-0',
+        cellClassName: 'pr-0 text-right whitespace-nowrap',
         cell: (activity) => {
           const actions = actionsFor(activity);
           // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without

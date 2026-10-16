@@ -95,8 +95,8 @@ export function BaselinesPanel({
     columns.push({
       header: 'Actions',
       srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       cell: (b) => (
         <div className="flex justify-end gap-2">
           <Button
