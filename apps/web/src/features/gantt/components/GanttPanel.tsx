@@ -16,7 +16,6 @@ import {
   ACTIONS_COLUMN_WIDTH,
   VARIANCE_COLUMN_WIDTH,
   chartGuard,
-  defaultGridWidth,
   ganttColumnWidth,
   ganttFixedWidth,
   isResizableKey,
@@ -463,20 +462,6 @@ function GanttPanelBody({
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
   const COLUMNS = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
   const widths = columnWidths?.widths ?? NO_WIDTHS;
-  /**
-   * The visible columns' **default** widths, summed — and nothing a planner set. This is the zoom
-   * framing's only grid input (ADR-0173 D5): making it planner-aware would rescale every bar on
-   * every frame of a column change. `grid-width.structural.test.ts` pins that it is the only thing
-   * `barRegionWidth` reads.
-   *
-   * **The row-menu column and the end gutter are in it** (#494): they are constants of the host, not
-   * a planner's choice, and leaving them out framed the zoom presets on room the chart no longer
-   * has, so Month's 91 days ran 48 px off the visible end. (`vs baseline` stays out, as before.)
-   */
-  const DEFAULT_GRID_WIDTH = useMemo(
-    () => defaultGridWidth(COLUMNS, pinnedExtraWidth(false, rowMenuContextFor !== undefined)),
-    [COLUMNS, rowMenuContextFor],
-  );
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The line a finger or stylus is shown when it selects a bar (ADR-0177 D2): the refusal reason, or
@@ -506,24 +491,6 @@ function GanttPanelBody({
   );
   const shownTouchNote =
     touchNote !== null && touchNote.id === selectedActivityId ? touchNote.text : null;
-
-  // The bar region's own width, measured so the zoom preset can frame its target range in the
-  // space actually available (`pxPerDayForPreset` is width-dependent by design — ADR-0056).
-  const [barRegionWidth, setBarRegionWidth] = useState(0);
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
-    const measure = (): void =>
-      setBarRegionWidth(Math.max(0, element.clientWidth - DEFAULT_GRID_WIDTH));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-    // `DEFAULT_GRID_WIDTH` is a per-render value (M5-T1 made the columns hideable), so it belongs in
-    // the deps: hiding a column changes how much room the bars have, and an effect that only ever
-    // measured on mount would leave `barRegionWidth` — and therefore the zoom preset's px-per-day —
-    // describing a grid that is no longer there, until the next window resize happened to fix it.
-  }, [DEFAULT_GRID_WIDTH]);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   /**
@@ -561,6 +528,25 @@ function GanttPanelBody({
    * `min`/`max`, derived from the same `column-widths.ts` arithmetic as `FIXED_WIDTH` above.
    */
   const gridWidth = gridPrefs.size;
+
+  // The bar region's own width, measured so the zoom preset can frame its target range in the
+  // space actually available (`pxPerDayForPreset` is width-dependent by design — ADR-0056).
+  //
+  // **It reads the pane as rendered (`gridWidth`) and no individual column's width** (ADR-0173 D5,
+  // #437): a divider drag moves the chart's left edge, so the preset must frame what remains, while
+  // a column drag only redistributes room inside the pane and must never rescale the bars. The pane
+  // already carries the row-menu column and the end gutter (#494). Hiding a column leaves it alone
+  // for the same reason: the pane stands and Activity absorbs the room.
+  const [barRegionWidth, setBarRegionWidth] = useState(0);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const measure = (): void => setBarRegionWidth(Math.max(0, element.clientWidth - gridWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [gridWidth]);
 
   /**
    * **One width per column, resolved against the pane** — used by the header, the activity rows and

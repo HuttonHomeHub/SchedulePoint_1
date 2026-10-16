@@ -12,6 +12,7 @@ import { useGanttGridPrefs } from '../model/use-gantt-grid-prefs';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
+import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { anActivity } from '@/test/activity-fixture';
 
 /** Same stub as `GanttPanel.test.tsx`: jsdom has no layout, so the virtualizer yields no rows. */
@@ -57,14 +58,21 @@ const cellWidths = (): number[] => {
 };
 
 /** A host in miniature: the same two hooks `plan-workspace-toolbar.tsx` owns, passed down whole. */
-function Host(): React.ReactElement {
+function Host({ zoomLevel }: { zoomLevel?: ZoomLevel }): React.ReactElement {
   const columnWidths = useGanttColumnWidths();
   const gridPrefs = useGanttGridPrefs({
     columns: IDENTITY,
     widths: columnWidths.widths,
     extraPinnedWidth: pinnedExtraWidth(false, false),
   });
-  return <GanttPanel activities={ACTIVITIES} columnWidths={columnWidths} gridPrefs={gridPrefs} />;
+  return (
+    <GanttPanel
+      activities={ACTIVITIES}
+      columnWidths={columnWidths}
+      gridPrefs={gridPrefs}
+      {...(zoomLevel === undefined ? {} : { zoomLevel })}
+    />
+  );
 }
 
 describe('GanttPanel — column widths', () => {
@@ -228,5 +236,57 @@ describe('GanttPanel — column widths', () => {
         String(584 + GRID_END_GUTTER),
       );
     });
+  });
+});
+
+describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () => {
+  const SEED = 584 + GRID_END_GUTTER;
+  beforeEach(() => localStorage.clear());
+  afterEach(() => Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth'));
+
+  const scrollerWidth = (px: number): void => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: px });
+  };
+  const storePane = (size: number): void =>
+    localStorage.setItem(
+      'schedulepoint:gantt-grid-width',
+      JSON.stringify({ collapsed: false, size }),
+    );
+  /** The timeline column's width: what the preset's px-per-day multiplies out to. */
+  const chartPx = (): number =>
+    parseFloat(
+      (screen.getByText('Timeline').closest('[role="columnheader"]') as HTMLElement).style.width,
+    );
+  /** One mount's chart width, then gone, so the next mount reads fresh storage. */
+  const measured = (): number => {
+    const mounted = render(<Host zoomLevel="week" />);
+    const px = chartPx();
+    mounted.unmount();
+    return px;
+  };
+
+  it('frames the chart that remains once the divider has moved', () => {
+    scrollerWidth(1200);
+    storePane(SEED);
+    const atDefault = measured();
+    storePane(SEED + 100);
+    const dragged = measured();
+    expect(dragged).toBeLessThan(atDefault);
+
+    // The same pane with 100 px less window has exactly the room the dragged pane leaves.
+    scrollerWidth(1200 - 100);
+    storePane(SEED);
+    expect(measured()).toBe(dragged);
+  });
+
+  it('does not rescale the bars when a column, rather than the pane, is dragged', () => {
+    scrollerWidth(1200);
+    storePane(SEED);
+    const before = measured();
+    localStorage.setItem(
+      COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify({ v: 1, widths: { code: 140 } }),
+    );
+    expect(measured()).toBe(before);
   });
 });

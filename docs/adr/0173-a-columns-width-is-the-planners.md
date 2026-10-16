@@ -54,10 +54,12 @@ single-pointer, non-dragging alternative.
   own handler (the ADR-0111 #192 shape), and still no 2.5.7 alternative.
 - **D4 — Paper keeps its own widths.** The printed programme (`PRINT_COLUMN_WIDTHS`) is a designed A4 or
   Letter landscape document, not a projection of a screen preference.
-- **D5 — The framing input is defaults-only.** Zoom framing (`barRegionWidth`) reads the **default**
-  grid width and never a planner's widths, so a column drag never rescales the bars. A structural test
-  pins it. The pre-existing divergence between that input and the dragged divider is recorded as
-  `docs/TECH_DEBT.md` #437, not fixed here.
+- **D5 — The framing input is the pane, never a column.** Zoom framing (`barRegionWidth`) reads the
+  default grid width and never a planner's widths, so a column drag never rescales the bars. A structural
+  test pins it. The pre-existing divergence between that input and the dragged divider was recorded as
+  `docs/TECH_DEBT.md` #437, not fixed here. _Amended 2026-10-16 (#437 closed):_ the input is now the pane
+  as rendered (`gridPrefs.size`, the Grid width divider), so a preset frames the room that remains after a
+  divider drag. A column's own width is still not an input, because Activity absorbs it inside the pane.
 - **D6 — One pointer-drag hook, no keys.** `usePointerDrag` (`components/ui/use-pointer-drag.ts`) is the
   pointer half of `PanelResizer` lifted verbatim: capture on press, one callback per animation frame,
   immediate flush and release on up or cancel, cancel on unmount. It claims **no key**; `PanelResizer`

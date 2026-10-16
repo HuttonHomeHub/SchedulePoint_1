@@ -235,13 +235,14 @@ describe('the Gantt grid width', () => {
     ).toBe(2);
   });
 
-  it('feeds the zoom framing from the DEFAULT widths and nothing a planner set', () => {
+  it("feeds the zoom framing from the pane as rendered and no column's width", () => {
     const panel = scan('src/features/gantt/components/GanttPanel.tsx');
     const measure = /setBarRegionWidth\(([^;]*)\)/.exec(panel);
     expect(measure, 'the bar-region measurement moved — re-point this scan').not.toBeNull();
-    // A planner-aware input would rescale every bar on every frame of a column change (ADR-0173 D5).
-    expect(measure![1]).toContain('DEFAULT_GRID_WIDTH');
-    expect(measure![1]).not.toMatch(/gridWidth|FIXED_WIDTH|columnWidths/);
+    // The pane (the Grid width divider, #437) moves the chart's left edge, so framing reads it. A
+    // COLUMN's width would rescale every bar on every frame of a column drag (ADR-0173 D5).
+    expect(measure![1]).toContain('gridWidth');
+    expect(measure![1]).not.toMatch(/FIXED_WIDTH|columnWidths|widths|resolveColumnWidth/);
   });
 
   it("keeps storage out of the edge: one write per gesture is the hook's, not the strip's", () => {
