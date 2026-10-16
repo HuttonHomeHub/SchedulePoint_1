@@ -67,6 +67,9 @@ services:
       com.centurylinklabs.watchtower.enable: 'false'
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
+      # `app` is the default when .env sets nothing. Postgres reads this only when the data directory
+      # is first created, so changing it later needs an ALTER USER too: see "Set a database
+      # password" in docs/guides/back-up-and-restore.md. The API logs a warning while it is `app`.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
       POSTGRES_DB: ${POSTGRES_DB:-app}
     # No `ports:` — the database is reachable only from the stack's own network (ADR-0192 D10).

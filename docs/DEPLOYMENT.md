@@ -1140,6 +1140,12 @@ The owner's step-by-step version is [`docs/guides/back-up-and-restore.md`](guide
 This section is the reference. Design and decisions: ADR-0192 and
 [`docs/specs/database-backup/`](specs/database-backup/feature-spec.md).
 
+The database password defaults to `app` when `.env` sets no `POSTGRES_PASSWORD`, and Postgres reads it
+only when the data directory is first created, so changing it on an existing installation is an
+`ALTER USER` as well as an `.env` edit. The API logs `database.default_password` at start-up while it is
+`app`; the steps are in the guide's
+[Set a database password](guides/back-up-and-restore.md#set-a-database-password-recommended-about-10-minutes).
+
 ### What runs
 
 - **The `backup` service** (`docker-compose.release.yml`, and `docker-compose.yml` for development)

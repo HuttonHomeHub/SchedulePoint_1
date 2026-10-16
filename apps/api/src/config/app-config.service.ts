@@ -34,6 +34,10 @@ export class AppConfigService {
     return this.nodeEnv === 'production';
   }
 
+  get databaseUrl(): string {
+    return this.config.get('DATABASE_URL', { infer: true });
+  }
+
   get port(): number {
     return this.config.get('API_PORT', { infer: true });
   }
