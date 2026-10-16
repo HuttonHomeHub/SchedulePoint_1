@@ -140,7 +140,7 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
   }
 
   // Nest's router error layer turns any `SyntaxError` into `new BadRequestException(err.message)`
-  // before a filter sees it (`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON
+  // before a filter sees it (`@nestjs/platform-express` `adapters/express-adapter.js:447-448`). body-parser's JSON
   // failure IS a `SyntaxError`, so the handler must hand on something that is not one, or the filter
   // receives an HttpException carrying "Unexpected end of JSON input" and echoes it.
   it('hands on a parser SyntaxError as a non-SyntaxError that keeps only its type and status', () => {

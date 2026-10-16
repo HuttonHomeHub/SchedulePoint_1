@@ -538,7 +538,7 @@ prefer a shape that is not on the success path at all.
 **What was decided.** The reconciliation pass entry below says `entity.parse.failed` "still reaches
 the opaque-500 branch", and `#412` was filed on that. **It was half wrong.** Nest's router error layer
 rewrites any `SyntaxError` into `new BadRequestException(err.message)` before a filter runs
-(`@nestjs/core` `router/routes-resolver.js:99-100`). body-parser's JSON failure is a `SyntaxError`,
+(`@nestjs/platform-express` `adapters/express-adapter.js:447-448`, where NestJS 11 had it in `@nestjs/core`'s router). body-parser's JSON failure is a `SyntaxError`,
 so malformed JSON was always a **400, but one echoing the parser's text**. The other cases the pass
 named (charset, encoding, corrupt compression) really were 500s.
 
