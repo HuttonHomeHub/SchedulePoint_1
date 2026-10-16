@@ -17,8 +17,8 @@ export function isBodyParserError(error: unknown): boolean {
 /**
  * What {@link tagBodyParserErrors} hands on instead of the parser's own error. **It must not be a `SyntaxError`.**
  * body-parser's JSON failure IS one, and Nest's router error layer rewrites any `SyntaxError` into
- * `new BadRequestException(err.message)` before a filter sees it (`@nestjs/core`
- * `router/routes-resolver.js:99-100`, `mapExternalException`) — so the filter received an
+ * `new BadRequestException(err.message)` before a filter sees it (`@nestjs/platform-express`
+ * `adapters/express-adapter.js:447-448`, `mapException`) — so the filter received an
  * `HttpException` carrying the parser's text ("Unexpected end of JSON input"), echoed it to the
  * client, and never saw the `type` tag. Found by `body-limit.e2e-spec.ts`; the filter's unit spec
  * could not see it, because it never runs Nest's router. Only `type` and `status` are carried, the

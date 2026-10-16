@@ -1,6 +1,6 @@
 # @repo/api
 
-The SchedulePoint REST API: **NestJS 11 + TypeScript**, **Prisma** ORM over **PostgreSQL**,
+The SchedulePoint REST API: **NestJS 12 + TypeScript**, **Prisma** ORM over **PostgreSQL**,
 authentication via **Better Auth**, and an **OpenAPI** contract generated with
 `@nestjs/swagger`.
 

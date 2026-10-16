@@ -89,7 +89,7 @@ performance**. Concretely:
 | Language       | TypeScript (strict) on Node.js 22 LTS               |
 | Frontend       | React 19 + Vite                                     |
 | Styling / UI   | Tailwind CSS v4, hand-rolled APG primitives, Lucide |
-| Backend        | NestJS 11                                           |
+| Backend        | NestJS 12                                           |
 | Database / ORM | PostgreSQL 17 + Prisma                              |
 | API            | REST, documented with OpenAPI (`@nestjs/swagger`)   |
 | Auth           | Better Auth (self-hosted) — see ADR-0003            |
