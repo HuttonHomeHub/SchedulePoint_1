@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as GuestApi from '../guest-api';
@@ -133,6 +133,31 @@ describe('GuestPlanView', () => {
 
     const panel = await screen.findByTestId('tsld-panel');
     expect(panel.dataset.barDateSource).toBe('visual');
+  });
+
+  it('names the header dates "Plan dates" and lists the data date and project finish', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
+    vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    const dates = await screen.findByLabelText('Plan dates');
+    expect(within(dates).getByText('Data date')).toBeInTheDocument();
+    expect(within(dates).getByText('Project finish')).toBeInTheDocument();
+  });
+
+  it('renders no dates list at all when the plan has neither date', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue({
+      ...PLAN,
+      dataDate: null,
+      summary: { ...PLAN.summary, dataDate: null, projectFinish: null },
+    });
+    vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    await screen.findByRole('heading', { name: 'Riverside Tower' });
+    expect(screen.queryByLabelText('Plan dates')).not.toBeInTheDocument();
   });
 
   it('shows an empty state for a plan with no activities (no canvas)', async () => {

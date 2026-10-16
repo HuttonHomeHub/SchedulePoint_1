@@ -1,5 +1,5 @@
 import type { InterchangeReport } from '@repo/interchange';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { InterchangeReportTable } from './InterchangeReportTable';
@@ -35,6 +35,13 @@ describe('InterchangeReportTable', () => {
     expect(screen.getByText('214')).toBeInTheDocument();
     expect(screen.getByText('231')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('names the counts list "Mapped" so the figures are not an anonymous list', () => {
+    render(<InterchangeReportTable report={report} />);
+    const list = screen.getByLabelText('Mapped');
+    expect(list.tagName).toBe('DL');
+    expect(within(list).getByText('Activities').nextElementSibling).toHaveTextContent('214');
   });
 
   it('shows the layout counts only for a file that carried a layout', () => {

@@ -177,6 +177,13 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   if (activitiesQuery.isPending || dependenciesQuery.isPending) return <GuestLoading />;
 
   const projectFinish = plan.summary.projectFinish;
+  // An empty list would be an announced, named `<dl>` with nothing in it, so no dates means no strip.
+  const planDates = [
+    ...(plan.dataDate ? [{ label: 'Data date', value: formatCalendarDate(plan.dataDate) }] : []),
+    ...(projectFinish
+      ? [{ label: 'Project finish', value: formatCalendarDate(projectFinish) }]
+      : []),
+  ];
 
   return (
     // Give the read-only canvas its own polite live region (its selection/announcements), independent of
@@ -216,19 +223,14 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
             <h1 className="text-base font-semibold">{plan.name}</h1>
             <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
             <span className="text-muted-foreground text-sm">Read-only shared view</span>
-            <ContextStrip
-              label="Plan dates"
-              framed={false}
-              className="ml-auto gap-y-1"
-              facts={[
-                ...(plan.dataDate
-                  ? [{ label: 'Data date', value: formatCalendarDate(plan.dataDate) }]
-                  : []),
-                ...(projectFinish
-                  ? [{ label: 'Project finish', value: formatCalendarDate(projectFinish) }]
-                  : []),
-              ]}
-            />
+            {planDates.length === 0 ? null : (
+              <ContextStrip
+                label="Plan dates"
+                framed={false}
+                className="ml-auto gap-y-1"
+                facts={planDates}
+              />
+            )}
           </header>
 
           <main className="min-h-0 flex-1 p-4">
