@@ -24,6 +24,7 @@ function build(
   options: {
     enabled?: boolean;
     sweepAll?: () => Promise<RetentionSweepResult[]>;
+    stopping?: boolean;
     alertUrl?: string | undefined;
   } = {},
 ) {
@@ -35,14 +36,20 @@ function build(
     retentionSweepIntervalMinutes: 60,
     mailAlertUrl: 'alertUrl' in options ? options.alertUrl : 'https://alerts.example/hook',
   } as AppConfigService;
+  const runnerState = { stopping: options.stopping ?? false };
   const store = new RetentionStatusStore();
   const service = new RetentionSweepService(
     config,
-    { sweepAll } as unknown as RetentionSweepRunner,
+    {
+      sweepAll,
+      get isStopping() {
+        return runnerState.stopping;
+      },
+    } as unknown as RetentionSweepRunner,
     store,
     logger as never,
   );
-  return { service, sweepAll, store };
+  return { service, sweepAll, store, runnerState };
 }
 
 beforeEach(() => {
@@ -60,6 +67,9 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+const eventsOf = (log: ReturnType<typeof vi.fn>): string[] =>
+  log.mock.calls.map(([fields]) => (fields as { event?: string }).event ?? '');
 
 /** The JSON body of the nth alert POST. `body` is a `BodyInit`, so it is narrowed rather than cast. */
 const alertBody = (index: number): string => {
@@ -303,5 +313,79 @@ describe('RetentionSweepService', () => {
     const periodKeys = Object.keys(logged).filter((key) => key.endsWith('Days'));
 
     expect(periodKeys, `logged ${periodKeys.join(', ')}`).toHaveLength(RETENTION_TABLES.length);
+  });
+
+  describe('shutdown (docs/TECH_DEBT.md #303)', () => {
+    it('does not start a sweep once the app is stopping, and says so without a failure', async () => {
+      const { service, sweepAll, store } = build({ stopping: true });
+
+      service.onApplicationBootstrap();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(sweepAll).not.toHaveBeenCalled();
+      expect(eventsOf(logger.info)).toContain('retention.sweep_abandoned');
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(store.snapshot().lastRunAt).toBeNull();
+    });
+
+    it('reports a run stopped between tables as abandoned: not failed, not recorded, no alert', async () => {
+      const { service, runnerState, store } = build({
+        sweepAll: () => {
+          runnerState.stopping = true;
+          return Promise.resolve([result('csp_reports')]);
+        },
+      });
+
+      await service.sweepNow();
+
+      expect(eventsOf(logger.info)).toContain('retention.sweep_abandoned');
+      expect(eventsOf(logger.info)).not.toContain('retention.swept');
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(store.snapshot().lastRunAt).toBeNull();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('reports a table interrupted mid-batch as abandoned', async () => {
+      const { service, runnerState } = build({
+        sweepAll: () => {
+          runnerState.stopping = true;
+          return Promise.resolve(
+            RETENTION_TABLES.map((table, index) =>
+              result(table, index === RETENTION_TABLES.length - 1 ? { interrupted: true } : {}),
+            ),
+          );
+        },
+      });
+
+      await service.sweepNow();
+
+      expect(eventsOf(logger.info)).toContain('retention.sweep_abandoned');
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('still logs retention.sweep_failed for a genuine failure while running', async () => {
+      // The alert watches this event, so stopping must not become a way to hide a real one.
+      const { service, store } = build({
+        sweepAll: () =>
+          Promise.resolve([result('csp_reports', { error: 'PrismaClientKnownError' })]),
+      });
+
+      await service.sweepNow();
+
+      expect(eventsOf(logger.warn)).toContain('retention.sweep_failed');
+      expect(eventsOf(logger.info)).not.toContain('retention.sweep_abandoned');
+      expect(store.snapshot().consecutiveFailures).toBe(1);
+    });
+
+    it('does not delay readiness behind a sweep that never finishes', () => {
+      const { service, sweepAll } = build({ sweepAll: () => new Promise(() => undefined) });
+
+      // Synchronous return, with the sweep started and still pending.
+      service.onApplicationBootstrap();
+
+      expect(sweepAll).toHaveBeenCalledTimes(1);
+    });
   });
 });

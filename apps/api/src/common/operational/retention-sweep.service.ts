@@ -8,6 +8,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { AppConfigService } from '../../config/app-config.service';
 
 import { postAlert } from './alert-dispatch';
+import { RETENTION_POLICIES } from './retention-policy';
 import { RetentionStatusStore } from './retention-status.store';
 import { RetentionSweepRunner } from './retention-sweep.runner';
 
@@ -145,11 +146,29 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
    */
   async sweepNow(): Promise<void> {
     if (this.running) return;
+    // The app is shutting down: do not start what the engine will not be around to finish.
+    if (this.runner.isStopping) {
+      this.logAbandoned(0);
+      return;
+    }
     this.running = true;
     const at = new Date();
 
     try {
       const results = await this.runner.sweepAll(at);
+
+      // Shutdown arrived mid-run. Not a failure and not a clean run, so it is neither recorded (a
+      // partial list would paint the staff console with tables that were never reached) nor
+      // alerted on. A genuine failure never lands here: it carries an `error` and the runner only
+      // stops starting work, it does not reclassify what already went wrong.
+      if (
+        this.runner.isStopping &&
+        (results.length < RETENTION_POLICIES.length ||
+          results.some((result) => result.interrupted === true))
+      ) {
+        this.logAbandoned(results.length);
+        return;
+      }
       this.status.record(results, at);
 
       const failed = results.filter((result) => result.error !== undefined);
@@ -208,6 +227,13 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
       // later tick and present as "retention stopped working" with nothing in the log to explain it.
       this.running = false;
     }
+  }
+
+  private logAbandoned(tablesFinished: number): void {
+    this.logger.info(
+      { event: 'retention.sweep_abandoned', tablesFinished },
+      'the app is shutting down; the retention sweep stopped and the next run will resume it',
+    );
   }
 
   /**

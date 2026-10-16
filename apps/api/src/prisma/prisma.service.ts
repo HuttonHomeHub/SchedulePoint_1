@@ -38,6 +38,7 @@ export const BATCH_TRANSACTION_TIMEOUT_MS = 60_000;
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly shutdownDrains: Array<() => Promise<void>> = [];
 
   constructor() {
     super({ transactionOptions: { timeout: TRANSACTION_TIMEOUT_MS } });
@@ -48,7 +49,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     this.logger.log('Database connection established');
   }
 
+  /**
+   * Register work that must have finished with the database before the engine goes away.
+   *
+   * **The point is that the ordering lives here, where the disconnect is, rather than in Nest's
+   * hook order.** A consumer that awaits its own in-flight query in `onModuleDestroy` is correct
+   * only if its module is destroyed before this one — an implementation detail of `@nestjs/core`
+   * (`docs/TECH_DEBT.md` #303) that a major bump can reverse without failing anything. Draining
+   * from inside this hook makes it true whichever module Nest destroys first.
+   */
+  registerShutdownDrain(drain: () => Promise<void>): void {
+    this.shutdownDrains.push(drain);
+  }
+
   async onModuleDestroy(): Promise<void> {
+    // `allSettled`, not `all`: a drain that fails must not leave the engine connected, and the
+    // failure is logged rather than lost.
+    const settled = await Promise.allSettled(this.shutdownDrains.map((drain) => drain()));
+    for (const outcome of settled) {
+      if (outcome.status === 'rejected') {
+        this.logger.error('A shutdown drain failed; disconnecting anyway', outcome.reason);
+      }
+    }
     await this.$disconnect();
     this.logger.log('Database connection closed');
   }
