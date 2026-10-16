@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RETENTION_POLICIES } from './retention-policy';
 import { BATCH_SIZE, RetentionSweepRunner } from './retention-sweep.runner';
@@ -33,6 +33,10 @@ function build(executeRaw: () => Promise<number>) {
 }
 
 describe('RetentionSweepRunner shutdown', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('registers its drain with the Prisma service so the disconnect waits for it', () => {
     const { registerShutdownDrain } = build(() => Promise.resolve(0));
 

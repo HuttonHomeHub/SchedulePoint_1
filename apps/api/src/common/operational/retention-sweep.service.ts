@@ -10,7 +10,7 @@ import { AppConfigService } from '../../config/app-config.service';
 import { postAlert } from './alert-dispatch';
 import { RETENTION_POLICIES } from './retention-policy';
 import { RetentionStatusStore } from './retention-status.store';
-import { RetentionSweepRunner } from './retention-sweep.runner';
+import { type RetentionSweepResult, RetentionSweepRunner } from './retention-sweep.runner';
 
 /**
  * How many consecutive failed runs earn an alert (ADR-0087 M4).
@@ -148,7 +148,7 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
     if (this.running) return;
     // The app is shutting down: do not start what the engine will not be around to finish.
     if (this.runner.isStopping) {
-      this.logAbandoned(0);
+      this.logAbandoned([]);
       return;
     }
     this.running = true;
@@ -166,7 +166,7 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
         (results.length < RETENTION_POLICIES.length ||
           results.some((result) => result.interrupted === true))
       ) {
-        this.logAbandoned(results.length);
+        this.logAbandoned(results);
         return;
       }
       this.status.record(results, at);
@@ -229,9 +229,19 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
     }
   }
 
-  private logAbandoned(tablesFinished: number): void {
+  /**
+   * `failedTables` is carried because an abandoned run is neither recorded nor alerted on: if table
+   * one had genuinely failed before shutdown cut the run short, the runner already logged that at
+   * error, and this line keeps the two readable together instead of the failure vanishing from the
+   * status counter without a trace.
+   */
+  private logAbandoned(results: readonly RetentionSweepResult[]): void {
     this.logger.info(
-      { event: 'retention.sweep_abandoned', tablesFinished },
+      {
+        event: 'retention.sweep_abandoned',
+        tablesFinished: results.length,
+        failedTables: results.filter((r) => r.error !== undefined).map((r) => r.table),
+      },
       'the app is shutting down; the retention sweep stopped and the next run will resume it',
     );
   }

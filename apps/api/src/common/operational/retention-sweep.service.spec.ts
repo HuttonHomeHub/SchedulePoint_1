@@ -365,6 +365,25 @@ describe('RetentionSweepService', () => {
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
+    it('names a table that genuinely failed before the run was abandoned', async () => {
+      const { service, runnerState } = build({
+        sweepAll: () => {
+          runnerState.stopping = true;
+          return Promise.resolve([result('csp_reports', { error: 'PrismaClientKnownError' })]);
+        },
+      });
+
+      await service.sweepNow();
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'retention.sweep_abandoned',
+          failedTables: ['csp_reports'],
+        }),
+        expect.any(String),
+      );
+    });
+
     it('still logs retention.sweep_failed for a genuine failure while running', async () => {
       // The alert watches this event, so stopping must not become a way to hide a real one.
       const { service, store } = build({

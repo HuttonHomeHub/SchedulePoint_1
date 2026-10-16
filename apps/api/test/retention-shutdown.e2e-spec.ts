@@ -51,7 +51,10 @@ describe.skipIf(!hasDatabase)('Retention sweep vs shutdown (e2e)', () => {
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
-    // Explicit: the boot sweep is the subject, so it must not depend on a default.
+    // Explicit: the boot sweep is the subject, so it must not depend on a default. Set before the
+    // dynamic import below because `ConfigModule` validates `process.env` when `AppModule` loads;
+    // vitest gives each spec file its own module graph, so no earlier file's config is cached here,
+    // and the race below fails loudly if the sweep did not arm.
     process.env.RETENTION_SWEEP_ENABLED = 'true';
 
     const { AppModule } = await import('../src/app.module');
@@ -71,7 +74,13 @@ describe.skipIf(!hasDatabase)('Retention sweep vs shutdown (e2e)', () => {
     // The statement the sweep issues is replaced by one that is slow INSIDE the engine. Delaying it
     // in JS would not do: Prisma reconnects lazily, so a statement sent after the disconnect
     // succeeds and the race this spec exists for would never happen.
-    vi.spyOn(prisma, '$executeRaw').mockImplementation((() => {
+    vi.spyOn(prisma, '$executeRaw').mockImplementation(((
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ) => {
+      // Only the sweep's own DELETE is slowed; anything else that touches the database during
+      // boot or close runs untouched.
+      if (!strings.join('?').includes('DELETE FROM')) return real(strings, ...values);
       markStarted();
       return real(Prisma.sql`SELECT pg_sleep(${STATEMENT_SLEEP_SECONDS})`);
     }) as never);
@@ -82,7 +91,18 @@ describe.skipIf(!hasDatabase)('Retention sweep vs shutdown (e2e)', () => {
     });
     configureHttpApp(app);
     await app.init();
-    await firstStatementStarted;
+    await Promise.race([
+      firstStatementStarted,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          reject(
+            new Error(
+              'the boot sweep never issued a DELETE; RETENTION_SWEEP_ENABLED was not read as true',
+            ),
+          );
+        }, 10_000).unref(),
+      ),
+    ]);
     await app.close();
     closed = true;
   });
