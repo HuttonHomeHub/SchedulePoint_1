@@ -30,7 +30,13 @@
 - **Foreign keys:** `<referenced_singular>_id` (`organization_id`).
 - **Indexes:** `idx_<table>_<cols>`; **unique:** `uq_<table>_<cols>`;
   **checks:** `ck_<table>_<rule>`.
-- **Enums:** `snake_case` type, `SCREAMING_SNAKE_CASE` values.
+- **Enums:** `PascalCase` Prisma type (`ConstraintType`, `SchedulingMode`), `SCREAMING_SNAKE_CASE`
+  values. A new enum follows that and carries **no** `@@map`, so its Postgres type is the
+  PascalCase name. Four of the schema's 27 enums predate the pattern and carry an `@@map` to a
+  `snake_case` database type — `ActivityHistoryScope` (`activity_history_scope`),
+  `ActivityHistoryOrigin` (`activity_history_origin`), `AuditActorType` (`audit_actor_type`) and
+  `AuditOutcome` (`audit_outcome`). Existing enum types are not renamed: a rename is a migration
+  per type, on types referenced across many models, for no user-visible benefit.
 - **Booleans:** positive (`is_active`), not negated.
 - In Prisma models we use `@@map`/`@map` so Prisma's `camelCase` fields map to
   `snake_case` columns, keeping both idioms clean.

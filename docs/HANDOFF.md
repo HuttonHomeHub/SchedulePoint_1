@@ -168,7 +168,7 @@ generate` has run and stale `.eslintcache` files are deleted. Turbo can stop oth
   starts Postgres.
 - **The shell always mounts an empty `role="status"` live region** (ADR-0179): scope any e2e
   `getByRole('status')`. Signed-in e2e below 1024 must opt in with `acknowledgeViewportNotice`.
-- **`plan-switch.spec.ts:109` flaked** under load; the `newPlan` helper had a race (it skipped the project
+- **A test in `apps/web/e2e-workspace-chrome/plan-switch.spec.ts` flaked** under load; the `newPlan` helper had a race (it skipped the project
   link click if the Explorer had not drawn it) and now waits for whichever of the link or the "New plan"
   button appears first (fixed; #435 is now closed).
 - **A stale API server on :3000 poisons later local runs** (`curl -s localhost:3000/api/v1/health` should
