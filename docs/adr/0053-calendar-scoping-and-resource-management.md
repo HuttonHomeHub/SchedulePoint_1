@@ -476,6 +476,15 @@ per-descendant advisory-lock loop batched into one `unnest` statement — ~830 m
 distinction end to end and runs as its own CI step; the flag-off parity suites stay green with the
 flag explicitly pinned off, which is the rollback contract.
 
+**Amendment 2026-10-16 (`docs/TECH_DEBT.md` #336, closed).** The `pg_trgm` escalation named in §4 and
+in the Follow-ups above as a GIN index on `lower(name)` is wrong, and the original text is left as
+written. The query is `name ILIKE '%q%'` (Prisma `contains` with `mode: 'insensitive'`, see
+`calendarSearchWhere` in `apps/api/src/modules/calendars/calendar.repository.ts`), and PostgreSQL
+uses an expression index only when the predicate contains that exact expression, so an index on
+`lower(name)` is never chosen. The correct escalation is `gin (name gin_trgm_ops)`, as
+`docs/API.md` already states for clients. Resources also OR on `code`, which needs its own index or a
+combined expression with a matching query rewrite; that remains a decision at the time.
+
 ## References
 
 - ADR-0012 / ADR-0016 — RBAC + resource scoping; tenancy & role model

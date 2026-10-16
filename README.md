@@ -101,6 +101,7 @@ Or run the full stack in containers:
 
 ```bash
 cp .env.example .env
+mkdir -p backups   # yours, not root-owned: Docker would create it as root and the backup service could not write
 docker compose up -d
 ```
 
