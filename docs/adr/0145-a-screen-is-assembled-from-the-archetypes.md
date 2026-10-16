@@ -333,8 +333,8 @@ M4 declined `docs/TECH_DEBT.md` #335 (merge a column's `headClassName`/`cellClas
 on 2026-10-16 (`docs/specs/shared-primitive-tidy/spec.md` §B.1): there were **five**, nothing in the
 code recorded that they were deliberate, and the other 14 omissions were actions columns dropping
 `pr-4` on purpose. `DataTable` now composes `cn(DEFAULT, override)`; the actions columns say
-`pr-0` explicitly, the five unpadded columns regain `py-2 pr-4`, and the restating columns stopped
-restating. The weight ratchet fell for it (`SCREEN_WEIGHT_CEILING` 158 to 137). The decline's
+`pr-0` explicitly, the five unpadded columns regain `py-2 pr-4`, and the 15 restatements of the default
+(6 heads and 9 cells, across 9 column definitions) were dropped. The weight ratchet fell for it (`SCREEN_WEIGHT_CEILING` 158 to 137). The decline's
 reasoning stands as a record of what was known in M4; it no longer governs.
 
 ## References

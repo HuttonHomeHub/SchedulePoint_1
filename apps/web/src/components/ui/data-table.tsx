@@ -135,8 +135,9 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
 const HEAD_DEFAULT = 'py-2 pr-4 font-medium';
 const CELL_DEFAULT = 'py-2 pr-4';
 
-/** A column's head classes, its declared width composed with whatever the caller passed. */
 /**
+ * A column's head classes: the default, the caller's, then the declared width.
+ *
  * **The width preset is composed LAST, so it wins a same-modifier collision.**
  *
  * `cn` is `tailwind-merge`, so on a conflict the later class survives: a caller writing

@@ -695,6 +695,14 @@ describe('DataTable — class overrides merge with the default', () => {
     expect(head.split(' ')).toContain('font-medium');
   });
 
+  it('lets a conflicting class replace the default, as the Select column relies on', () => {
+    const { cell, head } = settled({ cellClassName: 'pr-3', headClassName: 'pr-3' });
+    expect(cell.split(' ')).toContain('pr-3');
+    expect(cell.split(' ')).not.toContain('pr-4');
+    expect(head.split(' ')).toContain('pr-3');
+    expect(head.split(' ')).not.toContain('pr-4');
+  });
+
   it('keeps a responsive `hidden … lg:table-cell` pair', () => {
     const { cell } = settled({ cellClassName: 'hidden lg:table-cell' });
     expect(cell.split(' ')).toEqual(expect.arrayContaining(['hidden', 'lg:table-cell', 'pr-4']));
@@ -710,6 +718,8 @@ describe('DataTable — class overrides merge with the default', () => {
     const loading = skeleton({ ...column, width: 'fit', wrap: 'anywhere' });
     expect(loading.cell).toBe(plain.cell);
     expect(loading.head).toBe(plain.head);
+    expect(loading.head.split(' ')).not.toContain('pr-4');
+    expect(loading.head.split(' ')).toContain('pr-0');
     expect(withPresets.cell).not.toBe(loading.cell);
   });
 });
