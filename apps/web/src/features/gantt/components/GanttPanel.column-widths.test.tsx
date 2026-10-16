@@ -7,6 +7,7 @@ import {
   pinnedExtraWidth,
 } from '../layout/column-widths';
 import { GANTT_COLUMNS } from '../layout/grid-columns';
+import type { GanttColumnKey } from '../model/gantt-view-state';
 import { useGanttColumnWidths } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs } from '../model/use-gantt-grid-prefs';
 
@@ -279,7 +280,7 @@ describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () 
     expect(measured()).toBe(dragged);
   });
 
-  it('does not rescale the bars when a column, rather than the pane, is dragged', () => {
+  it('does not rescale the bars when another column, rather than the pane, is widened', () => {
     scrollerWidth(1200);
     storePane(SEED);
     const before = measured();
@@ -288,5 +289,51 @@ describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () 
       JSON.stringify({ v: 1, widths: { code: 140 } }),
     );
     expect(measured()).toBe(before);
+  });
+
+  it("re-frames when Activity's edge moves the pane, as the divider does", () => {
+    scrollerWidth(1200);
+    storePane(SEED);
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => cb(0));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    HTMLElement.prototype.releasePointerCapture = vi.fn();
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => true);
+    try {
+      render(<Host zoomLevel="week" />);
+      const before = chartPx();
+      const edge = screen
+        .getByRole('columnheader', { name: 'Activity' })
+        .querySelector<HTMLElement>('[data-gantt-column-edge]')!;
+      fireEvent.pointerDown(edge, { pointerId: 1, clientX: 0 });
+      fireEvent.pointerMove(edge, { pointerId: 1, clientX: 40 });
+      fireEvent.pointerUp(edge, { pointerId: 1, clientX: 40 });
+      expect(chartPx()).toBeLessThan(before);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not rescale the bars when a column is hidden and the pane stands', () => {
+    scrollerWidth(1200);
+    storePane(SEED);
+    const before = measured();
+    const mounted = render(
+      <GanttPanel
+        activities={ACTIVITIES}
+        zoomLevel="week"
+        viewState={{
+          sort: { key: 'name', direction: 'asc' },
+          hiddenColumns: new Set<GanttColumnKey>(['predecessors', 'code']),
+          collapsed: new Set(),
+          onSortChange: () => {},
+          onHiddenColumnsChange: () => {},
+          onCollapsedChange: () => {},
+          collapsedWithheld: 0,
+        }}
+      />,
+    );
+    expect(chartPx()).toBe(before);
+    mounted.unmount();
   });
 });

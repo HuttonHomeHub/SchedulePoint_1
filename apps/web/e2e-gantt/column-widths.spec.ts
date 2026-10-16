@@ -472,15 +472,16 @@ test('a zoom preset frames the chart that remains after the Grid width divider i
   await page.mouse.move(line.x + line.width / 2, y);
   await page.mouse.down();
   await page.mouse.move(line.x + line.width / 2 + 80, y, { steps: 8 });
-  await page.mouse.up();
-  await expect.poll(async () => (await framing()).pane - before.pane).toBeGreaterThanOrEqual(76);
-
-  // The scale follows the pane on the next measure, so poll for it.
+  // Re-framing is live (ADR-0173 D5): the bars fit the room that remains while the pointer is still
+  // down, not only after release.
   await expect
     .poll(async () => Math.abs((await framing()).ratio / before.ratio - 1), {
-      message: 'the preset still frames the chart for the pane before the drag',
+      message: 'mid-drag, the preset frames the chart for the pane before the drag',
     })
     .toBeLessThan(0.02);
+  await page.mouse.up();
+  await expect.poll(async () => (await framing()).pane - before.pane).toBeGreaterThanOrEqual(76);
+  expect(Math.abs((await framing()).ratio / before.ratio - 1)).toBeLessThan(0.02);
   await chartMeetsGrid(page, 'after a preset re-framed for the dragged divider');
 });
 

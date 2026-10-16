@@ -532,21 +532,25 @@ function GanttPanelBody({
   // The bar region's own width, measured so the zoom preset can frame its target range in the
   // space actually available (`pxPerDayForPreset` is width-dependent by design — ADR-0056).
   //
-  // **It reads the pane as rendered (`gridWidth`) and no individual column's width** (ADR-0173 D5,
-  // #437): a divider drag moves the chart's left edge, so the preset must frame what remains, while
-  // a column drag only redistributes room inside the pane and must never rescale the bars. The pane
-  // already carries the row-menu column and the end gutter (#494). Hiding a column leaves it alone
-  // for the same reason: the pane stands and Activity absorbs the room.
-  const [barRegionWidth, setBarRegionWidth] = useState(0);
+  // **It reads the pane as rendered (`gridWidth`) and no other column's width** (ADR-0173 D5, #437):
+  // the pane is set by the Grid width divider and by Activity's edge, and either moves the chart's
+  // left edge, so the preset frames what remains. Another column's drag only redistributes room
+  // inside the pane and must never rescale the bars; hiding a column leaves it alone for the same
+  // reason. The pane already carries the row-menu column and the end gutter (#494).
+  //
+  // Only the scroller's width is state: the subtraction happens in render, so the framing never
+  // lags the pane by a frame. It is live during a drag (PanelResizer exposes no drag-end signal).
+  const [scrollerWidth, setScrollerWidth] = useState(0);
   useEffect(() => {
     const element = scrollRef.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
-    const measure = (): void => setBarRegionWidth(Math.max(0, element.clientWidth - gridWidth));
+    const measure = (): void => setScrollerWidth(element.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [gridWidth]);
+  }, []);
+  const barRegionWidth = Math.max(0, scrollerWidth - gridWidth);
 
   /**
    * **One width per column, resolved against the pane** — used by the header, the activity rows and

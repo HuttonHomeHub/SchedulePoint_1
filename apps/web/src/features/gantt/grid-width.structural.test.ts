@@ -235,14 +235,19 @@ describe('the Gantt grid width', () => {
     ).toBe(2);
   });
 
-  it("feeds the zoom framing from the pane as rendered and no column's width", () => {
+  it("feeds the zoom framing from the pane as rendered and no other column's width", () => {
     const panel = scan('src/features/gantt/components/GanttPanel.tsx');
-    const measure = /setBarRegionWidth\(([^;]*)\)/.exec(panel);
-    expect(measure, 'the bar-region measurement moved — re-point this scan').not.toBeNull();
-    // The pane (the Grid width divider, #437) moves the chart's left edge, so framing reads it. A
-    // COLUMN's width would rescale every bar on every frame of a column drag (ADR-0173 D5).
-    expect(measure![1]).toContain('gridWidth');
-    expect(measure![1]).not.toMatch(/FIXED_WIDTH|columnWidths|widths|resolveColumnWidth/);
+    const region = /const barRegionWidth = ([^;]*);/.exec(panel);
+    expect(region, 'the bar-region derivation moved — re-point this scan').not.toBeNull();
+    // The pane (the Grid width divider or Activity's edge, #437) moves the chart's left edge, so
+    // framing reads it. Another COLUMN's width would rescale every bar on every frame of that
+    // column's drag (ADR-0173 D5).
+    expect(region![1]).toContain('gridWidth');
+    expect(region![1]).not.toMatch(/FIXED_WIDTH|columnWidths|widths|resolveColumnWidth/);
+    // And the measurement is the scroller's width alone, so no column can enter by the side.
+    const measure = /setScrollerWidth\(([^;]*)\)/.exec(panel);
+    expect(measure, 'the scroller measurement moved — re-point this scan').not.toBeNull();
+    expect(measure![1]).not.toMatch(/gridWidth|FIXED_WIDTH|columnWidths|widths/);
   });
 
   it("keeps storage out of the edge: one write per gesture is the hook's, not the strip's", () => {
