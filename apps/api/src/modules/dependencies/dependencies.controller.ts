@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -26,7 +27,6 @@ import { ApiLockedResponse } from '../../common/decorators/api-locked-response.d
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { DependenciesService } from './dependencies.service';
 import { DependencyResponseDto } from './dto/dependency-response.dto';
@@ -55,7 +55,7 @@ export class DependenciesController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('dependencyId', ParseUuidPipe) dependencyId: string,
+    @Param('dependencyId', ParseUUIDPipe) dependencyId: string,
   ): Promise<DependencyResponseDto> {
     return DependencyResponseDto.from(await this.service.get(principal, orgSlug, dependencyId));
   }
@@ -73,7 +73,7 @@ export class DependenciesController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('dependencyId', ParseUuidPipe) dependencyId: string,
+    @Param('dependencyId', ParseUUIDPipe) dependencyId: string,
     @Body() dto: UpdateDependencyDto,
   ): Promise<DependencyResponseDto> {
     return DependencyResponseDto.from(
@@ -99,7 +99,7 @@ export class DependenciesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('dependencyId', ParseUuidPipe) dependencyId: string,
+    @Param('dependencyId', ParseUUIDPipe) dependencyId: string,
     @Query() query: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {

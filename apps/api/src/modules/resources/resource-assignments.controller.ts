@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -28,7 +29,6 @@ import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ResourceAssignmentResponseDto } from './dto/assignment-response.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -65,7 +65,7 @@ export class ResourceAssignmentsController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
   ): Promise<ResourceAssignmentResponseDto[]> {
     const { items, canReadCost } = await this.service.list(principal, orgSlug, activityId);
     return items.map((row) => ResourceAssignmentResponseDto.from(row, canReadCost));
@@ -104,7 +104,7 @@ export class ResourceAssignmentsController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: CreateAssignmentDto,
   ): Promise<ResourceAssignmentResponseDto> {
     const { assignment, canReadCost } = await this.service.create(
@@ -144,7 +144,7 @@ export class ResourceAssignmentsController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('id', ParseUuidPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAssignmentDto,
   ): Promise<ResourceAssignmentResponseDto> {
     const { assignment, canReadCost } = await this.service.update(principal, orgSlug, id, dto);
@@ -169,7 +169,7 @@ export class ResourceAssignmentsController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('id', ParseUuidPipe) id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Query() query: OptionalVersionDto,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, id, query.version);

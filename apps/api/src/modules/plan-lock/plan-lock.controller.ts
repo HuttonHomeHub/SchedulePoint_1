@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -14,7 +24,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { AcquireLockDto } from './dto/acquire-lock.dto';
 import { PlanEditLockStatusDto } from './dto/plan-edit-lock-status.dto';
@@ -41,7 +50,7 @@ export class PlanLockController {
   async status(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(await this.service.status(principal, orgSlug, planId));
   }
@@ -57,7 +66,7 @@ export class PlanLockController {
   async acquire(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() body: AcquireLockDto,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(
@@ -76,7 +85,7 @@ export class PlanLockController {
   async heartbeat(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(await this.service.heartbeat(principal, orgSlug, planId));
   }
@@ -93,7 +102,7 @@ export class PlanLockController {
   async request(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(await this.service.request(principal, orgSlug, planId));
   }
@@ -107,7 +116,7 @@ export class PlanLockController {
   async handoff(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(await this.service.handoff(principal, orgSlug, planId));
   }
@@ -119,7 +128,7 @@ export class PlanLockController {
   async release(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<void> {
     await this.service.release(principal, orgSlug, planId);
   }

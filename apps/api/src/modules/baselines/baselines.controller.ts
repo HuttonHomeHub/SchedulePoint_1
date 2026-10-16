@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -28,7 +29,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { BaselinesService } from './baselines.service';
 import { BaselineDetailResponseDto, BaselineResponseDto } from './dto/baseline-response.dto';
@@ -64,7 +64,7 @@ export class BaselinesController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: ListBaselinesQueryDto,
   ): Promise<Paginated<BaselineResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, planId, query);
@@ -91,7 +91,7 @@ export class BaselinesController {
   async capture(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: CreateBaselineDto,
     @RequestContext() context: RequestContext,
   ): Promise<BaselineResponseDto> {
@@ -128,7 +128,7 @@ export class BaselinesController {
   async variance(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<Paginated<BaselineVarianceRowResponseDto, PlanVarianceSummary>> {
     const { rows, summary } = await this.service.variance(principal, orgSlug, planId);
     return new Paginated(rows, summary);
@@ -140,8 +140,8 @@ export class BaselinesController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
-    @Param('baselineId', ParseUuidPipe) baselineId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('baselineId', ParseUUIDPipe) baselineId: string,
   ): Promise<BaselineDetailResponseDto> {
     return BaselineDetailResponseDto.fromDetail(
       await this.service.get(principal, orgSlug, planId, baselineId),
@@ -158,8 +158,8 @@ export class BaselinesController {
   async activate(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
-    @Param('baselineId', ParseUuidPipe) baselineId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('baselineId', ParseUUIDPipe) baselineId: string,
     @RequestContext() context: RequestContext,
   ): Promise<BaselineResponseDto> {
     const { baseline, activityCount } = await this.service.activate(
@@ -180,8 +180,8 @@ export class BaselinesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
-    @Param('baselineId', ParseUuidPipe) baselineId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('baselineId', ParseUUIDPipe) baselineId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, planId, baselineId, context);

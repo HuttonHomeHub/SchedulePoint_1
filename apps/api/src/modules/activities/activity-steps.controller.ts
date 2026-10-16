@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -14,7 +14,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { ApiLockedResponse } from '../../common/decorators/api-locked-response.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivityStepsService } from './activity-steps.service';
 import { ReplaceStepsDto } from './dto/replace-steps.dto';
@@ -49,7 +48,7 @@ export class ActivityStepsController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
   ): Promise<ActivityStepResponseDto[]> {
     const items = await this.service.list(principal, orgSlug, activityId);
     return items.map((row) => ActivityStepResponseDto.from(row));
@@ -79,7 +78,7 @@ export class ActivityStepsController {
   async replace(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: ReplaceStepsDto,
   ): Promise<ActivityStepResponseDto[]> {
     const items = await this.service.replace(principal, orgSlug, activityId, dto);

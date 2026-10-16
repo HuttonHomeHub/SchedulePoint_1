@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -24,7 +25,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { PlanResponseDto } from './dto/plan-response.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
@@ -52,7 +52,7 @@ export class PlansController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanResponseDto> {
     return PlanResponseDto.from(await this.service.get(principal, orgSlug, planId));
   }
@@ -65,7 +65,7 @@ export class PlansController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdatePlanDto,
     @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
@@ -82,7 +82,7 @@ export class PlansController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, planId, context);
@@ -102,7 +102,7 @@ export class PlansController {
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
     return PlanResponseDto.from(await this.service.restore(principal, orgSlug, planId, context));

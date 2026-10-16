@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiNotFoundResponse,
@@ -12,7 +12,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { DependenciesService } from './dependencies.service';
 import { DependencyResponseDto } from './dto/dependency-response.dto';
@@ -38,7 +37,7 @@ export class ActivityDependenciesController {
   async predecessors(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<DependencyResponseDto>> {
     const { items, meta } = await this.service.listPredecessors(
@@ -59,7 +58,7 @@ export class ActivityDependenciesController {
   async successors(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<DependencyResponseDto>> {
     const { items, meta } = await this.service.listSuccessors(

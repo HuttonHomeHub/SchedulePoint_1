@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -29,7 +30,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { DissolveResourceGroupResponseDto } from './dto/dissolve-resource-group-response.dto';
@@ -112,7 +112,7 @@ export class ResourcesController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
   ): Promise<ResourceResponseDto> {
     const { resource, canReadCost } = await this.service.get(principal, orgSlug, resourceId);
     return ResourceResponseDto.from(resource, canReadCost);
@@ -141,7 +141,7 @@ export class ResourcesController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
     @Body() dto: UpdateResourceDto,
   ): Promise<ResourceResponseDto> {
     const { resource, canReadCost } = await this.service.update(
@@ -172,7 +172,7 @@ export class ResourcesController {
   async archive(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
     @Body() dto: ArchiveActionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
@@ -195,7 +195,7 @@ export class ResourcesController {
   async unarchive(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
     @Body() dto: ArchiveActionDto,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
@@ -230,7 +230,7 @@ export class ResourcesController {
   async dissolve(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
     @RequestContext() context: RequestContext,
   ): Promise<DissolveResourceGroupResponseDto> {
     const { promoted } = await this.service.dissolveGroup(principal, orgSlug, resourceId, context);
@@ -248,7 +248,7 @@ export class ResourcesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('resourceId', ParseUuidPipe) resourceId: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, resourceId, context);

@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -27,7 +28,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ClientsService } from './clients.service';
 import { ClientDetailResponseDto } from './dto/client-detail-response.dto';
@@ -99,7 +99,7 @@ export class ClientsController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('clientId', ParseUuidPipe) clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
   ): Promise<ClientDetailResponseDto> {
     const { client, ...counts } = await this.service.getDetail(principal, orgSlug, clientId);
     return ClientDetailResponseDto.fromDetail(client, counts);
@@ -113,7 +113,7 @@ export class ClientsController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('clientId', ParseUuidPipe) clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
     @Body() dto: UpdateClientDto,
   ): Promise<ClientResponseDto> {
     return ClientResponseDto.from(await this.service.update(principal, orgSlug, clientId, dto));
@@ -127,7 +127,7 @@ export class ClientsController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('clientId', ParseUuidPipe) clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, clientId, context);
@@ -147,7 +147,7 @@ export class ClientsController {
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('clientId', ParseUuidPipe) clientId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
     @RequestContext() context: RequestContext,
   ): Promise<ClientResponseDto> {
     return ClientResponseDto.from(

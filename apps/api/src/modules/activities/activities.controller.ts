@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -29,7 +30,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { OptionalVersionDto } from '../../common/dto/optional-version.dto';
 import { ResourceEnvelope } from '../../common/dto/resource-envelope';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
@@ -61,7 +61,7 @@ export class ActivitiesController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
   ): Promise<ActivityResponseDto> {
     const { activity, canReadCost } = await this.service.get(principal, orgSlug, activityId);
     return ActivityResponseDto.from(activity, canReadCost);
@@ -97,7 +97,7 @@ export class ActivitiesController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: UpdateActivityDto,
   ): Promise<ActivityResponseDto> {
     const { activity, canReadCost } = await this.service.update(
@@ -125,7 +125,7 @@ export class ActivitiesController {
   async updateProgress(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: UpdateActivityProgressDto,
   ): Promise<
     ActivityResponseDto | ResourceEnvelope<ActivityResponseDto, { warnings: ProgressWarning[] }>
@@ -167,7 +167,7 @@ export class ActivitiesController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Query() query: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<DeleteActivityResultDto> {
@@ -203,7 +203,7 @@ export class ActivitiesController {
   async dissolve(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Body() dto: OptionalVersionDto,
     @RequestContext() context: RequestContext,
   ): Promise<DissolveSummaryResponseDto> {
@@ -227,7 +227,7 @@ export class ActivitiesController {
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @RequestContext() context: RequestContext,
   ): Promise<ActivityResponseDto> {
     const { activity, canReadCost } = await this.service.restore(

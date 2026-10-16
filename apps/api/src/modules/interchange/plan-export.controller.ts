@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Param, Res, StreamableFile, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -16,7 +16,6 @@ import type { Response } from 'express';
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ExportService } from './export.service';
 
@@ -74,7 +73,7 @@ export class PlanExportController {
   async export(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Param('format') format: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {

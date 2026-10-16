@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -30,7 +31,6 @@ import { RequestContext } from '../../common/decorators/request-context.decorato
 import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ORG_SCOPED_JSON_LIMIT } from '../../common/http/body-limits';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivitiesService } from './activities.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
@@ -66,7 +66,7 @@ export class PlanActivitiesController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<ActivityResponseDto>> {
     const { items, meta, canReadCost } = await this.service.list(principal, orgSlug, planId, query);
@@ -92,7 +92,7 @@ export class PlanActivitiesController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: CreateActivityDto,
   ): Promise<ActivityResponseDto> {
     const { activity, canReadCost } = await this.service.create(principal, orgSlug, planId, dto);
@@ -120,7 +120,7 @@ export class PlanActivitiesController {
   async updatePositions(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdatePositionsDto,
   ): Promise<ActivityResponseDto[]> {
     const { items, canReadCost } = await this.service.updatePositions(
@@ -162,7 +162,7 @@ export class PlanActivitiesController {
   async updatePlacements(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdatePlacementsDto,
   ): Promise<ActivityResponseDto[]> {
     const { items, canReadCost } = await this.service.updatePlacements(
@@ -202,7 +202,7 @@ export class PlanActivitiesController {
   async bulkDelete(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: BulkDeleteActivitiesDto,
     @RequestContext() context: RequestContext,
   ): Promise<BulkDeleteResultDto> {
@@ -242,8 +242,8 @@ export class PlanActivitiesController {
   async restoreBatch(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
-    @Param('batchId', ParseUuidPipe) batchId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('batchId', ParseUUIDPipe) batchId: string,
     @RequestContext() context: RequestContext,
   ): Promise<ActivityResponseDto[]> {
     const { items, canReadCost } = await this.service.restoreDeleteBatch(
@@ -287,7 +287,7 @@ export class PlanActivitiesController {
   async updateParents(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdateParentsDto,
     @RequestContext() context: RequestContext,
   ): Promise<ActivityResponseDto[]> {

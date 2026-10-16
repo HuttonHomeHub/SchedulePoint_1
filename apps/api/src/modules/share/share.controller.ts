@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiCreatedResponse,
@@ -16,7 +26,6 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CreateShareDto } from './dto/create-share.dto';
 import { CreatedShareDto, ShareResponseDto } from './dto/share-response.dto';
@@ -56,7 +65,7 @@ export class ShareController {
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: CreateShareDto,
     @RequestContext() context: RequestContext,
   ): Promise<CreatedShareDto> {
@@ -76,7 +85,7 @@ export class ShareController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<ShareResponseDto[]> {
     const shares = await this.service.list(principal, orgSlug, planId);
     // One `now` for the whole response so `active` is computed consistently across rows.
@@ -97,8 +106,8 @@ export class ShareController {
   async revoke(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('planId', ParseUuidPipe) planId: string,
-    @Param('shareId', ParseUuidPipe) shareId: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('shareId', ParseUUIDPipe) shareId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.revoke(principal, orgSlug, planId, shareId, context);

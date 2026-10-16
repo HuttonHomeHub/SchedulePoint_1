@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCookieAuth,
@@ -15,7 +15,6 @@ import type { ActivityHistoryEntry, ActivityHistoryPageMeta } from '@repo/types'
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ActivityHistoryService } from './activity-history.service';
 import { ActivityHistoryEntryResponseDto } from './dto/activity-history-entry-response.dto';
@@ -48,7 +47,7 @@ export class ActivityHistoryController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('activityId', ParseUuidPipe) activityId: string,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
     @Query() query: ListActivityHistoryQueryDto,
   ): Promise<Paginated<ActivityHistoryEntry, ActivityHistoryPageMeta>> {
     const { items, meta } = await this.service.list(principal, orgSlug, activityId, query);

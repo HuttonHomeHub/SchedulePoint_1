@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiNotFoundResponse,
@@ -11,7 +11,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { CalendarsService } from './calendars.service';
 import { ProjectCalendarListQueryDto } from './dto/calendar-list-query.dto';
@@ -50,7 +49,7 @@ export class ProjectCalendarsController {
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query() query: ProjectCalendarListQueryDto,
   ): Promise<Paginated<CalendarResponseDto>> {
     const { items, meta } = await this.service.listForProject(principal, orgSlug, projectId, query);

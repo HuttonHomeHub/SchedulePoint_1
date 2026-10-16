@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -24,7 +25,6 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ProjectDetailResponseDto } from './dto/project-detail-response.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
@@ -60,7 +60,7 @@ export class ProjectsController {
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
   ): Promise<ProjectDetailResponseDto> {
     const { project, ...counts } = await this.service.getDetail(principal, orgSlug, projectId);
     return ProjectDetailResponseDto.fromDetail(project, counts);
@@ -74,7 +74,7 @@ export class ProjectsController {
   async update(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: UpdateProjectDto,
   ): Promise<ProjectResponseDto> {
     return ProjectResponseDto.from(await this.service.update(principal, orgSlug, projectId, dto));
@@ -88,7 +88,7 @@ export class ProjectsController {
   async remove(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @RequestContext() context: RequestContext,
   ): Promise<void> {
     await this.service.remove(principal, orgSlug, projectId, context);
@@ -108,7 +108,7 @@ export class ProjectsController {
   async restore(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Param('projectId', ParseUuidPipe) projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @RequestContext() context: RequestContext,
   ): Promise<ProjectResponseDto> {
     return ProjectResponseDto.from(
