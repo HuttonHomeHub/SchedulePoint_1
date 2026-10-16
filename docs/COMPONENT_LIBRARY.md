@@ -884,7 +884,7 @@ the same thing several times, each slightly different.
   refuses a hand-rolled `<h3>`/`<h4>` on that surface.
 - **`KeyValueList`** is a `<dl>` for _settings_ (a consequence is a second `<dd>`). Choose between its
   neighbours by what the content is: `StatGrid` is headline figures to scan, `ContextStrip` is the
-  facts beside an edit, `KeyValueList` is the subject of a section in words.
+  facts beside an edit, a header or a popover, `KeyValueList` is the subject of a section in words.
 - **`Disclosure`** takes a required `collapsed`: `'described'` keeps prose in the accessibility tree
   (clipped) for an `aria-describedby` target; `'hidden'` does not render controls and detail, because
   invisible focusable content fails WCAG 2.4.7. Focus stays on the button; Enter and Space toggle.

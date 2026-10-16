@@ -234,16 +234,29 @@ export interface ContextFact {
   label: string;
   /** The value. A node, so a fact can carry a badge (`Critical`) as well as a date. */
   value: React.ReactNode;
+  /**
+   * A short muted note beside the value ("3 under a day, not drawn"). Rendered inside the same
+   * `<dd>`, so a screen reader hears it with the value rather than as a stray sibling.
+   */
+  note?: string | undefined;
+  /** The id of a footnote that explains this fact, linked to the value with `aria-describedby`. */
+  describedBy?: string | undefined;
 }
 
 export interface ContextStripProps extends React.HTMLAttributes<HTMLDListElement> {
   /** Accessible name for the group — "Computed schedule", "What this baseline will capture". */
   label: string;
   facts: ReadonlyArray<ContextFact>;
+  /**
+   * Whether the strip draws its own muted box. Default `true`. Pass `false` where the strip already
+   * sits in a frame of its own (a header, a bordered section) and a second box would nest.
+   */
+  framed?: boolean;
 }
 
 /**
- * The facts an edit is *about*, kept on screen while it is made.
+ * The facts an edit is *about*, kept on screen while it is made — or the facts beside any other
+ * content that a reader needs but did not come for: a header, a popover.
  *
  * A planner changing an activity's constraint wants to know its current dates and float; before
  * this the editor showed neither, so the only way to answer "did that do what I wanted?" was to
@@ -253,10 +266,14 @@ export interface ContextStripProps extends React.HTMLAttributes<HTMLDListElement
  *
  * **Read-only by contract**: no interactive children, ever. The moment a fact becomes editable it
  * is a field and belongs in a {@link FormSection}.
+ *
+ * Headline figures a reader came to a section to read are `StatGrid`'s (`components/ui/page`); this
+ * is the quieter of the two.
  */
 export function ContextStrip({
   label,
   facts,
+  framed = true,
   className,
   ...rest
 }: ContextStripProps): React.ReactElement {
@@ -264,7 +281,8 @@ export function ContextStrip({
     <dl
       aria-label={label}
       className={cn(
-        'bg-muted border-border flex flex-wrap gap-x-6 gap-y-3 rounded-md border px-4 py-3',
+        'flex flex-wrap gap-x-6 gap-y-3',
+        framed && 'bg-muted border-border rounded-md border px-4 py-3',
         className,
       )}
       {...rest}
@@ -274,7 +292,12 @@ export function ContextStrip({
           <dt className="text-muted-foreground text-micro font-semibold tracking-wider uppercase">
             {fact.label}
           </dt>
-          <dd className="text-sm font-semibold tabular-nums">{fact.value}</dd>
+          <dd className="text-sm font-semibold tabular-nums" aria-describedby={fact.describedBy}>
+            {fact.value}
+            {fact.note ? (
+              <span className="text-muted-foreground ml-1.5 text-xs font-normal">{fact.note}</span>
+            ) : null}
+          </dd>
         </div>
       ))}
     </dl>

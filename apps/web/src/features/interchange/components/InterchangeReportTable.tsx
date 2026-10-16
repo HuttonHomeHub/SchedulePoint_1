@@ -1,6 +1,8 @@
 import type { InterchangeReport } from '@repo/interchange';
 import { useId } from 'react';
 
+import { StatGrid } from '@/components/ui/page';
+
 /**
  * The dry-run **review** surface: the mapped counts plus the approximation / repair / drop findings,
  * rendered as accessible, labelled regions (a definition list for counts; a headed list per finding
@@ -15,20 +17,24 @@ export function InterchangeReportTable({
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <dl aria-label="Mapped" className="grid grid-cols-3 gap-2">
-        <Count label="Activities" value={report.mapped.activities} />
-        <Count label="Relationships" value={report.mapped.relationships} />
-        <Count label="Calendars" value={report.mapped.calendars} />
-        {/* Only a SchedulePoint XER carries a layout (layout-interchange), so these two appear only
-            for one: a tile reading 0 on every foreign import would describe a feature that file
-            could never have used. */}
-        {report.mapped.placements === undefined ? null : (
-          <Count label="Placed starts" value={report.mapped.placements} />
-        )}
-        {report.mapped.lanes === undefined ? null : (
-          <Count label="Lanes" value={report.mapped.lanes} />
-        )}
-      </dl>
+      <StatGrid
+        label="Mapped"
+        columns={3}
+        items={[
+          { label: 'Activities', value: report.mapped.activities },
+          { label: 'Relationships', value: report.mapped.relationships },
+          { label: 'Calendars', value: report.mapped.calendars },
+          // Only a SchedulePoint XER carries a layout (layout-interchange), so these two appear only
+          // for one: a figure reading 0 on every foreign import would describe a feature that file
+          // could never have used.
+          ...(report.mapped.placements === undefined
+            ? []
+            : [{ label: 'Placed starts', value: report.mapped.placements }]),
+          ...(report.mapped.lanes === undefined
+            ? []
+            : [{ label: 'Lanes', value: report.mapped.lanes }]),
+        ]}
+      />
 
       <p className="text-muted-foreground text-xs">
         {report.detectedFormat.toUpperCase()}
@@ -53,16 +59,6 @@ export function InterchangeReportTable({
       {report.advisories === undefined || report.advisories.length === 0 ? null : (
         <FindingSection heading="Advisories" emptyLabel="" findings={report.advisories} />
       )}
-    </div>
-  );
-}
-
-/** One mapped-count tile — a `<div>` term/definition pair inside the counts `<dl>`. */
-function Count({ label, value }: { label: string; value: number }): React.ReactElement {
-  return (
-    <div className="border-border bg-muted/40 flex flex-col rounded-md border p-3">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-foreground text-xl font-semibold tabular-nums">{value}</dd>
     </div>
   );
 }

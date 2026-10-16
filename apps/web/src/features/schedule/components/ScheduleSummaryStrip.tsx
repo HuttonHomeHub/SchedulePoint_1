@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
+import { ContextStrip, type ContextFact } from '@/components/ui/form-layout';
 import { Spinner } from '@/components/ui/spinner';
 import {
   ADVANCED_ACTIVITY_TYPES_ENABLED,
@@ -12,32 +13,6 @@ import {
 import { activitiesQueryOptions } from '@/features/activities';
 import { countLevelledWithoutGhost } from '@/features/tsld/render/lenses';
 import { formatCalendarDate } from '@/lib/format-date';
-
-/** One labelled figure in the strip. `hintId` links an explanatory footnote for AT. */
-function Stat({
-  label,
-  value,
-  qualifier,
-  hintId,
-}: {
-  label: string;
-  value: React.ReactNode;
-  /** A short note beside the figure, inside the same `<dd>` so a screen reader hears it with the value. */
-  qualifier?: string | undefined;
-  hintId?: string;
-}): React.ReactElement {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-sm font-medium tabular-nums" aria-describedby={hintId}>
-        {value}
-        {qualifier ? (
-          <span className="text-muted-foreground ml-1.5 text-xs font-normal">{qualifier}</span>
-        ) : null}
-      </dd>
-    </div>
-  );
-}
 
 /**
  * The plan's computed schedule at a glance: data date, project finish, and the
@@ -124,71 +99,72 @@ export function ScheduleSummaryStrip({
     );
   }
 
+  // Each count that has a footnote below links to it with `describedBy`; the levelled-activities
+  // qualifier rides inside the same `<dd>` (`note`) so a screen reader hears it with the figure.
+  const facts: ContextFact[] = [
+    { label: 'Data date', value: formatCalendarDate(dataDate) },
+    { label: 'Project finish', value: formatCalendarDate(projectFinish) },
+    { label: 'Activities', value: activityCount },
+    { label: 'Critical', value: criticalCount },
+    { label: 'Near-critical', value: nearCriticalCount },
+  ];
+  if (constraintViolationCount > 0) {
+    facts.push({
+      label: 'Constraint conflicts',
+      value: constraintViolationCount,
+      describedBy: 'constraint-violations-hint',
+    });
+  }
+  if (constraintWarningCount > 0) {
+    facts.push({
+      label: 'Constraint warnings',
+      value: constraintWarningCount,
+      describedBy: 'constraint-warnings-hint',
+    });
+  }
+  if (externalDrivenCount > 0) {
+    facts.push({
+      label: 'Externally driven',
+      value: externalDrivenCount,
+      describedBy: 'external-driven-hint',
+    });
+  }
+  if (resourceDriverMissingCount > 0) {
+    facts.push({
+      label: 'Missing a driver',
+      value: resourceDriverMissingCount,
+      describedBy: 'resource-driver-missing-hint',
+    });
+  }
+  if (hasLevelled) {
+    facts.push(
+      { label: 'Levelled finish', value: formatCalendarDate(leveledProjectFinish) },
+      {
+        label: 'Levelled activities',
+        value: leveledActivityCount,
+        note:
+          levelledWithoutGhost > 0 ? `${levelledWithoutGhost} under a day, not drawn` : undefined,
+      },
+    );
+    if (levelingWindowExceededCount > 0) {
+      facts.push({
+        label: 'Window exceeded',
+        value: levelingWindowExceededCount,
+        describedBy: 'leveling-window-hint',
+      });
+    }
+    if (selfOverAllocatedCount > 0) {
+      facts.push({
+        label: 'Over capacity',
+        value: selfOverAllocatedCount,
+        describedBy: 'leveling-self-over-hint',
+      });
+    }
+  }
+
   return shell(
     <div className="flex flex-col gap-2">
-      <dl className="flex flex-wrap gap-x-8 gap-y-3">
-        <Stat label="Data date" value={formatCalendarDate(dataDate)} />
-        <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
-        <Stat label="Activities" value={activityCount} />
-        <Stat label="Critical" value={criticalCount} />
-        <Stat label="Near-critical" value={nearCriticalCount} />
-        {constraintViolationCount > 0 ? (
-          <Stat
-            label="Constraint conflicts"
-            value={constraintViolationCount}
-            hintId="constraint-violations-hint"
-          />
-        ) : null}
-        {constraintWarningCount > 0 ? (
-          <Stat
-            label="Constraint warnings"
-            value={constraintWarningCount}
-            hintId="constraint-warnings-hint"
-          />
-        ) : null}
-        {externalDrivenCount > 0 ? (
-          <Stat
-            label="Externally driven"
-            value={externalDrivenCount}
-            hintId="external-driven-hint"
-          />
-        ) : null}
-        {resourceDriverMissingCount > 0 ? (
-          <Stat
-            label="Missing a driver"
-            value={resourceDriverMissingCount}
-            hintId="resource-driver-missing-hint"
-          />
-        ) : null}
-        {hasLevelled ? (
-          <>
-            <Stat label="Levelled finish" value={formatCalendarDate(leveledProjectFinish)} />
-            <Stat
-              label="Levelled activities"
-              value={leveledActivityCount}
-              qualifier={
-                levelledWithoutGhost > 0
-                  ? `${levelledWithoutGhost} under a day, not drawn`
-                  : undefined
-              }
-            />
-            {levelingWindowExceededCount > 0 ? (
-              <Stat
-                label="Window exceeded"
-                value={levelingWindowExceededCount}
-                hintId="leveling-window-hint"
-              />
-            ) : null}
-            {selfOverAllocatedCount > 0 ? (
-              <Stat
-                label="Over capacity"
-                value={selfOverAllocatedCount}
-                hintId="leveling-self-over-hint"
-              />
-            ) : null}
-          </>
-        ) : null}
-      </dl>
+      <ContextStrip label="Computed schedule" framed={false} facts={facts} />
       {constraintViolationCount > 0 ? (
         <p id="constraint-violations-hint" className="text-muted-foreground text-xs">
           Constraint conflicts are activities where a mandatory constraint forces a date earlier
