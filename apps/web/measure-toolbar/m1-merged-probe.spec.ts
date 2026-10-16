@@ -76,7 +76,7 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
   ]);
   await recalculate(page, orgSlug);
   await ensurePen(page);
-  await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan view' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME, widestSentence: WIDEST_SENTENCE };
 
@@ -89,9 +89,7 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
         const round = (n: number): number => Math.round(n);
 
         const header = document.querySelector('header');
-        const modeToolbar = document.querySelector(
-          '[role="toolbar"][aria-label="Plan mode and view"]',
-        );
+        const modeToolbar = document.querySelector('[role="toolbar"][aria-label="Plan view"]');
         const identityBlock = document.querySelector('[data-plan-identity]');
         if (!header || !modeToolbar || !identityBlock) return { error: 'occupants not found' };
 

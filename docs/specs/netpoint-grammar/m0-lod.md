@@ -76,9 +76,12 @@ and Year (spec G11). So:
 - Quarter is **working**;
 - Year and Fit are **overview**.
 
-**P3, the overview ceiling on direction marks:** at the overview tier the per-link cap stays at
-today's six (`CHEVRON_MAX_PER_LINK`). That bounds the layer at **6 × visible links per frame**, exactly
-today's bound. The raised cap (spec G5's ~40 px spacing) applies at the working and detail tiers only.
+**P3, the ceiling on direction marks:** the per-link cap stays at today's six (`CHEVRON_MAX_PER_LINK`)
+at every tier. That bounds the layer at **6 × visible links per frame**, exactly today's bound. Spec
+G5's ~40 px spacing (`CHEVRON_SPACING_PX`) is **not tier-gated**: `chevronsAlong` applies it at every
+tier, and the cap is what bounds the cost. (This paragraph said the spacing applied at the working and
+detail tiers only; the code never did that, and the record was corrected to match it on 2026-10-16,
+`docs/TECH_DEBT.md` #391 item 7.)
 
 ## The accessibility rulings
 
