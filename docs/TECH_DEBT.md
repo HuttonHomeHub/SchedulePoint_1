@@ -9918,7 +9918,50 @@ row stays resolvable. Filing work against it would have been work against nothin
 
 ### 321. Turbo's `lint`/`typecheck` cache survives a dependency change, so `prepush` can pass where CI fails
 
-**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the vitest 4 → 5 bump) · **Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-16 · **Raised:** 2026-09-14 (the vitest 4 → 5 bump) · **Size:** S · **Owner:** repo
+
+**Re-verified 2026-10-16: the diagnosis below does not hold on turbo 2.11.7, and the heading is left as
+filed so inbound references resolve.** The lockfile DOES reach `lint` and `typecheck` hashes. The
+incident is real; the mechanism the row names is not what produced it. The original text follows
+unedited, as the record of what was believed.
+
+**Method.** `turbo run <task> --dry=json` on `@repo/web`, reading `hashOfExternalDependencies` and each
+task's `hash`; one throwaway `pnpm-lock.yaml` edit per row, each reverted afterwards.
+
+| Lockfile edit                                                             | web `hashOfExternalDependencies` | web `lint` hash                                                              | web `typecheck` hash         |
+| ------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | ---------------------------- |
+| none (baseline)                                                           | `faf5c9b0908630fb`               | `4bad872b2711b901`                                                           | `d74fd714a093b295`           |
+| `vitest` 5.0.3 → 5.0.9 (direct dependency, the same kind as the incident) | `4792d55267112e1a` (changed)     | `8e0dffd7cc97835a` (changed)                                                 | `915e05d666a93c7c` (changed) |
+| `chai` 6.2.2 → 6.2.9 (transitive, via `vitest`)                           | `cb3f75e6e970aef6` (changed)     | `d1efb7dec3fb4949` (changed)                                                 | `4be0c426b6f9f1c4` (changed) |
+| `@typescript-eslint/type-utils` 8.71.1 → 8.71.9 (via `@repo/config`)      | unchanged                        | `1de789b0955fb186` (changed, through the `^build` dependency `@repo/config`) | `a7ed76203b74736f` (changed) |
+| integrity string only, same version                                       | unchanged                        | unchanged                                                                    | unchanged                    |
+
+The global hash `5b98fd9f9d4526be` was constant throughout (its files are `.gitattributes` and
+`tsconfig.base.json`, so `pnpm-lock.yaml` is correctly not part of it). Turbo hashes the resolved
+external dependencies per workspace, from the lockfile, and a dependent workspace's hash folds in its
+`^build` dependencies' hashes. So a version bump invalidates `lint` and `typecheck` without any
+`globalDependencies` entry. **Adding `pnpm-lock.yaml` there would change no outcome** and would re-run
+every task, `test` and `build` included, on every lockfile change; the proposed "one line" fix should
+not be made. Only an integrity-only edit leaves the hashes alone, which is correct: the same version
+has the same types.
+
+**Lead hypothesis, UNCONFIRMED: `node_modules` was not reinstalled after the lockfile changed.** Turbo's
+hash moved and `lint` re-ran, but against the OLD installed `vitest` types, so it passed locally and
+failed on CI's fresh install. That fits every observation in the incident (a green local run, a red
+fresh runner, `--force` reproducing it) without a stale turbo cache. **`scripts/prepush.sh` does not
+guard against it:** it fixes its working directory (`:43`) and runs `pnpm lint`, `pnpm typecheck` and
+`pnpm test` (`:138-140`), which are `turbo run` (`package.json:16,20,38`), and then every `check:*`
+script (`:147-157`). Nothing in it compares the installed `node_modules` with `pnpm-lock.yaml`, so a
+lockfile pulled or edited without a following `pnpm install` is gated against whatever is on disk.
+What the incident's author actually ran is not recorded, which is why this stays a hypothesis.
+
+**Next, recorded and not done.** A `node_modules`-matches-lockfile check in `prepush` is a change to a
+shared gate (ADR-0105 trigger) and needs its own spec. **Trigger:** the next time `prepush` and CI
+disagree on `lint` or `typecheck`, capture `turbo run lint --dry=json` hashes for the failing
+workspace, and whether `pnpm install --frozen-lockfile --offline` reports `node_modules` out of date.
+That one observation confirms or kills the hypothesis.
+
+**Original filing (2026-09-14), superseded above:**
 
 `turbo.json:4` declares `"globalDependencies": [".env", "tsconfig.base.json"]`. **`pnpm-lock.yaml` is
 not in it**, and neither `lint` (`:27-30`) nor `typecheck` (`:31-34`) names it as an input. So a
