@@ -343,13 +343,9 @@ export function ResourcesTable({
        76px. Constrain what sits before the last fact; leave the last fact alone.
 
        **What is no longer true:** M4-T2's note that a width must go on `cellClassName` rather than
-       `headClassName`, because `DataTable`'s `??` replaces the default and restating
-       `py-2 pr-4 font-medium` would move a `font-medium` into a screen and push ADR-0097's weight
-       ratchet. `width` composes with both defaults instead of replacing either, so it needs no
-       restatement anywhere and the ratchet is untouched. That is `docs/TECH_DEBT.md` #335's actual
-       ask, reached without the blunt `??` → `cn` conversion that row proposes — which ADR-0145 M4
-       declined because seven overrides omit `py-2` deliberately, and which this epic re-took rather
-       than inherited. */
+       `headClassName`, because the default was replaced and restating `py-2 pr-4 font-medium` would
+       move a `font-medium` into a screen. `headClassName` and `cellClassName` now extend the
+       default (`docs/TECH_DEBT.md` #335), and `width` composes with both. */
     {
       header: 'Kind',
       width: 'fit',
@@ -371,8 +367,8 @@ export function ResourcesTable({
     },
     {
       header: 'Calendar',
-      headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap md:table-cell',
+      headClassName: 'hidden md:table-cell',
+      cellClassName: 'hidden whitespace-nowrap md:table-cell',
       cell: ({ resource }) => {
         // A group has no calendar by construction (ADR-0053 §3) — say so rather than showing the
         // same "—" that means "inherits the plan calendar" for a real resource.
@@ -393,8 +389,8 @@ export function ResourcesTable({
   columns.push({
     header: 'Actions',
     srHeader: true,
-    headClassName: 'py-2 font-medium',
-    cellClassName: 'py-2 text-right whitespace-nowrap',
+    headClassName: 'pr-0',
+    cellClassName: 'pr-0 text-right whitespace-nowrap',
     cell: ({ resource }) =>
       canWrite ? (
         <div className="flex items-center justify-end gap-1">

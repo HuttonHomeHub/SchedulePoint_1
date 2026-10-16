@@ -966,6 +966,12 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   `aria-describedby`-linked to prose qualifying what the rows mean. Responsive: horizontal scroll in
   a bordered container; never break the page layout.
 
+  **A column's `headClassName` / `cellClassName` extend the default (`py-2 pr-4 font-medium` on a
+  head, `py-2 pr-4` on a cell); they do not replace it** (TECH_DEBT #335, ADR-0145 amendment
+  2026-10-16). They merge through `cn`, so a conflicting class wins and removing part of the
+  default is written explicitly: an actions column that sits flush to the edge says `pr-0`. The
+  width preset still composes last.
+
   **`scroll: 'page' | 'contained'` decides who owns the scroll, and the two are not a stylistic
   choice between them** (`docs/specs/activities-panel-scale/`, TECH_DEBT #334). `'page'` (the
   default, and every call site but one) leaves the region `overflow-x-auto` with nothing bounding

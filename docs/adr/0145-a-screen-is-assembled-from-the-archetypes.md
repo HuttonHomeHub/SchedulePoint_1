@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Extended by:** ADR-0178 (2026-10-06) — D1's archetype set.
+- **Amended:** 2026-10-16 — M4's decline of #335 is re-taken (see "Amendment 2026-10-16" below).
 - **Date:** 2026-09-16
 - **Deciders:** Product owner; agent implementation
 - **Spec:** [`docs/specs/page-consistency/`](../specs/page-consistency/)
@@ -324,6 +325,17 @@ Every fix carries a regression test verified red first. Two findings are recorde
 rushed: `docs/TECH_DEBT.md` **#338** (two `<details>`, two treatments — and the ADR-0105 trigger to
 build a primitive) and **#339** (`SectionCard`'s description has no measure, which is
 character-for-character the shape `PageHeader` had before M1).
+
+## Amendment 2026-10-16 — the #335 decline is re-taken
+
+M4 declined `docs/TECH_DEBT.md` #335 (merge a column's `headClassName`/`cellClassName` onto the
+`DataTable` default) because "seven `cellClassName` sites deliberately omit the padding". Re-read
+on 2026-10-16 (`docs/specs/shared-primitive-tidy/spec.md` §B.1): there were **five**, nothing in the
+code recorded that they were deliberate, and the other 14 omissions were actions columns dropping
+`pr-4` on purpose. `DataTable` now composes `cn(DEFAULT, override)`; the actions columns say
+`pr-0` explicitly, the five unpadded columns regain `py-2 pr-4`, and the 15 restatements of the default
+(6 heads and 9 cells, across 9 column definitions) were dropped. The weight ratchet fell for it (`SCREEN_WEIGHT_CEILING` 158 to 137). The decline's
+reasoning stands as a record of what was known in M4; it no longer governs.
 
 ## References
 

@@ -81,8 +81,8 @@ export function ProjectsTable({
     columns.push({
       header: 'Actions',
       srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       /* **One row-action shape** (page-consistency M4): the primary action stays visible and the
          rest move behind a `⋯`, which is the shape ADR-0097 Landing F1 decided on the calendars
          table. Landing F asked "which tables are crowded?" and correctly answered "one", leaving

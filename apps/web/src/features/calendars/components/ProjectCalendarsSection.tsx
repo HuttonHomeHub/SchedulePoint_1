@@ -174,8 +174,8 @@ export function ProjectCalendarsSection({
     {
       header: 'Actions',
       srHeader: true,
-      headClassName: 'py-2 font-medium',
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       /* **One row-action shape** (page-consistency M4): `Edit` stays visible and the rest move
          behind a `⋯`, matching the org calendars table this section mirrors. That match is the
          point — a planner looking at a project calendar here and the same calendar on the library

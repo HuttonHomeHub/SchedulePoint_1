@@ -102,7 +102,7 @@ export function CrossPlanLinksSection({
     columns.push({
       header: 'Actions',
       srHeader: true,
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       cell: (link) => (
         <div className="flex justify-end">
           <Button

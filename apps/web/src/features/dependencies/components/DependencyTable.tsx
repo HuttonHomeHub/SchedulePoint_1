@@ -113,7 +113,7 @@ export function DependencyTable({
     columns.push({
       header: 'Actions',
       srHeader: true,
-      cellClassName: 'py-2 text-right whitespace-nowrap',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
       cell: (dep) => (
         // Keyboard lag nudge (ADR-0052 M3): with a row's Edit/Remove button focused,
         // Shift+←/→ nudges THIS link's lag ±1 day — the keyboard equivalent of the canvas
