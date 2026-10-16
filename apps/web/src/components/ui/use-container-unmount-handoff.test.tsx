@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,12 +20,12 @@ import { useContainerUnmountHandoff } from './use-container-unmount-handoff';
  * the "blank space" case then hands focus to the destination and speaks.
  */
 function Container({ slot }: { slot: HTMLElement | null }): React.ReactElement | null {
-  const handoff = useContainerUnmountHandoff({
+  const { wrapperProps } = useContainerUnmountHandoff({
     target: '[data-target]',
     message: 'The panel closed. Focus moved to Target.',
   });
   const body = (
-    <div {...handoff} data-testid="wrapper">
+    <div {...wrapperProps} data-testid="wrapper">
       <button type="button">Inside</button>
     </div>
   );
@@ -107,5 +107,96 @@ describe('useContainerUnmountHandoff', () => {
     expect(screen.getByTestId('announcer')).toHaveTextContent(
       'The panel closed. Focus moved to Target.',
     );
+  });
+});
+
+/**
+ * The strip's shape (`HistoryResultStrip`): a function destination, no sentence, and a record read
+ * while the container STAYS mounted.
+ */
+function Silent({
+  target,
+  onRecord,
+}: {
+  target: () => HTMLElement | null;
+  onRecord?: (inside: boolean) => void;
+}): React.ReactElement {
+  const { wrapperProps, focusWasInside } = useContainerUnmountHandoff({
+    target,
+  });
+  return (
+    <div {...wrapperProps}>
+      <button type="button" onClick={() => onRecord?.(focusWasInside())}>
+        Inside
+      </button>
+    </div>
+  );
+}
+
+function SilentHost({
+  shown,
+  target,
+}: {
+  shown: boolean;
+  target: () => HTMLElement | null;
+}): React.ReactElement {
+  return (
+    <AnnouncerProvider>
+      <button type="button">Surface</button>
+      {shown ? <Silent target={target} /> : null}
+    </AnnouncerProvider>
+  );
+}
+
+describe('useContainerUnmountHandoff, with a function target and no message', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('resolves the function at unmount, focuses what it returns and announces nothing', () => {
+    const target = vi.fn(() => screen.getByRole('button', { name: 'Surface' }));
+    const { rerender } = render(<SilentHost shown target={target} />);
+    expect(target).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Inside' }).focus();
+    rerender(<SilentHost shown={false} target={target} />);
+    expect(target).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Surface' })).toHaveFocus();
+    expect(screen.getByTestId('announcer')).toHaveTextContent('');
+  });
+
+  it('hands nothing on when the function answers null', () => {
+    const { rerender } = render(<SilentHost shown target={() => null} />);
+    screen.getByRole('button', { name: 'Inside' }).focus();
+    rerender(<SilentHost shown={false} target={() => null} />);
+    expect(document.body).toHaveFocus();
+  });
+
+  it('does not resolve the function when focus was never inside', () => {
+    const target = vi.fn(() => null);
+    const { rerender } = render(<SilentHost shown target={target} />);
+    rerender(<SilentHost shown={false} target={target} />);
+    expect(target).not.toHaveBeenCalled();
+  });
+
+  it('reports the record through focusWasInside, and clears it on a move elsewhere', () => {
+    const seen: boolean[] = [];
+    render(
+      <AnnouncerProvider>
+        <button type="button">Elsewhere</button>
+        <Silent target={() => null} onRecord={(inside) => seen.push(inside)} />
+      </AnnouncerProvider>,
+    );
+    const inside = screen.getByRole('button', { name: 'Inside' });
+    fireEvent.click(inside);
+    inside.focus();
+    fireEvent.click(inside);
+    screen.getByRole('button', { name: 'Elsewhere' }).focus();
+    fireEvent.click(inside);
+    expect(seen).toEqual([false, true, false]);
   });
 });

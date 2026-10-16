@@ -40,10 +40,13 @@ export function DiagramViewportCluster({
   items: ToolbarItem<TsldToolbarContext>[];
   context: TsldToolbarContext;
 }): React.ReactElement {
-  const handoff = useContainerUnmountHandoff({ target: HANDOFF_TARGET, message: HANDOFF_MESSAGE });
+  const { wrapperProps } = useContainerUnmountHandoff({
+    target: HANDOFF_TARGET,
+    message: HANDOFF_MESSAGE,
+  });
 
   return (
-    <div className="contents" {...handoff}>
+    <div className="contents" {...wrapperProps}>
       <Toolbar
         items={items}
         context={context}

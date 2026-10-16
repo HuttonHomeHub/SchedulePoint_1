@@ -4,11 +4,11 @@ import { useAnnounce } from '@/components/ui/announcer';
 
 /**
  * **A container that goes away hands focus on, and says so** (ADR-0135 for a container, where
- * `useToolbarFocusHandoff` is for an item). **Only the diagram viewport cluster uses it today.** The
- * toolbar-redesign M4 review counted three hand-written copies of this rule; `HistoryResultStrip`
- * (a `restoreFocus` callback, also run on its own buttons' presses) and `SelectionActionsBar` (a
- * boolean and a caller-supplied destination) still keep theirs, because neither takes a selector
- * and a sentence (`docs/TECH_DEBT.md` #481).
+ * `useToolbarFocusHandoff` is for an item). **Three components use it:** the diagram viewport cluster
+ * (`diagram-viewport-cluster.tsx`), `PanelResizer`'s size box (`panel-resizer.tsx`) and
+ * `HistoryResultStrip`, which hands on to the plan surface with a function `target` and no
+ * `message`. The toolbar-redesign M4 review counted three hand-written copies of this rule;
+ * `SelectionActionsBar` still keeps the last (`docs/TECH_DEBT.md` #481).
  *
  * It cannot be an effect on the toolbar's own item list: when the container itself unmounts no effect
  * body runs in that commit (`use-focus-handoff.ts` records this). So the **wrapper** the caller puts
@@ -39,14 +39,36 @@ export function useContainerUnmountHandoff({
   target,
   message,
 }: {
-  /** A selector for the control that takes focus; resolved at unmount, because it may not exist earlier. */
-  target: string;
-  /** Said through the polite region once focus has landed. */
-  message: string;
+  /**
+   * The control that takes focus: a selector, or a function for a destination that is a decision
+   * rather than a selector (the plan surface). Either is resolved at unmount, because the control
+   * may not exist earlier; a function that answers `null` hands nothing on.
+   */
+  target: string | (() => HTMLElement | null);
+  /**
+   * Said through the polite region once focus has landed. Absent means focus moves and nothing is
+   * said, for a container whose removal something else has already announced (ADR-0132).
+   */
+  message?: string;
 }): {
-  ref: (node: HTMLElement | null) => void;
-  onFocusCapture: () => void;
-  onBlurCapture: (event: React.FocusEvent<HTMLElement>) => void;
+  /** Spread onto the wrapper the caller puts around the container: `<div {...wrapperProps}>`. */
+  wrapperProps: {
+    ref: (node: HTMLElement | null) => void;
+    onFocusCapture: () => void;
+    onBlurCapture: (event: React.FocusEvent<HTMLElement>) => void;
+  };
+  /**
+   * Whether focus was inside when it was last recorded — the same record the unmount cleanup reads,
+   * for a caller whose container STAYS mounted while a control inside it goes (ADR-0135's per-item
+   * case). Kept beside `wrapperProps`, not among them, so spreading the wrapper's props can never
+   * put a function on a DOM node.
+   *
+   * **The record can be stale-true for one frame.** A click on blank space blurs with no related
+   * target, which the record cannot tell from a removal until the next frame re-reads it, so a
+   * caller that asks in that window (and the control then vanishes) hands focus on once more than
+   * the reader meant. Narrow, and accepted: the destination is the plan surface, not a surprise.
+   */
+  focusWasInside: () => boolean;
 } {
   const announce = useAnnounce();
   const latest = useRef({ target, message, announce });
@@ -69,12 +91,13 @@ export function useContainerUnmountHandoff({
       const active = document.activeElement;
       const dropped = active === null || active === document.body || !!node?.contains(active);
       if (!dropped) return;
-      const { target: selector, message: sentence, announce: say } = latest.current;
-      const destination = document.querySelector<HTMLElement>(selector);
+      const { target: wanted, message: sentence, announce: say } = latest.current;
+      const destination =
+        typeof wanted === 'function' ? wanted() : document.querySelector<HTMLElement>(wanted);
       if (!destination) return;
       destination.focus();
       if (document.activeElement !== destination) return;
-      say(sentence);
+      if (sentence !== undefined) say(sentence);
     },
     [],
   );
@@ -103,5 +126,7 @@ export function useContainerUnmountHandoff({
     });
   }, []);
 
-  return { ref, onFocusCapture, onBlurCapture };
+  const focusWasInside = useCallback(() => recorded.current, []);
+
+  return { wrapperProps: { ref, onFocusCapture, onBlurCapture }, focusWasInside };
 }

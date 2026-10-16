@@ -11,7 +11,7 @@ import {
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { dockBounds } from './dock-bounds';
-import { focusOutsideInert } from './focus-reachable';
+import { focusOutsideInert, planSurfaceTarget } from './focus-reachable';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
@@ -429,14 +429,7 @@ export function ToolbarPlanWorkspace({
    * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
    * order is a tie-break that never fires rather than a precedence.
    */
-  const focusPlanSurface = useCallback(() => {
-    const grid = document.querySelector<HTMLElement>('[role="treegrid"]');
-    if (grid) {
-      focusOutsideInert(grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]') ?? grid);
-      return;
-    }
-    focusOutsideInert(document.querySelector<HTMLElement>('[role="listbox"]'));
-  }, []);
+  const focusPlanSurface = useCallback(() => planSurfaceTarget()?.focus(), []);
 
   // **The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
   // right columns, and each reserves `CANVAS_MIN_WIDTH` for the diagram only as a best-effort floor
@@ -1091,7 +1084,7 @@ export function ToolbarPlanWorkspace({
               message={historyMessage}
               action={historyResultAction(historyResult, undoRedoLive, model.undoRedo)}
               onDismiss={model.historyResult.dismiss}
-              restoreFocus={focusPlanSurface}
+              restoreTarget={planSurfaceTarget}
             />
           ),
         };

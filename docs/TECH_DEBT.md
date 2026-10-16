@@ -11094,27 +11094,26 @@ reachable); a discoverability gap. **Next:** decide with the owner whether the f
 or the shell takes the wheel at the canvas edge. **Trigger:** a user reading that loses the band at a short window, or the
 next pass over the narrow shell.
 
-### 481. Three components keep their own copy of "this container goes away under focus"
+### 481. The selection bar keeps its own copy of "this container goes away under focus"
 
-**Status:** open · **Verified:** 2026-10-11 (`use-container-unmount-handoff.ts` is imported by `diagram-viewport-cluster.tsx` only; the copies re-read at the lines below)
+**Status:** open · **Verified:** 2026-10-16 (`use-container-unmount-handoff.ts` is now used by `diagram-viewport-cluster.tsx`, `components/ui/panel-resizer.tsx` and `HistoryResultStrip.tsx`; the bar re-read at `features/plan-actions/selection-actions.tsx`, `heldFocusRef`)
 **Raised:** 2026-10-10 (toolbar redesign M4 confirmation review) · **Size:** S · **Owner:** web
 
-The M4 review counted three hand-written copies of the ADR-0135 container hand-off and extracted one hook, but only the
-cluster adopted it. `HistoryResultStrip` cannot adopt it as it stands: its destination is a callback the workspace
-supplies (`restoreFocus`), it announces nothing (the workspace says the sentence once, per ADR-0132), and the same
-callback also runs on the strip's own button presses. **Next:** make the hook's `message` optional and let `target` be
-`string | (() => HTMLElement | null)`, then move `HistoryResultStrip` over with its focus-inside tests unchanged, and decide
-whether the selection bar's variant is the same rule. **Trigger:** the next change to either copy.
+**Landed 2026-10-16:** the hook takes an optional `message`, a `target` of `string | (() => HTMLElement | null)` and returns
+`focusWasInside()`; `HistoryResultStrip` moved onto it (its prop is now `restoreTarget`, fed `planSurfaceTarget()`), and the
+focus-inside unit cases passed unchanged apart from the prop rename. `PanelResizer` was always a user of the hook; this row
+and the hook's docblock both said the cluster was the only one, which was wrong.
 
-**The copies differ in behaviour, not only in shape (read 2026-10-11, not run).** On a blur with no related target,
-`HistoryResultStrip` **clears** its focus flag (`features/tsld/components/HistoryResultStrip.tsx:93-99`: `contains(null)`
-is false), the selection bar **keeps** it, by design, because that is exactly what a removal looks like
-(`features/plan-actions/selection-actions.tsx:1209-1215` and `:1262-1266`), and the hook keeps it and re-reads it one frame
-later (`use-container-unmount-handoff.ts:96-103`). Whether the strip's difference is visible in a real browser is **not
-established**, and jsdom cannot answer it (ADR-0111), so moving it onto the hook needs a real-browser check and the
-accessibility-reviewer before release. **There is a fourth sibling,** `features/tsld/components/use-withdrawn-column-handoff.ts`,
-for a container that is hidden rather than unmounted, which the hook's own docblock says it cannot serve. **Two files are
-called `selection-actions.tsx`:** the one meant here is `features/plan-actions/`, not `features/tsld/toolbar/`.
+**Left:** `SelectionActionsBar` still keeps `heldFocusRef`. Its "removed" is a re-render with `context === null`, not an unmount,
+and its cleanup clears the record on **every** `context` change, so by reading (not run) a refetch that rebuilds the context
+while focus stays on a bar command, followed by the selection going, drops focus to `<body>`. The red-first journey is
+`e2e-multi-select/multi-select.spec.ts` ("focus on a selection-bar command survives a context rebuild and then the bar
+going"); if it is red, split the bar's body so removal is an unmount and adopt the hook, and if it is green, adopt the hook for
+the dedupe only or record the bar as a declared variant. **Also open:** whether Chromium blurs with `relatedTarget === null`
+when a focused node is removed, and before React's layout cleanup (jsdom cannot say, ADR-0111), via the strip journey in
+`e2e-undo/undo.spec.ts`, and the accessibility-reviewer before release. The fourth sibling,
+`features/tsld/components/use-withdrawn-column-handoff.ts`, is for a container hidden rather than unmounted and stays separate.
+**Trigger:** the next change to the bar.
 
 ### 490. The app header at 320 wide is four lines, so `<main>` starts at 239 px against a 200 px target
 

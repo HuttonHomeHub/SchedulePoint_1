@@ -145,7 +145,7 @@ export function PanelResizer({
   // **Held here, on the divider, and not inside the box**: React's StrictMode simulates an unmount of a
   // freshly mounted component, and a box that mounts with focus going into it would hand that focus
   // away on the spot and close itself (found in the first journey run).
-  const handoff = useContainerUnmountHandoff({
+  const { wrapperProps } = useContainerUnmountHandoff({
     target: '#main',
     message: `${sizeLabel} box closed.`,
   });
@@ -266,7 +266,7 @@ export function PanelResizer({
       </div>
       {sizeBox.panel(
         `Set ${sizeLabel}`,
-        <div {...handoff} className="flex flex-col gap-2">
+        <div {...wrapperProps} className="flex flex-col gap-2">
           <SizeBox
             subject={sizeLabel}
             size={size}
