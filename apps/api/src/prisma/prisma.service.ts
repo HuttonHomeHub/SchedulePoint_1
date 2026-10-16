@@ -35,9 +35,24 @@ export const TRANSACTION_TIMEOUT_MS = 15_000;
  */
 export const BATCH_TRANSACTION_TIMEOUT_MS = 60_000;
 
+/**
+ * The longest `onModuleDestroy` waits for registered drains before disconnecting anyway.
+ *
+ * **4 s, chosen against the host rather than the work.** `docker stop` (and Watchtower's recreate,
+ * ADR-0047) sends SIGTERM and then SIGKILL after 10 s, and the other modules' destroy hooks, the
+ * disconnect itself and the shutdown hooks all share that window. A drain is normally one batch
+ * (milliseconds); 4 s is hundreds of times that, so it only ever fires for a statement stuck behind
+ * a row lock — and leaves ~6 s of headroom. I considered a `statement_timeout` on the sweep's batch
+ * delete instead and did not: it would turn a slow-but-healthy delete into a genuine
+ * `retention.sweep_failed` on a busy host, i.e. reintroduce the alert noise this exists to remove.
+ */
+export const SHUTDOWN_DRAIN_TIMEOUT_MS = 4_000;
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
+  private readonly shutdownDrains: Array<() => Promise<void>> = [];
+  private destroying = false;
 
   constructor() {
     super({ transactionOptions: { timeout: TRANSACTION_TIMEOUT_MS } });
@@ -48,7 +63,54 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     this.logger.log('Database connection established');
   }
 
+  /**
+   * Register work that must have finished with the database before the engine goes away.
+   *
+   * **The point is that the ordering lives here, where the disconnect is, rather than in Nest's
+   * hook order.** A consumer that awaits its own in-flight query in `onModuleDestroy` is correct
+   * only if its module is destroyed before this one — an implementation detail of `@nestjs/core`
+   * (`docs/TECH_DEBT.md` #303) that a major bump can reverse without failing anything. Draining
+   * from inside this hook makes it true whichever module Nest destroys first.
+   */
+  registerShutdownDrain(drain: () => Promise<void>): void {
+    if (this.destroying) {
+      // Shutdown has already collected its drains, so this one would never run. Said out loud
+      // because the caller believes its work is protected.
+      this.logger.warn('A shutdown drain was registered after shutdown began; it will not run');
+      return;
+    }
+    this.shutdownDrains.push(drain);
+  }
+
   async onModuleDestroy(): Promise<void> {
+    this.destroying = true;
+    // `allSettled`, not `all`: a drain that fails must not leave the engine connected, and the
+    // failure is logged rather than lost.
+    const draining = Promise.allSettled(this.shutdownDrains.map((drain) => drain()));
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timed_out'>((resolve) => {
+      timer = setTimeout(() => {
+        resolve('timed_out');
+      }, SHUTDOWN_DRAIN_TIMEOUT_MS);
+      // Unref'd so the bound itself can never keep a process alive.
+      timer.unref();
+    });
+    const outcome = await Promise.race([draining, timedOut]);
+    clearTimeout(timer);
+
+    if (outcome === 'timed_out') {
+      this.logger.warn({
+        event: 'prisma.shutdown_drain_timed_out',
+        timeoutMs: SHUTDOWN_DRAIN_TIMEOUT_MS,
+        message: 'A shutdown drain did not finish in time; disconnecting anyway',
+      });
+    } else {
+      for (const settled of outcome) {
+        if (settled.status === 'rejected') {
+          this.logger.error('A shutdown drain failed; disconnecting anyway', settled.reason);
+        }
+      }
+    }
     await this.$disconnect();
     this.logger.log('Database connection closed');
   }

@@ -112,7 +112,9 @@ describe.skipIf(!hasDatabase)('Activity history statement budget (e2e)', () => {
     });
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
-      .useValue(prisma)
+      // A bare `PrismaClient` stands in for the service, so it must also offer the one method the
+      // retention sweep calls at construction; nothing here exercises shutdown draining.
+      .useValue(Object.assign(prisma, { registerShutdownDrain: () => undefined }))
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>({
       bufferLogs: false,

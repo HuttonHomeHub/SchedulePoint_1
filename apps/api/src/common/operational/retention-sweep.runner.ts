@@ -50,6 +50,8 @@ export interface RetentionSweepResult {
   readonly durationMs: number;
   /** Present only when the table's sweep threw; the other tables still ran. */
   readonly error?: string;
+  /** The process began shutting down mid-table; rows may remain and the next run resumes. */
+  readonly interrupted?: true;
 }
 
 /**
@@ -83,21 +85,63 @@ export interface RetentionSweepResult {
  */
 @Injectable()
 export class RetentionSweepRunner {
+  private stopping = false;
+  private readonly active = new Set<Promise<unknown>>();
+
   constructor(
     private readonly prisma: PrismaService,
     @InjectPinoLogger(RetentionSweepRunner.name) private readonly logger: PinoLogger,
-  ) {}
+  ) {
+    // **Not starting a sweep the process cannot finish** (`docs/TECH_DEBT.md` #303/#259). The boot
+    // sweep is deliberately unawaited (ADR-0087), so a prompt shutdown used to disconnect the
+    // engine under a statement in flight and log `retention.sweep_failed` — the exact event the
+    // alert watches — for a database that was never unwell. `PrismaService.onModuleDestroy` runs
+    // this drain BEFORE `$disconnect`, so the guarantee holds in whichever order Nest destroys the
+    // modules: awaiting from `onApplicationShutdown` (too late) or relying on module order (an
+    // implementation detail a NestJS bump can reverse) are the two designs this replaces.
+    this.prisma.registerShutdownDrain(() => this.drain());
+  }
+
+  /** True once shutdown has begun: no new table or batch will start. */
+  get isStopping(): boolean {
+    return this.stopping;
+  }
+
+  /**
+   * Stop starting work and wait for the statement already running.
+   *
+   * Bounded by ONE batch (a few milliseconds, `BATCH_SIZE`), not by a table or a run, because the
+   * flag is also checked between batches — so a slow backlog delays shutdown by a single statement
+   * and boot readiness by nothing.
+   */
+  async drain(): Promise<void> {
+    this.stopping = true;
+    await Promise.allSettled([...this.active]);
+  }
 
   /** Sweep every policy. One table's failure never stops another's. */
   async sweepAll(now: Date): Promise<RetentionSweepResult[]> {
     const results: RetentionSweepResult[] = [];
     for (const policy of RETENTION_POLICIES) {
+      if (this.stopping) break;
       results.push(await this.sweep(policy, now));
     }
     return results;
   }
 
-  async sweep(policy: RetentionPolicy, now: Date): Promise<RetentionSweepResult> {
+  sweep(policy: RetentionPolicy, now: Date): Promise<RetentionSweepResult> {
+    const work = this.sweepTable(policy, now);
+    this.active.add(work);
+    // `then(done, done)`, not `finally`: `finally` returns a derived promise that re-rejects, which
+    // nobody holds and would surface as an unhandled rejection.
+    const done = (): void => {
+      this.active.delete(work);
+    };
+    void work.then(done, done);
+    return work;
+  }
+
+  private async sweepTable(policy: RetentionPolicy, now: Date): Promise<RetentionSweepResult> {
     const cutoff = cutoffFor(policy.days, now);
     const started = Date.now();
     let deleted = 0;
@@ -111,6 +155,16 @@ export class RetentionSweepRunner {
         // A short batch means the table is drained: the statement asked for BATCH_SIZE and the
         // index had fewer to give.
         if (removed < BATCH_SIZE) break;
+        if (this.stopping) {
+          return {
+            table: policy.table,
+            deleted,
+            batches,
+            cappedOut: false,
+            durationMs: Date.now() - started,
+            interrupted: true,
+          };
+        }
         if (deleted >= RUN_CAP) {
           return {
             table: policy.table,
