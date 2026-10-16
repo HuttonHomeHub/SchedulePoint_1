@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.94.1
+
+### Patch Changes
+
+- [#1007](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1007) [`bd93a53`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bd93a5320ebf59bc26d1f41f3ba141e41d137848) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Restarting or stopping the API no longer logs a false "retention sweep failed" error. The sweep that runs at start-up used to be cut off mid-delete when the app shut down quickly, which looked exactly like a real database failure and counted towards the retention alert. The sweep now finishes the statement it is running, stops, and reports itself as stopped by shutdown; a real failure is still reported as before.
+
+- [#1010](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1010) [`3c74007`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3c740075bfda71ce82b1aea6fa891ddcb8d94753) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The API now logs a warning at start-up when the database password is still the built-in default. Nothing stops or changes; the backup guide's "Set a database password" section says how to check and how to change it.
+
 ## 0.94.0
 
 ### Minor Changes

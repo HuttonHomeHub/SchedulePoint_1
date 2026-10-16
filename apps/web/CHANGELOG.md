@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.192.1
+
+### Patch Changes
+
+- [#1009](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1009) [`d605cd7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d605cd7e88b0e1efc5e64db4e831cd09e8c3209b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt's timeline now re-fits to the space beside the grid when you drag the grid divider (or the Activity column's edge), so a zoom preset such as Quarter still fills the chart instead of fitting the width the grid had before you moved it.
+
 ## 0.192.0
 
 ### Minor Changes
