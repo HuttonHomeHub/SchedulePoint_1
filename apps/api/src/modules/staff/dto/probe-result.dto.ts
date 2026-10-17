@@ -171,6 +171,22 @@ export class ProbeResultRowDto {
 }
 
 /**
+ * What the history read says about itself in `meta`.
+ *
+ * `total` is every stored row, not the page's length, so a reader can tell "fifty is everything"
+ * from "fifty is a page" (`docs/TECH_DEBT.md` #271, #273). It names the state; it does not make the
+ * older rows reachable — that still wants a cursor.
+ */
+export class ProbeHistoryMetaDto {
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    description: 'Every stored row, not only the page returned.',
+  })
+  total!: number;
+}
+
+/**
  * The history read.
  *
  * **No cursor, and that is a bound rather than an omission.** This table has no automated producer:

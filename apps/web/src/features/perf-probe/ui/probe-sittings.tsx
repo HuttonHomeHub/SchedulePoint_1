@@ -1,7 +1,7 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 
-import type { ProbeResultRow } from '../api/probe-results';
+import type { ProbeHistory } from '../api/probe-results';
 import type { Sitting } from '../model/sitting';
 import { sittingSpreadMs, sittingsFromRows, SITTING_SPREAD_LIMIT_MS } from '../model/sitting';
 import {
@@ -61,9 +61,13 @@ const COMPARABILITY_ID = 'probe-sittings-comparability';
 export function ProbeSittings({
   query,
 }: {
-  query: UseQueryResult<ProbeResultRow[]>;
+  query: UseQueryResult<ProbeHistory>;
 }): React.ReactElement {
-  const rows = query.data ?? [];
+  const rows = query.data?.rows ?? [];
+  const total = query.data?.total ?? null;
+  // Known only when the API stated a total; otherwise the page boundary is unknowable and the
+  // oldest block keeps the conservative reading.
+  const isCut = total === null || total > rows.length;
   const sittings = sittingsFromRows(rows);
   /**
    * Which sitting the detail slot holds — **`null` meaning "the newest", never a copied id.**
@@ -185,15 +189,19 @@ export function ProbeSittings({
           */}
           {/*
             **The list is a page, and saying so is what stops the blocks lying.** The read is capped
-            at 50 rows and returns no total and no cursor (`staff-probe.service.ts:14,136`), so an
-            installation past fifty simply stops seeing the oldest — with nothing on screen
-            distinguishing that from having taken fifty. Stated without a number, because the client
-            is not told the cap and inventing one would be the confidently-wrong sentence this whole
-            epic removes. `docs/TECH_DEBT.md` #271 is the real fix: a total, so this can say
-            "showing 50 of 312".
+            (`staff-probe.service.ts`) and returns `meta.total`, so the sentence states how many
+            exist and the oldest block is only hedged when rows were really withheld. Against an
+            API that predates the total there is no number to print, and the client is not told the
+            cap, so the old number-free wording stays — inventing one would be the
+            confidently-wrong sentence this whole epic removes. The older rows are still
+            unreachable; that is `docs/TECH_DEBT.md` #271's cursor.
           */}
           <p id={CAP_ID} className="text-muted-foreground text-sm">
-            Showing the most recent readings. Older sittings are not listed.
+            {total === null
+              ? 'Showing the most recent readings. Older sittings are not listed.'
+              : isCut
+                ? `Showing the most recent ${String(rows.length)} of ${String(total)} readings. Older sittings are not listed.`
+                : `Showing all ${String(total)} readings.`}
           </p>
           <SittingBlock
             blockRef={blockRef}
@@ -203,7 +211,7 @@ export function ProbeSittings({
             // about a sitting that is not the last one. It used to be an index comparison over a
             // list; with one block on screen it is a comparison against the list's last id, which
             // is the same rule stated for the block that is actually rendered.
-            mayBeTruncated={shown.id === sittings[sittings.length - 1]?.id}
+            mayBeTruncated={isCut && shown.id === sittings[sittings.length - 1]?.id}
             // Null when the paragraph is not rendered. An `aria-describedby` pointing at no
             // element reads to a screen reader as a missing description rather than an absent
             // one — the rule this file already states for its two conditional warnings, applied

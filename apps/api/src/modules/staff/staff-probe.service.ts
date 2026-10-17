@@ -13,6 +13,12 @@ import type { ProbeResultRowDto } from './dto/probe-result.dto';
 /** The history read's page size when the caller names none. */
 const DEFAULT_LIMIT = 50;
 
+/** One page of the history and the size of the whole. */
+export interface ProbeHistory {
+  rows: ProbeResultRowDto[];
+  total: number;
+}
+
 /**
  * The staff console's one write, and the property it must not break.
  *
@@ -134,12 +140,17 @@ export class StaffProbeService {
    * A plain backward scan of `(recorded_at, id)` — both keys descend together, so `ORDER BY
    * recorded_at DESC, id DESC` needs no second index and no DESC declaration.
    */
-  async list(limit: number = DEFAULT_LIMIT): Promise<ProbeResultRowDto[]> {
-    const rows = await this.prisma.perfProbeResult.findMany({
-      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-    });
-    return rows.map(toRow);
+  async list(limit: number = DEFAULT_LIMIT): Promise<ProbeHistory> {
+    // One transaction so the total and the page describe the same table; two bare reads could
+    // disagree by a row written between them, and "showing 50 of 49" is the sentence that follows.
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.perfProbeResult.findMany({
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+      }),
+      this.prisma.perfProbeResult.count(),
+    ]);
+    return { rows: rows.map(toRow), total };
   }
 }
 

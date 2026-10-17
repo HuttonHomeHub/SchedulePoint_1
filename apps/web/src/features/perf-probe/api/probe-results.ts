@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchEnvelope } from '@/lib/api/client';
 
 /** One stored limb, as the panel reads it back. Mirrors `ProbeResultRowDto`. */
 export interface ProbeResultRow {
@@ -123,6 +123,18 @@ export interface ProbePairBody {
   treatment: ProbePhaseBody;
 }
 
+/**
+ * One page of the history and, when the API says so, how many rows exist in all.
+ *
+ * `total` is `null` against an API that predates `meta.total` — the two apps release and deploy
+ * independently (ADR-0027, ADR-0047) — and the panel then falls back to wording that claims no
+ * number, which is what it said before the field existed.
+ */
+export interface ProbeHistory {
+  rows: ProbeResultRow[];
+  total: number | null;
+}
+
 /** Exported so the console's Refresh can name this read by key (`STAFF_PAGE_READS`). */
 export const PROBE_RESULTS_KEY = ['staff', 'probe-results'] as const;
 
@@ -133,10 +145,15 @@ export const PROBE_RESULTS_KEY = ['staff', 'probe-results'] as const;
  * is an **audited act**, so a panel that refetched on each tab switch would fill an append-only
  * table with evidence of nothing.
  */
-export function useProbeResults(): UseQueryResult<ProbeResultRow[]> {
+export function useProbeResults(): UseQueryResult<ProbeHistory> {
   return useQuery({
     queryKey: PROBE_RESULTS_KEY,
-    queryFn: () => apiFetch<ProbeResultRow[]>('/staff/probe-results'),
+    queryFn: async (): Promise<ProbeHistory> => {
+      const { data, meta } = await apiFetchEnvelope<ProbeResultRow[], { total?: unknown }>(
+        '/staff/probe-results',
+      );
+      return { rows: data, total: typeof meta?.total === 'number' ? meta.total : null };
+    },
     refetchOnWindowFocus: false,
     retry: false,
   });

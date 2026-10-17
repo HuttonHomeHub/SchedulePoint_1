@@ -222,7 +222,14 @@ describe('a saturated delta carries its caveat on every surface that prints one'
 function renderStored(row: ProbeResultRow): void {
   render(
     <ProbeSittings
-      query={{ isPending: false, isError: false, data: [row], refetch: () => undefined } as never}
+      query={
+        {
+          isPending: false,
+          isError: false,
+          data: { rows: [row], total: null },
+          refetch: () => undefined,
+        } as never
+      }
     />,
   );
 }

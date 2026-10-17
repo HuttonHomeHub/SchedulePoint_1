@@ -57,7 +57,7 @@ vi.mock('../api/probe-results', () => ({
   useProbeResults: () => ({
     isPending: false,
     isError: false,
-    data: historyRows,
+    data: { rows: historyRows, total: null },
     refetch: () => undefined,
   }),
 }));

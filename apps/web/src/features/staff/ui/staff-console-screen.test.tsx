@@ -116,7 +116,8 @@ function answerStaff(path: string): Promise<unknown> {
   if (path === '/staff/csp-reports') return Promise.resolve([]);
   if (path === '/staff/installation') return Promise.resolve(INSTALLATION);
   if (path === '/staff/activity') return Promise.resolve([]);
-  if (path === '/staff/probe-results') return Promise.resolve([]);
+  // `apiFetchEnvelope` is mocked onto the same function, so this read answers the envelope.
+  if (path === '/staff/probe-results') return Promise.resolve({ data: [], meta: { total: 0 } });
   if (path === '/staff/accounts') {
     return Promise.resolve({
       unverifiedTotal: 3,

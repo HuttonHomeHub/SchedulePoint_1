@@ -871,8 +871,8 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     expect(described, "this sitting's own machine facts").toContain('CI container');
     // Likewise the cap note, which M7 wired to the block and not only to the index — and which
     // nothing asserted until `docs/TECH_DEBT.md` #347, so that fix had no regression test.
-    expect(described, 'the cap note reaches the block, not only the index').toContain(
-      'Older sittings are not listed',
+    expect(described, 'the cap note reaches the block, not only the index').toMatch(
+      /Showing (all \d+ readings|the most recent)/,
     );
 
     /**

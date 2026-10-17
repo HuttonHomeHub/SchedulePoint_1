@@ -75,7 +75,7 @@ const row = (over: Partial<ProbeResultRow> = {}): ProbeResultRow => ({
   ...over,
 });
 
-const view = (rows: ProbeResultRow[]): ReturnType<typeof render> =>
+const view = (rows: ProbeResultRow[], total: number | null = null): ReturnType<typeof render> =>
   render(
     // **Wrapped, because the route is.** `staff.tsx:137` mounts an `AnnouncerProvider`, and
     // `useAnnounce()` outside one is a silent no-op — so a suite that omits it reports an
@@ -90,7 +90,7 @@ const view = (rows: ProbeResultRow[]): ReturnType<typeof render> =>
             {
               isPending: false,
               isError: false,
-              data: rows,
+              data: { rows, total },
               refetch: () => undefined,
             } as never
           }
@@ -194,6 +194,31 @@ describe('ProbeSittings', () => {
     expect(
       screen.getByText('Showing the most recent readings. Older sittings are not listed.'),
     ).toBeInTheDocument();
+  });
+
+  it('states the total when the API gives one, and the page is shorter than it', () => {
+    view(sweepRows(), 312);
+    expect(
+      screen.getByText('Showing the most recent 4 of 312 readings. Older sittings are not listed.'),
+    ).toBeInTheDocument();
+  });
+
+  // #273: the oldest block was hedged by position alone. With the total known, a page that holds
+  // everything is not cut, so the block may say what it knows — and a cut page still may not.
+  // Verified red by ignoring `total` in `isCut` (the oldest block then stays hedged).
+  it('stops hedging the oldest block when the total shows nothing was withheld', () => {
+    view(sweepRows().slice(0, 2), 2);
+    expect(screen.getByText('Showing all 2 readings.')).toBeInTheDocument();
+    const alert = describedText();
+    expect(alert).toContain('4 were refused or never taken');
+    expect(alert).not.toContain('fall outside this page');
+  });
+
+  it('keeps hedging the oldest block when the total shows rows were withheld', () => {
+    view(sweepRows().slice(0, 2), 50);
+    const alert = describedText();
+    expect(alert).toContain('fall outside this page');
+    expect(alert).not.toContain('were refused or never taken');
   });
 
   it('does not call a complete sweep partial', () => {

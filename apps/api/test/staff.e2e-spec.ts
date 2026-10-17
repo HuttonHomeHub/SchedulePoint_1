@@ -536,6 +536,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
       .expect(200);
 
     expect(response.body.data).toHaveLength(4);
+    expect(response.body.meta).toEqual({ total: 4 });
     expect(response.body.data[0].appVersion).toBe('0.110.0');
     expect(await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } })).toBe(
       before + 1,
@@ -569,6 +570,9 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
       .set('Origin', ORIGIN)
       .expect(200);
     expect(limited.body.data).toHaveLength(1);
+    // The total is the table's, not the page's — a capped read must be able to say it was capped
+    // (`docs/TECH_DEBT.md` #271). One press writes one row per limb, so two rows are stored.
+    expect(limited.body.meta).toEqual({ total: 2 });
 
     await agent.get('/api/v1/staff/probe-results?limit=0').set('Origin', ORIGIN).expect(422);
     await agent.get('/api/v1/staff/probe-results?limit=101').set('Origin', ORIGIN).expect(422);
