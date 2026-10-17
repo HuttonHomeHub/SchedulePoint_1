@@ -193,7 +193,8 @@ for the same APG citation.
 - **Ships dark.** No production caller sets `ComboboxOption.disabled` (all five consumers pass only the
   control-level prop), so no screen reaches this yet; the first caller to shade an option owes the
   journey (ADR-0081 §1).
-- **The `Menu` outside-press defect stays open** in #229 and is not part of this amendment.
+- **The `Menu` outside-press defect was not part of this amendment** and stayed open in #229 until the 2026-10-17 line below.
+- **2026-10-17 — the `Menu` half of #229 is closed**, by a later change: `Menu` takes a required `openerRef`, so a press on the control that opened a menu closes it and returns focus where Escape does, rather than closing and reopening it. Recorded in [`docs/specs/menu-opener-press/spec.md`](../specs/menu-opener-press/spec.md); it implements the APG Menu Button contract the primitive already claimed, so it needed no ADR of its own.
 
 ## Alternatives rejected
 

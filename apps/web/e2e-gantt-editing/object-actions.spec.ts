@@ -373,3 +373,60 @@ test('the docked bar in the Gantt is accessible', async ({ page }) => {
 
   expect(results.violations).toEqual([]);
 });
+
+/**
+ * **A row's `⋯` closes the menu it opened** (`docs/TECH_DEBT.md` #229, Menu half; spec
+ * `docs/specs/menu-opener-press/spec.md`). `GanttRowMenu`'s trigger is an **open-only** site: it sets
+ * an anchor on click and never reads the open state, so a second press closed the menu on
+ * `pointerdown` and then reopened it on `click` whatever React had flushed. And the menu can be
+ * opened from the row itself (right-click), where focus returns to the row but the control that must
+ * close it is still the row's `⋯` — the two refs the fix keeps apart.
+ *
+ * Outcomes are asserted after a settle, never event order.
+ *
+ * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
+ */
+test("a Gantt row's ⋯ closes the menu it opened, from either way of opening it", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  // Tall enough that the menu opens BELOW its `⋯`: in a short window the clamp lifts the panel over the
+  // trigger, and a real pointer could not press it there either.
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 2);
+  await recalculate(page);
+  await showGantt(page);
+
+  const row = ganttRow(page, 'Seeded 1');
+  const trigger = row.getByRole('button', { name: 'Actions for Seeded 1' });
+  const menu = page.getByRole('menu', { name: 'Actions for Seeded 1' });
+
+  // The open panel overlaps the lower edge of the `⋯` it hangs from, so the second press lands on the
+  // trigger's exposed upper strip, which is where a real pointer can reach it. Playwright's hit-test
+  // still checks the point, so this is not `force`.
+  const exposed = { position: { x: 14, y: 3 } };
+
+  // Opened by the ⋯, closed by the ⋯.
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await trigger.click(exposed);
+  await page.waitForTimeout(400);
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger).toBeFocused();
+
+  // Opened by right-click on the row, closed by the row's ⋯.
+  await row.click({ button: 'right' });
+  await expect(menu).toBeVisible();
+  await trigger.click(exposed);
+  await page.waitForTimeout(400);
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});

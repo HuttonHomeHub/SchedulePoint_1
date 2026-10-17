@@ -113,6 +113,7 @@ function PresetMenu({ onApply }: { onApply: (id: (typeof WEEK_PRESETS)[number]['
         onClose={close}
         anchor={anchor}
         label="Working-week presets"
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {WEEK_PRESETS.map((preset) => (
@@ -175,6 +176,7 @@ function CopyDayMenu({
         onClose={close}
         anchor={anchor}
         label={`Copy ${dayLabel} hours to`}
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {COPY_TARGET_GROUPS.map((group) => (

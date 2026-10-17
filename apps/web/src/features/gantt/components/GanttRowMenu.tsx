@@ -202,6 +202,7 @@ export function GanttRowMenu({
         }}
         anchor={anchor ?? { x: 0, y: 0 }}
         label={`Actions for ${activityName}`}
+        openerRef={triggerRef}
         restoreFocusRef={restoreRef}
       >
         {items.map((item) => {

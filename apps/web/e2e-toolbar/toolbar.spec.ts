@@ -286,3 +286,39 @@ test('icon-only deck glyphs name themselves to pointer, keyboard and touch', asy
     .poll(async () => (await marker.boundingBox())?.x, { timeout: 10_000 })
     .not.toBe(before);
 });
+
+/**
+ * **A menu's own trigger closes it** (`docs/TECH_DEBT.md` #229, Menu half; spec
+ * `docs/specs/menu-opener-press/spec.md`). A press on an open menu's trigger used to close the menu
+ * on `pointerdown` and then reach the trigger's `onClick` on `click`, which reopened it — so the
+ * control that said `aria-expanded="true"` could not dismiss what it had opened.
+ *
+ * **Export** is a plain trigger whose restore target is itself. The split-button caret is probed in
+ * `e2e-authoring/authoring.spec.ts`, because this suite pins `VITE_CANVAS_AUTHORING` off and so
+ * renders no split button. The outcome is asserted after a settle, not the order of events, since the
+ * original flicker is timing-shaped.
+ *
+ * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
+ */
+test("a menu's own trigger closes it, and focus lands where Escape would put it", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await onboard(page, Date.now() + 29);
+  await openNewPlan(page);
+  await startEditing(page);
+  await addActivity(page, 'Excavate');
+  await recalculate(page);
+
+  const bar = page.getByRole('toolbar', { name: 'Plan commands' });
+
+  const exportButton = bar.getByRole('button', { name: 'Export', exact: true });
+  await exportButton.click();
+  await expect(page.getByRole('menu', { name: 'Export' })).toBeVisible();
+  await expect(exportButton).toHaveAttribute('aria-expanded', 'true');
+  await exportButton.click();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(exportButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(exportButton).toBeFocused();
+});

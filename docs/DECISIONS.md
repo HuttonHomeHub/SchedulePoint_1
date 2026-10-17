@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-17 — A menu's opener and its focus-restore target are two refs (tech debt #229)
+
+**What was decided.** `Menu` takes a required `openerRef` beside `restoreFocusRef`. A primary press on the
+opener is ignored by the outside-press listener, and its `click` is swallowed at `document` capture and closes
+the menu through the same focus-restoring path Escape uses. `null` means a menu with no trigger control.
+
+**Why two refs.** They answer different questions — which press means "close", and where focus goes — and they
+differ exactly where the defect lived: a split button's `tabIndex={-1}` caret opens the menu while focus returns
+to the main half, and a row's `⋯` opens it while focus returns to the row. Deriving the opener from
+`restoreFocusRef` would have left the caret broken, stopped the main half closing the menu, and swallowed a row
+click under a context menu. Required rather than optional so a sixteenth menu must decide.
+
+**Consequences.** Four open-only triggers (`RowActionsMenu`, `GanttRowMenu`, the Explorer `⋯`,
+`ActivitiesTable`'s row button) needed no change because `Menu` owns the click. A press that starts on the
+opener and is dragged off before release now leaves the menu open (no `click` arrives); that is the native
+button contract and is accepted.
+
+---
+
 ## 2026-10-16 — A blur with no related target is one rule for every container that goes (tech debt #481)
 
 **What was decided.** ADR-0135's container rule lives in `useContainerUnmountHandoff` and nowhere else: focus

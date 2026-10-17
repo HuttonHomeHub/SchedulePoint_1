@@ -282,6 +282,21 @@ describe('Add / Link split buttons — focus restore (a11y)', () => {
   });
 
   it.each([['Activity type:'], ['Link type:']])(
+    'pressing the caret again closes the menu and focus lands on the primary half (%s, #229)',
+    (caretPrefix) => {
+      render(doRow(ctx({ hasDiagram: true })));
+      const caret = screen.getByRole('button', { name: new RegExp(`^${caretPrefix}`) });
+      fireEvent.click(caret);
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      fireEvent.pointerDown(caret, { button: 0 });
+      fireEvent.click(caret);
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+      expect(document.activeElement).not.toBe(caret);
+      expect(document.activeElement).toHaveAttribute('aria-pressed');
+    },
+  );
+
+  it.each([['Activity type:'], ['Link type:']])(
     'returns focus to the primary half after picking an item (%s)',
     (caretPrefix) => {
       render(doRow(ctx({ hasDiagram: true })));

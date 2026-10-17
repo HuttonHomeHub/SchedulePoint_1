@@ -1009,6 +1009,7 @@ function AddActivityControl({
         onClose={close}
         anchor={anchor}
         label="Add activity type"
+        openerRef={triggerRef}
         restoreFocusRef={mainButtonRef}
       >
         <MenuSection label="Draw on the canvas" />
@@ -1184,6 +1185,7 @@ function LinkControl({
         onClose={close}
         anchor={anchor}
         label="Link type"
+        openerRef={triggerRef}
         restoreFocusRef={mainButtonRef}
       >
         {/* Start → Finish is this menu's anchor and never promotes: "Stop linking" renders only while
@@ -1685,6 +1687,7 @@ function PlanAnalysisControl({
         onClose={close}
         anchor={anchor}
         label={ANALYSIS_LABEL}
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         <MenuItem onSelect={() => ctx.openBaselines()}>
@@ -1882,7 +1885,14 @@ function ExportMenuControl({
           </span>
         ) : null}
       </button>
-      <Menu open={open} onClose={close} anchor={anchor} label={name} restoreFocusRef={triggerRef}>
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label={name}
+        openerRef={triggerRef}
+        restoreFocusRef={triggerRef}
+      >
         {/* Grouped into Schedule / Diagram sections (ux S2), mirroring the Add split-button's sections. */}
         <MenuSection label="Schedule" />
         <MenuItem onSelect={() => ctx.exportScheduleCsv('all')}>
@@ -2649,6 +2659,7 @@ function UndoHistoryControl({
         onClose={close}
         anchor={anchor}
         label={HISTORY_LABEL}
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {entries && entries.undo.length > 0 ? <MenuSection label="Undo" /> : null}

@@ -54,6 +54,7 @@ export function PlanActionsMenu({
         onClose={close}
         anchor={anchor}
         label="Plan actions"
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         <MenuItem onSelect={() => setDialog('details')}>

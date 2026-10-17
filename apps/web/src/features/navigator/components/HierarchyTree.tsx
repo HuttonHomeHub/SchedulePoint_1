@@ -159,6 +159,10 @@ export function HierarchyTree({
   // The element to refocus when the menu closes — always the target row, so roving
   // tabindex stays coherent after the menu dismisses.
   const menuTriggerRef = useRef<HTMLElement | null>(null);
+  // The row's "⋯" button — the control a press on which must close the menu (#229). Distinct from
+  // `menuTriggerRef`, which is where focus returns (the row), so a context-menu open still has an
+  // opener to name. Null when the row shows no actions button.
+  const actionButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   // Touch long-press → open the row menu (the large-target, non-hover equivalent of the
   // "⋯" button). `suppressClick` swallows the tap's trailing click so the row doesn't
   // also activate/toggle after the menu opens.
@@ -651,6 +655,10 @@ export function HierarchyTree({
                   // Not a tab stop: the tree is a single tab stop (roving); keyboard users
                   // open the same menu with the Menu/Shift+F10 key on the focused row.
                   tabIndex={-1}
+                  ref={(element: HTMLButtonElement | null) => {
+                    if (element) actionButtonRefs.current.set(node.id, element);
+                    else actionButtonRefs.current.delete(node.id);
+                  }}
                   aria-label={`Actions for ${node.name}`}
                   aria-haspopup="menu"
                   aria-expanded={menuOpenHere}
@@ -683,6 +691,13 @@ export function HierarchyTree({
           onClose={() => setMenu(null)}
           anchor={menu.anchor}
           label={`Actions for ${menu.node.name}`}
+          // Resolved on every read, not captured at open: the tree is virtualized, so the row's `⋯`
+          // can remount while the menu is open, and a captured node would be detached by then.
+          openerRef={{
+            get current() {
+              return actionButtonRefs.current.get(menu.node.id) ?? null;
+            },
+          }}
           restoreFocusRef={menuTriggerRef}
         >
           {nodeActions(menu.node.kind, crud.canWrite).map((action) => (

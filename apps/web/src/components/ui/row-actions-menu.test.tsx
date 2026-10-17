@@ -40,6 +40,22 @@ describe('RowActionsMenu', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('pressing the trigger again closes the menu and stays closed (#229)', () => {
+    render(
+      <RowActionsMenu subject="Northgate">
+        <MenuItem onSelect={vi.fn()}>Delete</MenuItem>
+      </RowActionsMenu>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Actions for Northgate' });
+    open();
+    // An open-only trigger: before the fix this press reopened the menu it had just closed.
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+  });
+
   it('sizes its trigger with `icon-row`, so a coarse pointer gets 44 px and the row grows with it', () => {
     // jsdom paints nothing, so the class is the only tier-1 witness: a revert to a raw `size-7`
     // (or to `icon-sm`, which stays 28 on touch) passes every other unit test and is caught only

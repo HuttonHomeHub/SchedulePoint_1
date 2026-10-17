@@ -131,6 +131,23 @@ describe('HierarchyTree — in-tree CRUD', () => {
     expect(items).toEqual(['New project', 'Rename', 'Delete']);
   });
 
+  it('pressing the "⋯" again closes its menu, also when the menu was opened by right-click (#229)', async () => {
+    renderTree({ canWrite: true });
+    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+    const button = screen.getByRole('button', { name: 'Actions for Northgate' });
+    fireEvent.click(button);
+    fireEvent.pointerDown(button, { button: 0 });
+    fireEvent.click(button);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    // The opener is resolved when the press arrives, not captured at open (the tree is virtualized).
+    fireEvent.contextMenu(client);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.pointerDown(button, { button: 0 });
+    fireEvent.click(button);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('dispatches the chosen action with the target node', async () => {
     const { api } = renderTree({ canWrite: true });
     await screen.findByRole('treeitem', { name: /Northgate/ });

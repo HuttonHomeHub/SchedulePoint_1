@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { createRef } from 'react';
+import { createRef, useRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
-import { Menu, MenuItem } from './menu';
+import { Menu, MenuItem, useMenuTrigger } from './menu';
 
 function renderMenu(
   props: Partial<React.ComponentProps<typeof Menu>> = {},
@@ -11,7 +11,14 @@ function renderMenu(
 ): { onClose: ReturnType<typeof vi.fn>; onSelect: typeof onSelect } {
   const onClose = vi.fn();
   render(
-    <Menu open onClose={onClose} anchor={{ x: 40, y: 40 }} label="Node actions" {...props}>
+    <Menu
+      open
+      openerRef={null}
+      onClose={onClose}
+      anchor={{ x: 40, y: 40 }}
+      label="Node actions"
+      {...props}
+    >
       <MenuItem onSelect={() => onSelect('rename')}>Rename</MenuItem>
       <MenuItem onSelect={() => onSelect('delete')} destructive>
         Delete
@@ -24,7 +31,13 @@ function renderMenu(
 describe('Menu', () => {
   it('renders nothing when closed', () => {
     render(
-      <Menu open={false} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Node actions">
+      <Menu
+        open={false}
+        openerRef={null}
+        onClose={vi.fn()}
+        anchor={{ x: 0, y: 0 }}
+        label="Node actions"
+      >
         <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
       </Menu>,
     );
@@ -77,7 +90,7 @@ describe('Menu', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
     render(
-      <Menu open onClose={onClose} anchor={{ x: 40, y: 40 }} label="Add type">
+      <Menu open openerRef={null} onClose={onClose} anchor={{ x: 40, y: 40 }} label="Add type">
         <MenuItem onSelect={() => onSelect('task')}>Task</MenuItem>
         <MenuItem disabled onSelect={() => onSelect('hammock')}>
           Hammock
@@ -108,7 +121,7 @@ describe('Menu', () => {
     // the button leaks into the accessible NAME as well as the description. Here the span is a
     // sibling, so the name is exactly what the children say.
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
         <MenuItem
           disabled
           disabledReason="Start editing to change this activity."
@@ -129,7 +142,7 @@ describe('Menu', () => {
     // Reachable today wherever an item becomes disabled while focused (account-chip's Sign out
     // during its own pending write).
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Wrap">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Wrap">
         <MenuItem disabled disabledReason="Nope." onSelect={vi.fn()}>
           First
         </MenuItem>
@@ -148,7 +161,7 @@ describe('Menu', () => {
     // which is OUTSIDE the portal, so the container's React onKeyDown never saw the arrows and only
     // Escape worked. A focus trap in a menu of refusals.
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="All shut">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="All shut">
         <MenuItem disabled disabledReason="Take the edit lock." onSelect={vi.fn()}>
           Edit
         </MenuItem>
@@ -162,7 +175,7 @@ describe('Menu', () => {
 
   it('a `selected` item becomes a radio menu item conveying its checked state to AT', () => {
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Type">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Type">
         <MenuItem onSelect={vi.fn()} selected>
           Task
         </MenuItem>
@@ -196,6 +209,7 @@ describe('Menu', () => {
         <button ref={restore}>Trigger</button>
         <Menu
           open
+          openerRef={null}
           onClose={onClose}
           anchor={{ x: 10, y: 10 }}
           label="Node actions"
@@ -218,6 +232,7 @@ describe('Menu', () => {
         <button ref={restore}>Trigger</button>
         <Menu
           open
+          openerRef={null}
           onClose={onClose}
           anchor={{ x: 10, y: 10 }}
           label="Node actions"
@@ -240,7 +255,7 @@ describe('Menu', () => {
 
   it('has no axe violations', async () => {
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="Node actions">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="Node actions">
         <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
         <MenuItem onSelect={vi.fn()} destructive>
           Delete
@@ -269,7 +284,7 @@ describe('Menu — portal target', () => {
     document.body.append(dialog);
 
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="In a dialog">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="In a dialog">
         <MenuItem onSelect={vi.fn()}>Only item</MenuItem>
       </Menu>,
     );
@@ -281,7 +296,7 @@ describe('Menu — portal target', () => {
 
   it('falls back to document.body when no dialog is open', () => {
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="On a page">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="On a page">
         <MenuItem onSelect={vi.fn()}>Only item</MenuItem>
       </Menu>,
     );
@@ -313,7 +328,7 @@ describe('Menu — the contracts the ADR-0111 sweep found broken', () => {
   it('marks Escape handled, so a surrounding modal dialog does not also close', () => {
     const onClose = vi.fn();
     render(
-      <Menu open onClose={onClose} anchor={{ x: 40, y: 40 }} label="Node actions">
+      <Menu open openerRef={null} onClose={onClose} anchor={{ x: 40, y: 40 }} label="Node actions">
         <MenuItem onSelect={() => {}}>Only item</MenuItem>
       </Menu>,
     );
@@ -345,7 +360,13 @@ describe('Menu — the contracts the ADR-0111 sweep found broken', () => {
       // Shaped like the real host: a Gantt row selects on click and owns its own keyboard, and
       // `GanttRowMenu` is a React child of that row while its DOM lives in a portal.
       <div role="row" tabIndex={-1} onClick={ancestorClick} onKeyDown={() => {}}>
-        <Menu open onClose={() => {}} anchor={{ x: 40, y: 40 }} label="Node actions">
+        <Menu
+          open
+          openerRef={null}
+          onClose={() => {}}
+          anchor={{ x: 40, y: 40 }}
+          label="Node actions"
+        >
           <MenuItem onSelect={onSelect}>Duplicate</MenuItem>
         </Menu>
       </div>,
@@ -356,5 +377,190 @@ describe('Menu — the contracts the ADR-0111 sweep found broken', () => {
       ancestorClick,
       'the click reached the enclosing JSX — a row underneath would re-select',
     ).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #229 (Menu half): a press on the control that opened a menu closes it, and the same press's
+ * `click` must not reach the trigger's own handler, which would reopen it.
+ */
+describe('Menu — the opener closes it', () => {
+  function Harness({
+    onOpenerClick = () => {},
+    splitMain = false,
+  }: {
+    onOpenerClick?: () => void;
+    splitMain?: boolean;
+  }): React.ReactElement {
+    const { triggerRef, open, anchor, toggle, close } = useMenuTrigger();
+    const mainRef = useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        {splitMain ? (
+          <button ref={mainRef} type="button" onClick={onOpenerClick}>
+            Main
+          </button>
+        ) : null}
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-expanded={open}
+          onClick={() => {
+            onOpenerClick();
+            toggle();
+          }}
+        >
+          Opener
+        </button>
+        <Menu
+          open={open}
+          onClose={close}
+          anchor={anchor}
+          label="Actions"
+          openerRef={triggerRef}
+          restoreFocusRef={splitMain ? mainRef : triggerRef}
+        >
+          <MenuItem onSelect={() => {}}>Rename</MenuItem>
+        </Menu>
+      </>
+    );
+  }
+
+  /** A real press is `pointerdown` then `click`. */
+  function press(el: Element): void {
+    fireEvent.pointerDown(el, { button: 0 });
+    fireEvent.click(el);
+  }
+
+  it('click opens, a second press closes and stays closed, a third opens again', () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Opener' });
+    fireEvent.click(opener);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    press(opener);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(opener).toHaveAttribute('aria-expanded', 'false');
+    expect(opener).toHaveFocus();
+    fireEvent.click(opener);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it("closes without running the opener's own onClick, and restores focus", () => {
+    const onClose = vi.fn();
+    const opener = createRef<HTMLButtonElement>();
+    const restore = createRef<HTMLButtonElement>();
+    const ownClick = vi.fn();
+    render(
+      <>
+        <button ref={opener} onClick={ownClick}>
+          Opener
+        </button>
+        <button ref={restore}>Restore</button>
+        <Menu
+          open
+          onClose={onClose}
+          anchor={{ x: 0, y: 0 }}
+          label="Actions"
+          openerRef={opener}
+          restoreFocusRef={restore}
+        >
+          <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
+        </Menu>
+      </>,
+    );
+    press(opener.current as HTMLElement);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(ownClick).not.toHaveBeenCalled();
+    expect(restore.current).toHaveFocus();
+  });
+
+  it('a click with no pointerdown (assistive technology) closes the same way', () => {
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Opener' });
+    fireEvent.click(opener);
+    fireEvent.click(opener);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('a split button: pressing the restore target (main half) closes AND runs its command', () => {
+    const onMain = vi.fn();
+    render(<Harness splitMain onOpenerClick={onMain} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Opener' }));
+    onMain.mockClear();
+    press(screen.getByRole('button', { name: 'Main' }));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(onMain).toHaveBeenCalledOnce();
+  });
+
+  it('a split button: pressing the caret closes and focus lands on the main half', () => {
+    render(<Harness splitMain />);
+    const caret = screen.getByRole('button', { name: 'Opener' });
+    fireEvent.click(caret);
+    press(caret);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Main' })).toHaveFocus();
+  });
+
+  it('a click on a non-opener element outside the menu still reaches its own handler', () => {
+    const onElsewhere = vi.fn();
+    render(
+      <>
+        <button onClick={onElsewhere}>Elsewhere</button>
+        <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Actions" openerRef={null}>
+          <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
+        </Menu>
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    expect(onElsewhere).toHaveBeenCalledOnce();
+  });
+
+  it('a secondary-button press on the opener still closes on pointerdown, as before', () => {
+    const onClose = vi.fn();
+    const opener = createRef<HTMLButtonElement>();
+    render(
+      <>
+        <button ref={opener}>Opener</button>
+        <Menu open onClose={onClose} anchor={{ x: 0, y: 0 }} label="Actions" openerRef={opener}>
+          <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
+        </Menu>
+      </>,
+    );
+    fireEvent.pointerDown(opener.current as HTMLElement, { button: 2 });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('an empty ref and a null openerRef both behave as a press elsewhere', () => {
+    const empty = createRef<HTMLButtonElement>();
+    const first = renderMenu({ openerRef: empty });
+    fireEvent.pointerDown(document.body);
+    expect(first.onClose).toHaveBeenCalledOnce();
+    const second = renderMenu({ openerRef: null });
+    fireEvent.pointerDown(document.body);
+    expect(second.onClose).toHaveBeenCalledOnce();
+  });
+
+  it('a press elsewhere closes without moving focus to the restore target', () => {
+    const restore = createRef<HTMLButtonElement>();
+    const onClose = vi.fn();
+    render(
+      <>
+        <button ref={restore}>Restore</button>
+        <button>Elsewhere</button>
+        <Menu
+          open
+          onClose={onClose}
+          anchor={{ x: 0, y: 0 }}
+          label="Actions"
+          openerRef={null}
+          restoreFocusRef={restore}
+        >
+          <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
+        </Menu>
+      </>,
+    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Elsewhere' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(restore.current).not.toHaveFocus();
   });
 });

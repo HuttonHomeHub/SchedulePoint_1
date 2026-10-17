@@ -68,3 +68,42 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
 });
+
+/**
+ * **The Add caret closes the menu it opened** (`docs/TECH_DEBT.md` #229, Menu half; spec
+ * `docs/specs/menu-opener-press/spec.md`). The caret is the `tabIndex={-1}` half of a split button and
+ * the opener, while focus must return to the main half, so the two refs `Menu` takes differ exactly
+ * here. Pressing the caret again must close the menu, leave it closed, and put focus on the main half
+ * and never on the caret; pressing the main half instead closes it and still runs its command.
+ *
+ * Lives in this suite because `e2e-toolbar` pins `VITE_CANVAS_AUTHORING` off and renders no split
+ * button. Outcomes are asserted after a settle, not event order.
+ *
+ * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
+ */
+test('the Add caret closes the menu it opened, and focus lands on the main half', async ({
+  page,
+}) => {
+  await onboard(page, Date.now() + 31);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const caret = page.getByRole('button', { name: /^Activity type:/ });
+  // The main half is the caret's previous sibling inside the split button.
+  const main = caret.locator('xpath=preceding-sibling::button[1]');
+  await caret.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(caret).toHaveAttribute('aria-expanded', 'true');
+  await caret.click();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(caret).toHaveAttribute('aria-expanded', 'false');
+  await expect(caret).not.toBeFocused();
+  await expect(main).toBeFocused();
+
+  await caret.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await main.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(main).toHaveAttribute('aria-pressed', 'true');
+});

@@ -376,6 +376,26 @@ describe('the openAt handle (ADR-0177 D3)', () => {
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     expect(trigger).toHaveFocus();
   });
+
+  // #229: the opener is the `⋯` on every open path, while focus still goes where the open said.
+  it('pressing the ⋯ closes a menu the trigger opened, and keeps it closed', () => {
+    openMenu();
+    const trigger = screen.getByRole('button', { name: 'Actions for Foundations' });
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('pressing the ⋯ closes a menu opened at a point, and focus goes to the row', () => {
+    const { ref, row } = setup(() => context());
+    act(() => void ref.current?.openAt({ x: 40, y: 50 }, row));
+    const trigger = screen.getByRole('button', { name: 'Actions for Foundations' });
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+  });
 });
 
 describe('GanttRowMenu: its column width', () => {

@@ -1196,6 +1196,7 @@ export function ActivitiesTable({
           onClose={() => store.setMenu(null)}
           anchor={menu.anchor}
           label={`Actions for ${menu.activity.name}`}
+          openerRef={menuTriggerRef}
           restoreFocusRef={menuTriggerRef}
         >
           {actionsFor(menu.activity).map((action) => (

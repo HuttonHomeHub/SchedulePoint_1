@@ -121,6 +121,7 @@ export function OrgSwitcher(): React.ReactElement | null {
         onClose={close}
         anchor={anchor}
         label="Organisations"
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {organizations.map((organization) => {

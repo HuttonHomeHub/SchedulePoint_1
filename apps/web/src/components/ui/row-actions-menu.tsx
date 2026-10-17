@@ -99,6 +99,7 @@ export function RowActionsMenu({
         onClose={() => setAnchor(null)}
         anchor={anchor ?? { x: 0, y: 0 }}
         label={label}
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {children}
