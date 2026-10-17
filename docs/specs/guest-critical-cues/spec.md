@@ -523,7 +523,7 @@ web app. Alternatives are in §4.7.
 
 ## 5. Links
 
-- Implementation plan: [`./plan.md`](./implementation-plan.md)
+- Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Related docs updated by this change: `docs/API.md`, the new ADR, `docs/adr/0051-…` (status line),
   CLAUDE.md §16 (one line), `docs/TECH_DEBT.md` #403 (closed by the merging PR), new rows for N1/N2
   if none exist.

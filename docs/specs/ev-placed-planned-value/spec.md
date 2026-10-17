@@ -370,7 +370,7 @@ the capture changes.
 
 ## 5. Links
 
-- Implementation plan: [`./plan.md`](./plan.md)
+- Implementation plan: [`./implementation-plan.md`](./plan.md)
 - Docs updated by this change: `docs/API.md`, `docs/adr/0042-…` and `docs/adr/0044-…` (amendments),
   `docs/adr/0035-…` §29 and §32 (text), `docs/adr/0148-…` (References), `docs/TEST_PLAYBOOK.md:111`,
   `docs/TECH_DEBT.md` #405 (part (c) closed; F1 sibling row), CLAUDE.md §16 (one clause each on the
