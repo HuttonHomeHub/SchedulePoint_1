@@ -29,8 +29,8 @@ describe('toRenderActivities', () => {
       id: 'a1',
       type: 'TASK',
       laneIndex: 2,
-      earlyStart: '2026-01-01',
-      earlyFinish: '2026-01-03',
+      drawnStart: '2026-01-01',
+      drawnFinish: '2026-01-03',
       isCritical: true,
       isNearCritical: false,
       // The render model carries only the engine-owned conflict cue, not the source dates.

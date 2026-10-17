@@ -37,8 +37,8 @@ function bar(
     type,
     laneIndex: lane,
     label: id,
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-02',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-02',
     isCritical: false,
     isNearCritical: false,
   };

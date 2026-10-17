@@ -114,8 +114,8 @@ function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 't',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -190,7 +190,7 @@ describe('paintScene', () => {
   it('draws a milestone as a filled diamond path, not a rect', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {
-      activities: [task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02' })],
+      activities: [task({ type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02' })],
       edges: [],
       dataDate: DATA_DATE,
     };
@@ -203,14 +203,14 @@ describe('paintScene', () => {
     const ctx = mockCtx();
     const pred = task({
       id: 'p',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-01-03',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-01-03',
       laneIndex: 0,
     });
     const succ = task({
       id: 's',
-      earlyStart: '2026-01-08',
-      earlyFinish: '2026-01-09',
+      drawnStart: '2026-01-08',
+      drawnFinish: '2026-01-09',
       laneIndex: 1,
     });
     const scene: TsldScene = {
@@ -228,14 +228,14 @@ describe('paintScene', () => {
     const ctx = mockCtx();
     const pred = task({
       id: 'p',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-01-03',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-01-03',
       laneIndex: 0,
     });
     const succ = task({
       id: 's',
-      earlyStart: '2026-01-08',
-      earlyFinish: '2026-01-09',
+      drawnStart: '2026-01-08',
+      drawnFinish: '2026-01-09',
       laneIndex: 1,
     });
     const scene: TsldScene = {
@@ -386,7 +386,7 @@ describe('paintScene', () => {
     paintScene(
       plain,
       {
-        activities: [task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02' })],
+        activities: [task({ type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02' })],
         edges: [],
         dataDate: DATA_DATE,
       },
@@ -400,7 +400,7 @@ describe('paintScene', () => {
       pinned,
       {
         activities: [
-          task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', constraint: 'finish' }),
+          task({ type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02', constraint: 'finish' }),
         ],
         edges: [],
         dataDate: DATA_DATE,
@@ -713,7 +713,7 @@ describe('paintScene', () => {
   it('culls off-screen activities (no fillRect, not in the visible set)', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {
-      activities: [task({ id: 'far', earlyStart: '2027-06-01', earlyFinish: '2027-06-02' })],
+      activities: [task({ id: 'far', drawnStart: '2027-06-01', drawnFinish: '2027-06-02' })],
       edges: [],
       dataDate: DATA_DATE,
     };
@@ -926,8 +926,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     const year = task({
       id: 'y',
       label: 'A1020 Erect steel',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-12-31',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-12-31',
     });
     paintNames(
       ctx,
@@ -949,8 +949,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       ctx,
       {
         activities: [
-          task({ id: 'a', label: 'Alpha', earlyStart: '2026-01-02', earlyFinish: '2026-01-02' }),
-          task({ id: 'b', label: 'Bravo', earlyStart: '2026-01-04', earlyFinish: '2026-01-04' }),
+          task({ id: 'a', label: 'Alpha', drawnStart: '2026-01-02', drawnFinish: '2026-01-02' }),
+          task({ id: 'b', label: 'Bravo', drawnStart: '2026-01-04', drawnFinish: '2026-01-04' }),
         ],
         edges: [],
         dataDate: DATA_DATE,
@@ -973,8 +973,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     const long = task({
       id: 'l',
       label: 'Long bar',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-06-30',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-06-30',
     });
     paintNames(ctx, { activities: [long], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
     const x = ctx.fillText.mock.calls[0]![1] as number;
@@ -998,12 +998,12 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
    */
   it('truncates a name above a bar whose neighbour leaves too little room', () => {
     const ctx = mockCtx();
-    const narrow = task({ id: 'n', label: 'A1020 Erect steel · 3d', earlyFinish: '2026-01-04' });
+    const narrow = task({ id: 'n', label: 'A1020 Erect steel · 3d', drawnFinish: '2026-01-04' });
     const neighbour = task({
       id: 'x',
       label: 'B',
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
+      drawnStart: '2026-01-06',
+      drawnFinish: '2026-01-08',
     });
     paintNames(
       ctx,
@@ -1031,8 +1031,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       ctx,
       {
         activities: [
-          task({ id: 'bar', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
-          milestone({ id: 'ms', earlyStart: '2026-01-08', earlyFinish: '2026-01-08' }),
+          task({ id: 'bar', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' }),
+          milestone({ id: 'ms', drawnStart: '2026-01-08', drawnFinish: '2026-01-08' }),
         ],
         edges: [],
         dataDate: DATA_DATE,
@@ -1064,8 +1064,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     task({
       type: 'FINISH_MILESTONE',
       label: 'M1 Handover',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-01-02',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-01-02',
       ...over,
     });
 
@@ -1103,8 +1103,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     const right = milestone({
       id: 'r',
       label: 'M2 Done',
-      earlyStart: '2026-01-04',
-      earlyFinish: '2026-01-04',
+      drawnStart: '2026-01-04',
+      drawnFinish: '2026-01-04',
     });
     paintNames(
       ctx,
@@ -1144,8 +1144,8 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     const right = milestone({
       id: 'r',
       label: 'M2 Done',
-      earlyStart: '2026-01-04',
-      earlyFinish: '2026-01-04',
+      drawnStart: '2026-01-04',
+      drawnFinish: '2026-01-04',
     });
     paintNames(
       ctx,
@@ -1165,7 +1165,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     // place a beside label (≥ LABEL_BESIDE_MIN_PX) but far too narrow for the 66px label, so it
     // truncates with an ellipsis; the right diamond (unbounded room) draws its label in full.
     const left = milestone({ id: 'l' });
-    const right = milestone({ id: 'r', earlyStart: '2026-01-06', earlyFinish: '2026-01-06' });
+    const right = milestone({ id: 'r', drawnStart: '2026-01-06', drawnFinish: '2026-01-06' });
     paintNames(
       ctx,
       { activities: [left, right], edges: [], dataDate: DATA_DATE },
@@ -1190,7 +1190,7 @@ describe('paintScene — insight lenses', () => {
   const lensScene: TsldScene = {
     activities: [
       task({ id: 'a', isCritical: true }),
-      task({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-08' }),
+      task({ id: 'b', drawnStart: '2026-01-06', drawnFinish: '2026-01-08' }),
     ],
     edges: [],
     dataDate: DATA_DATE,
@@ -1389,7 +1389,7 @@ describe('paintScene — insight lenses', () => {
     paintScene(
       ctx,
       {
-        activities: [task({ id: 'far', earlyStart: '2027-06-01', earlyFinish: '2027-06-02' })],
+        activities: [task({ id: 'far', drawnStart: '2027-06-01', drawnFinish: '2027-06-02' })],
         edges: [],
         dataDate: DATA_DATE,
         baselineGhosts: [
@@ -1511,7 +1511,7 @@ describe('paintScene — over-allocation highlight', () => {
   const flagScene: TsldScene = {
     activities: [
       task({ id: 'a' }),
-      task({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-08' }),
+      task({ id: 'b', drawnStart: '2026-01-06', drawnFinish: '2026-01-08' }),
     ],
     edges: [],
     dataDate: DATA_DATE,
@@ -1565,7 +1565,7 @@ describe('paintScene — over-allocation highlight', () => {
   });
 
   it('does not badge a culled (off-screen) flagged bar', () => {
-    const offScreen = task({ id: 'z', earlyStart: '2035-01-01', earlyFinish: '2035-01-05' });
+    const offScreen = task({ id: 'z', drawnStart: '2035-01-01', drawnFinish: '2035-01-05' });
     const base = mockCtx();
     paintScene(
       base,
@@ -1592,8 +1592,8 @@ describe('paintScene — over-allocation highlight', () => {
 describe('paintScene — time-true links', () => {
   // A synthetic week keyed by day offset (0–4 working, 5–6 not), matching the render-model tests.
   const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
-  const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-04', laneIndex: 0 });
-  const succ = task({ id: 's', earlyStart: '2026-01-02', earlyFinish: '2026-01-14', laneIndex: 1 });
+  const pred = task({ id: 'p', drawnStart: '2026-01-02', drawnFinish: '2026-01-04', laneIndex: 0 });
+  const succ = task({ id: 's', drawnStart: '2026-01-02', drawnFinish: '2026-01-14', laneIndex: 1 });
   const linkScene = (over: Partial<TsldScene> = {}): TsldScene => ({
     activities: [pred, succ],
     edges: [
@@ -1741,7 +1741,7 @@ describe('paintScene — time-true links', () => {
 
   it('falls back to the extreme-end routing when dates are absent (no crash, no anchor math)', () => {
     const ctx = mockCtx();
-    const unscheduled = task({ id: 'u', earlyStart: null, earlyFinish: null, laneIndex: 1 });
+    const unscheduled = task({ id: 'u', drawnStart: null, drawnFinish: null, laneIndex: 1 });
     paintScene(
       ctx,
       linkScene({
@@ -1800,7 +1800,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
         task({ id: 'b', isNearCritical: true, laneIndex: 1, percentComplete: 100 }),
         task({ id: 'c', type: 'LEVEL_OF_EFFORT', laneIndex: 2 }),
         task({ id: 'd', type: 'WBS_SUMMARY', laneIndex: 3 }),
-        task({ id: 'e', type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', laneIndex: 4 }),
+        task({ id: 'e', type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02', laneIndex: 4 }),
       ],
       edges: [],
       dataDate: DATA_DATE,
@@ -1963,8 +1963,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
   });
 
   it('stops a link’s head at the node rim rather than under the disc (spec §4.13 A1)', () => {
-    const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-03' });
-    const succ = task({ id: 's', earlyStart: '2026-01-10', earlyFinish: '2026-01-12' });
+    const pred = task({ id: 'p', drawnStart: '2026-01-02', drawnFinish: '2026-01-03' });
+    const succ = task({ id: 's', drawnStart: '2026-01-10', drawnFinish: '2026-01-12' });
     const r = recordingCtx();
     paintScene(
       r.ctx,
@@ -2025,12 +2025,12 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
         refreshScene({
           view: { ...ALL_OFF, labels: true },
           activities: [
-            task({ id: 'a', label: 'AAAAAAAAAAAAAAAA', earlyFinish: '2026-01-05' }),
+            task({ id: 'a', label: 'AAAAAAAAAAAAAAAA', drawnFinish: '2026-01-05' }),
             task({
               id: 'b',
               label: 'BBBBBBBBBBBBBBBB',
-              earlyStart: secondStart,
-              earlyFinish: '2026-01-14',
+              drawnStart: secondStart,
+              drawnFinish: '2026-01-14',
             }),
           ],
         }),
@@ -2099,9 +2099,9 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     // legitimately flanks into it — a count over the whole row would be a test of that instead.
     const crowded = drawnBelow(
       [
-        task({ id: 'p', earlyStart: '2026-01-01', earlyFinish: '2026-01-01' }),
-        task({ id: 'c', earlyStart: '2026-01-02', earlyFinish: '2026-01-02' }),
-        task({ id: 'n', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+        task({ id: 'p', drawnStart: '2026-01-01', drawnFinish: '2026-01-01' }),
+        task({ id: 'c', drawnStart: '2026-01-02', drawnFinish: '2026-01-02' }),
+        task({ id: 'n', drawnStart: '2026-01-03', drawnFinish: '2026-01-03' }),
       ],
       VIEW,
     );
@@ -2150,24 +2150,24 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
         .filter((m): m is RegExpExecArray => m !== null && Number(m[3]) === below)
         .map((m) => m[1]!);
     };
-    const first = task({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-07' });
+    const first = task({ id: 'a', drawnStart: '2026-01-02', drawnFinish: '2026-01-07' });
     // Abutting, and wide enough (108 px) to write both of its own dates clear of its nodes.
     const meets = textsBelow([
       first,
-      task({ id: 'b', earlyStart: '2026-01-08', earlyFinish: '2026-01-13' }),
+      task({ id: 'b', drawnStart: '2026-01-08', drawnFinish: '2026-01-13' }),
     ]);
     expect(meets).toEqual(['2 Jan', '8 Jan', '13 Jan']);
     // A visible gap: the node is two nodes, each with its date.
     const apart = textsBelow([
       first,
       // 126 px: "10 Jan" + "16 Jan" + the gap + two node clearances fit inside.
-      task({ id: 'b', earlyStart: '2026-01-10', earlyFinish: '2026-01-16' }),
+      task({ id: 'b', drawnStart: '2026-01-10', drawnFinish: '2026-01-16' }),
     ]);
     expect(apart).toEqual(['2 Jan', '7 Jan', '10 Jan', '16 Jan']);
     // Abutting, but the next bar is too narrow to write its start: the finish keeps the node.
     const narrowNext = textsBelow([
       first,
-      task({ id: 'b', earlyStart: '2026-01-08', earlyFinish: '2026-01-09' }),
+      task({ id: 'b', drawnStart: '2026-01-08', drawnFinish: '2026-01-09' }),
     ]);
     expect(narrowNext).toContain('7 Jan');
   });
@@ -2356,7 +2356,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     paintScene(
       ctx,
       refreshScene({
-        activities: [task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02' })],
+        activities: [task({ type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02' })],
       }),
       VIEW,
       SIZE,
@@ -2378,7 +2378,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       critical.ctx,
       refreshScene({
         activities: [
-          task({ type: 'FINISH_MILESTONE', earlyFinish: '2026-01-02', isCritical: true }),
+          task({ type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02', isCritical: true }),
         ],
       }),
       VIEW,
@@ -2522,7 +2522,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
         refreshScene({
           activities: [
             task({
-              earlyFinish: '2026-01-02',
+              drawnFinish: '2026-01-02',
               visualConflict: true,
               visualConflictReason: 'LATER_THAN_BOUND',
             }),
@@ -2553,8 +2553,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      */
     const milestone = task({
       type: 'FINISH_MILESTONE',
-      earlyStart: '2026-01-05',
-      earlyFinish: '2026-01-05',
+      drawnStart: '2026-01-05',
+      drawnFinish: '2026-01-05',
       constraint: 'finish',
     });
     const refreshed = recordingCtx();
@@ -2654,8 +2654,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     const milestone = task({
       type: 'FINISH_MILESTONE',
       label: 'M1 Handover',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-01-02',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-01-02',
     });
     const legacy = mockCtx();
     paintScene(
@@ -3034,7 +3034,7 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
   // A short predecessor (days 1–4) and a long successor (days 1–19) so a walked anchor lands on
   // the bar rather than clamping — the geometry the M1/M5 anchor tests use.
   const pred = task({ id: 'p', laneIndex: 0 });
-  const succ = task({ id: 's', laneIndex: 1, earlyStart: '2026-01-02', earlyFinish: '2026-01-20' });
+  const succ = task({ id: 's', laneIndex: 1, drawnStart: '2026-01-02', drawnFinish: '2026-01-20' });
   const edge = (over: Partial<RenderEdge> = {}): RenderEdge => ({
     id: 'd1',
     predecessorId: 'p',

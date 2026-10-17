@@ -29,8 +29,8 @@ function task(id: string, lane: number, start: number, length: number): RenderAc
     type: 'TASK',
     laneIndex: lane,
     label: id,
-    earlyStart: day(start),
-    earlyFinish: day(start + length - 1),
+    drawnStart: day(start),
+    drawnFinish: day(start + length - 1),
     isCritical: false,
     isNearCritical: false,
   };

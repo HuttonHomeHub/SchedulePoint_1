@@ -165,8 +165,8 @@ export function evaluateLayout(
       scene.activities.map((a) => ({
         id: a.id,
         laneIndex: a.laneIndex,
-        start: a.earlyStart,
-        finish: a.earlyFinish,
+        start: a.drawnStart,
+        finish: a.drawnFinish,
       })),
     ).length,
     occluded,

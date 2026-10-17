@@ -29,8 +29,8 @@ function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 'a1',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -95,7 +95,7 @@ describe('minimapRects', () => {
     // 4,000-day extent in a 200px box: one day is 0.05px wide; 200 lanes: a lane is 0.6px.
     const mapping = minimapViewport({ minDay: 0, maxDay: 4000, maxLane: 199 }, BOX);
     const rects = minimapRects(
-      [activity({ earlyStart: '2026-01-02', earlyFinish: '2026-01-02', laneIndex: 150 })],
+      [activity({ drawnStart: '2026-01-02', drawnFinish: '2026-01-02', laneIndex: 150 })],
       DATA_DATE,
       mapping,
     );
@@ -108,8 +108,8 @@ describe('minimapRects', () => {
     const mapping = minimapViewport({ minDay: 0, maxDay: 100, maxLane: 1 }, BOX);
     const rects = minimapRects(
       [
-        activity({ id: 'placed', earlyStart: '2026-01-11', earlyFinish: null, laneIndex: 1 }),
-        activity({ id: 'unplaced', earlyStart: null, earlyFinish: null }),
+        activity({ id: 'placed', drawnStart: '2026-01-11', drawnFinish: null, laneIndex: 1 }),
+        activity({ id: 'unplaced', drawnStart: null, drawnFinish: null }),
       ],
       DATA_DATE,
       mapping,
@@ -125,7 +125,7 @@ describe('buildMinimapBitmap', () => {
     const { ctx, fills } = recordingCtx();
     const mapping = buildMinimapBitmap(
       ctx,
-      [activity({ earlyStart: null })],
+      [activity({ drawnStart: null })],
       DATA_DATE,
       BOX,
       PALETTE,
@@ -137,12 +137,12 @@ describe('buildMinimapBitmap', () => {
   it('draws ground → data-date → non-critical → critical, so the critical path survives the merge', () => {
     const { ctx, fills } = recordingCtx();
     // Two bars collapsing onto the same pixel column and lane: the critical one must paint LAST.
-    const shared = { earlyStart: '2026-06-01', earlyFinish: '2031-06-01', laneIndex: 0 } as const;
+    const shared = { drawnStart: '2026-06-01', drawnFinish: '2031-06-01', laneIndex: 0 } as const;
     const acts = [
       activity({ id: 'crit', ...shared, isCritical: true }),
       activity({ id: 'norm', ...shared }),
       // Anchors the extent at the data date so the data-date vertical is in span.
-      activity({ id: 'anchor', earlyStart: '2026-01-01', earlyFinish: '2026-01-02', laneIndex: 1 }),
+      activity({ id: 'anchor', drawnStart: '2026-01-01', drawnFinish: '2026-01-02', laneIndex: 1 }),
     ];
     const mapping = buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     expect(mapping).not.toBeNull();
@@ -186,7 +186,7 @@ describe('buildMinimapBitmap', () => {
 
   it('single activity: the bar spans the whole box (its own extent) and the data-date line lands at day 0 when in span', () => {
     const { ctx, fills } = recordingCtx();
-    const acts = [activity({ earlyStart: '2026-01-01', earlyFinish: '2026-01-10', laneIndex: 0 })];
+    const acts = [activity({ drawnStart: '2026-01-01', drawnFinish: '2026-01-10', laneIndex: 0 })];
     buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     const bar = fills.find((f) => f.style === PALETTE.bar)!;
     expect(bar.x).toBe(0);
@@ -216,8 +216,8 @@ describe('buildMinimapBitmap', () => {
     // them painted out — a whole activity class missing from the picture, and unreportable,
     // because a bar that is never drawn looks exactly like a bar that does not exist.
     const acts = [
-      activity({ id: 'm', earlyStart: DATA_DATE, earlyFinish: DATA_DATE, laneIndex: 0 }),
-      activity({ id: 'far', earlyStart: '2026-06-01', earlyFinish: '2026-06-30', laneIndex: 1 }),
+      activity({ id: 'm', drawnStart: DATA_DATE, drawnFinish: DATA_DATE, laneIndex: 0 }),
+      activity({ id: 'far', drawnStart: '2026-06-01', drawnFinish: '2026-06-30', laneIndex: 1 }),
     ];
     buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
 
@@ -239,7 +239,7 @@ describe('buildMinimapBitmap', () => {
   it('omits the data-date vertical when the data date falls outside the drawn extent', () => {
     const { ctx, fills } = recordingCtx();
     // Every bar starts a year after the data date, and worldExtent starts at the first bar.
-    const acts = [activity({ earlyStart: '2027-05-01', earlyFinish: '2027-08-01' })];
+    const acts = [activity({ drawnStart: '2027-05-01', drawnFinish: '2027-08-01' })];
     const mapping = buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     expect(mapping).not.toBeNull();
     expect(worldExtent(acts, DATA_DATE)!.minDay).toBeGreaterThan(0);
@@ -341,7 +341,7 @@ describe('the near-critical bar state (M2)', () => {
       },
     };
     // All three on the SAME pixel and lane, so the merge is real rather than incidental.
-    const shared = { earlyStart: '2026-06-01', earlyFinish: '2031-06-01', laneIndex: 0 } as const;
+    const shared = { drawnStart: '2026-06-01', drawnFinish: '2031-06-01', laneIndex: 0 } as const;
     buildMinimapBitmap(
       ctx,
       [
@@ -350,8 +350,8 @@ describe('the near-critical bar state (M2)', () => {
         activity({ id: 'norm', ...shared }),
         activity({
           id: 'anchor',
-          earlyStart: '2026-01-01',
-          earlyFinish: '2026-01-02',
+          drawnStart: '2026-01-01',
+          drawnFinish: '2026-01-02',
           laneIndex: 1,
         }),
       ],
@@ -440,7 +440,7 @@ describe('the temporal tier ladder (M3)', () => {
     const { calls, ctx } = countingStyleCtx();
     // ~55 years: every tier is below the floor.
     const acts = [
-      activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2081-01-01', laneIndex: 0 }),
+      activity({ id: 'a', drawnStart: '2026-01-01', drawnFinish: '2081-01-01', laneIndex: 0 }),
     ];
     buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     expect(calls.styles.includes(PALETTE.gridMinor), 'no minor tier').toBe(false);

@@ -564,17 +564,17 @@ export function lagAnchorPoints(
 ): LagAnchors | null {
   const from = activityRect(predecessor, view, dataDateIso, cache);
   const to = activityRect(successor, view, dataDateIso, cache);
-  if (!from || !to || predecessor.earlyStart === null) return null;
+  if (!from || !to || predecessor.drawnStart === null) return null;
   const predFinish = type === 'FS' || type === 'FF';
   const succStart = type === 'FS' || type === 'SS';
   let predX = predFinish ? from.x + from.w : from.x;
   let succX = succStart ? to.x : to.x + to.w;
   if (lagDays !== 0) {
-    const startDay = axisDayOf(predecessor.type, dataDateIso, predecessor.earlyStart);
+    const startDay = axisDayOf(predecessor.type, dataDateIso, predecessor.drawnStart);
     const finishDay =
-      predecessor.earlyFinish === null
+      predecessor.drawnFinish === null
         ? startDay
-        : axisDayOf(predecessor.type, dataDateIso, predecessor.earlyFinish);
+        : axisDayOf(predecessor.type, dataDateIso, predecessor.drawnFinish);
     // The one shared forward mapping (ADR-0052 M3) — the lag drag's inverse reads the same fn.
     const day = lagAnchorDay(startDay, finishDay, type, lagDays, walk);
     if (predFinish) {

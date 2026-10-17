@@ -137,9 +137,9 @@ export function framingFor(
   size: { width: number; height: number },
 ): DrawFraming {
   const spanDays = scene.scene.activities.reduce((max, activity) => {
-    if (activity.earlyFinish === null) return max;
+    if (activity.drawnFinish === null) return max;
     const day =
-      (new Date(`${activity.earlyFinish}T00:00:00Z`).getTime() -
+      (new Date(`${activity.drawnFinish}T00:00:00Z`).getTime() -
         new Date(`${EPOCH_ISO}T00:00:00Z`).getTime()) /
       86_400_000;
     return Math.max(max, day);

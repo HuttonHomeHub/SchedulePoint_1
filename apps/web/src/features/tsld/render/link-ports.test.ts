@@ -29,8 +29,8 @@ function activity(type: RenderActivity['type']): RenderActivity {
     type,
     laneIndex: 0,
     label: type,
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
   };

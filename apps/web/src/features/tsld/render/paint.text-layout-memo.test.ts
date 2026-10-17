@@ -23,8 +23,8 @@ function act(over: Partial<RenderActivity> & { id: string }): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: over.id,
-    earlyStart: '2026-01-05',
-    earlyFinish: '2026-01-20',
+    drawnStart: '2026-01-05',
+    drawnFinish: '2026-01-20',
     isCritical: false,
     isNearCritical: false,
     durationDays: 12,
@@ -36,16 +36,16 @@ function act(over: Partial<RenderActivity> & { id: string }): RenderActivity {
 const SCENE: TsldScene = {
   activities: [
     act({ id: 'a', label: 'Install analyser room services and commission' }),
-    act({ id: 'b', label: 'Pour', earlyStart: '2026-01-21', earlyFinish: '2026-01-30' }),
+    act({ id: 'b', label: 'Pour', drawnStart: '2026-01-21', drawnFinish: '2026-01-30' }),
     act({
       id: 'm',
       type: 'FINISH_MILESTONE',
       label: 'Handover to operations',
       laneIndex: 1,
-      earlyStart: '2026-01-30',
-      earlyFinish: '2026-01-30',
+      drawnStart: '2026-01-30',
+      drawnFinish: '2026-01-30',
     }),
-    act({ id: 'c', laneIndex: 2, label: 'Cladding', earlyStart: '2026-01-08' }),
+    act({ id: 'c', laneIndex: 2, label: 'Cladding', drawnStart: '2026-01-08' }),
   ],
   edges: [
     { predecessorId: 'a', successorId: 'b', type: 'FS', isDriving: true },

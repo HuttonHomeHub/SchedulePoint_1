@@ -611,11 +611,11 @@ function scale(count: number): FixtureResult {
   const dayOf = (iso: string): number =>
     Math.round((Date.parse(iso) - Date.parse('2026-01-01')) / 86_400_000);
   const items: PackItem[] = scene.activities
-    .filter((a) => a.earlyStart !== null)
+    .filter((a) => a.drawnStart !== null)
     .map((a) => ({
       id: a.id,
-      startDay: dayOf(a.earlyStart!),
-      endDay: dayOf(a.earlyFinish ?? a.earlyStart!),
+      startDay: dayOf(a.drawnStart!),
+      endDay: dayOf(a.drawnFinish ?? a.drawnStart!),
       laneIndex: a.laneIndex,
     }));
   const known = new Set(items.map((i) => i.id));

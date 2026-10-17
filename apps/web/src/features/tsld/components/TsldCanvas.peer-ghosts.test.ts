@@ -28,8 +28,8 @@ const act = (id: string, laneIndex: number, startIso: string, finishIso: string)
     name: id,
     label: id,
     laneIndex,
-    earlyStart: startIso,
-    earlyFinish: finishIso,
+    drawnStart: startIso,
+    drawnFinish: finishIso,
     type: 'TASK',
   }) as never;
 

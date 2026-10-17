@@ -49,8 +49,8 @@ function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
     name: 'Task',
     type: 'TASK',
     laneIndex: 0,
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     ...overrides,
   } as RenderActivity;

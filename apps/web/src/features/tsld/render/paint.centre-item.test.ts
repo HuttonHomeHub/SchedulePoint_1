@@ -40,8 +40,8 @@ function bar(over: Partial<RenderActivity> & { id: string }): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 'A100 Excavate',
-    earlyStart: '2026-01-05',
-    earlyFinish: '2026-01-24',
+    drawnStart: '2026-01-05',
+    drawnFinish: '2026-01-24',
     isCritical: false,
     isNearCritical: false,
     durationDays: 5,
@@ -82,7 +82,7 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     expect(centreItems(withToggles([a], { labels: true }), VIEW)).toHaveLength(1);
     // At the working tier (4–6 px a day) the switch alone does not draw it.
     const working: Viewport = { ...VIEW, pxPerDay: 5 };
-    const wide = bar({ id: 'w', earlyFinish: '2026-06-30' });
+    const wide = bar({ id: 'w', drawnFinish: '2026-06-30' });
     expect(centreItems(withToggles([wide], { labels: true }), working)).toEqual([]);
   });
 
@@ -99,8 +99,8 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     expect(items).toHaveLength(1);
     expect(items[0]!.text).toBe('5d · 3d float left');
     // Centred in the gap the two dates leave, not in the whole bar.
-    const startW = formatCanvasDate(a.earlyStart!).length * 6;
-    const finishW = formatCanvasDate(a.earlyFinish!).length * 6;
+    const startW = formatCanvasDate(a.drawnStart!).length * 6;
+    const finishW = formatCanvasDate(a.drawnFinish!).length * 6;
     expect(items[0]!.x).toBe(
       rect.x + (startW + LABEL_GAP_PX + (rect.w - finishW - LABEL_GAP_PX)) / 2,
     );
@@ -109,7 +109,7 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
   it('never leaves its own bar, and never reaches the dates beside it', () => {
     for (const days of [4, 6, 9, 14, 20, 30]) {
       const finish = new Date(Date.parse('2026-01-05T00:00:00Z') + (days - 1) * 86_400_000);
-      const a = bar({ id: `a${days}`, earlyFinish: finish.toISOString().slice(0, 10) });
+      const a = bar({ id: `a${days}`, drawnFinish: finish.toISOString().slice(0, 10) });
       const rect = activityRect(a, VIEW, DATA_DATE)!;
       for (const toggles of [{ dates: true }, { dates: false }]) {
         for (const item of centreItems(withToggles([a], { ...toggles, labels: true }), VIEW)) {
@@ -117,8 +117,8 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
           expect(item.x - half).toBeGreaterThanOrEqual(rect.x);
           expect(item.x + half).toBeLessThanOrEqual(rect.x + rect.w);
           // …and clear of the dates, wherever they were drawn inside the same bar.
-          const startW = formatCanvasDate(a.earlyStart!).length * 6;
-          const finishW = formatCanvasDate(a.earlyFinish!).length * 6;
+          const startW = formatCanvasDate(a.drawnStart!).length * 6;
+          const finishW = formatCanvasDate(a.drawnFinish!).length * 6;
           if (toggles.dates && startW + finishW + LABEL_GAP_PX <= rect.w) {
             expect(item.x - half).toBeGreaterThanOrEqual(rect.x + startW);
             expect(item.x + half).toBeLessThanOrEqual(rect.x + rect.w - finishW);
@@ -137,8 +137,8 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     const task = bar({
       id: 't',
       laneIndex: 0,
-      earlyStart: '2026-02-09',
-      earlyFinish: '2026-02-20',
+      drawnStart: '2026-02-09',
+      drawnFinish: '2026-02-20',
     });
     const summary = bar({
       id: 's',
@@ -146,7 +146,7 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
       label: 'EDF - Hynamics Proposal',
       durationDays: 21,
       remainingFloat: 0,
-      earlyFinish: '2026-01-30',
+      drawnFinish: '2026-01-30',
     });
     const texts = centreItems(
       withToggles([summary, task], { dates: true, labels: true }),
@@ -167,14 +167,14 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
 
   it('falls back to the duration alone where the full form does not fit', () => {
     // A 4-day bar is 80 px: the full form (108) does not fit, `5d` (12) does.
-    const a = bar({ id: 'a', earlyFinish: '2026-01-08' });
+    const a = bar({ id: 'a', drawnFinish: '2026-01-08' });
     expect(centreItems(withToggles([a], { dates: false, labels: true }), VIEW)).toEqual([
       expect.objectContaining({ text: '5d' }),
     ]);
   });
 
   it('draws nothing on a bar too narrow for either form', () => {
-    const a = bar({ id: 'a', earlyFinish: '2026-01-05' }); // one day: 20 px, and dates are off
+    const a = bar({ id: 'a', drawnFinish: '2026-01-05' }); // one day: 20 px, and dates are off
     const narrow: Viewport = { ...VIEW, pxPerDay: 8 };
     expect(centreItems(withToggles([a], { dates: false, labels: true }), narrow)).toEqual([]);
   });
@@ -194,8 +194,8 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     const m = bar({
       id: 'm',
       type: 'FINISH_MILESTONE',
-      earlyStart: '2026-01-10',
-      earlyFinish: '2026-01-10',
+      drawnStart: '2026-01-10',
+      drawnFinish: '2026-01-10',
       durationDays: 0,
       remainingFloat: 4,
     });
@@ -206,8 +206,8 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     const m = bar({
       id: 'm',
       type: 'FINISH_MILESTONE',
-      earlyStart: '2026-01-10',
-      earlyFinish: '2026-01-10',
+      drawnStart: '2026-01-10',
+      drawnFinish: '2026-01-10',
       durationDays: 0,
     });
     const rect = activityRect(m, VIEW, DATA_DATE)!;
@@ -260,15 +260,15 @@ describe('paintScene — names beside an overlapping milestone (FC-N6a)', () => 
           id: 'm',
           type: 'FINISH_MILESTONE',
           label: 'M100 Handover to client',
-          earlyStart: '2026-01-10',
-          earlyFinish: '2026-01-10',
+          drawnStart: '2026-01-10',
+          drawnFinish: '2026-01-10',
           durationDays: 0,
         }),
         bar({
           id: 'b',
           label: 'A200 Commissioning and testing',
-          earlyStart: '2026-01-11',
-          earlyFinish: '2026-01-30',
+          drawnStart: '2026-01-11',
+          drawnFinish: '2026-01-30',
         }),
       ],
       { dates: false, labels: true },

@@ -76,7 +76,7 @@ describe('toActivitySummary — the placed-span skew rule (ADR-0163)', () => {
     });
     const summary = toActivitySummary(row, 'plan-1');
     const [rendered] = toRenderActivities([summary], barDateSourceFor(false));
-    expect(rendered?.earlyStart).toBe(row.visualEffectiveStart);
-    expect(rendered?.earlyStart).not.toBe(row.earlyStart);
+    expect(rendered?.drawnStart).toBe(row.visualEffectiveStart);
+    expect(rendered?.drawnStart).not.toBe(row.earlyStart);
   });
 });

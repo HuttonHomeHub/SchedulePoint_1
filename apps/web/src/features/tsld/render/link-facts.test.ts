@@ -23,8 +23,8 @@ const act = (id: string, lane: number, start?: string, finish?: string): RenderA
   type: 'TASK',
   laneIndex: lane,
   label: id,
-  earlyStart: start ?? null,
-  earlyFinish: finish ?? null,
+  drawnStart: start ?? null,
+  drawnFinish: finish ?? null,
   isCritical: false,
   isNearCritical: false,
 });

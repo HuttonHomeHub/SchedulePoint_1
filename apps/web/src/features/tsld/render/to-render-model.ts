@@ -56,8 +56,8 @@ export function toRenderActivities(
     id: a.id,
     type: a.type,
     laneIndex: a.laneIndex,
-    earlyStart: start,
-    earlyFinish: finish,
+    drawnStart: start,
+    drawnFinish: finish,
     isCritical: a.isCritical,
     isNearCritical: a.isNearCritical,
     // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for

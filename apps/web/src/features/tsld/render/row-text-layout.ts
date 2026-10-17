@@ -577,10 +577,10 @@ export function layoutRowText({
       if (!next) return false;
       if (!sharesNode(rect, next.rect)) return false;
       const a = next.activity;
-      if (isMilestone(a.type) || !a.earlyStart || !a.earlyFinish) return false;
+      if (isMilestone(a.type) || !a.drawnStart || !a.drawnFinish) return false;
       return datesFitInside(
-        regular(formatCanvasDate(a.earlyStart)),
-        regular(formatCanvasDate(a.earlyFinish)),
+        regular(formatCanvasDate(a.drawnStart)),
+        regular(formatCanvasDate(a.drawnFinish)),
         textSpan(row, i + 1),
       );
     };
@@ -589,9 +589,9 @@ export function layoutRowText({
     for (const row of rows().values()) {
       for (let i = 0; i < row.length; i += 1) {
         const { activity, rect } = row[i]!;
-        if (!activity.earlyStart || !activity.earlyFinish) continue; // uncalculated ⇒ no dates
-        const startText = formatCanvasDate(activity.earlyStart);
-        const finishText = formatCanvasDate(activity.earlyFinish);
+        if (!activity.drawnStart || !activity.drawnFinish) continue; // uncalculated ⇒ no dates
+        const startText = formatCanvasDate(activity.drawnStart);
+        const finishText = formatCanvasDate(activity.drawnFinish);
         const startWidthPx = regular(startText);
         const finishWidthPx = regular(finishText);
         const prevRight = i > 0 ? row[i - 1]!.rect.x + row[i - 1]!.rect.w : 0;
@@ -829,7 +829,7 @@ export function layoutRowText({
       for (let i = 0; i < row.length; i += 1) {
         const { activity } = row[i]!;
         if (activity.durationDays === undefined) continue;
-        if (!activity.earlyStart || !activity.earlyFinish) continue;
+        if (!activity.drawnStart || !activity.drawnFinish) continue;
         const item = {
           durationDays: activity.durationDays,
           remainingFloat: activity.remainingFloat,
@@ -846,8 +846,8 @@ export function layoutRowText({
         let left = span.left;
         let right = span.right;
         if (datesDrawn) {
-          const startWidthPx = regular(formatCanvasDate(activity.earlyStart));
-          const finishWidthPx = regular(formatCanvasDate(activity.earlyFinish));
+          const startWidthPx = regular(formatCanvasDate(activity.drawnStart));
+          const finishWidthPx = regular(formatCanvasDate(activity.drawnFinish));
           if (datesFitInside(startWidthPx, finishWidthPx, span)) {
             left += startWidthPx + LABEL_GAP_PX;
             right -= finishWidthPx + LABEL_GAP_PX;
@@ -1017,8 +1017,8 @@ export function textWidthKeys(
       add(label.slice(0, k) + LABEL_ELLIPSIS, font);
       add(label.slice(0, k).trimEnd() + LABEL_ELLIPSIS, font);
     }
-    if (a.earlyStart) add(formatCanvasDate(a.earlyStart), undefined);
-    if (a.earlyFinish) add(formatCanvasDate(a.earlyFinish), undefined);
+    if (a.drawnStart) add(formatCanvasDate(a.drawnStart), undefined);
+    if (a.drawnFinish) add(formatCanvasDate(a.drawnFinish), undefined);
     if (toggles.centreItem === true && a.durationDays !== undefined) {
       const item = {
         durationDays: a.durationDays,

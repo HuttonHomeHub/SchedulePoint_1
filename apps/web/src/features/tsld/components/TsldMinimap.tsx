@@ -127,12 +127,12 @@ export function TsldMinimap({
   const todayX = todayAt !== null && todayAt >= 0 && todayAt <= MINIMAP_BOX.width ? todayAt : null;
 
   const marker = useMemo(() => {
-    if (mapping === null || selected === null || selected.earlyStart === null) return null;
-    const x0 = screenXOfDay(axisDayOf(selected.type, dataDate, selected.earlyStart), mapping.view);
+    if (mapping === null || selected === null || selected.drawnStart === null) return null;
+    const x0 = screenXOfDay(axisDayOf(selected.type, dataDate, selected.drawnStart), mapping.view);
     const x1 =
-      selected.earlyFinish === null
+      selected.drawnFinish === null
         ? x0
-        : screenXOfDay(axisDayOf(selected.type, dataDate, selected.earlyFinish) + 1, mapping.view);
+        : screenXOfDay(axisDayOf(selected.type, dataDate, selected.drawnFinish) + 1, mapping.view);
     // ≥3×3px (spec AC-2.3): a 1px echo of the bar is invisible at exactly the moment the
     // marker exists to answer "where is my selection in the whole plan?".
     const w = Math.min(Math.max(3, x1 - x0), MINIMAP_BOX.width);

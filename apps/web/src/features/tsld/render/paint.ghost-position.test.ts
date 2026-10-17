@@ -23,8 +23,8 @@ function live(type: ActivityType, start: string, finish: string): RenderActivity
     type,
     laneIndex: 0,
     label: 'A',
-    earlyStart: start,
-    earlyFinish: finish,
+    drawnStart: start,
+    drawnFinish: finish,
     isCritical: false,
     isNearCritical: false,
   };
