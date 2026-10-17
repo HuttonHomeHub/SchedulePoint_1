@@ -225,5 +225,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0199](0199-a-link-is-never-louder-than-the-work-it-joins.md)                                   | A link is never louder than the work it joins                                              | Accepted           |
 | [0200](0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)                       | A layer is a canvas, and the export accounts for every one                                 | Proposed           |
 | [0200](0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)                       | A layer is a canvas, and the export accounts for every one                                 | Accepted           |
-| [0200](0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)                           | A restore brings nothing back onto a deleted calendar                                      | Proposed           |
-| [0200](0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)                           | A restore brings nothing back onto a deleted calendar                                      | Accepted           |
+| [0201](0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)                           | A restore brings nothing back onto a deleted calendar                                      | Accepted           |

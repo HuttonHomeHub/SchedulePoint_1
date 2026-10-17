@@ -1071,7 +1071,7 @@ test('a planner undoes back several steps at once from the Recent edits menu', a
 
 /**
  * **An undo refused because the activity's calendar has since been deleted keeps its step**
- * (ADR-0200 D4, `docs/TECH_DEBT.md` #519).
+ * (ADR-0201 D4, `docs/TECH_DEBT.md` #519).
  *
  * A deleted activity is not listed in Recently deleted, so setting this step aside, as every other
  * refusal is (ADR-0176 D3), would leave the planner no way in the product to get the work back. The

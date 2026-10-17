@@ -727,7 +727,7 @@ Deleted resources and calendars gain a restore in Recently deleted (approved 202
 
 A restore no longer brings work back onto a deleted calendar, and a restore and a delete of its parent no
 longer interleave (approved 2026-10-17,
-[ADR-0200](adr/0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md); spec and plan at
+[ADR-0201](adr/0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md); spec and plan at
 [`docs/specs/deleted-calendar-restore/`](specs/deleted-calendar-restore/)).
 
 ## Next

@@ -105,7 +105,7 @@ interface DeletedRoot {
   calendarId: string | null;
 }
 
-/** A deleted PROJECT calendar a project or client restore brings back with it (ADR-0200 D6). */
+/** A deleted PROJECT calendar a project or client restore brings back with it (ADR-0201 D6). */
 interface StrandedCalendar {
   id: string;
   name: string;
@@ -410,7 +410,7 @@ export class HierarchyLifecycleService {
     if (entity === 'client') {
       // The root row first, BEFORE the subtree is read: a restore that holds this client `FOR SHARE`
       // makes the delete wait, and its reads below then see what the restore brought back
-      // (ADR-0200 D3, `docs/TECH_DEBT.md` #520).
+      // (ADR-0201 D3, `docs/TECH_DEBT.md` #520).
       await lockClientRowForDelete(tx, id);
       // Resolve the active subtree top-down BEFORE deleting it: the client's active
       // projects, then the active plans under them, then those plans' activities —
@@ -619,7 +619,7 @@ export class HierarchyLifecycleService {
    * Restore `entity` #id and everything soft-deleted with it (same batch).
    * Throws {@link NotFoundError} if the row is missing or not deleted,
    * `PARENT_DELETED` if its parent is still deleted, `CALENDAR_DELETED` if a plan or activity in
-   * the batch uses a calendar that is deleted outside it (ADR-0200), or `NAME_TAKEN` if
+   * the batch uses a calendar that is deleted outside it (ADR-0201), or `NAME_TAKEN` if
    * reactivating would collide with an active sibling.
    *
    * soft-delete: deleted-only — every write here reactivates rows selected by the batch id the
@@ -863,7 +863,7 @@ export class HierarchyLifecycleService {
    * live (ADR-0053 §4). Refused with the lowest deleted id, naming it, so the bin and the 409 agree.
    * Runs under the locks {@link lockBatchCalendars} took.
    *
-   * **One exit for a state the product used to allow (ADR-0200 D6).** A PROJECT-tier calendar deleted
+   * **One exit for a state the product used to allow (ADR-0201 D6).** A PROJECT-tier calendar deleted
    * on its own, in its own batch, before its project was deleted is not swept with the project, and
    * the calendar's own restore needs the project active while the project's restore needs the
    * calendar: neither could ever come back. For a project or client restore, such a calendar of a
@@ -872,7 +872,7 @@ export class HierarchyLifecycleService {
    * Its name is checked here, before the first write, as the calendar's own restore checks it.
    *
    * A calendar that is active but now belongs to ANOTHER project is refused too
-   * ({@link assertProjectCalendarsFit}, ADR-0200 D5): it is the second route to the same defect, and
+   * ({@link assertProjectCalendarsFit}, ADR-0201 D5): it is the second route to the same defect, and
    * checked second so the deleted-calendar answer, which the bin predicts, keeps its precedence.
    *
    * soft-delete: any-state — the whole question is whether each calendar is deleted.
@@ -1063,7 +1063,7 @@ export class HierarchyLifecycleService {
   /**
    * A PROJECT-tier calendar may be used only inside its own project (ADR-0053). An ORG calendar
    * narrowed to project Y while a plan of project X sat in the bin passes the narrowing guard, which
-   * counts only ACTIVE users (`docs/TECH_DEBT.md` #521), so the restore would put X's plan on Y's
+   * counts only ACTIVE users (`docs/TECH_DEBT.md` #530), so the restore would put X's plan on Y's
    * calendar and a later delete of Y would sweep a calendar something still uses. Refused instead,
    * naming the calendar and the project it now belongs to.
    *

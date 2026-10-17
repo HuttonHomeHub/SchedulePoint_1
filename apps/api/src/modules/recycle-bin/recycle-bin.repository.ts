@@ -74,7 +74,7 @@ interface DeletedUnionRow {
  * the page is cut, for the page's own resources only, and only for a row with no deleted parent
  * (the group's root). A member of a group never pays for it, and it cannot grow with the bin.
  * A plan, project or client gets the same lookup over the plans and activities of its batch
- * (ADR-0200 D2), so the row says what its restore would refuse; a calendar deleted in the SAME
+ * (ADR-0201 D2), so the row says what its restore would refuse; a calendar deleted in the SAME
  * batch is not a blocker, because the restore brings it back.
  *
  * Deliberately NO new indexes: a supporting `(organization_id, deleted_at DESC, id) WHERE

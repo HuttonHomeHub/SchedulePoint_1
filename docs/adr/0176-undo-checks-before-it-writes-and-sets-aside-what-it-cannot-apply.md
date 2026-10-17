@@ -1,6 +1,6 @@
 # ADR-0176: Undo checks before it writes, and sets aside what it cannot apply
 
-- **Status:** Accepted; D3 amended by [ADR-0200](0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md) (a step refused for `CALENDAR_DELETED` is kept, not set aside)
+- **Status:** Accepted; D3 amended by [ADR-0201](0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md) (a step refused for `CALENDAR_DELETED` is kept, not set aside)
 - **Date:** 2026-10-05
 - **Deciders:** James Ewbank (product owner — approved 2026-10-04: plan settings stay outside undo;
   the result lives in the dock strip), with Claude Code

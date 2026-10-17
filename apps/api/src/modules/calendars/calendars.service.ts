@@ -539,7 +539,7 @@ export class CalendarsService {
           // top-down: a project delete takes its row `FOR NO KEY UPDATE` before it sweeps its
           // calendars, so this restore either lands first (and the delete sweeps the calendar it
           // brought back) or finds the project deleted, instead of leaving an active calendar under
-          // a deleted project (`docs/TECH_DEBT.md` #520, ADR-0200 D3).
+          // a deleted project (`docs/TECH_DEBT.md` #520, ADR-0201 D3).
           const seen = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);
           const active =
             seen !== null &&

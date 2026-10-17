@@ -201,7 +201,7 @@ export async function writeOrSetAside(
       if (err.status === 404) return notApplicable('gone', subjectName);
       const reason = reasonOf(err);
       if (reason === 'PARENT_DELETED') return notApplicable('parent-deleted', subjectName);
-      // The one 409 that is NOT set aside (ADR-0200 D4): the cure — restoring the calendar — is in the
+      // The one 409 that is NOT set aside (ADR-0201 D4): the cure — restoring the calendar — is in the
       // planner's hands, and a deleted activity is not listed in Recently deleted, so dropping the
       // step would leave no way in the product to get that work back. A throw leaves both stacks intact.
       if (reason === 'CALENDAR_DELETED') throw new CalendarDeletedFailure(calendarNameOf(err), err);

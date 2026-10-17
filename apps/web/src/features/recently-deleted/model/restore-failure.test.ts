@@ -7,7 +7,7 @@ import { ApiFetchError } from '@/lib/api/client';
 const conflict = (details: unknown) =>
   new ApiFetchError(409, { code: 'CONFLICT', message: 'Restore the calendar first.', details });
 
-describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0200)', () => {
+describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0201)', () => {
   it.each(['plan', 'project', 'client', 'resource'] as const)(
     'names the calendar for a %s, with no library link',
     (kind) => {
@@ -57,7 +57,7 @@ describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0200)', () => {
   });
 });
 
-describe('describeRestoreFailure — CALENDAR_OTHER_PROJECT (ADR-0200 D5)', () => {
+describe('describeRestoreFailure — CALENDAR_OTHER_PROJECT (ADR-0201 D5)', () => {
   it('names the calendar and links to the calendars library, whatever the row', () => {
     const failure = describeRestoreFailure(
       conflict({

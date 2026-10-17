@@ -10,7 +10,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearDomainData } from './audit-reset';
 
 /**
- * A restore never brings work back onto a deleted calendar (ADR-0200, TECH_DEBT #519), against a real
+ * A restore never brings work back onto a deleted calendar (ADR-0201, TECH_DEBT #519), against a real
  * PostgreSQL + Better Auth.
  *
  * Every refusal here is written to fail against the restore this replaces — an `updateMany` by
@@ -324,7 +324,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
-  describe('a project calendar deleted on its own before its project (ADR-0200 D6)', () => {
+  describe('a project calendar deleted on its own before its project (ADR-0201 D6)', () => {
     /**
      * The bad state the product used to allow: the calendar sits in its own batch, so the project's
      * sweep skipped it, while the project's plan still points at it. Seeded directly because no
@@ -430,7 +430,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
-  describe('a calendar narrowed to another project while the plan was in the bin (ADR-0200 D5)', () => {
+  describe('a calendar narrowed to another project while the plan was in the bin (ADR-0201 D5)', () => {
     /** Narrow the plan's ORG calendar to a second project, which the guard allows: no ACTIVE user. */
     async function narrowToOtherProject(w: World): Promise<string> {
       const other = await w.actor.agent
@@ -503,7 +503,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
-  describe('Recently deleted shows the blocker in advance (ADR-0200 D2)', () => {
+  describe('Recently deleted shows the blocker in advance (ADR-0201 D2)', () => {
     it.each(['plan', 'project', 'client'] as const)(
       'names the deleted calendar on a %s row and withholds Restore',
       async (kind) => {

@@ -93,7 +93,7 @@ function setAsideClause(setAside: SetAside): string {
 }
 
 /**
- * The sentence for a step refused because it uses a calendar deleted after the edit (ADR-0200 D4).
+ * The sentence for a step refused because it uses a calendar deleted after the edit (ADR-0201 D4).
  * It tells the planner where the cure is and that pressing the same key again is how to retry —
  * the step stayed on its stack, unlike a set-aside one.
  */

@@ -12,7 +12,7 @@ export const BLOCKER_PREVIEW_LIMIT = 8;
 
 /**
  * Who uses the calendar: a plan or resource does itself, while a client or project holds the work that
- * does (ADR-0200 D2), and saying "Project “Tower” uses the calendar" would be false of the project.
+ * does (ADR-0201 D2), and saying "Project “Tower” uses the calendar" would be false of the project.
  */
 function calendarSubject(root: DeletedItem): string {
   return root.kind === 'client' || root.kind === 'project'

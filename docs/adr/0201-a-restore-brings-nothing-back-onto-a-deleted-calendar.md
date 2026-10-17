@@ -1,4 +1,4 @@
-# ADR-0200: A restore brings nothing back onto a deleted calendar
+# ADR-0201: A restore brings nothing back onto a deleted calendar
 
 - **Status:** Accepted — 2026-10-17, with the API half (milestone 2 of the plan). D5 is built in milestone 4 (this commit).
 - **Date:** 2026-10-17

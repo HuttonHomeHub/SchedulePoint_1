@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { calendarDeletedDetail, historyResultMessage } from './history-result';
 
-describe('calendarDeletedDetail (ADR-0200 D4)', () => {
+describe('calendarDeletedDetail (ADR-0201 D4)', () => {
   it.each(['undo', 'redo'] as const)(
     'tells the planner to %s again once the calendar is back',
     (direction) => {

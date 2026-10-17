@@ -17,7 +17,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * **Does a restore stop a delete of its ancestor from leaving it active under a deleted row?**
- * (`docs/TECH_DEBT.md` #520, ADR-0200 D3.)
+ * (`docs/TECH_DEBT.md` #520, ADR-0201 D3.)
  *
  * A restore reads its parent and writes on the strength of it; a client or project delete sweeps its
  * subtree and then stamps itself. With neither locked they interleave and the child ends ACTIVE under

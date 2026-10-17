@@ -1387,7 +1387,7 @@ Each item carries:
 project, a resource group, or a PROJECT calendar's project), computed whatever batch the parent is in —
 or `calendar`, only ever served for a row with **no** deleted parent: for a resource (a group's root),
 the first deleted calendar used by any resource in that row's deletion; for a **plan, project or
-client** (ADR-0200 D2), the lowest-id deleted calendar used by any plan or activity in that row's
+client** (ADR-0201 D2), the lowest-id deleted calendar used by any plan or activity in that row's
 deletion, **unless that calendar was deleted in the same batch** (it comes back with the row, so it
 blocks nothing). Parent first is what keeps a group's members as members, since the web picks a
 group's root as the row whose blocker lies outside its batch.
@@ -1451,7 +1451,7 @@ to `NAME_TAKEN` or `CODE_TAKEN` but **no** `conflicts[]` or `total`: read `reaso
 A calendar restore also marks every active plan that uses the calendar "edited since calculated", so
 its next recalculation uses it again; the scheduling engine itself is untouched.
 
-#### Restoring a client, project, plan or activity onto a deleted calendar (ADR-0200)
+#### Restoring a client, project, plan or activity onto a deleted calendar (ADR-0201)
 
 | Status | `details.reason`         | When                                                                                                                    |
 | ------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -1485,15 +1485,15 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
 - A project's **own** calendars, swept with it, come back with it and are not a blocker; an
   **archived** calendar is live (ADR-0053 §4) and is not one either.
 - `PARENT_DELETED` is reported first when both apply.
-- **409 `CALENDAR_OTHER_PROJECT`** (ADR-0200 D5) is the second refusal on the same routes: a plan or
+- **409 `CALENDAR_OTHER_PROJECT`** (ADR-0201 D5) is the second refusal on the same routes: a plan or
   activity in the batch uses an active **PROJECT**-tier calendar that now belongs to a different project
   (an ORG calendar can be narrowed while the plan sits in the bin, because the narrowing guard counts only
-  active users, `docs/TECH_DEBT.md` #521). `details` carries `calendar` `{ id, name, deleteBatchId }` and
+  active users, `docs/TECH_DEBT.md` #530). `details` carries `calendar` `{ id, name, deleteBatchId }` and
   `projectId`, the project the calendar now belongs to; `calendar.deleteBatchId` is **`null`**, because the
   calendar is live. It is checked after `CALENDAR_DELETED`, and `PARENT_DELETED` outranks both. It is a
   different string from the **422** `CALENDAR_WRONG_SCOPE` a binding write answers with. The cure is to make the
   calendar organisation-wide again (promote, always allowed). Rows restored with no batch id are not checked.
-- **A calendar stranded by an older delete is restored with its project (ADR-0200 D6).** A PROJECT-tier
+- **A calendar stranded by an older delete is restored with its project (ADR-0201 D6).** A PROJECT-tier
   calendar that was deleted on its own before its project was deleted is not swept with the project,
   and neither restore could go first. A project or client restore therefore brings it back in the same
   transaction, with its exceptions, when a plan or activity in the batch uses it and its project is among
@@ -1504,7 +1504,7 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
   repaired; restoring the calendar still marks their plans "edited since calculated".
 - Every restore (including `POST …/calendars/:calendarId/restore` for a PROJECT calendar) takes its
   ancestors `FOR SHARE`, top-down (client, then project), and a client or project delete takes its own
-  row `FOR NO KEY UPDATE` before it reads its subtree (ADR-0200 D3, `docs/TECH_DEBT.md` #520). A restore
+  row `FOR NO KEY UPDATE` before it reads its subtree (ADR-0201 D3, `docs/TECH_DEBT.md` #520). A restore
   and a delete of its ancestor therefore end consistently: either the delete sweeps the restored rows, or
   the restore answers `PARENT_DELETED`. Nothing is left active under a deleted ancestor, and the loser
   waits rather than failing.

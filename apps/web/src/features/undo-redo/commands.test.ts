@@ -1160,7 +1160,7 @@ describe('deleteActivityCommand', () => {
     expect(await command.undo(server.ctx)).toEqual(notApplicable('parent-deleted', 'Excavate'));
   });
 
-  it('a restore refused for a deleted calendar keeps the step and names the calendar (ADR-0200 D4)', async () => {
+  it('a restore refused for a deleted calendar keeps the step and names the calendar (ADR-0201 D4)', async () => {
     const { server, command } = await deleted();
     server.mutations.restoreBatch.mockRejectedValueOnce(
       new ApiFetchError(409, {

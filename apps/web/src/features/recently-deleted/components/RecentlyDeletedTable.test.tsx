@@ -773,7 +773,7 @@ describe('RecentlyDeletedTable', () => {
         dialog: 'Work in client “Northgate” uses the calendar “Mon-Wed”, which is also deleted.',
       },
     ] as const)(
-      'says a $kind row’s work uses a deleted calendar, in words true of that row (ADR-0200)',
+      'says a $kind row’s work uses a deleted calendar, in words true of that row (ADR-0201)',
       ({ kind, name, subLine, dialog }) => {
         renderTable(true, [
           {
@@ -936,7 +936,7 @@ describe('RecentlyDeletedTable', () => {
         ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');
       });
 
-      it('names a calendar deleted since the list loaded, on a plan row that showed no blocker (ADR-0200)', async () => {
+      it('names a calendar deleted since the list loaded, on a plan row that showed no blocker (ADR-0201)', async () => {
         mockApiFetch.mockRejectedValueOnce(
           refuse(409, 'Restore the calendar first.', {
             reason: 'CALENDAR_DELETED',
@@ -964,7 +964,7 @@ describe('RecentlyDeletedTable', () => {
         expect(within(alert).queryByRole('link')).not.toBeInTheDocument();
       });
 
-      it('links a calendar that moved to another project to the calendars library (ADR-0200 D5)', async () => {
+      it('links a calendar that moved to another project to the calendars library (ADR-0201 D5)', async () => {
         mockApiFetch.mockRejectedValueOnce(
           refuse(409, 'This calendar now belongs to another project.', {
             reason: 'CALENDAR_OTHER_PROJECT',

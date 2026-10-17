@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 
 /**
  * Row locks on the two ancestors a restore must find still active, and on the root a delete is
- * about to sweep (`docs/TECH_DEBT.md` #520, ADR-0200 D3).
+ * about to sweep (`docs/TECH_DEBT.md` #520, ADR-0201 D3).
  *
  * ## The defect these close
  *

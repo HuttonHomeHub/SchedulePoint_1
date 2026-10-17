@@ -819,7 +819,7 @@ describe.skipIf(!hasDatabase)('Library restore (e2e)', () => {
 
       // Delete the plan, then its calendar (the in-use guard counts ACTIVE plans only). The plan
       // restore used to succeed here and the plan then finished on 2026-01-09, round the clock
-      // (F11, TECH_DEBT #519). It is now refused (ADR-0200), so that state cannot be reached.
+      // (F11, TECH_DEBT #519). It is now refused (ADR-0201), so that state cannot be reached.
       await w.actor.agent.delete(`${API}/plans/${w.planId}`).expect(204);
       await w.actor.agent.delete(`${API}/calendars/${w.calendarId}`).expect(204);
       const refused = await w.actor.agent.post(`${API}/plans/${w.planId}/restore`).expect(409);
@@ -837,7 +837,7 @@ describe.skipIf(!hasDatabase)('Library restore (e2e)', () => {
 
     it('still re-dates a plan that is ALREADY live on a deleted calendar (legacy data, ADR-0195 D7)', async () => {
       const w = await worldWithPlan();
-      // LEGACY FIXTURE: rows restored before ADR-0200 can be live on a deleted calendar, and no
+      // LEGACY FIXTURE: rows restored before ADR-0201 can be live on a deleted calendar, and no
       // public path makes one any more, so the old restore is replayed directly on the rows.
       await w.actor.agent.delete(`${API}/plans/${w.planId}`).expect(204);
       await w.actor.agent.delete(`${API}/calendars/${w.calendarId}`).expect(204);

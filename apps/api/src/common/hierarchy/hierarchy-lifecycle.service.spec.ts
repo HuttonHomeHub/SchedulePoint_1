@@ -112,7 +112,7 @@ describe('HierarchyLifecycleService', () => {
     });
 
     it.each(['client', 'project'] as const)(
-      'locks the %s row FOR NO KEY UPDATE before it reads the subtree (ADR-0200 D3, #520)',
+      'locks the %s row FOR NO KEY UPDATE before it reads the subtree (ADR-0201 D3, #520)',
       async (entity) => {
         tx.project.findMany.mockResolvedValue([{ id: 'p1' }]);
         tx.plan.findMany.mockResolvedValue([{ id: 'pl1' }]);
@@ -800,7 +800,7 @@ describe('HierarchyLifecycleService', () => {
       );
     });
 
-    describe('ancestor locks (ADR-0200 D3, #520)', () => {
+    describe('ancestor locks (ADR-0201 D3, #520)', () => {
       /** The raw statements, as SQL text with the bound ids alongside. */
       const rawReads = () =>
         tx.$queryRaw.mock.calls.map((call) => {
@@ -881,7 +881,7 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
-    describe('a calendar that now belongs to another project (ADR-0200 D5)', () => {
+    describe('a calendar that now belongs to another project (ADR-0201 D5)', () => {
       const root = {
         deleteBatchId: 'batch-p',
         organizationId: 'org-1',
@@ -1028,7 +1028,7 @@ describe('HierarchyLifecycleService', () => {
         ).toHaveLength(0);
       });
 
-      describe('a calendar deleted on its own before its project (ADR-0200 D6)', () => {
+      describe('a calendar deleted on its own before its project (ADR-0201 D6)', () => {
         const projectRoot = {
           deleteBatchId: 'batch-pr',
           organizationId: 'org-1',
@@ -1141,7 +1141,7 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
-    describe('the deleted-calendar guard (ADR-0200)', () => {
+    describe('the deleted-calendar guard (ADR-0201)', () => {
       const deletedCalendar = (id: string, deleteBatchId: string | null = 'cal-batch') => ({
         id,
         name: `Calendar ${id}`,

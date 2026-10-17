@@ -660,7 +660,7 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
   });
 
   it.each(['undo', 'redo'] as const)(
-    'a calendar-deleted refusal on %s is a failed result worded for that press (ADR-0200 D4)',
+    'a calendar-deleted refusal on %s is a failed result worded for that press (ADR-0201 D4)',
     async (direction) => {
       const onResult = vi.fn();
       const refused = vi.fn().mockRejectedValue(new CalendarDeletedFailure('Mon-Wed', err(409)));

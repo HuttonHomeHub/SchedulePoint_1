@@ -319,7 +319,7 @@ test('the Show filter narrows the bin by the keyboard and survives a reload', as
 });
 
 /**
- * A plan restore never brings work back onto a deleted calendar (ADR-0200, `docs/TECH_DEBT.md` #519).
+ * A plan restore never brings work back onto a deleted calendar (ADR-0201, `docs/TECH_DEBT.md` #519).
  * The row says what its restore would refuse before anything is pressed, and the cure is the two-press
  * flow ADR-0195 shipped for resources: restore the calendar, then the plan.
  */
@@ -362,7 +362,7 @@ test('a plan whose calendar was deleted after it is restored in two presses (acc
 });
 
 /**
- * A plan cannot come back onto a calendar that now belongs to another project (ADR-0200 D5). The
+ * A plan cannot come back onto a calendar that now belongs to another project (ADR-0201 D5). The
  * server refuses, the alert says why in the planner's words, and its link goes to the library where
  * the cure (making the calendar organisation-wide again) is made.
  */
