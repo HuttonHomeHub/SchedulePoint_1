@@ -488,7 +488,7 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
       /**
        * **The positive case, per screen and before any verdict** (ADR-0093). A screen that renders
        * no cells reports no wraps, which is indistinguishable from a screen with none — and
-       * `DataTable`'s loading skeleton is three visible `<tr>`s printing no header text, so a sweep
+       * `DataTable`'s loading skeleton is three visible `<tr>`s of placeholder cells, so a sweep
        * that arrives early examines nothing and calls it clean.
        */
       expect(
@@ -677,10 +677,10 @@ test('no column header stands over an empty column', async ({ page }) => {
   const table = page.getByRole('table').first();
 
   /**
-   * **Wait for a real row, not for a row.** `DataTable`'s LOADING `<thead>` prints no header text
-   * at all (`data-table.tsx:236-239` renders the header only for an `srHeader` column), and its
-   * skeleton rows are three visible `<tr>`s — so `row.nth(1)` is visible the instant the route
-   * mounts, and a scan taken there finds nothing to examine and passes. It did: this assertion
+   * **Wait for a real row, not for a row.** `DataTable`'s skeleton rows are three visible `<tr>`s
+   * (and, since loading-skeletons M2, its headings are printed but `aria-hidden`, so they are not
+   * `columnheader`s to a locator) — so `row.nth(1)` is visible the instant the route mounts, and a
+   * scan taken there finds nothing to examine and passes. It did: this assertion
    * went green against the very column it was written to catch, twice, before the debug dump that
    * exposed it. The control below is what stops that recurring; this wait is what makes it rare.
    */

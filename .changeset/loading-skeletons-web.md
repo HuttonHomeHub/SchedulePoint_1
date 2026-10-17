@@ -7,4 +7,6 @@ revisions…", "Loading plans…", "Comparing…", "Checking the plan…" and "L
 activities…" indicators announce their own sentence to a screen reader instead of a generic
 "Loading…" beside text nobody heard, and the page-loading screen's announcement now sits outside the
 busy region so it cannot be held back. Loading placeholders keep an outline in Windows High Contrast
-instead of disappearing.
+instead of disappearing. A table that is still loading now shows its real column headings, and its
+fixed-width columns start at the width they will have, so the columns no longer slide sideways when
+the rows arrive.

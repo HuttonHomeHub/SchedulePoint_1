@@ -3,7 +3,8 @@ import { Children, Fragment, isValidElement, memo } from 'react';
 
 import { DataTableWindowedBody } from './data-table-windowed-body';
 
-import { Skeleton } from '@/components/ui/page/skeleton';
+import { LoadingShape } from '@/components/ui/page/loading-shape';
+import { Skeleton, SkeletonText } from '@/components/ui/page/skeleton';
 import { QueryErrorState } from '@/components/ui/query-error-state';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,20 @@ export interface Column<T> {
    * class is appended to the column's own classes rather than replacing them.
    */
   wrap?: 'anywhere';
+  /**
+   * One plausible value for this column, used ONLY while the table is loading: the placeholder is
+   * sized by rendering this string invisibly, so a `fit` column starts at the width its settled
+   * cells will have instead of sliding sideways when the rows arrive (`docs/TECH_DEBT.md` #341).
+   *
+   * **Format it with the formatter the cell uses**, so a date sample is the locale's date and not a
+   * hand-typed string that drifts from it. It is never shown — `visibility: hidden`, and the whole
+   * skeleton is `aria-hidden` — so it carries no copy and needs no translation.
+   *
+   * Additive: a column without one behaves exactly as before (even distribution, width withheld).
+   * A column that declares one also gets its declared {@link width} on the skeleton, because the
+   * placeholder now has content for `fit` to fit.
+   */
+  sample?: string;
 }
 
 /**
@@ -172,14 +187,13 @@ function cellClassesOf<T>(column: Column<T>): string {
 }
 
 /**
- * **The skeleton gets the caller's classes and NOT the declared width, and that is the opposite of
- * the obvious thing.**
+ * **An UNSAMPLED column's skeleton gets the caller's classes and NOT the declared width, and that
+ * is the opposite of the obvious thing.**
  *
- * `fit` works by making a cell's min-content width equal to its text's single-line width. The
- * skeleton has no text: its `<th>` renders nothing at all (the header material is `aria-hidden`
- * placeholder, deliberately) and its `<td>` holds a contentless block with a percentage width,
- * which contributes nothing to intrinsic sizing. So a `fit` column applied to the skeleton has
- * nothing to fit and collapses to its 1px floor.
+ * `fit` works by making a cell's min-content width equal to its text's single-line width. An
+ * unsampled skeleton cell has no text: it holds a contentless block with a percentage width, which
+ * contributes nothing to intrinsic sizing. So a `fit` column applied to it has nothing to fit and
+ * collapses to its 1px floor.
  *
  * **Measured in Chromium before this was split out**, on the Calendars table at 1646: `Working
  * days` rendered **16px while loading and 190px settled**, and `Actions` rendered **0px** — the
@@ -187,10 +201,17 @@ function cellClassesOf<T>(column: Column<T>): string {
  * to prevent. Raised by the component review as a mechanism; the numbers are why it was fixed
  * rather than noted.
  *
+ * A column that declares a {@link Column.sample} is the exception, and the reason is the same fact
+ * read the other way: its placeholder is the sample's invisible text, so there IS content for `fit`
+ * to fit and the declared width applies (see {@link headClassesOf} / {@link cellClassesOf}).
+ *
  * The caller's own `cellClassName` is still honoured, so a hidden-below-`lg` column stays hidden in
  * the skeleton too and the row keeps its column count.
  */
 function skeletonClassesOf<T>(column: Column<T>, kind: 'head' | 'cell'): string {
+  if (column.sample !== undefined) {
+    return kind === 'head' ? headClassesOf(column) : cellClassesOf(column);
+  }
   return kind === 'head'
     ? cn(HEAD_DEFAULT, column.headClassName)
     : cn(CELL_DEFAULT, column.cellClassName);
@@ -437,6 +458,64 @@ type DataTableModeProps =
 export type DataTableProps<T> = DataTableBaseProps<T> & DataTableModeProps;
 
 /**
+ * A table's loading picture: the REAL header row over three rows of placeholder cells
+ * (`docs/specs/loading-skeletons/`, TECH_DEBT #234 + #341).
+ *
+ * The header text is the real one, because it is known and showing it is what fixes the header
+ * half of #341 (a header that paints blank then fills in slides every column). A `srHeader` or
+ * `headerCell` column is drawn blank: the first is hidden by definition and the second is a live
+ * control, and a skeleton holds nothing focusable. The body is `columns.length` cells wide, because
+ * a skeleton whose column count differs from the settled table reflows the page under the reader's
+ * cursor. A cell is the column's `sample` when it has one, else a generic block.
+ *
+ * **It emits NO `data-col-width`.** That attribute is the wrap gate's declaration read off the
+ * settled table; a skeleton's cells are not content, and the gate must not read them
+ * (`data-table.test.tsx` pins this).
+ *
+ * The whole table is `aria-hidden`, so a `columnheader` locator cannot match the loading headings
+ * and a screen reader gets the one sentence `LoadingShape` speaks. Exported so a panel that draws
+ * its table before the rows exist can share the shape — wrap it in `LoadingShape` there.
+ */
+export function DataTableSkeleton<T>({
+  columns,
+  rows = SKELETON_ROWS,
+}: {
+  columns: Column<T>[];
+  rows?: number;
+}): React.ReactElement {
+  return (
+    <div className="overflow-x-auto" aria-hidden="true">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-border text-muted-foreground border-b text-left">
+            {columns.map((column) => (
+              <th key={column.header} scope="col" className={skeletonClassesOf(column, 'head')}>
+                {column.srHeader || column.headerCell ? null : column.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }, (_, rowIndex) => (
+            <tr key={rowIndex} className="border-border border-b">
+              {columns.map((column) => (
+                <td key={column.header} className={skeletonClassesOf(column, 'cell')}>
+                  {column.sample === undefined ? (
+                    <Skeleton className="h-3.5 w-full max-w-40" />
+                  ) : (
+                    <SkeletonText sample={column.sample} />
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
  * The single table primitive (DESIGN_SYSTEM.md → Tables). Renders the shared
  * loading / error-with-retry / empty / populated states so every resource list
  * behaves identically. Pass a `react-query` result and column definitions; the
@@ -462,55 +541,17 @@ export function DataTable<T>({
     // **A skeleton, not a spinner** (`docs/TECH_DEBT.md` #161(b),
     // `docs/specs/empty-state-consolidation/` M7). `docs/UX_STANDARDS.md` asks for a skeleton
     // wherever the content has a known shape, and a table's shape is known: it is this component's
-    // own `columns`. That obligation has been written down since the archetypes were built —
-    // `skeleton.tsx` says in as many words that each archetype owns its loading render because
-    // "`DataTable` knows its own" — and was never built here, so seventeen resource lists span a
-    // centred spinner and then reflow into a table.
-    //
-    // The header row is the real one, and the body is `columns.length` cells wide, because a
-    // skeleton whose column count differs from the settled table reflows the page under the
-    // reader's cursor — which is the defect a skeleton exists to prevent, not merely a cosmetic
-    // mismatch. Each cell reuses its column's own `cellClassName` for the same reason.
+    // own `columns`. See `DataTableSkeleton` for the shape and what it deliberately withholds.
     //
     // `loadingLabel` is KEPT and announced. It is required on every caller and `shoot.mjs` asserts
     // on it to photograph this state; deleting it would break the instrument that found the defect.
-    // The material is `aria-hidden` (see `Skeleton`) so an assistive reader gets that one sentence
-    // rather than a few dozen announced grey rectangles.
+    // `LoadingShape` speaks it once from a status outside any `aria-busy` subtree, and hides the
+    // material, so an assistive reader gets that one sentence rather than a few dozen announced grey
+    // rectangles. It sets no `aria-busy`: nothing here persists into the settled table to receive it.
     return (
-      <div aria-busy="true">
-        <span className="sr-only" role="status">
-          {loadingLabel}
-        </span>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <caption className="sr-only">{caption}</caption>
-            <thead>
-              <tr className="border-border text-muted-foreground border-b text-left">
-                {columns.map((column) => (
-                  <th
-                    key={column.header}
-                    scope="col"
-                    className={cn(skeletonClassesOf(column, 'head'), column.srHeader && 'relative')}
-                  >
-                    {column.srHeader ? <span className="sr-only">{column.header}</span> : null}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: SKELETON_ROWS }, (_, rowIndex) => (
-                <tr key={rowIndex} className="border-border border-b">
-                  {columns.map((column) => (
-                    <td key={column.header} className={skeletonClassesOf(column, 'cell')}>
-                      <Skeleton className="h-3.5 w-full max-w-40" />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <LoadingShape label={loadingLabel}>
+        <DataTableSkeleton columns={columns} />
+      </LoadingShape>
     );
   }
 
