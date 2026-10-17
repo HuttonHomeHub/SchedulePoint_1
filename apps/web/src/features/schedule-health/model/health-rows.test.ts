@@ -15,6 +15,8 @@ import {
   HEALTH_ADVISORY_FOOTER,
   healthAnnouncement,
   mergeCriticalPathResult,
+  offenderAnnouncement,
+  offenderJumpDescription,
   zeroDurationSummary,
 } from './health-rows';
 
@@ -331,14 +333,18 @@ describe('advisories read per id (redundant-link-advisory M1)', () => {
     );
   });
 
-  it('an unknown id is its count and nothing else', () => {
-    expect(advisorySummary(unknown)).toBe('2');
+  it('an unknown id has no summary paragraph of its own: its name and count are already on the row', () => {
+    expect(advisorySummary(unknown)).toBeNull();
     expect(advisoryCaveat(unknown)).toBeNull();
     expect(advisoryUnjudgedSentence(unknown)).toBeNull();
   });
 
   it('keys the caveat on the rule token, and names a token it does not know', () => {
-    expect(advisoryCaveat(redundant(1))).toMatch(/^Each is already implied by a longer chain/);
+    expect(advisoryCaveat(redundant(1))).toMatch(
+      /^Each is already implied by other links in the plan/,
+    );
+    // True of a parallel-link witness too, where there is no chain.
+    expect(advisoryCaveat(redundant(1))).not.toMatch(/chain/);
     expect(advisoryCaveat(redundant(1))).not.toMatch(/never drives/i);
     const novel = redundant(1, { rule: 'SOMETHING_ELSE' as never });
     expect(advisoryCaveat(novel)).toBe(
@@ -347,16 +353,18 @@ describe('advisories read per id (redundant-link-advisory M1)', () => {
     expect(advisoryCaveat(zero(1))).toBeNull();
   });
 
-  it('states what was not checked, and the stopped-early sentence replaces it', () => {
+  it('states what could not be judged without naming a cause it cannot know', () => {
     expect(advisoryUnjudgedSentence(redundant(0))).toBeNull();
     expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 1 }))).toBe(
-      '1 link into started or pinned work, or touching a level of effort, was not checked.',
+      '1 link could not be judged (for example a link into started or pinned work, or to a level of effort).',
     );
     expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 3 }))).toBe(
-      '3 links into started or pinned work, or touching a level of effort, were not checked.',
+      '3 links could not be judged (for example a link into started or pinned work, or to a level of effort).',
     );
+    // An unknown endpoint or a stored cycle is also in that count, so the cause is an example, never the claim.
+    expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 3 }))).not.toMatch(/were not checked/);
     expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 7, searchCapped: true }))).toBe(
-      'The check stopped early on a plan this size; 7 links were not checked.',
+      'The check stopped early on a plan this size; 7 links could not be judged.',
     );
   });
 
@@ -374,6 +382,10 @@ describe('advisories read per id (redundant-link-advisory M1)', () => {
     expect(healthAnnouncement(withAds([zero(0), redundant(0)]))).toMatch(
       / no zero-duration tasks, no redundant links\.$/,
     );
+    // "No redundant links" must not claim more than the check knew.
+    expect(healthAnnouncement(withAds([zero(0), redundant(0, { unjudged: 3 })]))).toMatch(
+      / no zero-duration tasks, no redundant links \(3 could not be judged\)\.$/,
+    );
     expect(healthAnnouncement(withAds([zero(0), unknown]))).toMatch(
       / no zero-duration tasks, Something newer: 2\.$/,
     );
@@ -382,5 +394,49 @@ describe('advisories read per id (redundant-link-advisory M1)', () => {
   it('the footer is true of a finding about links', () => {
     expect(HEALTH_ADVISORY_FOOTER).not.toMatch(/durations/);
     expect(HEALTH_ADVISORY_FOOTER).toContain('not part of the DCMA assessment above');
+  });
+});
+
+describe('what pressing an offender selects, said (a11y review 2026-10-17)', () => {
+  const relationship = {
+    kind: 'RELATIONSHIP' as const,
+    id: 'l1',
+    code: null,
+    name: 'Survey → Permit',
+    note: 'FS; already implied through Design',
+    activityId: 'permit',
+  };
+  const activityOffender = {
+    kind: 'ACTIVITY' as const,
+    id: 'a1',
+    code: 'A1',
+    name: 'Loose end',
+    note: 'no successor',
+    activityId: 'a1',
+  };
+
+  it('names the activity that IS selected, and which end of the link it is', () => {
+    expect(offenderAnnouncement(relationship)).toBe(
+      'Permit selected in the plan, the later end of Survey → Permit.',
+    );
+    expect(offenderAnnouncement(relationship)).not.toMatch(/^Survey → Permit selected/);
+  });
+
+  it('keeps an activity offender’s sentence as it was', () => {
+    expect(offenderAnnouncement(activityOffender)).toBe('Loose end selected in the plan.');
+    expect(offenderJumpDescription(activityOffender)).toBeNull();
+  });
+
+  it('describes the button of a relationship by what it selects', () => {
+    expect(offenderJumpDescription(relationship)).toBe(
+      'Selects Permit in the plan, the later end of this link. A link itself cannot be selected.',
+    );
+  });
+
+  it('takes the successor after the LAST arrow, and falls back if a label has none', () => {
+    expect(offenderAnnouncement({ ...relationship, name: 'A → B → C' })).toMatch(/^C selected/);
+    expect(offenderAnnouncement({ ...relationship, name: 'unknown' })).toBe(
+      'unknown selected in the plan.',
+    );
   });
 });

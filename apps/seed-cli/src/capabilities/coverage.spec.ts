@@ -169,9 +169,12 @@ describe('the capability plans themselves', () => {
 
   it('never state the same edge twice', () => {
     for (const spec of specs) {
-      // A duplicate edge is a documented reject (ADR-0035), so this would fail mid-seed with a
-      // finding that says nothing about the capability the plan is meant to demonstrate.
-      const pairs = spec.dependencies.map((d) => `${d.predecessorKey}→${d.successorKey}`);
+      // An exact duplicate (the same ordered pair AND type) is a documented reject (ADR-0035 §13 as
+      // amended, `uq_dependencies_pred_succ_type`), so this would fail mid-seed with a finding that says
+      // nothing about the capability the plan is meant to demonstrate. A different type between the
+      // same pair is the construction ladder and is legal, which `capability-redundant-logic-calendars`
+      // relies on; this said "same pair" until 2026-10-17 and described the pre-amendment rule.
+      const pairs = spec.dependencies.map((d) => `${d.predecessorKey}→${d.successorKey}:${d.type}`);
       expect(new Set(pairs).size, spec.seedName).toBe(pairs.length);
     }
   });

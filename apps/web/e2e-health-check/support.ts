@@ -61,6 +61,8 @@ export interface SeededDefects {
   danglerName: string;
   /** The one zero-duration TASK, for the ADR-0162 D1 advisory. */
   zeroTaskName: string;
+  /** The target of the one redundant link (`Survey → Permit`), for the ADR-0196 advisory. */
+  redundantTargetName: string;
 }
 
 /**
@@ -70,6 +72,8 @@ export interface SeededDefects {
  *   Groundworks (5 d) ──FS──▶ Frame (5 d) ──SS −1 d──▶ Fit out (5 d)   ← ONE lead (metric 2 FAIL)
  *   Phase 2 (WBS) ▸ Loose end (3 d)                                    ← dangles (metric 1 offender),
  *                                                                        under a collapsible parent
+ *   Survey (2 d) ──FS──▶ Design (2 d) ──FS──▶ Permit (2 d)
+ *   Survey ─────────────FS─────────────────▶ Permit                    ← implied: "Redundant links"
  * ```
  *
  * **This seeds through the API and does NOT reload — its callers do** (`docs/TECH_DEBT.md` #208).
@@ -113,6 +117,15 @@ export async function seedDefects(
         post(`/plans/${planId}/dependencies`, { predecessorId, successorId, ...extra });
       await link(a.id, b.id);
       await link(b.id, c.id, { type: 'SS', lagDays: -1 });
+      // ADR-0196: the canonical triangle. Survey to Permit is already implied through Design, so
+      // the "Redundant links" advisory lists it and nothing else here (the SS lead above is on a
+      // chain of two, with no direct link beside it).
+      const survey = await act('Survey', 2);
+      const design = await act('Design', 2);
+      const permit = await act('Permit', 2);
+      await link(survey.id, design.id);
+      await link(design.id, permit.id);
+      await link(survey.id, permit.id);
       const recalc = await fetch(
         `/api/v1/organizations/${slug}/plans/${planId}/schedule/recalculate`,
         { method: 'POST' },
@@ -121,7 +134,11 @@ export async function seedDefects(
     },
     { slug: orgSlug, planId },
   );
-  return { danglerName: 'Loose end', zeroTaskName: 'Handover sign-off' };
+  return {
+    danglerName: 'Loose end',
+    zeroTaskName: 'Handover sign-off',
+    redundantTargetName: 'Permit',
+  };
 }
 
 /** The canvas's parallel activity listbox — the a11y surface the offender jump has to reach. */

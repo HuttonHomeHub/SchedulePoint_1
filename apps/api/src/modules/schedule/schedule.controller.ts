@@ -76,6 +76,20 @@ const FLOAT_PATHS_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
 const CRITICAL_PATH_TEST_THROTTLE = { default: { ttl: 60_000, limit: 14 } } as const;
 
 /**
+ * The health-check budget — **derived, by the same rule as {@link CRITICAL_PATH_TEST_THROTTLE}**:
+ * `floor(12_000 / worst_case_p95_ms)`, at most 20 % of a 60-second window per IP in worst-case compute
+ * time. This route used to be a persisted read that earned the default 100 / 60 s (all four loads under a
+ * millisecond); since the redundant-link advisory it also runs a graph search (ADR-0196), bounded by a
+ * deterministic limit but not free. Worst case is the plan the limit stops: the 2,000 x 40 plan
+ * measured a median 91 ms and a p95 of **169 ms** for the search alone
+ * (`docs/specs/redundant-link-advisory/m0-measurement.md`), so `floor(12_000 / 169) = 71`. A realistic
+ * 2,000-activity plan answers in about 11 ms, so 71 requests cost about 0.8 s of a 60 s window, and the
+ * default 100 would have cost 17 s (28 %) in the capped worst case, which is what this limit exists to
+ * prevent. The CPM engine is still not invoked, no lock is taken and nothing is written.
+ */
+const HEALTH_CHECK_THROTTLE = { default: { ttl: 60_000, limit: 71 } } as const;
+
+/**
  * The levelling-application preview's budget: **10 requests / 60 s**. The route runs the engine's
  * network and levelling passes twice as a rule (read the plan, write every target and re-solve), and a
  * third time when the re-solve shows a candidate the links refuse and it has to be dropped. Measured at
@@ -220,12 +234,15 @@ export class ScheduleController {
   }
 
   @Get('health-check')
+  @Throttle(HEALTH_CHECK_THROTTLE)
   @ApiOperation({
     summary: 'The plan’s DCMA 14-point schedule health check (any member, health M1).',
     description:
-      'A pure read over the persisted definition and CPM columns — **the CPM engine is not ' +
+      'A read over the persisted definition and CPM columns — **the CPM engine is not ' +
       'invoked** (contrast float-paths, which recomputes per call), no lock or transaction is ' +
-      'taken, and nothing is written. **The response does not vary by role**: it carries no cost, ' +
+      'taken, and nothing is written. It does run one bounded graph search, for the redundant-link ' +
+      'advisory (deterministic work limit, about 0.1 s at most on a plan too dense to finish). ' +
+      '**The response does not vary by role**: it carries no cost, ' +
       'rate or budget field at any depth, so cost:read changes nothing and one URL produces one ' +
       'document — which is what makes it a handover artefact. Metric 10 (Resources) is ' +
       'deliberately narrowed to resource-assignment existence for the same reason, and says so in ' +
@@ -236,12 +253,11 @@ export class ScheduleController {
   @ApiOkResponse({ type: ScheduleHealthReportDto })
   @ApiTooManyRequestsResponse({
     description:
-      'Rate limited by the global default (100 requests / 60 s per IP, counted per route handler ' +
-      '— docs/TECH_DEBT.md #315). This route is a persisted read — it runs no CPM computation — so ' +
-      'it earns no tighter limit than the default, unlike float-paths which recomputes. Measured at both ' +
-      'scales (M0-T2 at 500 activities; the M5 gate pass at 2,000 — all four loads sub-1 ms, ' +
-      'independently re-derived by the security review): see ' +
-      'docs/specs/schedule-health-check/m0-measurement.md §M0-T2.',
+      'Rate limited to 71 requests / 60 s per IP, counted per route handler ' +
+      '(docs/TECH_DEBT.md #315): the same 20 %-of-the-window rule as the critical-path test, ' +
+      "applied to the redundant-link search's worst-case p95 of 169 ms (HEALTH_CHECK_THROTTLE; " +
+      'docs/specs/redundant-link-advisory/m0-measurement.md). The loads are sub-millisecond ' +
+      '(docs/specs/schedule-health-check/m0-measurement.md §M0-T2); the CPM engine is not invoked.',
   })
   async healthCheck(
     @CurrentUser() principal: Principal,

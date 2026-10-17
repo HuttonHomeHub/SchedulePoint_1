@@ -1,3 +1,4 @@
+import type { SeedSpec } from '@repo/seed';
 import type { ActivityType, ConstraintType, DependencyType } from '@repo/types';
 
 import { schedulingCalendarId } from '../../src/modules/activities/day-factor';
@@ -19,6 +20,8 @@ import type {
   HealthActivityInput,
   HealthDependencyInput,
 } from '../../src/modules/schedule/health/compute-health';
+import { lagCalendarKeyOf } from '../../src/modules/schedule/lag-calendar-key';
+import { specToEngineInput } from '../pairwise/spec-to-engine';
 
 /**
  * **The differential oracle for the redundant-link advisory** (`docs/specs/redundant-link-advisory/`
@@ -60,7 +63,11 @@ export interface OracleActivity {
   secondaryConstraintType?: ConstraintType | null;
   secondaryConstraintDate?: string | null;
   externalEarlyStart?: string | null;
+  externalLateFinish?: string | null;
   visualStart?: string | null;
+  expectedFinish?: string | null;
+  resumeDate?: string | null;
+  scheduleAsLateAsPossible?: boolean;
 }
 
 export interface OracleLink {
@@ -78,6 +85,7 @@ export interface OraclePlan {
   calendars: Readonly<Record<string, WorkingTimeCalendar>>;
   planCalendar: string;
   progressMode?: ComputeOptions['progressMode'];
+  useExpectedFinishDates?: boolean;
   activities: readonly OracleActivity[];
   links: readonly OracleLink[];
 }
@@ -90,16 +98,14 @@ export interface OraclePlan {
 export type LagCalendarKey = string;
 
 /** What the rule will read per activity: the health module's input plus the one new fact. */
-export type RuleActivity = HealthActivityInput & { schedulingCalendarId: string };
+export type RuleActivity = HealthActivityInput;
 /** What the rule will read per link: the health module's input plus the lag-calendar identity. */
-export type RuleDependency = HealthDependencyInput & { lagCalendarKey: LagCalendarKey };
+export type RuleDependency = HealthDependencyInput;
 
 export interface RuleInput {
   activities: RuleActivity[];
   dependencies: RuleDependency[];
 }
-
-export const TWENTY_FOUR_HOUR_KEY: LagCalendarKey = '24H';
 
 function calendarOf(plan: OraclePlan, key: string | null | undefined): WorkingTimeCalendar {
   const resolved = plan.calendars[key ?? plan.planCalendar];
@@ -146,7 +152,11 @@ export function buildEngineGraph(
       secondaryConstraintType: a.secondaryConstraintType ?? null,
       secondaryConstraintDate: a.secondaryConstraintDate ?? null,
       externalEarlyStart: a.externalEarlyStart ?? null,
+      externalLateFinish: a.externalLateFinish ?? null,
       visualStart: a.visualStart ?? null,
+      expectedFinish: a.expectedFinish ?? null,
+      resumeDate: a.resumeDate ?? null,
+      scheduleAsLateAsPossible: a.scheduleAsLateAsPossible ?? false,
       actualStart: a.actualStart ?? null,
       actualFinish: a.actualFinish ?? null,
       ...(a.remainingMinutes === undefined ? {} : { remainingMinutes: a.remainingMinutes }),
@@ -182,6 +192,9 @@ export function buildEngineGraph(
       dataDate: plan.dataDate,
       calendar: calendarOf(plan, plan.planCalendar),
       ...(plan.progressMode === undefined ? {} : { progressMode: plan.progressMode }),
+      ...(plan.useExpectedFinishDates === undefined
+        ? {}
+        : { useExpectedFinishDates: plan.useExpectedFinishDates }),
     },
   };
 }
@@ -220,14 +233,14 @@ export function buildRuleInput(plan: OraclePlan): RuleInput {
     const pred = byId.get(l.from);
     const succ = byId.get(l.to);
     if (pred === undefined || succ === undefined) throw new Error(`Link ${l.id} has no endpoint`);
-    const lagCalendarKey =
-      l.lagCalendar === 'TWENTY_FOUR_HOUR'
-        ? TWENTY_FOUR_HOUR_KEY
-        : l.lagCalendar === 'PREDECESSOR'
-          ? schedulingKey(plan, pred)
-          : l.lagCalendar === 'SUCCESSOR'
-            ? schedulingKey(plan, succ)
-            : plan.planCalendar;
+    // The product's own decision, called rather than restated: if it ever disagreed with the engine's
+    // edge calendars the soundness suite would show it.
+    const lagCalendarKey = lagCalendarKeyOf(
+      l.lagCalendar ?? 'PROJECT_DEFAULT',
+      schedulingKey(plan, pred),
+      schedulingKey(plan, succ),
+      plan.planCalendar,
+    );
     return {
       id: l.id,
       predecessorId: l.from,
@@ -331,8 +344,23 @@ export function oracleDivergences(
   plan: OraclePlan,
   candidateLinkIds: readonly string[],
 ): Divergence[] {
+  return engineDivergences((removed) => buildEngineGraph(plan, removed), candidateLinkIds);
+}
+
+/** The engine's input with a set of edges taken out: what both entry points hand the comparison. */
+export interface EngineGraph {
+  activities: EngineActivity[];
+  edges: EngineEdge[];
+  options: ComputeOptions;
+}
+
+/** The same check over any engine input (a catalogue plan arrives this way). */
+export function engineDivergences(
+  graphWithout: (removed: ReadonlySet<string>) => EngineGraph,
+  candidateLinkIds: readonly string[],
+): Divergence[] {
   const run = (removed: ReadonlySet<string>): EngineOutput => {
-    const { activities, edges, options } = buildEngineGraph(plan, removed);
+    const { activities, edges, options } = graphWithout(removed);
     return computeSchedule(activities, edges, options);
   };
   const baseline = run(new Set());
@@ -342,6 +370,106 @@ export function oracleDivergences(
     compare('all', baseline, run(new Set(candidateLinkIds)), found);
   }
   return found;
+}
+
+// ---------------------------------------------------------------------------------------------
+// A catalogue plan (`SeedSpec`) through the same two builders
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * A `SeedSpec`'s engine input, with the per-edge lag calendars the service resolves. The pairwise
+ * mapper (`spec-to-engine.ts`) leaves `PREDECESSOR`/`SUCCESSOR` on the plan calendar "until per-edge
+ * endpoint calendars land"; they have landed (ADR-0037 M5, `toEngineEdge`), so an oracle built on it
+ * unpatched would hand the engine a different plan from the one the service builds and could report a
+ * divergence the product never has, or hide one. The patch is the service's own rule: the endpoint's
+ * effective calendar port, `undefined` where it inherits the plan's.
+ */
+export function engineGraphOfSpec(spec: SeedSpec): (removed: ReadonlySet<string>) => EngineGraph {
+  const input = specToEngineInput(spec);
+  const calendarOf = new Map(input.activities.map((a) => [a.id, a.calendar] as const));
+  const edges = input.edges.map((edge, index) => {
+    const source = spec.dependencies[index]!.lagCalendarSource;
+    const lagCalendar =
+      source === 'TWENTY_FOUR_HOUR'
+        ? allMinutesWorkCalendar
+        : source === 'PREDECESSOR'
+          ? calendarOf.get(edge.predecessorId)
+          : source === 'SUCCESSOR'
+            ? calendarOf.get(edge.successorId)
+            : undefined;
+    const { lagCalendar: _unpatched, ...rest } = edge;
+    return lagCalendar ? { ...rest, lagCalendar } : rest;
+  });
+  return (removed) => ({
+    activities: input.activities,
+    edges: edges.filter((e) => !removed.has(e.id)),
+    options: input.options,
+  });
+}
+
+/** A `SeedSpec`'s rule input: the same calendar identities the engine graph above walks. */
+export function ruleInputOfSpec(spec: SeedSpec): RuleInput {
+  const plan = spec.plan.defaultCalendarKey ?? 'PLAN';
+  const drivingCalendar = new Map<string, string>();
+  for (const assignment of spec.assignments) {
+    if (!assignment.isDriving) continue;
+    const calendarKey = spec.resources.find((r) => r.key === assignment.resourceKey)?.calendarKey;
+    if (calendarKey != null) drivingCalendar.set(assignment.activityKey, calendarKey);
+  }
+  const schedulingKeyOf = new Map(
+    spec.activities.map((a) => {
+      const id = schedulingCalendarId({
+        type: a.type,
+        drivingCalendarId: drivingCalendar.get(a.key) ?? null,
+        activityCalendarId: a.calendarKey,
+        planCalendarId: plan,
+      });
+      return [a.key, id ?? plan] as const;
+    }),
+  );
+  const activities: RuleActivity[] = spec.activities.map((a) => {
+    const progress = a.progress;
+    const actualStart = progress?.actualStart ?? null;
+    const actualFinish = progress?.actualFinish ?? null;
+    return {
+      id: a.key,
+      code: a.code,
+      name: a.name,
+      type: a.type,
+      status:
+        actualFinish !== null ? 'COMPLETE' : actualStart !== null ? 'IN_PROGRESS' : 'NOT_STARTED',
+      constraintType: a.constraintType,
+      constraintDate: a.constraintDate,
+      secondaryConstraintType: a.secondaryConstraintType,
+      secondaryConstraintDate: a.secondaryConstraintDate,
+      totalFloat: null,
+      durationMinutes: a.durationMinutes,
+      remainingDurationMinutes: null,
+      percentComplete: 0,
+      actualStart,
+      actualFinish,
+      earlyStart: null,
+      earlyFinish: null,
+      dayFactorMinutes: 480,
+      hasAssignment: false,
+      assignmentCount: 0,
+      schedulingCalendarId: schedulingKeyOf.get(a.key) ?? plan,
+    };
+  });
+  const dependencies: RuleDependency[] = spec.dependencies.map((d, index) => ({
+    id: `edge-${String(index)}`,
+    predecessorId: d.predecessorKey,
+    successorId: d.successorKey,
+    type: d.type,
+    lagMinutes: d.lagMinutes,
+    lagCalendarKey: lagCalendarKeyOf(
+      d.lagCalendarSource,
+      schedulingKeyOf.get(d.predecessorKey),
+      schedulingKeyOf.get(d.successorKey),
+      plan,
+    ),
+  }));
+  return { activities, dependencies };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -450,6 +578,18 @@ export interface GeneratorOptions {
   /** Activity count range, inclusive. */
   minActivities?: number;
   maxActivities?: number;
+  /**
+   * Few activities and nearly every forward pair linked. Redundant links need a triangle (a chain and
+   * a direct link over the same span), and sparse random networks make them rare; this is the shape
+   * that exercises the rule's clauses, run beside the sparse one rather than instead of it.
+   */
+  dense?: boolean;
+  /**
+   * Exactly one triangle (`T0 → T1`, `T1 → T2` and a direct `T0 → T2`), every type, lag and calendar
+   * drawn at random. The smallest network the rule can judge, and the one the counterexamples are
+   * made of, so thousands of them are cheap and each clause meets its failing case by volume.
+   */
+  triangle?: boolean;
 }
 
 /**
@@ -462,13 +602,18 @@ export function generatePlan(seed: number, options: Partial<GeneratorOptions> = 
   const int = (lo: number, hi: number): number => lo + Math.floor(rand() * (hi - lo + 1));
   const pick = <T>(xs: readonly T[]): T => xs[int(0, xs.length - 1)]!;
   const dataDate = '2026-01-05';
-  const n = int(options.minActivities ?? 3, options.maxActivities ?? 9);
+  const n =
+    options.triangle === true
+      ? 3
+      : options.dense === true
+        ? int(3, 6)
+        : int(options.minActivities ?? 3, options.maxActivities ?? 9);
   const planCalendar = pick(CALENDAR_KEYS);
   const activities: OracleActivity[] = Array.from({ length: n }, (_, i) => {
     const a: OracleActivity = {
       id: `T${String(i)}`,
       durationMinutes: pick([0, 60, 240, 480, 1440, 2880, 4320]),
-      calendar: rand() < 0.35 ? pick(CALENDAR_KEYS) : null,
+      calendar: rand() < (options.dense === true ? 0.6 : 0.35) ? pick(CALENDAR_KEYS) : null,
     };
     const roll = rand();
     if (roll < 0.06) a.type = 'LEVEL_OF_EFFORT';
@@ -482,6 +627,11 @@ export function generatePlan(seed: number, options: Partial<GeneratorOptions> = 
         a.secondaryConstraintDate = addDays(dataDate, int(8, 40));
       }
     }
+    if (rand() < 0.1) a.visualStart = addDays(dataDate, int(0, 25));
+    if (rand() < 0.08) a.externalEarlyStart = addDays(dataDate, int(0, 15));
+    if (rand() < 0.06) a.externalLateFinish = addDays(dataDate, int(5, 40));
+    if (rand() < 0.1) a.expectedFinish = addDays(dataDate, int(0, 30));
+    if (rand() < 0.1) a.scheduleAsLateAsPossible = true;
     if (rand() < 0.12 && a.type !== 'LEVEL_OF_EFFORT') {
       const startedAgo = int(0, 6);
       a.actualStart = addDays(dataDate, -startedAgo);
@@ -492,10 +642,20 @@ export function generatePlan(seed: number, options: Partial<GeneratorOptions> = 
     return a;
   });
   const links: OracleLink[] = [];
-  const target = int(n - 1, n * 2);
+  const target =
+    options.triangle === true
+      ? 3
+      : options.dense === true
+        ? int(n, (n * (n - 1)) / 2 + 2)
+        : int(n - 1, n * 2);
+  const trianglePairs = [
+    [0, 1],
+    [1, 2],
+    [0, 2],
+  ] as const;
   for (let k = 0; k < target; k += 1) {
-    const to = int(1, n - 1);
-    const from = int(0, to - 1);
+    const to = options.triangle === true ? trianglePairs[k]![1] : int(1, n - 1);
+    const from = options.triangle === true ? trianglePairs[k]![0] : int(0, to - 1);
     links.push({
       id: `L${String(k)}`,
       from: `T${String(from)}`,
@@ -518,6 +678,7 @@ export function generatePlan(seed: number, options: Partial<GeneratorOptions> = 
     calendars: CALENDAR_SHAPES,
     planCalendar,
     progressMode: pick(['RETAINED_LOGIC', 'PROGRESS_OVERRIDE', 'ACTUAL_DATES'] as const),
+    useExpectedFinishDates: rand() < 0.3,
     activities,
     links: unique,
   };

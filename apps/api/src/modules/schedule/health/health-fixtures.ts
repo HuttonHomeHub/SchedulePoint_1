@@ -40,6 +40,7 @@ export function activity(overrides: Partial<HealthActivityInput> = {}): HealthAc
     earlyStart: '2026-03-02',
     earlyFinish: '2026-03-03',
     dayFactorMinutes: 480,
+    schedulingCalendarId: 'PLAN',
     ...overrides,
     hasAssignment,
     assignmentCount,
@@ -54,6 +55,7 @@ export function dependency(
     id: nextId('dep'),
     type: 'FS',
     lagMinutes: 0,
+    lagCalendarKey: 'PLAN',
     ...overrides,
   };
 }

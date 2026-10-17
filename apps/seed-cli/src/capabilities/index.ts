@@ -3,7 +3,14 @@ import type { SeedSpec } from '@repo/seed';
 import { calendarsPlan } from './calendars.js';
 import { constraintsPlan, expectedFinishPlan, snetEffectsPlan } from './constraints.js';
 import { costPlan, externalIgnoredPlan, externalPlan } from './cost.js';
-import { logicFfSfPlan, logicFsSsPlan } from './logic.js';
+import {
+  logicFfSfPlan,
+  logicFsSsPlan,
+  redundantLogicCalendarsPlan,
+  redundantLogicKeptPlan,
+  redundantLogicPlan,
+  redundantLogicUncheckedPlan,
+} from './logic.js';
 import { floatPlan, networkShapePlan } from './network.js';
 import { progressOverridePlan, progressPlan, retainedLogicPlan } from './progress.js';
 import {
@@ -56,6 +63,10 @@ export interface CapabilityFamily {
 export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'logic', label: 'Relationship types and lag', build: logicFsSsPlan },
   { key: 'logic', label: 'Relationship types and lag (FF/SF)', build: logicFfSfPlan },
+  { key: 'logic', label: 'Redundant links that are listed', build: redundantLogicPlan },
+  { key: 'logic', label: 'Redundant links across calendars', build: redundantLogicCalendarsPlan },
+  { key: 'logic', label: 'Links that look redundant and are not', build: redundantLogicKeptPlan },
+  { key: 'logic', label: 'Links the check does not judge', build: redundantLogicUncheckedPlan },
   { key: 'network', label: 'Network shape and open ends', build: networkShapePlan },
   { key: 'network', label: 'Float', build: floatPlan },
   { key: 'constraints', label: 'Constraints', build: constraintsPlan },

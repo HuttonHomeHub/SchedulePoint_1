@@ -1961,7 +1961,12 @@ export function ToolbarPlanWorkspace({
       {...(model.canRecalc ? { onRecalculate: () => ctx.recalculate() } : {})}
       {...(model.canWrite ? { onOpenBaselines: () => setDialog('baselines') } : {})}
       onActivateActivity={(activityId) => {
-        canvasUi.requestSelectActivity(activityId);
+        // Focus stays on the offender button that was pressed: the panel announces the jump itself, from
+        // inside that focus frame, and the reader is working down a list. Taking focus into the diagram
+        // (the default) left a keyboard user at the canvas after every press with the next offender a
+        // dock away (the search cycle's reason, ADR-0079), and made the panel's own "focus stays" claim
+        // false.
+        canvasUi.requestSelectActivity(activityId, { focusListbox: false });
         model.onSelectionChange(activityId);
         // The Gantt half of the reveal (M3-T2) — selection alone scrolls nothing there.
         setHealthRevealId(activityId);

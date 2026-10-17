@@ -15,14 +15,17 @@ export function networkShapePlan(): SeedSpec {
     name: 'Network: open ends, merges and dangles',
     description:
       'N1 has no predecessor and N5 no successor, so the plan has one true start and one true ' +
-      'finish. N4 is a merge point with two predecessors and takes the LATER of them. N3 is ' +
-      'redundant — N2 already reaches N4 directly — so removing it must change nothing. N7 hangs ' +
+      'finish. N4 is a merge point with two predecessors and takes the LATER of them. N3 is a ' +
+      'non-driving parallel path — N1 → N3 → N4 is shorter than N1 → N2 → N4 — so N2 alone sets ' +
+      'N4’s date; no link there is implied by a chain, and the health check lists none. N7 hangs ' +
       'off the network entirely, and N6 takes no time at all without being a milestone.',
     activities: [
       activity('N1', { name: 'Open start', testTags: ['net_open_start'] }),
       activity('N2', { name: 'Merge feeder A', durationMinutes: 3 * DAY }),
-      // Redundant: N2 → N4 exists directly, so this path can never be the binding one. It must not
-      // change a single date, and a scheduler that double-counts logic is where it shows.
+      // A non-driving parallel path: N2 → N4 is longer, so this path is never the binding one. It must
+      // not change a single date, and a scheduler that double-counts logic is where it shows. (Not
+      // "redundant" in the health check's sense, where an implied link is one a chain makes
+      // unnecessary whatever the durations: here a shorter N2 would make this path drive.)
       activity('N3', { name: 'Redundant path', testTags: ['net_redundant_logic'] }),
       activity('N4', {
         name: 'Merge point',

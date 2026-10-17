@@ -121,6 +121,7 @@ import {
 } from './engine';
 import { computeHealthReport, healthActivityAssignmentFields } from './health/compute-health';
 import type { HealthActivityInput } from './health/compute-health';
+import { lagCalendarKeyOf, PLAN_CALENDAR_KEY } from './lag-calendar-key';
 import { levelIfEnabled } from './level-if-enabled';
 import { placedProjectFinishOf } from './placed-finish';
 import {
@@ -1033,7 +1034,20 @@ export class ScheduleService {
       // presence, the zero-duration advisory the number. `healthActivityAssignmentFields` derives
       // both from one value so they cannot disagree; a unit case pins it.
       ...healthActivityAssignmentFields(assignmentCounts.get(r.id) ?? 0),
+      // The redundant-link rule's "same calendar". `schedulingCalendarId` is the rule the recalc and
+      // the day factor already share (driver, then own, then the plan's), called rather than restated
+      // so a fourth reading cannot drift. A plan with no calendar of its own is one calendar too.
+      schedulingCalendarId:
+        schedulingCalendarId({
+          type: r.type,
+          drivingCalendarId: r.drivingResourceCalendarId,
+          activityCalendarId: r.calendarId,
+          planCalendarId: plan.calendarId,
+        }) ?? PLAN_CALENDAR_KEY,
     }));
+    const schedulingCalendarByActivity = new Map(
+      activities.map((a) => [a.id, a.schedulingCalendarId] as const),
+    );
 
     return computeHealthReport({
       plan: {
@@ -1049,7 +1063,31 @@ export class ScheduleService {
         successorId: e.successorId,
         type: e.type,
         lagMinutes: e.lagMinutes,
+        // The identity `toEngineEdge` resolves to a calendar object: an elapsed lag is `24H`, the
+        // plan default is the plan's calendar, and predecessor/successor are that endpoint's
+        // scheduling calendar, so two links share a key exactly when the engine walks them together.
+        lagCalendarKey: lagCalendarKeyOf(
+          e.lagCalendar,
+          schedulingCalendarByActivity.get(e.predecessorId),
+          schedulingCalendarByActivity.get(e.successorId),
+          plan.calendarId,
+        ),
       })),
+      onRedundantLinks: (result) => {
+        if (result.cyclic || result.searchCapped) {
+          // Never a failure: the advisory says it did not check, and the operator hears why.
+          this.logger.warn(
+            {
+              planId,
+              cyclic: result.cyclic,
+              searchCapped: result.searchCapped,
+              unjudged: result.unjudged,
+              relationships: edges.length,
+            },
+            'health.redundant_links.not_fully_checked',
+          );
+        }
+      },
       baseline: baselineSnapshot
         ? {
             id: baselineSnapshot.id,

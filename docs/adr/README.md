@@ -218,3 +218,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0192](0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)              | A backup is a file the image writes, and a restore never overwrites                        | Accepted           |
 | [0193](0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)                    | A permanent delete is previewed by the code that performs it, and arming is a host act     | Accepted           |
 | [0194](0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)            | An organisation's export is a promised format, streamed on the request                     | Proposed           |
+| [0196](0196-a-redundant-link-is-one-no-duration-could-make-matter.md)                           | A redundant link is one no duration could make matter                                      | Accepted           |

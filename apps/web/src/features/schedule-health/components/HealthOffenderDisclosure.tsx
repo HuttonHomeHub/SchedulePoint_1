@@ -2,6 +2,8 @@ import type { HealthOffender } from '@repo/types';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 
+import { offenderJumpDescription } from '../model/health-rows';
+
 /**
  * **One row's offender disclosure** — the toggle, the truncation line and the offender list
  * (`docs/specs/zero-duration-task/` M3-T0, agreement-round finding C2).
@@ -97,21 +99,50 @@ export function HealthOffenderDisclosure({
             {offenders.map((offender) => (
               // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
               <li role="listitem" key={`${offender.kind}-${offender.id}`}>
-                <button
-                  type="button"
-                  onClick={() => onActivate(offender)}
-                  className="hover:bg-accent focus-visible:ring-ring flex w-full min-w-0 items-baseline gap-2 rounded-md px-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  <span className="min-w-0 flex-1 truncate">
-                    {offender.code === null ? offender.name : `${offender.code} ${offender.name}`}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">{offender.note}</span>
-                </button>
+                <OffenderButton offender={offender} onActivate={onActivate} />
               </li>
             ))}
           </ul>
         </div>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * One offender, pressed to select it. The name WRAPS and the note stacks under it (ADR-0184: a row's
+ * subject wraps, it never clips): the note used to be a non-shrinking sibling and the name a truncating
+ * one, so a long note squeezed the subject out of sight on a narrow dock. A relationship's button also
+ * says what it selects, because that is the successor and not the link the row names.
+ */
+function OffenderButton({
+  offender,
+  onActivate,
+}: {
+  offender: HealthOffender;
+  onActivate: (offender: HealthOffender) => void;
+}): React.ReactElement {
+  const descriptionId = useId();
+  const description = offenderJumpDescription(offender);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onActivate(offender)}
+        aria-describedby={description === null ? undefined : descriptionId}
+        className="hover:bg-accent focus-visible:ring-ring block w-full min-w-0 rounded-md px-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <span className="block min-w-0 break-words">
+          {offender.code === null ? offender.name : `${offender.code} ${offender.name}`}
+        </span>{' '}
+        <span className="text-muted-foreground block min-w-0 break-words">{offender.note}</span>
+      </button>
+      {/* Outside the button: inside it, the description would also be part of the button's NAME. */}
+      {description === null ? null : (
+        <span id={descriptionId} className="sr-only">
+          {description}
+        </span>
+      )}
     </>
   );
 }

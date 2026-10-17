@@ -564,7 +564,7 @@ describe('ScheduleHealthPanel', () => {
       expect(section).not.toHaveTextContent('undefined');
       expect(section).not.toHaveTextContent('zero-duration tasks out of');
       expect(section).toHaveTextContent(
-        "Each is already implied by a longer chain of links. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if that chain changes.",
+        "Each is already implied by other links in the plan. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if those links change.",
       );
     });
 
@@ -577,7 +577,7 @@ describe('ScheduleHealthPanel', () => {
       const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
       expect(section).toHaveTextContent('None');
       expect(section).toHaveTextContent(
-        '3 links into started or pinned work, or touching a level of effort, were not checked.',
+        '3 links could not be judged (for example a link into started or pinned work, or to a level of effort).',
       );
     });
 
@@ -593,6 +593,44 @@ describe('ScheduleHealthPanel', () => {
       expect(section).toHaveTextContent('Something newer');
       expect(section).not.toHaveTextContent('undefined');
       expect(section).not.toHaveTextContent('zero-duration');
+      // No bare "2" paragraph, and the toggle is not described by one.
+      const toggle = within(section).getByRole('button', { name: /Something newer/ });
+      expect(toggle).not.toHaveAccessibleDescription('2');
+      expect(toggle).not.toHaveAttribute('aria-describedby');
+    });
+
+    it('says the successor is what was selected when a relationship is pressed, and keeps focus', () => {
+      const props = renderPanel({
+        report: fullReport({ advisories: [zeroAdvisory(0), redundantAdvisory(1)] }),
+      });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      fireEvent.click(within(section).getByRole('button', { name: /Redundant links/ }));
+      const offender = within(section).getByRole('button', { name: /A0 → C0/ });
+      // What pressing it selects is stated on the button itself, not only after the fact.
+      expect(offender).toHaveAccessibleDescription(
+        'Selects C0 in the plan, the later end of this link. A link itself cannot be selected.',
+      );
+      offender.focus();
+      fireEvent.click(offender);
+      expect(props.onActivateActivity).toHaveBeenCalledWith('c0');
+      expect(announce).toHaveBeenCalledWith('C0 selected in the plan, the later end of A0 → C0.');
+      expect(announce).not.toHaveBeenCalledWith('A0 → C0 selected in the plan.');
+      expect(offender).toHaveFocus();
+    });
+
+    it('lets a long note wrap under the name instead of squeezing the subject out (ADR-0184)', () => {
+      renderPanel({
+        report: fullReport({ advisories: [zeroAdvisory(0), redundantAdvisory(1)] }),
+      });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      fireEvent.click(within(section).getByRole('button', { name: /Redundant links/ }));
+      const offender = within(section).getByRole('button', { name: /A0 → C0/ });
+      // Neither half truncates or refuses to shrink, and the two stack rather than sit side by side.
+      expect(offender.className).not.toMatch(/truncate|\bflex\b/);
+      for (const part of Array.from(offender.querySelectorAll('span'))) {
+        expect(part.className).not.toMatch(/truncate|shrink-0/);
+        expect(part.className).toMatch(/\bblock\b/);
+      }
     });
 
     it('has no axe violations with a redundant-links row expanded', async () => {

@@ -100,7 +100,8 @@ export function ScheduleHealthPrintDocument({
             {advisories.map((advisory) => (
               // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
               <li role="listitem" key={advisory.id}>
-                <strong>{advisory.name}:</strong> {advisorySummary(advisory)}
+                <strong>{advisory.name}:</strong>{' '}
+                {advisorySummary(advisory) ?? String(advisory.offenderCount)}
                 {advisory.offenderCount > 0 && advisoryCaveat(advisory) !== null ? (
                   <p>{advisoryCaveat(advisory)}</p>
                 ) : null}

@@ -1,5 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import type {
+  HealthAdvisoryId,
   HealthAdvisoryResult,
   HealthBaselineRef,
   HealthMeasured,
@@ -11,11 +12,11 @@ import type {
   HealthThreshold,
   HealthThresholdKind,
   HealthVerdict,
+  RedundantLinksAdvisory,
   ScheduleHealthReport,
   ZeroDurationTasksAdvisory,
 } from '@repo/types';
 import {
-  HEALTH_ADVISORY_IDS,
   HEALTH_METRIC_IDS,
   HEALTH_NOT_ASSESSABLE_REASONS,
   HEALTH_THRESHOLD_KINDS,
@@ -177,7 +178,7 @@ export class HealthMetricResultDto implements HealthMetricResult {
   }
 }
 
-export class HealthAdvisoryDetailDto {
+export class ZeroDurationAdvisoryDetailDto {
   @ApiProperty({
     description:
       'How many of the advisory’s offenders hold at least one live resource assignment (a live ' +
@@ -187,23 +188,49 @@ export class HealthAdvisoryDetailDto {
   resourced!: number;
 }
 
-/**
- * A finding **beyond the DCMA assessment** (ADR-0162 decision 2). Not a metric: no ordinal, no
- * verdict, no threshold, never counted in the summary. The `id` enum derives from
- * `HEALTH_ADVISORY_IDS`, the tuple that also derives the union, so the two cannot disagree.
- */
-export class HealthAdvisoryResultDto implements ZeroDurationTasksAdvisory {
-  @ApiProperty({ enum: HEALTH_ADVISORY_IDS })
-  id!: ZeroDurationTasksAdvisory['id'];
+export class RedundantLinksAdvisoryDetailDto {
+  @ApiProperty({
+    enum: ['DOMINATED_UNDER_ANY_DURATION'],
+    description:
+      'Names the rule that judged the links, so the sentence a client prints is keyed on a token ' +
+      'the server owns. DOMINATED_UNDER_ANY_DURATION: another chain of links pushes the successor at ' +
+      'least as far as this one does, whatever the durations, so deleting the link would not change ' +
+      'any activity’s dates or float.',
+  })
+  rule!: 'DOMINATED_UNDER_ANY_DURATION';
 
+  @ApiProperty({
+    description:
+      'Links the rule did not check, out of `relationshipCount`: an endpoint that is a level of ' +
+      'effort or a summary, a successor that is started or pinned, an endpoint that is not among ' +
+      'the plan’s live activities, or links left unreached when the work limit was hit. A ' +
+      'count of what was not known, never folded into the offender count (ADR-0127).',
+  })
+  unjudged!: number;
+
+  @ApiProperty({
+    description:
+      'True when the deterministic work limit was reached before every link was judged. The ' +
+      'count in `unjudged` then includes the links left unreached, and the same plan always ' +
+      'stops at the same place.',
+  })
+  searchCapped!: boolean;
+}
+
+/**
+ * What every advisory carries. The `measured.denominator` is **per advisory**: activities for the
+ * zero-duration row, relationships for the redundant-link row.
+ */
+class HealthAdvisoryBaseDto {
   @ApiProperty({ description: 'The advisory’s display name, e.g. "Zero-duration tasks".' })
   name!: string;
 
   @ApiProperty({
     type: HealthMeasuredDto,
     description:
-      'Percent-shaped: count of the active non-summary activities (the metrics’ denominator). ' +
-      'Never null — an advisory is assessed from stored durations, calculated or not.',
+      'Percent-shaped: `count` of a denominator that depends on the advisory — the active ' +
+      'non-summary activities for ZERO_DURATION_TASKS, the plan’s live relationships for ' +
+      'REDUNDANT_LINKS. Never null — an advisory is assessed from stored rows, calculated or not.',
   })
   measured!: HealthMeasured;
 
@@ -215,9 +242,35 @@ export class HealthAdvisoryResultDto implements ZeroDurationTasksAdvisory {
 
   @ApiProperty({ type: [HealthOffenderDto], description: 'At most offenderCap rows.' })
   offenders!: HealthOffender[];
+}
 
-  @ApiProperty({ type: HealthAdvisoryDetailDto })
-  detail!: { resourced: number };
+/**
+ * A finding **beyond the DCMA assessment** (ADR-0162 decision 2). Not a metric: no ordinal, no
+ * verdict, no threshold, never counted in the summary. Each `id` enum is checked against
+ * `HEALTH_ADVISORY_IDS` by `satisfies`, so a member added to the tuple without a DTO, or the
+ * reverse, does not compile.
+ */
+export class ZeroDurationAdvisoryDto
+  extends HealthAdvisoryBaseDto
+  implements ZeroDurationTasksAdvisory
+{
+  @ApiProperty({ enum: ['ZERO_DURATION_TASKS' satisfies HealthAdvisoryId] })
+  id!: 'ZERO_DURATION_TASKS';
+
+  @ApiProperty({ type: ZeroDurationAdvisoryDetailDto })
+  detail!: ZeroDurationTasksAdvisory['detail'];
+}
+
+/** A link no duration could make matter (redundant-link-advisory; ADR-0196). */
+export class RedundantLinksAdvisoryDto
+  extends HealthAdvisoryBaseDto
+  implements RedundantLinksAdvisory
+{
+  @ApiProperty({ enum: ['REDUNDANT_LINKS' satisfies HealthAdvisoryId] })
+  id!: 'REDUNDANT_LINKS';
+
+  @ApiProperty({ type: RedundantLinksAdvisoryDetailDto })
+  detail!: RedundantLinksAdvisory['detail'];
 }
 
 export class HealthBaselineRefDto implements HealthBaselineRef {
@@ -245,6 +298,7 @@ export class HealthSummaryDto implements HealthSummary {
   informational!: number;
 }
 
+@ApiExtraModels(ZeroDurationAdvisoryDto, RedundantLinksAdvisoryDto)
 export class ScheduleHealthReportDto implements ScheduleHealthReport {
   @ApiProperty()
   planId!: string;
@@ -298,11 +352,25 @@ export class ScheduleHealthReportDto implements ScheduleHealthReport {
   metrics!: HealthMetricResult[];
 
   @ApiProperty({
-    type: [HealthAdvisoryResultDto],
+    type: 'array',
+    items: {
+      oneOf: [
+        { $ref: getSchemaPath(ZeroDurationAdvisoryDto) },
+        { $ref: getSchemaPath(RedundantLinksAdvisoryDto) },
+      ],
+      discriminator: {
+        propertyName: 'id',
+        mapping: {
+          ZERO_DURATION_TASKS: getSchemaPath(ZeroDurationAdvisoryDto),
+          REDUNDANT_LINKS: getSchemaPath(RedundantLinksAdvisoryDto),
+        } satisfies Record<HealthAdvisoryId, string>,
+      },
+    },
     description:
       'Findings beyond the DCMA assessment (ADR-0162): one entry per HealthAdvisoryId, always, in ' +
-      'that order. Never counted in summary, and never a fifteenth metric. Added 2026-09-26; a ' +
-      'client should read it defensively against an API released before it existed.',
+      'that order, each discriminated on `id`. Never counted in summary, and never a fifteenth ' +
+      'metric. Added 2026-09-26; a client should read it defensively against an API released ' +
+      'before it existed, and should render an `id` it does not know as its name and count only.',
   })
   advisories!: HealthAdvisoryResult[];
 

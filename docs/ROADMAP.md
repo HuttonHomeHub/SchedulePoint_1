@@ -1136,6 +1136,16 @@ discriminators. Each becomes a spec/plan before build:
   the panel says so in a planner's words). Metric 12's real what-if test follows as its own slice
   (M6), measurement first.
 
+- **Redundant links in the health check** — **shipped** (ADR-0196, 2026-10-17; spec and plan at
+  [`docs/specs/redundant-link-advisory/`](specs/redundant-link-advisory/), 2026-10-17). A second finding
+  under "Beyond the DCMA assessment" lists links that cannot change any activity's dates or float
+  whatever the durations (A to B to C plus a direct A to C), proven against the real engine by a
+  differential oracle rather than argued, and counts the links it could not check (started or pinned
+  work, a level of effort, a very large plan) instead of passing them. The advisory contract becomes a
+  union discriminated on `id`; the web that reads each finding by its own id was released first
+  (web 0.192.3). No schema,
+  no flag, engine untouched; the remedy is the existing jump and the Logic tab.
+
 - **Revision comparison** — **shipped** (ADR-0125, 2026-09-05). What entered and left the critical
   path between two of a plan's computed schedules, and how far the completion moved:
   `GET …/schedule/revision-compare` reads two already-persisted snapshots — **the engine is not

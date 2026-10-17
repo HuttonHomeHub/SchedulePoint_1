@@ -1,7 +1,7 @@
 # Implementation Plan: A redundant link is reported when no duration could ever make it matter
 
 - **Feature spec:** [./spec.md](./spec.md)
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-17, with the spec (see its header and the amendment note under §6); built and closed 2026-10-17 (TECH_DEBT #518)
 - **Owner:** product owner (approval); build by Claude Code sessions (builder agent, Sonnet)
 
 ## Breakdown
@@ -193,7 +193,7 @@ selected; axe on the open panel.
 
 ##### M2-T1 — `health/redundant-links.ts`
 
-- **Description:** `findRedundantLinks(activities, dependencies, { relaxationBudget })` returning
+- **Description:** `findRedundantLinks(activities, dependencies, { relaxationLimit })` returning
   sorted offenders with witness labels, `unjudged`, `searchCapped`. Imports `@repo/types` only.
   `HealthDependencyInput` gains `lagCalendarKey`; `HealthActivityInput` gains
   `schedulingCalendarId` and `actualStart` is already present.
@@ -207,9 +207,9 @@ selected; axe on the open panel.
   - Non-determinism in witness labels or capped order → a case runs the rule twice over shuffled
     input order and asserts identical output.
 - **Testing:** one case per spec §2.3 row (R1–R17, N3); cyclic input; unknown endpoint; zero links;
-  the budget at 1 (everything unjudged, `searchCapped: true`); the engine-free gate passes.
+  the limit at 1 (everything unjudged, `searchCapped: true`); the engine-free gate passes.
 - **Development steps:**
-  1. End graph, Kahn, DP per mode, witness reconstruction, budget.
+  1. End graph, Kahn, DP per mode, witness reconstruction, limit.
   2. Unit suite; then the oracle; then a mutation check (drop W2) seen red in the oracle.
 
 ##### M2-T2 — Wire into the report and measure
@@ -217,7 +217,7 @@ selected; axe on the open panel.
 - **Description:** `compute-health.ts` adds `REDUNDANT_LINKS` to `advisoryRows` (typed as a mapped
   record over the union); the service passes `lagCalendarKey` (from `lagCalendar` and the existing
   scheduling-calendar rule) and `schedulingCalendarId` — no new query. Fill M0-T4's `TBD` rows; set
-  the budget from them.
+  the limit from them.
 - **Complexity:** M
 - **Dependencies:** M2-T1, M0-T4
 - **Risks:**
@@ -228,7 +228,7 @@ selected; axe on the open panel.
     deep-equal.
   - Query count grows → the existing service spy asserts the same number of loader calls.
   - FC-5a fails → stop; profile; prune (bitset reachability prefilter) before continuing. Not
-    shipped over budget.
+    shipped over its limit.
 - **Testing:** totality (both advisories always present, tuple order); G4 scan of the new DTO
   fields; service spec; measurement recorded.
 - **Development steps:** wiring; tests; run the measurement; record.
@@ -316,7 +316,7 @@ point.
 ##### M4-T1 — Specialist review
 
 - **Description:** api-reviewer (union DTO, OpenAPI `oneOf`), security-reviewer (CPU bound, scope,
-  G4), backend-performance-reviewer (the measurement and budget), test-engineer (oracle coverage —
+  G4), backend-performance-reviewer (the measurement and limit), test-engineer (oracle coverage —
   does it compare every persisted field?), component-reviewer and accessibility-reviewer (row,
   sentences, announcement, axe), ux-reviewer (copy). Blocking findings folded; suggestions to a
   register row with reasons.
@@ -348,7 +348,7 @@ M0 and M1 are independent and may run in parallel. No feature flag. `main` stays
 - **FC-2** Zero oracle divergences, alone and all-at-once, over the populations in spec §4.7.
 - **FC-3** Each exclusion has a red counterexample or is marked reasoned in ADR-0195.
 - **FC-4** Metrics and summary deep-equal with and without the advisory.
-- **FC-5** ≤ 50 ms p95 advisory compute at `scale-2000`; the dense case bounded by the budget.
+- **FC-5** ≤ 50 ms p95 advisory compute at `scale-2000`; the dense case bounded by the limit.
 - **FC-6** M2-T3 merges after a release containing M1.
 - **FC-7** N3's links and R2/R4/R7/R8 are never flagged.
 
@@ -364,7 +364,7 @@ plus the standing rules above. CI is read per CLAUDE.md §19.9 before merge.
 | R1: the rule flags a link that matters                                                                  | low        | high   | The oracle is the gate (FC-2); every exclusion tested red (FC-3); conservative defaults (CQ-1/3/4). |
 | R2: coverage is lower than planners expect (progress, mixed calendars, SS chains off a single calendar) | med        | low    | Stated in copy ("not checked") and ADR; M0's prevalence count over the catalogue says how much.     |
 | R3: an old tab misprints the new row                                                                    | low        | low    | M1 released first (FC-6); residual tab window stated.                                               |
-| R4: cost on a dense plan                                                                                | med        | med    | Measured first; deterministic budget; existing throttle.                                            |
+| R4: cost on a dense plan                                                                                | med        | med    | Measured first; deterministic limit; existing throttle.                                             |
 | R5: the levelling preview changes after a deletion                                                      | unknown    | low    | Measured in M0-T4 and stated either way; the claim names Pass 1 and Pass 2.                         |
 | R6: a per-link conflict reason names one fewer link after a deletion                                    | med        | low    | The boolean cannot change (spec §2.6); stated.                                                      |
 | R7: "Driving" shown on a flagged link confuses a reader                                                 | med        | low    | Copy never claims "never drives"; the caveat says what deleting it changes.                         |

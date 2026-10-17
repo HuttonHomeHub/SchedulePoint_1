@@ -1,19 +1,26 @@
 import {
   HEALTH_ADVISORY_IDS,
   isZeroDurationTask,
-  type HealthAdvisoryId,
   type HealthAdvisoryResult,
   type HealthMeasured,
   type HealthMetricId,
   type HealthMetricResult,
   type HealthNotAssessableReason,
   type HealthOffender,
+  type RedundantLinksAdvisory,
   type ScheduleHealthReport,
   type ZeroDurationTasksAdvisory,
 } from '@repo/types';
 
 import { resolveRemainingMinutes } from '../remaining-duration';
 
+import {
+  DEFAULT_RELAXATION_LIMIT,
+  findRedundantLinks,
+  REDUNDANT_LINKS_RULE,
+  type RedundantLink,
+  type RedundantLinksResult,
+} from './redundant-links';
 import {
   HARD_CONSTRAINT_TYPES,
   HEALTH_METRICS,
@@ -67,6 +74,11 @@ export interface HealthActivityInput {
    * readings cannot disagree (spec FC-7).
    */
   assignmentCount: number;
+  /**
+   * The calendar the activity schedules on (driver, then own, then the plan's), as an id: the
+   * redundant-link rule needs "same calendar" to mean what the engine means by it.
+   */
+  schedulingCalendarId: string;
 }
 
 /**
@@ -85,6 +97,12 @@ export interface HealthDependencyInput {
   successorId: string;
   type: string;
   lagMinutes: number;
+  /**
+   * The calendar the lag is measured on: `24H` for an elapsed lag, otherwise the id of the plan's or
+   * an endpoint's scheduling calendar. Two links share a key exactly when the engine walks their lags
+   * on the same calendar.
+   */
+  lagCalendarKey: string;
 }
 
 export interface HealthBaselineActivityInput {
@@ -121,6 +139,13 @@ export interface HealthComputeInput {
    * `variance.ts` shape — so this module stays pure and engine-compute-free.
    */
   workingDaysBetween: (from: string, to: string) => number;
+  /** The redundant-link rule's work limit; absent means the measured default. Tests lower it. */
+  redundantLinksLimit?: number;
+  /**
+   * Told what the redundant-link rule found, so the service can log a cycle or a reached limit with
+   * the plan's id. Optional so this module stays a pure function of its input.
+   */
+  onRedundantLinks?: (result: RedundantLinksResult) => void;
 }
 
 /** A metric row under construction — the id/ordinal/name half the builders fill in. */
@@ -218,6 +243,30 @@ function assignmentNote(count: number): string {
   return count === 1 ? '1 resource assignment' : `${count} resource assignments`;
 }
 
+/**
+ * A redundant link's note: its type, its lag in metric 3's phrase when it has one, and the witness
+ * ("already implied through B", "through B, C and 4 more", or the parallel link). A lead is named a
+ * lead, with its size unsigned, because "lag of -60 min" reads as an error.
+ */
+function redundantLinkNote(d: HealthDependencyInput, found: RedundantLink): string {
+  const lag =
+    d.lagMinutes === 0
+      ? ''
+      : d.lagMinutes > 0
+        ? `, lag of ${d.lagMinutes} min`
+        : `, lead of ${-d.lagMinutes} min`;
+  const witness =
+    found.parallelType !== null
+      ? `already implied by the ${found.parallelType} link between the same two activities`
+      : `already implied through ${viaPhrase(found.via)}`;
+  return `${d.type}${lag}; ${witness}`;
+}
+
+function viaPhrase(via: readonly string[]): string {
+  if (via.length <= 2) return via.join(' and ');
+  return `${via.slice(0, 2).join(', ')} and ${via.length - 2} more`;
+}
+
 const activityOffender = (a: HealthActivityInput, note: string): HealthOffender => ({
   kind: 'ACTIVITY',
   id: a.id,
@@ -304,8 +353,11 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
   // The findings beyond the DCMA assessment (ADR-0162 decision 2). Total over their own tuple and
   // built AFTER the summary's inputs, which read `metrics` alone: an advisory is never counted
   // there (FC-4).
-  const advisoryRows: Record<HealthAdvisoryId, HealthAdvisoryResult> = {
+  const advisoryRows: {
+    [Id in HealthAdvisoryResult['id']]: Extract<HealthAdvisoryResult, { id: Id }>;
+  } = {
     ZERO_DURATION_TASKS: advisoryZeroDurationTasks(),
+    REDUNDANT_LINKS: advisoryRedundantLinks(),
   };
 
   const summary = {
@@ -525,6 +577,32 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
       measured: measuredPercent(zero.length, acts.length),
       ...capped(offenders),
       detail: { resourced: zero.filter((a) => a.assignmentCount > 0).length },
+    };
+  }
+
+  // A link no duration could make matter (redundant-link-advisory; ADR-0196). Beyond the DCMA
+  // assessment, so it is never a metric and never counted in the summary. Always present, reading
+  // "None" at zero: an empty plan or one with no links is `0 of 0`, never not-assessable.
+  function advisoryRedundantLinks(): RedundantLinksAdvisory {
+    const result = findRedundantLinks(input.activities, dependencies, {
+      relaxationLimit: input.redundantLinksLimit ?? DEFAULT_RELAXATION_LIMIT,
+    });
+    input.onRedundantLinks?.(result);
+    const depById = new Map(dependencies.map((d) => [d.id, d]));
+    const offenders = result.offenders.map((o) => {
+      const d = depById.get(o.linkId)!;
+      return relOffender(d, redundantLinkNote(d, o));
+    });
+    return {
+      id: 'REDUNDANT_LINKS',
+      name: 'Redundant links',
+      measured: measuredPercent(offenders.length, dependencies.length),
+      ...capped(offenders),
+      detail: {
+        rule: REDUNDANT_LINKS_RULE,
+        unjudged: result.unjudged,
+        searchCapped: result.searchCapped,
+      },
     };
   }
 

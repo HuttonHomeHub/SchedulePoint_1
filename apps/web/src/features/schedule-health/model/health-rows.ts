@@ -1,5 +1,6 @@
 import type {
   HealthAdvisoryResult,
+  HealthOffender,
   HealthMetricResult,
   HealthNotAssessableReason,
   RedundantLinksAdvisory,
@@ -239,26 +240,29 @@ export const HEALTH_ADVISORY_FOOTER =
  * than the web — is rendered as its count and nothing else: its name travels in the payload, but
  * what its figures MEAN does not, and a sentence invented for it would be a claim nobody made.
  */
-export function advisorySummary(advisory: HealthAdvisoryResult): string {
-  const { offenderCount } = advisory;
+export function advisorySummary(advisory: HealthAdvisoryResult): string | null {
   switch (advisory.id) {
     case 'ZERO_DURATION_TASKS':
       return zeroDurationSummary(advisory);
     case 'REDUNDANT_LINKS':
       return redundantLinksSummary(advisory);
     default:
-      return offenderCount === 0 ? 'None' : String(offenderCount);
+      // An id this bundle does not know has a name and a count, both already on the row's header; a
+      // second paragraph repeating the bare count would be read out as an unexplained number.
+      return null;
   }
 }
 
 /**
  * The scope sentence a row with findings carries, keyed on the token the PAYLOAD names in
  * `detail.rule` (the `detail.narrowing` precedent): the server owns which rule ran, this module owns
- * the words. An unrecognised token is named rather than described.
+ * the words. An unrecognised token is named rather than described. "Other links in the plan", not "a
+ * longer chain": the parallel-link witness (an SS beside an FS between the same two activities) is
+ * implied by one link, not a chain.
  */
 const REDUNDANT_RULE_SENTENCES: Record<string, string> = {
   DOMINATED_UNDER_ANY_DURATION:
-    "Each is already implied by a longer chain of links. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if that chain changes.",
+    "Each is already implied by other links in the plan. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if those links change.",
 };
 
 export function advisoryCaveat(advisory: HealthAdvisoryResult): string | null {
@@ -271,18 +275,21 @@ export function advisoryCaveat(advisory: HealthAdvisoryResult): string | null {
 }
 
 /**
- * What the check could not judge (ADR-0127: an overlay counts what it does not know). When the work
- * cap was reached the count covers every link left unchecked, so that sentence replaces the first
- * rather than adding a second number for the same links.
+ * What the check could not judge (ADR-0127: an overlay counts what it does not know). The wording is
+ * deliberately neutral about WHY: the payload carries a count, not a cause, and the links in it are
+ * several kinds (started or pinned work, a level of effort, an endpoint the plan no longer holds, a
+ * stored cycle, links left when the work limit was reached), so a sentence naming one cause would be
+ * false for the others. When the work limit was reached the count covers every link left unchecked, so
+ * that sentence replaces the first rather than adding a second number for the same links.
  */
 export function advisoryUnjudgedSentence(advisory: HealthAdvisoryResult): string | null {
   if (advisory.id !== 'REDUNDANT_LINKS') return null;
   const { unjudged, searchCapped } = advisory.detail;
   if (typeof unjudged !== 'number' || unjudged <= 0) return null;
-  const links = unjudged === 1 ? '1 link was' : `${String(unjudged)} links were`;
+  const links = unjudged === 1 ? '1 link' : `${String(unjudged)} links`;
   return searchCapped === true
-    ? `The check stopped early on a plan this size; ${links} not checked.`
-    : `${unjudged === 1 ? '1 link' : `${String(unjudged)} links`} into started or pinned work, or touching a level of effort, ${unjudged === 1 ? 'was' : 'were'} not checked.`;
+    ? `The check stopped early on a plan this size; ${links} could not be judged.`
+    : `${links} could not be judged (for example a link into started or pinned work, or to a level of effort).`;
 }
 
 /**
@@ -336,9 +343,44 @@ function advisoryPhrase(advisory: HealthAdvisoryResult): string {
   switch (advisory.id) {
     case 'ZERO_DURATION_TASKS':
       return zeroDurationPhrase(advisory.offenderCount);
-    case 'REDUNDANT_LINKS':
-      return redundantLinksPhrase(advisory.offenderCount);
+    case 'REDUNDANT_LINKS': {
+      // A spoken "no redundant links" must not claim more than the check knew: links it could not judge
+      // are said too, the same count the visible row prints under its summary.
+      const unjudged = advisory.detail.unjudged;
+      const phrase = redundantLinksPhrase(advisory.offenderCount);
+      return typeof unjudged === 'number' && unjudged > 0
+        ? `${phrase} (${String(unjudged)} could not be judged)`
+        : phrase;
+    }
     default:
       return `${name}: ${String(offenderCount)}`;
   }
+}
+
+/**
+ * What is spoken when an offender is pressed. Pressing it selects an ACTIVITY (`activityId`), which for a
+ * relationship is the successor, the activity whose schedule the link shapes, not the link: nothing in
+ * the plan selects a link (spec E20). So "Survey → Permit selected" would be false; the sentence names
+ * what IS selected and says which end of the link it is. A relationship's label is `pred → succ`
+ * (`relOffender`), so the successor is what follows the last arrow.
+ */
+export function offenderAnnouncement(offender: HealthOffender): string {
+  const subject = relationshipSuccessor(offender);
+  return subject === null
+    ? `${offender.name} selected in the plan.`
+    : `${subject} selected in the plan, the later end of ${offender.name}.`;
+}
+
+/** The offender button's description: what pressing it will select, for a screen-reader user who cannot see the plan. */
+export function offenderJumpDescription(offender: HealthOffender): string | null {
+  const subject = relationshipSuccessor(offender);
+  return subject === null
+    ? null
+    : `Selects ${subject} in the plan, the later end of this link. A link itself cannot be selected.`;
+}
+
+function relationshipSuccessor(offender: HealthOffender): string | null {
+  if (offender.kind !== 'RELATIONSHIP') return null;
+  const at = offender.name.lastIndexOf(' → ');
+  return at < 0 ? null : offender.name.slice(at + 3);
 }
