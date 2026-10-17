@@ -103,6 +103,12 @@ describe('relayoutStartIds', () => {
   it('is never wider than the plans Re-layout is searched on at all', () => {
     expect(RELAYOUT_MULTISTART_MAX_ACTIVITIES).toBeLessThanOrEqual(OPTIMISE_MAX_ACTIVITIES);
   });
+
+  it('keeps the gate at the measured size: a plan past it waits for the pack start only (CQ-2)', () => {
+    expect(RELAYOUT_MULTISTART_MAX_ACTIVITIES).toBe(10);
+    expect(relayoutStartIds(11)).toEqual([0]);
+    expect(relayoutStartIds(300)).toEqual([0]);
+  });
 });
 
 describe('relayoutSeeds', () => {

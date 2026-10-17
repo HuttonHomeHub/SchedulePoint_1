@@ -63,6 +63,8 @@
  *                         any tree whose Tidy is unchanged (see `relayout-baseline.json`'s note).
  *                         `--skip-capture` scores the committed corpus and starts no servers.
  *   --base=origin/main    The revision FC-R9 diffs against.
+ *   --corpus=<file>       Read this corpus instead of the committed one (with `--skip-capture`): the size
+ *                         sweep that sets RELAYOUT_MULTISTART_MAX_ACTIVITIES times subsamples of it.
  *   --out=<dir>           Where the reports go (default .tmp/relayout).
  *   --self-test           Run step 1 and stop.
  */
@@ -126,7 +128,7 @@ const WEB = 'http://localhost:5173';
 const API_HEALTH = 'http://localhost:3000/api/v1/health';
 const HERE = process.cwd();
 const REPO = resolve(HERE, '../..');
-const CORPUS_PATH = join(HERE, 'scripts/fixtures/relayout-corpus.json');
+const CORPUS_PATH = resolve(opt('corpus', join(HERE, 'scripts/fixtures/relayout-corpus.json')));
 const BASELINE_PATH = join(HERE, 'scripts/fixtures/relayout-baseline.json');
 const OUT_DIR = resolve(opt('out', join(HERE, '.tmp/relayout')));
 mkdirSync(OUT_DIR, { recursive: true });

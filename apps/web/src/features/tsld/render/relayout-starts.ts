@@ -1,7 +1,6 @@
 import { packLanes } from '@repo/layout';
 
 import { compareObjectives, type LayoutObjective } from './layout-objective';
-import { OPTIMISE_MAX_ACTIVITIES } from './optimise-layout';
 import { axisDayOf, type RenderActivity, type RenderEdge } from './render-model';
 
 /**
@@ -42,12 +41,14 @@ export const START_NAMES: Record<StartId, string> = {
 
 /**
  * The largest plan that runs more than the pack start (CQ-2: only while Re-layout's wait at 300
- * activities stays within 1.5x today's). **Provisional**: it is set to the largest plan Re-layout is
- * searched on at all, which is correct only if `measure-relayout.mjs`'s FC-R6 passes with real
- * workers at that size; if it does not, lower it to the largest size that does and record the figure
- * here, as `OPTIMISE_MAX_ACTIVITIES` records its own.
+ * activities stays within 1.5x today's, else only below a measured size). **Measured 2026-10-17**
+ * by `measure-relayout.mjs` FC-R6 in the product's real module workers on deterministic subsamples
+ * of `scale-275` (`docs/specs/relayout-quality/m2-verdict.md`): the wait is 1.4x or less only up to
+ * about 10 drawn activities (1.06-1.43x at 6-11), and 1.5x-9x from 12 up (3.4x at 100, 4.3x at 250,
+ * 3.3x at 300). Ten is the largest clean size under the line; above it Re-layout searches from the
+ * pack start alone, as it did before the starts were added.
  */
-export const RELAYOUT_MULTISTART_MAX_ACTIVITIES = OPTIMISE_MAX_ACTIVITIES;
+export const RELAYOUT_MULTISTART_MAX_ACTIVITIES = 10;
 
 const ALL_STARTS: readonly StartId[] = [0, 1, 2, 3];
 

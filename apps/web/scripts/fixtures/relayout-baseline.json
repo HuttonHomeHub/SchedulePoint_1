@@ -1,0 +1,309 @@
+{
+  "commit": "9c56c6280fad05413acb1001882fecc031d892c0",
+  "product": "today",
+  "note": "Today's Re-layout (the seed-row budget, no extra starts) and Tidy, computed by the benchmark alone at 9c56c628 on the committed corpus. Valid while Tidy's search is unchanged; non-test sources under apps/web/src/features/tsld/ that differ from origin/main at write time: apps/web/src/features/tsld/components/ArrangeDialog.tsx, apps/web/src/features/tsld/components/use-arrange-search.ts, apps/web/src/features/tsld/render/optimise-layout.ts, apps/web/src/features/tsld/render/optimise-pool.ts, apps/web/src/features/tsld/render/relayout-starts.ts, apps/web/src/features/tsld/render/run-optimise-layout.ts, apps/web/src/features/tsld/render/test-support/in-process-optimise.ts.",
+  "tidy": {
+    "fixture-p6-torture-v1": "3351a802dd374658fae28630cbaf70c726508b1038a55cfb41efcfc066053c9a",
+    "capability-logic-fs-ss": "0d780aa375657a8909b9eac077f8955da8a06d9e550a85f2a4c6b079d2118f6c",
+    "capability-logic-ff-sf": "18582b798577ecb3624ebbaed6ee839890d89b44b05d4b7107c5c37018f38086",
+    "capability-redundant-logic": "ebe20cfa375d8e8b2f683288a6e6d249253c0b3c64ef680cc0d7fbbde8965ab7",
+    "capability-redundant-logic-calendars": "738ded9ff6f9a00c3ae6799bcbb84c60c69b21c53b522061ec03e0555d831d00",
+    "capability-redundant-logic-kept": "f248809a1e490b8007950ca0b7063321edb11c5a59aa9451821892edb675b112",
+    "capability-redundant-logic-unchecked": "a1d268598e9aa9d26bc44ab99ad33d7303297d4cd61a768c9aff9605963e4be0",
+    "capability-network-shape": "1dcd8c0d84d62f6f5fce5dde51265c939bac60a904a63ace914c9d1ad64702e1",
+    "capability-float": "110ede364cb3b0cb33f6867b82abd097a5426da7c4faeaac78ddd674670b2e15",
+    "capability-constraints": "c0262ca61c2df5401eb0120f0c7c8d97d783975597073879f48ee27d0bb93214",
+    "capability-expected-finish": "d3c2c75f090a290909fbf46c38c53e3c81ca62baaf542eb732dc4e6e6216d825",
+    "capability-snet-effects": "36b9e7c66195f3115fbc010330860fdcde17cecbe38fbc019ff75f84adc57ed4",
+    "capability-calendars": "257b56200d033c19ee1b06941ec9b6e342dbf84ef93a0b2235f58b2fa3d37e3c",
+    "capability-shift-calendars": "b2f12984bb4a0555f4c1703cfa10f3ba1e597dffe078ad51c46efc8a67d0d2d6",
+    "capability-progress": "9c31f62e1bc303e14741010bc711d025d8ea8bb0abf8ce94b19e8d155f57ddaa",
+    "capability-retained-logic": "efde60cdc1f8ffc9de55c007d152439020360b6bfd27c29119594d25ef553a19",
+    "capability-progress-override": "0c5bb9fdf9043bd82b51251117a6c8d72238aeabde46c9e0dfd344be5ada36b2",
+    "capability-types-and-wbs": "65db17f2bd8e1578fa37c2b7fa05c6b6c715c13fb6317f4654ac3d918b35ed81",
+    "capability-resources": "c3d40dc1b5fae6b937b01d7bc3abffa2c809736452cf97929c8835617a5c040b",
+    "capability-levelling": "3de3660a087fb93bb43a36b603d738e3d1dac309a8400c6a005e64605efbb894",
+    "capability-levelling-placed": "44bf08bc5002997901e6d67017df50158af1b129845134b4c7b4d90e50a813b3",
+    "capability-levelling-part-day": "7a4e22ad176b5599c9b90c9562f43f75e9619ce4bc4e701ff01b573eeb52cf54",
+    "capability-levelling-chain": "4c96c6a875750e07428614757f0302778b575b31b404bc890ecc2d0070124ed6",
+    "capability-cost-and-ev": "9a8f495eac9b86bbba9ff0c0abcc9b0592ecdc5a2c3f1d3f7e7f019957d20b26",
+    "capability-external-dates": "af087973996f33ce441ee7f7c09706015361647dff380fd3221f76daa25b9047",
+    "capability-external-ignored": "59956b1c7803f2a9abf33f9e5d9aacf6d9420ca413ce561e3b95ee2d9a10369d",
+    "capability-placements": "ce862d3a5cbb7d7d54725474f7fcf1403d7ee09f9424c11edf07e823e6696e93",
+    "capability-placement-on-early": "3d1526579b3504d0cdd01e1e90b49cc74feed823d4d923ad64552c1bf77db4d1",
+    "reference-netpoint-power-plant": "bc6dddd537cf5d2864df4f3e5adfa4ed6488443707596123e5f5cc8c8c500994",
+    "scale-275": "d5a56919fa1b5da3a860b766c6f8fff45833c42b66c428e068f8e9a0b9217804"
+  },
+  "today": {
+    "fixture-p6-torture-v1": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 171,
+      "contacts": 8,
+      "sameRow": 37,
+      "travel": 502,
+      "rows": 24
+    },
+    "capability-logic-fs-ss": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 3,
+      "travel": 6,
+      "rows": 7
+    },
+    "capability-logic-ff-sf": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 0,
+      "travel": 12,
+      "rows": 8
+    },
+    "capability-redundant-logic": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 2,
+      "sameRow": 13,
+      "travel": 2,
+      "rows": 5
+    },
+    "capability-redundant-logic-calendars": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 1,
+      "sameRow": 4,
+      "travel": 6,
+      "rows": 6
+    },
+    "capability-redundant-logic-kept": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 2,
+      "contacts": 4,
+      "sameRow": 4,
+      "travel": 16,
+      "rows": 6
+    },
+    "capability-redundant-logic-unchecked": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 1,
+      "sameRow": 8,
+      "travel": 4,
+      "rows": 5
+    },
+    "capability-network-shape": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 1,
+      "sameRow": 4,
+      "travel": 3,
+      "rows": 3
+    },
+    "capability-float": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 3,
+      "travel": 1,
+      "rows": 3
+    },
+    "capability-constraints": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 2,
+      "contacts": 2,
+      "sameRow": 2,
+      "travel": 16,
+      "rows": 5
+    },
+    "capability-expected-finish": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 2
+    },
+    "capability-snet-effects": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 2,
+      "travel": 0,
+      "rows": 2
+    },
+    "capability-calendars": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 0,
+      "rows": 7
+    },
+    "capability-shift-calendars": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 0,
+      "travel": 0,
+      "rows": 8
+    },
+    "capability-progress": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 0,
+      "travel": 0,
+      "rows": 9
+    },
+    "capability-retained-logic": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 2
+    },
+    "capability-progress-override": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 2
+    },
+    "capability-types-and-wbs": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 2,
+      "travel": 13,
+      "rows": 7
+    },
+    "capability-resources": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 0,
+      "travel": 1,
+      "rows": 15
+    },
+    "capability-levelling": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 2,
+      "travel": 4,
+      "rows": 3
+    },
+    "capability-levelling-placed": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 3,
+      "travel": 3,
+      "rows": 2
+    },
+    "capability-levelling-part-day": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 2
+    },
+    "capability-levelling-chain": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 1,
+      "sameRow": 1,
+      "travel": 2,
+      "rows": 4
+    },
+    "capability-cost-and-ev": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 3,
+      "travel": 0,
+      "rows": 2
+    },
+    "capability-external-dates": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 2
+    },
+    "capability-external-ignored": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 1,
+      "travel": 1,
+      "rows": 4
+    },
+    "capability-placements": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 3,
+      "travel": 4,
+      "rows": 3
+    },
+    "capability-placement-on-early": {
+      "overlaps": 0,
+      "occluded": 0,
+      "crossings": 0,
+      "contacts": 0,
+      "sameRow": 2,
+      "travel": 0,
+      "rows": 1
+    },
+    "reference-netpoint-power-plant": {
+      "overlaps": 1,
+      "occluded": 0,
+      "crossings": 9,
+      "contacts": 4,
+      "sameRow": 29,
+      "travel": 135,
+      "rows": 11
+    },
+    "scale-275": {
+      "overlaps": 0,
+      "occluded": 2,
+      "crossings": 343,
+      "contacts": 25,
+      "sameRow": 183,
+      "travel": 730,
+      "rows": 25
+    }
+  }
+}
