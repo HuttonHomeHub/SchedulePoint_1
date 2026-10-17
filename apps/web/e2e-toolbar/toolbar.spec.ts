@@ -286,3 +286,58 @@ test('icon-only deck glyphs name themselves to pointer, keyboard and touch', asy
     .poll(async () => (await marker.boundingBox())?.x, { timeout: 10_000 })
     .not.toBe(before);
 });
+
+/**
+ * **A menu's own trigger closes it** (`docs/TECH_DEBT.md` #229, Menu half; spec
+ * `docs/specs/menu-opener-press/spec.md`). A press on an open menu's trigger used to close the menu
+ * on `pointerdown` and then reach the trigger's `onClick` on `click`, which reopened it — so the
+ * control that said `aria-expanded="true"` could not dismiss what it had opened.
+ *
+ * Two shapes, because they fail differently: **Export** is a plain trigger whose restore target is
+ * itself; the **Add** caret is the `tabIndex={-1}` half of a split button, so focus must land on the
+ * main **Add** half and never on the caret. The outcome is asserted after a settle, not the order of
+ * events, since the original flicker is timing-shaped.
+ *
+ * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
+ */
+test("a menu's own trigger closes it, and focus lands where Escape would put it", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await onboard(page, Date.now() + 29);
+  await openNewPlan(page);
+  await startEditing(page);
+  await addActivity(page, 'Excavate');
+  await recalculate(page);
+
+  const bar = page.getByRole('toolbar', { name: 'Plan commands' });
+
+  const exportButton = bar.getByRole('button', { name: 'Export', exact: true });
+  await exportButton.click();
+  await expect(page.getByRole('menu', { name: 'Export' })).toBeVisible();
+  await expect(exportButton).toHaveAttribute('aria-expanded', 'true');
+  await exportButton.click();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(exportButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(exportButton).toBeFocused();
+
+  // The main half is the caret's previous sibling inside the split button.
+  const caret = bar.getByRole('button', { name: /^Activity type:/ });
+  const main = caret.locator('xpath=preceding-sibling::button[1]');
+  await caret.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await caret.click();
+  await page.waitForTimeout(400);
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(caret).toHaveAttribute('aria-expanded', 'false');
+  await expect(caret).not.toBeFocused();
+  await expect(main).toBeFocused();
+
+  // Pressing the MAIN half while the caret's menu is open closes the menu and still runs its command.
+  await caret.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await main.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(main).toHaveAttribute('aria-pressed', 'true');
+});

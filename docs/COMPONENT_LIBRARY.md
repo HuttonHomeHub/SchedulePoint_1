@@ -147,6 +147,14 @@ and Escape/Tab/selection return focus to `restoreFocusRef`.
 whose roving model would otherwise move focus to the next toolbar stop and leave the menu open
 and orphaned (found reviewing the Recent edits menu, undo-redo M7).
 
+**A press on the opener closes the menu** (tech debt #229). `Menu` takes two refs that look alike and are not:
+`openerRef` is the control whose press opened it (required; `null` for a pure context menu), and
+`restoreFocusRef` is where focus goes on Escape, Tab, selection and an opener press. They differ for a split
+button (the caret is the opener, the main half receives focus) and for a row menu (the `⋯` is the opener, the row
+receives focus when the menu was opened by right-click or long-press). `Menu` swallows the opener's `click` at
+`document` capture, so a trigger needs no toggle logic of its own. A press that starts on the opener and is dragged
+off before release leaves the menu open — no `click` arrives, as with any native button.
+
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
 typeahead. (The organisation switcher is the first consumer with a list that can grow, and it has
 no type-ahead: adding it changes this primitive's key set, which ADR-0111 reviews before release, not

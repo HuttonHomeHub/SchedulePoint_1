@@ -371,6 +371,7 @@ function IsolateControl({
         onClose={close}
         anchor={anchor}
         label="Isolate logic path"
+        openerRef={triggerRef}
         restoreFocusRef={mainButtonRef}
       >
         <MenuSection label="Show the logic path" />

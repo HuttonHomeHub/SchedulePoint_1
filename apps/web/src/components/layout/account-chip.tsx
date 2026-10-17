@@ -81,6 +81,7 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
         onClose={close}
         anchor={anchor}
         label="Account"
+        openerRef={triggerRef}
         restoreFocusRef={triggerRef}
       >
         {email ? (

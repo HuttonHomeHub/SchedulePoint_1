@@ -23,7 +23,7 @@ import { CLAMP_MARGIN } from './overlay-position';
 describe('Menu height ceiling', () => {
   it('caps its height to the viewport less a margin at each end, with its own scroll', () => {
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="Row actions">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="Row actions">
         <MenuItem onSelect={vi.fn()}>Edit</MenuItem>
       </Menu>,
     );
@@ -40,14 +40,20 @@ describe('Menu height ceiling', () => {
     // low-anchor menu got a much smaller one — which is precisely how its lower items ended up in
     // an internal scroll region below the fold.
     const { unmount } = render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="High">
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 20, y: 20 }} label="High">
         <MenuItem onSelect={vi.fn()}>Edit</MenuItem>
       </Menu>,
     );
     const high = screen.getByRole('menu', { name: 'High' }).style.maxHeight;
     unmount();
     render(
-      <Menu open onClose={vi.fn()} anchor={{ x: 20, y: window.innerHeight - 40 }} label="Low">
+      <Menu
+        open
+        openerRef={null}
+        onClose={vi.fn()}
+        anchor={{ x: 20, y: window.innerHeight - 40 }}
+        label="Low"
+      >
         <MenuItem onSelect={vi.fn()}>Edit</MenuItem>
       </Menu>,
     );

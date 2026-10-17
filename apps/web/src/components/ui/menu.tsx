@@ -15,13 +15,20 @@ import { cn } from '@/lib/utils';
  * no new dependency, mirroring {@link Dialog}'s focus conventions. It is a
  * transient, non-modal popup: focus moves into the menu on open, ↑/↓/Home/End
  * rove between items, Escape and item-selection **return focus to the trigger**,
- * and a click/tab away closes it. Anchored to a viewport point (`anchor`) so it
+ * a press on the **opener** closes it the same way, and a press or tab elsewhere closes it
+ * without moving focus. Anchored to a viewport point (`anchor`) so it
  * serves both a trigger button and a right-click context menu; the anchor is
  * clamped so the menu never overflows the viewport. Rendered in a portal so it
  * escapes clipping/overflow ancestors (e.g. the virtualized tree).
  *
  * Controlled via `open`/`onClose`. Pass `restoreFocusRef` for the element that
  * should regain focus on Escape/selection (the invoking trigger).
+ *
+ * **`openerRef` and `restoreFocusRef` are two refs because they answer two questions** (#229):
+ * which press means "close", and where focus goes. They differ exactly where the defect lived — a
+ * split button's caret opens the menu but focus returns to the main half, and a row's `⋯` opens it
+ * but focus returns to the row. `openerRef` is required (`null` for a pure context menu) so a new
+ * menu must decide rather than silently get the open-then-instantly-reopen flicker back.
  *
  * Scope is intentionally minimal — a flat list of a handful of actions, no
  * submenus or typeahead. Items may be **disabled** (`aria-disabled`), and roving
@@ -91,7 +98,9 @@ function itemsOf(container: HTMLElement | null): HTMLButtonElement[] {
  * split-button, the Link-type selector, …) share one implementation instead of re-deriving the
  * ref + `getBoundingClientRect()` + `useState` dance each time (component review, ADR-0032). Pair it
  * with {@link Menu}: spread nothing special on the trigger beyond `ref={triggerRef}` and wire
- * `onClick={toggle}`; pass `open`/`anchor`/`onClose={close}`/`restoreFocusRef={triggerRef}` to `Menu`.
+ * `onClick={toggle}`; pass `open`/`anchor`/`onClose={close}`/`openerRef={triggerRef}`/
+ * `restoreFocusRef={triggerRef}` to `Menu` (a split button's caret is the opener; its main half is
+ * the restore target).
  */
 export function useMenuTrigger(): {
   triggerRef: React.RefObject<HTMLButtonElement | null>;
@@ -120,6 +129,7 @@ export function Menu({
   anchor,
   label,
   restoreFocusRef,
+  openerRef,
   children,
 }: {
   open: boolean;
@@ -127,6 +137,8 @@ export function Menu({
   anchor: MenuAnchor;
   label: string;
   restoreFocusRef?: React.RefObject<HTMLElement | null> | undefined;
+  /** The control whose press opened this menu. A press on it closes the menu, as Escape does. */
+  openerRef: React.RefObject<HTMLElement | null> | null;
   children: React.ReactNode;
 }): React.ReactElement | null {
   const ref = useRef<HTMLDivElement>(null);
@@ -186,17 +198,32 @@ export function Menu({
         onClose();
       }
     };
+    const onOpener = (target: EventTarget | null): boolean =>
+      // Read at event time: a shared menu points one ref at a different opener per open.
+      !!openerRef?.current?.contains(target as Node);
     const onPointer = (event: PointerEvent): void => {
+      // A primary press on the opener is left for its `click` (below) to close, so the trigger's own
+      // toggle/open handler cannot reopen what this press just closed. A secondary press closes as before.
+      if (event.button === 0 && onOpener(event.target)) return;
       if (ref.current && !ref.current.contains(event.target as Node)) onClose();
+    };
+    const onClick = (event: MouseEvent): void => {
+      if (!onOpener(event.target)) return;
+      // Swallowed at `document` capture so no trigger handler beneath runs (four open-only triggers
+      // would otherwise reopen). Focus is owned here rather than left to the engine, which differs.
+      event.stopPropagation();
+      closeRestoring();
     };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer, true);
+    document.addEventListener('click', onClick, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('click', onClick, true);
     };
-    // restoreFocusRef is a stable ref object; onClose is provided stable by callers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- restoreFocusRef is a stable ref, read only on cleanup
+    // restoreFocusRef and openerRef are stable ref objects; onClose is provided stable by callers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restoreFocusRef/openerRef are stable refs read at event time
   }, [open, onClose]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {

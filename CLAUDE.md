@@ -483,7 +483,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0079** _(Accepted)_ — Search that navigates: the find cursor, the Escape rule, and zoom-to-selection → [`0079-search-that-navigates.md`](docs/adr/0079-search-that-navigates.md)
 - **ADR-0080** _(Accepted)_ — The canvas plural selection, and what a bulk action owes its subject → [`0080-canvas-plural-selection.md`](docs/adr/0080-canvas-plural-selection.md)
 - **ADR-0081** _(Proposed)_ — A milestone is its entry point, and the journey is the gate → [`0081-milestone-entry-point-and-journey.md`](docs/adr/0081-milestone-entry-point-and-journey.md)
-- **ADR-0082** _(Proposed; amended 2026-10-16 — `Combobox` follows §1–§2)_ — A shaded menu item keeps its focus, and its reason → [`0082-disabled-menu-items-stay-reachable.md`](docs/adr/0082-disabled-menu-items-stay-reachable.md)
+- **ADR-0082** _(Proposed; amended 2026-10-16 — `Combobox` follows §1–§2; 2026-10-17 — `Menu`'s opener press)_ — A shaded menu item keeps its focus, and its reason → [`0082-disabled-menu-items-stay-reachable.md`](docs/adr/0082-disabled-menu-items-stay-reachable.md)
 - **ADR-0083** _(Proposed)_ — A gated form field is read-only, not disabled → [`0083-shaded-form-fields.md`](docs/adr/0083-shaded-form-fields.md)
 - **ADR-0084** _(Accepted)_ — A feature flag is a rollback contract with an expiry date → [`0084-feature-flag-retirement.md`](docs/adr/0084-feature-flag-retirement.md)
 - **ADR-0088** _(Accepted)_ — Feature flags are classified, not scheduled → [`0088-flag-classification.md`](docs/adr/0088-flag-classification.md)
