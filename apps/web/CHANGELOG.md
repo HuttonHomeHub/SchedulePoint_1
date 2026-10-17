@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.193.1
+
+### Patch Changes
+
+- [#1039](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1039) [`c15ad7b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c15ad7bf4c1f5152b49d32292913b0b6f853878b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The password-reset request screen no longer reads an `?email=` parameter that nothing in the app produced.
+
+- [#1043](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1043) [`8831d36`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8831d3642ae5ad5c8cc639dce518dbc050dc0211) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance history now says how many readings exist ("Showing the most recent 50 of 312 readings") instead of silently listing a capped page. The history read returns `meta.total`, and the oldest sitting only hedges its missing-readings note when rows were really withheld.
+
+- [#1040](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1040) [`c1c1006`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c1c10069ba15ddedd9732f06bb0dd6d5425699ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the staff Retention panel's table labels total over the retention sweep's tables, so a table added to the sweep cannot reach the panel as a raw identifier.
+
+- [#1042](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1042) [`1b09ae1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1b09ae1222dd90a17fc6aa1061d2912ce7c5e04a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram's date ruler now centres the year label over the part of its span that is on screen,
+  instead of pinning it to the left edge, and tints alternate months in the ruler to continue the
+  canvas's month bands when Month bands is on.
+
 ## 0.193.0
 
 ### Minor Changes
