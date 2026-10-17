@@ -184,6 +184,20 @@ describe('the coverage rung’s detail lines', () => {
     expect(line).toContain('14 resources');
   });
 
+  it('reports a restore from the payload it records in `after`', () => {
+    expect(auditEventCopy(event({ action: 'resource.restored' })).title).toBe('Resource restored');
+    expect(
+      detail('resource.restored', {
+        after: { name: 'Groundworks', kind: 'GROUP', resourceCount: 4 },
+      }),
+    ).toContain('4 resources');
+    expect(auditEventCopy(event({ action: 'calendar.restored' })).title).toBe('Calendar restored');
+    expect(
+      detail('calendar.restored', { after: { name: 'Site', scope: 'ORG', exceptionCount: 3 } }),
+    ).toContain('3 exceptions');
+    expect(detail('calendar.restored', {})).toBeNull();
+  });
+
   it('says a group dissolve KEPT its resources and where they went', () => {
     expect(auditEventCopy(event({ action: 'resource.dissolved' })).title).toBe('Group dissolved');
     expect(

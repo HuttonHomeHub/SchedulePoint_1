@@ -76,6 +76,7 @@ const ALL: Permission[] = [
   'resource:create',
   'resource:update',
   'resource:delete',
+  'resource:restore',
 ];
 
 describe('ResourcesService', () => {
@@ -96,8 +97,17 @@ describe('ResourcesService', () => {
     promoteChildren: ReturnType<typeof vi.fn>;
     findPromotedByIds: ReturnType<typeof vi.fn>;
     findActivePlanIdsAssigning: ReturnType<typeof vi.fn>;
+    findAnyStateByIdInOrg: ReturnType<typeof vi.fn>;
+    findDeletedBatchInOrg: ReturnType<typeof vi.fn>;
+    findActiveHoldingNamesOrCodes: ReturnType<typeof vi.fn>;
+    restoreBatch: ReturnType<typeof vi.fn>;
+    findActivePlanIdsAssigningAny: ReturnType<typeof vi.fn>;
   };
-  let calendars: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let audit: { record: ReturnType<typeof vi.fn> };
+  let calendars: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findAnyStateByIdsInOrg: ReturnType<typeof vi.fn>;
+  };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: ResourcesService;
 
@@ -122,13 +132,19 @@ describe('ResourcesService', () => {
       findPromotedByIds: vi.fn().mockResolvedValue([]),
       // Proven against a real table in calendars-edited-since.e2e-spec.ts.
       findActivePlanIdsAssigning: vi.fn().mockResolvedValue([]),
+      findAnyStateByIdInOrg: vi.fn(),
+      findDeletedBatchInOrg: vi.fn().mockResolvedValue([]),
+      findActiveHoldingNamesOrCodes: vi.fn().mockResolvedValue([]),
+      restoreBatch: vi.fn().mockResolvedValue(1),
+      findActivePlanIdsAssigningAny: vi.fn().mockResolvedValue([]),
     };
-    calendars = { findActiveByIdInOrg: vi.fn() };
+    calendars = { findActiveByIdInOrg: vi.fn(), findAnyStateByIdsInOrg: vi.fn() };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by create/update).
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new ResourcesService(
       organizations as unknown as OrganizationsService,
       resources as unknown as ResourceRepository,
@@ -136,7 +152,7 @@ describe('ResourcesService', () => {
       prisma as unknown as PrismaService,
       // The library-governance producers (ADR-0073 C3.3) are proven against a real table in the
       // e2e suite; a fake here could only assert that a fake was called.
-      { record: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService,
+      audit as unknown as AuditService,
       logger,
     );
   });
@@ -451,6 +467,274 @@ describe('ResourcesService', () => {
         details: { reason: 'RESOURCE_IN_USE', count: 3, subtreeSize: 2 },
       });
       expect(resources.softDeleteMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restore (ADR-0195)', () => {
+    const BATCH = 'batch-1';
+    const gone = (overrides: Partial<Resource> = {}): Resource =>
+      resource({
+        id: 'res-1',
+        deletedAt: new Date('2026-10-01T00:00:00Z'),
+        deleteBatchId: BATCH,
+        ...overrides,
+      });
+    let executeRaw: ReturnType<typeof vi.fn>;
+
+    /** The refusal a restore raises, captured so its `details` can be read. */
+    const refusal = (): Promise<unknown> =>
+      service.restore(principalWith(ALL), 'acme', 'res-1').catch((e: unknown) => e);
+
+    beforeEach(() => {
+      executeRaw = vi.fn().mockResolvedValue(1);
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: executeRaw }),
+      );
+      resources.findAnyStateByIdInOrg.mockResolvedValue(gone());
+      resources.findDeletedBatchInOrg.mockResolvedValue([gone()]);
+      resources.findActiveByIdInOrg.mockResolvedValue(resource({ version: 2 }));
+      calendars.findAnyStateByIdsInOrg.mockResolvedValue([]);
+    });
+
+    it('refuses a caller without resource:restore before reading anything', async () => {
+      await expect(
+        service.restore(principalWith(['resource:read', 'resource:delete']), 'acme', 'res-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(resources.findAnyStateByIdInOrg).not.toHaveBeenCalled();
+    });
+
+    it('is a 404 for an unknown or foreign id', async () => {
+      resources.findAnyStateByIdInOrg.mockResolvedValue(null);
+      await expect(service.restore(principalWith(ALL), 'acme', 'res-1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+    });
+
+    it('is a no-op 200 for an active resource: nothing written, nothing recorded', async () => {
+      resources.findAnyStateByIdInOrg.mockResolvedValue(resource());
+      const result = await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(result.resource.id).toBe('res-1');
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('takes the tree lock BEFORE reading the batch or writing', async () => {
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      const lockedAt = executeRaw.mock.invocationCallOrder[0]!;
+      expect(lockedAt).toBeLessThan(resources.findDeletedBatchInOrg.mock.invocationCallOrder[0]!);
+      expect(lockedAt).toBeLessThan(resources.restoreBatch.mock.invocationCallOrder[0]!);
+    });
+
+    it('restores the whole batch by its id and records ONE event carrying the count', async () => {
+      resources.restoreBatch.mockResolvedValue(4);
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(resources.restoreBatch).toHaveBeenCalledWith(
+        BATCH,
+        ORG_ID,
+        USER_ID,
+        expect.anything(),
+      );
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'resource.restored',
+          subjectId: 'res-1',
+          after: { name: 'Crew A', kind: 'LABOUR', deleteBatchId: BATCH, resourceCount: 4 },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('refuses a deleted parent as PARENT_DELETED naming the group — also for a member’s id', async () => {
+      resources.findAnyStateByIdInOrg
+        .mockResolvedValueOnce(gone({ parentId: 'grp' }))
+        .mockResolvedValueOnce(gone({ parentId: 'grp' }))
+        .mockResolvedValueOnce(
+          gone({ id: 'grp', name: 'Groundworks', kind: 'GROUP', deleteBatchId: 'grp-batch' }),
+        );
+      const error = await refusal();
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'PARENT_DELETED',
+        blockedBy: {
+          kind: 'resource',
+          relation: 'parent',
+          id: 'grp',
+          name: 'Groundworks',
+          deleteBatchId: 'grp-batch',
+        },
+      });
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+    });
+
+    it('refuses a parent that is no longer a group, naming it', async () => {
+      resources.findAnyStateByIdInOrg
+        .mockResolvedValueOnce(gone({ parentId: 'old' }))
+        .mockResolvedValueOnce(gone({ parentId: 'old' }))
+        .mockResolvedValueOnce(resource({ id: 'old', name: 'Old group', kind: 'LABOUR' }));
+      resources.findActiveByIdInOrg.mockResolvedValue(
+        resource({ id: 'old', name: 'Old group', kind: 'LABOUR' }),
+      );
+      const error = await refusal();
+      expect((error as { details: unknown }).details).toMatchObject({
+        reason: 'RESOURCE_PARENT_NOT_GROUP',
+        parentName: 'Old group',
+      });
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+    });
+
+    it('supplies the BRANCH’s height to the depth cap — the tree walk reads only active rows', async () => {
+      // A chain of ten groups is itself the whole depth cap. Under a top-level parent it makes 11.
+      const chain = Array.from({ length: 10 }, (_, i) =>
+        gone({
+          id: i === 0 ? 'res-1' : `g${String(i)}`,
+          kind: 'GROUP',
+          parentId: i === 0 ? 'top' : i === 1 ? 'res-1' : `g${String(i - 1)}`,
+        }),
+      );
+      resources.findAnyStateByIdInOrg
+        .mockResolvedValueOnce(chain[0])
+        .mockResolvedValueOnce(chain[0])
+        .mockResolvedValueOnce(resource({ id: 'top', kind: 'GROUP', parentId: null }));
+      resources.findDeletedBatchInOrg.mockResolvedValue(chain);
+      resources.findActiveByIdInOrg.mockResolvedValue(
+        resource({ id: 'top', kind: 'GROUP', parentId: null }),
+      );
+      const error = await refusal();
+      expect((error as { details: unknown }).details).toMatchObject({
+        reason: 'RESOURCE_TREE_TOO_DEEP',
+        resultingDepth: 11,
+      });
+    });
+
+    it('refuses when the resource’s calendar has been deleted, naming it', async () => {
+      resources.findAnyStateByIdInOrg.mockResolvedValue(gone({ calendarId: CAL_ID }));
+      resources.findDeletedBatchInOrg.mockResolvedValue([gone({ calendarId: CAL_ID })]);
+      calendars.findAnyStateByIdsInOrg.mockResolvedValue([
+        { id: CAL_ID, name: 'Crane hours', deletedAt: new Date(), deleteBatchId: 'cal-batch' },
+      ]);
+      const error = await refusal();
+      expect((error as { details: unknown }).details).toMatchObject({
+        reason: 'CALENDAR_DELETED',
+        calendar: { id: CAL_ID, name: 'Crane hours', deleteBatchId: 'cal-batch' },
+      });
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+    });
+
+    it('refuses the WHOLE group when only a child’s calendar is deleted', async () => {
+      const root = gone({ id: 'res-1', kind: 'GROUP' });
+      const child = gone({ id: 'kid', parentId: 'res-1', calendarId: CAL_ID });
+      resources.findAnyStateByIdInOrg.mockResolvedValue(root);
+      resources.findDeletedBatchInOrg.mockResolvedValue([root, child]);
+      calendars.findAnyStateByIdsInOrg.mockResolvedValue([
+        { id: CAL_ID, name: 'Crane hours', deletedAt: new Date(), deleteBatchId: 'cal-batch' },
+      ]);
+      const error = await refusal();
+      expect((error as { details: unknown }).details).toMatchObject({
+        reason: 'CALENDAR_DELETED',
+      });
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+    });
+
+    it('allows an ARCHIVED calendar — archived bindings stay live', async () => {
+      resources.findAnyStateByIdInOrg.mockResolvedValue(gone({ calendarId: CAL_ID }));
+      resources.findDeletedBatchInOrg.mockResolvedValue([gone({ calendarId: CAL_ID })]);
+      calendars.findAnyStateByIdsInOrg.mockResolvedValue([
+        { id: CAL_ID, name: 'Retired', deletedAt: null, deleteBatchId: null },
+      ]);
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(resources.restoreBatch).toHaveBeenCalled();
+    });
+
+    it('takes each calendar’s advisory lock AFTER the tree lock', async () => {
+      resources.findAnyStateByIdInOrg.mockResolvedValue(gone({ calendarId: CAL_ID }));
+      resources.findDeletedBatchInOrg.mockResolvedValue([gone({ calendarId: CAL_ID })]);
+      calendars.findAnyStateByIdsInOrg.mockResolvedValue([
+        { id: CAL_ID, name: 'Hours', deletedAt: null, deleteBatchId: null },
+      ]);
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(executeRaw.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(executeRaw.mock.invocationCallOrder[1]!).toBeLessThan(
+        calendars.findAnyStateByIdsInOrg.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('refuses a name held by a live row, archived or not, and names the holder', async () => {
+      resources.findActiveHoldingNamesOrCodes.mockResolvedValue([
+        { id: 'other', name: 'Crew A', code: null, archivedAt: new Date() },
+      ]);
+      const error = await refusal();
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).message).toBe(
+        'An archived resource named “Crew A” already exists. Rename or delete that one, then restore this.',
+      );
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'NAME_TAKEN',
+        total: 1,
+        conflicts: [{ field: 'name', value: 'Crew A', id: 'other', archived: true }],
+      });
+      expect(resources.restoreBatch).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('reports a code clash as CODE_TAKEN when only the code collides', async () => {
+      resources.findActiveHoldingNamesOrCodes.mockResolvedValue([
+        { id: 'other', name: 'Different', code: 'CREW-A', archivedAt: null },
+      ]);
+      const error = await refusal();
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'CODE_TAKEN',
+        conflicts: [{ field: 'code', value: 'CREW-A', archived: false }],
+      });
+    });
+
+    it('caps the named holders and states the total', async () => {
+      const batch = Array.from({ length: 8 }, (_, i) =>
+        gone({ id: i === 0 ? 'res-1' : `r${String(i)}`, name: `N${String(i)}`, code: null }),
+      );
+      resources.findDeletedBatchInOrg.mockResolvedValue(batch);
+      resources.findActiveHoldingNamesOrCodes.mockResolvedValue(
+        batch.map((row, i) => ({
+          id: `h${String(i)}`,
+          name: row.name,
+          code: null,
+          archivedAt: null,
+        })),
+      );
+      const error = await refusal();
+      const details = (error as ConflictError).details as { conflicts: unknown[]; total: number };
+      expect(details.total).toBe(8);
+      expect(details.conflicts).toHaveLength(5);
+    });
+
+    it('maps the unique-index backstop to a name-taken refusal', async () => {
+      resources.restoreBatch.mockRejectedValue(uniqueViolation());
+      const error = await refusal();
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toMatchObject({ reason: 'NAME_TAKEN' });
+    });
+
+    it('fails loudly when the batch is already gone (retention, or a lost race)', async () => {
+      resources.restoreBatch.mockResolvedValue(0);
+      await expect(service.restore(principalWith(ALL), 'acme', 'res-1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('stamps plans that assign a restored resource (expected none, kept as defence in depth)', async () => {
+      resources.findActivePlanIdsAssigningAny.mockResolvedValue(['plan-1']);
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      // The tree lock, then the stamp.
+      expect(executeRaw).toHaveBeenCalledTimes(2);
+    });
+
+    it('hides costPerUnit from a caller without cost:read', async () => {
+      resources.findActiveByIdInOrg.mockResolvedValue(
+        resource({ costPerUnit: new Prisma.Decimal('12.5') }),
+      );
+      const result = await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(result.canReadCost).toBe(false);
     });
   });
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Calendar, type CalendarScope } from '@prisma/client';
-import { CALENDAR_ERROR, type PageMeta } from '@repo/types';
+import { CALENDAR_ERROR, LIBRARY_RESTORE_REASON, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -485,6 +485,150 @@ export class CalendarsService {
       },
       archived ? 'calendar archived' : 'calendar unarchived',
     );
+  }
+
+  /**
+   * Restore a deleted calendar with the exceptions deleted alongside it (ADR-0195).
+   *
+   * Keyed on the calendar's own `delete_batch_id`: exceptions removed EARLIER carry a different
+   * batch and stay removed. Gate order mirrors `remove`, so a caller is never told whether an id
+   * exists before their permission is checked: `calendar:restore` (403), the load (404), then
+   * `calendar:manage_org` for an ORG-scoped calendar (403). An already-active calendar is a no-op
+   * 200 that writes and records nothing.
+   *
+   * A PROJECT calendar needs its project active (409 `PARENT_DELETED`) — which is also why one
+   * swept with its project cannot be restored on its own: it comes back with the project, by the
+   * hierarchy restore, exactly as before.
+   *
+   * Takes the calendar advisory lock the delete-in-use guard and a plan's calendar assignment take,
+   * so a restore cannot interleave with either.
+   *
+   * Plans, activities and resources that already point at this calendar were scheduling without it
+   * (the engine treats a deleted calendar as absent and falls back to round-the-clock time), so
+   * restoring it is a working-time change for them and stamps them "edited since calculated" in the
+   * same transaction, as an exception edit does. The engine itself is not touched (ADR-0034).
+   */
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    calendarId: string,
+    context?: RequestContext,
+  ): Promise<CalendarWithExceptions> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:restore', organization.id);
+
+    const found = await this.calendars.findAnyStateByIdInOrg(calendarId, organization.id);
+    if (!found) throw new NotFoundError('Calendar not found.');
+    // The same second gate as `remove`: bringing a row back into the SHARED library is a write to
+    // shared tenant state (ADR-0053 §2).
+    if (found.scope === 'ORG') this.assertCan(principal, 'calendar:manage_org', organization.id);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await acquireCalendarWriteLock(tx, calendarId);
+
+        // Re-read UNDER the lock: the first read preceded it, and a concurrent restore of the same
+        // calendar finishes inside that window.
+        const root = await this.calendars.findAnyStateByIdInOrg(calendarId, organization.id, tx);
+        if (!root) throw new NotFoundError('Calendar not found.');
+        if (root.deletedAt === null) return;
+        if (root.deleteBatchId === null) throw new NotFoundError('Calendar not found.');
+
+        if (root.scope === 'PROJECT' && root.projectId !== null) {
+          const project = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);
+          if (!project || project.deletedAt !== null) {
+            throw new ConflictError('Restore the project first.', {
+              reason: LIBRARY_RESTORE_REASON.PARENT_DELETED,
+              blockedBy: project
+                ? {
+                    kind: 'project',
+                    relation: 'parent',
+                    id: project.id,
+                    name: project.name,
+                    deleteBatchId: project.deleteBatchId,
+                  }
+                : null,
+            });
+          }
+        }
+
+        const holder = await this.calendars.findActiveHoldingNameInTier(
+          {
+            organizationId: organization.id,
+            name: root.name,
+            scope: root.scope,
+            projectId: root.projectId,
+          },
+          tx,
+        );
+        if (holder) {
+          const archived = holder.archivedAt !== null;
+          throw new ConflictError(
+            `${archived ? 'An archived calendar' : 'A calendar'} named “${root.name}” already ` +
+              'exists. Rename or delete that one, then restore this.',
+            {
+              reason: LIBRARY_RESTORE_REASON.NAME_TAKEN,
+              conflicts: [{ field: 'name', value: root.name, id: holder.id, archived }],
+              total: 1,
+            },
+          );
+        }
+
+        const restored = await this.calendars.restoreWithExceptions(
+          { id: root.id, batchId: root.deleteBatchId, organizationId: organization.id },
+          principal.userId,
+          tx,
+        );
+        // Zero means the row is gone — the retention expiry, or a restore the lock should have
+        // serialised. Failing loudly beats a 200 for a restore that did not happen.
+        if (restored.calendars === 0) throw new NotFoundError('Calendar not found.');
+
+        await markScheduleInputsChanged(
+          tx,
+          organization.id,
+          await this.calendars.findActivePlanIdsUsing(root.id, organization.id, tx),
+        );
+        await this.audit.record(
+          {
+            action: 'calendar.restored',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'CALENDAR',
+            subjectId: root.id,
+            subjectLabel: root.name,
+            after: {
+              name: root.name,
+              scope: root.scope,
+              deleteBatchId: root.deleteBatchId,
+              exceptionCount: restored.exceptions,
+            },
+            ...auditActor(principal, context),
+          },
+          tx,
+        );
+        this.logger.info(
+          {
+            organizationId: organization.id,
+            calendarId: root.id,
+            exceptionCount: restored.exceptions,
+            userId: principal.userId,
+          },
+          'calendar restored (with exceptions)',
+        );
+      });
+    } catch (error) {
+      // The backstop behind the pre-check: a create or rename takes no lock this restore holds.
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictError('A calendar with this name already exists.', {
+          reason: LIBRARY_RESTORE_REASON.NAME_TAKEN,
+        });
+      }
+      throw error;
+    }
+
+    const detail = await this.calendars.findActiveDetailByIdInOrg(calendarId, organization.id);
+    if (!detail) throw new NotFoundError('Calendar not found.');
+    return detail;
   }
 
   async remove(

@@ -11143,3 +11143,21 @@ A ZIP writes its entries one after another, so a table's JSON file and its CSV f
 Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:159-160`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
 
 **Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.
+
+### 519. A plan or activity can be live on a deleted calendar, and then schedules round the clock
+
+**Status:** open · **Verified:** 2026-10-17, by reading only (`calendar.repository.ts` `countActivePlansUsing` and `countActiveActivitiesUsing` count active rows, so the delete guard ignores a deleted plan; `plans.service.ts` `restore` and `HierarchyLifecycleService.restoreBatch` check no calendar; `schedule.repository.ts:478-487` and `plan-calendar.ts:44` treat a soft-deleted calendar as absent). The reproduction is written as a characterisation test (`apps/api/test/library-restore.e2e-spec.ts`, "reproduces the gap") and is owed a run on the database.
+**Raised:** 2026-10-17 (library restore, ADR-0195 spec F11 and Q4) · **Size:** M · **Owner:** api
+
+Delete a plan, delete its ORG calendar (nothing active uses it), restore the plan. The plan now points at a deleted calendar, and its next recalculation uses round-the-clock time instead of the working week, with nothing on screen saying so. ADR-0195 remedies the symptom for the case it creates (restoring the calendar stamps the plans that use it "edited since calculated"); it does not close the cause, because that is a change to **plan** restore, a different surface with its own review.
+
+**Next:** make plan restore (and an activity restore that names a calendar) refuse, or re-point, when its calendar is deleted, as a resource restore now refuses with `CALENDAR_DELETED`. **Trigger:** the first report of a plan scheduling on 24-hour time after a restore, or the next change to plan restore.
+
+### 520. A standalone project-calendar restore can interleave with a project delete, leaving an active calendar under a deleted project
+
+**Status:** open · **Verified:** 2026-10-17, by reading only (`CalendarsService.restore` reads the project's state inside its transaction without locking it; `ProjectsService.remove` and `HierarchyLifecycleService` take plan advisory locks only, never the calendar lock or a project-row lock, and sweep only calendars that are active when they run)
+**Raised:** 2026-10-17 (library restore, ADR-0195 spec §2 edge cases) · **Size:** S · **Owner:** api
+
+If a project is deleted between the restore's "project is active" read and its commit, the project's cascade does not see the calendar (still deleted when the cascade ran) and the restore does not see the project (still active when it read). The calendar ends active under a deleted project. It is the same unlocked parent check that plan restore and project restore already make (`hierarchy-lifecycle.service.ts` `assertParentActive`), so it is a class and not a defect introduced by the calendar restore. Not run; the window is a read of the code.
+
+**Next:** none until the trigger; a fix is shared with the hierarchy (a parent-row lock in `assertParentActive`), not a calendar patch. **Trigger:** a report of a project calendar visible in a deleted project, or any change to the hierarchy's restore ordering.

@@ -1,8 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { DeletedHierarchyItem, DeletedItemBlocker } from '@repo/types';
+import type { CalendarScope, DeletedItem, DeletedItemBlocker, ResourceKind } from '@repo/types';
 
 /**
- * The ancestor standing between a deleted row and its restore.
+ * What stands between a deleted row and its restore: a still-deleted parent, or a still-deleted
+ * calendar the row's batch depends on (ADR-0195 D3).
  *
  * **A class, not an inline shape**, and that is not style: `@nestjs/swagger` cannot emit a usable
  * nested schema from a bare interface type with `nullable: true` — it needs a class to reflect over
@@ -12,12 +13,22 @@ import type { DeletedHierarchyItem, DeletedItemBlocker } from '@repo/types';
  */
 export class DeletedItemBlockerDto implements DeletedItemBlocker {
   @ApiProperty({
-    enum: ['client', 'project'],
+    enum: ['client', 'project', 'resource', 'calendar'],
     description:
-      'Never `plan` — a plan has no hierarchy descendants, so it can block nothing. Typed to the ' +
-      'two values that are reachable so a consumer need not handle an impossible third.',
+      'Never `plan` — a plan has no descendants, so it can block nothing. `resource` is a deleted ' +
+      'parent group; `calendar` is a deleted calendar a resource in the batch uses.',
   })
-  kind!: 'client' | 'project';
+  kind!: 'client' | 'project' | 'resource' | 'calendar';
+
+  @ApiProperty({
+    enum: ['parent', 'calendar'],
+    description:
+      '`parent`: the row’s immediate parent is deleted, whatever batch it is in (so a group’s ' +
+      'members keep a blocker inside their own batch and stay members). `calendar`: only ever ' +
+      'served for a row with NO deleted parent — a group’s root — and names the first deleted ' +
+      'calendar used anywhere in that row’s batch.',
+  })
+  relation!: 'parent' | 'calendar';
 
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -34,13 +45,34 @@ export class DeletedItemBlockerDto implements DeletedItemBlocker {
   deleteBatchId!: string | null;
 }
 
-/** Public representation of one soft-deleted hierarchy row in the recycle bin. */
-export class DeletedItemResponseDto implements DeletedHierarchyItem {
+/** Public representation of one soft-deleted row in the recycle bin. */
+export class DeletedItemResponseDto implements DeletedItem {
   @ApiProperty({
-    enum: ['client', 'project', 'plan'],
-    description: 'Which hierarchy level this is.',
+    enum: ['client', 'project', 'plan', 'resource', 'calendar'],
+    description: 'Which hierarchy level, or which library, this is.',
   })
-  kind!: 'client' | 'project' | 'plan';
+  kind!: 'client' | 'project' | 'plan' | 'resource' | 'calendar';
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'The resource kind (`GROUP` makes it a resource group) or the calendar scope (`ORG` or ' +
+      '`PROJECT`); null for a client, project or plan. For display only — never authorisation.',
+  })
+  subtype!: ResourceKind | CalendarScope | null;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    type: String,
+    description:
+      'When the retention timer WOULD permanently remove this row, or null when none ever does: a ' +
+      'resource and an organisation calendar never expire, and a project calendar goes with its ' +
+      'project. Served whether or not `meta.retentionActive`; a client still says nothing about ' +
+      'expiry unless it is.',
+  })
+  expiresAt!: string | null;
 
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -52,7 +84,8 @@ export class DeletedItemResponseDto implements DeletedHierarchyItem {
   deletedAt!: string;
 
   @ApiProperty({
-    description: 'False when an ancestor is still deleted — restore the parent first.',
+    description:
+      'False when a parent is still deleted, or a resource’s calendar is — restore that first.',
   })
   canRestore!: boolean;
 
@@ -70,7 +103,7 @@ export class DeletedItemResponseDto implements DeletedHierarchyItem {
     type: DeletedItemBlockerDto,
     nullable: true,
     description:
-      'The still-deleted ancestor blocking this row, or null. **Per row, not per group**: a ' +
+      'The still-deleted parent (or calendar) blocking this row, or null. **Per row, not per group**: a ' +
       'descendant deleted in the SAME cascade also carries one — its own batch root — because it ' +
       'is computed from the immediate parent. Only the group root’s blocker is a real ' +
       'obstacle; reading this per row re-creates the noise ADR-0096 removes.',

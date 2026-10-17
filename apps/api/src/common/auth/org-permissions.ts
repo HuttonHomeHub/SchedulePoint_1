@@ -77,6 +77,10 @@ export type OrgPermission =
   | 'calendar:create'
   | 'calendar:update'
   | 'calendar:delete'
+  // Bringing a soft-deleted calendar back from Recently deleted (ADR-0195). An ORG-scoped calendar
+  // additionally needs `calendar:manage_org`, exactly as its delete does. A code of its own (the
+  // `client:restore` precedent) so it is revocable on its own with a one-line move.
+  | 'calendar:restore'
   // Writing to the SHARED organisation calendar library — creating, editing or deleting an
   // ORG-scoped calendar, and promoting/narrowing a calendar between the two tiers (ADR-0053 §2).
   // A PROJECT-scoped calendar needs only the plain `calendar:create/update/delete` above; this
@@ -107,6 +111,8 @@ export type OrgPermission =
   | 'resource:create'
   | 'resource:update'
   | 'resource:delete'
+  // Bringing a soft-deleted resource, or a whole deleted group, back from Recently deleted (ADR-0195).
+  | 'resource:restore'
   | 'resource:assign'
   // Plan edit-lock coordination — the single-editor "pen" (ADR-0028). Acquiring/
   // heartbeating/releasing the lock and handing it off, and requesting control of
@@ -211,6 +217,7 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  'calendar:restore',
   // Shared-library writes (ADR-0053 §2) ride with the other calendar writes so Planner +
   // Org Admin keep exactly today's capability; lifting this single line into its own const
   // is all it takes to make the shared library Org-Admin-only.
@@ -221,6 +228,7 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'resource:create',
   'resource:update',
   'resource:delete',
+  'resource:restore',
   'resource:assign',
 ];
 

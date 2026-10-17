@@ -25,6 +25,8 @@ function row(overrides: Partial<DeletedRow> = {}): DeletedRow {
     parentActive: true,
     deleteBatchId: null,
     blockedBy: null,
+    subtype: null,
+    expiryBasis: null,
     ...overrides,
   };
 }
@@ -116,6 +118,55 @@ describe('RecycleBinService', () => {
     expect(items[1]).toMatchObject({ kind: 'client', name: 'Acme', canRestore: true });
     expect(items[0]).toMatchObject({ kind: 'plan', canRestore: false });
     expect(meta).toMatchObject({ nextCursor: null, hasMore: false });
+  });
+
+  /**
+   * ADR-0195 D4: expiry is the SERVER's statement, per row. The basis is null for a resource and an
+   * ORG calendar (no timer ever removes them), and the period added is the configured one (45 here,
+   * not the 90 default), so a hard-coded constant or a kind-based assumption in the service fails.
+   */
+  it('serves expiresAt per row from the basis and the configured period, null when none', async () => {
+    const day = 86_400_000;
+    const at = new Date('2026-07-10T10:00:00.000Z');
+    repo.findDeletedPage.mockResolvedValue([
+      row({ kind: 'plan', id: 'p1', deletedAt: at, expiryBasis: at }),
+      row({ kind: 'resource', id: 'r1', deletedAt: at, subtype: 'GROUP', expiryBasis: null }),
+      row({ kind: 'calendar', id: 'k1', deletedAt: at, subtype: 'ORG', expiryBasis: null }),
+      row({
+        kind: 'calendar',
+        id: 'k2',
+        deletedAt: at,
+        subtype: 'PROJECT',
+        expiryBasis: new Date(at.getTime() - 5 * day),
+      }),
+    ]);
+
+    const { items } = await service.list(principalWith(['client:read']), 'acme', { limit: 20 });
+
+    expect(items.map((i) => i.expiresAt)).toEqual([
+      new Date(at.getTime() + 45 * day).toISOString(),
+      null,
+      null,
+      new Date(at.getTime() + 40 * day).toISOString(),
+    ]);
+    expect(items.map((i) => i.subtype)).toEqual([null, 'GROUP', 'ORG', 'PROJECT']);
+  });
+
+  it('carries a calendar dependency as a blocker with its relation', async () => {
+    const blockedBy = {
+      kind: 'calendar' as const,
+      relation: 'calendar' as const,
+      id: 'cal-1',
+      name: 'Crane hours',
+      deleteBatchId: 'b-1',
+    };
+    repo.findDeletedPage.mockResolvedValue([
+      row({ kind: 'resource', id: 'r1', parentActive: false, blockedBy }),
+    ]);
+
+    const { items } = await service.list(principalWith(['client:read']), 'acme', { limit: 20 });
+
+    expect(items[0]).toMatchObject({ canRestore: false, blockedBy });
   });
 
   it('over-fetches limit + 1 and returns a cursor for the next page when there is more', async () => {

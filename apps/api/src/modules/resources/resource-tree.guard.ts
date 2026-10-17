@@ -11,6 +11,12 @@ export interface ResourceParentParams {
   organizationId: string;
   /** The resource being re-parented, or `null` when creating a brand-new one. */
   selfId: string | null;
+  /**
+   * The height of the subtree being attached, when the caller already knows it. A RESTORE must
+   * supply it: the walk below reads ACTIVE children only, and the branch being restored is still
+   * deleted, so walking it would report a height of 1 and let a deep branch through (ADR-0195).
+   */
+  movedHeight?: number;
 }
 
 /**
@@ -156,7 +162,8 @@ export async function assertValidResourceParent(
   // deep branch cannot be slipped under a deep parent to exceed the cap. On create there is no
   // subtree yet, so the height is 1.
   const movedHeight =
-    selfId === null ? 1 : await activeSubtreeHeight(db, resources, selfId, organizationId);
+    params.movedHeight ??
+    (selfId === null ? 1 : await activeSubtreeHeight(db, resources, selfId, organizationId));
   if (parentDepth + movedHeight > RESOURCE_TREE_MAX_DEPTH) {
     throw new ValidationError(RESOURCE_ERROR.RESOURCE_TREE_TOO_DEEP, {
       reason: 'RESOURCE_TREE_TOO_DEEP',

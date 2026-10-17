@@ -210,8 +210,8 @@ export class ResourcesController {
       'Promotes the group’s direct children to its own parent (or the top level), then ' +
       'soft-deletes the now-childless group, in one transaction under the organisation’s ' +
       'resource-tree lock. The deliberate opposite of DELETE, which takes the whole branch. ' +
-      'Resources have no restore endpoint, so a dissolved group cannot be restored — create it ' +
-      'again to regroup (its name is free again). ' +
+      'The emptied group appears in Recently deleted and can be restored, but it comes back ' +
+      'EMPTY — the promoted resources stay where they were moved (ADR-0195). ' +
       '**This write mutates sibling rows**: every promoted child’s `parentId` changes and its ' +
       'optimistic-lock `version` is incremented, so a client holding a cached copy of one would ' +
       'otherwise 409 on its next save with no explanation. The response returns those rows at ' +
@@ -235,6 +235,51 @@ export class ResourcesController {
   ): Promise<DissolveResourceGroupResponseDto> {
     const { promoted } = await this.service.dissolveGroup(principal, orgSlug, resourceId, context);
     return { promoted };
+  }
+
+  @Post(':resourceId/restore')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Restore a deleted resource, or a deleted group with everything deleted with it.',
+    description:
+      'ADR-0195. Restores exactly the deletion this row belongs to — a leaf is its own, a group ' +
+      'takes its whole branch — and nothing deleted separately. All-or-nothing: if any row in the ' +
+      'deletion is blocked, nothing is written. Restore by the id of a group’s **member** is ' +
+      'refused as PARENT_DELETED; act on the root. Restoring an already-active resource is a ' +
+      'no-op 200. Takes no body. Returns the restored root (`costPerUnit` is cost-gated). ' +
+      'Planner or Org Admin.',
+  })
+  @ApiOkResponse({ type: ResourceResponseDto })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({
+    description:
+      'No such resource in this organisation, or the retention timer removed it first (do not retry).',
+  })
+  @ApiConflictResponse({
+    description:
+      '`details.reason` is PARENT_DELETED (`details.blockedBy`: restore that group first), ' +
+      'CALENDAR_DELETED (`details.calendar`: restore that calendar first), or NAME_TAKEN / ' +
+      'CODE_TAKEN (`details.conflicts[]` and `total`: a live row, archived or not, holds it). ' +
+      'Nothing was written.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The parent is no longer a group (RESOURCE_PARENT_NOT_GROUP) or the branch would exceed the ' +
+      'depth ceiling (RESOURCE_TREE_TOO_DEEP). `details.parentName` names the parent to fix.',
+  })
+  async restore(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('resourceId', ParseUUIDPipe) resourceId: string,
+    @RequestContext() context: RequestContext,
+  ): Promise<ResourceResponseDto> {
+    const { resource, canReadCost } = await this.service.restore(
+      principal,
+      orgSlug,
+      resourceId,
+      context,
+    );
+    return ResourceResponseDto.from(resource, canReadCost);
   }
 
   @Delete(':resourceId')

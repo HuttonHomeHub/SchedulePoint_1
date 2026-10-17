@@ -25,14 +25,17 @@ interface Actor {
 }
 
 interface DeletedItem {
-  kind: 'client' | 'project' | 'plan';
+  kind: 'client' | 'project' | 'plan' | 'resource' | 'calendar';
   id: string;
   name: string;
   deletedAt: string;
   canRestore: boolean;
   deleteBatchId: string | null;
+  subtype: string | null;
+  expiresAt: string | null;
   blockedBy: {
-    kind: 'client' | 'project';
+    kind: 'client' | 'project' | 'resource' | 'calendar';
+    relation: 'parent' | 'calendar';
     id: string;
     name: string;
     deleteBatchId: string | null;
@@ -317,6 +320,121 @@ describe.skipIf(!hasDatabase)('Recycle bin API (e2e)', () => {
     expect(byId[clientId]?.canRestore).toBe(true);
     expect(byId[projectId]?.canRestore).toBe(false);
     expect(byId[planId]?.canRestore).toBe(false);
+  });
+
+  /**
+   * ADR-0195: resources and calendars are listed, with the display subtype and a per-row expiry that
+   * is the SERVER's statement. A resource and an ORG calendar have no timer, so a client that
+   * assumed one from the kind would print a countdown on something that never expires.
+   */
+  it('lists resources and calendars with their subtype, and expiresAt only where a timer exists', async () => {
+    const { actor } = await adminWithOrg();
+    const api = '/api/v1/organizations/acme';
+    const group = await actor.agent
+      .post(`${api}/resources`)
+      .send({ name: 'Groundworks', kind: 'GROUP' })
+      .expect(201);
+    const leaf = await actor.agent
+      .post(`${api}/resources`)
+      .send({ name: 'Excavator', kind: 'EQUIPMENT', parentId: group.body.data.id })
+      .expect(201);
+    const orgCal = await actor.agent
+      .post(`${api}/calendars`)
+      .send({ name: 'Shared week', workingWeekdays: 31 })
+      .expect(201);
+    const clientId = await createClient(actor, 'Northgate');
+    const projectId = await createProject(actor, clientId, 'Riverside');
+    const projectCal = await actor.agent
+      .post(`${api}/calendars`)
+      .send({ name: 'Riverside week', workingWeekdays: 31, scope: 'PROJECT', projectId })
+      .expect(201);
+    const planId = await createPlan(actor, projectId, 'Baseline');
+
+    await actor.agent.delete(`${api}/resources/${group.body.data.id as string}`).expect(204);
+    await actor.agent.delete(`${api}/calendars/${orgCal.body.data.id as string}`).expect(204);
+    await actor.agent.delete(`${api}/projects/${projectId}`).expect(204);
+
+    const res = await actor.agent.get(`${api}/deleted`).expect(200);
+    const byId = Object.fromEntries((res.body.data as DeletedItem[]).map((i) => [i.id, i]));
+    const days = res.body.meta.retentionDays as number;
+    const plus = (iso: string): string =>
+      new Date(new Date(iso).getTime() + days * 86_400_000).toISOString();
+
+    expect(byId[group.body.data.id as string]).toMatchObject({
+      kind: 'resource',
+      subtype: 'GROUP',
+      expiresAt: null,
+      canRestore: true,
+      blockedBy: null,
+    });
+    // A member of the group's deletion: same batch, blocked by its own parent (so it stays a member).
+    expect(byId[leaf.body.data.id as string]).toMatchObject({
+      kind: 'resource',
+      subtype: 'EQUIPMENT',
+      expiresAt: null,
+      blockedBy: { kind: 'resource', relation: 'parent', id: group.body.data.id },
+    });
+    expect(byId[orgCal.body.data.id as string]).toMatchObject({
+      kind: 'calendar',
+      subtype: 'ORG',
+      expiresAt: null,
+      canRestore: true,
+    });
+    // A project calendar goes with its project, so it expires WITH it — and the plan and project
+    // carry the same instant, which is `deletedAt + period` for a hierarchy row.
+    const project = byId[projectId]!;
+    expect(project.expiresAt).toBe(plus(project.deletedAt));
+    expect(byId[planId]!.expiresAt).toBe(plus(byId[planId]!.deletedAt));
+    expect(byId[projectCal.body.data.id as string]).toMatchObject({
+      kind: 'calendar',
+      subtype: 'PROJECT',
+      expiresAt: plus(project.deletedAt),
+      blockedBy: { kind: 'project', relation: 'parent', id: projectId },
+      deleteBatchId: project.deleteBatchId,
+    });
+  });
+
+  it('pages one row at a time across all five tables when deleted_at is identical', async () => {
+    // The (deleted_at, id) tiebreak must be total across the UNION: a row dropped or repeated at a
+    // page boundary between a resource and a plan would not show on a three-table bin.
+    const { actor } = await adminWithOrg();
+    const api = '/api/v1/organizations/acme';
+    const clientId = await createClient(actor, 'Northgate');
+    const projectId = await createProject(actor, clientId, 'Riverside');
+    const planId = await createPlan(actor, projectId, 'Baseline');
+    const resource = await actor.agent
+      .post(`${api}/resources`)
+      .send({ name: 'Crane', kind: 'EQUIPMENT' })
+      .expect(201);
+    const calendar = await actor.agent
+      .post(`${api}/calendars`)
+      .send({ name: 'Shared week', workingWeekdays: 31 })
+      .expect(201);
+    const resourceId = resource.body.data.id as string;
+    const calendarId = calendar.body.data.id as string;
+    await actor.agent.delete(`${api}/plans/${planId}`).expect(204);
+    await actor.agent.delete(`${api}/resources/${resourceId}`).expect(204);
+    await actor.agent.delete(`${api}/calendars/${calendarId}`).expect(204);
+    // Force the tie the real clock would make vanishingly rare.
+    const at = new Date('2026-10-01T10:00:00.000Z');
+    await prisma.plan.update({ where: { id: planId }, data: { deletedAt: at } });
+    await prisma.resource.update({ where: { id: resourceId }, data: { deletedAt: at } });
+    await prisma.calendar.update({ where: { id: calendarId }, data: { deletedAt: at } });
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 6; page += 1) {
+      const suffix: string = cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+      const res = await actor.agent.get(`${api}/deleted?limit=1${suffix}`).expect(200);
+      expect(res.body.data).toHaveLength(1);
+      seen.push((res.body.data[0] as DeletedItem).id);
+      if (!res.body.meta.hasMore) break;
+      cursor = res.body.meta.nextCursor as string;
+    }
+    expect(seen).toHaveLength(3);
+    expect(new Set(seen)).toEqual(new Set([planId, resourceId, calendarId]));
+    const whole = await actor.agent.get(`${api}/deleted`).expect(200);
+    expect(seen).toEqual((whole.body.data as DeletedItem[]).map((i) => i.id));
   });
 
   it('scopes the bin to the caller — outsiders and non-members see nothing/404', async () => {

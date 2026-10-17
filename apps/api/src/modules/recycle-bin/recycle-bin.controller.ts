@@ -17,8 +17,8 @@ import { DeletedItemResponseDto } from './dto/deleted-item-response.dto';
 import { RecycleBinService } from './recycle-bin.service';
 
 /**
- * The organisation recycle bin: soft-deleted clients, projects and plans in one
- * deletion-time-ordered list. Reading is a hierarchy read (any member). Restore
+ * The organisation recycle bin: soft-deleted clients, projects, plans, resources and calendars
+ * (ADR-0195) in one deletion-time-ordered list. Reading is a hierarchy read (any member). Restore
  * is not here — it stays on each entity's own writer-only `.../{id}/restore`
  * route, which the client picks by the item's `kind`.
  */
@@ -32,7 +32,8 @@ export class RecycleBinController {
 
   @Get()
   @ApiOperation({
-    summary: "List an organisation's recently-deleted clients, projects and plans.",
+    summary:
+      "List an organisation's recently-deleted clients, projects, plans, resources and calendars.",
     description:
       'Newest-deleted first, cursor-paginated. The direction is fixed — this list ' +
       'does not accept an `order` param, and sending one is a 422 (see docs/API.md).',

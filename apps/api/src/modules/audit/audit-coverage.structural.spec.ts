@@ -127,9 +127,11 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   //   keeps scheduling identically and refuses only NEW usages, so nothing visibly breaks and
   //   nobody is told.
   'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': ['calendar.deleted'],
+  'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/restore': ['calendar.restored'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': ['calendar.archived'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': ['calendar.unarchived'],
   'DELETE /api/v1/organizations/:orgSlug/resources/:resourceId': ['resource.deleted'],
+  'POST /api/v1/organizations/:orgSlug/resources/:resourceId/restore': ['resource.restored'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/dissolve': ['resource.dissolved'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/archive': ['resource.archived'],
   'POST /api/v1/organizations/:orgSlug/resources/:resourceId/unarchive': ['resource.unarchived'],

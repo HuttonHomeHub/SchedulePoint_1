@@ -238,6 +238,85 @@ export class ResourceRepository {
   }
 
   /**
+   * A resource in ANY state, scoped to its organisation (anti-IDOR) — the first read of a restore,
+   * which must find the row whether or not it is deleted. Callers branch on `deletedAt`.
+   *
+   * soft-delete: any-state — a restore starts from a row that is deleted by definition, and an
+   * already-active one answers a no-op rather than a 404.
+   */
+  findAnyStateByIdInOrg(
+    id: string,
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Resource | null> {
+    return db.resource.findFirst({ where: { id, organizationId } });
+  }
+
+  /**
+   * Every row of one deletion — the unit a restore brings back (ADR-0053 §3, ADR-0195 D1). A GROUP
+   * delete stamps its whole branch with one batch id, a leaf mints its own. Org-scoped so a batch id
+   * can never reach another tenant's rows. Rows already restored are excluded by the filter.
+   */
+  findDeletedBatchInOrg(
+    batchId: string,
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Resource[]> {
+    return db.resource.findMany({
+      where: { deleteBatchId: batchId, organizationId, deletedAt: { not: null } },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /**
+   * The ACTIVE resources (archived included) that already hold one of these names or codes — the
+   * restore's clash pre-check, against `uq_resources_org_name` / `uq_resources_org_code`. Both
+   * indexes are predicated on `deleted_at IS NULL` alone, so an archived row still holds its handle.
+   * Chunked at the bind-parameter ceiling: a branch's fan-out is unbounded (`common/db/id-chunks.ts`).
+   */
+  async findActiveHoldingNamesOrCodes(
+    params: { organizationId: string; names: readonly string[]; codes: readonly string[] },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Pick<Resource, 'id' | 'name' | 'code' | 'archivedAt'>[]> {
+    const held = new Map<string, Pick<Resource, 'id' | 'name' | 'code' | 'archivedAt'>>();
+    const select = { id: true, name: true, code: true, archivedAt: true } as const;
+    for (const chunk of chunkIds([...params.names])) {
+      const rows = await db.resource.findMany({
+        where: this.active({ organizationId: params.organizationId, name: { in: chunk } }),
+        select,
+      });
+      for (const row of rows) held.set(row.id, row);
+    }
+    for (const chunk of chunkIds([...params.codes])) {
+      const rows = await db.resource.findMany({
+        where: this.active({ organizationId: params.organizationId, code: { in: chunk } }),
+        select,
+      });
+      for (const row of rows) held.set(row.id, row);
+    }
+    return [...held.values()];
+  }
+
+  /**
+   * Reactivate every row of one deletion in a single statement. `version` increments so a client
+   * holding a stale copy gets a clean 409 on its next save. The archived state is untouched, so a
+   * row deleted while archived comes back archived (ADR-0195 spec D7). Returns the rows restored;
+   * `0` means the batch is gone.
+   */
+  async restoreBatch(
+    batchId: string,
+    organizationId: string,
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    const result = await db.resource.updateMany({
+      where: { deleteBatchId: batchId, organizationId, deletedAt: { not: null } },
+      data: { deletedAt: null, deleteBatchId: null, updatedBy: actorId, version: { increment: 1 } },
+    });
+    return result.count;
+  }
+
+  /**
    * The ARCHIVED resource holding this name or code in the org, if any (ADR-0053 §4). An
    * archived row deliberately keeps both: `uq_resources_org_name` / `uq_resources_org_code`
    * stay predicated on `deleted_at IS NULL` alone so that unarchive — an unguarded, lock-free,
@@ -463,6 +542,30 @@ export class ResourceRepository {
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
     return db.resource.count({ where: { calendarId, deletedAt: null } });
+  }
+
+  /**
+   * The ACTIVE plans with an active assignment of ANY of `resourceIds` — the set a restore stamps
+   * "edited since calculated". Expected to be empty (a delete is refused while any assignment
+   * references the resource), which is why this is defence in depth and not a branch anyone
+   * exercises. One `= ANY(array)` bind, so a large branch cannot hit the parameter ceiling.
+   */
+  async findActivePlanIdsAssigningAny(
+    resourceIds: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<string[]> {
+    if (resourceIds.length === 0) return [];
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT DISTINCT a.plan_id AS id
+      FROM resource_assignments ra
+      JOIN activities a ON a.id = ra.activity_id AND a.deleted_at IS NULL
+      JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+      WHERE ra.organization_id = ${organizationId}::uuid
+        AND ra.resource_id = ANY(${[...resourceIds]}::uuid[])
+        AND ra.deleted_at IS NULL
+    `;
+    return rows.map((row) => row.id);
   }
 
   /**

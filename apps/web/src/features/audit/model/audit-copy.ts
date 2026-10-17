@@ -74,12 +74,14 @@ const TITLES: Record<AuditAction, string> = {
   'baseline.activated': 'Baseline activated',
   'baseline.deleted': 'Baseline deleted',
   'calendar.deleted': 'Calendar deleted',
+  'calendar.restored': 'Calendar restored',
   // "Retired", not "Archived": the word has to carry that the calendar still works for everything
   // already using it and is only withheld from new choices. "Archived" reads as put away.
   'calendar.archived': 'Calendar retired',
   'calendar.unarchived': 'Calendar back in use',
   'calendar.scope_changed': 'Calendar sharing changed',
   'resource.deleted': 'Resource deleted',
+  'resource.restored': 'Resource restored',
   // "Dissolved", not "deleted": the grouping went, the resources stayed.
   'resource.dissolved': 'Group dissolved',
   'resource.archived': 'Resource retired',
@@ -249,6 +251,17 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       // a deletion, so it is the only place a reader can find out which happened.
       return scope === null ? null : (CALENDAR_SCOPES[scope] ?? scope);
     }
+    case 'calendar.restored': {
+      const scope = field(changes?.after, 'scope');
+      const exceptions = count(changes?.after, 'exceptionCount');
+      const parts = [
+        scope === null ? null : (CALENDAR_SCOPES[scope] ?? scope),
+        exceptions === null || exceptions === 0
+          ? null
+          : plural(exceptions, 'exception', 'exceptions'),
+      ].filter((part) => part !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
+    }
     case 'calendar.scope_changed': {
       const from = field(changes?.before, 'scope');
       const to = field(changes?.after, 'scope');
@@ -262,6 +275,17 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       // "14 resources" is the difference between a tidy-up and an incident.
       const parts = [
         swept !== null && swept > 1 ? plural(swept, 'resource', 'resources') : null,
+        kind === null ? null : resourceKindName(kind),
+      ].filter((part) => part !== null);
+      return parts.length === 0 ? null : parts.join(' · ');
+    }
+    case 'resource.restored': {
+      // The branch size, as the delete reports it, so the two halves of one story read alike. A
+      // restore records what came BACK in `after` (the delete records what went in `before`).
+      const back = count(changes?.after, 'resourceCount');
+      const kind = field(changes?.after, 'kind');
+      const parts = [
+        back !== null && back > 1 ? plural(back, 'resource', 'resources') : null,
         kind === null ? null : resourceKindName(kind),
       ].filter((part) => part !== null);
       return parts.length === 0 ? null : parts.join(' · ');
