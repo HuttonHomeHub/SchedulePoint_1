@@ -25,6 +25,7 @@ browser-native team use. See the full product context in
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1671 web
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1672 web
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1673 web
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1677 web
 > source files with 47 Playwright suites beside the base journey, and
 > 201 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`

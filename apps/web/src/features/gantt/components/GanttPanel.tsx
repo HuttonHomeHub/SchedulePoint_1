@@ -94,6 +94,7 @@ import {
   FORCED_SELECTED_EDGE,
   FORCED_SOLID_MARK,
 } from '@/components/ui/forced-colors';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
@@ -1052,12 +1053,13 @@ function GanttPanelBody({
 
   if (loading) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-4" aria-busy="true">
-        <span className="sr-only">Loading the schedule…</span>
-        {Array.from({ length: 8 }, (_, i) => (
-          <div key={i} className="bg-muted h-6 animate-pulse rounded" />
-        ))}
-      </div>
+      <LoadingShape label="Loading the schedule…" className="grid min-h-0 flex-1">
+        <div className="flex flex-col gap-2 p-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-6" />
+          ))}
+        </div>
+      </LoadingShape>
     );
   }
 

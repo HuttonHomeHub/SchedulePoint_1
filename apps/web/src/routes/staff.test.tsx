@@ -330,7 +330,9 @@ describe('StaffConsoleScreen', () => {
     renderStaffWith({});
 
     expect(await screen.findByRole('heading', { name: 'Mail' })).toBeVisible();
-    expect(await screen.findByText('Last failure')).toBeInTheDocument();
+    // 'Never' is the settled value of "Last failure"; the label alone is also drawn by the loading
+    // skeleton, so waiting on it would not wait for the answer.
+    expect(await screen.findByText('Never')).toBeInTheDocument();
     expect(screen.queryByText('No emails have failed.')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Recent failed emails' })).not.toBeInTheDocument();
   });

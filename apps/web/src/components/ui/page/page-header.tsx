@@ -1,6 +1,20 @@
 import { useId } from 'react';
 
+import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
+
+/**
+ * The header row's layout, shared with {@link PageHeaderSkeleton} so a header that settles moves
+ * nothing: the same row, the same title column, the same trailing wrapper.
+ */
+const ROW_CLASS = 'flex flex-wrap items-start justify-between gap-4';
+const TITLE_COLUMN_CLASS = 'min-w-0 flex-1';
+const endClass = (aside: boolean, actions: boolean): string =>
+  cn(
+    'flex shrink-0 items-center gap-4',
+    aside ? 'basis-full md:basis-auto' : null,
+    aside && actions ? 'justify-between md:justify-end' : null,
+  );
 
 export interface PageHeaderProps {
   /** The page's `<h1>`. Exactly one per page — this archetype is how that stays true. */
@@ -80,7 +94,7 @@ export function PageHeader({
   const descriptionId = useId();
   const describedBy = description ? descriptionId : undefined;
   return (
-    <div className={cn('flex flex-wrap items-start justify-between gap-4', className)}>
+    <div className={cn(ROW_CLASS, className)}>
       {/* **`flex-1` and `max-w-prose` together are what make the description ONE measure.**
           With `min-w-0` alone this column is an `auto`-width flex item, so it shrink-wraps to its
           content: a 42-character description rendered 267 px wide and a 116-character one 736 px,
@@ -89,7 +103,7 @@ export function PageHeader({
           (`docs/specs/page-consistency/m1-measurement.md`). `flex-1` gives the column the frame's
           width and `max-w-prose` caps the line length inside it, which is the same pairing
           `EmptyState` already uses one file over. */}
-      <div className="min-w-0 flex-1">
+      <div className={TITLE_COLUMN_CLASS}>
         <h1
           className={cn(
             'text-2xl font-semibold tracking-tight wrap-anywhere',
@@ -134,15 +148,52 @@ export function PageHeader({
           beside the title and wrap naturally, an aside alone still takes its own line. Above `md`
           the wrapper is `basis-auto shrink-0` and paints exactly what two siblings painted. */}
       {aside || actions ? (
-        <div
-          className={cn(
-            'flex shrink-0 items-center gap-4',
-            aside ? 'basis-full md:basis-auto' : null,
-            aside && actions ? 'justify-between md:justify-end' : null,
-          )}
-        >
+        <div className={endClass(Boolean(aside), Boolean(actions))}>
           {aside ? <div className="text-muted-foreground text-sm">{aside}</div> : null}
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * `PageHeader`'s loading shape: a title block of the `h1`'s line height (`text-2xl`, 2rem), an
+ * optional description line, an optional aside and up to two action blocks at the control height.
+ *
+ * It never draws a live control, so an action appears as a block and becomes a button when the
+ * subject arrives — a skeleton holds nothing focusable. Whether a description exists is data the
+ * skeleton cannot know; a caller draws one only when most subjects have one, and a header that
+ * turns out to have none shortens by that line when it settles. Hidden from assistive technology
+ * on its own root as well as by `LoadingShape`.
+ */
+export function PageHeaderSkeleton({
+  description = false,
+  aside = false,
+  actions = 0,
+  className,
+}: {
+  description?: boolean;
+  aside?: boolean;
+  actions?: 0 | 1 | 2;
+  className?: string;
+}): React.ReactElement {
+  return (
+    <div className={cn(ROW_CLASS, className)} aria-hidden="true">
+      <div className={TITLE_COLUMN_CLASS}>
+        <Skeleton className="h-8 w-64 max-w-full" />
+        {description ? <Skeleton className="mt-1 h-5 w-96 max-w-prose" /> : null}
+      </div>
+      {aside || actions > 0 ? (
+        <div className={endClass(aside, actions > 0)}>
+          {aside ? <Skeleton className="h-5 w-28" /> : null}
+          {actions > 0 ? (
+            <div className="flex shrink-0 items-center gap-2">
+              {Array.from({ length: actions }, (_, index) => (
+                <Skeleton key={index} className="h-(--control-h) w-28" />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

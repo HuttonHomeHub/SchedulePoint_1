@@ -2,7 +2,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
-import { Spinner } from '@/components/ui/spinner';
+import { WorkspaceSkeleton } from '@/components/layout/workspace/workspace-skeleton';
 import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
 import { EntityLoadFailure } from '@/routes/entity-not-found';
 
@@ -48,22 +48,9 @@ function PlanDetail({ orgSlug, planId }: { orgSlug: string; planId: string }): R
   useRememberPlan({ orgSlug, planId, resolved: planQuery.isSuccess });
 
   if (planQuery.isPending) {
-    // A workspace-shaped skeleton (header + canvas + panel) on the canvas-first path so the load
-    // → loaded transition doesn't jump from a small centred box to a full-bleed column (ADR-0030).
-    return (
-      <div className="flex min-h-0 flex-1 flex-col" aria-busy="true">
-        <div className="border-border flex flex-col gap-2 border-b px-4 py-3">
-          <div className="bg-muted h-3 w-56 animate-pulse rounded" />
-          <div className="bg-muted h-6 w-64 animate-pulse rounded" />
-        </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <Spinner label="Loading plan…" />
-        </div>
-        <div className="border-border h-40 shrink-0 border-t px-4 py-3">
-          <div className="bg-muted h-4 w-32 animate-pulse rounded" />
-        </div>
-      </div>
-    );
+    // A workspace-shaped skeleton (header + canvas + panel) so the load → loaded transition doesn't
+    // jump from a small centred box to a full-bleed column (ADR-0030).
+    return <WorkspaceSkeleton />;
   }
 
   if (planQuery.isError) {

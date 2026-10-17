@@ -13,3 +13,6 @@ the rows arrive.
 The staff console's panels show the shape of what is loading — the Mail figures, the settings list and
 the account and activity tables — instead of a spinner each, and the page no longer announces once
 per panel.
+A client or project page now opens in its own frame, with the real column headings of its table, and
+the plan opens in a workspace-shaped placeholder instead of a spinner, so nothing slides into place
+when the page arrives.

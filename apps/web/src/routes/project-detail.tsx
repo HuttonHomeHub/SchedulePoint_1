@@ -1,8 +1,15 @@
 import { useParams } from '@tanstack/react-router';
 
-import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { ChildCounts, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import {
+  ChildCounts,
+  LoadingShape,
+  PageContainer,
+  PageHeader,
+  PageHeaderSkeleton,
+  SectionCard,
+  Skeleton,
+} from '@/components/ui/page';
 import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
 import { useClient } from '@/features/clients';
@@ -22,6 +29,10 @@ import { EntityLoadFailure } from '@/routes/entity-not-found';
  * plans, with create/edit/delete for writers. Individual plan detail (and the
  * future TSLD canvas) lives at `/orgs/$orgSlug/plans/$planId`.
  *
+ * **The frame renders at once and only the header waits for the project** (see `client-detail.tsx`
+ * for the reasoning and its cost). The Calendars section needs the project's name, so it appears
+ * when the project does; it is the last block on the page, so nothing above it moves for it.
+ *
  * It also carries the project's **Calendars** section (ADR-0053
  * §1). This screen is the project's only detail surface — there is no separate project-settings
  * route — and it already owns the project's scoped children (its plans), so the project's scoped
@@ -39,14 +50,6 @@ export function ProjectDetailScreen(): React.ReactElement {
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
 
-  if (project.isPending) {
-    return (
-      <PageContainer>
-        <Spinner label="Loading project…" />
-      </PageContainer>
-    );
-  }
-
   if (project.isError) {
     return (
       <EntityLoadFailure
@@ -58,75 +61,91 @@ export function ProjectDetailScreen(): React.ReactElement {
     );
   }
 
-  const crumbs: Crumb[] = [
-    { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
-    {
-      label: client.data?.name ?? 'Client',
-      to: '/orgs/$orgSlug/clients/$clientId',
-      params: { orgSlug, clientId: project.data.clientId },
-    },
-    { label: project.data.name },
-  ];
+  // How many action blocks the settled header will draw: the same gates it applies, all known
+  // from the role, so the skeleton's trailing edge is where the buttons will be.
+  const importing = SCHEDULE_INTERCHANGE_ENABLED && canImport;
+  const actionBlocks = importing && canWrite ? 2 : importing || canWrite ? 1 : 0;
 
   return (
     <PageContainer>
-      <Breadcrumbs items={crumbs} />
-      {/* Flag OFF ⇒ render exactly the prior surface. Flag ON ⇒ the "Import from file…" entry sits
+      {project.isPending ? (
+        <LoadingShape label="Loading project…" announce="none">
+          <Skeleton className="h-5 w-64" />
+          <PageHeaderSkeleton className="mt-2" aside actions={actionBlocks} />
+        </LoadingShape>
+      ) : (
+        <>
+          <Breadcrumbs
+            items={[
+              { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
+              {
+                label: client.data?.name ?? 'Client',
+                to: '/orgs/$orgSlug/clients/$clientId',
+                params: { orgSlug, clientId: project.data.clientId },
+              },
+              { label: project.data.name },
+            ]}
+          />
+          {/* Flag OFF ⇒ render exactly the prior surface. Flag ON ⇒ the "Import from file…" entry sits
           beside "New plan" (the entry self-gates on interchange:import). */}
-      <PageHeader
-        className="mt-2"
-        title={project.data.name}
-        description={project.data.description ?? undefined}
-        actions={
-          SCHEDULE_INTERCHANGE_ENABLED ? (
-            <>
-              <ImportScheduleButton
-                orgSlug={orgSlug}
-                projectId={projectId}
-                projectName={project.data.name}
-                canImport={canImport}
-                canManageOrgCalendars={canManageOrgCals}
-              />
-              {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
-            </>
-          ) : canWrite ? (
-            <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
-          ) : null
-        }
-        /* **"activities across its plans", and "activities" means EVERY row.** A project owns no
+          <PageHeader
+            className="mt-2"
+            title={project.data.name}
+            description={project.data.description ?? undefined}
+            actions={
+              SCHEDULE_INTERCHANGE_ENABLED ? (
+                <>
+                  <ImportScheduleButton
+                    orgSlug={orgSlug}
+                    projectId={projectId}
+                    projectName={project.data.name}
+                    canImport={canImport}
+                    canManageOrgCalendars={canManageOrgCals}
+                  />
+                  {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+                </>
+              ) : canWrite ? (
+                <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
+              ) : null
+            }
+            /* **"activities across its plans", and "activities" means EVERY row.** A project owns no
            activities directly — an activity hangs off a plan — and the figure includes WBS
            summaries, levels of effort and milestones as well as tasks, which is what the API
            counts and what `docs/TEST_PLAYBOOK.md` records a reader being misled by once when a
            denominator quietly included summaries. Either count is ABSENT rather than zero when the
            API could not take it. */
-        aside={
-          <ChildCounts
-            counts={[
-              { value: project.data.planCount, one: 'plan', many: 'plans' },
-              {
-                value: project.data.activityCount,
-                one: 'activity across its plans',
-                many: 'activities across its plans',
-              },
-            ]}
+            aside={
+              <ChildCounts
+                counts={[
+                  { value: project.data.planCount, one: 'plan', many: 'plans' },
+                  {
+                    value: project.data.activityCount,
+                    one: 'activity across its plans',
+                    many: 'activities across its plans',
+                  },
+                ]}
+              />
+            }
           />
-        }
-      />
+        </>
+      )}
       {/* `flush`: no vertical padding, so the rows start under the heading, and the card's own
           horizontal gutter so the first cell lines up with it — see `client-detail.tsx` for the
           defect that rule was written against (ADR-0146 D3). */}
       <SectionCard className="mt-6" title="Plans" flush>
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </SectionCard>
-      <div className="mt-10">
-        <ProjectCalendarsSection
-          orgSlug={orgSlug}
-          projectId={projectId}
-          projectName={project.data.name}
-          canWrite={canWrite}
-          canManageOrg={canManageOrgCals}
-        />
-      </div>
+      {project.isPending ? null : (
+        <div className="mt-10">
+          <ProjectCalendarsSection
+            orgSlug={orgSlug}
+            projectId={projectId}
+            projectName={project.data.name}
+            canWrite={canWrite}
+            canManageOrg={canManageOrgCals}
+          />
+        </div>
+      )}
     </PageContainer>
   );
 }

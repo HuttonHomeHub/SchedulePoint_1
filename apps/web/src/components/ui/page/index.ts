@@ -19,7 +19,7 @@
  * adding a sixteenth means editing this line.
  */
 export { PageContainer, type PageContainerProps } from './page-container';
-export { PageHeader, type PageHeaderProps } from './page-header';
+export { PageHeader, PageHeaderSkeleton, type PageHeaderProps } from './page-header';
 export { SectionCard, type SectionCardProps } from './section-card';
 export { EmptyState, type EmptyStateProps } from './empty-state';
 export { Skeleton, SkeletonText } from './skeleton';

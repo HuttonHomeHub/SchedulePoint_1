@@ -108,9 +108,6 @@ const DECLARED: Record<string, Declared> = {
 
 /** Group A: first loads whose settled shape is known. Each milestone deletes its own entries. */
 const PENDING_SPINNERS: Record<string, { sites: number; milestone: string }> = {
-  'routes/client-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
-  'routes/project-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
-  'routes/plan-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
   'features/earned-value/components/EarnedValuePanel.tsx': {
     sites: 1,
     milestone: 'loading-skeletons M5',
@@ -139,16 +136,11 @@ const PENDING_SPINNERS: Record<string, { sites: number; milestone: string }> = {
   'features/share/components/GuestPlanView.tsx': { sites: 1, milestone: 'loading-skeletons M6' },
 };
 
-/** G2: the hand-rolled pulses still to convert. Emptied by M4. */
-const PENDING_PULSES: Record<string, string> = {
-  'routes/plan-detail.tsx': 'loading-skeletons M4',
-  'features/gantt/components/GanttPanel.tsx': 'loading-skeletons M4',
-  'components/layout/workspace/plan-workspace-toolbar.tsx': 'loading-skeletons M4',
-};
+/** G2: the hand-rolled pulses still to convert. Empty since M4. */
+const PENDING_PULSES: Record<string, string> = {};
 
-/** G4: the call sites whose spinner still sits inside `aria-busy`. Emptied by M4 and M6. */
+/** G4: the call sites whose spinner still sits inside `aria-busy`. Emptied by M6. */
 const PENDING_BUSY: Record<string, string> = {
-  'routes/plan-detail.tsx': 'loading-skeletons M4',
   'features/share/components/GuestPlanView.tsx': 'loading-skeletons M6',
 };
 
@@ -312,7 +304,7 @@ describe('every loading spinner is declared', () => {
 
   it('scans a non-trivial number of files, so a broken walker cannot pass silently', () => {
     expect(files.length).toBeGreaterThan(150);
-    expect(found.size).toBeGreaterThan(20);
+    expect(found.size).toBeGreaterThan(10);
   });
 
   it('G1: finds no spinner outside the gate, action and pending declarations', () => {

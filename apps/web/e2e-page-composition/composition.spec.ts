@@ -812,3 +812,48 @@ test('every list screen shows its first row above the fold at 1646', async ({ pa
     ).toBeLessThan(1000);
   }
 });
+
+/**
+ * **A client's page opens in its own frame while its read is held**
+ * (`docs/specs/loading-skeletons/` M4, CQ-2, TECH_DEBT #234).
+ *
+ * Both the client read and its projects list are held by routes the test releases (no timer), so
+ * the pending picture is observed rather than raced. What only a browser can say: the Projects
+ * heading and the table's real column headings are on screen at once, exactly one status speaks
+ * ("Loading projects…"), no spinner is drawn, and when the client arrives the Projects heading
+ * does not move (SC-2, |delta| <= 1 px).
+ */
+test('a client page shows its frame while the client read is held', async ({ page }) => {
+  const gates = new Map<string, () => void>();
+  const hold = async (name: string, pattern: RegExp): Promise<void> => {
+    const released = new Promise<void>((resolve) => gates.set(name, resolve));
+    await page.route(pattern, async (route) => {
+      await released;
+      await route.continue();
+    });
+  };
+  await hold('client', new RegExp(`/organizations/[^/]+/clients/${seededIds.clientId}$`));
+  await hold('projects', /\/organizations\/[^/]+\/clients\/[^/]+\/projects(\?|$)/);
+
+  await page.goto(`/orgs/${orgSlug}/clients/${seededIds.clientId}`);
+  const heading = page.getByRole('heading', { name: 'Projects', level: 2 });
+  await expect(heading).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Projects' }).getByText('Name', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Loading projects…' })).toHaveCount(1);
+  await expect(page.getByRole('columnheader'), 'the skeleton table is not exposed').toHaveCount(0);
+  expect(await page.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+  const pendingTop = (await heading.boundingBox())?.y ?? Number.NaN;
+
+  gates.get('client')?.();
+  await expect(page.getByRole('heading', { name: 'Harbourside Estates', level: 1 })).toBeVisible();
+  const settledTop = (await heading.boundingBox())?.y ?? Number.NaN;
+  expect(
+    Math.abs(settledTop - pendingTop),
+    'the Projects heading did not move when the client arrived',
+  ).toBeLessThanOrEqual(1);
+
+  gates.get('projects')?.();
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+});

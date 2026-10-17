@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { KeyValueList, KeyValueListSkeleton } from './key-value-list';
+import { PageHeader, PageHeaderSkeleton } from './page-header';
 import { StatGrid, StatGridSkeleton } from './stat-grid';
 
 /**
- * The two panel skeletons draw their archetype's real labels in the archetype's own grid, so a
+ * The panel and page-header skeletons draw their archetype's real labels in the archetype's own grid, so a
  * panel that settles moves nothing above or beside its labels. Geometry itself is judged in a
  * browser (`measure-loading-shapes.mjs`); jsdom lays nothing out, so these pin the shared classes.
  */
@@ -74,6 +75,41 @@ describe('KeyValueListSkeleton', () => {
 
   it('has no axe violations', async () => {
     const { container } = render(<KeyValueListSkeleton items={items} />);
+    expect((await axe(container)).violations).toEqual([]);
+  });
+});
+
+describe('PageHeaderSkeleton', () => {
+  it('hides itself and renders no heading or live control', () => {
+    const { container } = render(<PageHeaderSkeleton description aside actions={2} />);
+    expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(container.querySelector('h1, button, a, input')).toBeNull();
+  });
+
+  it('draws a title block plus one block per action asked for, and nothing else', () => {
+    // title + 2 actions; no description, no aside.
+    expect(
+      render(<PageHeaderSkeleton actions={2} />).container.querySelectorAll('[data-skeleton]'),
+    ).toHaveLength(3);
+    expect(
+      render(<PageHeaderSkeleton />).container.querySelectorAll('[data-skeleton]'),
+    ).toHaveLength(1);
+  });
+
+  it('uses the settled header’s own row and title-column classes', () => {
+    const settled = render(<PageHeader title="Northgate" />).container.firstElementChild;
+    const skeleton = render(<PageHeaderSkeleton />).container.firstElementChild;
+    expect(skeleton?.className).toBe(settled?.className);
+    expect(skeleton?.firstElementChild?.className).toBe(settled?.firstElementChild?.className);
+  });
+
+  it('takes the title line height of the h1 (text-2xl, 2rem)', () => {
+    const { container } = render(<PageHeaderSkeleton />);
+    expect(container.querySelector('.h-8')).not.toBeNull();
+  });
+
+  it('has no axe violations', async () => {
+    const { container } = render(<PageHeaderSkeleton description aside actions={1} />);
     expect((await axe(container)).violations).toEqual([]);
   });
 });
