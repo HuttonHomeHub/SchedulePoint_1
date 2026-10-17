@@ -526,6 +526,9 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
   ).toEqual([]);
 
   await guestContext.close();
+});
+
+/**
  * **The guest view draws its frame while the plan read is held, and says nothing about the token**
  * (`docs/specs/loading-skeletons/` M6, ADR-0051 §5).
  *
