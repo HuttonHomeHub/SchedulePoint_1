@@ -532,7 +532,6 @@ export class CalendarsService {
         const root = await this.calendars.findAnyStateByIdInOrg(calendarId, organization.id, tx);
         if (!root) throw new NotFoundError('Calendar not found.');
         if (root.deletedAt === null) return;
-        if (root.deleteBatchId === null) throw new NotFoundError('Calendar not found.');
 
         if (root.scope === 'PROJECT' && root.projectId !== null) {
           const project = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);

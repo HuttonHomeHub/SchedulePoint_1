@@ -302,15 +302,22 @@ export class ResourceRepository {
    * holding a stale copy gets a clean 409 on its next save. The archived state is untouched, so a
    * row deleted while archived comes back archived (ADR-0195 spec D7). Returns the rows restored;
    * `0` means the batch is gone.
+   *
+   * A row with NO batch id (the column is nullable, and nothing proves none predates the stamp) is
+   * its own deletion: it is restored alone, by id, rather than by a `NULL` batch that would match
+   * every such row in the organisation.
    */
   async restoreBatch(
-    batchId: string,
+    deletion: { id: string; batchId: string | null },
     organizationId: string,
     actorId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
     const result = await db.resource.updateMany({
-      where: { deleteBatchId: batchId, organizationId, deletedAt: { not: null } },
+      where:
+        deletion.batchId === null
+          ? { id: deletion.id, deleteBatchId: null, organizationId, deletedAt: { not: null } }
+          : { deleteBatchId: deletion.batchId, organizationId, deletedAt: { not: null } },
       data: { deletedAt: null, deleteBatchId: null, updatedBy: actorId, version: { increment: 1 } },
     });
     return result.count;

@@ -436,7 +436,7 @@ export class CalendarRepository {
    * expiry, or a concurrent restore).
    */
   async restoreWithExceptions(
-    params: { id: string; batchId: string; organizationId: string },
+    params: { id: string; batchId: string | null; organizationId: string },
     actorId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<{ calendars: number; exceptions: number }> {
@@ -445,11 +445,15 @@ export class CalendarRepository {
       where: {
         id: params.id,
         organizationId: params.organizationId,
+        // `null` is a real value here: the one row, whose own batch is absent.
         deleteBatchId: params.batchId,
         deletedAt: { not: null },
       },
       data: { ...restore, version: { increment: 1 } },
     });
+    // A calendar with no batch id has no deletion to name its exceptions by: restoring "the null
+    // batch" would also bring back every exception removed on its own. So only the calendar returns.
+    if (params.batchId === null) return { calendars: calendars.count, exceptions: 0 };
     const exceptions = await db.calendarException.updateMany({
       where: {
         calendarId: params.id,

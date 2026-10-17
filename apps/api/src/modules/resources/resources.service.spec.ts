@@ -529,7 +529,7 @@ describe('ResourcesService', () => {
       resources.restoreBatch.mockResolvedValue(4);
       await service.restore(principalWith(ALL), 'acme', 'res-1');
       expect(resources.restoreBatch).toHaveBeenCalledWith(
-        BATCH,
+        { id: 'res-1', batchId: BATCH },
         ORG_ID,
         USER_ID,
         expect.anything(),
@@ -543,6 +543,21 @@ describe('ResourcesService', () => {
         }),
         expect.anything(),
       );
+    });
+
+    it('restores a row with no batch id on its own, by id — never as a 404', async () => {
+      // The column is nullable. A null batch used to skip the write and answer "not found" for a row
+      // the bin advertised as restorable.
+      const lone = gone({ deleteBatchId: null });
+      resources.findAnyStateByIdInOrg.mockResolvedValue(lone);
+      await service.restore(principalWith(ALL), 'acme', 'res-1');
+      expect(resources.restoreBatch).toHaveBeenCalledWith(
+        { id: 'res-1', batchId: null },
+        ORG_ID,
+        USER_ID,
+        expect.anything(),
+      );
+      expect(resources.findDeletedBatchInOrg).not.toHaveBeenCalled();
     });
 
     it('refuses a deleted parent as PARENT_DELETED naming the group — also for a member’s id', async () => {

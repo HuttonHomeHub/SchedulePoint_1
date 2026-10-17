@@ -625,15 +625,12 @@ export class ResourcesService {
         await this.assertCalendarsRestorable(tx, organization.id, batch);
         await this.assertNoLiveHolder(tx, organization.id, batch);
 
-        const count =
-          root.deleteBatchId === null
-            ? 0
-            : await this.resources.restoreBatch(
-                root.deleteBatchId,
-                organization.id,
-                principal.userId,
-                tx,
-              );
+        const count = await this.resources.restoreBatch(
+          { id: root.id, batchId: root.deleteBatchId },
+          organization.id,
+          principal.userId,
+          tx,
+        );
         // Zero rows means the batch is gone — nothing else changes a deleted row's batch id, so
         // this is a concurrent restore that the lock should have serialised, or a hand-edited row.
         // Failing loudly beats answering 200 for a restore that did not happen.

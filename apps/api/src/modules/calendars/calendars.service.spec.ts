@@ -447,6 +447,16 @@ describe('CalendarsService', () => {
       );
     });
 
+    it('restores a calendar with no batch id on its own rather than answering 404', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(deleted({ deleteBatchId: null }));
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(calendars.restoreWithExceptions).toHaveBeenCalledWith(
+        { id: 'cal-1', batchId: null, organizationId: ORG_ID },
+        USER_ID,
+        expect.anything(),
+      );
+    });
+
     it('stamps nothing when no plan uses the calendar', async () => {
       await service.restore(principalWith(ALL), 'acme', 'cal-1');
       expect(executeRaw).toHaveBeenCalledTimes(1);

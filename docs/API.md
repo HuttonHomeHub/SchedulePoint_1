@@ -1099,8 +1099,8 @@ call changes shape or meaning**.
 | GET    | `…/organizations/:orgSlug/resources`                     | **+ query** `q` (matches **name OR code**), `kind` (a `ResourceKind`, incl. `GROUP`), `archived`. **+ response field** `archivedAt`. Combines with the existing `parentId`. |
 | POST   | `…/organizations/:orgSlug/resources/:resourceId/archive` | **NEW** — `204`. Body `{ version }`. `resource:update`. Archiving a `GROUP` does **not** archive its subtree.                                                               |
 | POST   | `…/resources/:resourceId/unarchive`                      | **NEW** — `204`. Same body and permission.                                                                                                                                  |
-| POST   | `…/calendars/:calendarId/restore`                        | **NEW (ADR-0195)** — `200` with the calendar detail. No body. `calendar:restore`, plus `calendar:manage_org` for an **ORG** calendar. See "The recycle bin" below.          |
-| POST   | `…/resources/:resourceId/restore`                        | **NEW (ADR-0195)** — `200` with the restored root (`costPerUnit` cost-gated). No body. `resource:restore`. See "The recycle bin" below.                                     |
+| POST   | `…/organizations/:orgSlug/calendars/:calendarId/restore` | **NEW (ADR-0195)** — `200` with the calendar detail. No body. `calendar:restore`, plus `calendar:manage_org` for an **ORG** calendar. See "The recycle bin" below.          |
+| POST   | `…/organizations/:orgSlug/resources/:resourceId/restore` | **NEW (ADR-0195)** — `200` with the restored root (`costPerUnit` cost-gated). No body. `resource:restore`. See "The recycle bin" below.                                     |
 
 **New rejections:**
 
@@ -1438,6 +1438,10 @@ needs `calendar:manage_org`. Audited as one `resource.restored` / `calendar.rest
 | 409    | `CALENDAR_DELETED`                                     | A resource in the deletion uses a calendar that is deleted. `details.calendar` is `{ id, name, deleteBatchId }`. Restore the calendar first.                                                                             |
 | 409    | `NAME_TAKEN` / `CODE_TAKEN`                            | A live row, **archived or not**, holds a name (or a resource's code) the deletion needs. `details.conflicts[]` is `{ field, value, id, archived }`, capped at 5, with `details.total`. Nothing is renamed automatically. |
 | 422    | `RESOURCE_PARENT_NOT_GROUP` / `RESOURCE_TREE_TOO_DEEP` | The parent has stopped being a group, or the branch no longer fits under it. `details.parentName` names the parent to fix.                                                                                               |
+
+A name or code taken in the instant between the check and the write (a create takes no lock the
+restore holds) is caught by the unique index and answers the same `409`, with `details.reason` set
+to `NAME_TAKEN` or `CODE_TAKEN` but **no** `conflicts[]` or `total`: read `reason`, not the list.
 
 A calendar restore also marks every active plan that uses the calendar "edited since calculated", so
 its next recalculation uses it again; the scheduling engine itself is untouched.

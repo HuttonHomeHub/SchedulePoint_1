@@ -160,7 +160,7 @@ export class RecycleBinRepository {
                CASE WHEN rp.deleted_at IS NULL THEN NULL ELSE rp.delete_batch_id END AS blocker_batch_id,
                rs.kind::text AS subtype, NULL::timestamptz AS expiry_basis
           FROM resources rs
-          LEFT JOIN resources rp ON rp.id = rs.parent_id
+          LEFT JOIN resources rp ON rp.id = rs.parent_id AND rp.organization_id = rs.organization_id
          WHERE rs.organization_id = ${organizationId}::uuid
            AND rs.deleted_at IS NOT NULL
            AND (
@@ -179,7 +179,7 @@ export class RecycleBinRepository {
                CASE WHEN pj.deleted_at IS NULL THEN NULL ELSE pj.delete_batch_id END AS blocker_batch_id,
                ca.scope::text AS subtype, pj.deleted_at AS expiry_basis
           FROM calendars ca
-          LEFT JOIN projects pj ON pj.id = ca.project_id
+          LEFT JOIN projects pj ON pj.id = ca.project_id AND pj.organization_id = ca.organization_id
          WHERE ca.organization_id = ${organizationId}::uuid
            AND ca.deleted_at IS NOT NULL
            AND (
@@ -203,7 +203,7 @@ export class RecycleBinRepository {
         LEFT JOIN LATERAL (
           SELECT rc.id, rc.name, rc.delete_batch_id
             FROM resources rm
-            JOIN calendars rc ON rc.id = rm.calendar_id
+            JOIN calendars rc ON rc.id = rm.calendar_id AND rc.organization_id = rm.organization_id
            WHERE rm.delete_batch_id = pg.delete_batch_id
              AND rm.organization_id = ${organizationId}::uuid
              AND rm.deleted_at IS NOT NULL
