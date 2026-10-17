@@ -192,6 +192,20 @@ describe('ArrangeDialog', () => {
     expect(tidy).not.toHaveAccessibleDescription(/fewer crossings/);
   });
 
+  it('says Re-layout may use as many lanes as the diagram has now', () => {
+    renderDialog(READY);
+    expect(screen.getByRole('radio', { name: 'Re-layout' })).toHaveAccessibleDescription(
+      /may use as many lanes as the diagram has now/,
+    );
+  });
+
+  it('keeps the plain-pack sentence for Re-layout when the plan is over the search limit', () => {
+    renderDialog({ ...READY, bounded: { drawn: 301, limit: 300 } });
+    const relayout = screen.getByRole('radio', { name: 'Re-layout' });
+    expect(relayout).toHaveAccessibleDescription(/^Pack the lanes again by time/);
+    expect(relayout).not.toHaveAccessibleDescription(/as many lanes/);
+  });
+
   it('reports a failed search as an alert, with Confirm shaded', () => {
     renderDialog({ kind: 'error', message: 'The worker stopped.' });
     expect(screen.getByRole('alert')).toHaveTextContent('The worker stopped.');

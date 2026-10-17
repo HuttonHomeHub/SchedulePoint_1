@@ -163,7 +163,7 @@ export function ArrangeDialog({
               title: 'Re-layout',
               description: bounded
                 ? 'Pack the lanes again by time, so no two activities overlap in a lane.'
-                : 'Start again from lanes packed by time, then improve them the same way.',
+                : 'Start again from scratch and improve the lanes the same way. It may use as many lanes as the diagram has now.',
               figures: ready ? arrangeFigures(ready.relayout) : null,
             },
           ]}

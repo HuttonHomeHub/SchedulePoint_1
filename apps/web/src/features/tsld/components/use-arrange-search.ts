@@ -16,6 +16,12 @@ import type { TsldViewToggles } from '../render/view-toggles';
  * because a whole Tidy is measured at 4.2 s on a 144-activity plan (M4, FC-N2 (b)). Closing the dialog
  * aborts the run, so nothing keeps computing behind a dismissed dialog.
  *
+ * **Re-layout may use as many rows as the diagram has now** ({@link relayoutBudget}, CQ-1 of
+ * `docs/specs/relayout-quality`, answered 2026-10-17). It starts from the fewest rows time allows, so a
+ * budget of its seed's rows held it below the height of a layout a planner had already drawn and
+ * accepted, and it could never spend a row on readability (`docs/TECH_DEBT.md` #382). Tidy keeps the
+ * budget it has always had: its seed IS the diagram.
+ *
  * **Above {@link OPTIMISE_MAX_ACTIVITIES} drawn activities the search is not offered**, because a
  * whole Tidy there is measured past 10 s. Re-layout is then evaluated but not searched, so its
  * figures describe the plain pack, and Tidy is reported as bounded for the dialog to explain.
@@ -97,6 +103,23 @@ export function changesBetween(
     .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 }
 
+/**
+ * Re-layout's row cap: the taller of the diagram as it stands and the pack it starts from. Never a
+ * formula over the pack — the 2026-09-23 decision refused one after seeing links climb about 25 rows
+ * at +50 % — but a height the planner is already looking at. Rows stay the last tie-break
+ * (`compareObjectives`), so a row is added only when it buys a better term ranked above it.
+ */
+export function relayoutBudget(
+  current: ReadonlyMap<string, number>,
+  packed: ReadonlyMap<string, number>,
+): number {
+  let rows = 0;
+  for (const lanes of [current, packed]) {
+    for (const lane of lanes.values()) rows = Math.max(rows, lane + 1);
+  }
+  return rows;
+}
+
 export function drawnCount(activities: readonly RenderActivity[]): number {
   return activities.filter((a) => a.drawnStart !== null).length;
 }
@@ -152,7 +175,12 @@ export function useArrangeSearch(
           tidy = { changes: changesBetween(input.activities, r.lanes), before, after: r.final };
         }
         const r = await runOptimiseLayout(
-          arrangeRequest(input, packed, bounded ? { passes: 0 } : {}, widths),
+          arrangeRequest(
+            input,
+            packed,
+            bounded ? { passes: 0 } : { budget: relayoutBudget(current, packed) },
+            widths,
+          ),
           { signal, onProgress: progress(tidyEvaluations) },
         );
         // Re-layout's own seed is the pack, so its "before" is the diagram's, never the pack's.

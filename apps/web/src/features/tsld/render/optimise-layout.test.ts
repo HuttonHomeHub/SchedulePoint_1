@@ -127,6 +127,34 @@ describe('optimiseLayout', () => {
     }
   });
 
+  it('spends a row it is given on glyphs that touch, and does not take one it is not (Re-layout, #382)', () => {
+    // A, B and C sit a day apart in one row, so the unlinked neighbours' end glyphs touch; E fills a
+    // second row for the whole span. The only way to separate them is a THIRD row for A and C.
+    const scene = {
+      activities: [
+        task('A', 0, 0, 5),
+        task('B', 0, 6, 5),
+        task('C', 0, 12, 5),
+        task('E', 1, 0, 17),
+      ],
+      edges: [link('A', 'C')],
+      dataDate: DATA_DATE,
+      text: FIXED_WIDTH_TEXT,
+    };
+    // Tidy's call: no budget given, so the seed's two rows are the cap and nothing improves.
+    const atSeed = optimiseLayout(scene);
+    // Re-layout's call: the rows the diagram has now, plus the one this plan is short of.
+    const taller = optimiseLayout(scene, { budget: 3 });
+
+    expect(atSeed.final.contacts).toBe(2);
+    expect(atSeed.final.rows).toBe(2);
+    expect(taller.final.contacts).toBe(0);
+    expect(taller.final.rows).toBe(3);
+    // The extra row is the LAST tie-break, so it is taken only because a term ranked above it improved.
+    expect(compareObjectives(taller.final, atSeed.final)).toBeLessThan(0);
+    expect(taller.final.overlaps).toBe(0);
+  });
+
   it('repairs an overlap even when that needs a row, and says so', () => {
     const r = optimiseLayout({
       activities: [task('A', 0, 0, 10), task('B', 0, 5, 10)],

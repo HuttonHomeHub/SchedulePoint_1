@@ -32,8 +32,11 @@ import type { PlacedText } from './row-text-layout';
  * counts, never time**: a time budget would make the layout depend on the machine, and two planners
  * pressing the same button must get the same diagram.
  *
- * **The budget is the seed's row count** (CQ-1, answered 2026-09-23): the search may reorder rows and
- * move bars between them but does not add rows beyond what the seed used.
+ * **The budget defaults to the seed's row count** (CQ-1, answered 2026-09-23): the search may reorder
+ * rows and move bars between them but does not add rows beyond what the seed used. That is Tidy's, whose
+ * seed is the diagram. Re-layout's seed is the pack, the fewest rows time allows, so its caller passes
+ * a budget of the rows the diagram has now (`relayoutBudget`, `docs/specs/relayout-quality` CQ-1,
+ * answered 2026-10-17) and the "one new row" candidate below becomes reachable for it.
  *
  * **It takes `RenderActivity`, so `drawnStart`/`drawnFinish` are the DRAWN dates** (ADR-0148): the
  * caller builds them from `barDatesFor(…, 'visual')`, never from an `ActivitySummary`'s early dates.
@@ -44,7 +47,7 @@ import type { PlacedText } from './row-text-layout';
  * activities and edges are sorted by id before anything is evaluated.
  */
 export interface OptimiseLayoutOptions {
-  /** The row cap. Defaults to the seed's row count (CQ-1). */
+  /** The row cap. Defaults to the seed's row count (CQ-1); Re-layout passes its own. */
   budget?: number;
   /** Pass cap P. */
   passes?: number;
