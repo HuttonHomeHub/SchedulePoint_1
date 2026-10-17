@@ -163,7 +163,6 @@ export function HierarchyTree({
   // `menuTriggerRef`, which is where focus returns (the row), so a context-menu open still has an
   // opener to name. Null when the row shows no actions button.
   const actionButtonRefs = useRef(new Map<string, HTMLButtonElement>());
-  const menuOpenerRef = useRef<HTMLElement | null>(null);
   // Touch long-press → open the row menu (the large-target, non-hover equivalent of the
   // "⋯" button). `suppressClick` swallows the tap's trailing click so the row doesn't
   // also activate/toggle after the menu opens.
@@ -376,7 +375,6 @@ export function HierarchyTree({
 
   const openMenu = (node: TreeNodeData, anchor: { x: number; y: number }): void => {
     menuTriggerRef.current = rowRefs.current.get(node.id) ?? null;
-    menuOpenerRef.current = actionButtonRefs.current.get(node.id) ?? null;
     setMenu({ node, anchor });
   };
 
@@ -693,7 +691,13 @@ export function HierarchyTree({
           onClose={() => setMenu(null)}
           anchor={menu.anchor}
           label={`Actions for ${menu.node.name}`}
-          openerRef={menuOpenerRef}
+          // Resolved on every read, not captured at open: the tree is virtualized, so the row's `⋯`
+          // can remount while the menu is open, and a captured node would be detached by then.
+          openerRef={{
+            get current() {
+              return actionButtonRefs.current.get(menu.node.id) ?? null;
+            },
+          }}
           restoreFocusRef={menuTriggerRef}
         >
           {nodeActions(menu.node.kind, crud.canWrite).map((action) => (

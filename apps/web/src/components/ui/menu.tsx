@@ -30,6 +30,10 @@ import { cn } from '@/lib/utils';
  * but focus returns to the row. `openerRef` is required (`null` for a pure context menu) so a new
  * menu must decide rather than silently get the open-then-instantly-reopen flicker back.
  *
+ * **While the menu is open the opener's own `onClick` does not run**: the opener's click is stopped at
+ * `document` capture and closes the menu instead. Put no side effect on a trigger's `onClick` that must
+ * happen on a press of an open menu's button.
+ *
  * Scope is intentionally minimal — a flat list of a handful of actions, no
  * submenus or typeahead. Items may be **disabled** (`aria-disabled`), and roving
  * focus **still reaches them** so a `disabledReason` is readable by keyboard

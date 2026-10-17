@@ -155,6 +155,9 @@ receives focus when the menu was opened by right-click or long-press). `Menu` sw
 `document` capture, so a trigger needs no toggle logic of its own. A press that starts on the opener and is dragged
 off before release leaves the menu open — no `click` arrives, as with any native button.
 
+While the menu is open the opener's own `onClick` is **not invoked** (its click is stopped at `document`
+capture), so a trigger must not hang a side effect on a press that closes its menu.
+
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no
 typeahead. (The organisation switcher is the first consumer with a list that can grow, and it has
 no type-ahead: adding it changes this primitive's key set, which ADR-0111 reviews before release, not

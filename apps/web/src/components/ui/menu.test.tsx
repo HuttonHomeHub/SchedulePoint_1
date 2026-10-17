@@ -501,6 +501,20 @@ describe('Menu — the opener closes it', () => {
     expect(screen.getByRole('button', { name: 'Main' })).toHaveFocus();
   });
 
+  it('a click on a non-opener element outside the menu still reaches its own handler', () => {
+    const onElsewhere = vi.fn();
+    render(
+      <>
+        <button onClick={onElsewhere}>Elsewhere</button>
+        <Menu open onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Actions" openerRef={null}>
+          <MenuItem onSelect={vi.fn()}>Rename</MenuItem>
+        </Menu>
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Elsewhere' }));
+    expect(onElsewhere).toHaveBeenCalledOnce();
+  });
+
   it('a secondary-button press on the opener still closes on pointerdown, as before', () => {
     const onClose = vi.fn();
     const opener = createRef<HTMLButtonElement>();
