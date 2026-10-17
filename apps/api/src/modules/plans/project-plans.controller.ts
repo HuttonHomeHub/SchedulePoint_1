@@ -27,7 +27,7 @@ import { Paginated } from '../../common/dto/paginated';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 import { CreatePlanDto } from './dto/create-plan.dto';
-import { PlanResponseDto } from './dto/plan-response.dto';
+import { PlanResponseDto, planResponse } from './dto/plan-response.dto';
 import { PlansService } from './plans.service';
 
 /**
@@ -57,7 +57,7 @@ export class ProjectPlansController {
   ): Promise<Paginated<PlanResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, projectId, query);
     return new Paginated(
-      items.map((plan) => PlanResponseDto.from(plan)),
+      items.map((plan) => planResponse(principal, plan)),
       meta,
     );
   }
@@ -74,6 +74,6 @@ export class ProjectPlansController {
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: CreatePlanDto,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(await this.service.create(principal, orgSlug, projectId, dto));
+    return planResponse(principal, await this.service.create(principal, orgSlug, projectId, dto));
   }
 }

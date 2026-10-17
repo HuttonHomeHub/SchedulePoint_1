@@ -438,6 +438,35 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
       .expect(403);
   });
 
+  it('says whether the caller may read cost, per caller (TECH_DEBT #62)', async () => {
+    const { actor, orgId, projectId } = await setup();
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Costed', plannedStart: '2026-01-01' })
+      .expect(201);
+    const planId = created.body.data.id as string;
+    expect(created.body.data.canReadCost).toBe(true);
+
+    const viewer = await signUp('viewer@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
+    });
+
+    const adminRead = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}`)
+      .expect(200);
+    const viewerRead = await viewer.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}`)
+      .expect(200);
+    expect(adminRead.body.data.canReadCost).toBe(true);
+    expect(viewerRead.body.data.canReadCost).toBe(false);
+
+    const list = await viewer.agent
+      .get(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .expect(200);
+    expect(list.body.data[0].canReadCost).toBe(false);
+  });
+
   it('401s without a session', async () => {
     await request(server())
       .get('/api/v1/organizations/acme/projects/00000000-0000-7000-8000-000000000000/plans')
