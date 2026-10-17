@@ -222,3 +222,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0196](0196-a-redundant-link-is-one-no-duration-could-make-matter.md)                           | A redundant link is one no duration could make matter                                      | Accepted           |
 | [0197](0197-a-derived-span-states-its-own-length.md)                                            | A derived span states its own length, and the engine is what measures it                   | Accepted           |
 | [0198](0198-a-guest-sees-what-is-near-critical-and-what-drives.md)                              | A guest sees what is near critical and what drives                                         | Accepted           |
+| [0199](0199-a-link-is-never-louder-than-the-work-it-joins.md)                                   | A link is never louder than the work it joins                                              | Accepted           |

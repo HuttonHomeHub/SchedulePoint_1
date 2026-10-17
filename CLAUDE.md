@@ -556,7 +556,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0154** _(Accepted)_ — A link says what drives, which way, and how long it waits → [`0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md`](docs/adr/0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md)
 - **ADR-0155** _(Accepted)_ — A finish milestone is dated by the day it closes → [`0155-a-finish-milestone-is-dated-by-the-day-it-closes.md`](docs/adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)
 - **ADR-0156** _(Accepted)_ — A SchedulePoint layout travels in an inert field that only SchedulePoint reads → [`0156-a-schedulepoint-layout-travels-in-an-inert-field.md`](docs/adr/0156-a-schedulepoint-layout-travels-in-an-inert-field.md)
-- **ADR-0157** _(Accepted)_ — A mark's class is its hue and its shape, and the grid is the quietest mark → [`0157-a-marks-class-is-its-hue-and-its-shape.md`](docs/adr/0157-a-marks-class-is-its-hue-and-its-shape.md)
+- **ADR-0157** _(Accepted; D2 and D4 amended by ADR-0199)_ — A mark's class is its hue and its shape, and the grid is the quietest mark → [`0157-a-marks-class-is-its-hue-and-its-shape.md`](docs/adr/0157-a-marks-class-is-its-hue-and-its-shape.md)
 - **ADR-0158** _(Accepted)_ — A link leaves and enters at its node → [`0158-a-link-leaves-and-enters-at-its-node.md`](docs/adr/0158-a-link-leaves-and-enters-at-its-node.md)
 - **ADR-0159** _(Accepted)_ — A route reads the text it is drawn beside, and a two-way track splits at its node → [`0159-a-route-reads-the-text-it-is-drawn-beside.md`](docs/adr/0159-a-route-reads-the-text-it-is-drawn-beside.md)
 - **ADR-0160** _(Accepted)_ — A gate CI runs is a gate prepush runs → [`0160-a-gate-ci-runs-is-a-gate-prepush-runs.md`](docs/adr/0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)
@@ -601,6 +601,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0196** _(Accepted; amends ADR-0162 D2)_ — A redundant link is one no duration could make matter → [`0196-a-redundant-link-is-one-no-duration-could-make-matter.md`](docs/adr/0196-a-redundant-link-is-one-no-duration-could-make-matter.md)
 - **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
 - **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
+- **ADR-0199** _(Accepted; amends ADR-0157 D2 and D4)_ — A link is never louder than the work it joins → [`0199-a-link-is-never-louder-than-the-work-it-joins.md`](docs/adr/0199-a-link-is-never-louder-than-the-work-it-joins.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

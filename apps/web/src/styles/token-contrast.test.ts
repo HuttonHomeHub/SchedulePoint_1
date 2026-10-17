@@ -1221,8 +1221,7 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
  * red first; the last case fails if an entry survives after `globals.css` says the same thing.
  */
 const MARK_CONTRAST_PROPOSED: Readonly<Record<string, string>> = {
-  '--canvas-bar': 'oklch(0.616 0.13 150)',
-  '--canvas-link': 'oklch(0.645 0.13 295)',
+  // Empty since M1, which wrote `--canvas-bar` and `--canvas-link` into `globals.css`.
 };
 
 describe('diagram mark contrast — the work is not fainter than the relationship', () => {

@@ -34,7 +34,7 @@ test.describe('NetPoint grammar — bars and nodes', () => {
     page,
   }) => {
     await openReferencePlan(page);
-    expect(await sceneCanvasToken(page, '--canvas-bar')).toBe('oklch(0.629 0.13 150)');
+    expect(await sceneCanvasToken(page, '--canvas-bar')).toBe('oklch(0.616 0.13 150)');
 
     const found = await page.evaluate(() => {
       const canvases = [...document.querySelectorAll('canvas')];
@@ -47,14 +47,14 @@ test.describe('NetPoint grammar — bars and nodes', () => {
         const i = (y * width + x) * 4;
         return [data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0, data[i + 3] ?? 0];
       };
-      // `--canvas-bar` is oklch(0.629 0.13 150) ≈ rgb(69, 158, 93); a pixel within 24 of it.
+      // `--canvas-bar` is oklch(0.616 0.13 150) ≈ rgb(64, 154, 89); a pixel within 24 of it.
       let green = 0;
       for (let i = 0; i < data.length; i += 4) {
         if (
           (data[i + 3] ?? 0) > 200 &&
-          Math.abs((data[i] ?? 0) - 69) < 24 &&
-          Math.abs((data[i + 1] ?? 0) - 158) < 24 &&
-          Math.abs((data[i + 2] ?? 0) - 93) < 24
+          Math.abs((data[i] ?? 0) - 64) < 24 &&
+          Math.abs((data[i + 1] ?? 0) - 154) < 24 &&
+          Math.abs((data[i + 2] ?? 0) - 89) < 24
         ) {
           green += 1;
         }

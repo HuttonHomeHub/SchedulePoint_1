@@ -926,6 +926,11 @@ discriminators. Each becomes a spec/plan before build:
   plan at [`docs/specs/guest-critical-cues/`](specs/guest-critical-cues/), `docs/TECH_DEBT.md`
   #403): the guest read gains the engine's `isNearCritical` and `isDriving` flags so the guest
   canvas draws and speaks what a member sees.
+- **A link is never louder than the work it joins** — **shipped** (ADR-0199, 2026-10-17; spec and plan at
+  [`docs/specs/diagram-mark-contrast/`](specs/diagram-mark-contrast/)): the ordinary bar is slightly
+  stronger and an ordinary driving link slightly quieter, so the work is never the faintest meaningful
+  mark on the diagram, and a gate and a Chromium case hold the ordering. Critical and near-critical
+  links are unchanged.
 - **Canvas authoring flow & link routing** — **shipped** (ADR-0064
   `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
   one arm/disarm contract across all four tool modes with a mode statement band above the scene,

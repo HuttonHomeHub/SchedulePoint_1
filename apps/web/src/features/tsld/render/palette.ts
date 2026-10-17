@@ -163,18 +163,18 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     linkMinor: token('--canvas-link-minor', '#9182be'),
     // An ordinary driving link (NetPoint grammar M3): the violet link family, never the button's
     // blue, which also paints the selection ring (spec §4.2 G5).
-    linkDriving: token('--canvas-link', '#846cc2'),
+    linkDriving: token('--canvas-link', '#947cd4'),
     linkMark: token('--canvas-link-mark', '#3d2070'),
     // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12): the mark shade, a
     // key of its own so a harness can tell a dot from a chevron.
     attachDot: token('--canvas-link-mark', '#3d2070'),
     edge: token('--muted-foreground', '#7a8090'),
-    bar: token('--canvas-bar', '#459e5d'),
+    bar: token('--canvas-bar', '#409a59'),
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
     // The node rims (NetPoint grammar M2): the rung inks, under keys of their own so a harness can
     // tell a node from a bar (spec §4.11 R2).
-    nodeRim: token('--canvas-bar', '#459e5d'),
+    nodeRim: token('--canvas-bar', '#409a59'),
     nodeRimNear: token('--warning', '#d29628'),
     nodeRimCritical: token('--destructive', '#c83c3c'),
     // A foreground-contrast stroke used to outline critical/near-critical bars, so
@@ -270,14 +270,14 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineYear: ['--canvas-paper-grid-year', '#595e66'],
   laneRule: ['--canvas-lane-rule', '#f4f6f8'],
   linkMinor: ['--canvas-link-minor', '#9182be'],
-  linkDriving: ['--canvas-link', '#846cc2'],
+  linkDriving: ['--canvas-link', '#947cd4'],
   linkMark: ['--canvas-link-mark', '#3d2070'],
   attachDot: ['--canvas-link-mark', '#3d2070'],
   edge: ['--muted-foreground', '#636363'],
-  bar: ['--canvas-bar', '#459e5d'],
+  bar: ['--canvas-bar', '#409a59'],
   critical: ['--destructive', '#9c0711'],
   nearCritical: ['--warning', '#9f5600'],
-  nodeRim: ['--canvas-bar', '#459e5d'],
+  nodeRim: ['--canvas-bar', '#409a59'],
   nodeRimNear: ['--warning', '#9f5600'],
   nodeRimCritical: ['--destructive', '#9c0711'],
   outline: ['--foreground', '#333333'],
@@ -389,7 +389,7 @@ export function resolveLensPalette(root: Element): LensPalette {
     // Mirror the painter (same tokens + fallbacks) so Criticality mode paints byte-for-byte today's fills.
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
-    bar: token('--canvas-bar', '#459e5d'),
+    bar: token('--canvas-bar', '#409a59'),
     // The muted "uncomputed / ungrouped" fill — a null total float or a null WBS parent.
     neutral: token('--muted-foreground', '#7a8090'),
     // Total-float bands: less slack (red) → more slack (green), each a distinct semantic hue.
@@ -492,7 +492,7 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     return value || fallback;
   };
   return {
-    bar: token('--canvas-bar', '#459e5d'),
+    bar: token('--canvas-bar', '#409a59'),
     derived: token('--muted-foreground', '#7a8090'),
     rule: token('--border', '#2a2f3a'),
     label: token('--primary-foreground', '#ffffff'),
