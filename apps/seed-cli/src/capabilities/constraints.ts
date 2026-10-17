@@ -12,6 +12,10 @@ import { activity, calendar, capabilityPlan, DAY, link } from './builders.js';
  * commonest way a constraint test proves nothing.
  */
 export function constraintsPlan(): SeedSpec {
+  // A plain Monday–Friday week, given explicitly. A plan with no `defaultCalendarKey` resolves to
+  // the ALL-MINUTES calendar (`plan-calendar.ts`), where 2026-03-21 is an ordinary working day and
+  // C_NONWORK below would have nothing to resolve away (`docs/TECH_DEBT.md` #350).
+  const cal = calendar('CON_CAL', 'Constraints five-day week', [1, 2, 3, 4, 5]);
   return capabilityPlan({
     seedName: 'capability-constraints',
     name: 'Constraints: every type, one activity each',
@@ -19,7 +23,10 @@ export function constraintsPlan(): SeedSpec {
       'Each activity below carries exactly one constraint and the same single predecessor, so any ' +
       'date that differs from C0’s successor does so BECAUSE of the constraint. The two mandatory ' +
       'ones break the logic on purpose and must be flagged, not silently obeyed or silently ' +
-      'dropped. ALAP carries no date — it is a flag, not a constraint.',
+      'dropped. ALAP carries no date — it is a flag, not a constraint. The plan runs on a ' +
+      'Monday–Friday week so C_NONWORK’s Saturday constraint has a weekend to resolve past.',
+    defaultCalendarKey: cal.key,
+    calendars: [cal],
     activities: [
       activity('C0', { name: 'Common predecessor' }),
       activity('C_SNET', {
