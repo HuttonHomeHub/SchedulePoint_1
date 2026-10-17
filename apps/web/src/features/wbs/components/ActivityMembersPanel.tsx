@@ -204,7 +204,7 @@ export function ActivityMembersPanel({
   if (loading) {
     return (
       <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
-        <Spinner label="Loading the plan’s activities…" showLabel />
+        <Spinner label="Loading the plan’s activities…" labelOnScreen />
       </div>
     );
   }

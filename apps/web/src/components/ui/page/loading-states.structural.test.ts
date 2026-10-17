@@ -18,9 +18,9 @@ import { describe, expect, it } from 'vitest';
  *   hand-rolled a pulsing block and bypassed the material; `docs/DESIGN_SYSTEM.md` forbids a
  *   one-off loading shape and nothing enforced it.
  * - **G3** — no `<Spinner` carries `aria-hidden`. The prop is silently dropped (the component
- *   accepts `{ className, label, showLabel }` and TypeScript does not check hyphenated JSX
+ *   accepts `{ className, label, labelOnScreen }` and TypeScript does not check hyphenated JSX
  *   attributes), so five sites announced a generic "Loading…" beside the sentence they meant to be
- *   the announcement. `showLabel` is the supported way to put a sentence on screen.
+ *   the announcement. `labelOnScreen` is the supported way to put a sentence on screen.
  *
  * **The `pending` buckets are a declaration the epic must empty, not an exemption list that lives
  * on.** Each later milestone deletes its entries; M7's done-check is that both are empty. The group
@@ -256,7 +256,7 @@ describe('every loading spinner is declared', () => {
     }
     expect(
       offenders,
-      `<Spinner> drops aria-hidden silently; use label + showLabel:\n${offenders.join('\n')}`,
+      `<Spinner> drops aria-hidden silently; use label + labelOnScreen:\n${offenders.join('\n')}`,
     ).toEqual([]);
   });
 });

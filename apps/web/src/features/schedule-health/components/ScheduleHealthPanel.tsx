@@ -209,7 +209,7 @@ export function ScheduleHealthPanel({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {isPending ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Spinner className="size-4" label="Checking the plan…" showLabel />
+            <Spinner className="size-4" label="Checking the plan…" labelOnScreen />
           </p>
         ) : null}
 
