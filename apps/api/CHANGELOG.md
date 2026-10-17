@@ -1,5 +1,41 @@
 # @repo/api
 
+## 0.95.0
+
+### Minor Changes
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every activity read, and the shared-plan read, now carries `derivedDurationMinutes` and `derivedDurationDays`: the working time a WBS summary's or Level-of-Effort activity's calculated span covers, written by the scheduling engine on each recalculation. They are empty for every other activity type, for a summary with no children, for a Level-of-Effort with no resolvable span, and until the plan is next recalculated.
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The organisation export's format moves to `1.1`: `activities` gains `derivedDurationMinutes`, appended as its last column — the working minutes a WBS summary's or level-of-effort activity's calculated span covers. It stays empty until the scheduling engine writes it and the plan is recalculated, and is empty for every other activity type. The database gains the matching `activities.derived_duration_minutes` column (nullable, never negative); no existing data changes.
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The organisation export is now format 2.0. Its float columns were labelled as minutes (`totalFloatMinutes`, `freeFloatMinutes`, `remainingFloatMinutes`, and the baseline's `totalFloatMinutes`) but hold working days on the activity's calendar, so they are renamed `totalFloatDays`, `freeFloatDays` and `remainingFloatDays` and documented as working days. The values are unchanged; renaming a column is a major format change. The format also carries 1.1's `derivedDurationMinutes` on activities.
+
+- [#1033](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1033) [`0e5c9c1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0e5c9c1255f7d36d22d0a3ca56cbf7f267dec101) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The health check now lists redundant links under "Beyond the DCMA assessment": links already
+  implied by a longer chain, so that deleting one cannot change any activity's dates or float whatever
+  the durations. It also counts the links it could not check, and says when a very large plan stopped it
+  early. The fourteen DCMA rows and the summary are unchanged. The report's `advisories` entries are now
+  discriminated on `id`, and the new row's denominator is the plan's relationships.
+
+- [#1035](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1035) [`4986c1e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4986c1eb5a10787bddb393cff9cc4381f11c9383) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleted resources and calendars can now be restored (ADR-0195). `POST …/resources/:resourceId/restore`
+  brings back a resource, or a resource group with everything deleted with it; `POST
+  …/calendars/:calendarId/restore` brings back a calendar with the exceptions deleted alongside it and
+  marks the plans that already use it "edited since calculated". Both are all-or-nothing and refuse
+  with a reason the caller can act on: the parent group or project is still deleted, a resource's
+  calendar is deleted, a live row holds the name or code (archived ones included), or the parent is no
+  longer a group or sits too deep. They need the new `resource:restore` and `calendar:restore`
+  permissions (Planner and Org Admin), and restoring an organisation calendar also needs
+  `calendar:manage_org`. Each is audited (`resource.restored`, `calendar.restored`).
+  
+  `GET …/deleted` now lists resources and calendars too. Its items gain `subtype` and `expiresAt`
+  (null for a row no timer ever removes), `kind` widens to `resource` and `calendar`, and `blockedBy`
+  gains `relation` (`parent` or `calendar`) and can name a resource group or a calendar.
+
+### Patch Changes
+
+- Updated dependencies [[`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e), [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e), [`4986c1e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4986c1eb5a10787bddb393cff9cc4381f11c9383)]:
+  - @repo/types@0.43.0
+  - @repo/interchange@0.13.0
+
 ## 0.94.2
 
 ### Patch Changes

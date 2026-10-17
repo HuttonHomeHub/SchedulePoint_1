@@ -1,5 +1,44 @@
 # @repo/web
 
+## 0.193.0
+
+### Minor Changes
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A WBS summary and a Level-of-Effort activity now show how long they last. The Duration column of the activities table and the Gantt (and its print), the figure under a bar on the diagram, the spoken description of an activity, the Schedule CSV and the editor's Work section all state the working time the activity's calculated span covers, once the plan has been recalculated — instead of a dash for a summary and a false "0 d" for a Level-of-Effort. A summary shows the figure alone, without a float clause. Where there is nothing to state (an empty summary, a Level-of-Effort with no span, a plan not yet recalculated) the dash remains.
+
+- [#1035](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1035) [`4986c1e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4986c1eb5a10787bddb393cff9cc4381f11c9383) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Recently deleted now lists deleted resources and calendars beside clients, projects and plans, each
+  with a Restore button. A resource group comes back with everything deleted with it, a calendar with
+  its exceptions, and a project's own calendars are shown inside the project's row. When a restore
+  cannot happen the screen says why: a name or code is taken (with a link to the library to rename it),
+  a parent group or the resource's calendar is still deleted ("Restore resource group first…",
+  "Restore calendar first…"), or the parent group has stopped being a group. Deleted resources and
+  calendars never expire, so their rows show no "Expires in…" line. A "Show" control above the list
+  narrows it to clients, projects and plans, resources, or calendars, and the choice is kept in the
+  address (`?show=`). The delete confirmations for
+  resources, resource groups and calendars now say they can be restored from Recently deleted.
+
+- [#1031](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1031) [`9b495d5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9b495d552514b1abfe8106b6f037fde7527efc30) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A WBS summary's Members panel now lists other summaries, so a breakdown can be nested from the
+  parent: tick a summary to file it, with everything inside it, under this one. A summary that already
+  contains this one stays in the list, shaded, with the reason it can't be ticked. Rows with no pen are
+  now shaded rather than removed from the keyboard, and a save the server refuses as circular says that
+  nothing moved.
+
+### Patch Changes
+
+- [#1033](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1033) [`0e5c9c1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0e5c9c1255f7d36d22d0a3ca56cbf7f267dec101) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the health check, pressing a relationship (a redundant link, or a lag or lead row) now says which
+  activity it selected, the later end of the link, instead of announcing the link itself, and the button
+  says so before it is pressed. Focus stays on the button you pressed instead of moving into the diagram.
+  Long offender notes wrap under the name rather than squeezing it out. The "could not be judged" sentence
+  no longer names a cause it cannot know, the spoken summary says when some links could not be judged, and
+  an advisory this version does not know shows its name and count without a stray number.
+
+- [#1031](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1031) [`9b495d5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9b495d552514b1abfe8106b6f037fde7527efc30) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Editing a WBS summary, the "Parent WBS summary" picker no longer offers the summaries inside it. It
+  used to list them and the server then refused the choice as a cycle with a message that named
+  nothing; the hint now says why they are missing.
+- Updated dependencies [[`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e), [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e), [`4986c1e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4986c1eb5a10787bddb393cff9cc4381f11c9383)]:
+  - @repo/types@0.43.0
+  - @repo/interchange@0.13.0
+
 ## 0.192.3
 
 ### Patch Changes
