@@ -35,10 +35,8 @@ import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
  * one object moves.
  */
 export function RequestPasswordResetForm({
-  email,
   request,
 }: {
-  email?: string | undefined;
   /** The route's mutation, so the route can render the terminal state with its own heading. */
   request: ReturnType<typeof useRequestPasswordReset>;
 }): React.ReactElement {
@@ -49,7 +47,7 @@ export function RequestPasswordResetForm({
     formState: { errors },
   } = useForm<RequestPasswordResetValues>({
     resolver: zodResolver(requestPasswordResetSchema),
-    defaultValues: { email: email ?? '' },
+    defaultValues: { email: '' },
   });
   useClearOnEdit(watch, request);
   const onSubmit = handleSubmit((values) => {

@@ -10,6 +10,19 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-17 — `/forgot-password` takes no `?email=`; the unproduced prefill is deleted (tech debt #242)
+
+**What was decided.** Option (b) of the row: the route's validator, the screen's `useSearch` and
+`RequestPasswordResetForm`'s `email` prop are removed. A link carrying `?email=` still opens the screen; the
+field starts empty. Spec and plan: `docs/specs/forgot-password-email/`.
+
+**Why.** Nothing in the application ever wrote the parameter — it was specified by analogy with
+`/verify-email`, which has real producers. Carrying the address would put what a stranger typed into a URL
+(history, Referer) or change `SignInForm`'s public contract, for a kindness nobody measured (ADR-0142).
+
+**Consequences.** Both route-search census gates drop to eight validators. Specify option (c) (navigation
+state, not the URL) against a measured drop-off if the want returns.
+
 ## 2026-10-17 — A menu's opener and its focus-restore target are two refs (tech debt #229)
 
 **What was decided.** `Menu` takes a required `openerRef` beside `restoreFocusRef`. A primary press on the

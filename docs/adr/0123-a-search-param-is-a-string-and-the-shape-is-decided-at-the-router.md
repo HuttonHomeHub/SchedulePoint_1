@@ -156,6 +156,9 @@ symptom this epic measured.
 `apps/web/src` or `apps/api/src`. Filed rather than fixed here (ADR-0081's shape, one layer below a
 screen).
 
+**Closed 2026-10-17** by `docs/specs/forgot-password-email/`: the parameter and its validator were
+deleted (tech debt #242), so there are now eight route validators, not nine.
+
 ## The number
 
 Filed as **0123**. The plan said ADR-0122, and that number was taken between the plan being written

@@ -305,7 +305,7 @@ Three critical (§6). Everything else has a stated default and proceeds.
 
 ### 2.2 Workflows
 
-**W1 — Request reset.** `/forgot-password` (prefilled from `?email=` if present) → validate
+**W1 — Request reset.** `/forgot-password` (prefilled from `?email=` if present _(withdrawn 2026-10-17: no producer; see `docs/specs/forgot-password-email/`)_) → validate
 address client-side → `authClient.requestPasswordReset({ email, redirectTo: '/reset-password' })`
 → **always** render the same submitted state. **Never** pre-check the address against a
 members lookup, and never branch the rendering: Better Auth already equalises timing with a
@@ -802,7 +802,7 @@ fix it in this epic, and do **not** propose file-based routes on the strength of
 
 | Path               | Parent        | Registration               | Notes                                                                                                                               |
 | ------------------ | ------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/forgot-password` | `rootRoute`   | `PASSWORD_RESET_ENABLED`   | prefill from `?email=`                                                                                                              |
+| `/forgot-password` | `rootRoute`   | `PASSWORD_RESET_ENABLED`   | prefill from `?email=` _(withdrawn 2026-10-17: no producer; see `docs/specs/forgot-password-email/`)_                               |
 | `/reset-password`  | `rootRoute`   | `PASSWORD_RESET_ENABLED`   | `validateSearch` accepts `token` **and** `error`, permissively; `noindex` + `Referrer-Policy: no-referrer` (the `/share` precedent) |
 | `/verify-email`    | `rootRoute`   | **unconditional** (§3.2)   | optional `?email=` so resend works session-less                                                                                     |
 | `/account`         | `authedRoute` | `ACCOUNT_SETTINGS_ENABLED` | precedent for a non-org-scoped authed route exists twice: `/onboarding` and `/me/activity`                                          |
