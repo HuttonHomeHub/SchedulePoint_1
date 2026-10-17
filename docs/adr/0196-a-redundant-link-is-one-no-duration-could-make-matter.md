@@ -102,6 +102,12 @@ sized envelope). Links into started or
 pinned work, to a level of effort, or with an unknown endpoint are counted as not checked (ADR-0127), apart from the
 offender count and never folded into it. A stored cycle (ADR-0021 forbids one) flags nothing and counts every link.
 
+**The health route is no longer "a persisted read that earns the default throttle".** It carries its own limit,
+**71 requests / 60 s per IP** (`HEALTH_CHECK_THROTTLE`), by the critical-path test's rule (at most 20 % of a
+window in worst-case compute time: `floor(12 000 / 169 ms)`, 169 ms being the capped 2,000 × 40 plan's search p95).
+A realistic 2,000-activity plan costs about 11 ms, so 71 requests are about 0.8 s of the window; the default 100 on
+the capped worst case would have been 17 s, 28 %. The CPM engine is still not invoked.
+
 **D6. No schema, no flag, engine untouched.** The loader already selected every field the rule reads; the service
 stopped discarding `lagCalendar`. There is no `VITE_` flag (ADR-0088 D1): rollback is the commit boundary.
 `check:engine-parity` was active for the whole epic (TECH_DEBT #518) and is deactivated in the closing commit. The

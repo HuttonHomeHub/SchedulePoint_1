@@ -1879,13 +1879,14 @@ controller's 30 / 60 s per handler.
   restates either. **The response does not vary by role**: it carries no cost,
   rate or budget field at any depth (metric 10 is narrowed to
   resource-assignment existence and says so in `detail.narrowing`), so one URL
-  produces one document — a handover artefact. **Earns no tighter limit than
-  the global default** (measured:
-  `docs/specs/schedule-health-check/m0-measurement.md`). This said "shares the
-  global throttle budget" until 2026-09-13 and there is no shared budget to
-  join — the counter is per route handler (`docs/TECH_DEBT.md` #315), so this
-  route has its own 100 / 60 s. The decision it describes is unchanged; only
-  the mechanism was wrong.
+  produces one document — a handover artefact. **Rate limit: 71 requests / 60 s
+  per IP** (counted per route handler, `docs/TECH_DEBT.md` #315), derived by the
+  critical-path test's rule (at most 20 % of a window in worst-case compute time,
+  `floor(12 000 / 169 ms)`) from the redundant-link search's worst-case p95
+  (`docs/specs/redundant-link-advisory/m0-measurement.md`, ADR-0196). It was the
+  global 100 / 60 s while the route was a pure persisted read; it still does not
+  invoke the CPM engine, take a lock or write anything, but it now runs one bounded
+  graph search, so it no longer earns the default.
   The response also carries **`advisories`** (ADR-0162 D1): an array **always
   present**, one entry per `HealthAdvisoryId` in tuple order (`ZERO_DURATION_TASKS`,
   then `REDUNDANT_LINKS`), kept **outside** the fourteen metrics and **never counted
@@ -1906,7 +1907,12 @@ controller's 30 / 60 s per handler.
   links the rule did not check (a level of effort or summary endpoint, a started or
   pinned successor, an endpoint not among the live activities, or links left when the
   deterministic work limit was reached) and is never folded into `offenderCount`, and
-  `searchCapped` says the limit was reached. A client must tolerate its absence and
+  `searchCapped` says the limit was reached. **The `note` is prose for a person, not
+  a contract**: its wording may change, so a client prints it and never parses it.
+  The witness in it is abbreviated ("through B and C", or "through B, C and 4 more"
+  past two names). The offender list is **sorted** by predecessor label, successor
+  label, then link id before it is capped at `offenderCap`, so the same plan lists the
+  same links first, on screen and on paper. A client must tolerate its absence and
   an `id` it does not know: the web and API images are recreated independently, so a
   new web bundle can meet an API that predates a row, and an old one an API that has
   added one (the web that reads each row by its own id shipped before the API emitted

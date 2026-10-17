@@ -358,7 +358,13 @@ export class ScheduleHealthReportDto implements ScheduleHealthReport {
         { $ref: getSchemaPath(ZeroDurationAdvisoryDto) },
         { $ref: getSchemaPath(RedundantLinksAdvisoryDto) },
       ],
-      discriminator: { propertyName: 'id' },
+      discriminator: {
+        propertyName: 'id',
+        mapping: {
+          ZERO_DURATION_TASKS: getSchemaPath(ZeroDurationAdvisoryDto),
+          REDUNDANT_LINKS: getSchemaPath(RedundantLinksAdvisoryDto),
+        } satisfies Record<HealthAdvisoryId, string>,
+      },
     },
     description:
       'Findings beyond the DCMA assessment (ADR-0162): one entry per HealthAdvisoryId, always, in ' +
