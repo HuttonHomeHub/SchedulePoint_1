@@ -30,6 +30,9 @@
 > 3. **Copy** (§4.7 and US-2/US-4): the reason reads "is already inside it", and the refusal is two
 >    sentences; both use one verb for the move. `nestingRefusal` became the boolean `wouldCloseLoop`,
 >    since nothing branched on its two reasons.
+>
+> The shaded state is not dimmed, by design of `CheckboxField`'s gate, and the lock sits at the row's far
+> end; both are primitive-wide and are not changed here.
 
 ## 1. Business understanding
 

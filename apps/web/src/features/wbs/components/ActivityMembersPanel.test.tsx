@@ -407,6 +407,20 @@ describe('ActivityMembersPanel', () => {
       expect(screen.getByText(/2 will move, with 1 activity inside them/)).toBeInTheDocument();
     });
 
+    it('ties the refusal to Save and does not truncate a row name', async () => {
+      mutateSpy.mockRejectedValueOnce(new Error('Server said no'));
+      renderNested();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      await save();
+      const alert = screen.getByRole('alert');
+      const button = screen.getByRole('button', { name: 'Save membership' });
+      expect(button.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
+      // ADR-0184 D1: a row's subject wraps; it never clips.
+      const name = screen.getByText('Superstructure');
+      expect(name).not.toHaveClass('truncate');
+      expect(name).toHaveClass('break-words');
+    });
+
     it('leaves any other 409 to its own sentence', async () => {
       mutateSpy.mockRejectedValueOnce(
         new ApiFetchError(409, { code: 'CONFLICT', message: 'This plan changed.' }),
