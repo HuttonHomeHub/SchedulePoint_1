@@ -293,10 +293,10 @@ test('icon-only deck glyphs name themselves to pointer, keyboard and touch', asy
  * on `pointerdown` and then reach the trigger's `onClick` on `click`, which reopened it — so the
  * control that said `aria-expanded="true"` could not dismiss what it had opened.
  *
- * Two shapes, because they fail differently: **Export** is a plain trigger whose restore target is
- * itself; the **Add** caret is the `tabIndex={-1}` half of a split button, so focus must land on the
- * main **Add** half and never on the caret. The outcome is asserted after a settle, not the order of
- * events, since the original flicker is timing-shaped.
+ * **Export** is a plain trigger whose restore target is itself. The split-button caret is probed in
+ * `e2e-authoring/authoring.spec.ts`, because this suite pins `VITE_CANVAS_AUTHORING` off and so
+ * renders no split button. The outcome is asserted after a settle, not the order of events, since the
+ * original flicker is timing-shaped.
  *
  * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
  */
@@ -321,23 +321,4 @@ test("a menu's own trigger closes it, and focus lands where Escape would put it"
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(exportButton).toHaveAttribute('aria-expanded', 'false');
   await expect(exportButton).toBeFocused();
-
-  // The main half is the caret's previous sibling inside the split button.
-  const caret = bar.getByRole('button', { name: /^Activity type:/ });
-  const main = caret.locator('xpath=preceding-sibling::button[1]');
-  await caret.click();
-  await expect(page.getByRole('menu')).toBeVisible();
-  await caret.click();
-  await page.waitForTimeout(400);
-  await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(caret).toHaveAttribute('aria-expanded', 'false');
-  await expect(caret).not.toBeFocused();
-  await expect(main).toBeFocused();
-
-  // Pressing the MAIN half while the caret's menu is open closes the menu and still runs its command.
-  await caret.click();
-  await expect(page.getByRole('menu')).toBeVisible();
-  await main.click();
-  await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(main).toHaveAttribute('aria-pressed', 'true');
 });

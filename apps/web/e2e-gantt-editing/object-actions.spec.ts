@@ -390,6 +390,9 @@ test("a Gantt row's ⋯ closes the menu it opened, from either way of opening it
   page,
 }) => {
   test.setTimeout(120_000);
+  // Tall enough that the menu opens BELOW its `⋯`: in a short window the clamp lifts the panel over the
+  // trigger, and a real pointer could not press it there either.
+  await page.setViewportSize({ width: 1600, height: 1100 });
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await createClient(page, 'Northgate');
@@ -404,11 +407,16 @@ test("a Gantt row's ⋯ closes the menu it opened, from either way of opening it
   const trigger = row.getByRole('button', { name: 'Actions for Seeded 1' });
   const menu = page.getByRole('menu', { name: 'Actions for Seeded 1' });
 
+  // The open panel overlaps the lower edge of the `⋯` it hangs from, so the second press lands on the
+  // trigger's exposed upper strip, which is where a real pointer can reach it. Playwright's hit-test
+  // still checks the point, so this is not `force`.
+  const exposed = { position: { x: 14, y: 3 } };
+
   // Opened by the ⋯, closed by the ⋯.
   await trigger.click();
   await expect(menu).toBeVisible();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  await trigger.click();
+  await trigger.click(exposed);
   await page.waitForTimeout(400);
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -417,7 +425,7 @@ test("a Gantt row's ⋯ closes the menu it opened, from either way of opening it
   // Opened by right-click on the row, closed by the row's ⋯.
   await row.click({ button: 'right' });
   await expect(menu).toBeVisible();
-  await trigger.click();
+  await trigger.click(exposed);
   await page.waitForTimeout(400);
   await expect(menu).toHaveCount(0);
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
