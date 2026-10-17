@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The recalculation hold's expiry wiring** (ADR-0064 T7), the middle link of a three-part chain.
  *
@@ -133,9 +135,8 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 }));
 
 // Imported AFTER the mocks.
+// eslint-disable-next-line import/order -- must load after the vi.mock() calls above
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
-
-import { anActivity } from '@/test/activity-fixture';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);

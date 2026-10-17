@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **Make milestone… in the workspace model** (ADR-0162 decision 4, spec D4, M4-T3).
  *
@@ -145,7 +148,6 @@ import { makeMilestoneSentence, usePlanWorkspaceModel } from './use-plan-workspa
 
 import type { Command } from '@/features/undo-redo';
 import { ApiFetchError } from '@/lib/api/client';
-import { anActivity } from '@/test/activity-fixture';
 import { fakePlanServer } from '@/test/fake-plan-server';
 
 const wrapper = ({ children }: { children: ReactNode }) =>

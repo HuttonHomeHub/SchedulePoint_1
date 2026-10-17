@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * Toolbar quick-wins model seams (spec `docs/specs/toolbar-quick-wins/`). Covers the F0 selection lift +
  * F3 progress target + the F5 `clearVisualPlacement` command that the flag-gated toolbar items read.
@@ -122,7 +125,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';
-import { anActivity } from '@/test/activity-fixture';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);

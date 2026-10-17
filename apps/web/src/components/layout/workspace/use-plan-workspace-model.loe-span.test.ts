@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * `createLoeSpan` seam coverage (Stage D, `docs/specs/canvas-activity-types/`): the workspace model
  * composes a `LEVEL_OF_EFFORT` activity + an SS (start → LOE) and an FF (LOE → finish) edge from two
@@ -144,8 +147,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 }));
 
 // Imported AFTER the mocks are declared (so the model sees the mocked hooks/env).
-// eslint-disable-next-line import/order -- must load after the vi.mock() calls above
-import { anActivity } from '@/test/activity-fixture';
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';

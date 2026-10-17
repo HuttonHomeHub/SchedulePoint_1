@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The copy/paste composites** (`docs/specs/activity-copy-paste/` M1-T2 / M2-T3 / M3).
  *
@@ -159,8 +162,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 }));
 
 // Imported AFTER the mocks are declared (so the model sees the mocked hooks/env).
-// eslint-disable-next-line import/order -- must load after the vi.mock() calls above
-import { anActivity } from '@/test/activity-fixture';
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';

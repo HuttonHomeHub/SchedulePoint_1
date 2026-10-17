@@ -4,6 +4,9 @@ import { renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **`moveMany` — the plural drag's write seam** (`docs/TECH_DEBT.md` #108).
  *
@@ -139,7 +142,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { ApiFetchError } from '@/lib/api/client';
-import { anActivity } from '@/test/activity-fixture';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);

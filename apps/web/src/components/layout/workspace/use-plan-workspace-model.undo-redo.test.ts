@@ -4,6 +4,9 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * M1.3 seam coverage (ADR-0048): the workspace model records ONE undo command per structural
  * edit, and the edit's own behaviour (the mutation it issues) is unchanged by the recording. The command builders + history store have their own
@@ -152,7 +155,6 @@ const DEPENDENCY = {
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { activityKeys } from '@/lib/query/hierarchy-keys';
-import { anActivity } from '@/test/activity-fixture';
 import { aCrossPlanLink, anAssignment, aStep } from '@/test/fake-plan-server';
 
 // The model now composes the M3 undo/redo wrapper (`usePlanUndoRedo`), which reads the query client to
