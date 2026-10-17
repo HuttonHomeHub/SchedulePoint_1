@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.95.1
+
+### Patch Changes
+
+- [#1043](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1043) [`8831d36`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8831d3642ae5ad5c8cc639dce518dbc050dc0211) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance history now says how many readings exist ("Showing the most recent 50 of 312 readings") instead of silently listing a capped page. The history read returns `meta.total`, and the oldest sitting only hedges its missing-readings note when rows were really withheld.
+
+- [#1040](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1040) [`c1c1006`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c1c10069ba15ddedd9732f06bb0dd6d5425699ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the staff Retention panel's table labels total over the retention sweep's tables, so a table added to the sweep cannot reach the panel as a raw identifier.
+
 ## 0.95.0
 
 ### Minor Changes
