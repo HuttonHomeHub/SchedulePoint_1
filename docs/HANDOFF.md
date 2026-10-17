@@ -3,41 +3,51 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-16. The owner parked the three host steps again and asked for backlog and
-tech-debt work instead. Four register rows were taken, all merged, and released together as
-**`api` 0.94.1 and `web` 0.192.1**. **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-17. The owner kept the three host steps parked and asked for tech-debt work they
+did not have to test. They picked **all eight** offered jobs. Twelve register rows were closed (nine) or
+narrowed (three) across eight PRs, released together as **`api` 0.94.2 and `web` 0.192.2**. **1.0 is not cut**;
+that stays the owner's call (ADR-0190).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.94.1 and `web` 0.192.1 (Version Packages PR #1008; tags confirmed with
+- **Latest releases:** `api` 0.94.2 and `web` 0.192.2 (Version Packages PR #1015; tags confirmed with
   `git ls-remote --tags`).
-- **This session's PRs:**
-  - **#1006** `docs(docs): re-verify the turbo lockfile cache row against turbo 2.11.7`. **#321's
-    diagnosis does not hold on turbo 2.11.7**: dry-run hashes show the lockfile reaching lint and
-    typecheck through `hashOfExternalDependencies` and `^build` dependents, so the "one-line fix" was
-    not made. The row is deferred on a trigger, and the lead hypothesis (unconfirmed) is `node_modules`
-    not reinstalled after a lockfile change; a prepush guard for that would be a shared-gate change
-    (ADR-0105) and needs its own spec.
-  - **#1007** `fix(api): stop the retention boot sweep cleanly when the app shuts down` (closes #303 and
-    #259's item). `PrismaService.registerShutdownDrain` lets a drain run before `$disconnect`, bounded
-    at 4 s; the sweep stops between tables and batches and reports `retention.sweep_abandoned` (info)
-    instead of a false `retention.sweep_failed`. A real failure still alerts. Does not depend on Nest
-    hook order, so it survives the NestJS 12 bump (#289).
-  - **#1009** `fix(web): frame a Gantt zoom preset for the pane width after the divider is dragged`
-    (closes #437). Bar region = scroller width minus the rendered pane, computed in render. ADR-0173
-    D5 rewritten: the Activity column's edge is the pane, so it re-frames; other columns and hiding a
-    column do not. Re-framing is **live while dragging** (no drag-end signal exists; adding one is an
-    ADR-0105 trigger).
-  - **#1010** `fix(api): warn at start-up when the database password is the built-in default` (closes
-    #514). Security review tier (b), the owner's choice: one WARN `database.default_password` (never the
-    password), silent under `NODE_ENV=test`; the backup guide now says "recommended" and makes the
-    `.env` check the sure test. Making the password **required** was considered and not done — it
-    would stop compose commands on an existing install (`docs/DECISIONS.md`, 2026-10-16).
-- **The fifth-shard trigger technically fired, and was not acted on.** On #1006, web shard 4 was
-  cancelled by its 30-minute timeout. The cause was `playwright install --with-deps` taking 12 m 43 s
-  on a slow apt mirror (114 MB at 156 kB/s); every suite passed at its usual speed and the single
-  re-run took 1,048 s. A fifth shard would not have helped, so none was added; recorded under
-  `docs/TECH_DEBT.md` #502. **Whether that counts is the owner's call**; it was reported to them.
+- **The spec this batch built from:** [`docs/specs/shared-primitive-tidy/spec.md`](specs/shared-primitive-tidy/spec.md),
+  four sections (A–D), approved by the owner on 2026-10-16 with the defaults (the shared look
+  everywhere, no boxed option; ship the combobox change now). All four sections are built.
+- **This session's PRs, in merge order:**
+  - **#1012** `docs(docs)`: closes #352 (`DATABASE.md` now describes the PascalCase enum convention the
+    schema uses: 27 enums, 4 mapped), #338 (already solved by the `Disclosure` primitive) and #336
+    (ADR-0053 amendment: the trigram index the `name ILIKE` query can use). Also adds `mkdir -p backups`
+    to the README quick-start and replaces two stale line citations with symbols.
+  - **#1014** `chore(web)`: closes #355 (the `measure-toolbar` harnesses find `Plan view` again; one
+    retired), and takes #395 item 6 (one label-measure closure in the painter) and #391 item 7 (`m0-lod.md`
+    P3 now describes the code). Both rows stay open for their other items.
+  - **#1013** `fix(api)`: closes #340. Every path id uses Nest's `ParseUUIDPipe`; ours is deleted. Only the
+    400 message wording changed. No e2e spec had asserted the old wording, contrary to the row.
+  - **#1016** `chore(deps)`: closes #289. **The API runs on NestJS 12** (common/core/platform-express/testing
+    12.1.3). #289's two Vitest bootstrap failures do not reproduce on 12.1.3. Nest 12's `ParseUUIDPipe` is
+    narrower (v1–8 RFC variant, nil, max), which is harmless because every id is `uuid(7)` or v4. Security
+    review passed. Two notes left out on purpose: `@nestjs/common` 12 is ESM-only and loads through
+    Node's `require(esm)` (needs Node ≥ 22.12, the current floor), and `@nestjs/cli` 12 asks for Node
+    `^22.22.3` (dev-only; CI and the Docker image take the latest 22).
+  - **#1017** `fix(web)` (spec §B): closes #335. `DataTable`'s `headClassName`/`cellClassName` now **merge**
+    onto the default; actions columns say `pr-0`; five columns that had lost their padding by accident
+    get it back. Adds the spec and amends ADR-0145.
+  - **#1018** `fix(web)` (spec §D): the combobox half of #229. Arrows, Home and End reach disabled
+    options; `disabledReason` is the option's description; Enter or a click announces it. Nothing uses a
+    disabled option yet. ADR-0082 amended. #229 stays open for the **Menu** half only.
+  - **#1019** `fix(web)` (spec §A): closes #481. One `useContainerUnmountHandoff` hook (now returning
+    `{ wrapperProps, focusWasInside }`) for the cluster, the divider, the history strip and the selection
+    bar. **A real bug was found and fixed:** after the selection's data refetched and the selection was
+    then cleared, focus fell to `<body>` (red-first Playwright probe in `e2e-multi-select`, red before,
+    green after). The history strip's own copy was **not** buggy in Chromium (its probe was green on the
+    old code); moving it was de-duplication. New `docs/DECISIONS.md` entry, 2026-10-16.
+  - **#1020** `fix(web)` (spec §C): closes #325. Earned value and the import review use `StatGrid`; the
+    guest header and the Summary popover use an unframed `ContextStrip`. New props: `StatGrid.label`,
+    `ContextStrip.framed`, `ContextFact.note` and `describedBy`.
+- **Every UI change had its reviewers before release:** accessibility-reviewer (ADR-0111) for #1018 and
+  #1019 (twice), component-reviewer for all four, ux-reviewer for #1017 and #1020. Every finding was folded.
 
 ## What the owner has to do (in this order)
 
@@ -51,7 +61,7 @@ the real server, fix the guide.
    Parts 3 and 4 once: **about an hour**. Done when the owner reports one `CHECK PASSED` with its date
    and the copy's file name. The guide's paste block matched `docker-compose.release.yml` on
    2026-10-16. While there, the owner can check the Env box for a `POSTGRES_PASSWORD` line (the guide's
-   "Set a database password", now recommended, ~10 minutes); after `api` 0.94.1 the API log says so too.
+   "Set a database password", now recommended, ~10 minutes); since `api` 0.94.1 the API log says so too.
 2. **Export — download once** (row 6). Guide:
    [`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), about 10 minutes.
 3. **Clear-out — switch on, only on a day step 1 has passed** (row 7). Guide:
@@ -68,10 +78,12 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
   it (`docs/specs/organisation-export/m2-measurements.md`, #515, #516).
 - Collaborative editing is not in 1.0.
 - Four web e2e shards; the fifth-shard trigger is the slowest shard above 1,250 s (median of three runs)
-  or a 30-minute timeout. (One timeout on 2026-10-16 was a setup stall, not suite time; see above.)
+  or a 30-minute timeout. The one timeout on 2026-10-16 was a setup stall, not suite time; no fifth shard.
 - The diagram keeps its own colours under a Windows contrast theme (#508).
 - `Start editing` stays plain while the pen is not held.
 - The default database password is warned about, not refused (2026-10-16).
+- Metric tiles: the shared look everywhere, no boxed option (2026-10-16, spec §C question 1).
+- The combobox's disabled-option behaviour ships before any screen uses it (2026-10-16, spec §D question 2).
 
 ## Parked by the owner — keep, do not raise
 
@@ -93,8 +105,11 @@ does not bring them up until the owner does. When the owner returns to one, the 
 ## Open rows worth knowing
 
 - #509–#513 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
-  call, default not for 1.0), #508 (by decision). #514 is closed by #1010.
-- #321 is deferred on a trigger (see #1006 above); #502 carries the 2026-10-16 shard-4 note.
+  call, default not for 1.0), #508 (by decision).
+- #321 is deferred on a trigger; #502 carries the 2026-10-16 shard-4 note.
+- #229 is now **only** the `Menu` half (its outside-press listener closes the menu when its own trigger is
+  pressed; needs a new opener prop on a primitive with ~10 consumers, and the obvious fix is wrong for
+  split buttons). #395 and #391 stay open for their remaining items.
 - **Not folded, by choice:** a leave-page guard during an export (the page says leaving cancels it).
 
 ## Suggested next
@@ -102,12 +117,12 @@ does not bring them up until the owner does. When the owner returns to one, the 
 Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering:
 
 1. **The owner's three host steps** above, when they are ready, recorded as they come.
-2. **More small register rows**, of the kind this session took (fix or tidy, no new surface). Candidates
-   checked on 2026-10-16: #481 (one focus hand-off hook instead of three copies; S, web), #477 (the
-   wheel cannot bring back a scrolled-away command band at short windows; needs an owner choice between
-   two remedies), #419 (selection cost at 2,000 activities; needs a reading on the owner's machine,
-   which needs a new probe scene and so a spec), and the docs tidy offered on 2026-10-16 and not taken
-   (cite code by symbol rather than line number; `mkdir backups` in the README quick-start).
+2. **More register rows that need nothing from the owner's machines**, checked against the code on
+   2026-10-16: #397 (the selection bar words one role refusal two ways; S, visible copy only), #408
+   (`exportMatch` hides the print regression a second way; S, test only), #351 (63 test files hand-build an
+   `ActivitySummary` instead of the shared factory; M, test only), the rest of #395 and #391 (small painter
+   tidies), the Menu half of #229 (M; a shared primitive's keyboard contract, so a spec first), and #372
+   (rename the render model's `earlyStart`/`earlyFinish`; about 68 files, M–L).
 3. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
    to cut 1.0.
 
@@ -273,3 +288,24 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
   - **`docs/TECH_DEBT.md`'s closed ledger conflicts on every second closing PR**; keep both rows.
   - **A test that overrides `PrismaService` with a bare `PrismaClient`** (`activity-history-statements`)
     breaks when `PrismaService` grows a method a constructor calls; give the stub the method.
+
+- **2026-10-16/17 lessons:**
+  - **Merge one PR at a time and rebase the next onto `main` just before.** Every PR that closes a row
+    touches `docs/TECH_DEBT.md`'s closed ledger, so every second merge conflicted. Rebasing in parallel
+    only multiplied the work.
+  - **In a rebase, "ours" is `main` and "theirs" is the commit being replayed.** A helper that let "theirs"
+    win on a duplicate ledger row silently put back `main`'s older wording of #303. Check every duplicate
+    row by hand, drop hunks where both sides deleted rows, and confirm `git diff origin/main --
+docs/TECH_DEBT.md` shows only that PR's rows.
+  - **After rebasing onto a dependency bump, run `pnpm install --frozen-lockfile --prefer-offline` (and
+    `prisma generate`) in the worktree before `pnpm prepush`.** Without it `check:claims` fails ("verified
+    against 12.1.3, 11.2.7 is installed") on code that is fine.
+  - **Tell read-only reviewers never to check out a branch in the main checkout** (`git show` and
+    `git diff` only). One left `/home/user/SchedulePoint_1` detached on a feature commit, which deleted an
+    untracked working copy other builders were reading.
+  - **A red-first Playwright probe is cheap and decisive for focus bugs.** The #481 probes showed one copy
+    was fine in Chromium and the other really dropped focus. Reading the code alone had guessed the
+    opposite risk for the strip. For TanStack Query refetches in a probe, dispatch `visibilitychange` on
+    `window` and wait past the 30 s stale time.
+  - **The container restarted once mid-session** (about 01:00); worktrees, pushed branches and the
+    wake-up survived, and nothing was lost.
