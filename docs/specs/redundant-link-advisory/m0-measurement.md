@@ -40,15 +40,41 @@ diverge on R1; and an empty candidate set never diverges on any generated plan.
 
 ## Results
 
-Filled in by the commit that runs them (counterexamples) and by M2-T2 (the cost table, because the
-harness is completed against M2-T1's module).
+Run on 2026-10-17 against the unmodified engine (`pnpm --filter @repo/api exec vitest run
+src/modules/schedule/redundant-links.oracle.spec.ts`, 16 cases).
 
-| Item                                      | Result |
-| ----------------------------------------- | ------ |
-| CE1 to CE9                                | TBD    |
-| Structural rule on R1 and R2              | TBD    |
-| `scale-500` compute, p50 / p95            | TBD    |
-| `scale-2000` compute, p50 / p95           | TBD    |
-| Dense (2,000 x 10) compute, p50 / p95     | TBD    |
-| Fixture compute, p50 / p95                | TBD    |
-| Levelling preview, with and without links | TBD    |
+| Case | Predicted                     | Measured                                                                                                                                                                                                                   | Verdict                                                            |
+| ---- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| CE1  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+| CE2  | A late finish and total float | Only A's late start, late finish, total float and remaining float move; no early date does. First construction (all calendars full-day) did not diverge; the second, below, did                                            | Demonstrated, as a backward-pass-only counterexample               |
+| CE3  | A free float                  | **No divergence in four constructions** (MSO pin; MSO with a late secondary; started successor; completed successor)                                                                                                       | **Not demonstrated, the exclusion stays (reasoned, conservative)** |
+| CE4  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+| CE5  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+| CE6  | C early start                 | C's early start offset moves, not its display date: both bounds land on the same Monday. The first construction (A one day) did not diverge because elapsed and working minutes agree away from a weekend; A five days did | Demonstrated, on offsets                                           |
+| CE7  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+| CE8  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+| CE9  | C early start                 | C early start moves                                                                                                                                                                                                        | Demonstrated                                                       |
+
+**CE3 mispredicted, and why.** The spec (E13, R-T) argued that a successor pinned or started early gives
+`D` a negative gap that the chain does not, so removing `D` changes the predecessor's free float. The
+engine pins such a successor's **late** dates to its early ones, so the chain's total float is already at
+or below `D`'s gap, and free float (capped by total float) reads the same either way. In general, with
+`C` pinned both ways, the chain's total float is `D`'s gap less the intermediate's duration, so `D`'s gap
+can never be the binding one. The exclusion is **kept**, as conservative, and ADR-0196 must mark it
+"reasoned, not demonstrated". It is a candidate for relaxation (coverage: links into started or pinned
+work would become checkable) that the product owner may take up after M2; it is not relaxed here, because
+four constructions are not a proof of necessity or of its absence, and the oracle population run in M2 is
+the place to test the relaxation.
+
+The oracle's own checks: the structural rule flags R2 and the oracle reports C's early start moving; the
+same rule flags R1 and the oracle reports nothing; an empty candidate set never diverges on 120 generated
+plans; a structural rule diverges somewhere in 150 generated plans; and a completeness case fails when the
+engine gains a per-activity output the oracle neither compares nor excludes.
+
+| Item                                      | Result      |
+| ----------------------------------------- | ----------- |
+| `scale-500` compute, p50 / p95            | TBD (M2-T2) |
+| `scale-2000` compute, p50 / p95           | TBD (M2-T2) |
+| Dense (2,000 x 10) compute, p50 / p95     | TBD (M2-T2) |
+| Fixture compute, p50 / p95                | TBD (M2-T2) |
+| Levelling preview, with and without links | TBD (M2-T2) |
