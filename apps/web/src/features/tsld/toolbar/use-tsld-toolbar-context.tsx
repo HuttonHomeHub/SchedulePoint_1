@@ -449,6 +449,16 @@ export function useTsldToolbarContext({
     // was actually added or removed.
     dependencies,
   ]);
+  // Destructured so the outer context memo keys on the three fields, not the object: every
+  // recompute above returns a fresh object — including the no-filter branches — so listing
+  // `exportMatch` itself re-identified the whole toolbar context whenever `dependencies` changed,
+  // which hid the outer memo's own `dependencies` entry from its print test (`docs/TECH_DEBT.md`
+  // #408). With no filter and no isolate the fields are all primitives/`undefined` and stay equal.
+  const {
+    filterActive: exportFilterActive,
+    matchingCount: exportMatchingCount,
+    isMatching: exportIsMatching,
+  } = exportMatch;
 
   // The three imperative canvas viewport commands (ADR-0078 S11). Extracting the two readers below
   // freed enough of the `react-hooks/refs` analysis budget that the rule reached a THIRD ref read it
@@ -720,7 +730,7 @@ export function useTsldToolbarContext({
         const csv = buildScheduleCsv(activities, {
           scope,
           resolveWbsParent,
-          isMatching: exportMatch.isMatching,
+          isMatching: exportIsMatching,
         });
         const filename = buildExportFilename({
           planName: plan.name,
@@ -729,7 +739,7 @@ export function useTsldToolbarContext({
           date: todayIso,
         });
         downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), filename);
-        const count = scope === 'matching' ? exportMatch.matchingCount : activities.length;
+        const count = scope === 'matching' ? exportMatchingCount : activities.length;
         announce(`Downloaded ${filename} (${count} ${count === 1 ? 'activity' : 'activities'}).`);
       },
       // Diagram (PNG) export (M2): build the off-screen image for the requested extent (whole / current
@@ -886,8 +896,8 @@ export function useTsldToolbarContext({
           })
           .finally(() => setPrinting(false));
       },
-      filterActive: exportMatch.filterActive,
-      matchingCount: exportMatch.matchingCount,
+      filterActive: exportFilterActive,
+      matchingCount: exportMatchingCount,
       // The visible export/print error + its dismiss (B2); the workspace renders it as a `role="alert"`
       // banner beside the toolbar. Null ⇒ no banner.
       exportError,
@@ -1077,7 +1087,9 @@ export function useTsldToolbarContext({
     activities,
     dependencies,
     plan.name,
-    exportMatch,
+    exportFilterActive,
+    exportMatchingCount,
+    exportIsMatching,
     // The extracted image builder (ADR-0078 S11) — a `useCallback` keyed on exactly what the block
     // used to close over, so the memo re-identifies on the same inputs it always did.
     buildDiagramImage,
