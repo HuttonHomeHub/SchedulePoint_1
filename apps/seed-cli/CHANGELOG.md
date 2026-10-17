@@ -1,5 +1,11 @@
 # @repo/seed-cli
 
+## 0.2.1
+
+### Patch Changes
+
+- [#1025](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1025) [`4c87a96`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c87a965fafea03bf2cca557d05a6b7a7edd1c61) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Seed the `capability-constraints` plan on an explicit Monday–Friday calendar, so its `C_NONWORK` case (an SNET dated on a Saturday) has a weekend to resolve past instead of passing on the 24/7 calendar by default.
+
 ## 0.2.0
 
 ### Minor Changes
