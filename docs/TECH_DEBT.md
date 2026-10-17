@@ -11142,3 +11142,22 @@ A ZIP writes its entries one after another, so a table's JSON file and its CSV f
 Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:159-160`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
 
 **Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.
+
+### 518. A redundant link cannot be found except by tracing chains by eye
+
+**Status:** open · **Verified:** 2026-10-17 (`docs/specs/redundant-link-advisory/spec.md` §0, E3 and E4: nothing under `apps/api/src/modules/dependencies` reasons about transitive links, and "redundant logic" is named as a later add in ADR-0035 §16 and ADR-0116's follow-ups)
+**Raised:** 2026-10-17 (redundant-link advisory M0) · **Size:** L · **Owner:** api
+
+A planner who imports or builds a programme over months accumulates links the rest of the logic already implies, and the health check does not list them. The epic reports the **provable** class beside the DCMA assessment: a link whose removal cannot change any activity's dates or float, whatever the durations, proven against the engine by a differential oracle rather than argued. Scope, rule and milestones are in `docs/specs/redundant-link-advisory/`. The engine is not touched, so `scripts/engine-parity.json` declares this row while the epic runs and the closing commit deactivates it.
+
+Falsification conditions, committed before any product code:
+
+- **FC-1** `check:engine-parity` is green for the whole epic.
+- **FC-2** Zero oracle divergences, alone and all-at-once, over the populations in spec §4.7.
+- **FC-3** Each exclusion has a red counterexample or is marked "reasoned, not demonstrated" in the ADR.
+- **FC-4** The fourteen metrics and `summary` deep-equal with and without the advisory.
+- **FC-5** At most 50 ms p95 advisory compute at `scale-2000`; the dense case is bounded by the work budget.
+- **FC-6** The producer (M2-T3) merges after a release containing the tolerant web reader (M1).
+- **FC-7** N3's links and R2, R4, R7 and R8 are never flagged.
+
+**Next:** M0 oracle, counterexamples and measurement; M1 web reads advisories per id; then M2 the rule. **Trigger:** none; approved work (product owner, 2026-10-17).
