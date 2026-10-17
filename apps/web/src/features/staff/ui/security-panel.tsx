@@ -1,11 +1,10 @@
-import { DataTable, type Column } from '@/components/ui/data-table';
-import { QueryPanel } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { DataTable, DataTableSkeleton, type Column } from '@/components/ui/data-table';
+import { QueryPanel, Skeleton } from '@/components/ui/page';
 import { useStaffCspReports, type CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
 import { cspActionLabel } from '@/features/staff/model/enum-copy';
 import { SECURITY } from '@/features/staff/model/panel-copy';
-import { formatTimestamp } from '@/lib/format-date';
+import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
 
 /**
  * What the browser reports it blocked on this site.
@@ -49,7 +48,12 @@ const COLUMNS: Column<CspReportRow>[] = [
     width: 'fit',
     cellClassName: 'tabular-nums',
   },
-  { header: 'Last seen', cell: (row) => formatTimestamp(row.lastSeenAt), width: 'fit' },
+  {
+    header: 'Last seen',
+    cell: (row) => formatTimestamp(row.lastSeenAt),
+    width: 'fit',
+    sample: formatTimestamp(SAMPLE_INSTANT),
+  },
 ];
 
 export function SecurityPanel(): React.ReactElement {
@@ -61,7 +65,14 @@ export function SecurityPanel(): React.ReactElement {
       id={CHECK_SECTION_ID.security}
       description={SECURITY.intro}
       query={reports}
-      skeleton={<Spinner label="Loading security reports…" />}
+      // The caveat line, then the table — the order the body draws them in.
+      skeleton={
+        <div className="space-y-4">
+          <Skeleton className="h-5 w-3/4" />
+          <DataTableSkeleton columns={COLUMNS} />
+        </div>
+      }
+      loadingLabel="Loading security reports…"
       errorLabel="Couldn't load security reports."
       errorStatus="Security reports couldn't be loaded."
       settledStatus={(rows) =>

@@ -111,12 +111,6 @@ const PENDING_SPINNERS: Record<string, { sites: number; milestone: string }> = {
   'routes/client-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
   'routes/project-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
   'routes/plan-detail.tsx': { sites: 1, milestone: 'loading-skeletons M4' },
-  'features/staff/ui/accounts-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
-  'features/staff/ui/installation-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
-  'features/staff/ui/mail-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
-  'features/staff/ui/retention-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
-  'features/staff/ui/alerting-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
-  'features/staff/ui/security-panel.tsx': { sites: 1, milestone: 'loading-skeletons M3' },
   'features/earned-value/components/EarnedValuePanel.tsx': {
     sites: 1,
     milestone: 'loading-skeletons M5',

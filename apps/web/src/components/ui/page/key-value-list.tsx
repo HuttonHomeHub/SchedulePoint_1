@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
 
 export interface KeyValueItem {
@@ -12,6 +13,10 @@ export interface KeyValueItem {
    */
   consequence?: React.ReactNode;
 }
+
+/** Shared with {@link KeyValueListSkeleton}, so the placeholder and the list cannot drift apart. */
+const LIST_CLASS = 'grid grid-cols-1 gap-x-8 gap-y-3 @md:grid-cols-2';
+const LABEL_CLASS = 'text-muted-foreground text-sm';
 
 export interface KeyValueListProps {
   items: KeyValueItem[];
@@ -40,14 +45,48 @@ export interface KeyValueListProps {
 export function KeyValueList({ items, className }: KeyValueListProps): React.ReactElement {
   return (
     <div className={cn('@container', className)}>
-      <dl className="grid grid-cols-1 gap-x-8 gap-y-3 @md:grid-cols-2">
+      <dl className={LIST_CLASS}>
         {items.map((item, index) => (
           <div key={`${String(index)}-${item.label}`} className="min-w-0">
-            <dt className="text-muted-foreground text-sm">{item.label}</dt>
+            <dt className={LABEL_CLASS}>{item.label}</dt>
             <dd className="text-sm wrap-anywhere">{item.value}</dd>
             {item.consequence === undefined ? null : (
               <dd className="text-muted-foreground text-xs wrap-anywhere">{item.consequence}</dd>
             )}
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/**
+ * `KeyValueList`'s loading shape: the real labels over a value line of the value's own height
+ * (`text-sm`, 1.25rem, so `h-5`) and, where the settled item has a consequence, a `text-xs` line
+ * (`h-4`). Whether an item HAS a consequence depends on the data, so the caller says which items
+ * usually do; an item that turns out not to shortens by one line when it settles.
+ */
+export function KeyValueListSkeleton({
+  items,
+  className,
+}: {
+  items: { label: string; consequence?: boolean }[];
+  className?: string;
+}): React.ReactElement {
+  return (
+    <div className={cn('@container', className)} aria-hidden="true">
+      <dl className={LIST_CLASS}>
+        {items.map((item, index) => (
+          <div key={`${String(index)}-${item.label}`} className="min-w-0">
+            <dt className={LABEL_CLASS}>{item.label}</dt>
+            <dd>
+              <Skeleton className="h-5 w-40" />
+            </dd>
+            {item.consequence === true ? (
+              <dd>
+                <Skeleton className="h-4 w-56" />
+              </dd>
+            ) : null}
           </div>
         ))}
       </dl>

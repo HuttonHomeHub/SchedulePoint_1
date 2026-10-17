@@ -24,6 +24,7 @@ function panel(
       {...(id === null ? {} : { id })}
       query={{ ...query, refetch }}
       skeleton={<p>skeleton slot</p>}
+      loadingLabel="Loading counts…"
       errorLabel="Could not read counts."
       errorStatus="Counts could not be read."
       settledStatus={(row) => `${String(row.n)} counted.`}
@@ -41,6 +42,19 @@ describe('QueryPanel', () => {
     expect(screen.getByText('skeleton slot')).toBeInTheDocument();
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
     expect(polite()).toHaveTextContent('');
+  });
+
+  it('wraps the skeleton in a LoadingShape that adds no live region of its own', () => {
+    // The section already owns a polite region; a second status per panel was six announcements.
+    const { container } = render(panel({ isPending: true, isError: false, data: undefined }));
+    const shape = container.querySelector('[data-loading-shape]');
+    expect(shape).toHaveTextContent('Loading counts…');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(shape?.querySelector('[aria-hidden="true"]')).toContainElement(
+      screen.getByText('skeleton slot'),
+    );
+    // The label is plain text, and the section's busy flag is not set by the placeholder.
+    expect(shape?.querySelector('[aria-live]')).toBeNull();
   });
 
   // ADR-0178 D-6: the first settled sentence is a resting state. It is reachable as plain text and

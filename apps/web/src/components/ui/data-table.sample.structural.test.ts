@@ -76,11 +76,21 @@ const DECLARED: Record<string, Declared> = {
     sampled: 0,
     reason: NOT_SC3,
   },
-  'features/staff/ui/accounts-panel.tsx': { fit: 1, sampled: 0, reason: NOT_SC3 },
-  'features/staff/ui/activity-panel.tsx': { fit: 1, sampled: 0, reason: NOT_SC3 },
-  'features/staff/ui/mail-panel.tsx': { fit: 2, sampled: 0, reason: NOT_SC3 },
+  'features/staff/ui/accounts-panel.tsx': { fit: 1, sampled: 1 },
+  'features/staff/ui/activity-panel.tsx': { fit: 1, sampled: 1 },
+  'features/staff/ui/mail-panel.tsx': {
+    fit: 2,
+    sampled: 1,
+    reason:
+      'the timestamp is sampled; the Email kind is a label from a closed set no one sample can stand for',
+  },
   'features/staff/ui/retention-panel.tsx': { fit: 3, sampled: 0, reason: NOT_SC3 },
-  'features/staff/ui/security-panel.tsx': { fit: 3, sampled: 0, reason: NOT_SC3 },
+  'features/staff/ui/security-panel.tsx': {
+    fit: 3,
+    sampled: 1,
+    reason:
+      'the timestamp is sampled; Action is a label from a closed set and Times is a count, neither worth a sample',
+  },
 };
 
 function sourceFiles(dir = SRC, out: string[] = []): string[] {

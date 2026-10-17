@@ -1,8 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { ConditionStrip } from '@/components/ui/condition-strip';
-import { DataTable, type Column } from '@/components/ui/data-table';
-import { QueryPanel } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { DataTable, DataTableSkeleton, type Column } from '@/components/ui/data-table';
+import { QueryPanel, Skeleton } from '@/components/ui/page';
 import {
   useStaffHealth,
   type Retention,
@@ -27,6 +26,32 @@ const RETENTION_NOTE_IDS = {
   footnote: 'staff-retention-footnote',
 } as const;
 
+// Module-level so the loading skeleton and the settled table share ONE definition (headings and
+// column widths), and cannot drift apart.
+const COLUMNS: Column<RetentionTable>[] = [
+  { header: 'Record', cell: (row) => tableLabel(row.table), width: 'fit' },
+  { header: 'Kept for', cell: (row) => `${String(row.retentionDays)} days`, width: 'fit' },
+  {
+    header: 'Oldest still held',
+    width: 'fit',
+    cell: (row) => (
+      <>
+        <span className="tabular-nums">{oldestSentence(row)}</span>
+        {row.overdue && (
+          // The word, not the colour (WCAG 1.4.1). The badge says "Overdue"; the line under it
+          // carries only the number the claim rests on.
+          <>
+            {' '}
+            <Badge variant="warning">Overdue</Badge>
+            <span className="text-warning-text block text-xs">{overdueSentence(row)}</span>
+          </>
+        )}
+      </>
+    ),
+  },
+  { header: 'Last run', cell: (row) => lastRunSentence(row), width: 'auto' },
+];
+
 /**
  * Clearing old records: is the automatic deletion being honoured? (ADR-0087)
  *
@@ -49,7 +74,15 @@ export function RetentionPanel(): React.ReactElement {
       id={CHECK_SECTION_ID.retention}
       description={RETENTION.intro}
       query={health}
-      skeleton={<Spinner label="Loading old-record clearing…" />}
+      // The status line, the table and the footnote — the three things the body always draws.
+      skeleton={
+        <div className="space-y-4">
+          <Skeleton className="h-5 w-2/3" />
+          <DataTableSkeleton columns={COLUMNS} />
+          <Skeleton className="h-5 w-3/4" />
+        </div>
+      }
+      loadingLabel="Loading old-record clearing…"
       errorLabel="Couldn't load old-record clearing."
       errorStatus="Old-record clearing couldn't be loaded."
       settledStatus={(data) => statusSentence(data.retention)}
@@ -74,30 +107,6 @@ function RetentionBody({
   // Only one condition strip is drawn at a time, so a note is a description target only when ITS
   // strip is the one on screen: an id that resolves to nothing describes the table as nothing.
   const stuck = retention.enabled && !failing && schedule?.overdue === true;
-
-  const columns: Column<RetentionTable>[] = [
-    { header: 'Record', cell: (row) => tableLabel(row.table), width: 'fit' },
-    { header: 'Kept for', cell: (row) => `${String(row.retentionDays)} days`, width: 'fit' },
-    {
-      header: 'Oldest still held',
-      width: 'fit',
-      cell: (row) => (
-        <>
-          <span className="tabular-nums">{oldestSentence(row)}</span>
-          {row.overdue && (
-            // The word, not the colour (WCAG 1.4.1). The badge says "Overdue"; the line under it
-            // carries only the number the claim rests on.
-            <>
-              {' '}
-              <Badge variant="warning">Overdue</Badge>
-              <span className="text-warning-text block text-xs">{overdueSentence(row)}</span>
-            </>
-          )}
-        </>
-      ),
-    },
-    { header: 'Last run', cell: (row) => lastRunSentence(row), width: 'auto' },
-  ];
 
   // Every note that changes how the ages and the Overdue flags should be read is a description
   // target: the table is a focusable region and a reader navigating by landmark lands INSIDE it.
@@ -167,7 +176,7 @@ function RetentionBody({
 
       <DataTable
         caption={RETENTION.caption}
-        columns={columns}
+        columns={COLUMNS}
         query={{
           isPending: false,
           isError: false,

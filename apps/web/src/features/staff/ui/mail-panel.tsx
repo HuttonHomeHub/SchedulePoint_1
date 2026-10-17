@@ -1,7 +1,6 @@
 import { ConditionStrip } from '@/components/ui/condition-strip';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { QueryPanel, StatGrid } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { QueryPanel, Skeleton, StatGrid, StatGridSkeleton } from '@/components/ui/page';
 import {
   useStaffHealth,
   type MailFailure,
@@ -10,10 +9,17 @@ import {
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
 import { mailKindLabel } from '@/features/staff/model/enum-copy';
 import { MAIL } from '@/features/staff/model/panel-copy';
-import { formatTimestamp } from '@/lib/format-date';
+import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
 import { formatRelative } from '@/lib/relative-time';
 
 const MAIL_NOTE_ID = 'staff-mail-note';
+
+// Shared by the settled grid and its skeleton, so the placeholder shows the real words.
+const STAT_LABELS = {
+  lastHour: 'Failed in the last hour',
+  last24Hours: 'Failed in the last 24 hours',
+  lastFailure: 'Last failure',
+} as const;
 
 /**
  * Mail: is the email the app sends actually going out?
@@ -38,7 +44,22 @@ export function MailPanel(): React.ReactElement {
       id={CHECK_SECTION_ID.mail}
       description={MAIL.intro}
       query={health}
-      skeleton={<Spinner label="Loading mail…" />}
+      // The healthy state's one-line note, then the three figures. The failed-emails table is not
+      // drawn: whether there is one is data the skeleton cannot know.
+      skeleton={
+        <div className="space-y-4">
+          <Skeleton className="h-5 w-2/3" />
+          <StatGridSkeleton
+            columns={3}
+            items={[
+              { label: STAT_LABELS.lastHour },
+              { label: STAT_LABELS.last24Hours },
+              { label: STAT_LABELS.lastFailure },
+            ]}
+          />
+        </div>
+      }
+      loadingLabel="Loading mail…"
       errorLabel="Couldn't load mail."
       errorStatus="Mail couldn't be loaded."
       settledStatus={MAIL.status}
@@ -53,7 +74,12 @@ function MailBody({ health }: { health: StaffHealth }): React.ReactElement {
   const failures = MAIL.failures(health.failuresLast24h);
 
   const columns: Column<MailFailure>[] = [
-    { header: 'When', cell: (row) => formatTimestamp(row.occurredAt), width: 'fit' },
+    {
+      header: 'When',
+      cell: (row) => formatTimestamp(row.occurredAt),
+      width: 'fit',
+      sample: formatTimestamp(SAMPLE_INSTANT),
+    },
     { header: 'Email', cell: (row) => mailKindLabel(row.kind), width: 'fit' },
     { header: 'Sent to', cell: (row) => row.recipient ?? '—', width: 'bounded', wrap: 'anywhere' },
     { header: 'Reason', cell: (row) => row.errorClass ?? '—', width: 'auto', wrap: 'anywhere' },
@@ -90,17 +116,17 @@ function MailBody({ health }: { health: StaffHealth }): React.ReactElement {
         columns={3}
         items={[
           {
-            label: 'Failed in the last hour',
+            label: STAT_LABELS.lastHour,
             value: String(health.failuresLastHour),
             ...(health.failuresLastHour > 0 ? { tone: 'alarm' as const } : {}),
           },
           {
-            label: 'Failed in the last 24 hours',
+            label: STAT_LABELS.last24Hours,
             value: String(health.failuresLast24h),
             ...(health.failuresLast24h > 0 ? { tone: 'alarm' as const } : {}),
           },
           {
-            label: 'Last failure',
+            label: STAT_LABELS.lastFailure,
             value:
               health.lastFailureAt === null ? 'Never' : formatRelative(health.lastFailureAt, now),
           },

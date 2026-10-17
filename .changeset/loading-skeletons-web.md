@@ -10,3 +10,6 @@ busy region so it cannot be held back. Loading placeholders keep an outline in W
 instead of disappearing. A table that is still loading now shows its real column headings, and its
 fixed-width columns start at the width they will have, so the columns no longer slide sideways when
 the rows arrive.
+The staff console's panels show the shape of what is loading — the Mail figures, the settings list and
+the account and activity tables — instead of a spinner each, and the page no longer announces once
+per panel.

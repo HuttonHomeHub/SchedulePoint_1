@@ -70,6 +70,55 @@ describe('the console names itself only once it knows who is asking (M1-T5)', ()
   });
 });
 
+describe('each panel draws its settled shape while its read is held (loading-skeletons M3)', () => {
+  function holdPanels(): void {
+    // Identity answers so the console renders; every panel read stays pending.
+    apiFetch.mockImplementation((path) =>
+      path.endsWith('/staff/me') ? Promise.resolve(ME) : new Promise(() => undefined),
+    );
+  }
+
+  it('names the Mail figures and the Accounts columns, and speaks no status of its own', async () => {
+    holdPanels();
+    mount();
+    const mail = await screen.findByRole('region', { name: 'Mail' });
+    for (const label of [
+      'Failed in the last hour',
+      'Failed in the last 24 hours',
+      'Last failure',
+    ]) {
+      expect(within(mail).getByText(label)).toBeInTheDocument();
+    }
+    const accounts = screen.getByRole('region', { name: 'Unconfirmed accounts' });
+    expect(within(accounts).getByText('Signed up')).toBeInTheDocument();
+    // The skeleton table is aria-hidden: a column heading is not exposed while it is pending.
+    expect(within(accounts).queryByRole('columnheader')).toBeNull();
+  });
+
+  it('adds no role="status" inside any panel section (the page speaks one sentence)', async () => {
+    holdPanels();
+    mount();
+    await screen.findByRole('region', { name: 'Mail' });
+    const sections = [
+      'Mail',
+      'Unconfirmed accounts',
+      'Version and settings',
+      'Alerts and monitoring',
+    ];
+    for (const name of sections) {
+      expect(within(screen.getByRole('region', { name })).queryByRole('status')).toBeNull();
+    }
+  });
+
+  it('keeps each panel’s sentence as plain text a reader can reach', async () => {
+    holdPanels();
+    mount();
+    await screen.findByRole('region', { name: 'Mail' });
+    expect(screen.getByText('Loading mail…')).toBeInTheDocument();
+    expect(screen.getByText('Loading version and settings…')).toBeInTheDocument();
+  });
+});
+
 /**
  * **The audit cost is a unit-test property here as well as a journey one** (SC-4, SC-5). Every one
  * of these reads writes a `staff.panel_read` row to a table that refuses `DELETE`, so "six per load,

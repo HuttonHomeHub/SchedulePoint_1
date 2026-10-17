@@ -1,5 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 
+import { LoadingShape } from './loading-shape';
 import { StatusSection } from './status-section';
 
 import { QueryErrorState } from '@/components/ui/query-error-state';
@@ -22,14 +23,21 @@ export interface QueryPanelProps<T> {
     refetch: () => unknown;
   };
   /**
-   * What stands in for the body while the query is pending.
+   * What stands in for the body while the query is pending: the panel's own settled shape drawn as
+   * `Skeleton` material (`StatGridSkeleton`, `KeyValueListSkeleton`, `DataTableSkeleton`).
    *
    * **Required, and not defaulted.** A panel whose loading shape is whatever the primitive happened
-   * to render is a panel nobody designed a loading state for; the staff console's panels do not
-   * share one shape (a spinner for the stat grid, a table-shaped skeleton for a `DataTable`), so the
-   * caller says which.
+   * to render is a panel nobody designed a loading state for; the panels do not share one shape, so
+   * the caller says which. `QueryPanel` wraps it in a `LoadingShape` (`announce="none"`), so it is
+   * `aria-hidden` and needs no status of its own — the section already speaks. Pass the shape, not a
+   * `Spinner`: a second `role="status"` per panel was the six-announcements defect this replaced.
    */
   skeleton: React.ReactNode;
+  /**
+   * What is loading, as one sentence ("Loading accounts…"). Required: it is present as plain
+   * screen-reader text for a reader who browses into the pending section, not a live region.
+   */
+  loadingLabel: string;
   /** One sentence saying what the box holds, under its heading. */
   description?: React.ReactNode;
   /** The failure shape's sentence: "Could not read accounts." */
@@ -76,6 +84,7 @@ export function QueryPanel<T>({
   description,
   query,
   skeleton,
+  loadingLabel,
   errorLabel,
   errorStatus,
   settledStatus,
@@ -94,7 +103,11 @@ export function QueryPanel<T>({
       announce="change"
       {...(description === undefined ? {} : { description })}
     >
-      {query.isPending && skeleton}
+      {query.isPending && (
+        <LoadingShape label={loadingLabel} announce="none">
+          {skeleton}
+        </LoadingShape>
+      )}
       {query.isError && <QueryErrorState label={errorLabel} onRetry={() => void query.refetch()} />}
       {answered && children(data)}
     </StatusSection>
