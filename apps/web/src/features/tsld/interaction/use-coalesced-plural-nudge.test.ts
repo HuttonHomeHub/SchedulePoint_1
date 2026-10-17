@@ -2,7 +2,12 @@ import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { startFrozenPluralReason, summaryNotMovablePluralReason } from '../render/hit-test';
+import { STILL_SAVING_NOTE, MOVE_FAILED_NOTE } from '../model/reposition-announcement';
+import {
+  startFrozenPluralReason,
+  summaryNotMovablePluralReason,
+  topLanePluralReason,
+} from '../render/hit-test';
 
 import { NUDGE_DEBOUNCE_MS } from './use-coalesced-nudge';
 import {
@@ -69,7 +74,7 @@ describe('useCoalescedPluralNudge', () => {
     expect(deps.moveMany).toHaveBeenCalledWith(
       ROWS,
       { dayDelta: 3, laneDelta: 0 },
-      { coalesce: true },
+      { coalesce: true, pressedAt: expect.any(Number) },
     );
     expect(deps.announce).toHaveBeenCalledWith(
       '3 activities moved 3 days later; dates will update.',
@@ -150,15 +155,14 @@ describe('useCoalescedPluralNudge', () => {
     expect(deps.moveMany).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses Alt+Up aloud when a selected bar is in the top lane, keeping the set shape', async () => {
+  it('refuses Alt+Up through the banner when a selected bar is in the top lane, keeping the shape', async () => {
     const rows = [activity('a', 0), activity('b', 0), activity('c', 3)];
     const deps = makeDeps({ activities: rows });
     const { result } = renderHook(() => useCoalescedPluralNudge(deps));
     act(() => result.current(IDS, rows[0]!, 'lane', -1));
     await settle();
-    expect(deps.announce).toHaveBeenCalledWith(
-      '2 of the selected activities are already in the top lane.',
-    );
+    expect(deps.setConflict).toHaveBeenCalledWith(topLanePluralReason(2), false);
+    expect(topLanePluralReason(2)).toMatch(/already in the top lane, so none moved\.$/);
     expect(deps.moveMany).not.toHaveBeenCalled();
   });
 
@@ -202,16 +206,21 @@ describe('useCoalescedPluralNudge', () => {
     expect(deps.moveMany).toHaveBeenCalledTimes(2);
   });
 
-  it('announces nothing as moved when the write was not applied (a lost pen)', async () => {
-    const deps = makeDeps({
-      moveMany: vi.fn(() => Promise.resolve({ applied: false, conflict: null })),
-    });
+  it('says the move failed, not that it moved, when the write was not applied (a lost pen)', async () => {
+    const moveMany = vi
+      .fn<MoveMany>()
+      .mockResolvedValueOnce({ applied: false, conflict: null })
+      .mockResolvedValue({ applied: true, conflict: null });
+    const deps = makeDeps({ moveMany });
     const { result } = renderHook(() => useCoalescedPluralNudge(deps));
     act(() => result.current(IDS, A, 'time', 1));
     await settle();
-    expect(deps.announce).not.toHaveBeenCalled();
-    expect(deps.setConflict).not.toHaveBeenCalledWith(expect.any(String));
+    expect(deps.announce).toHaveBeenCalledWith(MOVE_FAILED_NOTE);
+    expect(deps.announce).not.toHaveBeenCalledWith(expect.stringMatching(/moved/));
     expect(deps.setGhost).toHaveBeenLastCalledWith(null);
+    // The lag is cleared: the next burst is seeded from the props, not from the move that failed.
+    act(() => result.current(IDS, A, 'time', 1));
+    expect(deps.setGhost).toHaveBeenLastCalledWith({ startDay: 1, endDay: 3, laneIndex: 1 });
   });
 
   it('shows a conflict from moveMany and does not announce a move', async () => {
@@ -241,6 +250,7 @@ describe('useCoalescedPluralNudge', () => {
     await settle();
     expect(deps.moveMany).not.toHaveBeenCalled();
     expect(deps.setGhost).not.toHaveBeenCalled();
+    expect(deps.announce).toHaveBeenCalledWith(STILL_SAVING_NOTE);
   });
 
   it('flushes an UNCOMMITTED burst on unmount', async () => {
@@ -250,6 +260,9 @@ describe('useCoalescedPluralNudge', () => {
     unmount();
     await act(() => vi.advanceTimersByTimeAsync(10));
     expect(deps.moveMany).toHaveBeenCalledTimes(1);
+    // Best-effort: the flushed write reports nothing once the component is gone.
+    expect(deps.announce).not.toHaveBeenCalled();
+    expect(deps.setConflict).not.toHaveBeenCalledWith(expect.any(String));
   });
 
   it('does not replay a COMMITTED burst on unmount (#448 analogue)', async () => {
@@ -270,6 +283,37 @@ describe('useCoalescedPluralNudge', () => {
     expect(deps.busyRef.current).toBe(true);
     await settle();
     expect(deps.busyRef.current).toBe(false);
+  });
+
+  it('stamps each write with its LAST keypress, so taps 200 ms apart fold even when the writes land seconds later', async () => {
+    let resolveFirst: () => void = () => {};
+    const moveMany = vi
+      .fn<MoveMany>()
+      .mockImplementationOnce(
+        () => new Promise((r) => (resolveFirst = () => r({ applied: true, conflict: null }))),
+      )
+      .mockResolvedValue({ applied: true, conflict: null });
+    const deps = makeDeps({ moveMany });
+    const { result, rerender } = renderHook((d) => useCoalescedPluralNudge(d), {
+      initialProps: deps,
+    });
+    const t0 = Date.now();
+    act(() => result.current(IDS, A, 'time', 1));
+    await act(() => vi.advanceTimersByTimeAsync(200)); // first write is now pending
+    act(() => result.current(IDS, A, 'time', 1));
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    act(() => result.current(IDS, A, 'time', 1));
+    await act(() => vi.advanceTimersByTimeAsync(3000)); // the first write is slow to land
+    resolveFirst();
+    rerender({ ...deps, activities: ROWS.map((r) => ({ ...r, version: r.version + 1 })) });
+    await act(() => vi.advanceTimersByTimeAsync(3000));
+    const stamps = moveMany.mock.calls.map(([, , options]) => options?.pressedAt ?? NaN);
+    expect(stamps.length).toBeGreaterThanOrEqual(2);
+    // Every stamp is a keypress time, each within the history's 500 ms window of the one before.
+    stamps.forEach((at, i) => {
+      expect(at - t0).toBeLessThanOrEqual(400);
+      if (i > 0) expect(at - stamps[i - 1]!).toBeLessThanOrEqual(500);
+    });
   });
 
   it('is inert without a moveMany or a data date', async () => {

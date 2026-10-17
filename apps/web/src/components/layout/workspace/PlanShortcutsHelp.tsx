@@ -45,12 +45,16 @@ const MULTI_SELECT_SHORTCUTS: readonly Shortcut[] = [
 const EDIT_SHORTCUTS: readonly Shortcut[] = [
   {
     keys: 'Alt + ↑ / ↓',
-    action: 'Move the activity — or every selected activity — up / down one lane',
+    action: 'Move the activity up / down one lane',
   },
   {
     keys: 'Alt + ← / →',
     action:
       'Nudge the start — of the activity or every selected activity — one day earlier / later (recalculates)',
+  },
+  {
+    keys: 'Alt + arrows, cursor in a selection',
+    action: 'Move every selected activity by the same step',
   },
   {
     keys: 'n',

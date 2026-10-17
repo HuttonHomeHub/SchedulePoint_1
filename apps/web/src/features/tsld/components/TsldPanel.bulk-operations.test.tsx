@@ -63,7 +63,7 @@ const ACTIVITIES = [
   activity('c', 'Cure', 2, '2026-01-05'),
 ];
 
-function renderPanel(bulk: Partial<TsldBulkOperations> = {}) {
+function renderPanel(bulk: Partial<TsldBulkOperations> = {}, editable = false) {
   const operations: TsldBulkOperations = {
     gate: { writable: true, reason: null },
     deleteMany: vi.fn(() => Promise.resolve()),
@@ -77,6 +77,12 @@ function renderPanel(bulk: Partial<TsldBulkOperations> = {}) {
       dependencies={NO_DEPS}
       dataDate="2026-01-01"
       canEdit
+      {...(editable
+        ? {
+            onCreate: vi.fn().mockResolvedValue({ recalcConflict: null }),
+            onReposition: vi.fn().mockResolvedValue({ applied: true, conflict: null }),
+          }
+        : {})}
       bulk={operations}
       fill
     />,
@@ -290,7 +296,7 @@ describe('a plural drag that includes a started activity', () => {
     dragFrom(canvas, 0, 42, 0);
     expect(moveMany).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '1 of the selected activities has started, so its start is its actual start and cannot be moved.',
+      '1 of the selected activities has started, so its start is its actual start and cannot be moved sideways.',
     );
   });
 
@@ -455,7 +461,7 @@ describe('Alt+arrow moves the whole plural selection', () => {
     expect(moveMany).toHaveBeenCalledWith(
       ACTIVITIES.map((a) => expect.objectContaining({ id: a.id })),
       { dayDelta: 2, laneDelta: 0 },
-      { coalesce: true },
+      { coalesce: true, pressedAt: expect.any(Number) },
     );
     expect(onReposition).not.toHaveBeenCalled();
     await waitFor(() =>
@@ -494,22 +500,34 @@ describe('Alt+arrow moves the whole plural selection', () => {
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/moved/));
   });
 
-  it('refuses Alt+Up aloud when a selected bar is already in the top lane, writing nothing', async () => {
+  it('refuses Alt+Up through the banner when a selected bar is already in the top lane, writing nothing', async () => {
     const { list, moveMany } = setup();
     fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
-    announceSpy.mockClear();
     fireEvent.keyDown(list, { key: 'ArrowUp', altKey: true });
-    expect(announceSpy).toHaveBeenCalledWith(
-      '1 of the selected activities is already in the top lane.',
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '1 of the selected activities is already in the top lane, so none moved.',
     );
     await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(moveMany).not.toHaveBeenCalled();
+  });
+
+  // The single-bar and plural presses arrive in one tick: the second must see the first's write as
+  // busy through a synchronous ref, not through render state, and say so rather than drop silently.
+  it('refuses a plural press while a single-bar nudge is pending, aloud, and writes once', async () => {
+    const { list, moveMany, onReposition } = setup();
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true }); // one selected: single path
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true }); // two selected, cursor in set
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    expect(announceSpy).toHaveBeenCalledWith('Still saving the previous move.');
+    await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     expect(moveMany).not.toHaveBeenCalled();
   });
 });
 
 describe('the move hint is spoken once, on entering plural, and only to a writer', () => {
   it('appends the hint at 1 → 2 and not at 2 → 3', () => {
-    const { list } = renderPanel();
+    const { list } = renderPanel({}, true);
     // Focusing the listbox already selected the first row, so this is the 1 → 2 transition.
     announceSpy.mockClear();
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true }); // 2 selected
@@ -520,7 +538,7 @@ describe('the move hint is spoken once, on entering plural, and only to a writer
   });
 
   it('says nothing about moving, on the bar or aloud, without the write right', () => {
-    const { list } = renderPanel({ gate: { writable: false, reason: 'No pen.' } });
+    const { list } = renderPanel({ gate: { writable: false, reason: 'No pen.' } }, true);
     announceSpy.mockClear();
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
     expect(announceSpy).toHaveBeenCalledWith('2 activities selected.');
@@ -528,8 +546,16 @@ describe('the move hint is spoken once, on entering plural, and only to a writer
   });
 
   it('shows the same sentence on the bar for a writer', () => {
-    const { list } = renderPanel();
+    const { list } = renderPanel({}, true);
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
     expect(screen.getByTestId('bulk-selection-bar')).toHaveTextContent(pluralMoveHint(2));
+  });
+
+  it('says nothing about moving when the keymap would not honour it (no reposition handler)', () => {
+    const { list } = renderPanel();
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(announceSpy).toHaveBeenCalledWith('2 activities selected.');
+    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(/Alt with an arrow/);
   });
 });

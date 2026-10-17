@@ -10835,3 +10835,12 @@ A comment and an accepted ADR describe two endpoints; the code uses one. The cos
 Both ways of moving a plural selection inherit the cap, and a plan large enough to hit it shows the validation sentence as it came from the server. Plans of that size are the scale-test fixtures (`packages/seed`), not a planner's selection, so no one has reached it.
 
 **Next:** refuse before writing with a sentence that names the cap, in `moveMany` so the drag and the keyboard share it. **Trigger:** a report of the raw message, or raising the cap.
+
+### 524. The plural-move hint is spoken once, on entering a plural selection, and not again if the pen is taken later
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-17, by reading (`TsldPanel.tsx` `announceSelectionCount` appends `pluralMoveHint` only when the previous count was below 2 and `canMovePlural` held at that moment; nothing re-speaks it when `bulk.gate.writable` later turns true)
+**Raised:** 2026-10-17 (keyboard plural nudge review) · **Size:** XS · **Owner:** web
+
+A planner who selects several activities without the pen is told only the count. If they then take the pen, the bar gains the hint line (it is rendered from the same gate) but nothing is spoken, so a screen-reader user learns that the arrow chord moves the set only by reading the bar or the shortcuts list. The one-shot was chosen so the hint does not drown every Space toggle.
+
+**Next:** speak the hint once when `canMovePlural` turns true while the selection is already plural. **Trigger:** a report from a screen-reader user, or the next change to the pen-acquired announcement.

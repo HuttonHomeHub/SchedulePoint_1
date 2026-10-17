@@ -107,7 +107,14 @@ export const STARTS_NOT_CHANGED_NOTE = 'Starts of activities that have started w
 export function startFrozenPluralReason(count: number): string {
   return `${String(count)} of the selected activities ${count === 1 ? 'has' : 'have'} started, so ${
     count === 1 ? 'its start is its actual start' : 'their starts are their actual starts'
-  } and cannot be moved.`;
+  } and cannot be moved sideways.`;
+}
+
+/** Why `Alt+↑` on a plural selection writes nothing: the set would lose its shape at lane 0. */
+export function topLanePluralReason(count: number): string {
+  return `${String(count)} of the selected activities ${
+    count === 1 ? 'is' : 'are'
+  } already in the top lane, so none moved.`;
 }
 
 /**

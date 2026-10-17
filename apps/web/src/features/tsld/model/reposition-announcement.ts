@@ -77,3 +77,9 @@ export function pluralMoveAnnouncement(f: {
 export function pluralMoveHint(count: number): string {
   return `Dragging any of these, or pressing Alt with an arrow key, moves all ${String(count)} activities.`;
 }
+
+/** Said when a keyboard move is refused because an earlier write has not finished. */
+export const STILL_SAVING_NOTE = 'Still saving the previous move.';
+
+/** Said when a plural move was attempted and nothing was written, and no other message says why. */
+export const MOVE_FAILED_NOTE = 'Couldn’t move the selection.';

@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { bulkDeleteCommand, bulkMoveCoalesceKey, bulkPlacementCommand } from './commands';
 import { notApplicable } from './replay';
@@ -121,6 +121,51 @@ describe('bulkPlacementCommand — the opt-in set-scoped merge key (CQ-1 (b))', 
     expect(server.row('a').visualStart).toBe('2026-03-02');
     expect(server.row('b').visualStart).toBe('2026-03-02');
     expect(result.current.canUndo).toBe(false); // one undo emptied the stack
+  });
+
+  describe('the window is measured between keypresses, not write completions', () => {
+    afterEach(() => vi.useRealTimers());
+
+    // Three taps ~200 ms apart, the first write slow to land: the records arrive seconds apart on
+    // the wall clock, which made the approved "within 500 ms" fold impossible in practice.
+    it('three taps 200 ms apart whose writes land seconds apart are ONE step restoring all', async () => {
+      vi.useFakeTimers();
+      const server = seeded();
+      const key = bulkMoveCoalesceKey(IDS);
+      const { result } = renderHook(() => usePlanEditHistory('pl1'));
+      const days = ['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05'] as const;
+      const commands = [] as Awaited<ReturnType<typeof nudge>>[];
+      for (let i = 0; i < 3; i += 1) {
+        commands.push(await nudge(server, days[i]!, days[i + 1]!, key));
+      }
+      const t0 = Date.now();
+      commands.forEach((command, i) => {
+        vi.setSystemTime(t0 + (i + 1) * 4000); // each write completes seconds after the last
+        act(() => result.current.record(command, { at: t0 + i * 200 }));
+      });
+      await act(async () => {
+        expect((await result.current.undo(server.ctx))?.kind).toBe('applied');
+      });
+      expect(server.row('a').visualStart).toBe('2026-03-02');
+      expect(server.row('b').visualStart).toBe('2026-03-02');
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('taps more than 500 ms apart stay separate steps', async () => {
+      const server = seeded();
+      const key = bulkMoveCoalesceKey(IDS);
+      const { result } = renderHook(() => usePlanEditHistory('pl1'));
+      const first = await nudge(server, '2026-03-02', '2026-03-03', key);
+      const second = await nudge(server, '2026-03-03', '2026-03-04', key);
+      act(() => {
+        result.current.record(first, { at: 1000 });
+        result.current.record(second, { at: 1600 });
+      });
+      await act(async () => {
+        await result.current.undo(server.ctx);
+      });
+      expect(result.current.canUndo).toBe(true);
+    });
   });
 
   it('different sets never merge', async () => {

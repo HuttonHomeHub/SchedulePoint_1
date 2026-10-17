@@ -39,8 +39,10 @@ import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
 import {
   pluralMoveAnnouncement,
+  MOVE_FAILED_NOTE,
   pluralMoveHint,
   repositionAnnouncement,
+  STILL_SAVING_NOTE,
 } from '../model/reposition-announcement';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
@@ -277,8 +279,11 @@ export interface TsldBulkOperations {
   moveMany: (
     rows: readonly ActivitySummary[],
     delta: { dayDelta: number; laneDelta: number },
-    /** `coalesce` folds quick successive moves of the same set into one undo step (the keyboard). */
-    options?: { coalesce?: boolean },
+    /**
+     * `coalesce` folds moves of the same set into one undo step when their keypresses were within
+     * the history's window; `pressedAt` (epoch ms) is when the last of them happened (the keyboard).
+     */
+    options?: { coalesce?: boolean; pressedAt?: number },
   ) => Promise<{
     /** False when nothing was written (a pen rejection, a stale version, a no-op). */
     applied: boolean;
@@ -1735,6 +1740,14 @@ export function TsldPanel({
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
 
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+  // The plural-move capability exists only where the keymap will honour it: the hint is a claim
+  // about what Alt+arrow does, so it needs the same conditions the keydown branch needs.
+  const canMovePlural =
+    CANVAS_MULTI_SELECT_ENABLED &&
+    editingEnabled &&
+    onReposition !== undefined &&
+    bulk?.moveMany !== undefined &&
+    bulk.gate.writable;
 
   /**
    * What one press of `Arrange` would do — **derived once**, and read by the dock's offer, the
@@ -2030,9 +2043,7 @@ export function TsldPanel({
     }
     const count = `${String(next.ids.length)} activities selected.`;
     announce(
-      previousCount < 2 && bulk?.gate.writable
-        ? `${count} ${pluralMoveHint(next.ids.length)}`
-        : count,
+      previousCount < 2 && canMovePlural ? `${count} ${pluralMoveHint(next.ids.length)}` : count,
     );
   };
 
@@ -2115,23 +2126,38 @@ export function TsldPanel({
   // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
   // The full state machine + its correctness reasoning live in the hook (unit-tested there).
   const pointerRepositionBusyRef = useRef(false);
+  // Each keyboard nudge's "I have a write pending or in flight", held in a ref and set in the same
+  // tick as the press. They are read by the OTHER hook's busy predicate, so neither direction goes
+  // through render state (the ghost's `pendingReposition`, refreshed only after a render) — a
+  // single-bar press and a plural press in one tick could otherwise both pass the check.
   const pluralNudgeBusyRef = useRef(false);
+  const singleNudgeBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
     barDateSource,
     onReposition: notedReposition,
     activities,
     dataDate,
-    setGhost: setPendingReposition,
+    // The single hook sets a ghost when it accepts a press and clears it when its write settles,
+    // which is exactly its busy window, so the ref tracks the ghost without editing that hook.
+    setGhost: (ghost) => {
+      singleNudgeBusyRef.current = ghost !== null;
+      setPendingReposition(ghost);
+    },
     // A nudge conflict is a stale-version reject (refreshable); null clears the banner.
     setConflict: (message, refreshable) =>
       message === null ? clearConflict() : showConflict(message, refreshable),
     announce,
-    // The plural nudge is a write too: a single-bar press must not race its burst.
-    isPointerBusy: () => pointerRepositionBusyRef.current || pluralNudgeBusyRef.current,
+    // The hook asks this once per press and drops the press when it is true, so say so here: a key
+    // that does nothing and says nothing reads as a broken key.
+    isPointerBusy: () => {
+      const busy = pointerRepositionBusyRef.current || pluralNudgeBusyRef.current;
+      if (busy) announce(STILL_SAVING_NOTE);
+      return busy;
+    },
   });
   // Coalesced keyboard nudge of the plural selection (`docs/TECH_DEBT.md` #116 item 1) — one write
   // per burst through the same `moveMany` seam the plural drag uses. A sibling of the hook above,
-  // not a mode of it; the two see each other through the busy predicates so they never write at once.
+  // not a mode of it; the two see each other through the busy refs so they never write at once.
   const pluralNudge = useCoalescedPluralNudge({
     barDateSource,
     moveMany: bulk?.moveMany,
@@ -2141,10 +2167,7 @@ export function TsldPanel({
     setConflict: (message, refreshable) =>
       message === null ? clearConflict() : showConflict(message, refreshable),
     announce,
-    // A ghost that is not ours is a single-bar nudge or drag in flight.
-    isOtherWriteBusy: () =>
-      pointerRepositionBusyRef.current ||
-      (pendingReposition !== null && !pluralNudgeBusyRef.current),
+    isOtherWriteBusy: () => pointerRepositionBusyRef.current || singleNudgeBusyRef.current,
     busyRef: pluralNudgeBusyRef,
   });
   // Coalesced duration nudge (ADR-0052 M2, WCAG 2.5.7) — the `Shift+←/→` keyboard equivalent of
@@ -2699,6 +2722,7 @@ export function TsldPanel({
                   intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''
                 }`,
               );
+            else announce(MOVE_FAILED_NOTE);
           })
           .catch((err: unknown) => {
             setPendingReposition(null);
@@ -3208,7 +3232,7 @@ export function TsldPanel({
               listboxRef.current?.focus();
             }}
             busy={bulkBusy}
-            canMove={bulk.gate.writable}
+            canMove={canMovePlural}
           />
         ) : null}
 

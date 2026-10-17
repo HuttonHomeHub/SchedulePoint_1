@@ -4,11 +4,16 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { PendingGhost } from '../components/TsldCanvas';
 import type { TsldBulkOperations } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
-import { pluralMoveAnnouncement } from '../model/reposition-announcement';
+import {
+  MOVE_FAILED_NOTE,
+  pluralMoveAnnouncement,
+  STILL_SAVING_NOTE,
+} from '../model/reposition-announcement';
 import {
   isStartEdgeFrozen,
   startFrozenPluralReason,
   summaryNotMovablePluralReason,
+  topLanePluralReason,
 } from '../render/hit-test';
 
 import { NUDGE_DEBOUNCE_MS, SERIALIZE_RETRY_MS } from './use-coalesced-nudge';
@@ -35,6 +40,8 @@ interface Burst {
   laneOffset: number;
   dayDelta: number;
   laneDelta: number;
+  /** When the latest keypress of the burst happened — the undo window is measured from it. */
+  pressedAt: number;
 }
 
 /** A committed delta the props do not show yet, so the next burst on the set extends from it. */
@@ -138,7 +145,7 @@ export function useCoalescedPluralNudge(
       const outcome = await moveMany(
         rows,
         { dayDelta: burst.dayDelta, laneDelta: burst.laneDelta },
-        { coalesce: true },
+        { coalesce: true, pressedAt: burst.pressedAt },
       );
       if (!outcome.applied) {
         lagRef.current = null;
@@ -155,6 +162,10 @@ export function useCoalescedPluralNudge(
             laneDelta: burst.laneDelta,
           }),
         );
+      } else {
+        // The ghost was shown and nothing was written (a lost pen, most often). The pen UI says why;
+        // this keeps the listener from hearing silence after pressing a key that did something.
+        announce(MOVE_FAILED_NOTE);
       }
       if (settled()) setGhost(null);
     } catch (err: unknown) {
@@ -214,7 +225,9 @@ export function useCoalescedPluralNudge(
     return () => {
       mountedRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
-      // Only the UNCOMMITTED burst is flushed here; a queued one already owns its delta and runs on,
+      // Best-effort: the flushed write runs after the component is gone, so its outcome is neither
+      // announced nor reported — a failure is silent, and the refetch shows the truth. Only the
+      // UNCOMMITTED burst is flushed here; a queued one already owns its delta and runs on,
       // and nothing already written is replayed (#448).
       const burst = burstRef.current;
       burstRef.current = null;
@@ -226,7 +239,11 @@ export function useCoalescedPluralNudge(
     const { moveMany, dataDate, setGhost, setConflict, announce, isOtherWriteBusy, barDateSource } =
       depsRef.current;
     if (!moveMany || dataDate === null) return;
-    if (isOtherWriteBusy()) return; // don't race a pointer drag or a single-bar nudge
+    if (isOtherWriteBusy()) {
+      // Don't race a pointer drag or a single-bar nudge — and don't drop the press silently.
+      announce(STILL_SAVING_NOTE);
+      return;
+    }
     const rows = liveRows(ids);
     if (rows.length === 0) return;
     // A WBS summary is in the set: the server would refuse the whole batch (422), so say so first.
@@ -259,6 +276,7 @@ export function useCoalescedPluralNudge(
         laneOffset: lag?.laneDelta ?? 0,
         dayDelta: 0,
         laneDelta: 0,
+        pressedAt: Date.now(),
       };
     }
     if (axis === 'lane') {
@@ -268,15 +286,14 @@ export function useCoalescedPluralNudge(
       const { laneOffset, laneDelta } = burst;
       const blocked = rows.filter((r) => r.laneIndex + laneOffset + laneDelta + delta < 0).length;
       if (blocked > 0) {
-        announce(
-          `${String(blocked)} of the selected activities ${blocked === 1 ? 'is' : 'are'} already in the top lane.`,
-        );
+        setConflict(topLanePluralReason(blocked), false);
         return;
       }
       burst = { ...burst, laneDelta: laneDelta + delta };
     } else {
       burst = { ...burst, dayDelta: burst.dayDelta + delta };
     }
+    burst = { ...burst, pressedAt: Date.now() };
     burstRef.current = burst;
     syncBusy();
     setConflict(null);

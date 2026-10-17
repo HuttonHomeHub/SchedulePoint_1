@@ -46,7 +46,12 @@ export interface HistoryEntries {
 
 export interface PlanEditHistory {
   /** Push a just-applied edit's inverse onto the undo stack; clears the redo branch (linear history). */
-  record: (command: Command) => void;
+  /**
+   * `options.at` is when the GESTURE happened (epoch ms), for a command whose write lands long after
+   * the keypress — the plural keyboard nudge waits on a refetch before it writes. The coalescing
+   * window is then measured between gestures, not between write completions.
+   */
+  record: (command: Command, options?: { at?: number }) => void;
   /**
    * Whether `command` is the step the next undo would run. A notice that offers `Undo` beside a
    * sentence about ONE edit asks this before it keeps showing: once anything else is on top, its
@@ -157,9 +162,9 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   }, [planId, clear]);
 
   const record = useCallback(
-    (command: Command) => {
+    (command: Command, options?: { at?: number }) => {
       const undoStack = undoStackRef.current;
-      const now = Date.now();
+      const now = options?.at ?? Date.now();
       const top = undoStack[undoStack.length - 1];
       // Coalesce (ADR-0048 M2.3): a same-key command recorded within the interaction window folds
       // into the current top step instead of pushing a new one, so a whole drag/nudge gesture is one

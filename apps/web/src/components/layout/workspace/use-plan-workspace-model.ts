@@ -957,7 +957,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       moveMany: async (
         rows: readonly ActivitySummary[],
         delta: { dayDelta: number; laneDelta: number },
-        options?: { coalesce?: boolean },
+        options?: { coalesce?: boolean; pressedAt?: number },
       ): Promise<{ applied: boolean; conflict: string | null }> => {
         if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
         const { before, after, versions } = bulkMoveSnapshots({
@@ -993,6 +993,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                 ? { coalesceKey: bulkMoveCoalesceKey(rows.map((a) => a.id)) }
                 : {}),
             }),
+            // The window is measured between keypresses: this write lands after a debounce and a
+            // wait for the previous write's refetch, so by completion time two taps 200 ms apart
+            // would look seconds apart and never fold.
+            options?.coalesce && options.pressedAt !== undefined
+              ? { at: options.pressedAt }
+              : undefined,
           );
         } catch (err) {
           // **The same refusals the single-bar drag already handles**, and for the same reasons.

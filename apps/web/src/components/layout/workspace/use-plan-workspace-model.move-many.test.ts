@@ -278,6 +278,15 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     expect(h.record.mock.calls[0]?.[0].coalescing?.key).toBe(
       `bulk-move:${[ACTIVITY.id, OTHER.id].sort().join(',')}`,
     );
+
+    // The undo window is measured from the keypress: the record is stamped with it.
+    h.record.mockClear();
+    await moveMany()(
+      [ACTIVITY, OTHER],
+      { dayDelta: 2, laneDelta: 0 },
+      { coalesce: true, pressedAt: 1234 },
+    );
+    expect(h.record.mock.calls[0]?.[1]).toEqual({ at: 1234 });
   });
 
   it('records ONE undoable step, labelled by how many bars actually moved', async () => {

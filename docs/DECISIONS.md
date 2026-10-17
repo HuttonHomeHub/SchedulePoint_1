@@ -27,9 +27,13 @@ state, not the URL) against a measured drop-off if the want returns.
 
 **What was decided.** `bulkPlacementCommand` takes an optional `coalesceKey`; `bulkMoveCoalesceKey(ids)` builds
 it from the **sorted id set**. Only the keyboard's plural nudge sets it (through `moveMany`'s `coalesce`
-option), so presses on the same selection within the history's 500 ms window collapse to one step spanning the
-first `before` and the last `after`. The drag and apply-levelling pass no key and are unchanged. The product
-owner chose this over one step per committed burst (CQ-1 (b)).
+option), so writes of the same selection whose last keypresses were within 500 ms of one another collapse to
+one step spanning the first `before` and the last `after`. The 500 ms is measured **between keypresses**, not
+between write completions: the nudge writes after a 150 ms debounce and a bounded wait (up to 2 s) for the
+previous write to show in the props, so by completion time two taps 200 ms apart look seconds apart and the
+history's own window would never fold them. `moveMany` therefore passes the burst's last keypress time as
+`pressedAt` and `usePlanEditHistory.record` accepts it as `options.at`. The drag and apply-levelling pass no
+key and are unchanged. The product owner chose this over one step per committed burst (CQ-1 (b)).
 
 **Why this reverses a "deliberately not".** The command's docblock refused coalescing because merging two bulk
 moves would restore a set nobody selected, the union of two selections. That objection is about
