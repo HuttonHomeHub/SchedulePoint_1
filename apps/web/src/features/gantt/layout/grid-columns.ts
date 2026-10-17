@@ -81,11 +81,12 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
      * records `0 d` being printed for real sub-day work — so the two states looked identical on the
      * one screen listing a plan's work. Printing `0 d` here would re-create that on a second screen.
      *
-     * **A WBS summary reads an em dash too** (`docs/TECH_DEBT.md` #375), for a different reason: it
-     * HAS a duration, but not the one stored. Its dates are an engine rollup (ADR-0038) while its
-     * stored duration is whatever it was created with — `0` from the XER importer — and
-     * recalculation never writes it back. So `0 d` beside an eleven-month summary bar was a false
-     * statement, and the canvas's centre item withholds the same figure for the same reason.
+     * **A WBS summary and a Level-of-Effort read the duration the engine derived from their span**
+     * (ADR-0197, closing `docs/TECH_DEBT.md` #375), not the stored one: that is `0` — the XER
+     * importer writes it and recalculation never writes it back — so `0 d` beside an eleven-month
+     * summary bar was a false statement. Where the engine has written none (an empty summary, an LOE
+     * with no span, a plan not yet recalculated) the cell is an em dash. `formatDurationCell` owns
+     * the rule; this print and screen column both read it through here.
      */
     value: (a, _source, hoursPerDay) => formatDurationCell(a, hoursPerDay),
   },

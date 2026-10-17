@@ -199,6 +199,38 @@ export async function activityCount(page: Page, orgSlug: string): Promise<number
 }
 
 /**
+ * A named activity's `derivedDurationDays`, straight from the API (ADR-0197) — the figure every
+ * surface must agree with, read from the source rather than from any one screen.
+ */
+export async function derivedDurationDays(
+  page: Page,
+  orgSlug: string,
+  name: string,
+): Promise<number | null> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id, target }: { org: string; id: string; target: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        {
+          credentials: 'include',
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`activity list ${String(response.status)}: ${await response.text()}`);
+      }
+      const body = (await response.json()) as {
+        data: { name: string; derivedDurationDays: number | null }[];
+      };
+      const row = body.data.find((a) => a.name === target);
+      if (!row) throw new Error(`no activity named ${target}`);
+      return row.derivedDurationDays;
+    },
+    { org: orgSlug, id: planId, target: name },
+  );
+}
+
+/**
  * Make the activities table reachable in the canvas-first workspace (ADR-0030), where it lives in a
  * collapsible bottom panel rather than being the page. Idempotent: expands only if collapsed.
  *

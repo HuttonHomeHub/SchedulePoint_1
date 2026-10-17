@@ -6,6 +6,7 @@ import type { RenderActivity, RenderEdge } from './render-model';
 
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { activeConstraintAnchor } from '@/lib/constraint-format';
+import { statedDuration } from '@/lib/stated-duration';
 
 /**
  * Which persisted dates feed each bar's geometry (ADR-0033). `early` is classic CPM (the earliest
@@ -73,7 +74,9 @@ export function toRenderActivities(
     // composing here as well would print the code twice the day a `true` reached this call.
     label: a.name,
     code: a.code,
-    durationDays: a.durationDays,
+    // The STATED duration (ADR-0197): a summary's and a level-of-effort's is the engine-derived span, and
+    // absent where the engine wrote none — which the centre item reads as "draw nothing".
+    ...durationDaysOf(a),
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
     // so the canvas and the table can never disagree on how complete an activity is.
     percentComplete: a.percentComplete,
@@ -91,6 +94,12 @@ export function toRenderActivities(
     // halves of one window, and M-F collapses both when the mode goes.
     remainingFloat: windowFloatFor(a, source),
   }));
+}
+
+/** `durationDays` as the render model carries it: the stated duration, or no key at all. */
+function durationDaysOf(a: ActivitySummary): { durationDays?: number } {
+  const stated = statedDuration(a);
+  return stated === null ? {} : { durationDays: stated.durationDays };
 }
 
 export function toRenderEdges(dependencies: readonly DependencySummary[]): RenderEdge[] {

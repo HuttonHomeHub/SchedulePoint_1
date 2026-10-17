@@ -7,6 +7,7 @@ import {
   formatDurationText,
   parseDurationText,
 } from '@/lib/duration-text';
+import { statedDuration, type DurationSource } from '@/lib/stated-duration';
 
 /**
  * The duration control, in the two shapes it is allowed to take (ADR-0070 §4).
@@ -108,34 +109,29 @@ export function formatDurationRead(
 }
 
 /**
- * **The one Duration cell, for every table that lists activities** (`docs/TECH_DEBT.md` #375).
+ * **The one Duration cell, for every table that lists activities** (`docs/TECH_DEBT.md` #375,
+ * ADR-0197).
  *
- * An em dash where the stored duration is not the activity's duration:
- *
- * - a **milestone** has none at all, and `0 d` there read exactly like real sub-day work rounded
- *   down (ADR-0070 M4);
- * - a **WBS summary** has one, but not the one stored. Its dates are an engine rollup of its
- *   children (ADR-0038) while its stored duration is whatever it was created with — `0` from the
- *   XER importer — and recalculation never writes it back, so `0 d` beside an eleven-month summary
- *   was a false statement. The canvas's centre item withholds the same figure (`centreItemText`).
+ * - a **milestone** reads an em dash: it has no duration at all, and `0 d` there read exactly like
+ *   real sub-day work rounded down (ADR-0070 M4);
+ * - a **WBS summary** and a **Level-of-Effort** read the duration the engine derived from their span
+ *   (`statedDuration`), in the same `5 d` / `4h` grammar as a task. Neither can print its stored
+ *   duration, which is `0` — the importer writes it, recalculation never writes it back, and `0 d`
+ *   beside an eleven-month summary was a false statement. Where the engine has written no figure
+ *   (an empty summary, an LOE with no span, a plan not recalculated since it shipped) the cell reads
+ *   an em dash again: nothing to state is not zero.
  *
  * One function because the rule had two copies — the activities table and the Gantt column — and
- * the summary half had to be added to both; a third table would have had to know to add it too.
- * The types are listed here rather than read from `isMilestoneType`, because `activity-schemas`
- * imports this module and the reverse import would be a cycle.
+ * a third table would have had to know to add it too. The CSV and the canvas read the same
+ * `statedDuration`, so no surface can disagree with this one.
  */
 export function formatDurationCell(
-  activity: { type: string; durationDays: number; durationMinutes: number },
+  activity: DurationSource,
   hoursPerDay: number | undefined,
 ): string {
-  if (
-    activity.type === 'START_MILESTONE' ||
-    activity.type === 'FINISH_MILESTONE' ||
-    activity.type === 'WBS_SUMMARY'
-  ) {
-    return '—';
-  }
-  return formatDurationRead(activity, hoursPerDay);
+  if (activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE') return '—';
+  const stated = statedDuration(activity);
+  return stated === null ? '—' : formatDurationRead(stated, hoursPerDay);
 }
 
 /**

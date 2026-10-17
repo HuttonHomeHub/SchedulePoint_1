@@ -82,7 +82,9 @@ import {
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel, ancestorIds, wouldCloseLoop } from '@/features/wbs';
+import { barDatesFor } from '@/lib/bar-dates';
 import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { isDerivedSpanType, statedDuration } from '@/lib/stated-duration';
 import {
   buildReport,
   describeUnsavedWork,
@@ -235,6 +237,19 @@ export function ActivityEditorSession({
   // ADR-0039 §4) and the join lag is deliberately framed on the activity's OWN (ADR-0071 §1).
   // Before this split the single value was the second answer, which made the duration seed wrong.
   const seedFrame = activityDayFactorFrame(activity);
+  // The derived span the Work group states for a saved summary or level-of-effort (ADR-0197). The
+  // dates are the DRAWN ones, so the sentence agrees with the bar and the table beside it; a
+  // sub-day span (zero whole days) is left unsaid rather than rounded into a false "0 working days".
+  const stated = statedDuration(activity);
+  const drawn = barDatesFor(activity, 'visual');
+  const derivedSpan =
+    isDerivedSpanType(activity.type) &&
+    stated !== null &&
+    stated.durationDays > 0 &&
+    drawn.start !== null &&
+    drawn.finish !== null
+      ? { days: stated.durationDays, start: drawn.start, finish: drawn.finish }
+      : undefined;
   const durationSeedFactor = effectiveHoursPerDay(calendars, {
     activityCalendarId: activity.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
@@ -767,6 +782,7 @@ export function ActivityEditorSession({
                       hoursPerDay={hoursPerDay}
                       savedType={activity.type}
                       savedDurationMinutes={activity.durationMinutes}
+                      derivedSpan={derivedSpan}
                     />
 
                     {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it

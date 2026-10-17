@@ -16,7 +16,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   },
 }));
 
-import { ActivityWorkFields, WORK_FIELDS } from './ActivityWorkFields';
+import { ActivityWorkFields, WORK_FIELDS, type DerivedSpan } from './ActivityWorkFields';
 
 import { FieldGridContainer } from '@/components/ui/form-layout';
 import {
@@ -38,7 +38,9 @@ function Harness({
   hoursPerDay,
   savedType,
   savedDurationMinutes,
+  derivedSpan,
 }: {
+  derivedSpan?: DerivedSpan;
   type?: ActivityType;
   hoursPerDay?: number;
   savedType?: ActivityType;
@@ -64,6 +66,7 @@ function Harness({
         hoursPerDay={hoursPerDay}
         {...(savedType === undefined ? {} : { savedType })}
         {...(savedDurationMinutes === undefined ? {} : { savedDurationMinutes })}
+        {...(derivedSpan === undefined ? {} : { derivedSpan })}
       />
     </FieldGridContainer>
   );
@@ -246,5 +249,39 @@ describe('ActivityWorkFields — the type-change dates hint (ADR-0162, M2-T2)', 
     render(<Harness type="TASK" />);
     fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
     expect(screen.queryByText(HINT)).toBeNull();
+  });
+  describe('the derived span sentence (ADR-0197)', () => {
+    const span: DerivedSpan = { days: 47, start: '2026-03-02', finish: '2026-05-05' };
+
+    it.each(['WBS_SUMMARY', 'LEVEL_OF_EFFORT'] as const)(
+      'ends the %s explanation with the current span',
+      (type) => {
+        render(<Harness type={type} savedType={type} derivedSpan={span} />);
+        expect(
+          screen.getByText(/Currently 47 working days, 02 Mar 2026 to 05 May 2026\./),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it('says nothing extra where the engine wrote no span', () => {
+      render(<Harness type="WBS_SUMMARY" savedType="WBS_SUMMARY" />);
+      expect(screen.queryByText(/Currently/)).not.toBeInTheDocument();
+    });
+
+    it('is singular for one day', () => {
+      render(
+        <Harness
+          type="LEVEL_OF_EFFORT"
+          savedType="LEVEL_OF_EFFORT"
+          derivedSpan={{ ...span, days: 1 }}
+        />,
+      );
+      expect(screen.getByText(/Currently 1 working day,/)).toBeInTheDocument();
+    });
+
+    it('is withheld once the type selector has moved off the stored type', () => {
+      render(<Harness type="LEVEL_OF_EFFORT" savedType="WBS_SUMMARY" derivedSpan={span} />);
+      expect(screen.queryByText(/Currently/)).not.toBeInTheDocument();
+    });
   });
 });

@@ -62,6 +62,21 @@ describe('the Duration column', () => {
     expect(durationColumn?.value(summary, 'early', EIGHT_HOUR)).toBe('—');
   });
 
+  it('reads a WBS summary and a level-of-effort as the duration the engine derived (ADR-0197)', () => {
+    // The em dash above is what a summary reads until a recalculation has written its span; once it
+    // has, the same cell states it — the Gantt print shares this column, so it follows.
+    for (const type of ['WBS_SUMMARY', 'LEVEL_OF_EFFORT'] as const) {
+      const derived = activity({
+        type,
+        durationDays: 0,
+        durationMinutes: 0,
+        derivedDurationDays: 47,
+        derivedDurationMinutes: 47 * 480,
+      });
+      expect(durationColumn?.value(derived, 'early', EIGHT_HOUR)).toBe('47 d');
+    }
+  });
+
   it('reads a milestone as an em dash, not as zero duration', () => {
     const milestone = activity({ type: 'START_MILESTONE', durationDays: 0, durationMinutes: 0 });
     expect(durationColumn?.value(milestone, 'early', EIGHT_HOUR)).toBe('—');

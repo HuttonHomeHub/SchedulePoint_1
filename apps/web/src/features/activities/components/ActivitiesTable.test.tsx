@@ -183,6 +183,24 @@ describe('ActivitiesTable', () => {
     expect(screen.queryByText('0 d')).not.toBeInTheDocument();
   });
 
+  it('shows the engine-derived duration for a WBS summary and a level-of-effort (ADR-0197)', () => {
+    // Restates the em-dash case above for the other half of its state: once a recalculation has
+    // written the span, the cell states it instead of withholding it.
+    const zero = { ...ACTIVITY, durationDays: 0, durationMinutes: 0 };
+    renderTable(true, [
+      {
+        ...zero,
+        id: 'sum',
+        name: 'Substructure',
+        type: 'WBS_SUMMARY',
+        derivedDurationDays: 47,
+        derivedDurationMinutes: 47 * 1440,
+      },
+    ]);
+    expect(screen.getByText('47 d')).toBeInTheDocument();
+    expect(screen.queryByText('0 d')).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no activities', () => {
     renderTable(true, []);
     expect(screen.getByText(/No activities yet/)).toBeInTheDocument();
