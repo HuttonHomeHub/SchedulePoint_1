@@ -233,7 +233,10 @@ describe.skipIf(!hasDatabase)('Restore against a delete of its ancestor (below H
 
   /** Hold `CalendarsService.restore` right after its project check, before its first write. */
   function holdAfterProjectCheck(hold: () => Promise<void>): () => void {
-    const repository = app.get<Record<string, unknown>>(CalendarRepository);
+    // The instance the service holds: several modules provide their own `CalendarRepository`, so
+    // `app.get(CalendarRepository)` may hand back one the restore never calls.
+    const repository = (app.get(CalendarsService) as unknown as { calendars: CalendarRepository })
+      .calendars as unknown as Record<string, unknown>;
     const original = repository.findActiveHoldingNameInTier as (
       ...args: unknown[]
     ) => Promise<unknown>;
