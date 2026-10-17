@@ -78,6 +78,16 @@ const EXCEPTIONS = new Map<string, string>([
       'an empty state offers is a `Button` beside it, which the rule already governs',
   ],
   ['page/empty-state.tsx::size-9', 'the same decorative glyph at its non-page size'],
+  [
+    'page/page-header.tsx::h-8 w-64',
+    'the title block of `PageHeaderSkeleton`: the heading line height (text-2xl, 2rem), a placeholder ' +
+      'for text and not a control — nothing here is pressable, and its action blocks take the token',
+  ],
+  [
+    'page/stat-grid.tsx::h-7 w-16',
+    'the value block of `StatGridSkeleton`: the figure line height (text-xl, 1.75rem), a ' +
+      'placeholder for text and not a control',
+  ],
 ]);
 
 function sourceFiles(): string[] {
