@@ -178,7 +178,11 @@ export class ProbeResultRowDto {
  * older rows reachable — that still wants a cursor.
  */
 export class ProbeHistoryMetaDto {
-  @ApiProperty({ minimum: 0, description: 'Every stored row, not only the page returned.' })
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    description: 'Every stored row, not only the page returned.',
+  })
   total!: number;
 }
 
