@@ -214,9 +214,9 @@ describe('the organisation export census', () => {
     expect(unitless).toEqual([]);
     const activities = EXPORT_FILES.find((f) => f.model === 'Activity');
     expect(activities?.columns.filter((c) => c.source)).toEqual([
-      { field: 'totalFloatMinutes', kind: 'int', source: 'totalFloat' },
-      { field: 'freeFloatMinutes', kind: 'int', source: 'freeFloat' },
-      { field: 'remainingFloatMinutes', kind: 'int', source: 'remainingFloat' },
+      { field: 'totalFloatDays', kind: 'int', source: 'totalFloat' },
+      { field: 'freeFloatDays', kind: 'int', source: 'freeFloat' },
+      { field: 'remainingFloatDays', kind: 'int', source: 'remainingFloat' },
     ]);
   });
 

@@ -174,7 +174,7 @@ describe('manifest and README', () => {
     ]);
     expect(manifest).toMatchObject({
       format: 'schedulepoint.organisation-export',
-      formatVersion: '1.1',
+      formatVersion: '2.0',
       generatedAt: '2026-10-14T09:30:00.000Z',
       snapshot: 'consistent',
       includesDeleted: true,
@@ -300,10 +300,10 @@ describe('the format’s edge cases', () => {
   it('reads a renamed column from its source field and writes it under the exported name', () => {
     const renamed: ExportFile = {
       ...KINDS,
-      columns: [{ field: 'totalFloatMinutes', kind: 'int', source: 'totalFloat' }],
+      columns: [{ field: 'totalFloatDays', kind: 'int', source: 'totalFloat' }],
     };
-    expect(jsonLine(renamed, { totalFloat: 480 })).toBe('{"totalFloatMinutes":480}');
-    expect(csvHeader(renamed)).toBe(`${CSV_BOM}totalFloatMinutes\r\n`);
+    expect(jsonLine(renamed, { totalFloat: 480 })).toBe('{"totalFloatDays":480}');
+    expect(csvHeader(renamed)).toBe(`${CSV_BOM}totalFloatDays\r\n`);
     expect(csvRecord(renamed, { totalFloat: 480 })).toBe('480\r\n');
   });
 });

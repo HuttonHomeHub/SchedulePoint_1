@@ -231,7 +231,7 @@ describe('OrganizationExportService', () => {
     const after = input.after as Record<string, unknown>;
     expect(after.bytes).toBe(res.written.reduce((n, b) => n + b.length, 0));
     expect(after).not.toHaveProperty('reason');
-    expect(after).toMatchObject({ formatVersion: '1.1', includesDeleted: true, rows: 0 });
+    expect(after).toMatchObject({ formatVersion: '2.0', includesDeleted: true, rows: 0 });
   });
 
   it('on a failure after the headers: destroys the connection, writes no envelope, records FAILURE and does not throw', async () => {

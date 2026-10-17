@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `1.1`
+- **Version:** `2.0`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -46,8 +46,8 @@ file is present even when it has no rows: its JSON is `[]` and its CSV is a head
 - **Money** amounts are whole numbers (bigint) of the minor unit (cents, pence) of the plan's currency; a
   rate such as a resource's `costPerUnit` is a decimal in the same unit. A plan with no currency states none.
 - **Units are in the name.** Every duration, lag, float and delay column ends in `Minutes` or `Days`, and the
-  Notes column of each table says which. The API serves some of the same quantities in working days; the
-  file never does, so a float here is `totalFloatMinutes`, not `totalFloat`.
+  Notes column of each table says which. A float is stored in working days on the
+  activity's own calendar, so it is `totalFloatDays`, not `totalFloat` and not minutes.
 - **Finish dates** (`earlyFinish`, `lateFinish`, `actualFinish`, `endDate` and the like) are the **inclusive
   last day**: the day the work finishes on, not the day after.
 - **Computed and layout columns** (early and late dates, float, criticality, lane and placement columns) are
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "1.1",
+  "formatVersion": "2.0",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,6 +145,14 @@ version.
 
 Changes since `1.0`:
 
+- **`2.0`** — three `activities` columns and one `baseline-activities` column are renamed and documented
+  as **working days**: `totalFloatMinutes` → `totalFloatDays` (both files), `freeFloatMinutes` →
+  `freeFloatDays` and `remainingFloatMinutes` → `remainingFloatDays`. The values are unchanged. In `1.x`
+  they were labelled minutes, but the product stores them as working days on the activity's own calendar
+  (divided by that calendar's day factor when a plan is calculated), so the label was wrong; a reader of
+  `1.x` that took them for minutes was off by the length of a working day. This is a major change because
+  columns are renamed. A reader written for `1.x` does not read `2.0`; to convert to minutes, multiply by
+  the `workdayMinutes` of the calendar the activity is scheduled on (its own, else the plan's).
 - **`1.1`** — `activities` gains `derivedDurationMinutes`, appended at the end: the working minutes a
   WBS summary's or level-of-effort activity's calculated span covers, on that activity's calendar. Empty
   for every other type, for a summary with no children, for a level-of-effort with no span, and for a
@@ -400,8 +408,8 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `earlyFinish`              | date    | inclusive last day                                    |
 | `lateStart`                | date    |                                                       |
 | `lateFinish`               | date    | inclusive last day                                    |
-| `totalFloatMinutes`        | int     | minutes                                               |
-| `freeFloatMinutes`         | int     | minutes                                               |
+| `totalFloatDays`           | int     | working days                                          |
+| `freeFloatDays`            | int     | working days                                          |
 | `isCritical`               | boolean |                                                       |
 | `isNearCritical`           | boolean |                                                       |
 | `constraintViolated`       | boolean |                                                       |
@@ -414,7 +422,7 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `visualConflict`           | boolean |                                                       |
 | `visualDriftDays`          | int     | days                                                  |
 | `visualConflictReason`     | enum    |                                                       |
-| `remainingFloatMinutes`    | int     | minutes                                               |
+| `remainingFloatDays`       | int     | working days                                          |
 | `leveledStart`             | date    |                                                       |
 | `leveledFinish`            | date    | inclusive last day                                    |
 | `levelingDelayMinutes`     | int     | minutes                                               |
@@ -592,7 +600,7 @@ Rows: every row of the organisation. Files `json/baseline-activities.json` and `
 | `baselineFinish`          | date    | inclusive last day                     |
 | `lateStart`               | date    |                                        |
 | `lateFinish`              | date    | inclusive last day                     |
-| `totalFloatMinutes`       | int     | minutes                                |
+| `totalFloatDays`          | int     | working days                           |
 | `isCritical`              | boolean |                                        |
 | `budgetedCost`            | bigint  |                                        |
 | `budgetedExpense`         | bigint  |                                        |
