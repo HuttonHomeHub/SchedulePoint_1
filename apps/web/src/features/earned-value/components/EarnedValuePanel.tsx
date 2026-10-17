@@ -6,6 +6,7 @@ import { isCostReadForbidden, useEarnedValue } from '../api/use-earned-value';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { StatGrid } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { formatMoney } from '@/lib/format-money';
 
@@ -62,28 +63,6 @@ function IndexValue({
         {behindLabel}
       </Badge>
     </span>
-  );
-}
-
-/** One headline KPI tile: a label, a large value, and an optional sub-line (e.g. a variance). */
-function KpiTile({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div className="border-border flex flex-col gap-1 rounded-lg border p-4">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-      {/* A second <dd> (a definition list allows many per <dt>), not a <p>: a <div> grouped inside
-          a <dl> may only contain <dt>/<dd>, so the sub-line must be a <dd> to keep the list valid
-          (axe definition-list / WCAG 1.3.1). */}
-      {sub ? <dd className="text-muted-foreground text-xs">{sub}</dd> : null}
-    </div>
   );
 }
 
@@ -298,38 +277,41 @@ export function EarnedValuePanel({
         </p>
       ) : null}
 
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <KpiTile
-          label="Schedule Performance Index"
-          value={<IndexValue ratio={total.spi} behindLabel="Behind" />}
-          sub={
-            <>
-              <Abbr short="SV" full="Schedule Variance" /> {money(total.sv)}
-            </>
-          }
-        />
-        <KpiTile
-          label="Cost Performance Index"
-          value={<IndexValue ratio={total.cpi} behindLabel="Over" />}
-          sub={
-            <>
-              <Abbr short="CV" full="Cost Variance" /> {money(total.cv)}
-            </>
-          }
-        />
-        <KpiTile
-          label="Estimate at Completion"
-          value={money(total.eac)}
-          sub={
-            <>
-              <Abbr short="VAC" full="Variance at Completion" /> {money(total.vac)}
-            </>
-          }
-        />
-        <KpiTile label="Budget at Completion" value={money(total.bac)} />
-        <KpiTile label="Earned Value" value={money(total.ev)} />
-        <KpiTile label="Actual Cost" value={money(total.ac)} />
-      </dl>
+      <StatGrid
+        columns={3}
+        items={[
+          {
+            label: 'Schedule Performance Index',
+            value: <IndexValue ratio={total.spi} behindLabel="Behind" />,
+            sub: (
+              <>
+                <Abbr short="SV" full="Schedule Variance" /> {money(total.sv)}
+              </>
+            ),
+          },
+          {
+            label: 'Cost Performance Index',
+            value: <IndexValue ratio={total.cpi} behindLabel="Over" />,
+            sub: (
+              <>
+                <Abbr short="CV" full="Cost Variance" /> {money(total.cv)}
+              </>
+            ),
+          },
+          {
+            label: 'Estimate at Completion',
+            value: money(total.eac),
+            sub: (
+              <>
+                <Abbr short="VAC" full="Variance at Completion" /> {money(total.vac)}
+              </>
+            ),
+          },
+          { label: 'Budget at Completion', value: money(total.bac) },
+          { label: 'Earned Value', value: money(total.ev) },
+          { label: 'Actual Cost', value: money(total.ac) },
+        ]}
+      />
 
       {ev.activities.length === 0 ? (
         // `role="status"` so the resolved empty state is announced when the query settles

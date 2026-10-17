@@ -648,7 +648,11 @@ describe('weight is a governed axis', () => {
   // which places the weight once (the primitives' ceiling below rises for it).
   // ...and 158 -> 137 (2026-10-16, `docs/TECH_DEBT.md` #335): `DataTable` now merges a column's
   // `headClassName` onto its own `font-medium` default, so eighteen callers stopped restating it (155 measured before, 137 after).
-  const SCREEN_WEIGHT_CEILING = 137;
+  // ...and 137 -> 132 (2026-10-16, `docs/TECH_DEBT.md` #325): the four hand-rolled metric tiles
+  // (`KpiTile`, `Count` and two `Stat`s) became `StatGrid` / `ContextStrip`, which place the weight once.
+  // Five sites went, not four: the schedule summary's qualifier span also restated `font-normal`,
+  // which `ContextStrip`'s `note` now owns.
+  const SCREEN_WEIGHT_CEILING = 132;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

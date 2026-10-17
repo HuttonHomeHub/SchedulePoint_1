@@ -17,6 +17,7 @@ import {
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ContextStrip } from '@/components/ui/form-layout';
 import { EmptyState } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { TsldPanel } from '@/features/tsld';
@@ -108,16 +109,6 @@ function errorFrame(error: unknown): React.ReactElement {
   return <GuestMessageCard title={UNAVAILABLE_MESSAGE} />;
 }
 
-/** One labelled figure in the guest header (dl/dt/dd), matching the member `ScheduleSummaryStrip` Stat. */
-function Stat({ label, value }: { label: string; value: React.ReactNode }): React.ReactElement {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="text-foreground text-sm font-medium tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
 /**
  * The public, session-less **External-Guest read-only plan view** (ADR-0051 F-M4 Task 2). Given a share
  * token (read from the URL fragment by the `/share` route), it reads the F-M3 endpoints with a Bearer
@@ -186,6 +177,13 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   if (activitiesQuery.isPending || dependenciesQuery.isPending) return <GuestLoading />;
 
   const projectFinish = plan.summary.projectFinish;
+  // An empty list would be an announced, named `<dl>` with nothing in it, so no dates means no strip.
+  const planDates = [
+    ...(plan.dataDate ? [{ label: 'Data date', value: formatCalendarDate(plan.dataDate) }] : []),
+    ...(projectFinish
+      ? [{ label: 'Project finish', value: formatCalendarDate(projectFinish) }]
+      : []),
+  ];
 
   return (
     // Give the read-only canvas its own polite live region (its selection/announcements), independent of
@@ -225,14 +223,14 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
             <h1 className="text-base font-semibold">{plan.name}</h1>
             <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
             <span className="text-muted-foreground text-sm">Read-only shared view</span>
-            <dl className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
-              {plan.dataDate ? (
-                <Stat label="Data date" value={formatCalendarDate(plan.dataDate)} />
-              ) : null}
-              {projectFinish ? (
-                <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
-              ) : null}
-            </dl>
+            {planDates.length === 0 ? null : (
+              <ContextStrip
+                label="Plan dates"
+                framed={false}
+                className="ml-auto gap-y-1"
+                facts={planDates}
+              />
+            )}
           </header>
 
           <main className="min-h-0 flex-1 p-4">

@@ -48,6 +48,12 @@ export interface StatGridProps {
    * other. The container is the thing whose width decides how many figures fit.
    */
   columns?: 3 | 4;
+  /**
+   * The accessible name of the list, for a grid that sits beside other content and would otherwise
+   * be announced as an anonymous "list" ("Mapped" in the import review). Optional: a grid under its
+   * own section heading is already named by it.
+   */
+  label?: string;
   className?: string;
 }
 
@@ -59,22 +65,27 @@ export interface StatGridProps {
  *
  * - **`StatGrid` is a grid of headline metrics in a page section** — figures a reader came to the
  *   screen to read, laid out to be scanned. It is the subject.
- * - **`ContextStrip` is the facts an edit is about, beside the edit** — read-only context that
- *   makes a form intelligible, deliberately quieter than the controls next to it. It is the
- *   background, and its own docblock forbids interactive children for that reason.
+ * - **`ContextStrip` is the facts beside other content — an edit, a header, a popover** —
+ *   read-only context that makes the content intelligible, deliberately quieter than what is next
+ *   to it. It is the background, and its own docblock forbids interactive children for that
+ *   reason.
  *
  * The figure's size is the visible difference and the honest one: a `StatGrid` value is large
  * because it is what the reader came for; a `ContextStrip` value is `text-sm` because it is not.
  *
  * **It is promoted as the FIRST step of a convergence, not as a sixth answer.** Five hand-rolled
- * metric tiles exist today, each with its own type ramp — `routes/staff.tsx`,
- * `EarnedValuePanel.tsx`, `InterchangeReportTable.tsx`, `GuestPlanView.tsx` and
- * `ScheduleSummaryStrip.tsx` — and `staff.tsx`'s own docblock claimed "the codebase has no promoted
- * primitive for this shape", which was already untrue when it was written. The remaining four are
- * `docs/TECH_DEBT.md` #325; this API is designed against the widest of them so that they CAN adopt
- * it, which is the part that makes it a convergence rather than a sixth divergence.
+ * metric tiles existed — `routes/staff.tsx`, `EarnedValuePanel.tsx`, `InterchangeReportTable.tsx`,
+ * `GuestPlanView.tsx` and `ScheduleSummaryStrip.tsx` — and `staff.tsx`'s own docblock claimed "the
+ * codebase has no promoted primitive for this shape", which was already untrue when it was written.
+ * The earned-value panel and the import review now use this; the guest header and the schedule
+ * summary are quiet facts and use `ContextStrip` (`docs/TECH_DEBT.md` #325).
  */
-export function StatGrid({ items, columns = 4, className }: StatGridProps): React.ReactElement {
+export function StatGrid({
+  items,
+  columns = 4,
+  label,
+  className,
+}: StatGridProps): React.ReactElement {
   return (
     /**
      * **The `@container` is a WRAPPER, and that is the whole reason this element exists.**
@@ -93,6 +104,7 @@ export function StatGrid({ items, columns = 4, className }: StatGridProps): Reac
      */
     <div className={cn('@container', className)}>
       <dl
+        aria-label={label}
         className={cn(
           'grid grid-cols-2 gap-4',
           columns === 4 ? '@md:grid-cols-4' : '@md:grid-cols-3',

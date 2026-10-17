@@ -118,4 +118,60 @@ describe('ContextStrip', () => {
     );
     expect(container.querySelectorAll('button, input, select, textarea, a')).toHaveLength(0);
   });
+
+  it('draws its own box by default, and drops it with framed={false}', () => {
+    const { rerender } = render(
+      <ContextStrip label="Plan dates" facts={[{ label: 'Data date', value: '1 Jan' }]} />,
+    );
+    expect(screen.getByLabelText('Plan dates').className).toMatch(/bg-muted/);
+
+    rerender(
+      <ContextStrip
+        label="Plan dates"
+        framed={false}
+        facts={[{ label: 'Data date', value: '1 Jan' }]}
+      />,
+    );
+    const strip = screen.getByLabelText('Plan dates');
+    expect(strip.className).not.toMatch(/bg-muted|border|rounded|px-4|py-3/);
+    // Dropping the box keeps the type: the labels are still the small capitals.
+    expect(within(strip).getByText('Data date').className).toMatch(/uppercase/);
+  });
+
+  it('renders a note inside the same <dd> as its value, so it is read with the value', () => {
+    render(
+      <ContextStrip
+        label="Computed schedule"
+        facts={[{ label: 'Levelled activities', value: 4, note: '2 under a day, not drawn' }]}
+      />,
+    );
+    const definition = screen.getByText('2 under a day, not drawn').closest('dd');
+    expect(definition).toHaveTextContent('4');
+    expect(definition).toHaveTextContent('2 under a day, not drawn');
+  });
+
+  it('renders no note element when a fact has none', () => {
+    const { container } = render(
+      <ContextStrip label="Computed schedule" facts={[{ label: 'Critical', value: 3 }]} />,
+    );
+    expect(container.querySelectorAll('dd > span')).toHaveLength(0);
+  });
+
+  it('links a fact to its footnote with aria-describedby on the <dd>', () => {
+    render(
+      <>
+        <ContextStrip
+          label="Computed schedule"
+          facts={[{ label: 'Over capacity', value: 2, describedBy: 'over-hint' }]}
+        />
+        <p id="over-hint">Over capacity counts activities whose demand exceeds capacity.</p>
+      </>,
+    );
+    expect(screen.getByText('2').closest('dd')).toHaveAttribute('aria-describedby', 'over-hint');
+  });
+
+  it('sets no aria-describedby on a fact without a footnote', () => {
+    render(<ContextStrip label="Computed schedule" facts={[{ label: 'Critical', value: 3 }]} />);
+    expect(screen.getByText('3').closest('dd')).not.toHaveAttribute('aria-describedby');
+  });
 });
