@@ -74,7 +74,8 @@ rows below are the ones a person could meet, one line each, as read from each ro
 - **#318** — after a calendar's hours-per-day changes, a baseline comparison shows float as having moved
   when no date moved.
 - **#84** — levelling gets slow when thousands of activities compete for one resource (about 11.6 seconds at
-  16,000).
+  16,000). Closed on 2026-10-17: a 16,000-activity single crew now levels in about 3 seconds where it took
+  146 on the same machine before.
 - **#419** — selecting an activity on the diagram takes about a quarter of a second on a 2,000-activity plan.
 - **#294** — a colleague's request for the pen costs the diagram 76 to 80 pixels of height.
 - **#437** — after dragging the Gantt's grid divider, a zoom preset frames the chart for the old width. Closed

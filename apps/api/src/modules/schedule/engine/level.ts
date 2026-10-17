@@ -644,6 +644,32 @@ interface ResourceContention {
 }
 
 /**
+ * Working minutes in `[from, to)` on `cal`, remembered per calendar. A gap between two blackouts is
+ * asked about again by every placement that searches past it, and it does not change until something is
+ * placed in it, so on a hot resource the same few thousand gaps are re-measured thousands of times. A
+ * calendar is immutable and the answer is a pure function of its arguments, so the memo cannot go stale.
+ */
+const gapWorkingMinutes = new WeakMap<WorkingTimeCalendar, Map<number, Map<number, number>>>();
+function workingBetween(cal: WorkingTimeCalendar, from: number, to: number): number {
+  let byFrom = gapWorkingMinutes.get(cal);
+  if (byFrom === undefined) {
+    byFrom = new Map();
+    gapWorkingMinutes.set(cal, byFrom);
+  }
+  let byTo = byFrom.get(from);
+  if (byTo === undefined) {
+    byTo = new Map();
+    byFrom.set(from, byTo);
+  }
+  let minutes = byTo.get(to);
+  if (minutes === undefined) {
+    minutes = cal.workingTimeBetween(absMinutesToInstant(from), absMinutesToInstant(to));
+    byTo.set(to, minutes);
+  }
+  return minutes;
+}
+
+/**
  * Whether `[from, to)` clears every blackout in `sorted`. Binary-searches the first blackout that could
  * still be running at `from`, so the check is `O(log b)` rather than a scan — the blackouts are disjoint
  * and ascending, so if that one clears, every later one starts even later.
@@ -710,7 +736,9 @@ function earliestFeasibleStart(
   const lagFree = perResource.every((rc) => rc.lagMinutes === 0);
   let horizon = lagFree ? advanceWorking(cal, start0, d) : Number.POSITIVE_INFINITY;
   for (;;) {
-    const scans = perResource.map((rc) => rc.profile?.blackoutsOf(rc.need, esAbs, horizon));
+    const scans = perResource.map((rc) =>
+      rc.profile?.blackoutsOf(rc.need, esAbs, horizon, lagFree ? d : 0),
+    );
     let knownUntil = Number.POSITIVE_INFINITY;
     for (const scan of scans) if (scan) knownUntil = Math.min(knownUntil, scan.knownUntil);
     const found = searchCandidates(
@@ -751,7 +779,24 @@ function searchCandidates(
   const candidates = new Set<number>([start0]);
   for (let j = 0; j < blackouts.length; j += 1) {
     const lag = perResource[j]!.lagMinutes;
-    for (const b of blackouts[j]!) {
+    const list = blackouts[j]!;
+    for (let k = 0; k < list.length; k += 1) {
+      const b = list[k]!;
+      // A zero-lag resource whose next blackout starts before `d` working minutes have passed after
+      // this one ends cannot host the run in between. Testing that candidate would cost three calendar
+      // walks to learn it, and a hot resource has thousands of such gaps (#84). Dropping it moves no
+      // answer. Either the next blackout still blocks the run once the start is rolled to working time,
+      // or it ends inside the non-working stretch the roll skips, in which case ITS end rolls to the
+      // very same start and is kept (or dropped by this same argument in turn). The outcome depends
+      // only on the rolled start, so which of them is tested is immaterial.
+      const next = list[k + 1];
+      if (
+        lag === 0 &&
+        next !== undefined &&
+        (next.start - b.finish < d || workingBetween(cal, b.finish, next.start) < d)
+      ) {
+        continue;
+      }
       const cand = lag > 0 ? advanceWorking(cal, b.finish, -lag) : b.finish;
       if (cand > start0) candidates.add(cand);
     }

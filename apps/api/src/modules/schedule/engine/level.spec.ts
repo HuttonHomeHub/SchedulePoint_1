@@ -475,9 +475,11 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
    * **The absolute bound above cannot see this pass getting slower, and that is the gap.**
    *
    * It allows 3,000 ms where the run measures ~840; a pass that got **three times** slower would
-   * still be green. `docs/TECH_DEBT.md` #84 records the shape as quadratic in the number of
-   * activities contending on ONE resource and deliberately leaves it that way — measure a real plan
-   * before optimising — so what is worth gating is not the cost but the **shape**.
+   * still be green. `docs/TECH_DEBT.md` #84 recorded the shape as quadratic in the number of
+   * activities contending on ONE resource; it was closed on 2026-10-17 by block-stepping the profile
+   * (`level-profile.ts`), which cut the measured cost of a hot resource by more than an order of
+   * magnitude. What is worth gating is still not the cost but the **shape**, and this bound is now
+   * loose by design: it catches a slide back, not a drift.
    *
    * **A ratio, not a second absolute, because a ratio cancels the hardware.** Two runs in one
    * process on one machine: whatever the runner's speed, doubling N should cost about the same
