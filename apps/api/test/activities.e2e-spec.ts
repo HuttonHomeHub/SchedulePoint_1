@@ -1052,6 +1052,30 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
         expect(rows.every((r) => r.parentId === null)).toBe(true);
       });
 
+      // The Members panel branches on this `details.reason` to tell a planner the breakdown changed
+      // underneath them (wbs-nest-from-members), so the code is pinned over HTTP, not just in the
+      // service-level race test.
+      it('refuses to file a summary under its own descendant: 409 PARENT_CYCLE, nothing written', async () => {
+        const { actor, planId } = await setup();
+        const outer = await summary(actor, planId, 'Structure');
+        const inner = await summary(actor, planId, 'Substructure');
+        const nested = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: inner.id, parentId: outer.id, version: inner.version }] })
+          .expect(200);
+        expect(nested.body.data[0]).toMatchObject({ id: inner.id, parentId: outer.id });
+
+        const res = await actor.agent
+          .patch(parentsUrl(planId))
+          .send({ parents: [{ id: outer.id, parentId: inner.id, version: outer.version }] })
+          .expect(409);
+        expect(res.body.error.details.reason).toBe('PARENT_CYCLE');
+
+        const row = await prisma.activity.findUniqueOrThrow({ where: { id: outer.id } });
+        expect(row.parentId).toBeNull();
+        expect(row.version).toBe(outer.version);
+      });
+
       it('422s a non-summary parent and 404s an activity from another plan', async () => {
         const { actor, orgId, planId } = await setup();
         const a = await task(actor, planId, 'Excavate');

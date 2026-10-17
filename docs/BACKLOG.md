@@ -323,10 +323,10 @@ narrowed one, which the Background-processing entry now states.**
   (`docs/specs/resource-group-dissolve/`; ADR-0053 §3 amended). The API shipped first
   (`POST …/resources/:id/dissolve`, audited as `resource.dissolved`), then the Resources library's
   row menu and an honest group Delete confirmation. Resources still have no restore.
-- `S` **Nest a summary from the Members panel** — spec C-1b deliberately kept WBS nesting in the
-  Breakdown picker, because a checklist that can restructure the tree needs cycle feedback a
-  checklist cannot express well. Worth revisiting with a design for that feedback rather than by
-  simply widening the list.
+- `S` ~~**Nest a summary from the Members panel**~~ **— DONE 2026-10-17**
+  (`docs/specs/wbs-nest-from-members/`; ADR-0063 Amendment). Summaries are listed; the ones that
+  contain the subject are shaded with a reason, and the Breakdown picker no longer offers a
+  summary's own contents. The table's bulk assign still excludes summaries, by choice.
 - `S` ~~**A shape cue for the derived Unassigned band bar** (TECH_DEBT #71)~~ **— DONE
   2026-09-01**, and a widened `CheckboxField` for the bulk-selection column (TECH_DEBT #72), which
   is **half done**.

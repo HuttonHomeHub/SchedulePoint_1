@@ -250,7 +250,11 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
 });
 
 export interface CheckboxFieldProps extends Omit<InputProps, 'type'>, GatedFieldProps {
-  label: string;
+  /**
+   * The label's content. Rich content (a name plus secondary notes) is allowed because the control
+   * is named by the wrapping `<label>`'s text, so every part of it is part of the accessible name.
+   */
+  label: React.ReactNode;
   /** Validation message for this field, if any (from React Hook Form). */
   error?: string | undefined;
   /** Optional helper text rendered under the control when there is no error. */

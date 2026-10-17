@@ -81,9 +81,10 @@ export function membershipDiff(
  * - an id no longer in the plan (deleted, or filtered away by a refetch) — sending it would fail
  *   the whole batch on behalf of an activity the user cannot even see;
  * - the target itself, which cannot be its own parent;
- * - a `WBS_SUMMARY`, because nesting one summary inside another is the Breakdown picker's job
- *   (spec C-1b). A checklist has nowhere to put the cycle feedback that restructuring needs, and
- *   the server would reject the cycle anyway — after failing the other thirty-nine rows with it.
+ * - a `WBS_SUMMARY`, **by choice** (`wbs-nest-from-members` CQ-4): the Members panel now nests
+ *   summaries, with the cycle feedback it needs, but a target `<select>` cannot shade a reason per
+ *   row and nesting from a selection is a different question. The server could cope — it rejects
+ *   a cycle — but would fail the other thirty-nine rows with it.
  *
  * @param selected  ids the user ticked, in any order
  * @param targetId  the summary to file them under, or `null` for the top level

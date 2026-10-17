@@ -48,6 +48,7 @@ export function ScopeSaveBar({
   pendingLabel = 'Saving…',
   dirtyMessage = 'Unsaved changes in this section.',
   savedMessage = 'Saved.',
+  alsoDescribedBy,
 }: {
   /**
    * May the caller write, and — when not — why. Typed structurally so both the editor's `ScopeGate`
@@ -84,6 +85,11 @@ export function ScopeSaveBar({
   dirtyMessage?: string | null;
   /** What to say after a successful write. Overridden for the same reason as {@link dirtyMessage}. */
   savedMessage?: string | null;
+  /**
+   * Another node that explains the button's state, appended after the bar's own reason — for a
+   * refusal that renders away from the bar (a save error below a long list) while focus stays here.
+   */
+  alsoDescribedBy?: string | undefined;
 }): React.ReactElement {
   const reasonId = useId();
   const blocked = !gate.writable || !dirty || pending;
@@ -103,7 +109,9 @@ export function ScopeSaveBar({
     : groupReasonId
       ? null
       : gate.reason;
-  const describedBy = groupReasonId ?? (reason ? reasonId : undefined);
+  const describedBy =
+    [groupReasonId ?? (reason ? reasonId : undefined), alsoDescribedBy].filter(Boolean).join(' ') ||
+    undefined;
 
   return (
     <div className="border-border flex items-center justify-between gap-4 border-t pt-4">

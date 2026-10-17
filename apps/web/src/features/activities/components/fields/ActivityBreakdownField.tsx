@@ -35,11 +35,17 @@ export const BREAKDOWN_FIELDS = [
 export function ActivityBreakdownField({
   form,
   parentOptions,
+  parentContentsHidden = false,
   loading = false,
   errored = false,
 }: GroupProps<ActivityGeneralValues> & {
-  /** The plan's summaries, minus the activity being edited (no self-parent; the API rejects it). */
+  /**
+   * The plan's summaries, minus the activity being edited (no self-parent) and, for a summary, the
+   * summaries inside it (no loop). The API rejects both.
+   */
   parentOptions: ActivitySummary[];
+  /** Summaries inside this activity were left out of the list (they would close a loop). */
+  parentContentsHidden?: boolean;
   /** The plan's activities are still in flight. */
   loading?: boolean;
   /** The plan's activities failed to load. */
@@ -71,7 +77,12 @@ export function ActivityBreakdownField({
             ? ' Its current summary isn’t in this plan’s list — it may have been deleted. Saving keeps it as it is; choose another to change it.'
             : !loading && !errored && parentOptions.length === 0
               ? ' There are no WBS summaries in this plan yet — create a “WBS summary” activity to nest others under it.'
-              : '')
+              : '') +
+          // A `<select>` option cannot carry a reason, so the summaries inside this one are omitted
+          // and the hint says so (ADR-0063 Amendment) — the Members panel shades them instead.
+          (parentContentsHidden
+            ? ' Summaries inside this one aren’t listed — a summary can’t be filed under its own contents.'
+            : '')
         }
         {...form.register('parentId')}
       >

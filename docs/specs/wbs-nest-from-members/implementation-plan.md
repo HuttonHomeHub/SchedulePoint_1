@@ -1,7 +1,7 @@
 # Implementation Plan: Nest a WBS summary from the Members panel
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft — produced with the spec; nothing is built until the product owner approves both
+- **Status:** Approved — by the product owner, 2026-10-17, with the spec; M1 and M2 built on `work/wbs-nest-members`
 - **Owner:** product owner (approver); builder agent (implementation)
 
 ## Breakdown
@@ -26,7 +26,7 @@ in a container: `pnpm prepush`, `scripts/e2e-local.sh api`, `scripts/e2e-local.s
 ### Milestone M1: the Members panel nests summaries, and explains the ones it cannot
 
 **Outcome:** from a summary's Members panel a planner ticks other summaries to nest them; summaries
-that contain this one are listed shaded with "Can't be filed here — “S” is inside it."
+that contain this one are listed shaded with "Can't be filed here — “S” is already inside it."
 **Entry point:** Plan workspace → select a WBS summary → **Edit** → **Members** tab (also the
 activities-table row menu → **Members**).
 **Journey:** `apps/web/e2e-wbs/wbs.spec.ts` — new step after the existing dissolve section (spec
@@ -44,7 +44,7 @@ against the shipped panel.
 
 ##### Task M1-T1 — `features/wbs/model/wbs-tree.ts`
 
-- **Description:** `ancestorIds`, `subtreeSizes`, `nestingRefusal`, each `seen`-guarded and using the
+- **Description:** `ancestorIds`, `subtreeSizes`, `wouldCloseLoop`, each `seen`-guarded and using the
   orphan rule `wbs-groups.ts` already uses.
 - **Complexity:** S · **Dependencies:** none
 - **Risks:** a second copy of `wbs-groups.ts`'s private `subtreeCount` → extract it here and have

@@ -27,6 +27,19 @@ click under a context menu. Required rather than optional so a sixteenth menu mu
 opener and is dragged off before release now leaves the menu open (no `click` arrives); that is the native
 button contract and is accepted.
 
+## 2026-10-17 — In a tree picker, a candidate that would close a cycle is shaded in a checklist and omitted from a select
+
+**What was decided.** The WBS Members panel lists summaries; the ones that already contain the subject are shown
+shaded with a visible reason (`aria-disabled`, click cancelled, still in the tab order). The Breakdown `<select>`
+omits them. Recorded as an Amendment to ADR-0063 (spec C-1b reversed), not a new ADR.
+
+**Why.** The server already refused every cyclic batch (`409 PARENT_CYCLE`); the old reason for excluding
+summaries ("two paths, one unchecked") was stale. What was missing was client feedback. A checklist row has room
+for a reason and a search that hides the row makes "No activity matches" false; an `<option>` cannot carry one.
+
+**Consequences.** The table's bulk assign still excludes summaries, by choice. One pure module
+(`features/wbs/model/wbs-tree.ts`) answers the question for both pickers.
+
 ---
 
 ## 2026-10-16 — A blur with no related target is one rule for every container that goes (tech debt #481)

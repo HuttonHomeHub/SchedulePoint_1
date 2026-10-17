@@ -120,7 +120,11 @@ describe('ActivityEditorDialog — the Members tab', () => {
   it('shades the panel with the pen reason rather than hiding it', () => {
     mount({ gating: PLANNER_NO_PEN });
     expect(screen.getByLabelText('Find an activity')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /Pour slab/ })).toBeDisabled();
+    // `aria-disabled`, not native `disabled`: the row stays in the tab order (ADR-0083 D1).
+    expect(screen.getByRole('checkbox', { name: /Pour slab/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByText('Start editing to change this activity.')).toBeInTheDocument();
   });
 
