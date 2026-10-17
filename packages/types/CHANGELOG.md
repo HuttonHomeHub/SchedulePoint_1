@@ -1,5 +1,25 @@
 # @repo/types
 
+## 0.43.0
+
+### Minor Changes
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every activity read, and the shared-plan read, now carries `derivedDurationMinutes` and `derivedDurationDays`: the working time a WBS summary's or Level-of-Effort activity's calculated span covers, written by the scheduling engine on each recalculation. They are empty for every other activity type, for a summary with no children, for a Level-of-Effort with no resolvable span, and until the plan is next recalculated.
+
+- [#1035](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1035) [`4986c1e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4986c1eb5a10787bddb393cff9cc4381f11c9383) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleted resources and calendars can now be restored (ADR-0195). `POST …/resources/:resourceId/restore`
+  brings back a resource, or a resource group with everything deleted with it; `POST
+  …/calendars/:calendarId/restore` brings back a calendar with the exceptions deleted alongside it and
+  marks the plans that already use it "edited since calculated". Both are all-or-nothing and refuse
+  with a reason the caller can act on: the parent group or project is still deleted, a resource's
+  calendar is deleted, a live row holds the name or code (archived ones included), or the parent is no
+  longer a group or sits too deep. They need the new `resource:restore` and `calendar:restore`
+  permissions (Planner and Org Admin), and restoring an organisation calendar also needs
+  `calendar:manage_org`. Each is audited (`resource.restored`, `calendar.restored`).
+  
+  `GET …/deleted` now lists resources and calendars too. Its items gain `subtype` and `expiresAt`
+  (null for a row no timer ever removes), `kind` widens to `resource` and `calendar`, and `blockedBy`
+  gains `relation` (`parent` or `calendar`) and can name a resource group or a calendar.
+
 ## 0.42.0
 
 ### Minor Changes

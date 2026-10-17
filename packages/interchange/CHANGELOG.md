@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.13.0
+
+### Minor Changes
+
+- [#1034](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1034) [`23e1b41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23e1b412e915d62ef5ee542fefbf89be9c522f9e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An MS Project (MSPDI) export now writes a WBS summary's and a Level-of-Effort activity's `<Duration>` as the working time its calculated span covers, instead of the stored zero, when the plan has been recalculated. A task's duration, and the XER export, are unchanged.
+
 ## 0.12.1
 
 ### Patch Changes
