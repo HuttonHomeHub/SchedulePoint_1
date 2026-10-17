@@ -245,6 +245,17 @@ export type SelectionBarContext = SelectionActionContext & {
 /** The phrase these five actions complete: "…to change this activity". The FRAME is chosen by
  * `ctx.scheduleRefusal` from the live role/pen state — see {@link SelectionActionContext}. */
 const PEN_ACTION = 'change this activity';
+
+/**
+ * The reason a pen-gated item is shut, worded **once for the whole bar** (`docs/TECH_DEBT.md` #397).
+ * Make milestone… shades with `definitionGate.reason` (ADR-0162 D6), so the five neighbours read the
+ * same object first: a Viewer meets one role sentence across the bar, not two for one fact. The pen
+ * wording is identical on both paths (`activity-editor-gating`'s `noPen` calls `penReason` with this
+ * same action), and `scheduleRefusal` stays the fallback for a host that passes no gate.
+ */
+function penRefusal(ctx: SelectionActionContext): string | undefined {
+  return ctx.definitionGate?.reason ?? ctx.scheduleRefusal(PEN_ACTION) ?? undefined;
+}
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 // The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt
 // the refusal there meets the identical wording here (`docs/specs/object-bar-defects/` M2).
@@ -754,7 +765,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       label: 'Edit',
       icon: <SquarePen className="size-4" />,
       penGated: true,
-      disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
+      disabledReason: (ctx) => penRefusal(ctx),
       onActivate: (ctx) => ctx.onEdit(),
     },
     // Duplicate — after Edit, and present for EVERY selection including a summary.
@@ -779,7 +790,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             label: 'Duplicate',
             icon: <Copy className="size-4" />,
             penGated: true,
-            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
+            disabledReason: (ctx) => penRefusal(ctx),
             isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
             lostReason: 'This action does not apply to a WBS summary.',
             onActivate: (ctx: SelectionActionContext) => {
@@ -795,7 +806,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             description: 'Copies the summary and every activity in it',
             icon: <Copy className="size-4" />,
             penGated: true,
-            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
+            disabledReason: (ctx) => penRefusal(ctx),
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
             lostReason: 'This action applies only to a WBS summary.',
             onActivate: (ctx: SelectionActionContext) => {
@@ -852,7 +863,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             label: 'Dissolve',
             icon: <Ungroup className="size-4" />,
             penGated: true,
-            disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
+            disabledReason: (ctx) => penRefusal(ctx),
             // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
             // context fact, so a non-summary selection cannot reach an action that would 422.
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
@@ -869,7 +880,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       label: 'Delete',
       icon: <Trash2 className="size-4" />,
       penGated: true,
-      disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
+      disabledReason: (ctx) => penRefusal(ctx),
       onActivate: (ctx) => ctx.onDelete(),
     },
     // ── Clear visual start — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
