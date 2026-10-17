@@ -478,10 +478,15 @@ const planDetailRoute = createRoute({
   component: PlanDetailScreen,
 });
 
-/** The organisation recycle bin (soft-deleted clients/projects/plans + restore). */
+/**
+ * The organisation recycle bin (soft-deleted clients, projects, plans, resources and calendars, with
+ * restore). `?show=` narrows it to one kind of deletion (ADR-0195 D8); like `?view=` above, the
+ * validator keeps the raw string and the screen's reader degrades an unrecognised value to "all".
+ */
 const recentlyDeletedRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/recently-deleted',
+  validateSearch: libraryFilterSearch(['show']),
   beforeLoad: ({ context, params }) => ensureOrgMembership(context.queryClient, params.orgSlug),
   component: RecentlyDeletedScreen,
 });

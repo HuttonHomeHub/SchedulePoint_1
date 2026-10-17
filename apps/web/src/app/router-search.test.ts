@@ -250,3 +250,23 @@ describe('the plan workspace’s ?view=', () => {
     expect(validate('/orgs/$orgSlug/plans/$planId', '?view=')).toEqual({});
   });
 });
+
+describe('the recycle bin’s ?show=', () => {
+  it('keeps the kind of deletion it is narrowed to', () => {
+    expect(validate('/orgs/$orgSlug/recently-deleted', '?show=resources')).toEqual({
+      show: 'resources',
+    });
+  });
+
+  it('keeps a value it does not know — the screen’s reader degrades it to "all", not the router', () => {
+    // A hand-edited URL must never crash a screen; deciding what an unknown value MEANS is the
+    // reader's job (`pickParam`), exactly as `?view=` does it.
+    expect(validate('/orgs/$orgSlug/recently-deleted', '?show=nonsense')).toEqual({
+      show: 'nonsense',
+    });
+  });
+
+  it('drops an empty value, which is how the default is spelled', () => {
+    expect(validate('/orgs/$orgSlug/recently-deleted', '?show=')).toEqual({});
+  });
+});

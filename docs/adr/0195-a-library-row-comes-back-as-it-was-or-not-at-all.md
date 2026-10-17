@@ -66,6 +66,24 @@ expiry, a server-side `kind` filter, a flag, and partial restore. Each is reject
 - No schema change is expected; whether the widened bin query needs an index is decided by measurement and by the
   database-architect agent (spec §4 "Database changes").
 
+## Acceptance-status ledger
+
+Built 2026-10-17 on `work/restore-library`; the readings marked **owed** need the database or a browser
+and had not been taken when this was written.
+
+| Decision                                               | Built in                                                  | Evidence                                                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| D1 per-entity, batch-keyed, all-or-nothing             | `ResourcesService.restore`, `CalendarsService.restore`    | `resources.service.spec.ts`, `calendars.service.spec.ts`; `test/library-restore.e2e-spec.ts` (**owed**: API run) |
+| D2 refuse a clash, name the holder                     | `assertNoLiveHolder`; the calendar pre-check              | the unit specs; the e2e (**owed**)                                                                               |
+| D3 a blocker is a parent or a dependency, parent first | `RecycleBinRepository.findDeletedPage`                    | `recycle-bin.service.spec.ts`, `group-deletions.test.ts`; `recycle-bin.e2e-spec.ts` (**owed**)                   |
+| D4 library rows do not expire                          | `expiresAt` per row                                       | `recycle-bin.service.spec.ts`, `expiry-copy.test.ts`, `RecentlyDeletedTable.test.tsx`                            |
+| D5 `resource:restore`, `calendar:restore`              | `org-permissions.ts`                                      | `org-permissions.spec.ts`                                                                                        |
+| D6 a dissolved group restores empty                    | no special case                                           | `library-restore.e2e-spec.ts` (**owed**)                                                                         |
+| D7 a calendar restore stamps the plans using it        | `markScheduleInputsChanged` in `CalendarsService.restore` | `schedule-inputs.structural.spec.ts`; the e2e (**owed**)                                                         |
+| Bin query cost                                         | `test/measure/recycle-bin-library.measure.ts`             | **owed**: the reading decides whether the conditional index goes to database-architect                           |
+| Engine untouched                                       | nothing under `apps/api/src/modules/schedule/` changed    | the diff of that directory against the base commit is empty, read 2026-10-17                                     |
+| Journeys                                               | `apps/web/e2e/recently-deleted.spec.ts`                   | **owed**: a browser run                                                                                          |
+
 ## References
 
 - Spec: [`restore-resources-calendars`](../specs/restore-resources-calendars/feature-spec.md)

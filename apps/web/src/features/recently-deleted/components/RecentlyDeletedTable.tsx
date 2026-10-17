@@ -1,12 +1,19 @@
 import { Link } from '@tanstack/react-router';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { useDeletedItems, useRestoreItem } from '../api/use-deleted-items';
 import { expirySentence, expirySummary } from '../model/expiry-copy';
 import { describeMembers, groupDeletions, type DeletionGroup } from '../model/group-deletions';
 import { blockerNoun, nounOf, sentenceNounOf, typeLabel } from '../model/kind-label';
 import { describeRestoreFailure, type RestoreFailure } from '../model/restore-failure';
+import {
+  DEFAULT_SHOW,
+  emptyFilterSentence,
+  filterGroups,
+  SHOW_OPTIONS,
+  type ShowFilter,
+} from '../model/show-filter';
 
 import { RestoreBlockerDialog } from './RestoreBlockerDialog';
 
@@ -14,6 +21,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { SectionCard } from '@/components/ui/page';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { textLinkVariants } from '@/components/ui/text-link';
 import { formatTimestamp } from '@/lib/format-date';
 
@@ -37,10 +45,27 @@ const RETENTION_RULE_ID = 'recently-deleted-retention-rule';
 export function RecentlyDeletedTable({
   orgSlug,
   canWrite,
+  show: controlledShow,
+  onShowChange,
 }: {
   orgSlug: string;
   canWrite: boolean;
+  /**
+   * Which kind of deletion to show (ADR-0195 D8). The route owns it, because it lives in the URL
+   * (`?show=`) — but the table is also mounted directly by its unit tests, outside a router, so an
+   * omitted `show` falls back to local state: the controlled/uncontrolled idiom
+   * `useUrlFilterState` documents.
+   */
+  show?: ShowFilter;
+  onShowChange?: (next: ShowFilter) => void;
 }): React.ReactElement {
+  const showLabelId = useId();
+  const [localShow, setLocalShow] = useState<ShowFilter>(DEFAULT_SHOW);
+  const show = controlledShow ?? localShow;
+  const changeShow = (next: ShowFilter): void => {
+    setLocalShow(next);
+    onShowChange?.(next);
+  };
   const deleted = useDeletedItems(orgSlug);
   const restore = useRestoreItem(orgSlug);
   const announce = useAnnounce();
@@ -83,9 +108,12 @@ export function RecentlyDeletedTable({
   // would make every sentence below wrong on any host that changed it (ADR-0096 D2).
   const retentionDays = deleted.data?.meta?.retentionDays ?? null;
   const retentionActive = deleted.data?.meta?.retentionActive ?? false;
+  // What is on screen. `groups` (all of them) stays the lookup for a blocker's own deletion, which
+  // may sit under another filter: restoring "the group first" must still find it.
+  const visible = useMemo(() => filterGroups(groups, show), [groups, show]);
   const groupQuery = useMemo(
-    () => ({ ...deleted, data: groups }) as unknown as typeof deleted & { data: DeletionGroup[] },
-    [deleted, groups],
+    () => ({ ...deleted, data: visible }) as unknown as typeof deleted & { data: DeletionGroup[] },
+    [deleted, visible],
   );
 
   /**
@@ -305,7 +333,7 @@ export function RecentlyDeletedTable({
      */
     <SectionCard
       title="Deleted items"
-      count={deleted.data === undefined ? undefined : groups.length}
+      count={deleted.data === undefined ? undefined : visible.length}
       flush
     >
       <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
@@ -345,7 +373,7 @@ export function RecentlyDeletedTable({
           </p>
         )}
         {(() => {
-          const summary = expirySummary(groups, retentionActive);
+          const summary = expirySummary(visible, retentionActive);
           // A subset, said as a subset: "1 of 3" rather than a bare count that reads as though the
           // whole list is imminent and sends a reader restoring things with months left.
           return summary === null ? null : (
@@ -354,6 +382,22 @@ export function RecentlyDeletedTable({
             </p>
           );
         })()}
+        {groups.length === 0 ? null : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {/* Labelled by its own visible caption, so a serial reader hears "Show" once (ADR-0119):
+                these are alternatives, not toggles. */}
+            <span id={showLabelId} className="text-muted-foreground text-sm">
+              Show
+            </span>
+            <SegmentedControl
+              label="Show"
+              labelledById={showLabelId}
+              value={show}
+              onChange={changeShow}
+              options={SHOW_OPTIONS}
+            />
+          </div>
+        )}
         <DataTable
           caption="Recently deleted items"
           {...(retentionDays === null || !retentionActive
@@ -379,10 +423,16 @@ export function RecentlyDeletedTable({
           loadingLabel="Loading recently deleted…"
           errorLabel="Couldn’t load recently deleted items. Please try again."
           empty={
-            <>
-              Nothing has been deleted. Deleted clients, projects, plans, resources and calendars
-              appear here so you can restore them.
-            </>
+            // Only a NARROWED view of a bin that has something in it says what is missing; an empty
+            // bin says so whatever the URL asks for, or "No deleted resources." would be a half-truth.
+            groups.length > 0 ? (
+              emptyFilterSentence(show)
+            ) : (
+              <>
+                Nothing has been deleted. Deleted clients, projects, plans, resources and calendars
+                appear here so you can restore them.
+              </>
+            )
           }
         />
         {(() => {

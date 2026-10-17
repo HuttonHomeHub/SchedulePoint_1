@@ -284,3 +284,36 @@ test('a project’s own calendar is listed inside the project’s deletion', asy
   await page.getByRole('button', { name: 'Restore project Tower and 1 calendar' }).click();
   await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
 });
+
+test('the Show filter narrows the bin by the keyboard and survives a reload', async ({ page }) => {
+  const orgSlug = await onboard(page, 'binshow');
+  const api = libraryApi(page, orgSlug);
+  const resource = await api.post('/resources', { name: 'Crane A', kind: 'EQUIPMENT' });
+  const calendar = await api.post('/calendars', { name: 'Crane hours', workingWeekdays: 31 });
+  await api.remove(`/resources/${resource.id}`);
+  await api.remove(`/calendars/${calendar.id}`);
+
+  await navLink(page, 'Recently deleted').click();
+  const group = page.getByRole('radiogroup', { name: 'Show' });
+  await expect(group.getByRole('radio', { name: 'All' })).toBeChecked();
+  await expect(page.getByRole('cell', { name: 'Crane A', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toBeVisible();
+
+  // The APG radiogroup: Arrow keys move the selection (All → Clients, projects & plans → Resources).
+  await group.getByRole('radio', { name: 'All' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Resources' })).toBeChecked();
+  await expect(page).toHaveURL(/[?&]show=resources/);
+  await expect(page.getByRole('cell', { name: 'Crane A', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toHaveCount(0);
+
+  await page.reload();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'Resources' }),
+  ).toBeChecked();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(results.violations).toEqual([]);
+});

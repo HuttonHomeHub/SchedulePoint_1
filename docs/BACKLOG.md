@@ -322,7 +322,9 @@ narrowed one, which the Background-processing entry now states.**
 - `S` ~~**Dissolve for a resource `GROUP`**~~ **— DONE 2026-10-03**
   (`docs/specs/resource-group-dissolve/`; ADR-0053 §3 amended). The API shipped first
   (`POST …/resources/:id/dissolve`, audited as `resource.dissolved`), then the Resources library's
-  row menu and an honest group Delete confirmation. Resources still have no restore.
+  row menu and an honest group Delete confirmation. The restore followed: deleted resources and
+  calendars are listed in Recently deleted and restorable (`docs/specs/restore-resources-calendars/`,
+  ADR-0195; built and run against the database 2026-10-17).
 - `S` ~~**Nest a summary from the Members panel**~~ **— DONE 2026-10-17**
   (`docs/specs/wbs-nest-from-members/`; ADR-0063 Amendment). Summaries are listed; the ones that
   contain the subject are shaded with a reason, and the Breakdown picker no longer offers a

@@ -908,4 +908,147 @@ describe('RecentlyDeletedTable', () => {
       expect((await axe(container)).violations).toEqual([]);
     });
   });
+
+  describe('the Show filter (ADR-0195 D8)', () => {
+    const T = '2026-07-12T09:00:00.000Z';
+    const MIXED: Fixture[] = [
+      ITEMS[0]!,
+      {
+        kind: 'resource',
+        subtype: 'EQUIPMENT',
+        id: '00000000-0000-4000-8000-000000000050',
+        name: 'Crane A',
+        deletedAt: T,
+        canRestore: true,
+        deleteBatchId: 'b-res',
+        blockedBy: null,
+      },
+      {
+        kind: 'calendar',
+        subtype: 'ORG',
+        id: '00000000-0000-4000-8000-000000000051',
+        name: 'Crane hours',
+        deletedAt: T,
+        canRestore: true,
+        deleteBatchId: 'b-cal',
+        blockedBy: null,
+      },
+    ];
+
+    /** The number in the section header — what the heading says there are. */
+    const sectionCount = (): string | null =>
+      document.querySelector('.tabular-nums')?.textContent ?? null;
+
+    it('offers the four alternatives as a named radiogroup, opening on All', () => {
+      renderTable(true, MIXED);
+      const group = screen.getByRole('radiogroup', { name: 'Show' });
+      expect(
+        within(group)
+          .getAllByRole('radio')
+          .map((r) => r.textContent),
+      ).toEqual(['All', 'Clients, projects & plans', 'Resources', 'Calendars']);
+      expect(within(group).getByRole('radio', { name: 'All' })).toBeChecked();
+      expect(sectionCount()).toBe('3');
+    });
+
+    it('narrows to one kind of deletion and counts what is SHOWN', () => {
+      renderTable(true, MIXED);
+      fireEvent.click(screen.getByRole('radio', { name: 'Resources' }));
+
+      expect(screen.getByText('Crane A')).toBeInTheDocument();
+      expect(screen.queryByText('Northgate')).not.toBeInTheDocument();
+      expect(screen.queryByText('Crane hours')).not.toBeInTheDocument();
+      expect(sectionCount()).toBe('1');
+    });
+
+    it('moves the selection with the arrow keys, as an APG radiogroup does', () => {
+      renderTable(true, MIXED);
+      const all = screen.getByRole('radio', { name: 'All' });
+      all.focus();
+      fireEvent.keyDown(all, { key: 'ArrowRight' });
+      fireEvent.keyDown(screen.getByRole('radio', { name: 'Clients, projects & plans' }), {
+        key: 'ArrowRight',
+      });
+      expect(screen.getByRole('radio', { name: 'Resources' })).toBeChecked();
+      expect(screen.queryByText('Northgate')).not.toBeInTheDocument();
+    });
+
+    it('is controlled by the route when it is given one, and reports a change', () => {
+      const onShowChange = vi.fn();
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      queryClient.setQueryData(deletedItemKeys.list('acme'), {
+        rows: MIXED.map(serve),
+        meta: META,
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AnnouncerProvider>
+            <RecentlyDeletedTable
+              orgSlug="acme"
+              canWrite
+              show="calendars"
+              onShowChange={onShowChange}
+            />
+          </AnnouncerProvider>
+        </QueryClientProvider>,
+      );
+      expect(screen.getByText('Crane hours')).toBeInTheDocument();
+      expect(screen.queryByText('Crane A')).not.toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Calendars' })).toBeChecked();
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Resources' }));
+      expect(onShowChange).toHaveBeenCalledWith('resources');
+    });
+
+    it('says WHAT is empty in a narrowed view, not that nothing was ever deleted', () => {
+      renderTable(true, [ITEMS[0]!]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Calendars' }));
+      expect(screen.getByText('No deleted calendars.')).toBeInTheDocument();
+      expect(screen.queryByText(/Nothing has been deleted/)).not.toBeInTheDocument();
+      expect(sectionCount()).toBe('0');
+    });
+
+    it('does not offer a filter over an empty bin, whatever the URL asks for', () => {
+      renderTable(true, []);
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      expect(screen.getByText(/Nothing has been deleted/)).toBeInTheDocument();
+    });
+
+    it('still finds a blocker that is filtered out of view', async () => {
+      // The resource is blocked by a calendar; narrowing to Resources hides the calendar's row, and
+      // "Restore calendar first…" must still open its confirmation — the lookup reads ALL groups.
+      renderTable(true, [
+        {
+          kind: 'resource',
+          subtype: 'EQUIPMENT',
+          id: '00000000-0000-4000-8000-000000000052',
+          name: 'Crane B',
+          deletedAt: T,
+          canRestore: false,
+          deleteBatchId: 'b-res',
+          blockedBy: {
+            kind: 'calendar',
+            relation: 'calendar',
+            id: '00000000-0000-4000-8000-000000000051',
+            name: 'Crane hours',
+            deleteBatchId: 'b-cal',
+          },
+        },
+        MIXED[2]!,
+      ]);
+      fireEvent.click(screen.getByRole('radio', { name: 'Resources' }));
+      expect(
+        screen.queryByRole('cell', { name: 'Crane hours', exact: true }),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Restore calendar first…: Crane hours' }));
+      expect(screen.getByRole('dialog')).toHaveTextContent('uses the calendar “Crane hours”');
+    });
+
+    it('has no axe violations with the filter present', async () => {
+      const { container } = renderTable(true, MIXED);
+      expect((await axe(container)).violations).toEqual([]);
+    });
+  });
 });

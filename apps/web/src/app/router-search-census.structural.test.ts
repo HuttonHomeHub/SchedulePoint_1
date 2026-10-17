@@ -72,7 +72,7 @@ function routesDeclaringValidateSearch(): string[] {
 }
 
 /**
- * The eight, named. This is the **pinned positive case**: without it, "every route with a validator
+ * The nine, named. This is the **pinned positive case**: without it, "every route with a validator
  * has a case" passes just as happily against a census that found no routes at all.
  */
 const KNOWN_VALIDATORS = [
@@ -80,6 +80,7 @@ const KNOWN_VALIDATORS = [
   '/forgot-password',
   '/orgs/$orgSlug/calendars',
   '/orgs/$orgSlug/plans/$planId',
+  '/orgs/$orgSlug/recently-deleted',
   '/orgs/$orgSlug/resources',
   '/reset-password',
   '/sign-in',
@@ -120,7 +121,7 @@ describe('Gate A — the route search census', () => {
     }
   });
 
-  it('A3 — the census is not empty, and holds the eight validators it was written for', () => {
+  it('A3 — the census is not empty, and holds the nine validators it was written for', () => {
     const declaring = routesDeclaringValidateSearch();
     expect(declaring).toEqual([...KNOWN_VALIDATORS]);
     const covered = coveredPaths();
