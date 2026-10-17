@@ -6,12 +6,17 @@ import type { DependencyWithEndpoints } from '../../dependencies/dependency.repo
 import type { WithLagDayFactor } from '../../dependencies/lag-day-factor';
 
 /**
- * Guest read DTO for a dependency edge (ADR-0051 §4, F-M3) — the READ-ONLY logic tie the
- * TSLD needs to draw a link. Field-stripped to exactly the ADR scope: the edge id, its two
- * endpoints (by id only), the type, and the lag. It references endpoints by id — it does NOT
- * embed the endpoint name/code summaries the member DTO carries (the guest already has the
- * activity list) — and it deliberately omits the engine-owned `isDriving`, `lagCalendar`, and
- * ALL audit columns (version/createdAt/updatedAt/created-by). No `from` copies anything else.
+ * Guest read DTO for a dependency edge (ADR-0051 §4, F-M3; widened by ADR-0198) — the READ-ONLY
+ * logic tie the TSLD needs to draw a link. Field-stripped to exactly the ADR scope: the edge id,
+ * its two endpoints (by id only), the type, the lag, and the engine-owned `isDriving` link flag.
+ * It references endpoints by id — it does NOT embed the endpoint name/code summaries the member
+ * DTO carries (the guest already has the activity list) — and it deliberately omits
+ * `lagCalendar` and ALL audit columns (version/createdAt/updatedAt/created-by). No `from` copies
+ * anything else.
+ *
+ * `isDriving` is ONE bit per link, computed over inputs the guest cannot see (the lag and
+ * successor calendars) and so recoverable into none of them (ADR-0198 D2). It is the LINK's flag
+ * only: `ResourceAssignment.isDriving` (which resource drives) stays excluded.
  *
  * `lagDays` is measured on the relationship's OWN `lagCalendar` (ADR-0068 §4), the same rule the
  * member DTO applies — `from` takes a row already carrying `lagDayFactorMinutes`
@@ -46,6 +51,13 @@ export class GuestDependencyDto {
   })
   lagMinutes!: number;
 
+  @ApiProperty({
+    description:
+      'Engine-owned: true when this link sets its successor’s early start. Not the resource ' +
+      'assignment’s driving flag, which is never exposed.',
+  })
+  isDriving!: boolean;
+
   static from(entity: WithLagDayFactor<DependencyWithEndpoints>): GuestDependencyDto {
     return {
       id: entity.id,
@@ -56,6 +68,7 @@ export class GuestDependencyDto {
       // relationship's OWN lag calendar, exactly as the member DTO does (`docs/TECH_DEBT.md` #316).
       lagDays: minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes),
       lagMinutes: entity.lagMinutes,
+      isDriving: entity.isDriving,
     };
   }
 }

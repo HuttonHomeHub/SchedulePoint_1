@@ -748,11 +748,11 @@ is `@Public()` (bypasses the session guard) and instead resolves an
 construction). Reads go through the existing org-scoped repositories, scoped **only** by
 the token's `planId` + `organizationId`, and return **field-stripped, read-only** DTOs.
 
-| Method | Path                         | Notes                                                                                                                                                                                                                                                                              |
-| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                                                                                   |
-| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, lane, and progress (`status`, `percentComplete`). |
-| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days).                                                                                                                                                                                    |
+| Method | Path                         | Notes                                                                                                                                                                                                                                                                                                           |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                                                                                                                |
+| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, `isNearCritical` (ADR-0198), lane, and progress (`status`, `percentComplete`). |
+| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days and exact minutes), and `isDriving` (ADR-0198: whether the link sets its successor's early start).                                                                                                                |
 
 - **Uniform 404** — any dead / revoked / expired / soft-deleted-grant / deleted-plan
   token resolves to the same `404`, never `401/403` (no oracle).
@@ -770,13 +770,16 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   (`visualStart`/`visualConflict`/`visualConflictReason`/`visualDriftDays`/`remainingFloat`) —
   a guest is shown where the work sits, never the planner's working notes about why it sits
   there, and a float is analysis rather than the schedule a share link exists to show.
+  **Exposed as of ADR-0198:** `isNearCritical` on an activity and `isDriving` on a dependency, the
+  engine's own flags, equal to the member read. `ResourceAssignment.isDriving` (which resource
+  drives) is a different field and is **never** exposed.
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
   link), fired-and-forgotten so it never blocks or fails a read.
 
 #### Web surface (F-M4, flagged)
 
-The web surface for both halves ships behind `VITE_GUEST_SHARE_LINKS` (default off; ADR-0051
+The web surface for both halves ships behind `VITE_GUEST_SHARE_LINKS` (default on; ADR-0051
 F-M4): a member **Share links** dialog on the TSLD toolbar (`share` item) that calls the F-M2
 management endpoints above — list / create (showing the one-time guest URL with a Copy button) /
 revoke, gated on `plan:share` — and a **public `/share` route** (a sibling of the authenticated

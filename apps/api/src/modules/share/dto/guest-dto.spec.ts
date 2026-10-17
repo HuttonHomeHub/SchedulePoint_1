@@ -68,7 +68,8 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
     totalFloat: 5,
     freeFloat: 2,
     isCritical: true,
-    isNearCritical: false,
+    // `true` so a mapper that hard-codes `false` fails the value case (#403).
+    isNearCritical: true,
     constraintViolated: true,
     externalDriven: true,
     loeNoSpan: false,
@@ -140,7 +141,6 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'actualExpense',
   'accrualType',
   'freeFloat',
-  'isNearCritical',
   'scheduleAsLateAsPossible',
   'constraintViolated',
   'externalDriven',
@@ -209,6 +209,10 @@ describe('GuestActivityDto', () => {
         'lateFinish',
         'totalFloat',
         'isCritical',
+        // ADR-0198: a function of fields already exposed (`isCritical`, `totalFloat`) and a product
+        // constant, and its count is already public as `nearCriticalCount` — which activities make
+        // up that count, not a new category of information. `freeFloat` stays out.
+        'isNearCritical',
         'status',
         'percentComplete',
         'actualStart',
@@ -232,6 +236,7 @@ describe('GuestActivityDto', () => {
       durationDays: 2, // 2880 / 1440
       durationMinutes: 2880, // the exact stored value, unrounded
       isCritical: true,
+      isNearCritical: true,
       totalFloat: 5,
       status: 'IN_PROGRESS',
       percentComplete: 40,
@@ -299,19 +304,26 @@ function dependencyRow(): WithLagDayFactor<DependencyWithEndpoints> {
 describe('GuestDependencyDto', () => {
   const dto = GuestDependencyDto.from(dependencyRow());
 
-  it('exposes ONLY id, endpoints (by id), type and lag', () => {
+  it('exposes ONLY id, endpoints (by id), type, lag and the driving flag', () => {
     expect(Object.keys(dto).sort()).toEqual(
       // `lagMinutes` joined the scope with ADR-0070, for the same reason as `durationMinutes`:
-      // it is the exact form of `lagDays`, not a new datum.
-      ['id', 'predecessorId', 'successorId', 'type', 'lagDays', 'lagMinutes'].sort(),
+      // it is the exact form of `lagDays`, not a new datum. `isDriving` joined with ADR-0198: one
+      // engine-owned bit per link over inputs the guest cannot see, so it recovers no calendar.
+      ['id', 'predecessorId', 'successorId', 'type', 'lagDays', 'lagMinutes', 'isDriving'].sort(),
     );
+  });
+
+  it('carries the engine-owned link flag through, not a constant (ADR-0198)', () => {
+    expect(dto.isDriving).toBe(true);
+    expect(GuestDependencyDto.from({ ...dependencyRow(), isDriving: false }).isDriving).toBe(false);
   });
 
   it.each([
     'organizationId',
     'planId',
     'lagCalendar',
-    'isDriving',
+    // `ResourceAssignment.isDriving` (which resource drives) is a different field and is never
+    // exposed; the link's own flag is in the exact-key list above.
     'predecessor',
     'successor',
     'version',
