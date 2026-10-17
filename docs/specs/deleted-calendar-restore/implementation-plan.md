@@ -332,3 +332,39 @@ Each task's PR must satisfy the Feature Completion Criteria in [`docs/PROCESS.md
 | Plans already live on a deleted calendar stay so | med (unknown count) | med    | ADR-0195's remedy already covers them (restore the calendar). The owner can run spec §4.10's count query.                                                       |
 | Q2 answered "set aside"                          | —                   | med    | Then 1.2 maps the reason to a new `calendar-deleted` set-aside clause instead of a throw (≈ the same size). The undo journey asserts the clause, not Try again. |
 | Q1 answered "re-point"                           | —                   | high   | The design changes: an audit field for the re-point, a visible notice, and parity reasoning for the changed dates. Re-plan M2.                                  |
+
+## Database-architect review (2026-10-17)
+
+**Verdict: proceed with changes. No schema change is needed.**
+
+1. **No schema or index change: confirmed.** The batch reads use `idx_plans_delete_batch_id`
+   (`20260709160500_…/migration.sql:109`), `idx_activities_delete_batch_id` (`20260710092048_…:88`)
+   and `idx_calendars_delete_batch_id` (`20260710120000_…:84`). These are partial on
+   `delete_batch_id IS NOT NULL`, and an equality predicate implies that condition. None has been dropped.
+   The calendar-state read and the parent `FOR SHARE` are primary-key lookups. The EXPLAIN of the bin's widened lateral lookup on the scale seed stays owed (§4.7).
+2. **Lock order: no cycle among the paths listed.** One #520 hole is still open:
+   - Client delete reads `planIds` and `calendarIds` as snapshots, and only takes the project rows at
+     `project.updateMany` (`hierarchy-lifecycle.service.ts:378-404`). A **plan** restore, or a **project-calendar**
+     restore, that takes its project `FOR SHARE` therefore never meets the client root lock. The delete
+     then stamps the project over a restored plan or calendar, and nothing sweeps it: `plan.updateMany` is keyed by
+     `id IN planIds` (`:398-400`). **Change:** a restore locks every ancestor `FOR SHARE`, **top-down**
+     (client, then project). This applies to plan restore and to `CalendarsService.restore` (`calendars.service.ts:536-538`).
+     That is deadlock-free: deletes lock only their own root and never request an ancestor or a calendar advisory lock.
+     Add the barrier test for client-delete against plan-restore.
+   - Everything else checks out. Activity restore and activity/plan update take plan advisory, then calendar advisory. Plan restore takes no plan advisory
+     lock (`plans.service.ts:321-322`). Calendar delete and narrowing (`calendars.service.ts:316`, `:659`) and resource restore (`resources.service.ts:759`)
+     take calendar advisory locks and no plan advisory or hierarchy row lock. The expiry runner takes no
+     advisory lock. Its root claim does not conflict with `FOR SHARE … deleted_at IS NULL` on a row that is already deleted,
+     because that read matches nothing.
+3. **`FOR SHARE` is right.** `FOR KEY SHARE` would be wrong because it does not conflict with `FOR NO KEY UPDATE`. `FOR UPDATE` would
+   serialise sibling restores for no benefit. For the delete root lock, use raw
+   `SELECT … FOR NO KEY UPDATE` with `deleted_at IS NULL`, not a no-op `updateMany`: the update form writes a tuple and
+   bumps `updated_at` on every delete.
+4. **M4 and the expiry: M4 is worth keeping, but it closes only the restore route.** The narrowing guard counts **active**
+   referencers only (`calendar.repository.ts:747-770`; resources likewise, `calendars.service.ts:1039`). So a
+   soft-deleted plan, activity or resource in project X can still reference Y's calendar. When Y expires, the runner deletes Y's
+   calendars (`hierarchy-expiry.runner.ts:192-207`) against RESTRICT FKs (`schema.prisma:1012`, `:1546`, `:3331`).
+   That fails with 23503 every hour. An individually deleted activity in a live plan never expires, so the failure is
+   permanent. This was found by reading and has **not been run**. **Change:** file a TECH_DEBT row (follow-on, outside this
+   spec) to make the narrowing guard count references in any state. That is a code change, not a schema change, and it needs an
+   ADR-0172 `any-state` comment.
