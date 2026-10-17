@@ -20,6 +20,8 @@ import {
   selectableActivityTypes,
 } from '@/features/activities/schemas/activity-schemas';
 import type { ActivityGeneralValues } from '@/features/activities/schemas/activity-scope-schemas';
+import { formatCalendarDate } from '@/lib/format-date';
+import { spokenWorkingTime } from '@/lib/stated-duration';
 
 /**
  * What kind of activity this is, and how long it takes.
@@ -33,6 +35,15 @@ export const WORK_FIELDS = [
   'duration',
   'durationType',
 ] as const satisfies readonly (keyof ActivityGeneralValues)[];
+
+/** A saved summary's or level-of-effort's derived span, as the Work group states it (ADR-0197). */
+export interface DerivedSpan {
+  /** The span's length on the activity's own calendar: days (rounded) and the exact minutes. */
+  durationDays: number;
+  durationMinutes: number;
+  start: string;
+  finish: string;
+}
 
 /**
  * Work — the type, the duration, and how the two relate.
@@ -58,6 +69,7 @@ export function ActivityWorkFields({
   hoursPerDay,
   savedType,
   savedDurationMinutes,
+  derivedSpan,
 }: GroupProps<ActivityGeneralValues> & {
   /** The working-hours factor for the calendar the SCHEDULING scope currently selects (ADR-0070). */
   hoursPerDay: number | undefined;
@@ -69,11 +81,26 @@ export function ActivityWorkFields({
    * row rather than the live field: the server keys the date rule on the stored duration.
    */
   savedDurationMinutes?: number;
+  /**
+   * The engine-derived span of a saved summary or level-of-effort (ADR-0197): its length in working
+   * days and the dates it is drawn between. Absent when creating, for any other type, and where the
+   * engine has written none. Resolved by the host from the stored row for the reason `savedType` is
+   * (ADR-0089 D2b): this group has no row of its own, and it is a fact about the saved activity,
+   * not about whatever the type selector currently says.
+   */
+  derivedSpan?: DerivedSpan | undefined;
 }): JSX.Element {
   const { errors } = form.formState;
   const type = useWatch({ control: form.control, name: 'type' });
   const derived = isDurationDerivedType(type);
   const typeChangeHint = typeChangeDatesHint(savedType, savedDurationMinutes, type);
+  // Said only while the live type is the stored one: after the selector changes it, the span belongs
+  // to a type the planner is leaving, and describing it under the new type's paragraph would mislead.
+  const spoken = derivedSpan === undefined ? null : spokenWorkingTime(derivedSpan);
+  const derivedSpanSentence =
+    derivedSpan !== undefined && spoken !== null && type === savedType
+      ? `Currently ${spoken}, ${formatCalendarDate(derivedSpan.start)} to ${formatCalendarDate(derivedSpan.finish)}.`
+      : null;
 
   return (
     <FormSection title="Work" description="What kind of activity this is, and how long it takes.">
@@ -102,6 +129,9 @@ export function ActivityWorkFields({
                 earliest start-to-start predecessor to the finish of its latest finish-to-finish
                 successor. Add those links, then Recalculate.
               </p>
+              {derivedSpanSentence === null ? null : (
+                <p className="text-foreground text-sm">{derivedSpanSentence}</p>
+              )}
             </FieldGridFull>
           ) : type === 'WBS_SUMMARY' ? (
             <FieldGridFull>
@@ -111,6 +141,9 @@ export function ActivityWorkFields({
                 dependencies). To fill it, open each activity in the branch and set its WBS summary
                 to this one, then Recalculate.
               </p>
+              {derivedSpanSentence === null ? null : (
+                <p className="text-foreground text-sm">{derivedSpanSentence}</p>
+              )}
             </FieldGridFull>
           ) : null
         ) : (

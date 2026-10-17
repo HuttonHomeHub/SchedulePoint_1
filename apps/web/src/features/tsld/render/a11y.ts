@@ -7,6 +7,7 @@ import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatFinishVariance } from '@/lib/schedule-format';
+import { isDerivedSpanType, spokenWorkingTime, statedDuration } from '@/lib/stated-duration';
 
 /**
  * Pure text builders for the TSLD's parallel accessible representation (ADR-0026 D7, M5). Kept out
@@ -86,13 +87,13 @@ export function canvasLabel(a: { code: string | null; name: string }, withCode: 
  * **Null for a milestone.** The item never leaves its own bar, and a milestone has no bar to hold
  * it — its float is spoken in the Tier-1 sentence and drawn by the feasible window.
  *
- * **Null for a WBS summary too** (`docs/TECH_DEBT.md` #375). A summary's dates are an engine rollup
- * of its children (ADR-0038) but its stored duration is not: the importer writes `0`
- * (`xer-adapter.ts:478`) and recalculation never writes a summary's duration back
- * (`apps/api/src/modules/schedule/schedule.repository.ts:840-902`). So the item printed "0d · 0d
- * float left" under a bar spanning eleven months. The honest rolled-up figure needs the span in
- * working days on the right calendar, which the engine would have to write; until it does, the
- * item says nothing rather than something false.
+ * **A WBS summary prints its duration alone** (ADR-0197, closing `docs/TECH_DEBT.md` #375). It
+ * printed nothing while the only figure on the row was the stored `0` — "0d · 0d float left" under
+ * a bar spanning eleven months — and now prints the engine-derived span the caller passes in
+ * `durationDays`. It carries no float clause: a summary's float is 0 by convention
+ * (`compute.ts`), and "0d float left" would present a convention as a measurement. A
+ * Level-of-Effort prints its derived duration and keeps its float clause. The caller omits
+ * `durationDays` where the engine wrote none, and the item then draws nothing.
  *
  * "float left" rather than "float" because the figure is `remainingFloat` on the placed basis
  * (ADR-0148): the room from where the bar IS, not from where the network would put it.
@@ -106,15 +107,17 @@ export function centreItemText(
   },
   form: 'full' | 'short',
 ): string | null {
-  if (a.milestone || a.summary) return null;
+  if (a.milestone) return null;
   const duration = `${a.durationDays}d`;
-  if (form === 'short' || a.remainingFloat == null) return duration;
+  if (a.summary || form === 'short' || a.remainingFloat == null) return duration;
   return `${duration} · ${a.remainingFloat}d float left`;
 }
 
 /**
  * **Tier 1** — the one lean sentence spoken on every navigation keystroke:
- * `{code name}, {n working days}, {start}–{finish}, lane N, {float|critical}`. The working-day
+ * `{code name}, {n working days}, {start}–{finish}, lane N, {float|critical}`. A summary or
+ * level-of-effort says `spanning {n working days}` instead (ADR-0197), or its hours where the span is
+ * under half a day; a summary also omits the float. The working-day
  * duration is spoken because it is the same datum the on-canvas centre item shows (`Nd`) and is
  * *not* derivable from the spoken calendar dates — working days skip weekends/holidays (WCAG
  * 1.1.1). Float is added where it informs: `critical` already implies zero float (so just
@@ -127,10 +130,13 @@ export function describeActivity(
   opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource; withCodes?: boolean },
 ): string {
   const name = activityLabel(a, opts?.withCodes ?? false);
+  // The stated duration (ADR-0197): a summary's and a level-of-effort's is the engine-derived span, not
+  // the stored `0`, which is why the clause was never spoken for either.
+  // A summary or LOE says "spanning" because its length is the span it covers, not work it does.
+  const stated = statedDuration(a);
+  const spoken = stated === null ? null : spokenWorkingTime(stated);
   const duration =
-    a.durationDays > 0
-      ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
-      : '';
+    spoken === null ? '' : isDerivedSpanType(a.type) ? `, spanning ${spoken}` : `, ${spoken}`;
   /**
    * **The spoken dates are the DRAWN dates, through the one shared resolver** — and they were the
    * network's until the M-J gate pass (one-planning-surface), which is a WCAG 1.1.1/1.3.1 failure
@@ -177,9 +183,13 @@ export function describeActivity(
   // flags, which are pure-network facts and stay so: an activity is critical because of the
   // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
   // `floatDays()` labels it.
+  //
+  // **A WBS summary speaks no float** (ADR-0197): its float is 0 by convention (`compute.ts`), which the
+  // canvas's centre item already withholds, and "0 days float left" would present a convention as a
+  // measurement. An LOE keeps its clause, as its centre item does.
   const floatPart = a.isCritical
     ? ', critical'
-    : a.remainingFloat === null
+    : a.type === 'WBS_SUMMARY' || a.remainingFloat === null
       ? ''
       : a.isNearCritical
         ? `, near-critical, ${floatDays(a.remainingFloat)}`

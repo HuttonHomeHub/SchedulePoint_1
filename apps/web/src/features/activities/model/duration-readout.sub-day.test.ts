@@ -43,18 +43,69 @@ describe('formatDurationRead', () => {
   });
 });
 
-describe('formatDurationCell (the one Duration cell, #375)', () => {
+describe('formatDurationCell (the one Duration cell, #375, ADR-0197)', () => {
   const zero = { durationDays: 0, durationMinutes: 0 };
-  it('reads an em dash for both milestone types and a WBS summary', () => {
+  it('reads an em dash for both milestone types', () => {
     expect(formatDurationCell({ ...zero, type: 'START_MILESTONE' }, EIGHT)).toBe('—');
     expect(formatDurationCell({ ...zero, type: 'FINISH_MILESTONE' }, EIGHT)).toBe('—');
-    expect(formatDurationCell({ ...zero, type: 'WBS_SUMMARY' }, EIGHT)).toBe('—');
   });
 
-  it('reads every other type exactly as formatDurationRead does', () => {
-    for (const type of ['TASK', 'LEVEL_OF_EFFORT', 'RESOURCE_DEPENDENT']) {
+  it('reads every plain type exactly as formatDurationRead does', () => {
+    for (const type of ['TASK', 'RESOURCE_DEPENDENT']) {
       expect(formatDurationCell({ type, durationDays: 0, durationMinutes: 240 }, EIGHT)).toBe('4h');
       expect(formatDurationCell({ type, ...zero }, EIGHT)).toBe('0 d');
     }
+  });
+
+  describe.each(['WBS_SUMMARY', 'LEVEL_OF_EFFORT'])('a %s states the derived duration', (type) => {
+    // This block restates two assertions the #375 fix pinned: that a summary reads `—` and that an LOE
+    // reads `0 d`. Both described the STORED duration being unusable, which is still true — the cell now
+    // reads the engine-derived span instead, and `—` means the engine wrote none.
+    it('in whole days', () => {
+      expect(
+        formatDurationCell(
+          { type, ...zero, derivedDurationDays: 47, derivedDurationMinutes: 47 * 480 },
+          EIGHT,
+        ),
+      ).toBe('47 d');
+    });
+
+    it('in the sub-day grammar when the span is not a whole number of days', () => {
+      expect(
+        formatDurationCell(
+          { type, ...zero, derivedDurationDays: 47, derivedDurationMinutes: 46 * 480 + 240 },
+          EIGHT,
+        ),
+      ).toBe('46d 4h');
+    });
+
+    it('as an em dash where the engine wrote none, never the stored zero', () => {
+      expect(formatDurationCell({ type, ...zero, derivedDurationMinutes: null }, EIGHT)).toBe('—');
+      expect(formatDurationCell({ type, ...zero }, EIGHT)).toBe('—');
+    });
+
+    it('as a real zero when the span is genuinely zero', () => {
+      expect(
+        formatDurationCell(
+          { type, ...zero, derivedDurationDays: 0, derivedDurationMinutes: 0 },
+          EIGHT,
+        ),
+      ).toBe('0 d');
+    });
+  });
+
+  it('ignores a derived value on a task', () => {
+    expect(
+      formatDurationCell(
+        {
+          type: 'TASK',
+          durationDays: 2,
+          durationMinutes: 960,
+          derivedDurationDays: 9,
+          derivedDurationMinutes: 9 * 480,
+        },
+        EIGHT,
+      ),
+    ).toBe('2 d');
   });
 });

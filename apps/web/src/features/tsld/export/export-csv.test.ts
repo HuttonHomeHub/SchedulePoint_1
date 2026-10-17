@@ -54,6 +54,28 @@ describe('buildScheduleCsv', () => {
     expect(header).toContain('Total float,Free float,Critical');
   });
 
+  it('writes a summary and a level-of-effort the derived duration, blank where there is none (ADR-0197)', () => {
+    // Their stored duration is 0, which is not their length; a task keeps its stored figure.
+    const durationIndex = SCHEDULE_COLUMNS.findIndex((c) => c.header === 'Duration (days)');
+    const cell = (over: Partial<ActivitySummary>): string =>
+      lines(buildScheduleCsv([act(over)], NO_PARENT))[1]!.split(',')[durationIndex]!;
+    for (const type of ['WBS_SUMMARY', 'LEVEL_OF_EFFORT'] as const) {
+      expect(
+        cell({
+          type,
+          durationDays: 0,
+          durationMinutes: 0,
+          derivedDurationDays: 47,
+          derivedDurationMinutes: 47 * 1440,
+        }),
+      ).toBe('47');
+      expect(
+        cell({ type, durationDays: 0, durationMinutes: 0, derivedDurationMinutes: null }),
+      ).toBe('');
+    }
+    expect(cell({ type: 'TASK', durationDays: 5 })).toBe('5');
+  });
+
   it('renders booleans as Yes/No', () => {
     const csvYes = buildScheduleCsv([act({ isCritical: true })], NO_PARENT);
     const csvNo = buildScheduleCsv([act({ isCritical: false })], NO_PARENT);

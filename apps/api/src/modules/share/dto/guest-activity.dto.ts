@@ -2,7 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ActivityStatus, ActivityType, type Activity } from '@prisma/client';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
-import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
+import {
+  DERIVED_DURATION_DAYS_DESCRIPTION,
+  DERIVED_DURATION_MINUTES_DESCRIPTION,
+  derivedDuration,
+  minutesToDays,
+  type WithDayFactor,
+} from '../../activities/day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
 /**
@@ -16,7 +22,9 @@ import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
  * field-stripped, READ-ONLY projection for the session-less External-Guest surface. It exposes
  * ONLY the schedule + progress fields the guest scope allows: identity (id/code/name/type), the
  * computed CPM dates, the PLACED span (where the bar is drawn — ADR-0163), duration/float/
- * critical, lane position, and the progress trio.
+ * critical, the engine-derived duration of a summary or level-of-effort
+ * (`derivedDurationMinutes`/`derivedDurationDays`, ADR-0197 — schedule, not analysis), lane
+ * position, and the progress trio.
  *
  * EXCLUDED BY CONSTRUCTION (must NEVER appear — no `from` copies them), each for a reason ADR-0163
  * §4.5/§4.6 states rather than assumes:
@@ -70,6 +78,20 @@ export class GuestActivityDto {
       'four-hour activity as `durationDays: 0` and cannot tell it apart from a milestone.',
   })
   durationMinutes!: number;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: DERIVED_DURATION_MINUTES_DESCRIPTION,
+  })
+  derivedDurationMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: DERIVED_DURATION_DAYS_DESCRIPTION,
+  })
+  derivedDurationDays!: number | null;
 
   @ApiProperty({ description: 'Graphical y-lane / vertical position on the TSLD canvas.' })
   laneIndex!: number;
@@ -138,6 +160,7 @@ export class GuestActivityDto {
       // day-rounded one a reader expects to see on a bar.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
       durationMinutes: entity.durationMinutes,
+      ...derivedDuration(entity),
       laneIndex: entity.laneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),

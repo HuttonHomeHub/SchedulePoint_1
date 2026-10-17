@@ -128,31 +128,41 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     }
   });
 
-  it('draws nothing under a WBS summary, whose stored duration is not its span (#375)', () => {
-    // An imported summary: stored duration 0, dates rolled up across a wide span. Before #375 the
-    // painter printed "0d · 0d float left" here. The TASK beside it is the control — the same scene
-    // must still produce ITS item, so an empty result cannot mean the layer drew nothing at all.
-    const summary = bar({
-      id: 's',
-      type: 'WBS_SUMMARY',
-      label: 'EDF - Hynamics Proposal',
-      durationDays: 0,
-      remainingFloat: 0,
-      earlyFinish: '2026-01-30',
-    });
+  // Restates #375's "draws nothing under a WBS summary" (ADR-0197): the item was withheld while the
+  // only figure was the stored 0. The render model now carries the engine-derived span as
+  // `durationDays`, and OMITS it where the engine wrote none — which is what draws nothing.
+  it('prints a WBS summary its derived duration alone, and nothing where there is none', () => {
+    // The TASK beside each is the control — the same scene must still produce ITS item, so an empty
+    // result cannot mean the layer drew nothing at all.
     const task = bar({
       id: 't',
       laneIndex: 0,
       earlyStart: '2026-02-09',
       earlyFinish: '2026-02-20',
     });
+    const summary = bar({
+      id: 's',
+      type: 'WBS_SUMMARY',
+      label: 'EDF - Hynamics Proposal',
+      durationDays: 21,
+      remainingFloat: 0,
+      earlyFinish: '2026-01-30',
+    });
     const texts = centreItems(
       withToggles([summary, task], { dates: true, labels: true }),
       VIEW,
     ).map((item) => item.text);
-    expect(texts).not.toContain('0d · 0d float left');
-    expect(texts).not.toContain('0d');
+    expect(texts).toContain('21d');
+    expect(texts).not.toContain('21d · 0d float left');
     expect(texts).toContain('5d · 3d float left');
+
+    const { durationDays: _omitted, ...underived } = summary;
+    const none = centreItems(
+      withToggles([underived, task], { dates: true, labels: true }),
+      VIEW,
+    ).map((item) => item.text);
+    expect(none).not.toContain('0d');
+    expect(none).toEqual(['5d · 3d float left']);
   });
 
   it('falls back to the duration alone where the full form does not fit', () => {

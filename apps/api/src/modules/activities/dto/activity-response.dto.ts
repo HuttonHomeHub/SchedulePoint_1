@@ -11,7 +11,13 @@ import {
 import type { ActivitySummary, VisualConflictReason } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
-import { minutesToDays, type WithDayFactor } from '../day-factor';
+import {
+  DERIVED_DURATION_DAYS_DESCRIPTION,
+  DERIVED_DURATION_MINUTES_DESCRIPTION,
+  derivedDuration,
+  minutesToDays,
+  type WithDayFactor,
+} from '../day-factor';
 import type { WithAssignmentCount } from '../resource-assignment-counts';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
@@ -70,6 +76,20 @@ export class ActivityResponseDto implements ActivitySummary {
       'a 4-hour activity and only ever see it as `durationDays: 0` (TECH_DEBT #78).',
   })
   durationMinutes!: number;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: DERIVED_DURATION_MINUTES_DESCRIPTION,
+  })
+  derivedDurationMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: DERIVED_DURATION_DAYS_DESCRIPTION,
+  })
+  derivedDurationDays!: number | null;
 
   @ApiProperty({
     enum: DurationType,
@@ -476,6 +496,7 @@ export class ActivityResponseDto implements ActivitySummary {
       drivingResourceCalendarId: entity.drivingResourceCalendarId,
       resourceAssignmentCount: entity.resourceAssignmentCount,
       durationMinutes: entity.durationMinutes,
+      ...derivedDuration(entity),
       durationType: entity.durationType,
       constraintType: entity.constraintType,
       constraintDate: day(entity.constraintDate),

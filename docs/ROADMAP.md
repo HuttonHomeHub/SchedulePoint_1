@@ -912,6 +912,11 @@ discriminators. Each becomes a spec/plan before build:
   printed programme. The CPM engine and the recalc parity gate are untouched. Deliberately not
   done: the band is select-only (a summary's dates are an engine rollup, so there is nothing on it
   to drag), and the derived bucket is never persisted.
+- **A derived span states its own length** — **in progress** (approved 2026-10-17,
+  [ADR-0197](adr/0197-a-derived-span-states-its-own-length.md); spec and plan at
+  [`docs/specs/wbs-summary-duration/`](specs/wbs-summary-duration/)): the engine writes the working
+  time a WBS summary's or Level-of-Effort's span covers, replacing `—` and a false `0 d` in every
+  place a duration is shown. The engine, API, web surfaces and the MSPDI export are built.
 - **Canvas authoring flow & link routing** — **shipped** (ADR-0064
   `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
   one arm/disarm contract across all four tool modes with a mode statement band above the scene,

@@ -460,7 +460,7 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
         kind: 'drop',
         entity: 'activity',
         sourceRef: activity.code,
-        detail: `"${activity.name}" is a Level of Effort; written as an ordinary task with its duration`,
+        detail: `"${activity.name}" is a Level of Effort; written as an ordinary task with its ${activity.derivedDurationMinutes === undefined ? 'stored' : 'derived'} duration`,
         reason: 'MSPDI has no level-of-effort activity type (ADR-0035 §21)',
       });
     }
@@ -474,7 +474,14 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
     ];
     if (isSummary) children.push(leaf('Summary', '1'));
     if (isMilestone) children.push(leaf('Milestone', '1'));
-    children.push(leaf('Duration', minutesToIsoDuration(activity.durationMinutes)));
+    // A summary's and an LOE's stored duration is `0` (ADR-0197); where the engine derived their span
+    // the file states that, and otherwise the stored value, as before.
+    children.push(
+      leaf(
+        'Duration',
+        minutesToIsoDuration(activity.derivedDurationMinutes ?? activity.durationMinutes),
+      ),
+    );
     if (activity.calendarId !== null) children.push(leaf('CalendarUID', activity.calendarId));
 
     // Constraints + progress ride the real-activity <Task>s (a summary carries neither).

@@ -477,6 +477,16 @@ export interface ActivitySummary {
    * (ADR-0070).
    */
   durationMinutes: number;
+  /**
+   * Working **minutes** the derived span of a `WBS_SUMMARY` or `LEVEL_OF_EFFORT` covers (ADR-0197),
+   * counted by the engine on the activity's own calendar. **Engine-owned**, never an input. `null`
+   * for every other type, for a summary with no children, for a level-of-effort with no resolvable
+   * span, and until a recalculation has written it. Read it through the one Duration cell function,
+   * never re-derive it from the rolled-up dates (they are day-granular).
+   */
+  derivedDurationMinutes: number | null;
+  /** {@link ActivitySummary.derivedDurationMinutes} rounded to whole days on the row's day factor. */
+  derivedDurationDays: number | null;
   constraintType: ConstraintType | null;
   constraintDate: string | null;
   /**

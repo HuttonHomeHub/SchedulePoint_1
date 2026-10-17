@@ -22,8 +22,9 @@ export interface ExportColumn {
   readonly kind: ColumnKind;
   /**
    * The Prisma field it is read from, when the exported name differs. The stored float columns are
-   * minutes while the API serves the same names in working days, so the file renames them rather
-   * than let a reader assume the API's unit.
+   * WORKING DAYS on the activity's own calendar (`writeResults` divides the engine's minutes by the
+   * day factor before it stores them, ADR-0036 §7), so the file names them `…Days` rather than let a
+   * reader assume the `…Minutes` of the duration columns beside them.
    */
   readonly source?: string;
 }
@@ -297,8 +298,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'earlyFinish:date',
       'lateStart:date',
       'lateFinish:date',
-      'totalFloatMinutes:int=totalFloat',
-      'freeFloatMinutes:int=freeFloat',
+      'totalFloatDays:int=totalFloat',
+      'freeFloatDays:int=freeFloat',
       'isCritical:boolean',
       'isNearCritical:boolean',
       'constraintViolated:boolean',
@@ -311,7 +312,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'visualConflict:boolean',
       'visualDriftDays:int',
       'visualConflictReason:enum',
-      'remainingFloatMinutes:int=remainingFloat',
+      'remainingFloatDays:int=remainingFloat',
       'leveledStart:date',
       'leveledFinish:date',
       'levelingDelayMinutes:int',
@@ -322,6 +323,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'createdBy:text',
       'updatedBy:text',
       'deletedAt:instant',
+      // 1.1 — appended, not placed beside the other computed columns: a reader taking columns by
+      // position keeps working within a major (docs/ORGANISATION_EXPORT_FORMAT.md "Versioning").
+      'derivedDurationMinutes:int',
     ),
     withheld: {
       version: VERSION,
@@ -518,7 +522,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'baselineFinish:date',
       'lateStart:date',
       'lateFinish:date',
-      'totalFloatMinutes:int=totalFloat',
+      'totalFloatDays:int=totalFloat',
       'isCritical:boolean',
       'budgetedCost:bigint',
       'budgetedExpense:bigint',
@@ -892,7 +896,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '1.0';
+export const EXPORT_FORMAT_VERSION = '2.0';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';

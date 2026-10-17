@@ -145,6 +145,24 @@ describe('toRenderActivities', () => {
     expect(row!.durationDays).toBe(5);
   });
 
+  it('carries a summary’s and a level-of-effort’s derived duration, and no key where there is none (ADR-0197)', () => {
+    for (const type of ['WBS_SUMMARY', 'LEVEL_OF_EFFORT'] as const) {
+      const [derived] = toRenderActivities([
+        activity({
+          type,
+          durationDays: 0,
+          durationMinutes: 0,
+          derivedDurationDays: 47,
+          derivedDurationMinutes: 47 * 1440,
+        }),
+      ]);
+      expect(derived!.durationDays).toBe(47);
+      // Absent, not 0: the centre item reads an absent figure as "draw nothing".
+      const [none] = toRenderActivities([activity({ type, durationDays: 0, durationMinutes: 0 })]);
+      expect(none).not.toHaveProperty('durationDays');
+    }
+  });
+
   it('threads percentComplete through — the in-bar progress fill (ADR-0052 M4) reads the same value the row reports', () => {
     expect(toRenderActivities([activity({ percentComplete: 40 })])[0]!.percentComplete).toBe(40);
     expect(toRenderActivities([activity()])[0]!.percentComplete).toBe(0);

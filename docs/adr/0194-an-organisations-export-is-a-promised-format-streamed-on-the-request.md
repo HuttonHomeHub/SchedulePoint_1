@@ -10,6 +10,7 @@
   §4.9 · **Plan:** [`implementation-plan.md`](../specs/organisation-export/implementation-plan.md) ·
   **Format:** [`docs/ORGANISATION_EXPORT_FORMAT.md`](../ORGANISATION_EXPORT_FORMAT.md)
 - **Date:** 2026-10-14
+- **Amended 2026-10-17 (format 2.0):** D2 said the stored floats were minutes and named them `totalFloatMinutes`. They are working days on the activity's calendar (`writeResults` divides the engine's minutes by the day factor), so the file labelled them wrongly. Renamed to `totalFloatDays`, `freeFloatDays`, `remainingFloatDays` (and the baseline's `totalFloatDays`), a major format change; nothing had been downloaded.
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Implements:** [ADR-0085](0085-privacy-operations.md) D4 (the organisation export, Org Admin only) and D5 (it is
   audited as `privacy.exported`). **Amends:** `docs/PROJECT_BRIEF.md` §14 ("export generation is async / job-queue
@@ -54,8 +55,7 @@ formula guard (now shared as `csvCell` in `@repo/interchange`), so a negative nu
 authoritative and the CSV is a view. Adding a file or column is a minor format change, removing or retyping one is a
 major change and, after 1.0, an API major. Readers ignore what they do not know. The database layout stays unpromised,
 and there are no request options in v1, because each option multiplies the promised shapes. Every duration, lag and float column's name
-carries its unit (the stored floats are minutes while the API serves working days, so the file says
-`totalFloatMinutes`). New columns are appended at the end and a new enum value is a minor change. The three
+carries its unit (the floats are stored in working days, so the file says `totalFloatDays`). New columns are appended at the end and a new enum value is a minor change. The three
 migration-record files are informational and outside the promise, and the keys inside the two JSON columns are
 informational too. No database name appears in the manifest. A test compares
 `docs/ORGANISATION_EXPORT_FORMAT.md` with the registry.

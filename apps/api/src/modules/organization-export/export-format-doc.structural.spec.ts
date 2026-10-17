@@ -61,7 +61,7 @@ describe('the organisation export format document', () => {
       // The unit is stated for every column that has one, and a finish date says it is inclusive.
       for (const [, field = '', kind = '', note = ''] of rows) {
         if (/Minutes$/.test(field)) expect(note).toMatch(/^minutes/);
-        if (/Days$/.test(field)) expect(note).toBe('days');
+        if (/Days$/.test(field)) expect(note).toMatch(/^(working )?days$/);
         if (kind === 'date' && (/Finish$/.test(field) || field === 'endDate')) {
           expect(note).toBe('inclusive last day');
         }

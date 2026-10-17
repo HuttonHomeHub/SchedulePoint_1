@@ -131,6 +131,7 @@ function activity(id: string, planId: string, overrides: Partial<Activity> = {})
     levelingDelayMinutes: null,
     levelingWindowExceeded: false,
     selfOverAllocated: false,
+    derivedDurationMinutes: null,
     remainingDurationMinutes: null,
     suspendDate: null,
     resumeDate: null,

@@ -293,7 +293,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the twenty-three engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the twenty-four engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -802,7 +802,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the twenty-three engine
+   * id can never write across a plan or tenant). Sets only the twenty-four engine
    * columns; a no-op for an empty result set.
    *
    * The caller holds the plan advisory lock, which the lock-free placement writers do not, so the
@@ -922,6 +922,14 @@ export class ScheduleRepository {
     );
     const levelingWindowExceeded = results.map((r) => r.levelingWindowExceeded ?? false);
     const selfOverAllocated = results.map((r) => r.selfOverAllocated ?? false);
+    /**
+     * The derived duration of a summary / LOE (ADR-0197), the TWENTY-FIFTH `unnest` argument —
+     * appended after `self_over_allocated` so no pinned index moves. Written for EVERY result, `null`
+     * included: the NULL is what clears an activity that has stopped being a summary or an LOE, which
+     * a write limited to those two types would leave stale. Cast `::int[]`, because on a plan with
+     * neither type this is an ALL-NULL array and Prisma sends it with no element-type hint.
+     */
+    const derivedDurationMinutes = results.map((r) => r.derivedDurationMinutes ?? null);
 
     const updated = await db.$executeRaw`
       UPDATE activities AS a
@@ -948,7 +956,8 @@ export class ScheduleRepository {
         leveled_finish = v.leveled_finish,
         leveling_delay_minutes = v.leveling_delay_minutes,
         leveling_window_exceeded = v.leveling_window_exceeded,
-        self_over_allocated = v.self_over_allocated
+        self_over_allocated = v.self_over_allocated,
+        derived_duration_minutes = v.derived_duration_minutes
       FROM unnest(
         ${ids}::uuid[],
         ${earlyStart}::date[],
@@ -973,13 +982,15 @@ export class ScheduleRepository {
         ${leveledFinish}::text[]::date[],
         ${levelingDelayMinutes}::int[],
         ${levelingWindowExceeded}::boolean[],
-        ${selfOverAllocated}::boolean[]
+        ${selfOverAllocated}::boolean[],
+        ${derivedDurationMinutes}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
         external_driven, loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
         visual_conflict, visual_drift_days, remaining_float, visual_conflict_reason, leveled_start,
-        leveled_finish, leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
+        leveled_finish, leveling_delay_minutes, leveling_window_exceeded, self_over_allocated,
+        derived_duration_minutes
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

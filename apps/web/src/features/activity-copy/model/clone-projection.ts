@@ -255,6 +255,16 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
       'Engine output (one-planning-surface M-D): total float minus the drift, recomputed by the ' +
       'next recalculation. A clone carries no placement, so it has no drift to have spent.',
   },
+  derivedDurationMinutes: {
+    disposition: 'withheld',
+    reason:
+      'Engine output (ADR-0197): the working time a summary or level-of-effort span covers, ' +
+      'rewritten by the next recalculation. A clone has no calculated span yet.',
+  },
+  derivedDurationDays: {
+    disposition: 'withheld',
+    reason: 'The day-rounded form of derivedDurationMinutes (ADR-0197); engine-owned, never input.',
+  },
   leveledStart: { disposition: 'withheld', reason: 'Levelling output (ADR-0041), engine-owned.' },
   leveledFinish: { disposition: 'withheld', reason: 'Levelling output (ADR-0041), engine-owned.' },
   levelingDelayDays: {

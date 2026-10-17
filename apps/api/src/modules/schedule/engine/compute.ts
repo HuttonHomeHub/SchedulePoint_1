@@ -580,6 +580,8 @@ export function computeSchedule(
   // by-convention 0 float. An EMPTY summary (no children) collapses to the data date (the defined empty
   // convention). No summary ⇒ this loop is empty and every prior map is untouched (the parity gate).
   const summaryIds = graph.order.filter((id) => isSummary(graph.activities.get(id)!.type));
+  // A childless summary's collapse to the data date is a placement, not a span, so it states no duration.
+  const emptySummaries = new Set<string>();
   if (summaryIds.length > 0) {
     const childrenByParent = new Map<string, string[]>();
     for (const id of graph.order) {
@@ -611,6 +613,7 @@ export function computeSchedule(
         // Empty summary (§24): collapse to the data date — a defined zero-length point, never NaN.
         esInst = dataDateAbs;
         efInst = dataDateAbs;
+        emptySummaries.add(id);
       } else {
         esInst = Infinity;
         efInst = -Infinity;
@@ -924,6 +927,11 @@ export function computeSchedule(
     const placedStartInst = drawnOnPass1 ? esInst : vDisplayInst;
     const placedFinishInst = drawnOnPass1 ? efInst : vPlacedFinishInst;
 
+    // The rolled instants the passes stored (post rollForward/Math.max), so the figure is the length of the
+    // drawn span; absent for any other type so a plan with neither is byte-identical (the parity gate).
+    const derivedSpan =
+      (activityIsLoe && !loeNoSpan.get(id)) || (activityIsSummary && !emptySummaries.has(id));
+
     results.push({
       activityId: id,
       earlyStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, esInst),
@@ -943,6 +951,14 @@ export function computeSchedule(
       // External-driven (§30) is present only when true — absent on the no-external path (parity),
       // mirroring the optional levelling-overlay fields below.
       ...(externalDriven.get(id) ? { externalDriven: true } : {}),
+      ...(derivedSpan
+        ? {
+            derivedDurationMinutes: cal.workingTimeBetween(
+              absMinutesToInstant(esInst),
+              absMinutesToInstant(efInst),
+            ),
+          }
+        : {}),
       loeNoSpan: loeNoSpan.get(id) ?? false,
       resourceDriverMissing: activity.resourceDriverMissing ?? false,
       earlyStart: earlyStartDate,

@@ -192,3 +192,39 @@ describe('writeResults — remaining float is one rounding, not two (FC-4)', () 
     expect(args[17], 'remaining_float is the 18th, and it is the correct form').toEqual([correct]);
   });
 });
+
+/**
+ * The derived duration (ADR-0197) is the TWENTY-FIFTH `unnest` argument, appended after
+ * `self_over_allocated` so no pinned index above moves, and it is written for EVERY result — a `null`
+ * included, because the NULL is what clears an activity that stopped being a summary or an LOE. Like the
+ * case above this reads the mocked argument array and cannot see the `SET` line; the real-Postgres
+ * read-back is `derived-duration.e2e-spec.ts`.
+ */
+describe('writeResults — derived duration is the 25th argument', () => {
+  it('passes the minutes by position, and null for a result that has none', async () => {
+    const captured: unknown[][] = [];
+    const tx = {
+      $executeRaw: vi.fn((_s: unknown, ...args: unknown[]) => {
+        captured.push(args);
+        return Promise.resolve(2);
+      }),
+      $queryRaw: vi.fn(() => Promise.resolve([])),
+    };
+    const repo = new ScheduleRepository({} as unknown as PrismaService);
+
+    await repo.writeResults(
+      'org-1',
+      'plan-1',
+      [{ ...result('a', 0), derivedDurationMinutes: 6720 }, result('b', 0)],
+      new Map([
+        ['a', 1440],
+        ['b', 1440],
+      ]),
+      tx as never,
+    );
+
+    const args = captured[0]!;
+    expect(args[23], 'self_over_allocated stays the 24th').toEqual([false, false]);
+    expect(args[24], 'derived_duration_minutes is the 25th').toEqual([6720, null]);
+  });
+});

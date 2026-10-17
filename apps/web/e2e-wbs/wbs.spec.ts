@@ -3,6 +3,7 @@ import { expect, test } from '../e2e-support/test';
 import {
   activityCount,
   createPlan,
+  derivedDurationDays,
   diagramActivityList,
   ensurePen,
   onboard,
@@ -122,6 +123,23 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   await recalculate(page, orgSlug);
   await ensurePen(page);
 
+  // ------------------------------------------------- ADR-0197: the summary states its own length
+  // Before the engine wrote it, a summary's Duration cell read an em dash (and an LOE's read `0 d`).
+  // The figure is asserted against what the API returns for the same row, so the screen and the
+  // source cannot agree by both being wrong, and a `—` after the recalculation above is the failure.
+  const substructureDays = await derivedDurationDays(page, orgSlug, 'Substructure');
+  expect(
+    substructureDays,
+    'a recalculated summary with children states a duration',
+  ).toBeGreaterThan(0);
+  await openActivitiesPanel(page);
+  const summaryRow = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('button', { name: 'Actions for Substructure' }) });
+  await expect(
+    summaryRow.getByText(`${String(substructureDays)} d`, { exact: true }),
+  ).toBeVisible();
+
   // ------------------------------------------------- M4: the pinned canvas band
   // The a11y invariant first (ADR-0063 §4): summaries leave the SCENE when the band is on, and must
   // not leave the accessibility tree with it. The listbox is the only way an AT user reaches a bar.
@@ -159,6 +177,15 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   const grid = page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
   await expect(grid).toBeVisible();
   await expect(grid.getByText('Unassigned')).toHaveCount(0);
+  // The Gantt's Duration column is the same cell function (ADR-0197), so the summary reads the figure
+  // the table did.
+  await expect(
+    grid
+      .getByRole('row')
+      .filter({ hasText: 'Substructure' })
+      .first()
+      .getByText(`${String(substructureDays)} d`, { exact: true }),
+  ).toBeVisible();
 
   await seedActivities(page, orgSlug, [{ name: 'Loose end' }]);
   await recalculate(page, orgSlug);

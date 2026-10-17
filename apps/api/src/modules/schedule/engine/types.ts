@@ -325,6 +325,14 @@ export interface EngineResult {
    */
   loeNoSpan: boolean;
   /**
+   * The working minutes a `WBS_SUMMARY`'s or `LEVEL_OF_EFFORT`'s derived span covers, counted on the
+   * activity's own calendar (falling back to the plan's) between the rolled early start and finish the
+   * passes store — the span both bases draw. **Absent** for every other type (the parity default, like
+   * {@link externalDriven}), for a summary with no children and for an LOE with `loeNoSpan`: those have
+   * a defined placement, not a measurement. A summary whose children are all milestones is a real 0.
+   */
+  derivedDurationMinutes?: number;
+  /**
    * Resource-dependent driver-missing produce-and-flag (M7.2, ADR-0035 §23 / ADR-0039): true when a
    * `RESOURCE_DEPENDENT` activity has no driving resource assignment, so its driving calendar could not
    * be resolved. The activity is still scheduled (on the fallback calendar — activity own → plan

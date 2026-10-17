@@ -219,3 +219,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0193](0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)                    | A permanent delete is previewed by the code that performs it, and arming is a host act     | Accepted           |
 | [0194](0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)            | An organisation's export is a promised format, streamed on the request                     | Proposed           |
 | [0196](0196-a-redundant-link-is-one-no-duration-could-make-matter.md)                           | A redundant link is one no duration could make matter                                      | Accepted           |
+| [0197](0197-a-derived-span-states-its-own-length.md)                                            | A derived span states its own length, and the engine is what measures it                   | Accepted           |

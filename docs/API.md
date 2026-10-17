@@ -324,6 +324,20 @@ where the two disagree — **read the reason wherever the sentence or the mark d
 Never derive `remainingFloat` client-side from `totalFloat − visualDriftDays`: the difference of two
 roundings is not the rounding of the difference, and minutes are persisted for neither input.
 
+**A summary's and a level-of-effort's duration is engine output** (ADR-0197). Every activity read
+and the guest share read carry two further fields:
+
+| Field                    | On                         | Meaning                                                                                                                                                                                            |
+| ------------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `derivedDurationMinutes` | activity reads, guest read | Working minutes the derived span of a `WBS_SUMMARY` or `LEVEL_OF_EFFORT` covers, counted by the engine on the activity's own calendar (the plan's when it has none). `null` otherwise — see below. |
+| `derivedDurationDays`    | activity reads, guest read | The same, rounded to whole days on the row's day factor — lossy, as `durationDays` is beside `durationMinutes`.                                                                                    |
+
+Both are `null` for every other type, for a summary with no children, for a level-of-effort with no
+resolvable span (`loeNoSpan`), and until a recalculation has written them; a summary of milestones
+only is a real `0`. The server withholds a stored value from a row whose type is no longer one of
+the two, so a type change is never read as a duration before the next recalculation clears it. They
+are never accepted on a write and never change `durationMinutes`, which stays the planner's input.
+
 ### Baseline variance basis (`placement-baseline-variance`, amending ADR-0025)
 
 `GET …/plans/:planId/baselines/variance`'s `meta.basis: 'PLACED' | 'NETWORK' | null` names which
@@ -875,6 +889,12 @@ finding. A calendar name the target tier already holds is created afresh as
 calendars sharing a name can have different working weeks. **Export** emits `clndr_type` from the
 stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
 reports the tier as a drop.
+
+**An MSPDI export states a summary's and a Level-of-Effort's derived duration** (ADR-0197). Their
+stored duration is `0`, so `<Duration>` for either is the engine-derived `derivedDurationMinutes`
+where a recalculation has written one, and the stored value otherwise (the Level-of-Effort drop
+finding says which). A task's `<Duration>` is unchanged, the importer reads `<Duration>` for a task
+only, so nothing re-imports differently; the XER export is unchanged.
 
 ### Calendar scope tiers (ADR-0053)
 

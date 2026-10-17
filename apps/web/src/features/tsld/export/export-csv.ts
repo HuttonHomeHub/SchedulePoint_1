@@ -8,6 +8,7 @@ import {
 } from '@/features/activities';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatMoney } from '@/lib/format-money';
+import { statedDuration } from '@/lib/stated-duration';
 
 /**
  * The pure, DOM-free **Schedule CSV** serialiser for the TSLD export deliverables (spec
@@ -101,7 +102,16 @@ export const SCHEDULE_COLUMNS: readonly ScheduleColumn[] = [
   { header: 'Code', cell: (a) => a.code ?? '' },
   { header: 'Name', cell: (a) => a.name },
   { header: 'Type', cell: (a) => ACTIVITY_TYPE_LABELS[a.type] },
-  { header: 'Duration (days)', cell: (a) => String(a.durationDays) },
+  {
+    // A summary's and a level-of-effort's stored duration is `0`, which is not their length; they state
+    // the engine-derived span, blank where the engine wrote none (ADR-0197, the column's own
+    // uncalculated convention above). Every other type keeps the stored figure.
+    header: 'Duration (days)',
+    cell: (a) => {
+      const stated = statedDuration(a);
+      return stated === null ? '' : String(stated.durationDays);
+    },
+  },
   { header: 'Status', cell: (a) => ACTIVITY_STATUS_LABELS[a.status] },
   { header: '% complete', cell: (a) => String(a.percentComplete) },
   { header: 'Start', cell: (a) => dateCell(barDatesFor(a, CSV_BAR_DATE_SOURCE).start) },

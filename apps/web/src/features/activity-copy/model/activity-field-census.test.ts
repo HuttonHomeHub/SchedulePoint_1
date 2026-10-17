@@ -112,7 +112,11 @@ describe('the clone field census', () => {
     // 62 -> 63 on 2026-09-27: `resourceAssignmentCount` (ADR-0162, zero-duration M4-T1). Derived on
     // read from the live assignments, and a clone carries no assignments, so the server counts the
     // copy afresh. Classified `withheld`.
-    expect(entries.length).toBe(63);
+    //
+    // 63 -> 65 on 2026-10-17: `derivedDurationMinutes` and `derivedDurationDays` (ADR-0197). Engine
+    // output — the working time a summary's or level-of-effort's span covers, rewritten by every
+    // recalculation — and a clone has no calculated span to carry. Classified `withheld`.
+    expect(entries.length).toBe(65);
   });
 
   it('sends nothing the census withholds', () => {

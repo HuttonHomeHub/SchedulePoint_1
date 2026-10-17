@@ -259,6 +259,12 @@ export const canonicalActivitySchema = z
      * MSPDI adapter produce exactly what they always did: absent means the file said nothing.
      */
     layout: canonicalActivityLayoutSchema.optional(),
+    /**
+     * The engine-derived duration of a `WBS_SUMMARY` or `LEVEL_OF_EFFORT` in working minutes
+     * (ADR-0197). Present only on an EXPORT to a format that states it (MSPDI), and only where the
+     * engine wrote one — so a foreign file, an import and the XER emitter never see it.
+     */
+    derivedDurationMinutes: z.number().int().min(0).optional(),
   })
   .strict();
 export type CanonicalActivity = z.infer<typeof canonicalActivitySchema>;

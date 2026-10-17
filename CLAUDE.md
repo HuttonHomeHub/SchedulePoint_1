@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 26 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 74 migrations, 1661 web
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1663 web
 > source files with 47 Playwright suites beside the base journey, and
-> 195 ADRs.
+> 196 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -114,7 +114,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   26 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (35 models) + 74 migrations
+│   │   ├── prisma/           #   Schema (35 models) + 75 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -596,8 +596,9 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
 - **ADR-0192** _(Accepted; amends ADR-0018)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
 - **ADR-0193** _(Accepted; amends ADR-0096 D4 and D9)_ — A permanent delete is previewed by the code that performs it, and arming is a host act → [`0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md`](docs/adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)
-- **ADR-0194** _(Accepted; implements ADR-0085 D4 and D5)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
+- **ADR-0194** _(Accepted; implements ADR-0085 D4 and D5; D2's float unit corrected 2026-10-17, format 2.0)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **ADR-0196** _(Accepted; amends ADR-0162 D2)_ — A redundant link is one no duration could make matter → [`0196-a-redundant-link-is-one-no-duration-could-make-matter.md`](docs/adr/0196-a-redundant-link-is-one-no-duration-could-make-matter.md)
+- **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

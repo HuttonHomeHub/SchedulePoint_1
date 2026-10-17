@@ -125,21 +125,21 @@ describe('activityLabel (shared identity) and centreItemText', () => {
     ).toBe('5d · 0d float left');
   });
 
-  it('draws nothing for a WBS summary, whose stored duration is not its rolled-up span (#375)', () => {
-    // The importer writes 0 and recalculation never writes a summary's duration back, so this is
-    // exactly the "0d · 0d float left" printed under an eleven-month summary bar.
-    expect(
-      centreItemText(
-        { durationDays: 0, remainingFloat: 0, milestone: false, summary: true },
-        'full',
-      ),
-    ).toBeNull();
-    expect(
-      centreItemText(
-        { durationDays: 0, remainingFloat: 0, milestone: false, summary: true },
-        'short',
-      ),
-    ).toBeNull();
+  // These two cases restate #375's "draws nothing for a WBS summary". That rule withheld the item
+  // because the only figure available was the stored 0; ADR-0197 gives the caller the engine-derived
+  // span (and omits `durationDays` where there is none), so the summary now states it.
+  it('prints a WBS summary its derived duration alone, with no float clause (ADR-0197)', () => {
+    // A summary's float is 0 by convention, so "0d float left" would present a convention as a
+    // measurement — in both forms the item is the duration only.
+    const summary = { durationDays: 47, remainingFloat: 0, milestone: false, summary: true };
+    expect(centreItemText(summary, 'full')).toBe('47d');
+    expect(centreItemText(summary, 'short')).toBe('47d');
+  });
+
+  it('prints a level-of-effort its derived duration and keeps the float clause', () => {
+    const loe = { durationDays: 47, remainingFloat: 0, milestone: false, summary: false };
+    expect(centreItemText(loe, 'full')).toBe('47d · 0d float left');
+    expect(centreItemText(loe, 'short')).toBe('47d');
   });
 
   it('draws nothing for a milestone, which has no bar to hold it', () => {
@@ -191,6 +191,50 @@ describe('describeActivity (Tier 1)', () => {
     expect(describeActivity(activity({ durationDays: 1 }))).toContain('Excavate, 1 working day,');
     expect(describeActivity(activity({ type: 'FINISH_MILESTONE', durationDays: 0 }))).not.toContain(
       'working day',
+    );
+  });
+
+  it('speaks the derived duration of a summary and a level-of-effort, which the stored 0 never could (ADR-0197)', () => {
+    for (const type of ['WBS_SUMMARY', 'LEVEL_OF_EFFORT'] as const) {
+      const derived = activity({
+        type,
+        durationDays: 0,
+        durationMinutes: 0,
+        derivedDurationDays: 47,
+        derivedDurationMinutes: 47 * 1440,
+      });
+      expect(describeActivity(derived)).toContain('Excavate, spanning 47 working days,');
+      // Where the engine wrote none the clause is left out, as for a milestone — never "0 working days".
+      const none = activity({ type, durationDays: 0, durationMinutes: 0 });
+      expect(describeActivity(none)).not.toContain('working day');
+    }
+  });
+
+  it('says a sub-day derived span in hours, and a task keeps the plain clause', () => {
+    const short = activity({
+      type: 'WBS_SUMMARY',
+      durationDays: 0,
+      durationMinutes: 0,
+      derivedDurationDays: 0,
+      derivedDurationMinutes: 240,
+    });
+    expect(describeActivity(short)).toContain('Excavate, spanning 4h of working time,');
+    expect(describeActivity(activity({ durationDays: 3 }))).toContain('Excavate, 3 working days,');
+  });
+
+  it('speaks no float for a WBS summary, whose 0 is a convention, and keeps it for a level-of-effort', () => {
+    const base = {
+      durationDays: 0,
+      durationMinutes: 0,
+      derivedDurationDays: 5,
+      derivedDurationMinutes: 5 * 1440,
+      remainingFloat: 0,
+      totalFloat: 0,
+      isCritical: false,
+    };
+    expect(describeActivity(activity({ ...base, type: 'WBS_SUMMARY' }))).not.toContain('float');
+    expect(describeActivity(activity({ ...base, type: 'LEVEL_OF_EFFORT' }))).toContain(
+      '0 days float left',
     );
   });
 
