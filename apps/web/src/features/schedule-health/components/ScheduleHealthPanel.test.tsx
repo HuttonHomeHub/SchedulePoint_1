@@ -1,4 +1,9 @@
-import type { HealthAdvisoryResult, HealthMetricResult, ScheduleHealthReport } from '@repo/types';
+import type {
+  HealthAdvisoryResult,
+  HealthMetricResult,
+  RedundantLinksAdvisory,
+  ScheduleHealthReport,
+} from '@repo/types';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
@@ -42,6 +47,28 @@ function zeroAdvisory(count: number, resourced = 0): HealthAdvisoryResult {
       activityId: `z${i}`,
     })),
     detail: { resourced },
+  };
+}
+
+function redundantAdvisory(
+  count: number,
+  detail: Partial<RedundantLinksAdvisory['detail']> = {},
+): HealthAdvisoryResult {
+  return {
+    id: 'REDUNDANT_LINKS',
+    name: 'Redundant links',
+    measured: { count, denominator: 12, percent: null, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: Array.from({ length: count }, (_, i) => ({
+      kind: 'RELATIONSHIP' as const,
+      id: `l${i}`,
+      code: null,
+      name: `A${i} → C${i}`,
+      note: 'FS; already implied through B',
+      activityId: `c${i}`,
+    })),
+    detail: { rule: 'DOMINATED_UNDER_ANY_DURATION', unjudged: 0, searchCapped: false, ...detail },
   };
 }
 
@@ -496,7 +523,7 @@ describe('ScheduleHealthPanel', () => {
         '3 zero-duration tasks out of 10 activities; 1 has resource assignments',
       );
       expect(section).toHaveTextContent(
-        'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.',
+        "Found from the plan's stored activities and links, whether or not the plan has been calculated, and not part of the DCMA assessment above.",
       );
       // DOM order: after the metrics list.
       expect(
@@ -525,6 +552,64 @@ describe('ScheduleHealthPanel', () => {
       renderPanel({ report: legacy as unknown as ScheduleHealthReport });
       expect(screen.queryByRole('region', { name: 'Beyond the DCMA assessment' })).toBeNull();
       expect(screen.getAllByRole('listitem')).toHaveLength(14);
+    });
+
+    it('renders a redundant-links row by its own id, never as a zero-duration row', () => {
+      renderPanel({
+        report: fullReport({ advisories: [zeroAdvisory(0), redundantAdvisory(1)] }),
+      });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      const toggle = within(section).getByRole('button', { name: /Redundant links\s*1/ });
+      expect(toggle).toHaveAccessibleDescription('1 redundant link out of 12 relationships');
+      expect(section).not.toHaveTextContent('undefined');
+      expect(section).not.toHaveTextContent('zero-duration tasks out of');
+      expect(section).toHaveTextContent(
+        "Each is already implied by a longer chain of links. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if that chain changes.",
+      );
+    });
+
+    it('says what a redundant-links row could not check, also at zero', () => {
+      renderPanel({
+        report: fullReport({
+          advisories: [redundantAdvisory(0, { unjudged: 3 })],
+        }),
+      });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      expect(section).toHaveTextContent('None');
+      expect(section).toHaveTextContent(
+        '3 links into started or pinned work, or touching a level of effort, were not checked.',
+      );
+    });
+
+    it('renders an advisory id it does not know as its name and count only', () => {
+      const unknown = {
+        ...zeroAdvisory(2),
+        id: 'FUTURE_ADVISORY',
+        name: 'Something newer',
+        detail: { novel: true },
+      } as unknown as HealthAdvisoryResult;
+      renderPanel({ report: fullReport({ advisories: [unknown] }) });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      expect(section).toHaveTextContent('Something newer');
+      expect(section).not.toHaveTextContent('undefined');
+      expect(section).not.toHaveTextContent('zero-duration');
+    });
+
+    it('has no axe violations with a redundant-links row expanded', async () => {
+      const { container } = render(
+        <ScheduleHealthPanel
+          report={fullReport({
+            advisories: [zeroAdvisory(0), redundantAdvisory(2, { unjudged: 1 })],
+          })}
+          isPending={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={vi.fn()}
+          onActivateActivity={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Redundant links/ }));
+      expect((await axe(container)).violations).toEqual([]);
     });
 
     it('has no axe violations with the advisory expanded', async () => {

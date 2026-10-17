@@ -9,6 +9,7 @@ import {
   type HealthNotAssessableReason,
   type HealthOffender,
   type ScheduleHealthReport,
+  type ZeroDurationTasksAdvisory,
 } from '@repo/types';
 
 import { resolveRemainingMinutes } from '../remaining-duration';
@@ -515,7 +516,7 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
   // A `TASK` with no work is almost always a milestone entered, or imported, as a task. Assessed
   // from STORED durations, so it is present whether or not the plan has been calculated. Never
   // NOT_ASSESSABLE: an empty plan is "0 of 0", which the panel reads as "None".
-  function advisoryZeroDurationTasks(): HealthAdvisoryResult {
+  function advisoryZeroDurationTasks(): ZeroDurationTasksAdvisory {
     const zero = acts.filter((a) => isZeroDurationTask(a.type, a.durationMinutes));
     const offenders = zero.map((a) => activityOffender(a, assignmentNote(a.assignmentCount)));
     return {

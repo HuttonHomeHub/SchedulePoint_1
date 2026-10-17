@@ -3046,20 +3046,47 @@ export const HEALTH_ADVISORY_IDS = ['ZERO_DURATION_TASKS'] as const;
 export type HealthAdvisoryId = (typeof HEALTH_ADVISORY_IDS)[number];
 
 /**
- * One advisory row. `measured` is percent-shaped (`count` of `denominator`, the same active
- * non-summary denominator the metrics use). `detail` carries the one extra fact the zero-duration
- * advisory states: how many of its offenders hold a live resource assignment (`resourced`).
+ * What every advisory row carries. `measured` is percent-shaped (`count` of `denominator`), but the
+ * denominator is **per advisory**: the zero-duration row counts against the active non-summary
+ * activities the metrics use, the redundant-link row against `relationshipCount`. A reader must
+ * therefore take the denominator from the row, never assume it.
  */
-export interface HealthAdvisoryResult {
-  id: HealthAdvisoryId;
+interface HealthAdvisoryBase {
   name: string;
   measured: HealthMeasured;
   /** The TRUE total of offenders, never the capped length. */
   offenderCount: number;
   offendersTruncated: boolean;
   offenders: HealthOffender[];
+}
+
+/** `detail.resourced` is how many of its offenders hold a live resource assignment. */
+export interface ZeroDurationTasksAdvisory extends HealthAdvisoryBase {
+  id: 'ZERO_DURATION_TASKS';
   detail: { resourced: number };
 }
+
+/**
+ * A link no duration could make matter (redundant-link-advisory, spec §4.5). `detail.rule` is the
+ * token the caveat sentence is keyed on (the `detail.narrowing` precedent): the payload owns the
+ * fact of which rule ran, the web owns the words. `unjudged` counts the links the rule did not
+ * check, and `searchCapped` says its deterministic work cap was reached (ADR-0127).
+ */
+export interface RedundantLinksAdvisory extends HealthAdvisoryBase {
+  id: 'REDUNDANT_LINKS';
+  detail: {
+    rule: 'DOMINATED_UNDER_ANY_DURATION';
+    unjudged: number;
+    searchCapped: boolean;
+  };
+}
+
+/**
+ * One advisory row, discriminated on `id`. The union admits the redundant-link member before
+ * {@link HEALTH_ADVISORY_IDS} emits it: the web that reads it per id is released first, so an
+ * older tab never prints a row under a heading it was not written for (spec E6).
+ */
+export type HealthAdvisoryResult = ZeroDurationTasksAdvisory | RedundantLinksAdvisory;
 
 /**
  * **The one predicate for "a zero-duration task"** (ADR-0162): a `TASK` with no work. Shared by the

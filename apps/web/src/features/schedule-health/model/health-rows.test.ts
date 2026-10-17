@@ -1,8 +1,18 @@
-import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
+import type {
+  HealthAdvisoryResult,
+  HealthMetricResult,
+  RedundantLinksAdvisory,
+  ScheduleHealthReport,
+  ZeroDurationTasksAdvisory,
+} from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  advisoryCaveat,
+  advisorySummary,
+  advisoryUnjudgedSentence,
   buildHealthRows,
+  HEALTH_ADVISORY_FOOTER,
   healthAnnouncement,
   mergeCriticalPathResult,
   zeroDurationSummary,
@@ -279,5 +289,98 @@ describe('zeroDurationSummary (ADR-0162 D1)', () => {
 
   it('reads "None" at zero rather than disappearing', () => {
     expect(zeroDurationSummary(advisory(0, 0))).toBe('None');
+  });
+});
+
+describe('advisories read per id (redundant-link-advisory M1)', () => {
+  const redundant = (
+    count: number,
+    detail: Partial<RedundantLinksAdvisory['detail']> = {},
+    denominator: number | null = 12,
+  ): RedundantLinksAdvisory => ({
+    id: 'REDUNDANT_LINKS',
+    name: 'Redundant links',
+    measured: { count, denominator, percent: null, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: [],
+    detail: { rule: 'DOMINATED_UNDER_ANY_DURATION', unjudged: 0, searchCapped: false, ...detail },
+  });
+  const zero = (count: number): ZeroDurationTasksAdvisory => ({
+    id: 'ZERO_DURATION_TASKS',
+    name: 'Zero-duration tasks',
+    measured: { count, denominator: 10, percent: null, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: [],
+    detail: { resourced: 0 },
+  });
+  const unknown = {
+    ...zero(2),
+    id: 'FUTURE_ADVISORY',
+    name: 'Something newer',
+    detail: { novel: true },
+  } as unknown as HealthAdvisoryResult;
+
+  it('summarises each id with its own figures', () => {
+    expect(advisorySummary(redundant(4))).toBe('4 redundant links out of 12 relationships');
+    expect(advisorySummary(redundant(1, {}, 1))).toBe('1 redundant link out of 1 relationship');
+    expect(advisorySummary(redundant(0))).toBe('None');
+    expect(advisorySummary(zero(3))).toBe(
+      '3 zero-duration tasks out of 10 activities; none has resource assignments',
+    );
+  });
+
+  it('an unknown id is its count and nothing else', () => {
+    expect(advisorySummary(unknown)).toBe('2');
+    expect(advisoryCaveat(unknown)).toBeNull();
+    expect(advisoryUnjudgedSentence(unknown)).toBeNull();
+  });
+
+  it('keys the caveat on the rule token, and names a token it does not know', () => {
+    expect(advisoryCaveat(redundant(1))).toMatch(/^Each is already implied by a longer chain/);
+    expect(advisoryCaveat(redundant(1))).not.toMatch(/never drives/i);
+    const novel = redundant(1, { rule: 'SOMETHING_ELSE' as never });
+    expect(advisoryCaveat(novel)).toBe(
+      'Judged by a rule this page does not describe — SOMETHING_ELSE.',
+    );
+    expect(advisoryCaveat(zero(1))).toBeNull();
+  });
+
+  it('states what was not checked, and the stopped-early sentence replaces it', () => {
+    expect(advisoryUnjudgedSentence(redundant(0))).toBeNull();
+    expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 1 }))).toBe(
+      '1 link into started or pinned work, or touching a level of effort, was not checked.',
+    );
+    expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 3 }))).toBe(
+      '3 links into started or pinned work, or touching a level of effort, were not checked.',
+    );
+    expect(advisoryUnjudgedSentence(redundant(1, { unjudged: 7, searchCapped: true }))).toBe(
+      'The check stopped early on a plan this size; 7 links were not checked.',
+    );
+  });
+
+  it('the announcement lists every advisory, at zero, one and many, and an unknown by name', () => {
+    const withAds = (advisories: HealthAdvisoryResult[]): ScheduleHealthReport => ({
+      ...report([]),
+      advisories,
+    });
+    expect(healthAnnouncement(withAds([zero(0), redundant(4)]))).toMatch(
+      / Beyond the DCMA assessment: no zero-duration tasks, 4 redundant links\.$/,
+    );
+    expect(healthAnnouncement(withAds([zero(1), redundant(1)]))).toMatch(
+      / 1 zero-duration task, 1 redundant link\.$/,
+    );
+    expect(healthAnnouncement(withAds([zero(0), redundant(0)]))).toMatch(
+      / no zero-duration tasks, no redundant links\.$/,
+    );
+    expect(healthAnnouncement(withAds([zero(0), unknown]))).toMatch(
+      / no zero-duration tasks, Something newer: 2\.$/,
+    );
+  });
+
+  it('the footer is true of a finding about links', () => {
+    expect(HEALTH_ADVISORY_FOOTER).not.toMatch(/durations/);
+    expect(HEALTH_ADVISORY_FOOTER).toContain('not part of the DCMA assessment above');
   });
 });

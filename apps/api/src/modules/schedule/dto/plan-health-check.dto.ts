@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type {
-  HealthAdvisoryId,
   HealthAdvisoryResult,
   HealthBaselineRef,
   HealthMeasured,
@@ -13,6 +12,7 @@ import type {
   HealthThresholdKind,
   HealthVerdict,
   ScheduleHealthReport,
+  ZeroDurationTasksAdvisory,
 } from '@repo/types';
 import {
   HEALTH_ADVISORY_IDS,
@@ -192,9 +192,9 @@ export class HealthAdvisoryDetailDto {
  * verdict, no threshold, never counted in the summary. The `id` enum derives from
  * `HEALTH_ADVISORY_IDS`, the tuple that also derives the union, so the two cannot disagree.
  */
-export class HealthAdvisoryResultDto implements HealthAdvisoryResult {
+export class HealthAdvisoryResultDto implements ZeroDurationTasksAdvisory {
   @ApiProperty({ enum: HEALTH_ADVISORY_IDS })
-  id!: HealthAdvisoryId;
+  id!: ZeroDurationTasksAdvisory['id'];
 
   @ApiProperty({ description: 'The advisory’s display name, e.g. "Zero-duration tasks".' })
   name!: string;
