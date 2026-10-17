@@ -14,10 +14,13 @@ import { cn } from '@/lib/utils';
  * ("Loading…") was announced beside a visible sentence that said something more specific, because a
  * caller who passed `aria-hidden` to the icon had it silently dropped (hyphenated JSX attributes are
  * not type-checked). `labelOnScreen` is the supported way to put the sentence on screen: the visible
- * text and the announcement are then ONE element, so they cannot disagree.
+ * text and the announcement are then both made from the one `label`, so they cannot disagree.
  *
- * The status mounts with its sentence absent and receives it after mount (`useLateStatus`): a live
- * region inserted already holding its text is commonly not announced.
+ * The status is always a screen-reader-only element that mounts with its sentence absent and
+ * receives it after mount (`useLateStatus`): a live region inserted already holding its text is
+ * commonly not announced. With `labelOnScreen` the visible copy is a separate, `aria-hidden`
+ * sibling rendered from the first frame, so the late write never leaves an empty gap on screen and
+ * the sentence is not announced twice.
  */
 export function Spinner({
   className,
@@ -30,14 +33,19 @@ export function Spinner({
   /** Render the sentence beside the icon, instead of for assistive technology alone. */
   labelOnScreen?: boolean;
 }): React.ReactElement {
-  const text = useLateStatus<HTMLSpanElement>(label);
+  const status = useLateStatus<HTMLSpanElement>(label);
   return (
-    <span role="status" className={cn('inline-flex items-center', labelOnScreen && 'gap-2')}>
+    <span className={cn('inline-flex items-center', labelOnScreen && 'gap-2')}>
       <Loader2
         className={cn('text-muted-foreground size-5 animate-spin', className)}
         aria-hidden="true"
       />
-      <span ref={text} className={labelOnScreen ? 'text-muted-foreground text-sm' : 'sr-only'} />
+      {labelOnScreen ? (
+        <span className="text-muted-foreground text-sm" aria-hidden="true">
+          {label}
+        </span>
+      ) : null}
+      <span ref={status} role="status" className="sr-only" />
     </span>
   );
 }

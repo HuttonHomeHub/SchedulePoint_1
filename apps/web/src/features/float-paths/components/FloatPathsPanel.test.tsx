@@ -135,7 +135,8 @@ describe('FloatPathsPanel', () => {
 
   it('shows a busy state while the analysis runs — this request is a CPM computation', () => {
     renderPanel({ isPending: true, model: null });
-    expect(screen.getByText(/calculating float paths/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/calculating float paths/i).length).toBeGreaterThan(0);
   });
 
   it('announces the sentence it shows as its one busy status — not a generic "Loading…"', () => {

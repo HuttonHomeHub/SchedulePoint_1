@@ -205,7 +205,8 @@ describe('ActivityMembersPanel', () => {
 
   it('renders a loading state instead of an empty checklist', () => {
     renderPanel([], WRITABLE, { loading: true });
-    expect(screen.getByText(/Loading the plan/)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/Loading the plan/).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 

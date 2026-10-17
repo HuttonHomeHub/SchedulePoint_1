@@ -1,5 +1,4 @@
 import { useLateStatus } from '@/hooks/use-late-status';
-import { cn } from '@/lib/utils';
 
 export interface LoadingShapeProps {
   /** One sentence naming what is loading: "Loading notes…". Required — no default copy. */
@@ -44,7 +43,7 @@ export function LoadingShape({
   children,
 }: LoadingShapeProps): React.ReactElement {
   return (
-    <div data-loading-shape="" className={cn(className)}>
+    <div data-loading-shape="" className={className}>
       {announce === 'polite' ? (
         <LateStatus label={label} />
       ) : (

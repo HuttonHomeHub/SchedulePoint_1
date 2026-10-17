@@ -20,12 +20,14 @@ import { useLateStatus } from '@/hooks/use-late-status';
  * page, which is the one moment a landmark would help and the one place the cost of its absence is
  * a second or two.
  *
- * `aria-busy` marks the skeleton and a status line carries the announcement, because the skeleton
- * blocks are `aria-hidden` (a skeleton is not information). **The status is a sibling of the busy
- * container, not a child of it**: ARIA 1.2 lets assistive technology defer changes inside a busy
- * element until it is no longer busy, and this status unmounts when the route arrives, so inside
- * the container its sentence could be deferred past its own lifetime (loading-skeletons spec §1,
- * defect 5; reasoned from the specification, not observed).
+ * A status line carries the announcement, because the skeleton blocks are `aria-hidden` (a skeleton
+ * is not information). **There is no `aria-busy` here at all:** `aria-busy` belongs on the element
+ * that persists from pending to settled and receives the content, and this container is unmounted
+ * when the route arrives — the routed page is a different element, so marking this one busy
+ * announces nothing true and only invites the question of where the status sits. The status is also a
+ * sibling of the skeleton rather than a child, so no reading of ARIA 1.2's "defer changes inside a
+ * busy element" can apply to it (loading-skeletons spec §1, defect 5; reasoned from the
+ * specification, not observed).
  *
  * **The status element mounts EMPTY and is filled after mount** (`useLateStatus`). A live region
  * that arrives already containing its text is inserted, not changed, and assistive technology
@@ -37,7 +39,7 @@ export function RoutePending(): React.JSX.Element {
   return (
     <>
       <span ref={status} role="status" className="sr-only" />
-      <PageContainer aria-busy="true" data-testid="route-pending">
+      <PageContainer data-testid="route-pending">
         <div className="flex flex-col gap-6">
           <Skeleton className="h-8 w-1/3" />
           <Skeleton className="h-4 w-2/3" />

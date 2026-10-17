@@ -277,18 +277,20 @@ describe('ListRow', () => {
     // UX_STANDARDS requires the skeleton and the settled layout to be identical. A bare `Skeleton`
     // becomes whatever shape the real row turns out to be, so the shape lives with the component
     // that knows it.
-    const { container } = render(<ListRowSkeleton rows={3} />);
-    const busy = container.querySelector('[aria-busy="true"]');
-    expect(busy).toBeInTheDocument();
+    const { container } = render(<ListRowSkeleton rows={3} label="Loading rows…" />);
+    const shape = container.querySelector('[data-loading-shape]');
+    expect(shape).toBeInTheDocument();
 
     // Three rows, each with the row's real shape — two stacked lines and a trailing block — so the
     // settled content replaces it without reflow.
-    expect(busy!.querySelectorAll('.animate-pulse')).toHaveLength(9);
+    expect(shape!.querySelectorAll('.animate-pulse')).toHaveLength(9);
 
-    // Announced once as "loading", not as nine grey rectangles: EVERY skeleton is hidden, so the
-    // `aria-busy` on the wrapper is the only thing an assistive reader is told.
-    const shapes = [...busy!.querySelectorAll('.animate-pulse')];
+    // Every rectangle is hidden, and the shape is neither busy nor a live region: an enclosing
+    // section speaks, so this adds no sentence of its own.
+    const shapes = [...shape!.querySelectorAll('.animate-pulse')];
     expect(shapes.every((node) => node.getAttribute('aria-hidden') === 'true')).toBe(true);
+    expect(container.querySelector('[aria-busy]')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });
 

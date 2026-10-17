@@ -775,6 +775,39 @@ separator's drag and arrow handlers would act on the field's events.
 - **`usePointerDrag`** reports a press through `onPress` and then withholds `onValue` until the pointer passes the
   slop; a handle that passes no `onPress` is unchanged.
 
+## Primitives: loading — `LoadingShape`, `Skeleton`, `SkeletonText`, `Spinner`, `DataTableSkeleton`
+
+The standard and the decision rule (spinner or skeleton) are in
+[`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) "Loading states". The authoring contract:
+
+- **`LoadingShape`** (`components/ui/page/loading-shape.tsx`) — `{ label, announce?, className?, children }`. `label` is
+  required and there is no default copy. `announce` is `'polite'` (default: a `role="status"` mounted empty, filled
+  after mount) or `'none'` (the sentence is plain screen-reader text, for use under a region that already speaks). It
+  renders a `data-loading-shape` wrapper, the children inside an `aria-hidden` element, and **sets no `aria-busy`** —
+  the site puts that on the element that persists into the settled state. It is self-contained rather than built on
+  the shell's `useAnnounce`, because the guest view, the staff gate and the route-pending screen have no shell
+  announcer.
+- **`Skeleton`** — the material. `on: 'canvas' | 'muted'` names the ground it is drawn on (`muted` for a block on a
+  `bg-muted` ground, which would otherwise vanish). Always `aria-hidden`; carries `data-skeleton`, the hook for the
+  forced-colours outline and for measuring instruments.
+- **`SkeletonText`** — `{ sample, className?, on? }`: a block as wide and tall as `sample` would render, with the
+  sample as `visibility: hidden` text. The sample is caller-supplied; the primitive carries no copy.
+- **`DataTableSkeleton`** — `DataTable`'s pending render, exported from `data-table.tsx`. Real header text,
+  `aria-hidden` table, one status via `LoadingShape` (the table's `loadingLabel`), and no `data-col-width` (so the
+  wrap gate reads nothing from it).
+- **`Column.sample?: string`** — one plausible value for the column, formatted with the formatter the cell uses. A
+  sampled column's skeleton cell receives the column's declared width classes; an unsampled one keeps even
+  distribution.
+- **`Spinner`** — a **contract change**: `label: string` is **required** and the primitive has no default text (the old
+  `'Loading…'` default was announced beside a more specific visible sentence, because a caller's `aria-hidden` was
+  silently dropped). `labelOnScreen` draws the sentence beside the icon from the first frame as an `aria-hidden` copy,
+  while the announcement stays a separate screen-reader-only status filled after mount.
+- **`ListRowSkeleton`** — `label` required; a `LoadingShape` with `announce="none"`.
+
+Tests: each primitive has a unit suite (status mounted empty and then filled under StrictMode, `announce="none"` renders no
+live region, the material is `aria-hidden`). Do not reach for a bare `animate-pulse`; the gates are listed in
+`DESIGN_SYSTEM.md`.
+
 ## Documentation requirements
 
 - **TSDoc** on the component and any non-obvious prop.

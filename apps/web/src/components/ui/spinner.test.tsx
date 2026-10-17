@@ -33,15 +33,23 @@ describe('Spinner', () => {
     const { rerender } = render(<Spinner label="Loading plans…" />);
     expect(screen.getByText('Loading plans…')).toHaveClass('sr-only');
     rerender(<Spinner label="Loading plans…" labelOnScreen />);
-    expect(screen.getByText('Loading plans…')).not.toHaveClass('sr-only');
+    const [visible] = screen
+      .getAllByText('Loading plans…')
+      .filter((el) => !el.classList.contains('sr-only'));
+    expect(visible).toBeDefined();
   });
 
-  it('makes the visible sentence and the announcement one element', () => {
-    // The defect this fixes: an icon with a dropped `aria-hidden` announced "Loading…" while the
-    // visible sentence beside it sat in no live region.
+  it('draws the visible sentence on the first frame and still announces it once', () => {
+    // The status is filled after mount, so the visible copy must not wait for that write: before
+    // this the on-screen sentence was the late-filled status itself, and the first paint was an
+    // icon with an empty gap beside it.
+    const html = renderToString(<Spinner label="Calculating float paths…" labelOnScreen />);
+    expect(html).toContain('Calculating float paths…');
     render(<Spinner label="Calculating float paths…" labelOnScreen />);
     const status = screen.getByRole('status');
-    expect(status).toContainElement(screen.getByText('Calculating float paths…'));
+    expect(status).toHaveTextContent('Calculating float paths…');
+    const visible = screen.getAllByText('Calculating float paths…').find((el) => el !== status);
+    expect(visible).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('has no axe violations', async () => {

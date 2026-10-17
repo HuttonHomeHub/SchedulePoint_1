@@ -101,7 +101,7 @@ describe('Skeleton material', () => {
     const { container } = render(
       <>
         <Skeleton />
-        <Skeleton surface="muted" />
+        <Skeleton on="muted" />
       </>,
     );
     const [plain, onMuted] = [...container.children];

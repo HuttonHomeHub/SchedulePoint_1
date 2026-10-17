@@ -3,18 +3,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 /**
- * Which ground the placeholder is drawn on. `bg-muted` rebinds per surface scope (ADR-0055), but a
- * block on a ground that is itself `bg-muted` — a framed `ContextStrip` — would be invisible, so
- * that ground takes the `border` token instead. Both are existing tokens.
+ * What the placeholder is drawn ON. `bg-muted` rebinds per surface scope (ADR-0055), but a block
+ * on a ground that is itself `bg-muted` — a framed `ContextStrip` — would be invisible, so
+ * `on: 'muted'` takes the `border` token instead. The value names the ground, not the block's own
+ * colour. Both colours are existing tokens.
  */
 const skeletonVariants = cva('animate-pulse rounded-md', {
   variants: {
-    surface: {
-      default: 'bg-muted',
+    on: {
+      canvas: 'bg-muted',
       muted: 'bg-border',
     },
   },
-  defaultVariants: { surface: 'default' },
+  defaultVariants: { on: 'canvas' },
 });
 
 /**
@@ -41,7 +42,7 @@ const skeletonVariants = cva('animate-pulse rounded-md', {
  */
 export function Skeleton({
   className,
-  surface,
+  on,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> &
   VariantProps<typeof skeletonVariants>): React.ReactElement {
@@ -49,7 +50,7 @@ export function Skeleton({
     <div
       aria-hidden="true"
       data-skeleton=""
-      className={cn(skeletonVariants({ surface }), className)}
+      className={cn(skeletonVariants({ on }), className)}
       {...props}
     />
   );
@@ -71,14 +72,14 @@ export function Skeleton({
 export function SkeletonText({
   sample,
   className,
-  surface,
+  on,
 }: {
   /** One plausible value for the field — formatted with the formatter the settled cell uses. */
   sample: string;
   className?: string;
 } & VariantProps<typeof skeletonVariants>): React.ReactElement {
   return (
-    <Skeleton surface={surface} className={cn('inline-block align-middle', className)}>
+    <Skeleton on={on} className={cn('inline-block align-middle', className)}>
       <span className="invisible whitespace-nowrap">{sample}</span>
     </Skeleton>
   );

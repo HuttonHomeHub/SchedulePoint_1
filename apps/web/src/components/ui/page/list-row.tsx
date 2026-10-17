@@ -1,3 +1,4 @@
+import { LoadingShape } from '@/components/ui/page/loading-shape';
 import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -136,12 +137,22 @@ export function ListRow({
  * cannot satisfy that — it becomes whatever shape the real row turns out to be. So the shape lives
  * with the component that knows it, and `Skeleton` supplies only the material.
  *
- * The wrapper carries `aria-busy` and the skeletons are `aria-hidden`, so an assistive reader gets
- * one fact — this list is loading — rather than a dozen announced grey rectangles.
+ * It is a `LoadingShape` with `announce="none"`: the rectangles are `aria-hidden` and `label` is
+ * present as plain screen-reader text, not a live region, because a list of rows always sits under
+ * a section whose page already speaks (the overview announces its settled count once). A skeleton
+ * that spoke here would be a second sentence about one load. It sets no `aria-busy` either: the
+ * element that persists into the settled state is the section, not this placeholder.
  */
-export function ListRowSkeleton({ rows = 3 }: { rows?: number }): React.ReactElement {
+export function ListRowSkeleton({
+  rows = 3,
+  label,
+}: {
+  rows?: number;
+  /** What is loading, for assistive technology: "Loading recently changed plans…". */
+  label: string;
+}): React.ReactElement {
   return (
-    <div aria-busy="true">
+    <LoadingShape label={label} announce="none">
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
@@ -154,6 +165,6 @@ export function ListRowSkeleton({ rows = 3 }: { rows?: number }): React.ReactEle
           <Skeleton className="h-3 w-20 shrink-0" />
         </div>
       ))}
-    </div>
+    </LoadingShape>
   );
 }
