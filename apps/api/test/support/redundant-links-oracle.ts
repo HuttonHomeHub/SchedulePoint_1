@@ -20,6 +20,7 @@ import type {
   HealthActivityInput,
   HealthDependencyInput,
 } from '../../src/modules/schedule/health/compute-health';
+import { lagCalendarKeyOf } from '../../src/modules/schedule/lag-calendar-key';
 import { specToEngineInput } from '../pairwise/spec-to-engine';
 
 /**
@@ -97,16 +98,14 @@ export interface OraclePlan {
 export type LagCalendarKey = string;
 
 /** What the rule will read per activity: the health module's input plus the one new fact. */
-export type RuleActivity = HealthActivityInput & { schedulingCalendarId: string };
+export type RuleActivity = HealthActivityInput;
 /** What the rule will read per link: the health module's input plus the lag-calendar identity. */
-export type RuleDependency = HealthDependencyInput & { lagCalendarKey: LagCalendarKey };
+export type RuleDependency = HealthDependencyInput;
 
 export interface RuleInput {
   activities: RuleActivity[];
   dependencies: RuleDependency[];
 }
-
-export const TWENTY_FOUR_HOUR_KEY: LagCalendarKey = '24H';
 
 function calendarOf(plan: OraclePlan, key: string | null | undefined): WorkingTimeCalendar {
   const resolved = plan.calendars[key ?? plan.planCalendar];
@@ -234,14 +233,14 @@ export function buildRuleInput(plan: OraclePlan): RuleInput {
     const pred = byId.get(l.from);
     const succ = byId.get(l.to);
     if (pred === undefined || succ === undefined) throw new Error(`Link ${l.id} has no endpoint`);
-    const lagCalendarKey =
-      l.lagCalendar === 'TWENTY_FOUR_HOUR'
-        ? TWENTY_FOUR_HOUR_KEY
-        : l.lagCalendar === 'PREDECESSOR'
-          ? schedulingKey(plan, pred)
-          : l.lagCalendar === 'SUCCESSOR'
-            ? schedulingKey(plan, succ)
-            : plan.planCalendar;
+    // The product's own decision, called rather than restated: if it ever disagreed with the engine's
+    // edge calendars the soundness suite would show it.
+    const lagCalendarKey = lagCalendarKeyOf(
+      l.lagCalendar ?? 'PROJECT_DEFAULT',
+      schedulingKey(plan, pred),
+      schedulingKey(plan, succ),
+      plan.planCalendar,
+    );
     return {
       id: l.id,
       predecessorId: l.from,
@@ -463,14 +462,12 @@ export function ruleInputOfSpec(spec: SeedSpec): RuleInput {
     successorId: d.successorKey,
     type: d.type,
     lagMinutes: d.lagMinutes,
-    lagCalendarKey:
-      d.lagCalendarSource === 'TWENTY_FOUR_HOUR'
-        ? TWENTY_FOUR_HOUR_KEY
-        : d.lagCalendarSource === 'PREDECESSOR'
-          ? (schedulingKeyOf.get(d.predecessorKey) ?? plan)
-          : d.lagCalendarSource === 'SUCCESSOR'
-            ? (schedulingKeyOf.get(d.successorKey) ?? plan)
-            : plan,
+    lagCalendarKey: lagCalendarKeyOf(
+      d.lagCalendarSource,
+      schedulingKeyOf.get(d.predecessorKey),
+      schedulingKeyOf.get(d.successorKey),
+      plan,
+    ),
   }));
   return { activities, dependencies };
 }
