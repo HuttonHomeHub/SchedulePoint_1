@@ -1,7 +1,7 @@
 # Implementation Plan: Nest a WBS summary from the Members panel
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft — produced with the spec; nothing is built until the product owner approves both
+- **Status:** Approved — by the product owner, 2026-10-17, with the spec; M1 and M2 built on `work/wbs-nest-members`
 - **Owner:** product owner (approver); builder agent (implementation)
 
 ## Breakdown

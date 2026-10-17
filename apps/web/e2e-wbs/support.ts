@@ -229,6 +229,30 @@ export function diagramActivityList(page: Page): ReturnType<Page['getByRole']> {
   return page.getByRole('listbox', { name: 'Activities in the diagram' });
 }
 
+/**
+ * An activity's `parentId` straight from the API — the nesting journey's probe, because the panel
+ * showing a tick is not evidence that the server filed anything.
+ */
+export async function parentOf(
+  page: Page,
+  orgSlug: string,
+  activityId: string,
+): Promise<string | null> {
+  return page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/activities/${id}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`activity read ${String(response.status)}: ${await response.text()}`);
+      }
+      const body = (await response.json()) as { data: { parentId: string | null } };
+      return body.data.parentId;
+    },
+    { org: orgSlug, id: activityId },
+  );
+}
+
 /** Toggle a `View▾ ▸ Structure` switch by its label. */
 export async function toggleView(page: Page, label: string): Promise<void> {
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });

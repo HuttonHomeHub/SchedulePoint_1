@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityMembersPanel } from './ActivityMembersPanel';
 
+import { ApiFetchError } from '@/lib/api/client';
+
 /**
  * The Members panel — a WBS summary's contents, managed from the summary (`VITE_WBS_IMPROVEMENTS`).
  *
@@ -88,15 +90,16 @@ describe('ActivityMembersPanel', () => {
     expect(boxes[1]).not.toBeChecked();
   });
 
-  // Nesting is set from the child's own editor, where it is cycle-checked. Offering summaries here
-  // would give the hierarchy a second, unchecked way to be built.
-  it('never offers another summary as a member', () => {
+  it('lists another summary so it can be nested, noting what moves with it', () => {
     renderPanel([
       SUMMARY,
       activity({ id: 's2', name: 'Superstructure', type: 'WBS_SUMMARY' }),
-      activity({ id: 'a', name: 'Excavate' }),
+      activity({ id: 'a', name: 'Excavate', parentId: 's2' }),
     ]);
-    expect(visibleRows().join(' ')).not.toContain('Superstructure');
+    expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+    expect(screen.getByText('Moves with its 1 activity')).toBeInTheDocument();
   });
 
   it('sends only the rows that actually changed', async () => {
@@ -174,8 +177,24 @@ describe('ActivityMembersPanel', () => {
   // to see what is in the summary.
   it('shades the checklist with a reason rather than hiding it', () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })], SHUT);
-    expect(screen.getByRole('checkbox', { name: /Excavate/ })).toBeDisabled();
-    expect(screen.getByText(SHUT.reason)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Excavate/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // Rendered once, not once per row and again on the Save bar (ADR-0083 D4).
+    expect(screen.getAllByText(SHUT.reason)).toHaveLength(1);
+  });
+
+  it('keeps a shaded row focusable and inert, with the reason linked', () => {
+    renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })], SHUT);
+    const box = screen.getByRole('checkbox', { name: /Excavate/ });
+    expect(box).not.toBeDisabled();
+    // jsdom cannot show a cancelled activation (ADR-0083 §3: the journey does), so assert the
+    // panel's state: a refused click never reaches the checked set.
+    fireEvent.click(box);
+    expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
+    const reason = document.getElementById(box.getAttribute('aria-describedby') ?? '');
+    expect(reason).toHaveTextContent(SHUT.reason);
   });
 
   it('refuses to save when the gate is shut, even if a row was somehow toggled', async () => {
@@ -282,5 +301,119 @@ describe('ActivityMembersPanel', () => {
     renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })]);
     const label = screen.getByRole('checkbox', { name: /Excavate/ }).closest('label');
     expect(within(label as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  describe('nesting', () => {
+    // Structure ▸ Substructure(s1, the panel's subject) ▸ nothing; Piling is inside Substructure.
+    const STRUCTURE = activity({ id: 'top', name: 'Structure', type: 'WBS_SUMMARY' });
+    const NESTED = activity({
+      id: 's1',
+      name: 'Substructure',
+      type: 'WBS_SUMMARY',
+      parentId: 'top',
+    });
+    const OTHER = activity({ id: 's2', name: 'Superstructure', type: 'WBS_SUMMARY' });
+    const PILING = activity({ id: 'p', name: 'Piling', parentId: 's2' });
+
+    const renderNested = (gate = WRITABLE) =>
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <ActivityMembersPanel
+            orgSlug="acme"
+            planId="p1"
+            summary={NESTED}
+            planActivities={[STRUCTURE, NESTED, OTHER, PILING]}
+            gate={gate}
+          />
+        </QueryClientProvider>,
+      );
+
+    it('shades a summary that contains this one, with a visible reason, and ignores a click', () => {
+      renderNested();
+      const box = screen.getByRole('checkbox', { name: /^Structure/ });
+      expect(box).toHaveAttribute('aria-disabled', 'true');
+      const reason = document.getElementById(box.getAttribute('aria-describedby') ?? '');
+      expect(reason).toHaveTextContent('Can’t be filed here — “Substructure” is inside it.');
+      fireEvent.click(box);
+      expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
+    });
+
+    it('never hides the shaded ancestor from a search', () => {
+      renderNested();
+      fireEvent.change(screen.getByLabelText('Find an activity'), { target: { value: 'Struct' } });
+      expect(screen.getByRole('checkbox', { name: /^Structure/ })).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '2 activities match your search · 1 can’t be filed here · 0 in this summary',
+      );
+    });
+
+    it('keeps the status sentence unchanged when nothing is shaded', () => {
+      renderPanel([SUMMARY, activity({ id: 'a', name: 'Excavate' })]);
+      expect(screen.getByRole('status')).toHaveTextContent('1 activity · 0 in this summary');
+    });
+
+    it('counts what rides along with a ticked summary, once', async () => {
+      renderNested();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      expect(screen.getByText(/1 will move, with 1 activity inside it/)).toBeInTheDocument();
+      // Ticking the summary's own child as well moves the child once, not twice.
+      fireEvent.click(screen.getByRole('checkbox', { name: /Piling/ }));
+      expect(screen.getByText(/2 activities will move\./)).toBeInTheDocument();
+      await save();
+      expect(mutateSpy).toHaveBeenCalledWith({
+        parents: [
+          { id: 's2', parentId: 's1', version: 1 },
+          { id: 'p', parentId: 's1', version: 1 },
+        ],
+      });
+    });
+
+    it('explains a PARENT_CYCLE refusal and keeps the ticks', async () => {
+      mutateSpy.mockRejectedValueOnce(
+        new ApiFetchError(409, {
+          code: 'CONFLICT',
+          message: 'That would create a WBS cycle.',
+          details: { reason: 'PARENT_CYCLE' },
+        }),
+      );
+      renderNested();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      await save();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “Substructure”.',
+      );
+      expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).toBeChecked();
+    });
+
+    it('leaves any other 409 to its own sentence', async () => {
+      mutateSpy.mockRejectedValueOnce(
+        new ApiFetchError(409, { code: 'CONFLICT', message: 'This plan changed.' }),
+      );
+      renderNested();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      await save();
+      expect(screen.getByRole('alert')).toHaveTextContent('This plan changed.');
+    });
+
+    it('drops a tick on a row that has become an ancestor after a refetch', () => {
+      const s2 = activity({ id: 's2', name: 'Superstructure', type: 'WBS_SUMMARY' });
+      const panel = (subject: ActivitySummary) => (
+        <QueryClientProvider client={new QueryClient()}>
+          <ActivityMembersPanel
+            orgSlug="acme"
+            planId="p1"
+            summary={subject}
+            planActivities={[subject, s2]}
+            gate={WRITABLE}
+          />
+        </QueryClientProvider>
+      );
+      const { rerender } = render(panel(SUMMARY));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      // A peer nested the subject inside Superstructure; the refetch lands.
+      rerender(panel({ ...SUMMARY, parentId: 's2' }));
+      expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).not.toBeChecked();
+      expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
+    });
   });
 });

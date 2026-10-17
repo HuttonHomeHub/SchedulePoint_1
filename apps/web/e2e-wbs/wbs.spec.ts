@@ -8,6 +8,7 @@ import {
   onboard,
   openActivitiesPanel,
   openRowMenu,
+  parentOf,
   recalculate,
   releasePen,
   rowCheckbox,
@@ -322,4 +323,58 @@ test('every item in the tallest row menu is reachable by pointer, not just prese
     unreachable,
     `row-menu items a pointer cannot reach: ${JSON.stringify(unreachable)}`,
   ).toEqual([]);
+});
+
+/**
+ * **Nest a summary from the Members panel** (`docs/specs/wbs-nest-from-members/`, ADR-0063
+ * Amendment). Its own plan, so the long journey above is undisturbed.
+ *
+ * Two claims only a real browser and server can make:
+ *
+ * - ticking a summary in the parent's panel really files it (read back from the API, not the tick);
+ * - the summary that contains this one is listed, shaded, with its reason, and **Space on it does
+ *   nothing** — jsdom cannot show a cancelled checkbox activation (ADR-0083 §3).
+ *
+ * **Verified red** against the shipped panel: the first assertion fails because `Piling` is not
+ * listed at all.
+ */
+test('WBS: nest a summary from the Members panel, and the ancestor is shaded', async ({ page }) => {
+  test.setTimeout(180_000);
+  const org = await onboard(page, Date.now() + 23);
+  await createPlan(page, 'Nesting');
+  await ensurePen(page);
+  const [structure, piling] = await seedActivities(page, org, [
+    { name: 'Structure', type: 'WBS_SUMMARY' },
+    { name: 'Piling', type: 'WBS_SUMMARY' },
+  ]);
+  if (structure === undefined || piling === undefined) throw new Error('seeding returned no rows');
+  await recalculate(page, org);
+  await ensurePen(page);
+  await openActivitiesPanel(page);
+
+  // --- Structure's panel: Piling is offered, and ticking it files it.
+  await openRowMenu(page, 'Structure');
+  await page.getByRole('menuitem', { name: 'Members' }).click();
+  const editor = page.getByRole('dialog');
+  await editor.getByRole('checkbox', { name: /^Piling/ }).check();
+  await editor.getByRole('button', { name: 'Save membership' }).click();
+  await expect(editor.getByText(/Membership saved/)).toBeVisible();
+  expect(await parentOf(page, org, piling.id)).toBe(structure.id);
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+
+  // --- Piling's panel: Structure contains it, so it is shaded with its reason, and inert.
+  await openRowMenu(page, 'Piling');
+  await page.getByRole('menuitem', { name: 'Members' }).click();
+  const ancestor = editor.getByRole('checkbox', { name: /^Structure/ });
+  await expect(ancestor).toHaveAttribute('aria-disabled', 'true');
+  await expect(editor.getByText('Can’t be filed here — “Piling” is inside it.')).toBeVisible();
+  await ancestor.focus();
+  await expect(ancestor).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(ancestor).not.toBeChecked();
+  await expect(editor.getByText(/will move/)).toHaveCount(0);
+  expect(await parentOf(page, org, structure.id)).toBeNull();
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
 });

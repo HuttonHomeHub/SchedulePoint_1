@@ -1,5 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 
+import { subtreeSizes } from './wbs-tree';
+
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 
 /**
@@ -244,40 +246,8 @@ export function wbsBandGroups(
     return depth;
   };
 
-  // Children by parent, over the SAME resolved-parent rule `deriveWbsGroups` uses — an activity
-  // whose `parentId` names a row that is not present is an orphan and counts as top-level, so it
-  // belongs to no summary's subtree rather than to a phantom one.
   const present = new Set(activities.map((a) => a.id));
-  const childrenOf = new Map<string, string[]>();
-  for (const activity of activities) {
-    const parentId = activity.parentId;
-    if (parentId === null || !present.has(parentId)) continue;
-    const siblings = childrenOf.get(parentId);
-    if (siblings) siblings.push(activity.id);
-    else childrenOf.set(parentId, [activity.id]);
-  }
-
-  /**
-   * Everything under `id`, at any depth. The `seen` guard is the `depthOf` guard's mirror and is
-   * there for the same reason: the server forbids a cycle in the parent tree (ADR-0038), but this
-   * is render-path code and must not hang the canvas if one ever exists.
-   */
-  const subtreeCount = (id: string): number => {
-    let total = 0;
-    const seen = new Set<string>([id]);
-    const stack = [id];
-    while (stack.length > 0) {
-      const next = stack.pop();
-      if (next === undefined) break;
-      for (const child of childrenOf.get(next) ?? []) {
-        if (seen.has(child)) continue;
-        seen.add(child);
-        total += 1;
-        stack.push(child);
-      }
-    }
-    return total;
-  };
+  const sizes = subtreeSizes(activities);
 
   const rows: WbsBandGroupInput[] = groups.summaries
     .map((group) => {
@@ -288,7 +258,7 @@ export function wbsBandGroups(
         depth: depthOf(group.summary),
         start: span.start,
         finish: span.finish,
-        count: subtreeCount(group.summary.id),
+        count: sizes.get(group.summary.id) ?? 0,
         // The RESOLVED parent, not the raw column: an orphan is top-level here, as it is in
         // `deriveWbsGroups` and in the Gantt row model.
         parentId:

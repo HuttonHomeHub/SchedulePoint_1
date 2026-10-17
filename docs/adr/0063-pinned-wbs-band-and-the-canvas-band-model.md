@@ -1,6 +1,6 @@
 # ADR-0063: The pinned WBS band, and the canvas band model
 
-- **Status:** Accepted
+- **Status:** Accepted; C-1b amended 2026-10-17
 - **Date:** 2026-07-30
 - **Deciders:** Technical Lead, Product Owner
 - **Spec:** [`docs/specs/wbs-improvements/`](../specs/wbs-improvements/feature-spec.md)
@@ -225,3 +225,38 @@ pending edit, so there the boxes do shade.)
 - **Make the band editable (drag a summary to move its subtree).** Rejected for now, per §2.
   It is a coherent future feature and would need its own decision about what moving a rollup
   means for the activities under it; it is not a detail of this one.
+
+## Amendment, 2026-10-17: the Members panel nests summaries (spec C-1b reversed)
+
+**Spec:** [`docs/specs/wbs-nest-from-members/`](../specs/wbs-nest-from-members/spec.md), approved by
+the product owner 2026-10-17 (CQ-1: ancestors shaded with a visible reason; CQ-2: the Breakdown
+picker fixed too).
+
+The wbs-improvements spec chose **C-1b = no** as an M1 default: the Members panel lists no summary,
+because "a checklist that can restructure the tree needs cycle feedback a checklist cannot express".
+That reason did not survive being re-read against the code. The server already walks the **resulting**
+tree under the plan lock and answers `409 PARENT_CYCLE` for any batch, single-row or bulk
+(`ActivitiesService.updateParents` / `assertValidParent`), so the tree was never at risk; what was
+missing was **client feedback**. The panel's docblock claim that two paths were checked unequally
+was stale.
+
+**Decision.**
+
+1. The Members panel lists every plan activity except the summary itself, summaries included. A
+   summary that already **contains** this one (an ancestor, at any depth) is shown **shaded** with a
+   visible reason — "Can't be filed here — “S” is inside it." — on `aria-disabled` plus a cancelled
+   `click`, ADR-0083 D1's checkbox mechanism, so the row stays in the tab order. The panel's pen gate
+   moves from native `disabled` to the same mechanism, its reason rendered once (ADR-0083 D4).
+2. A ticked summary says "Moves with its N activities" before Save, and the save bar counts what
+   rides along. A `409 PARENT_CYCLE` is mapped to a sentence saying nothing moved and the list was
+   refreshed; the activities query is invalidated by the mutation's own `onSettled`.
+3. The child-side picker ("Parent WBS summary") omits the edited summary's descendants, from the same
+   pure predicate (`features/wbs/model/wbs-tree.ts`), so the two pickers cannot disagree.
+4. **The reusable rule: in a tree picker, a candidate that would close a cycle is _shown and shaded
+   with a reason_ in a checklist, and _omitted_ from a `<select>`** — an `<option>` cannot carry a
+   reason (ADR-0083 D1's `<select>` exception; the resource tree's picker is the precedent).
+5. The activities table's bulk assign is **unchanged**: summaries keep no selection checkbox there.
+   That is a choice (a target `<select>` cannot shade per row), not a server limitation.
+
+No server, schema or API change; no flag (ADR-0088 D1). The server stays authoritative; the client
+predicate only stops a planner being offered a tick that would be refused.
