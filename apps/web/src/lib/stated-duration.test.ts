@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isDerivedSpanType, statedDuration } from './stated-duration';
+import {
+  isDerivedSpanType,
+  spokenWorkingTime,
+  statedDuration,
+  workingDays,
+} from './stated-duration';
 
 const stored = { durationDays: 3, durationMinutes: 1440 * 3 };
 
@@ -52,5 +57,20 @@ describe('isDerivedSpanType', () => {
     expect(isDerivedSpanType('LEVEL_OF_EFFORT')).toBe(true);
     expect(isDerivedSpanType('TASK')).toBe(false);
     expect(isDerivedSpanType('FINISH_MILESTONE')).toBe(false);
+  });
+});
+
+describe('spokenWorkingTime / workingDays', () => {
+  it('pluralises working days', () => {
+    expect(workingDays(1)).toBe('1 working day');
+    expect(workingDays(3)).toBe('3 working days');
+  });
+
+  it('says whole days, then hours for a span under half a day, then nothing', () => {
+    expect(spokenWorkingTime({ durationDays: 47, durationMinutes: 47 * 480 })).toBe(
+      '47 working days',
+    );
+    expect(spokenWorkingTime({ durationDays: 0, durationMinutes: 240 })).toBe('4h of working time');
+    expect(spokenWorkingTime({ durationDays: 0, durationMinutes: 0 })).toBeNull();
   });
 });

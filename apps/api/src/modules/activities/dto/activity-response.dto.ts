@@ -11,7 +11,13 @@ import {
 import type { ActivitySummary, VisualConflictReason } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
-import { derivedDuration, minutesToDays, type WithDayFactor } from '../day-factor';
+import {
+  DERIVED_DURATION_DAYS_DESCRIPTION,
+  DERIVED_DURATION_MINUTES_DESCRIPTION,
+  derivedDuration,
+  minutesToDays,
+  type WithDayFactor,
+} from '../day-factor';
 import type { WithAssignmentCount } from '../resource-assignment-counts';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
@@ -74,21 +80,14 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({
     nullable: true,
     type: Number,
-    description:
-      'Engine-owned (ADR-0197). Working MINUTES the derived span of a WBS_SUMMARY or LEVEL_OF_EFFORT ' +
-      'covers, counted on its own calendar (the plan’s when it has none) between the rolled start ' +
-      'and finish the recalculation placed. Null for every other type, for a summary with no ' +
-      'children, for a level-of-effort with no resolvable span, and until a recalculation has ' +
-      'written it. Never an input: `durationMinutes` stays what the planner stored.',
+    description: DERIVED_DURATION_MINUTES_DESCRIPTION,
   })
   derivedDurationMinutes!: number | null;
 
   @ApiProperty({
     nullable: true,
     type: Number,
-    description:
-      '`derivedDurationMinutes` rounded to whole days on the activity’s day factor — lossy, as ' +
-      '`durationDays` is beside `durationMinutes`. Null wherever the minutes are.',
+    description: DERIVED_DURATION_DAYS_DESCRIPTION,
   })
   derivedDurationDays!: number | null;
 

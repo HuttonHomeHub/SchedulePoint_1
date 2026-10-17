@@ -1,3 +1,5 @@
+import { formatWorkingMinutesNoDays } from './duration-text';
+
 /**
  * **The duration an activity states — one rule, for every surface that prints one** (ADR-0197).
  *
@@ -14,6 +16,28 @@
  * `formatDurationCell` records: `activity-schemas` imports the duration field, and the reverse
  * import would be a cycle.
  */
+
+/** `1 working day`, `3 working days` — the one pluraliser the spoken sentence and the editor share. */
+export function workingDays(n: number): string {
+  return `${String(n)} working ${n === 1 ? 'day' : 'days'}`;
+}
+
+/**
+ * A derived span as it is SPOKEN or written in prose: whole working days, or — where the span is
+ * shorter than the half day that rounds to zero — its hours and minutes, which need no calendar to
+ * mean something (`formatWorkingMinutesNoDays`). So a four-hour span is said rather than omitted or
+ * rounded into "0 working days". `null` where there is nothing to say.
+ */
+export function spokenWorkingTime(stated: {
+  durationDays: number;
+  durationMinutes: number;
+}): string | null {
+  if (stated.durationDays > 0) return workingDays(stated.durationDays);
+  if (stated.durationMinutes > 0) {
+    return `${formatWorkingMinutesNoDays(stated.durationMinutes)} of working time`;
+  }
+  return null;
+}
 
 /** The fields this reads. The derived pair is optional so a hand-built partial still type-checks. */
 export interface DurationSource {

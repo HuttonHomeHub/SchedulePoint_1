@@ -207,6 +207,20 @@ export function minutesToDays(minutes: number, dayFactorMinutes: number): number
 }
 
 /**
+ * The OpenAPI descriptions of the two derived-duration response fields (ADR-0197), shared by
+ * `ActivityResponseDto` and `GuestActivityDto` so the member and guest contracts cannot drift.
+ */
+export const DERIVED_DURATION_MINUTES_DESCRIPTION =
+  'Engine-owned (ADR-0197). Working MINUTES the derived span of a WBS_SUMMARY or LEVEL_OF_EFFORT ' +
+  'covers, counted on its own calendar (the plan’s when it has none) between the rolled start ' +
+  'and finish the recalculation placed. Null for every other type, for a summary with no ' +
+  'children, for a level-of-effort with no resolvable span, and until a recalculation has ' +
+  'written it. Never an input: `durationMinutes` stays what the planner stored.';
+export const DERIVED_DURATION_DAYS_DESCRIPTION =
+  '`derivedDurationMinutes` rounded to whole days on the activity’s day factor — lossy, as ' +
+  '`durationDays` is beside `durationMinutes`. Null wherever the minutes are.';
+
+/**
  * The engine-derived duration of a WBS summary or Level-of-Effort activity, as the two response
  * fields (ADR-0197): both `null` for every other type and wherever the engine wrote none.
  *

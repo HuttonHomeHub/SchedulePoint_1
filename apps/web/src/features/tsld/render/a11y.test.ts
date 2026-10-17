@@ -203,11 +203,39 @@ describe('describeActivity (Tier 1)', () => {
         derivedDurationDays: 47,
         derivedDurationMinutes: 47 * 1440,
       });
-      expect(describeActivity(derived)).toContain('Excavate, 47 working days,');
+      expect(describeActivity(derived)).toContain('Excavate, spanning 47 working days,');
       // Where the engine wrote none the clause is left out, as for a milestone — never "0 working days".
       const none = activity({ type, durationDays: 0, durationMinutes: 0 });
       expect(describeActivity(none)).not.toContain('working day');
     }
+  });
+
+  it('says a sub-day derived span in hours, and a task keeps the plain clause', () => {
+    const short = activity({
+      type: 'WBS_SUMMARY',
+      durationDays: 0,
+      durationMinutes: 0,
+      derivedDurationDays: 0,
+      derivedDurationMinutes: 240,
+    });
+    expect(describeActivity(short)).toContain('Excavate, spanning 4h of working time,');
+    expect(describeActivity(activity({ durationDays: 3 }))).toContain('Excavate, 3 working days,');
+  });
+
+  it('speaks no float for a WBS summary, whose 0 is a convention, and keeps it for a level-of-effort', () => {
+    const base = {
+      durationDays: 0,
+      durationMinutes: 0,
+      derivedDurationDays: 5,
+      derivedDurationMinutes: 5 * 1440,
+      remainingFloat: 0,
+      totalFloat: 0,
+      isCritical: false,
+    };
+    expect(describeActivity(activity({ ...base, type: 'WBS_SUMMARY' }))).not.toContain('float');
+    expect(describeActivity(activity({ ...base, type: 'LEVEL_OF_EFFORT' }))).toContain(
+      '0 days float left',
+    );
   });
 
   it('collapses a single-day span to one date', () => {

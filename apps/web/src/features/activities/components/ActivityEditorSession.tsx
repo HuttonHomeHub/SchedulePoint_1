@@ -239,16 +239,16 @@ export function ActivityEditorSession({
   const seedFrame = activityDayFactorFrame(activity);
   // The derived span the Work group states for a saved summary or level-of-effort (ADR-0197). The
   // dates are the DRAWN ones, so the sentence agrees with the bar and the table beside it; a
-  // sub-day span (zero whole days) is left unsaid rather than rounded into a false "0 working days".
+  // sub-day span is said in hours and minutes (`spokenWorkingTime`) rather than rounded to zero.
   const stated = statedDuration(activity);
   const drawn = barDatesFor(activity, 'visual');
   const derivedSpan =
     isDerivedSpanType(activity.type) &&
     stated !== null &&
-    stated.durationDays > 0 &&
+    stated.durationMinutes > 0 &&
     drawn.start !== null &&
     drawn.finish !== null
-      ? { days: stated.durationDays, start: drawn.start, finish: drawn.finish }
+      ? { ...stated, start: drawn.start, finish: drawn.finish }
       : undefined;
   const durationSeedFactor = effectiveHoursPerDay(calendars, {
     activityCalendarId: activity.calendarId ?? '',
