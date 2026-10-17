@@ -393,8 +393,8 @@ and not to a popover or split-button trigger). `useTooltip` takes
 off). `useContainerUnmountHandoff({ target, message? })` is the hook for "this container goes away
 under focus": `target` is a selector or a `() => HTMLElement | null`, an absent `message` moves focus and
 says nothing, and `focusWasInside()` reads the same record for a container that stays mounted. The cluster,
-`PanelResizer` and `HistoryResultStrip` use it; the selection bar keeps its own copy
-(`docs/TECH_DEBT.md` #481).
+`PanelResizer`, `HistoryResultStrip` and the selection bar's body use it
+(`docs/DECISIONS.md` 2026-10-16).
 A toolbar run or cluster is keyed by a stable identity (the item's id, the cluster's id), never by position and never by a changing element type: React re-creates positionally keyed siblings and the focus handoff (ADR-0135/ADR-0111) then announces a still-present control as gone. `toolbar-runs.tsx` (`renderRun`) holds the rule once for `Deck` and `Toolbar`; see `docs/TECH_DEBT.md` #504.
 `Deck` renders its two rows in the order `use-deck-row-order.ts` gives: LOOK then DO at 1024 and wider,
 DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a

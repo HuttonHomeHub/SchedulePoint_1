@@ -4,11 +4,12 @@ import { useAnnounce } from '@/components/ui/announcer';
 
 /**
  * **A container that goes away hands focus on, and says so** (ADR-0135 for a container, where
- * `useToolbarFocusHandoff` is for an item). **Three components use it:** the diagram viewport cluster
- * (`diagram-viewport-cluster.tsx`), `PanelResizer`'s size box (`panel-resizer.tsx`) and
- * `HistoryResultStrip`, which hands on to the plan surface with a function `target` and no
- * `message`. The toolbar-redesign M4 review counted three hand-written copies of this rule;
- * `SelectionActionsBar` still keeps the last (`docs/TECH_DEBT.md` #481).
+ * `useToolbarFocusHandoff` is for an item). **Four components use it:** the diagram viewport cluster
+ * (`diagram-viewport-cluster.tsx`), `PanelResizer`'s size box (`panel-resizer.tsx`),
+ * `HistoryResultStrip` (a function `target` and no `message`) and `SelectionActionsBar`'s body, whose
+ * function `target` runs the host's own `restoreFocus` and answers `null`. The toolbar-redesign M4
+ * review counted three hand-written copies of this rule; the last two are gone (`docs/TECH_DEBT.md` #481,
+ * `docs/DECISIONS.md` 2026-10-16).
  *
  * It cannot be an effect on the toolbar's own item list: when the container itself unmounts no effect
  * body runs in that commit (`use-focus-handoff.ts` records this). So the **wrapper** the caller puts
