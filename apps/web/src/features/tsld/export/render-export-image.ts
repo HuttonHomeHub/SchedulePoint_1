@@ -391,19 +391,22 @@ function fitLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
 /** What the caption's first line says, from the snapshot's {@link StripCaption}. Exported for tests. */
 export function stripCaptionHeadline(snapshot: ResourceStripSnapshot): string {
   const caption = snapshot.caption;
-  if (!caption) return 'Resource loading';
-  if (caption.status === 'loading') return 'Resource loading: still loading when exported';
-  if (caption.status === 'error') return 'Resource loading: could not be loaded';
+  if (!caption) return 'Resource load';
+  if (caption.status === 'loading') return 'Resource load: not shown, still loading when exported';
+  if (caption.status === 'error') return 'Resource load: not shown, could not be loaded';
   if (caption.status === 'empty') {
-    return `Resource loading: ${caption.emptyMessage ?? 'nothing to show'}`;
+    return `Resource load: ${caption.emptyMessage ?? 'nothing to show'}`;
   }
   const how =
     caption.mode === 'isolated'
       ? `${caption.resourceName ?? 'one resource'} only`
       : `stacked by ${caption.mode}`;
+  // **The peak leads**: a narrow crop cuts the tail of this line (marked with an ellipsis), and the
+  // figure a reader came for must not be the first thing to go. "Load", not "loading": on paper
+  // "Resource loading" reads as a status ("still loading"), not as the name of a section.
   return (
-    `Resource loading · ${how} · ${STRIP_BUCKET_WORD[caption.granularity]} buckets · ` +
-    `peak ${formatStripUnits(snapshot.max)} units`
+    `Resource load · peak ${formatStripUnits(snapshot.max)} units · ${how} · ` +
+    `${STRIP_BUCKET_WORD[caption.granularity]} buckets`
   );
 }
 

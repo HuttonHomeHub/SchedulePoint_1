@@ -26,6 +26,8 @@ const PRINT_ROOT_CLASS = 'tsld-print-root';
 
 export { PRINT_TEARDOWN_FALLBACK_MS };
 
+export type PrintSurfaceStripStatus = 'ready' | 'loading' | 'error' | 'empty';
+
 export interface PrintSurfaceProps {
   /** The object/data URL of the already-produced whole-diagram PNG. */
   imageUrl: string;
@@ -57,6 +59,18 @@ export function PrintSurface({
   );
 }
 
+const STRIP_ALT_SUFFIX = {
+  ready: ', with resource load',
+  loading: ', resource load section was still loading',
+  error: ', resource load section could not be loaded',
+  empty: ', resource load section was empty',
+} as const;
+
+/** The printed diagram's alt text, worded by what the strip actually contributed (ADR-0122). */
+export function printAlt(title: string, status: PrintSurfaceStripStatus | undefined): string {
+  return `Diagram of ${title}${status ? STRIP_ALT_SUFFIX[status] : ''}`;
+}
+
 export interface PrintDiagramImageInput {
   /** The already-produced whole-diagram PNG blob (from the shared `buildDiagramImage` helper). */
   blob: Blob;
@@ -65,11 +79,12 @@ export interface PrintDiagramImageInput {
   /** The subtitle line (e.g. "As of 2026-07-20"). */
   subtitle: string;
   /**
-   * Whether the resource strip is in the picture. The image's `alt` is the only text a screen
-   * reader gets for it (ADR-0122), so it must say what the picture holds — loading under the work
-   * is a fact a reader of the printed page has, and a non-visual reader should not lack.
+   * The resource strip's state in the picture, or absent/`null` when it is not open. The image's
+   * `alt` is the only text a screen reader gets for it (ADR-0122), so it states what the picture
+   * HOLDS: only a `ready` strip is claimed as resource load; a strip that was still loading, failed
+   * or was empty is named as exactly that, never as content the picture does not have.
    */
-  includesResourceStrip?: boolean;
+  resourceStripStatus?: PrintSurfaceStripStatus | null;
 }
 
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
@@ -95,11 +110,7 @@ export function printDiagramImage(
       imageUrl={url}
       title={input.title}
       subtitle={input.subtitle}
-      alt={
-        input.includesResourceStrip === true
-          ? `Diagram of ${input.title}, with resource loading`
-          : `Diagram of ${input.title}`
-      }
+      alt={printAlt(input.title, input.resourceStripStatus ?? undefined)}
     />,
     { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
   );

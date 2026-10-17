@@ -210,7 +210,11 @@ describe('the exported diagram composes the same scene as the screen (structural
  * strip's panel). Those are not layers; their export equivalents are painted rows that are hand
  * mirrors (ADR-0106), and that residue is recorded in ADR-0198 rather than claimed covered.
  */
-const COMPONENTS = join(SRC, 'features/tsld/components');
+const CANVAS_ROOTS = [
+  join(SRC, 'features/tsld'),
+  // The strip's host panel is the other place a diagram surface could grow a canvas.
+  join(SRC, 'components/layout/workspace'),
+];
 
 /**
  * Layers the export deliberately does not compose, each with the reason. Same discipline as
@@ -244,9 +248,12 @@ function tagExtent(text: string, from: number): string {
  */
 function canvasLayers(): CanvasLayer[] {
   const layers: CanvasLayer[] = [];
-  const files = readdirSync(COMPONENTS).filter((f) => f.endsWith('.tsx') && !f.includes('.test.'));
-  for (const name of files) {
-    const file = join(COMPONENTS, name);
+  const files = CANVAS_ROOTS.flatMap((root) =>
+    (readdirSync(root, { recursive: true }) as string[])
+      .filter((f) => f.endsWith('.tsx') && !f.includes('.test.'))
+      .map((f) => join(root, f)),
+  );
+  for (const file of files) {
     const text = readStripped(file);
     for (const match of text.matchAll(/<canvas\b/g)) {
       const line = text.slice(0, match.index).split('\n').length;
@@ -295,11 +302,16 @@ describe('the exported diagram accounts for every canvas layer the screen render
   const composes = (input: string): boolean =>
     new RegExp(`(?:^|[\\s{,])${input}\\s*(?::|,|\\})`).test(call);
 
-  it('the roster is plausibly sized, so a truncated parse cannot read as parity', () => {
-    // ADR-0093's second assertion: five canvases today (wbs-band, scene, interaction,
-    // resource-strip, minimap). A roster that parsed fewer would satisfy every check below.
-    expect(names.length, 'the layer roster looks truncated').toBeGreaterThanOrEqual(5);
-    expect(new Set(names).size, 'two canvases share a data-layer name').toBe(names.length);
+  it('the roster is exactly the five known layers, so a truncated parse cannot read as parity', () => {
+    // ADR-0093's second assertion, pinned by NAME rather than by a floor: a count passes when one
+    // layer vanishes and another appears, and a new layer should be a conscious edit here.
+    expect([...names].sort()).toEqual([
+      'interaction',
+      'minimap',
+      'resource-strip',
+      'scene',
+      'wbs-band',
+    ]);
   });
 
   it('every layer is composed or listed screen-only with a reason', () => {

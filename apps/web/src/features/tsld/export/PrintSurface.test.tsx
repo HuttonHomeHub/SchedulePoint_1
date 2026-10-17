@@ -1,7 +1,12 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PrintSurface, printDiagramImage, PRINT_TEARDOWN_FALLBACK_MS } from './PrintSurface';
+import {
+  PrintSurface,
+  printAlt,
+  printDiagramImage,
+  PRINT_TEARDOWN_FALLBACK_MS,
+} from './PrintSurface';
 
 /**
  * The TSLD Browser-Print surface + its mount/teardown lifecycle (spec `docs/specs/export-print/`
@@ -33,6 +38,18 @@ describe('PrintSurface (component)', () => {
     // The container is the print-only element (the stylesheet keys its screen `display:none` + the
     // `@media print` reveal on this class), not a normally-visible node.
     expect(screen.getByTestId('tsld-print-surface')).toHaveClass('tsld-print-root');
+  });
+});
+
+describe('printAlt — claims only what the picture holds (ADR-0122)', () => {
+  it.each([
+    ['ready', 'Diagram of North Tower, with resource load'],
+    ['loading', 'Diagram of North Tower, resource load section was still loading'],
+    ['error', 'Diagram of North Tower, resource load section could not be loaded'],
+    ['empty', 'Diagram of North Tower, resource load section was empty'],
+    [undefined, 'Diagram of North Tower'],
+  ] as const)('strip %s', (status, expected) => {
+    expect(printAlt('North Tower', status)).toBe(expected);
   });
 });
 
@@ -105,13 +122,13 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
   it('says the resource loading is in the picture when it is (ADR-0122)', () => {
     act(() => {
       printDiagramImage(
-        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01', includesResourceStrip: true },
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01', resourceStripStatus: 'ready' },
         { print },
       );
     });
     expect(container()?.querySelector('img')).toHaveAttribute(
       'alt',
-      'Diagram of North Tower, with resource loading',
+      'Diagram of North Tower, with resource load',
     );
     // Tear the surface down here, so its fallback timer cannot fire inside a later test's count.
     act(() => {

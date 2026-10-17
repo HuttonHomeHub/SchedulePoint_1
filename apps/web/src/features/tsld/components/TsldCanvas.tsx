@@ -1688,11 +1688,10 @@ export function TsldCanvas({
   // is inactive (nothing reads `stripRef` then), so this never affects the scene paint (parity).
   useEffect(() => {
     stripRef.current = resourceStrip;
-    stripDirtyRef.current = true;
-  }, [resourceStrip]);
-  useEffect(() => {
+    // Written with the snapshot, so `getResourceStrip` never sees one without the other.
     stripActiveRef.current = resourceStripActive;
-  }, [resourceStripActive]);
+    stripDirtyRef.current = true;
+  }, [resourceStrip, resourceStripActive]);
 
   // Publish the band's groups to the loop, marking ONLY the band dirty — the two-dirty-flag
   // decoupling the strip established, for the same reason: a membership change must not cost the

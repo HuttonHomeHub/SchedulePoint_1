@@ -98,8 +98,8 @@ export function useDiagramImage(args: {
   promise: Promise<{ blob: Blob; scaledToFit: boolean }>;
   imageWidth: number;
   imageHeight: number;
-  /** True when the resource strip is in the picture (the printed diagram's `alt` says so). */
-  includesResourceStrip: boolean;
+  /** The strip's state in the picture, `null` when it is not open (the printed diagram's `alt`). */
+  resourceStripStatus: 'ready' | 'loading' | 'error' | 'empty' | null;
 } | null {
   const {
     plan,
@@ -279,8 +279,9 @@ export function useDiagramImage(args: {
       }).then((blob) => ({ blob, scaledToFit }));
       return {
         promise,
-        // Whether the strip is in the picture, so the printed diagram's `alt` can say so (ADR-0122).
-        includesResourceStrip: strip !== null,
+        // What the strip contributed, so the printed diagram's `alt` claims only what is there
+        // (ADR-0122): a snapshot with no caption predates the field and is a drawn strip.
+        resourceStripStatus: strip ? (strip.caption?.status ?? 'ready') : null,
         imageWidth: Math.max(1, Math.round(size.width * dpr)),
         imageHeight: Math.max(1, Math.round(size.height * dpr)),
       };

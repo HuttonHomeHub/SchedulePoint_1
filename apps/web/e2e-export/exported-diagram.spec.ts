@@ -666,13 +666,19 @@ test.describe('The exported diagram', () => {
           ctx.drawImage(bitmap, 0, 0);
           const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
           const chromatic = new Map<string, number>();
-          let captionDark = 0;
+          // Dark ink per caption line: the row is three lines (headline, notes, legend), so a
+          // third each — a total cannot say WHICH line went missing.
+          const lineInk = [0, 0, 0];
+          const captionTop = bitmap.height - args.band - args.caption;
           for (let y = bitmap.height - args.band - args.caption; y < bitmap.height; y += 1) {
             for (let x = 0; x < bitmap.width; x += 1) {
               const i = (y * bitmap.width + x) * 4;
               const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
               if (y < bitmap.height - args.band) {
-                if ((r + g + b) / 3 < 128) captionDark += 1;
+                if ((r + g + b) / 3 < 128) {
+                  const line = Math.min(2, Math.floor(((y - captionTop) * 3) / args.caption));
+                  lineInk[line] = (lineInk[line] ?? 0) + 1;
+                }
               } else if (Math.max(r, g, b) - Math.min(r, g, b) > 40) {
                 const key = `${r},${g},${b}`;
                 chromatic.set(key, (chromatic.get(key) ?? 0) + 1);
@@ -681,7 +687,7 @@ test.describe('The exported diagram', () => {
           }
           return {
             height: bitmap.height,
-            captionDark,
+            lineInk,
             // Antialiased edges are one-offs; a fill has a real footprint.
             fills: [...chromatic.entries()].filter(([, n]) => n >= 40).map(([colour]) => colour),
           };
@@ -706,16 +712,39 @@ test.describe('The exported diagram', () => {
       open.fills.length,
       `the strip band holds ${String(open.fills.length)} coloured fill(s) — the two trades are not both in the picture`,
     ).toBeGreaterThanOrEqual(2);
-    expect(
-      open.captionDark,
-      'no dark ink in the caption row — the mode, bucket, peak and legend are missing',
-    ).toBeGreaterThan(100);
+    // Each of the caption's three lines must hold ink on its own: the headline (mode, peak, bucket),
+    // the notes (load basis) and the legend. A single total passes when one line has gone.
+    const [headline, notes, legend] = open.lineInk;
+    expect(headline, 'no ink in the caption headline').toBeGreaterThan(40);
+    expect(notes, 'no ink in the caption notes line (load basis)').toBeGreaterThan(40);
+    expect(legend, 'no ink in the caption legend line').toBeGreaterThan(40);
+
+    // ── A narrow crop, measured by the browser's own text metrics (the unit suites fake
+    // `measureText` at 6 px a character): the current-view export of a narrow window exercises the
+    // ellipsis and the `+N more` count for real. It must still be a complete, captioned picture.
+    await page.setViewportSize({ width: 760, height: 900 });
+    await expect(panel.getByRole('list', { name: 'Legend' })).toBeVisible();
+    await page
+      .getByRole('button', { name: /^(share & )?export$/i })
+      .first()
+      .click();
+    const narrowDownload = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('menuitem', { name: 'Diagram — current view (PNG)' }).click();
+    const narrowPath = await (await narrowDownload).path();
+    const narrow = await measure(
+      (await import('node:fs')).readFileSync(narrowPath),
+      stripPx,
+      EXPORT_STRIP_CAPTION_ROW,
+    );
+    expect(narrow.lineInk[0], 'the narrow crop lost its caption headline').toBeGreaterThan(40);
+    expect(narrow.lineInk[2], 'the narrow crop lost its legend line').toBeGreaterThan(20);
+    await page.setViewportSize({ width: 1646, height: 1097 });
 
     // ── Print… embeds the same blob, and its alt is the only text a screen reader gets for it.
     await openPrintDocument(page);
     await expect(page.locator('.tsld-print-container img')).toHaveAttribute(
       'alt',
-      `Diagram of ${planName}, with resource loading`,
+      `Diagram of ${planName}, with resource load`,
     );
     // Tear the print document down (print() is stubbed, so `afterprint` never comes on its own).
     await page.evaluate(() => globalThis.dispatchEvent(new Event('afterprint')));

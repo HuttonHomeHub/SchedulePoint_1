@@ -132,7 +132,7 @@ describe('renderExportImage — the resource strip', () => {
   it('with no strip, draws nothing about one — no band, no offset frame, no caption', async () => {
     const calls = await render({});
 
-    expect(texts(calls).some((t) => t.startsWith('Resource loading'))).toBe(false);
+    expect(texts(calls).some((t) => t.startsWith('Resource load'))).toBe(false);
     expect(calls).not.toContainEqual({ method: 'clearRect', args: [0, 0, WIDTH, STRIP_HEIGHT] });
     // Every frame the export sets is the surface's own (no vertical offset): nothing was painted
     // into a shifted frame, which is how the band would have got there.
@@ -170,7 +170,7 @@ describe('renderExportImage — the resource strip', () => {
 
     // The caption is chrome, painted after the ground like the title and marker rows.
     const headline = calls.findIndex(
-      (c) => c.method === 'fillText' && String(c.args[0]).startsWith('Resource loading'),
+      (c) => c.method === 'fillText' && String(c.args[0]).startsWith('Resource load'),
     );
     expect(headline).toBeGreaterThan(groundMode);
   });
@@ -196,9 +196,7 @@ describe('renderExportImage — the resource strip', () => {
     });
     const drawn = texts(calls);
 
-    expect(drawn).toContain(
-      'Resource loading · stacked by resource · Weekly buckets · peak 3 units',
-    );
+    expect(drawn).toContain('Resource load · peak 3 units · stacked by resource · Weekly buckets');
     // The screen's own sentence, so the two surfaces cannot be reworded apart.
     expect(drawn).toContain(RESOURCE_LOAD_BASIS_NOTE);
     expect(drawn).toContain('Crane crew');
@@ -249,9 +247,7 @@ describe('renderExportImage — the resource strip', () => {
       size: { width: 150, height: HEIGHT },
       resourceStrip: { snapshot: snapshot(STACKED), palette: PALETTE, height: STRIP_HEIGHT },
     });
-    expect(texts(calls).some((t) => t.startsWith('Resource loading') && t.endsWith('…'))).toBe(
-      true,
-    );
+    expect(texts(calls).some((t) => t.startsWith('Resource load') && t.endsWith('…'))).toBe(true);
   });
 });
 
@@ -267,8 +263,8 @@ describe('stripCaptionHeadline', () => {
   });
 
   it.each([
-    ['group', 'Resource loading · stacked by group · Monthly buckets · peak 12.5 units'],
-    ['kind', 'Resource loading · stacked by kind · Monthly buckets · peak 12.5 units'],
+    ['group', 'Resource load · peak 12.5 units · stacked by group · Monthly buckets'],
+    ['kind', 'Resource load · peak 12.5 units · stacked by kind · Monthly buckets'],
   ] as const)('names the %s mode', (mode, expected) => {
     expect(stripCaptionHeadline(bare({ ...base, status: 'ready', mode }))).toBe(expected);
   });
@@ -278,19 +274,19 @@ describe('stripCaptionHeadline', () => {
       stripCaptionHeadline(
         bare({ ...base, status: 'ready', mode: 'isolated', resourceName: 'Crane crew' }),
       ),
-    ).toBe('Resource loading · Crane crew only · Monthly buckets · peak 12.5 units');
+    ).toBe('Resource load · peak 12.5 units · Crane crew only · Monthly buckets');
   });
 
   it('says why an open strip has nothing to show, never an unexplained band', () => {
     const mode = 'resource' as const;
     expect(stripCaptionHeadline(bare({ ...base, status: 'loading', mode }))).toBe(
-      'Resource loading: still loading when exported',
+      'Resource load: not shown, still loading when exported',
     );
     expect(stripCaptionHeadline(bare({ ...base, status: 'error', mode }))).toBe(
-      'Resource loading: could not be loaded',
+      'Resource load: not shown, could not be loaded',
     );
     expect(
       stripCaptionHeadline(bare({ ...base, status: 'empty', mode, emptyMessage: 'Nothing yet.' })),
-    ).toBe('Resource loading: Nothing yet.');
+    ).toBe('Resource load: Nothing yet.');
   });
 });
