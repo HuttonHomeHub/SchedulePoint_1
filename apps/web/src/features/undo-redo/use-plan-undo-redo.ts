@@ -9,8 +9,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Command } from './commands';
-import { historyResultMessage, type PostedHistoryResult } from './history-result';
-import { isNotFound, ReplayFailure, SINGLE_READ_LIMIT, type ReplayContext } from './replay';
+import {
+  calendarDeletedDetail,
+  historyResultMessage,
+  type PostedHistoryResult,
+} from './history-result';
+import {
+  CalendarDeletedFailure,
+  isNotFound,
+  ReplayFailure,
+  SINGLE_READ_LIMIT,
+  type ReplayContext,
+} from './replay';
 import type { HistoryEntries, PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
@@ -352,7 +362,13 @@ export function usePlanUndoRedo(params: {
           // The step failed part-way and says what state it left the plan in; the planner is told
           // that, whatever the cause — and a lost pen under it still runs the pen contract.
           if (err.cause instanceof ApiFetchError && err.cause.status === 423) onLockLost(err.cause);
-          return { kind: 'failed', label, detail: err.detail };
+          // The calendar refusal is worded here, not where it was thrown: only this press knows
+          // whether the planner should "undo again" or "redo again".
+          const detail =
+            err instanceof CalendarDeletedFailure
+              ? calendarDeletedDetail(direction, err.calendarName)
+              : err.detail;
+          return { kind: 'failed', label, detail };
         }
         if (err instanceof ApiFetchError && err.status === 423) {
           // Pen lost — the shared pen contract shows the lost-control banner and refetches the

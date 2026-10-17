@@ -20,11 +20,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *
  * Most refusals already carry a sentence that names the cause and the cure — "A resource named
  * “Crane A” already exists. Rename or delete that one, then restore this." — so those pass through
- * untouched and only gain a link to the library where the rename happens. Two do not, and are worded
- * here because the server's text is a rule and the reader needs a name:
+ * untouched and only gain a link to the library where the rename happens. Three do not, and are
+ * worded here because the server's text is a rule and the reader needs a name:
  *
  * - **A 404 means gone, not unlucky** (`docs/API.md`, the retention race): the item no longer exists
  *   and retrying cannot help, which "Resource not found." does not say.
+ * - **A calendar deleted since the list loaded** (`CALENDAR_DELETED`, ADR-0200): the server's
+ *   sentence has no name in it; `details.calendar` does.
  * - **A parent that has stopped being a group, or sits too deep**, which the server sends with the
  *   parent's name in `details` rather than in the sentence.
  */
@@ -51,6 +53,18 @@ export function describeRestoreFailure(error: Error, kind: DeletedItem['kind']):
         : '';
     return {
       message: `${parent} is nested too deeply to hold this${levels}. Move that group nearer the top, then restore this.`,
+      library: null,
+    };
+  }
+  if (reason === 'CALENDAR_DELETED') {
+    // The server's sentence ("Restore the calendar first.") names no calendar; this does. The race
+    // that reaches it: the calendar was deleted after the list loaded, so the row showed no blocker.
+    const calendar = isRecord(details.calendar) ? details.calendar : {};
+    return {
+      message:
+        typeof calendar.name === 'string'
+          ? `It uses the calendar “${calendar.name}”, which is deleted. Restore that calendar first, then restore this.`
+          : 'It uses a calendar that no longer exists.',
       library: null,
     };
   }

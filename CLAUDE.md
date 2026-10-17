@@ -23,6 +23,9 @@ browser-native team use. See the full product context in
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1672 web
 > source files with 47 Playwright suites beside the base journey, and
 > 200 ADRs.
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1669 web
+> source files with 47 Playwright suites beside the base journey, and
+> 198 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -603,6 +606,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
 - **ADR-0199** _(Accepted; amends ADR-0157 D2 and D4)_ — A link is never louder than the work it joins → [`0199-a-link-is-never-louder-than-the-work-it-joins.md`](docs/adr/0199-a-link-is-never-louder-than-the-work-it-joins.md)
 - **ADR-0200** _(Accepted; amends ADR-0103 D7 and ADR-0049)_ — A layer is a canvas, and the export accounts for every one → [`0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md`](docs/adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)
+- **ADR-0200** _(Proposed; amends ADR-0176 D3)_ — A restore brings nothing back onto a deleted calendar → [`0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md`](docs/adr/0200-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

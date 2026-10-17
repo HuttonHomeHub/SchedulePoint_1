@@ -22,7 +22,7 @@ import {
   visualResizeCommand,
   visualStartCommand,
 } from './commands';
-import { notApplicable } from './replay';
+import { CalendarDeletedFailure, notApplicable } from './replay';
 
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
@@ -1158,6 +1158,29 @@ describe('deleteActivityCommand', () => {
       }),
     );
     expect(await command.undo(server.ctx)).toEqual(notApplicable('parent-deleted', 'Excavate'));
+  });
+
+  it('a restore refused for a deleted calendar keeps the step and names the calendar (ADR-0200 D4)', async () => {
+    const { server, command } = await deleted();
+    server.mutations.restoreBatch.mockRejectedValueOnce(
+      new ApiFetchError(409, {
+        code: 'CONFLICT',
+        message: 'Restore the calendar first.',
+        details: {
+          reason: 'CALENDAR_DELETED',
+          calendar: { id: 'cal-1', name: 'Mon-Wed', deleteBatchId: 'cb-1' },
+        },
+      }),
+    );
+    // A throw, not a set-aside result: the history store leaves both stacks alone on a throw, so the
+    // same step is still on top when the planner has restored the calendar and presses undo again.
+    const refusal = await command.undo(server.ctx).catch((err: unknown) => err);
+    expect(refusal).toBeInstanceOf(CalendarDeletedFailure);
+    expect((refusal as CalendarDeletedFailure).calendarName).toBe('Mon-Wed');
+    expect(server.activities.has('a1')).toBe(false);
+    // The retry applies, with the activity's id (the fake server's restore now succeeds).
+    expect(await command.undo(server.ctx)).toEqual(APPLIED);
+    expect(server.activities.has('a1')).toBe(true);
   });
 
   it('a restore that 404s is set aside as gone', async () => {
