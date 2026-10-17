@@ -965,9 +965,7 @@ export class HierarchyLifecycleService {
    * The restored project must not already hold an active calendar of the stranded one's name: the
    * per-project partial unique would otherwise fail the whole restore as an anonymous 409. The same
    * answer the calendar's own restore gives, so the planner sees which calendar to rename.
-   *
-   * soft-delete: active-only — the question is which LIVE calendar holds the name (archived ones
-   * still do, ADR-0053 §4).
+   * Archived calendars count: they still hold their name (ADR-0053 §4).
    */
   private async assertNameFreeInProject(
     tx: Prisma.TransactionClient,
