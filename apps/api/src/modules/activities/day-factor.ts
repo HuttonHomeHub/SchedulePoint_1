@@ -205,3 +205,27 @@ export function minutesToDays(minutes: number, dayFactorMinutes: number): number
     ? Math.round(minutes / DEFAULT_HOURS_PER_DAY_MINUTES)
     : Math.round(minutes / dayFactorMinutes);
 }
+
+/**
+ * The engine-derived duration of a WBS summary or Level-of-Effort activity, as the two response
+ * fields (ADR-0197): both `null` for every other type and wherever the engine wrote none.
+ *
+ * Gated on the TYPE here as well as at the column. The recalculation writes NULL to every other type
+ * so the column cannot go stale across a type change, but a row read between the type change and the
+ * next recalculation still holds the old value — and the reader must not see a task state a duration
+ * it never had. The days use the row's own factor, the calendar the engine counted the minutes on.
+ */
+export function derivedDuration(entity: {
+  type: ActivityType;
+  derivedDurationMinutes: number | null;
+  dayFactorMinutes: number;
+}): { derivedDurationMinutes: number | null; derivedDurationDays: number | null } {
+  const derives = entity.type === 'WBS_SUMMARY' || entity.type === 'LEVEL_OF_EFFORT';
+  if (!derives || entity.derivedDurationMinutes === null) {
+    return { derivedDurationMinutes: null, derivedDurationDays: null };
+  }
+  return {
+    derivedDurationMinutes: entity.derivedDurationMinutes,
+    derivedDurationDays: minutesToDays(entity.derivedDurationMinutes, entity.dayFactorMinutes),
+  };
+}

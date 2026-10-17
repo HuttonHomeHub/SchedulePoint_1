@@ -198,6 +198,10 @@ describe('GuestActivityDto', () => {
         // sub-day activity: without this a guest sees a four-hour lift as `durationDays: 0` and
         // cannot tell it apart from a milestone.
         'durationMinutes',
+        // ADR-0197: schedule, not analysis — the length of the span `earlyStart`/`earlyFinish` bound,
+        // for a summary or a level-of-effort. Null on every other type.
+        'derivedDurationMinutes',
+        'derivedDurationDays',
         'laneIndex',
         'earlyStart',
         'earlyFinish',
@@ -233,6 +237,22 @@ describe('GuestActivityDto', () => {
       percentComplete: 40,
       laneIndex: 3,
     });
+  });
+
+  it('states a derived duration for a summary and withholds it from every other type (ADR-0197)', () => {
+    const base = activityRow();
+    const summary = GuestActivityDto.from({
+      ...base,
+      type: 'WBS_SUMMARY',
+      derivedDurationMinutes: 960,
+      dayFactorMinutes: 480,
+    });
+    expect(summary.derivedDurationMinutes).toBe(960);
+    expect(summary.derivedDurationDays).toBe(2);
+    // A stale value on a row whose type has since changed is never shown.
+    const task = GuestActivityDto.from({ ...base, type: 'TASK', derivedDurationMinutes: 960 });
+    expect(task.derivedDurationMinutes).toBeNull();
+    expect(task.derivedDurationDays).toBeNull();
   });
 
   // FC-3 (spec §2): the fixture's OTHER dates are all `DAY` (2026-07-01) — this pins that the

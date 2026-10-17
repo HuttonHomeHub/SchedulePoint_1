@@ -34,6 +34,15 @@ const FROZEN: Record<string, string> = {
   'scale2 on': '66d75aa6e6155a1037b9f8e75a84d6ceffadce8e8f827d52581f971a1e592327',
 };
 
+/**
+ * `derivedDurationMinutes` (ADR-0197) is an output the engine gained after these hashes were taken, on
+ * the summary and level-of-effort rows only. It is dropped before hashing rather than the hashes being
+ * regenerated: the claim under test is that LEVELLING moved no date, and a stripped match against the
+ * ORIGINAL hashes proves that, which a regenerated set taken from the tree under test could not.
+ */
+const withoutDerivedDuration = (key: string, value: unknown): unknown =>
+  key === 'derivedDurationMinutes' ? undefined : value;
+
 describe('levelSchedule — hot-resource and scale-plan output is byte-identical to before M2.5', () => {
   const spec = scaleSpec({ activities: 2000 });
   const { activities, edges, options } = specToEngineInput(spec);
@@ -77,9 +86,11 @@ describe('levelSchedule — hot-resource and scale-plan output is byte-identical
             resources,
             levelOptions,
           );
-          expect(createHash('sha256').update(JSON.stringify(output)).digest('hex')).toBe(
-            FROZEN[key],
-          );
+          expect(
+            createHash('sha256')
+              .update(JSON.stringify(output, withoutDerivedDuration))
+              .digest('hex'),
+          ).toBe(FROZEN[key]);
         },
         30_000,
       );

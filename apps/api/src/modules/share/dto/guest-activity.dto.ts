@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ActivityStatus, ActivityType, type Activity } from '@prisma/client';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
-import { minutesToDays, type WithDayFactor } from '../../activities/day-factor';
+import { derivedDuration, minutesToDays, type WithDayFactor } from '../../activities/day-factor';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
 /**
@@ -71,6 +71,27 @@ export class GuestActivityDto {
   })
   durationMinutes!: number;
 
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Engine-owned (ADR-0197). Working MINUTES the derived span of a WBS_SUMMARY or LEVEL_OF_EFFORT ' +
+      'covers, counted on its own calendar (the plan’s when it has none) between the rolled start ' +
+      'and finish the recalculation placed. Null for every other type, for a summary with no ' +
+      'children, for a level-of-effort with no resolvable span, and until a recalculation has ' +
+      'written it. Never an input: `durationMinutes` stays what the planner stored.',
+  })
+  derivedDurationMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      '`derivedDurationMinutes` rounded to whole days on the activity’s day factor — lossy, as ' +
+      '`durationDays` is beside `durationMinutes`. Null wherever the minutes are.',
+  })
+  derivedDurationDays!: number | null;
+
   @ApiProperty({ description: 'Graphical y-lane / vertical position on the TSLD canvas.' })
   laneIndex!: number;
 
@@ -138,6 +159,7 @@ export class GuestActivityDto {
       // day-rounded one a reader expects to see on a bar.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
       durationMinutes: entity.durationMinutes,
+      ...derivedDuration(entity),
       laneIndex: entity.laneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),

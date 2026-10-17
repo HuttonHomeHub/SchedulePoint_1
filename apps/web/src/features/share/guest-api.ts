@@ -90,6 +90,14 @@ export interface GuestActivity {
   durationDays: number;
   /** The exact stored duration in working minutes (ADR-0070) — `durationDays` rounds it. */
   durationMinutes: number;
+  /**
+   * The engine-derived duration of a summary or level-of-effort (ADR-0197), in working minutes.
+   * **Optional on the wire type** for the same version-skew reason as the visual span below: an older
+   * API does not send it, and absent reads as "not calculated".
+   */
+  derivedDurationMinutes?: number | null;
+  /** {@link GuestActivity.derivedDurationMinutes} rounded to whole days on the row's day factor. */
+  derivedDurationDays?: number | null;
   laneIndex: number;
   earlyStart: string | null;
   earlyFinish: string | null;
@@ -190,6 +198,8 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     type: activity.type,
     durationDays: activity.durationDays,
     durationMinutes: activity.durationMinutes,
+    derivedDurationMinutes: activity.derivedDurationMinutes ?? null,
+    derivedDurationDays: activity.derivedDurationDays ?? null,
     constraintType: null,
     constraintDate: null,
     secondaryConstraintType: null,
