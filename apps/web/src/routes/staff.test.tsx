@@ -23,7 +23,14 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
  */
 vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, apiFetch: vi.fn() };
+  const apiFetch = vi.fn<(path: string) => Promise<unknown>>();
+  // The probe history reads its `meta.total` through the envelope variant; routing it through the
+  // same mock keeps every test here answering one function per path.
+  return {
+    ...actual,
+    apiFetch,
+    apiFetchEnvelope: async (path: string) => ({ data: await apiFetch(path) }),
+  };
 });
 
 /**

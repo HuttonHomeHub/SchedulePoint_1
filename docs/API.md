@@ -1653,16 +1653,15 @@ window — losing the reading on the one machine that can produce one. `limbKind
 carries a value list, because it is a **structure discriminator** a reader dispatches on to
 interpret the samples.
 
-`GET /api/v1/staff/probe-results?limit=` (1–100, default 50) reads the history newest first. **No
-cursor and no total**, and that stopped being a bound the day one press could write six rows. This
-paragraph said a page was "more history than the panel can usefully show" because the table has no
-automated producer; ADR-0130 gave it a control that writes a whole sitting per press, so fifty rows
-is roughly eight sittings, and the screen showing them cannot tell "fifty is everything" from "fifty
-is a page". `docs/TECH_DEBT.md` **#271** carries the fix and the argument for which one: a bare
-`total` names the state, and only a cursor (`meta.nextCursor`/`meta.hasMore`, this file's own
-standard) lets a reader walk back into older sittings — which is what the sittings screen exists
-for. Until then the client says the list is a page and refuses to explain an absence at its
-boundary, because at that boundary an absent reading is stored rather than missing.
+`GET /api/v1/staff/probe-results?limit=` (1–100, default 50) reads the history newest first and
+answers `{ data, meta: { total } }`. `total` is every stored row, counted in the same transaction as
+the page, so a client can tell "fifty is everything" from "fifty is a page" and say "showing 50 of
+312". **There is still no cursor**, and that stopped being a bound the day one press could write six
+rows: ADR-0130 gave the table a control that writes a whole sitting per press, so fifty rows is
+roughly eight sittings. A total names the state without making the older sittings reachable;
+`docs/TECH_DEBT.md` **#271** carries the cursor (`meta.nextCursor`/`meta.hasMore`, this file's own
+standard), which is what lets a reader walk back into their history. A client talking to an API that
+predates `meta.total` must treat it as absent and claim no number.
 
 `GET /api/v1/staff/diagnostics` is the surface's **first read of customer work data**, and it
 returns integers only (ADR-0140). Each registry entry answers one named question with how many rows

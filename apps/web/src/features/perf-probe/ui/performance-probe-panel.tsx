@@ -142,7 +142,7 @@ export function PerformanceProbePanel({
     ? PERFORMANCE_COPY.readingPending
     : history.isError
       ? PERFORMANCE_COPY.readingFailed
-      : lastReadingSummary(history.data, now);
+      : lastReadingSummary(history.data.rows, now);
 
   // `announce="change"`: the resting sentence ("No measurement has been taken…") is a standing fact
   // that the page-level load sentence replaces (ADR-0178 D-6); a run's outcome is a change and is spoken.

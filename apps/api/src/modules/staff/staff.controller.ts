@@ -24,10 +24,15 @@ import { Throttle } from '@nestjs/throttler';
 import { StaffPrincipal } from '../../common/auth/staff-principal';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
+import { Paginated } from '../../common/dto/paginated';
 import { AuditService } from '../audit/audit.service';
 
 import { CreateProbeResultDto } from './dto/create-probe-result.dto';
-import { ProbeResultRowDto, ProbeResultsQueryDto } from './dto/probe-result.dto';
+import {
+  ProbeHistoryMetaDto,
+  ProbeResultRowDto,
+  ProbeResultsQueryDto,
+} from './dto/probe-result.dto';
 import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
 import { StaffDiagnosticsDto } from './dto/staff-diagnostics.dto';
@@ -354,7 +359,8 @@ export class StaffController {
     summary: 'Readings taken on this installation',
     description:
       'Newest first. A panel read like the other four, so it takes `staff.panel_read` rather ' +
-      'than an action of its own.',
+      'than an action of its own. `meta.total` is every stored row, so a client can say the list is ' +
+      'a page ("showing 50 of 312") rather than guess.',
   })
   @ApiOkResponse({ type: [ProbeResultRowDto] })
   @ApiUnprocessableEntityResponse({
@@ -364,9 +370,10 @@ export class StaffController {
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,
     @Query() query: ProbeResultsQueryDto,
-  ): Promise<ProbeResultRowDto[]> {
+  ): Promise<Paginated<ProbeResultRowDto, ProbeHistoryMetaDto>> {
     await this.recordPanelRead(staff, context, 'performance');
-    return await this.probe.list(query.limit);
+    const { rows, total } = await this.probe.list(query.limit);
+    return new Paginated(rows, { total });
   }
 
   /**
