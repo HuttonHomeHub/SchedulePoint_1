@@ -29,6 +29,8 @@ const WRITE = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  'calendar:restore',
+  'resource:restore',
   'baseline:create',
   'baseline:activate',
   'baseline:delete',

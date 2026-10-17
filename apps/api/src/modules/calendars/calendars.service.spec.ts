@@ -85,6 +85,7 @@ const ALL: Permission[] = [
   'calendar:create',
   'calendar:update',
   'calendar:delete',
+  'calendar:restore',
   // Writing to the SHARED (ORG-tier) library needs this on top since ADR-0053 §2; Planner and
   // Org Admin both hold it, so the "fully authorised" principal these tests model still does.
   'calendar:manage_org',
@@ -111,9 +112,16 @@ describe('CalendarsService', () => {
     softDeleteException: ReturnType<typeof vi.fn>;
     touchVersion: ReturnType<typeof vi.fn>;
     findActivePlanIdsUsing: ReturnType<typeof vi.fn>;
+    findAnyStateByIdInOrg: ReturnType<typeof vi.fn>;
+    findActiveHoldingNameInTier: ReturnType<typeof vi.fn>;
+    restoreWithExceptions: ReturnType<typeof vi.fn>;
   };
+  let audit: { record: ReturnType<typeof vi.fn> };
   let resources: { countActiveResourcesUsingCalendar: ReturnType<typeof vi.fn> };
-  let projects: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let projects: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findByIdInOrg: ReturnType<typeof vi.fn>;
+  };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: CalendarsService;
 
@@ -141,9 +149,17 @@ describe('CalendarsService', () => {
       touchVersion: vi.fn(),
       // The plan-set query is proven against a real table in calendars-edited-since.e2e-spec.ts.
       findActivePlanIdsUsing: vi.fn().mockResolvedValue([]),
+      findAnyStateByIdInOrg: vi.fn(),
+      findActiveHoldingNameInTier: vi.fn().mockResolvedValue(null),
+      restoreWithExceptions: vi.fn().mockResolvedValue({ calendars: 1, exceptions: 2 }),
     };
     resources = { countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0) };
-    projects = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }) };
+    projects = {
+      findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }),
+      findByIdInOrg: vi
+        .fn()
+        .mockResolvedValue({ id: PROJECT_ID, name: 'Riverside', deletedAt: null }),
+    };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by remove).
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
@@ -151,7 +167,7 @@ describe('CalendarsService', () => {
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     // The working-time producers (ADR-0073 C3.2) are proven against a real table in the e2e
     // suite; a fake here could only assert that a fake was called.
-    const audit = { record: vi.fn().mockResolvedValue(undefined) };
+    audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new CalendarsService(
       organizations as unknown as OrganizationsService,
       calendars as unknown as CalendarRepository,
@@ -299,6 +315,159 @@ describe('CalendarsService', () => {
       await expect(
         service.remove(principalWith(['calendar:read']), 'acme', 'cal-1'),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('restore (ADR-0195)', () => {
+    const deleted = (overrides: Partial<Calendar> = {}): Calendar =>
+      calendar({
+        deletedAt: new Date('2026-10-01T00:00:00Z'),
+        deleteBatchId: 'batch-1',
+        ...overrides,
+      });
+    let executeRaw: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      executeRaw = vi.fn().mockResolvedValue(1);
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: executeRaw }),
+      );
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(deleted());
+      calendars.findActiveDetailByIdInOrg.mockResolvedValue({
+        ...calendar(),
+        shifts: [],
+        exceptions: [],
+      });
+    });
+
+    it('refuses a caller without calendar:restore before reading anything', async () => {
+      await expect(
+        service.restore(principalWith(['calendar:read', 'calendar:manage_org']), 'acme', 'cal-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(calendars.findAnyStateByIdInOrg).not.toHaveBeenCalled();
+    });
+
+    it('is a 404 for an unknown or foreign id, before the manage_org gate', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.restore(principalWith(['calendar:restore']), 'acme', 'cal-1'),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('needs calendar:manage_org for an ORG calendar, after the load (403 then, never a 404 oracle)', async () => {
+      await expect(
+        service.restore(principalWith(['calendar:restore']), 'acme', 'cal-1'),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(calendars.findAnyStateByIdInOrg).toHaveBeenCalled();
+      expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('does not need manage_org for a PROJECT calendar', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(
+        deleted({ scope: 'PROJECT', projectId: PROJECT_ID }),
+      );
+      await service.restore(principalWith(['calendar:restore']), 'acme', 'cal-1');
+      expect(calendars.restoreWithExceptions).toHaveBeenCalled();
+    });
+
+    it('is a no-op 200 for an already-active calendar: nothing written, nothing recorded', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(calendar());
+      const result = await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(result.id).toBe('cal-1');
+      expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('refuses a PROJECT calendar whose project is still deleted, naming the project', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(
+        deleted({ scope: 'PROJECT', projectId: PROJECT_ID }),
+      );
+      projects.findByIdInOrg.mockResolvedValue({
+        id: PROJECT_ID,
+        name: 'Riverside',
+        deletedAt: new Date(),
+        deleteBatchId: 'proj-batch',
+      });
+      const error = await service
+        .restore(principalWith(ALL), 'acme', 'cal-1')
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'PARENT_DELETED',
+        blockedBy: { kind: 'project', relation: 'parent', id: PROJECT_ID, name: 'Riverside' },
+      });
+      expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('refuses when a live calendar holds the name, saying whether it is archived', async () => {
+      calendars.findActiveHoldingNameInTier.mockResolvedValue({
+        id: 'other',
+        name: 'Standard',
+        archivedAt: new Date(),
+      });
+      const error = await service
+        .restore(principalWith(ALL), 'acme', 'cal-1')
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).message).toContain('An archived calendar named “Standard”');
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'NAME_TAKEN',
+        conflicts: [{ field: 'name', value: 'Standard', id: 'other', archived: true }],
+      });
+      expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('maps the unique index backstop to the same name-taken refusal', async () => {
+      calendars.restoreWithExceptions.mockRejectedValue(uniqueViolation());
+      const error = await service
+        .restore(principalWith(ALL), 'acme', 'cal-1')
+        .catch((e: unknown) => e);
+      expect((error as ConflictError).details).toMatchObject({ reason: 'NAME_TAKEN' });
+    });
+
+    it('restores by the calendar’s own batch, stamps the plans using it, and records one event', async () => {
+      calendars.findActivePlanIdsUsing.mockResolvedValue(['plan-1']);
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(calendars.restoreWithExceptions).toHaveBeenCalledWith(
+        { id: 'cal-1', batchId: 'batch-1', organizationId: ORG_ID },
+        USER_ID,
+        expect.anything(),
+      );
+      // The advisory lock, then the stamp: two statements, the stamp last.
+      expect(executeRaw).toHaveBeenCalledTimes(2);
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'calendar.restored',
+          subjectId: 'cal-1',
+          after: { name: 'Standard', scope: 'ORG', deleteBatchId: 'batch-1', exceptionCount: 2 },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('restores a calendar with no batch id on its own rather than answering 404', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(deleted({ deleteBatchId: null }));
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(calendars.restoreWithExceptions).toHaveBeenCalledWith(
+        { id: 'cal-1', batchId: null, organizationId: ORG_ID },
+        USER_ID,
+        expect.anything(),
+      );
+    });
+
+    it('stamps nothing when no plan uses the calendar', async () => {
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(executeRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails loudly when the row is gone by the time it is written (retention beat the restore)', async () => {
+      calendars.restoreWithExceptions.mockResolvedValue({ calendars: 0, exceptions: 0 });
+      await expect(service.restore(principalWith(ALL), 'acme', 'cal-1')).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(audit.record).not.toHaveBeenCalled();
     });
   });
 

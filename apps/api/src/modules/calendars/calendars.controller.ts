@@ -181,6 +181,43 @@ export class CalendarsController {
     await this.service.remove(principal, orgSlug, calendarId, context);
   }
 
+  @Post(':calendarId/restore')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Restore a deleted calendar with the exceptions deleted alongside it.',
+    description:
+      'ADR-0195. Exceptions removed earlier stay removed. Restoring an already-active calendar is ' +
+      'a no-op 200. Plans, activities and resources that already reference the calendar are ' +
+      'marked “edited since calculated”, so the next recalculation uses it again. A PROJECT ' +
+      'calendar needs its project active, so one deleted with its project comes back with the ' +
+      'project instead. Restoring an ORG-scoped calendar additionally requires ' +
+      '`calendar:manage_org`. Takes no body.',
+  })
+  @ApiOkResponse({ type: CalendarDetailResponseDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for an ORG-scoped calendar.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'No such calendar in this organisation, or the retention timer removed it first (do not retry).',
+  })
+  @ApiConflictResponse({
+    description:
+      '`details.reason` is PARENT_DELETED (`details.blockedBy`: restore that project first) or ' +
+      'NAME_TAKEN (`details.conflicts[]`: a live calendar in the same tier, archived or not, holds ' +
+      'the name). Nothing was written.',
+  })
+  async restore(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('calendarId', ParseUUIDPipe) calendarId: string,
+    @RequestContext() context: RequestContext,
+  ): Promise<CalendarDetailResponseDto> {
+    return CalendarDetailResponseDto.fromDetail(
+      await this.service.restore(principal, orgSlug, calendarId, context),
+    );
+  }
+
   @Post(':calendarId/archive')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

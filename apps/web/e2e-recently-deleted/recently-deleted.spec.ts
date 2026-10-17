@@ -108,8 +108,9 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
 
   // **The countdown is the server's number.** This suite's API is configured with 3,650 days; a
   // constant in the client would render 90 here and read as correct.
+  // The sentence names what expires, because deleted resources and organisation calendars never do.
   await expect(
-    page.getByText('Deleted items are kept for 3650 days, then permanently removed.'),
+    page.getByText('Deleted clients, projects and plans are kept for 3650 days, then permanently'),
   ).toBeVisible();
 
   // ------------------------------------------------------------------ One press brings all three back

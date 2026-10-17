@@ -153,12 +153,17 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   calendar going away is a different event from a project one, and the row is the only place
   //   that distinction survives the deletion.
   'calendar.deleted': ['name', 'scope', 'deleteBatchId'],
+  //   `exceptionCount` is what came back with the calendar; `deleteBatchId` joins this row to the
+  //   `calendar.deleted` row it undoes (ADR-0195).
+  'calendar.restored': ['name', 'scope', 'deleteBatchId', 'exceptionCount'],
   'calendar.archived': ['name', 'scope'],
   'calendar.unarchived': ['name', 'scope'],
   'calendar.scope_changed': ['name', 'scope'],
   //   `resourceCount` is the subtree a GROUP delete swept (ADR-0053 §3) — one row for the branch,
   //   never one per descendant, the same rule family D applies to a WBS summary.
   'resource.deleted': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
+  //   Same shape as the delete it undoes: one row for the branch, `resourceCount` the rows that came back.
+  'resource.restored': ['name', 'kind', 'deleteBatchId', 'resourceCount'],
   //   `destinationName` is the parent group the members moved up to, `null` for the top level — a
   //   determined fact (one destination), so the allow-list carries the null rather than dropping it.
   'resource.dissolved': ['name', 'promotedChildCount', 'destinationName', 'deleteBatchId'],

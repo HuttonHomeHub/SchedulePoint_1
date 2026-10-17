@@ -1099,6 +1099,8 @@ call changes shape or meaning**.
 | GET    | `…/organizations/:orgSlug/resources`                     | **+ query** `q` (matches **name OR code**), `kind` (a `ResourceKind`, incl. `GROUP`), `archived`. **+ response field** `archivedAt`. Combines with the existing `parentId`. |
 | POST   | `…/organizations/:orgSlug/resources/:resourceId/archive` | **NEW** — `204`. Body `{ version }`. `resource:update`. Archiving a `GROUP` does **not** archive its subtree.                                                               |
 | POST   | `…/resources/:resourceId/unarchive`                      | **NEW** — `204`. Same body and permission.                                                                                                                                  |
+| POST   | `…/organizations/:orgSlug/calendars/:calendarId/restore` | **NEW (ADR-0195)** — `200` with the calendar detail. No body. `calendar:restore`, plus `calendar:manage_org` for an **ORG** calendar. See "The recycle bin" below.          |
+| POST   | `…/organizations/:orgSlug/resources/:resourceId/restore` | **NEW (ADR-0195)** — `200` with the restored root (`costPerUnit` cost-gated). No body. `resource:restore`. See "The recycle bin" below.                                     |
 
 **New rejections:**
 
@@ -1352,11 +1354,13 @@ refusal before the first byte records nothing. `changes.after` also carries `for
 
 ### The recycle bin, and what expires (ADR-0096)
 
-`GET /organizations/:orgSlug/deleted` — the organisation's soft-deleted clients, projects and plans
-in one keyset-paged list, ordered by `deletedAt DESC, id`. Requires `client:read`; a non-member gets
-**404**, never 403 (no existence oracle). Restore is per-entity on the owning resource
-(`POST …/clients/:id/restore` and siblings); **there is no purge route and there will not be one** —
-ADR-0096 D1 refuses it structurally, so permanent deletion is only ever the retention timer's.
+`GET /organizations/:orgSlug/deleted` — the organisation's soft-deleted clients, projects, plans,
+**resources and calendars** (ADR-0195) in one keyset-paged list, ordered by `deletedAt DESC, id`.
+Requires `client:read`; a non-member gets **404**, never 403 (no existence oracle). Restore is
+per-entity on the owning resource (`POST …/clients/:id/restore` and siblings,
+`POST …/resources/:id/restore`, `POST …/calendars/:id/restore`); **there is no purge route and there
+will not be one** — ADR-0096 D1 refuses it structurally, so permanent deletion is only ever the
+retention timer's.
 
 A restore that loses a race with the retention timer answers **404** in the normal `NOT_FOUND`
 envelope and records nothing: the timer claims the root under a row lock before it deletes
@@ -1367,12 +1371,21 @@ inside its own transaction. Restoring an item that is already active stays a no-
 
 Each item carries:
 
-| Field                                | Meaning                                                                                                                                                                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `kind` / `id` / `name` / `deletedAt` | The deleted thing.                                                                                                                                                                                                                         |
-| `canRestore`                         | Whether restoring this row alone is legal — false when a live ancestor is required.                                                                                                                                                        |
-| `deleteBatchId`                      | **The cascade's identity.** Deleting a client stamps ONE id across its projects and plans, and the restore is keyed on it, so those rows return together whatever the caller presses. Null only for a row deleted before batching existed. |
-| `blockedBy`                          | The ancestor that must come back first: `{ kind, id, name, deleteBatchId }`, or `null`. Drawn from the same organisation-scoped query as the row itself, so it can never name an ancestor in another organisation.                         |
+| Field                                | Meaning                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind` / `id` / `name` / `deletedAt` | The deleted thing. `kind` is `client`, `project`, `plan`, `resource` or `calendar`.                                                                                                                                                                                                                                             |
+| `subtype`                            | **(ADR-0195)** The `ResourceKind` of a resource (`GROUP` is a resource group) or the `CalendarScope` of a calendar; `null` for the hierarchy. Display only, never authorisation.                                                                                                                                                |
+| `expiresAt`                          | **(ADR-0195)** When the retention timer WOULD permanently remove the row, or `null` when none ever does. A resource and an ORG calendar: `null`. A PROJECT calendar: its project's `deletedAt + retentionDays` while the project is deleted. Hierarchy rows: `deletedAt + retentionDays`. Served whatever `retentionActive` is. |
+| `canRestore`                         | Whether restoring this row alone is legal — false when a live parent is required, or (a resource) a calendar in its deletion is deleted.                                                                                                                                                                                        |
+| `deleteBatchId`                      | **The cascade's identity.** Deleting a client stamps ONE id across its projects and plans, and the restore is keyed on it, so those rows return together whatever the caller presses. Null only for a row deleted before batching existed.                                                                                      |
+| `blockedBy`                          | What must come back first: `{ kind, relation, id, name, deleteBatchId }`, or `null`. Drawn from the same organisation-scoped query as the row itself, so it can never name anything in another organisation.                                                                                                                    |
+
+`blockedBy.relation` (ADR-0195 D3) is `parent` — the row's immediate parent is deleted (a client, a
+project, a resource group, or a PROJECT calendar's project), computed whatever batch the parent is in —
+or `calendar`, only ever served for a resource row with **no** deleted parent (a group's root): the
+first deleted calendar used by any resource in that row's deletion. Parent first is what keeps a
+group's members as members, since the web picks a group's root as the row whose blocker lies outside
+its batch.
 
 `blockedBy.deleteBatchId` is the field that matters: **equal to the row's own** means the blocker is
 part of the same cascade and a single restore of the batch root takes both — the caller should
@@ -1407,6 +1420,31 @@ values `…/deleted` serves, repeated per organisation rather than per member. T
 loads that list; they become part of `/api/v1` at 1.0, and any further installation-wide setting goes on
 a dedicated endpoint, not on the organisation. `retentionActive: false` means items are kept
 indefinitely, so `retentionDays` alone is never a countdown.
+
+#### Restoring a resource or a calendar (ADR-0195)
+
+`POST …/resources/:resourceId/restore` and `POST …/calendars/:calendarId/restore` — no body, `200`
+with the restored root. They restore exactly the deletion the row belongs to (`deleteBatchId`): a
+resource group takes the whole branch deleted with it, a calendar takes the exceptions deleted with
+it, and **nothing deleted separately** comes back. They are all-or-nothing: if anything in the
+deletion is blocked, nothing is written. Gate order is `403` (permission), `404`, then the refusals
+below; restoring an already-active row is a no-op `200` that records nothing. The permissions are
+`resource:restore` / `calendar:restore` (Planner and Org Admin), and an **ORG** calendar additionally
+needs `calendar:manage_org`. Audited as one `resource.restored` / `calendar.restored` row.
+
+| Status | `details.reason`                                       | When                                                                                                                                                                                                                     |
+| ------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 409    | `PARENT_DELETED`                                       | The parent group (or a calendar's project) is still deleted, or the id is a **member** of a group's deletion. `details.blockedBy` is as in the bin.                                                                      |
+| 409    | `CALENDAR_DELETED`                                     | A resource in the deletion uses a calendar that is deleted. `details.calendar` is `{ id, name, deleteBatchId }`. Restore the calendar first.                                                                             |
+| 409    | `NAME_TAKEN` / `CODE_TAKEN`                            | A live row, **archived or not**, holds a name (or a resource's code) the deletion needs. `details.conflicts[]` is `{ field, value, id, archived }`, capped at 5, with `details.total`. Nothing is renamed automatically. |
+| 422    | `RESOURCE_PARENT_NOT_GROUP` / `RESOURCE_TREE_TOO_DEEP` | The parent has stopped being a group, or the branch no longer fits under it. `details.parentName` names the parent to fix.                                                                                               |
+
+A name or code taken in the instant between the check and the write (a create takes no lock the
+restore holds) is caught by the unique index and answers the same `409`, with `details.reason` set
+to `NAME_TAKEN` or `CODE_TAKEN` but **no** `conflicts[]` or `total`: read `reason`, not the list.
+
+A calendar restore also marks every active plan that uses the calendar "edited since calculated", so
+its next recalculation uses it again; the scheduling engine itself is untouched.
 
 ### The organisation overview (ADR-0098)
 
@@ -1767,9 +1805,9 @@ controller's 30 / 60 s per handler.
   soft-deleted, under the organisation's resource-tree lock. Permission `resource:delete`; a
   non-group is `422 RESOURCE_NOT_A_GROUP`, an unknown, deleted or other-organisation id is `404`.
   It returns `{ promoted: [{ id, parentId, version }] }` for the same reason as the WBS dissolve —
-  every promoted child's `version` is bumped. **Unlike the WBS dissolve it cannot be undone from a
-  recycle bin**: resources have no restore endpoint, so the way back is to create the group again
-  and move the resources into it. Audited as one `resource.dissolved` row, never `resource.deleted`. A
+  every promoted child's `version` is bumped. **Unlike the WBS dissolve it is not undone by a
+  restore** (ADR-0195 D6): the emptied group appears in Recently deleted and restores **empty**, while the
+  promoted resources stay where they were moved. Audited as one `resource.dissolved` row, never `resource.deleted`. A
   **409 `RESOURCE_GROUP_HAS_CHILDREN`** is a backstop only (an active child remained after the
   promotion), not an optimistic-lock clash: nothing was written, and a refetch and retry is safe.
 - A batch whose items are individually valid may still be **jointly** invalid. `parents` is checked

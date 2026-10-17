@@ -927,12 +927,26 @@ export interface CrossPlanDependencySummary {
 }
 
 /**
- * A soft-deleted hierarchy row surfaced in the "recently deleted" list. `kind`
- * discriminates which entity it is; `canRestore` is false when an ancestor is
- * still deleted (restore the parent first — the top-down invariant).
+ * A soft-deleted row surfaced in the "recently deleted" list. `kind`
+ * discriminates which entity it is; `canRestore` is false when a parent (or, for a resource, its
+ * calendar) is still deleted — restore that first. Clients, projects and plans are the hierarchy;
+ * resources and calendars are the two libraries (ADR-0195).
  */
-export interface DeletedHierarchyItem {
-  kind: 'client' | 'project' | 'plan';
+export interface DeletedItem {
+  kind: 'client' | 'project' | 'plan' | 'resource' | 'calendar';
+  /**
+   * What sort of resource or calendar this is, for display only and never for authorisation:
+   * the {@link ResourceKind} of a resource (`GROUP` is what makes it a "Resource group") or the
+   * {@link CalendarScope} of a calendar; null for a client, project or plan.
+   */
+  subtype: ResourceKind | CalendarScope | null;
+  /**
+   * The instant the retention timer WOULD permanently remove this row, or null when no timer ever
+   * does (ADR-0195 D4): a resource and an ORG calendar never expire, and a PROJECT calendar expires
+   * with its project. Served per row so the screen never assumes it from the kind. Present whether
+   * or not `retentionActive`; the screen still says nothing about expiry unless it is.
+   */
+  expiresAt: string | null;
   id: string;
   name: string;
   deletedAt: string;
@@ -958,9 +972,23 @@ export interface DeletedHierarchyItem {
   blockedBy: DeletedItemBlocker | null;
 }
 
-/** The ancestor standing between a deleted row and its restore. See {@link DeletedHierarchyItem}. */
+/** The original name of {@link DeletedItem}, kept until nothing imports it. */
+export type DeletedHierarchyItem = DeletedItem;
+
+/**
+ * What stands between a deleted row and its restore: a still-deleted **parent** (a client, a
+ * project, a resource group) or a still-deleted **dependency** (the calendar a resource uses).
+ * See {@link DeletedItem}.
+ */
 export interface DeletedItemBlocker {
-  kind: 'client' | 'project';
+  kind: 'client' | 'project' | 'resource' | 'calendar';
+  /**
+   * `parent` is computed from the row's immediate parent whatever batch the parent is in, which
+   * keeps a group's members as members. `calendar` is only ever served for a row with no deleted
+   * parent, so the web's "root is the row whose blocker is outside its batch" rule still holds
+   * (ADR-0195 D3).
+   */
+  relation: 'parent' | 'calendar';
   id: string;
   name: string;
   /** The blocker's OWN deletion, which is what a reader must restore — not this row's. */
@@ -2232,6 +2260,31 @@ export interface ReplaceActivityStepsRequest {
 }
 
 /**
+ * The `details.reason` of a refused library restore (ADR-0195). The web branches on these rather
+ * than on a message, and the hierarchy restore's own `PARENT_DELETED` / `NAME_TAKEN` carry the same
+ * strings so one handler serves both.
+ */
+export const LIBRARY_RESTORE_REASON = {
+  /** The row's parent group, or a calendar's project, is still deleted (409). */
+  PARENT_DELETED: 'PARENT_DELETED',
+  /** A resource in the batch uses a calendar that is deleted (409). */
+  CALENDAR_DELETED: 'CALENDAR_DELETED',
+  /** A live row already holds a restored row's name (409). */
+  NAME_TAKEN: 'NAME_TAKEN',
+  /** A live row already holds a restored resource's code (409). */
+  CODE_TAKEN: 'CODE_TAKEN',
+} as const;
+
+/** One live row holding a name or code a restore needs (`details.conflicts[]`). */
+export interface LibraryRestoreConflict {
+  field: 'name' | 'code';
+  value: string;
+  id: string;
+  /** Archiving does not free a name or code, so an archived holder still blocks (ADR-0053 §4). */
+  archived: boolean;
+}
+
+/**
  * Canonical resource-module conflict / validation reasons + messages (M7.1, ADR-0039),
  * shared like {@link DEPENDENCY_CONFLICT_MESSAGES} so the same rejection reads
  * identically wherever it surfaces. The key is the machine-readable reason carried in a
@@ -2461,10 +2514,14 @@ export const AUDIT_ACTIONS = [
   //   archived row keeps scheduling identically and refuses only NEW usages, so nothing visibly
   //   breaks and nobody is told — which is exactly when a log earns its place.
   'calendar.deleted',
+  //   A restore sits beside its delete (ADR-0195), as the hierarchy's do: the log answers "where did it
+  //   go?" and "who brought it back?" in one filter.
+  'calendar.restored',
   'calendar.archived',
   'calendar.unarchived',
   'calendar.scope_changed',
   'resource.deleted',
+  'resource.restored',
   //   `resource.dissolved` is NOT a deletion: the group goes and its members are kept, so filing it
   //   under `resource.deleted` would tell somebody hunting for lost resources that a whole crew
   //   list went away (the `activity.dissolved` reasoning, ADR-0073 family D).
@@ -2606,7 +2663,9 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // about it ("where did the December baseline go?"), not "what changed about the rules".
   'baseline.deleted': 'deletions',
   'calendar.deleted': 'deletions',
+  'calendar.restored': 'deletions',
   'resource.deleted': 'deletions',
+  'resource.restored': 'deletions',
   // Archiving is deliberately NOT a deletion (ADR-0053 §4) — the row stays valid and every
   // existing reference keeps working — so filing it under "what disappeared" would answer the
   // wrong question. A tier move is the same class of fact: who may use this, from now on.

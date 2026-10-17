@@ -129,11 +129,13 @@ describe('the write paths that stamp', () => {
     ['plans/plans.service.ts', ['update']],
     // A calendar's working time and a resource's calendar or ceiling are inputs the plans using them
     // never see change (`docs/TECH_DEBT.md` #449).
+    // A restore is the inverse of a delete: bringing a calendar back changes the working time of every
+    // plan already pointing at it (ADR-0195 D7). A resource restore stamps defensively (expected empty).
     [
       'calendars/calendars.service.ts',
-      ['update', 'addException', 'updateException', 'removeException'],
+      ['update', 'addException', 'updateException', 'removeException', 'restore'],
     ],
-    ['resources/resources.service.ts', ['update']],
+    ['resources/resources.service.ts', ['update', 'restore']],
   ];
 
   for (const [file, methods] of STAMPING) {

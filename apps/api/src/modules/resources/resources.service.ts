@@ -2,10 +2,17 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Resource, type ResourceKind } from '@prisma/client';
-import { RESOURCE_ERROR, type DissolveResourceGroupResult, type PageMeta } from '@repo/types';
+import {
+  LIBRARY_RESTORE_REASON,
+  RESOURCE_ERROR,
+  type DissolveResourceGroupResult,
+  type LibraryRestoreConflict,
+  type PageMeta,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { acquireResourceWriteLocks } from '../../common/db/resource-advisory-lock';
 import { acquireResourceTreeWriteLock } from '../../common/db/resource-tree-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
@@ -46,6 +53,33 @@ export const RESOURCE_CONFLICT = {
  * bypassed, and it should degrade to an honest 422 rather than an opaque 500.
  */
 const PG_CHECK_VIOLATION = '23514';
+
+/**
+ * How many clashing holders a refused restore names. A branch of thousands could clash on many
+ * names; the first few are what a person acts on, and `total` says how many there were.
+ */
+const MAX_NAMED_CONFLICTS = 5;
+
+/** The height of a deleted branch, in nodes, from the rows themselves (a leaf is 1). */
+function batchHeight(rows: readonly Resource[], rootId: string): number {
+  const childrenOf = new Map<string, string[]>();
+  for (const row of rows) {
+    if (row.parentId === null) continue;
+    const siblings = childrenOf.get(row.parentId) ?? [];
+    siblings.push(row.id);
+    childrenOf.set(row.parentId, siblings);
+  }
+  let height = 1;
+  let frontier = [rootId];
+  const seen = new Set(frontier);
+  while (frontier.length > 0) {
+    const next = frontier.flatMap((id) => childrenOf.get(id) ?? []).filter((id) => !seen.has(id));
+    for (const id of next) seen.add(id);
+    if (next.length > 0) height += 1;
+    frontier = next;
+  }
+  return height;
+}
 
 /**
  * Business logic for the org-scoped resource library (ADR-0039). A near-clone of
@@ -530,6 +564,259 @@ export class ResourcesService {
   }
 
   /**
+   * Restore a deleted resource, or a deleted group with everything deleted with it (ADR-0195).
+   *
+   * **Batch-keyed and all-or-nothing.** A leaf delete mints its own batch; a GROUP delete stamps
+   * its whole branch with one. The restore reactivates exactly that batch and nothing deleted
+   * separately — and if anything in it is blocked, nothing comes back. Called with a MEMBER's id it
+   * is refused as `PARENT_DELETED`: the bin acts on the root, so a caller cannot resurrect part of
+   * a branch.
+   *
+   * Every invariant a forward path guards is re-checked here, under the same locks, because a
+   * delete does not clear them: the parent may be deleted, no longer a group or now too deep (the
+   * tree guard, with the branch's height supplied because the walk reads only active rows); a
+   * resource's calendar may have been deleted meanwhile (`CALENDAR_IN_USE` counts only ACTIVE
+   * resources); and an active row may have taken the name or code (archived rows hold both).
+   *
+   * LOCK ORDER (a subset of `remove`'s and `update`'s, so none can deadlock): the org
+   * resource-tree lock first, then the calendar advisory locks in ASCENDING id order. The calendar
+   * lock is the one the calendar delete's in-use guard takes, so a concurrent delete of a calendar
+   * this restore depends on either counts the restored resources (409 CALENDAR_IN_USE) or is seen
+   * by the check below.
+   *
+   * Gate order is 403, then 404, then the 409/422 refusals, so a caller without the permission is
+   * never told whether an id exists. An already-active row is a no-op 200: nothing is written and
+   * no audit row is recorded.
+   */
+  async restore(
+    principal: Principal,
+    orgSlug: string,
+    resourceId: string,
+    context?: RequestContext,
+  ): Promise<{ resource: Resource; canReadCost: boolean }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'resource:restore', organization.id);
+    const canReadCost = principal.can('cost:read', organization.id);
+
+    const found = await this.resources.findAnyStateByIdInOrg(resourceId, organization.id);
+    if (!found) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+    if (found.deletedAt === null) return { resource: found, canReadCost };
+
+    try {
+      const restored = await this.prisma.$transaction(async (tx) => {
+        await acquireResourceTreeWriteLock(tx, organization.id);
+
+        // Re-read UNDER the lock (the `dissolveGroup` lesson): the first read happened before it,
+        // and a concurrent restore of the same batch finishes inside that window.
+        const root = await this.resources.findAnyStateByIdInOrg(resourceId, organization.id, tx);
+        if (!root) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+        if (root.deletedAt === null) return { resource: root, noop: true as const };
+
+        const batch =
+          root.deleteBatchId === null
+            ? [root]
+            : await this.resources.findDeletedBatchInOrg(root.deleteBatchId, organization.id, tx);
+        if (!batch.some((row) => row.id === root.id)) {
+          throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+        }
+        const ids = batch.map((row) => row.id);
+
+        await this.assertParentRestorable(tx, organization.id, root, batch);
+        await this.assertCalendarsRestorable(tx, organization.id, batch);
+        await this.assertNoLiveHolder(tx, organization.id, batch);
+
+        const count = await this.resources.restoreBatch(
+          { id: root.id, batchId: root.deleteBatchId },
+          organization.id,
+          principal.userId,
+          tx,
+        );
+        // Zero rows means the batch is gone — nothing else changes a deleted row's batch id, so
+        // this is a concurrent restore that the lock should have serialised, or a hand-edited row.
+        // Failing loudly beats answering 200 for a restore that did not happen.
+        if (count === 0) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+
+        // Defence in depth: a delete is refused while ANY assignment references the resource (and
+        // no cascade stamps assignments), so this is expected to be empty. If it ever is not, the
+        // plans that now see a resource they did not are marked for recalculation, last, after the
+        // write, as the helper's contract asks.
+        await markScheduleInputsChanged(
+          tx,
+          organization.id,
+          await this.resources.findActivePlanIdsAssigningAny(ids, organization.id, tx),
+        );
+
+        await this.audit.record(
+          {
+            action: 'resource.restored',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'RESOURCE',
+            subjectId: root.id,
+            subjectLabel: root.name,
+            after: {
+              name: root.name,
+              kind: root.kind,
+              deleteBatchId: root.deleteBatchId,
+              resourceCount: count,
+            },
+            ...auditActor(principal, context),
+          },
+          tx,
+        );
+
+        const back = await this.resources.findActiveByIdInOrg(root.id, organization.id, tx);
+        if (!back) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+        return { resource: back, noop: false as const, count };
+      });
+
+      if (!restored.noop) {
+        this.logger.info(
+          {
+            organizationId: organization.id,
+            resourceId,
+            kind: restored.resource.kind,
+            resourceCount: restored.count,
+            userId: principal.userId,
+          },
+          'resource restored',
+        );
+      }
+      return { resource: restored.resource, canReadCost };
+    } catch (error) {
+      // The backstop behind the pre-check: a CREATE of a top-level resource takes no tree lock, so
+      // a name or code can be taken between the check and the write, and the unique index has the
+      // last word.
+      if (this.isUniqueViolation(error)) {
+        const onCode =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          JSON.stringify(error.meta ?? {}).includes('code');
+        throw new ConflictError(RESOURCE_ERROR.DUPLICATE_RESOURCE, {
+          reason: onCode ? LIBRARY_RESTORE_REASON.CODE_TAKEN : LIBRARY_RESTORE_REASON.NAME_TAKEN,
+        });
+      }
+      throw this.mapCheckViolation(error);
+    }
+  }
+
+  /**
+   * The restored root must land somewhere the forward paths would have accepted. A deleted parent
+   * is `PARENT_DELETED` (restore it first); an active one must still be a GROUP and shallow enough
+   * for the whole branch (the tree guard, given the branch's height).
+   */
+  private async assertParentRestorable(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    root: Resource,
+    batch: readonly Resource[],
+  ): Promise<void> {
+    if (root.parentId === null) return;
+    const parent = await this.resources.findAnyStateByIdInOrg(root.parentId, organizationId, tx);
+    // A parent that no longer exists at all cannot be restored first; the row is unreachable.
+    if (!parent) throw new NotFoundError(RESOURCE_ERROR.RESOURCE_NOT_FOUND);
+    if (parent.deletedAt !== null) {
+      throw new ConflictError('Restore the resource group first.', {
+        reason: LIBRARY_RESTORE_REASON.PARENT_DELETED,
+        blockedBy: {
+          kind: 'resource',
+          relation: 'parent',
+          id: parent.id,
+          name: parent.name,
+          deleteBatchId: parent.deleteBatchId,
+        },
+      });
+    }
+    try {
+      await assertValidResourceParent(tx, this.resources, {
+        parentId: parent.id,
+        organizationId,
+        selfId: root.id,
+        movedHeight: batchHeight(batch, root.id),
+      });
+    } catch (error) {
+      // Name the parent so the planner knows which group to fix; the guard does not carry it.
+      if (error instanceof ValidationError && typeof error.details === 'object') {
+        throw new ValidationError(error.message, { ...error.details, parentName: parent.name });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Every calendar the batch points at must be active. Checked under the calendar advisory lock
+   * the delete-in-use guard uses, taken in ascending id order, so the answer cannot change before
+   * the restore commits. An archived calendar is fine: archived bindings stay live (ADR-0053 §4).
+   */
+  private async assertCalendarsRestorable(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    batch: readonly Resource[],
+  ): Promise<void> {
+    const calendarIds = [
+      ...new Set(batch.map((row) => row.calendarId).filter((id) => id !== null)),
+    ].sort();
+    if (calendarIds.length === 0) return;
+    for (const calendarId of calendarIds) await acquireCalendarWriteLock(tx, calendarId);
+    const states = await this.calendars.findAnyStateByIdsInOrg(calendarIds, organizationId, tx);
+    const byId = new Map(states.map((state) => [state.id, state]));
+    for (const calendarId of calendarIds) {
+      const state = byId.get(calendarId);
+      if (state && state.deletedAt === null) continue;
+      throw new ConflictError('Restore the calendar first.', {
+        reason: LIBRARY_RESTORE_REASON.CALENDAR_DELETED,
+        calendar: {
+          id: calendarId,
+          name: state?.name ?? null,
+          deleteBatchId: state?.deleteBatchId ?? null,
+        },
+      });
+    }
+  }
+
+  /**
+   * No active row may hold a name or code the batch needs. Archived rows count — archiving frees
+   * neither — and the refusal names the holders so the planner knows what to rename.
+   */
+  private async assertNoLiveHolder(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    batch: readonly Resource[],
+  ): Promise<void> {
+    const names = new Set(batch.map((row) => row.name));
+    const codes = new Set(batch.flatMap((row) => (row.code === null ? [] : [row.code])));
+    const holders = await this.resources.findActiveHoldingNamesOrCodes(
+      { organizationId, names: [...names], codes: [...codes] },
+      tx,
+    );
+    const conflicts: LibraryRestoreConflict[] = [];
+    for (const holder of holders) {
+      const archived = holder.archivedAt !== null;
+      if (names.has(holder.name)) {
+        conflicts.push({ field: 'name', value: holder.name, id: holder.id, archived });
+      }
+      if (holder.code !== null && codes.has(holder.code)) {
+        conflicts.push({ field: 'code', value: holder.code, id: holder.id, archived });
+      }
+    }
+    const first = conflicts[0];
+    if (!first) return;
+    const what = first.field === 'name' ? 'named' : 'with the code';
+    const subject = first.archived ? 'An archived resource' : 'A resource';
+    const more = conflicts.length > 1 ? ` (and ${conflicts.length - 1} more)` : '';
+    throw new ConflictError(
+      `${subject} ${what} “${first.value}” already exists${more}. ` +
+        'Rename or delete that one, then restore this.',
+      {
+        reason: conflicts.some((conflict) => conflict.field === 'name')
+          ? LIBRARY_RESTORE_REASON.NAME_TAKEN
+          : LIBRARY_RESTORE_REASON.CODE_TAKEN,
+        conflicts: conflicts.slice(0, MAX_NAMED_CONFLICTS),
+        total: conflicts.length,
+      },
+    );
+  }
+
+  /**
    * Dissolve a `GROUP`: promote its direct children to the group's own parent (or the top level),
    * then soft-delete the now-childless group — remove the grouping, keep the resources
    * (ADR-0053 §3; the resource-tree counterpart of the WBS `dissolveSummary`, ADR-0063 §8).
@@ -545,8 +832,9 @@ export class ResourcesService {
    * untouched and nothing the engine reads changes. The lock order stays a subset of `remove`'s
    * (tree lock first), so the two cannot deadlock.
    *
-   * Resources have no restore endpoint, so unlike the WBS dissolve this cannot be undone from a
-   * recycle bin; the audit row carries the batch id a future restore would key on.
+   * A restore does not undo a dissolve (ADR-0195 D6): the emptied group sits in the bin and comes
+   * back EMPTY, while the promoted children stay where they were moved. The audit row carries the
+   * batch id that restore keys on.
    */
   async dissolveGroup(
     principal: Principal,

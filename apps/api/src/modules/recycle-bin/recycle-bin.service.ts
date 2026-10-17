@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { DeletedHierarchyItem, DeletedItemsMeta } from '@repo/types';
+import type { DeletedItem, DeletedItemsMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -10,10 +10,12 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { decodeDeletedCursor, encodeDeletedCursor } from './recycle-bin.cursor';
 import { RecycleBinRepository } from './recycle-bin.repository';
 
+const MS_PER_DAY = 86_400_000;
+
 /**
- * Read model for the recycle bin — an organisation's soft-deleted clients,
- * projects and plans in one deletion-time-ordered, cursor-paginated list
- * (see docs/DECISIONS.md, 2026-07-10). Reading is a hierarchy read (any member);
+ * Read model for the recycle bin — an organisation's soft-deleted clients, projects, plans,
+ * resources and calendars in one deletion-time-ordered, cursor-paginated list (see
+ * docs/DECISIONS.md, 2026-07-10, and ADR-0195). Reading is a hierarchy read (any member);
  * restoring stays on the per-entity, writer-only `.../{id}/restore` endpoints.
  */
 @Injectable()
@@ -29,7 +31,7 @@ export class RecycleBinService {
     principal: Principal,
     orgSlug: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: DeletedHierarchyItem[]; meta: DeletedItemsMeta }> {
+  ): Promise<{ items: DeletedItem[]; meta: DeletedItemsMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     // Representative hierarchy-read permission — reads are granted together, so
     // any member who can browse the tree can see what's been removed from it.
@@ -43,7 +45,7 @@ export class RecycleBinService {
     });
 
     // The repository's `UNION ALL … ORDER BY … LIMIT` already returns the globally
-    // ordered top `limit + 1` across all three tables, so there is nothing to merge
+    // ordered top `limit + 1` across all five tables, so there is nothing to merge
     // here — only the standard over-fetch-by-one has-more probe (TECH_DEBT #22).
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
@@ -59,6 +61,16 @@ export class RecycleBinService {
         canRestore: row.parentActive,
         deleteBatchId: row.deleteBatchId,
         blockedBy: row.blockedBy,
+        subtype: row.subtype,
+        // Served per row, never assumed from the kind (ADR-0195 D4): a resource and an ORG calendar
+        // have no timer, and a PROJECT calendar goes with its project's. The period is read here,
+        // from the same config the sweep reads, so the two cannot drift.
+        expiresAt:
+          row.expiryBasis === null
+            ? null
+            : new Date(
+                row.expiryBasis.getTime() + this.appConfig.retentionHierarchyDays * MS_PER_DAY,
+              ).toISOString(),
       })),
       meta: {
         nextCursor,

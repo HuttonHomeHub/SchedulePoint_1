@@ -368,6 +368,105 @@ export class CalendarRepository {
   }
 
   /**
+   * A calendar in ANY state, scoped to its organisation (anti-IDOR) — a restore's first read,
+   * which must find the row whether or not it is deleted.
+   *
+   * soft-delete: any-state — a restore starts from a calendar that is deleted by definition, and
+   * an already-active one answers a no-op rather than a 404.
+   */
+  findAnyStateByIdInOrg(
+    id: string,
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Calendar | null> {
+    return db.calendar.findFirst({ where: { id, organizationId } });
+  }
+
+  /**
+   * The state of the calendars a restored resource points at, org-scoped, in ANY state. A
+   * resource's calendar FK is not cleared by that calendar's delete (the guard counts only ACTIVE
+   * resources), so this is how a restore learns a binding went stale (ADR-0195 Q2).
+   *
+   * soft-delete: any-state — the whole question is whether each calendar is deleted.
+   */
+  findAnyStateByIdsInOrg(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ id: string; name: string; deletedAt: Date | null; deleteBatchId: string | null }[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return db.calendar.findMany({
+      where: { id: { in: [...ids] }, organizationId },
+      select: { id: true, name: true, deletedAt: true, deleteBatchId: true },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /**
+   * The ACTIVE calendar (archived included) holding `name` in the tier a restore is aiming at —
+   * the clash pre-check against `uq_calendars_org_name` (ORG tier) / `uq_calendars_project_name`
+   * (PROJECT tier). Both are predicated on `deleted_at IS NULL` alone, so an archived row still
+   * holds its name (ADR-0053 §4).
+   */
+  findActiveHoldingNameInTier(
+    params: {
+      organizationId: string;
+      name: string;
+      scope: CalendarScope;
+      projectId: string | null;
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Pick<Calendar, 'id' | 'name' | 'archivedAt'> | null> {
+    return db.calendar.findFirst({
+      where: this.active({
+        organizationId: params.organizationId,
+        name: params.name,
+        scope: params.scope,
+        ...(params.scope === 'PROJECT' ? { projectId: params.projectId } : {}),
+      }),
+      select: { id: true, name: true, archivedAt: true },
+    });
+  }
+
+  /**
+   * Reactivate a calendar and the exceptions stamped with its batch, in the caller's transaction.
+   * Exceptions removed EARLIER carry their own batch id and stay removed. Shifts and exception
+   * windows have no `deleted_at` (owned value rows), so there is nothing else to bring back.
+   * Returns how many of each came back; `calendars: 0` means the row is gone (the retention
+   * expiry, or a concurrent restore).
+   */
+  async restoreWithExceptions(
+    params: { id: string; batchId: string | null; organizationId: string },
+    actorId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ calendars: number; exceptions: number }> {
+    const restore = { deletedAt: null, deleteBatchId: null, updatedBy: actorId };
+    const calendars = await db.calendar.updateMany({
+      where: {
+        id: params.id,
+        organizationId: params.organizationId,
+        // `null` is a real value here: the one row, whose own batch is absent.
+        deleteBatchId: params.batchId,
+        deletedAt: { not: null },
+      },
+      data: { ...restore, version: { increment: 1 } },
+    });
+    // A calendar with no batch id has no deletion to name its exceptions by: restoring "the null
+    // batch" would also bring back every exception removed on its own. So only the calendar returns.
+    if (params.batchId === null) return { calendars: calendars.count, exceptions: 0 };
+    const exceptions = await db.calendarException.updateMany({
+      where: {
+        calendarId: params.id,
+        organizationId: params.organizationId,
+        deleteBatchId: params.batchId,
+        deletedAt: { not: null },
+      },
+      data: restore,
+    });
+    return { calendars: calendars.count, exceptions: exceptions.count };
+  }
+
+  /**
    * The day↔minute factors for a set of calendars (ADR-0068), as `id → hours_per_day_minutes`.
    *
    * Deliberately **not** filtered by `deleted_at` or `archived_at`. An activity may legitimately

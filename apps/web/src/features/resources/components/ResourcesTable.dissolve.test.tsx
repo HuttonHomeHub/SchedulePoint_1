@@ -363,6 +363,8 @@ describe('ResourcesTable — deleting a group', () => {
     renderTable();
     await clickRowAction('Crew A', 'Delete');
     const dialog = screen.getByRole('alertdialog', { name: 'Delete resource' });
-    expect(within(dialog).getByText('Delete “Crew A”?')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Delete “Crew A”? You can restore it from Recently deleted.'),
+    ).toBeInTheDocument();
   });
 });

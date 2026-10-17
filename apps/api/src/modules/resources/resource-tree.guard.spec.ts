@@ -217,6 +217,23 @@ describe('resource-tree guard (ADR-0053 §3)', () => {
       ).resolves.toBeUndefined();
     });
 
+    it('uses a SUPPLIED height instead of walking active children (a restored branch is deleted)', async () => {
+      // The stub has no children under `top`, exactly as a still-deleted branch has none to the
+      // active walk — so without the supplied height the check would see height 1 and pass.
+      const repo = repositoryOver([resource({ id: 'top', kind: 'GROUP' })]);
+      await expect(
+        assertValidResourceParent(TX, repo, {
+          parentId: 'top',
+          organizationId: ORG_ID,
+          selfId: 'branch-root',
+          movedHeight: RESOURCE_TREE_MAX_DEPTH,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'RESOURCE_TREE_TOO_DEEP', resultingDepth: RESOURCE_TREE_MAX_DEPTH + 1 },
+      });
+      expect(repo.findActiveChildIdsOf).not.toHaveBeenCalled();
+    });
+
     it('creating under a deep group measures a height of 1 (there is no subtree yet)', async () => {
       const chain = Array.from({ length: RESOURCE_TREE_MAX_DEPTH - 1 }, (_, i) =>
         resource({ id: `g${i}`, kind: 'GROUP', parentId: i === 0 ? null : `g${i - 1}` }),

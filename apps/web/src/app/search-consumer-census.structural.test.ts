@@ -77,7 +77,7 @@ const CLASSIFIED: Record<string, string> = {
     'real parser.',
 
   // Route validators — Gate A refuses any of these without a case in `router-search.test.ts`.
-  'app/router.tsx': 'All eight validators; covered by Gate A + `router-search.test.ts`.',
+  'app/router.tsx': 'All nine validators; covered by Gate A + `router-search.test.ts`.',
   'routes/sign-in.tsx': 'Reads `redirect`/`signedOut`, validated at the route (Gate A).',
   'routes/verify-email.tsx': 'Reads `email`/`verified`/`error`, validated at the route (Gate A).',
   'routes/reset-password.tsx': 'Reads `token`/`error`, validated at the route (Gate A).',
@@ -92,6 +92,9 @@ const CLASSIFIED: Record<string, string> = {
     'Library filters `q`/`scope`/`archived`. `q` is the milestone’s own journey case; the two ' +
     'enums are pinned as a measured no-op in `search-string.test.ts`.',
   'routes/resources.tsx': 'Library filters `q`/`kind`/`archived`; same coverage as calendars.',
+  'routes/recently-deleted.tsx':
+    'The bin’s `show` filter, validated at the route (Gate A) and read through `pickParam`, so an ' +
+    'unknown value degrades to `all`; `router-search.test.ts` drives it through the real parser.',
   'routes/clients.tsx':
     'The clients search `q` (page-consistency M7), read through `pickText` like every other ' +
     '`q` on this surface, so it crosses the router’s real parser wherever the library screens ' +

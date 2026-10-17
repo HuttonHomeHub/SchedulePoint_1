@@ -72,9 +72,11 @@ describe('dissolveGroupDescription', () => {
 });
 
 describe('deleteResourceDescription', () => {
-  it('keeps a leaf resource’s wording and title unchanged', () => {
+  it('says a deleted leaf can be restored, and keeps its title', () => {
     const leaf = { id: 'x', name: 'Crane', kind: 'EQUIPMENT' as const };
-    expect(deleteResourceDescription(leaf, [])).toBe('Delete “Crane”?');
+    expect(deleteResourceDescription(leaf, [])).toBe(
+      'Delete “Crane”? You can restore it from Recently deleted.',
+    );
     expect(deleteResourceTitle(leaf)).toBe('Delete resource');
   });
 
@@ -84,7 +86,9 @@ describe('deleteResourceDescription', () => {
     const text = deleteResourceDescription(g, [g, row('a', 'A', 'g'), row('b', 'B', 'g')]);
     expect(text).toContain('Delete the group “Groundworks” and the 2 resources in it?');
     expect(text).toContain('deletes everything in it');
-    expect(text).toContain('can’t be restored');
+    // Library rows are in Recently deleted since ADR-0195, so the old "can’t be restored" is false.
+    expect(text).toContain('You can restore them from Recently deleted.');
+    expect(text).not.toContain('can’t be restored');
     expect(text).toContain('dissolve the group instead');
   });
 

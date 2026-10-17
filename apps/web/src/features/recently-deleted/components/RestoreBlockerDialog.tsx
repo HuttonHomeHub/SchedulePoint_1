@@ -1,26 +1,23 @@
-import type { DeletedHierarchyItem } from '@repo/types';
 import { useState } from 'react';
 
 import type { DeletionGroup } from '../model/group-deletions';
+import { sentenceNounOf, typeLabel } from '../model/kind-label';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 
 /** How many members are named before the rest are summarised. */
-export const ANCESTOR_PREVIEW_LIMIT = 8;
-
-const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
-  client: 'Client',
-  project: 'Project',
-  plan: 'Plan',
-};
+export const BLOCKER_PREVIEW_LIMIT = 8;
 
 /**
  * **The one case grouping cannot dissolve**, and the confirmation it needs.
  *
  * A plan deleted on Monday whose project was deleted on Tuesday are two different cascades.
  * Restoring the plan's group is not enough and never will be — its parent is still deleted, and the
- * parent belongs to a batch of its own.
+ * parent belongs to a batch of its own. The same is true of a resource deleted before its group, and
+ * of a resource whose calendar was deleted after it (ADR-0195): the blocker is a **parent** in the
+ * first two and a **dependency** in the last, and the sentence below says which, because "sits
+ * inside" is false for a calendar.
  *
  * The obvious fix, restoring the ancestor automatically when the reader presses Restore, was
  * **rejected**: the ancestor's batch may hold siblings that are nowhere on the row pressed, so one
@@ -31,40 +28,44 @@ const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
  * destructive confirmations, and using it here would tell an assistive-technology user this action
  * is dangerous when it is reversible by deleting again.
  */
-export function RestoreAncestorDialog({
+export function RestoreBlockerDialog({
   open,
   onClose,
   blocked,
-  ancestor,
+  blockerGroup,
   onConfirm,
 }: {
   open: boolean;
   onClose: () => void;
   /** The group the reader actually tried to restore. */
   blocked: DeletionGroup;
-  /** The blocker's OWN deletion — what this press brings back. */
-  ancestor: DeletionGroup;
+  /** The blocker's OWN deletion — what this press brings back. A parent, or a calendar. */
+  blockerGroup: DeletionGroup;
   onConfirm: () => void;
 }): React.ReactElement {
   const [showAll, setShowAll] = useState(false);
 
-  const rows = [ancestor.root, ...ancestor.members];
+  const rows = [blockerGroup.root, ...blockerGroup.members];
   // **Capped, for the same reason the row disclosure is.** A client-rooted cascade can hold
   // hundreds of plans; an uncapped list is a wall of text at the exact moment a reader is deciding.
   // The count is always exact and always shown — the cap changes how much is NAMED, never what is
   // claimed (ADR-0090's "no silent caps").
-  const hidden = showAll ? 0 : Math.max(0, rows.length - ANCESTOR_PREVIEW_LIMIT);
-  const shown = showAll ? rows : rows.slice(0, ANCESTOR_PREVIEW_LIMIT);
+  const hidden = showAll ? 0 : Math.max(0, rows.length - BLOCKER_PREVIEW_LIMIT);
+  const shown = showAll ? rows : rows.slice(0, BLOCKER_PREVIEW_LIMIT);
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={`Restore ${ancestor.root.name} first?`}
+      title={`Restore ${blockerGroup.root.name} first?`}
       description={
-        `${KIND_LABEL[blocked.root.kind]} “${blocked.root.name}” sits inside ` +
-        `${ancestor.root.name}, which is also deleted. Restoring ${ancestor.root.name} brings back ` +
-        `everything deleted with it — then you can restore ${blocked.root.name} separately.`
+        blocked.root.blockedBy?.relation === 'calendar'
+          ? `${sentenceNounOf(blocked.root)} “${blocked.root.name}” uses the calendar ` +
+            `“${blockerGroup.root.name}”, which is also deleted. Restoring ${blockerGroup.root.name} brings ` +
+            `back everything deleted with it — then you can restore ${blocked.root.name} separately.`
+          : `${sentenceNounOf(blocked.root)} “${blocked.root.name}” sits inside ` +
+            `${blockerGroup.root.name}, which is also deleted. Restoring ${blockerGroup.root.name} brings back ` +
+            `everything deleted with it — then you can restore ${blocked.root.name} separately.`
       }
     >
       <div className="flex flex-col gap-4">
@@ -75,7 +76,12 @@ export function RestoreAncestorDialog({
           <ul className="text-muted-foreground mt-2 flex flex-col gap-1 text-sm">
             {shown.map((row) => (
               <li key={`${row.kind}:${row.id}`}>
-                <span>{KIND_LABEL[row.kind]}</span>{' '}
+                <span>
+                  {typeLabel({
+                    ...row,
+                    empty: row === blockerGroup.root && blockerGroup.members.length === 0,
+                  })}
+                </span>{' '}
                 <span className="text-foreground">{row.name}</span>
               </li>
             ))}
@@ -111,7 +117,7 @@ export function RestoreAncestorDialog({
               never be true, and a state that cannot be reached is the lit-but-inert shape this
               register keeps recording. Found by checking the test failed red against the wrong
               implementation, which it did not. */}
-          <Button onClick={onConfirm}>Restore {ancestor.root.name}</Button>
+          <Button onClick={onConfirm}>Restore {blockerGroup.root.name}</Button>
         </div>
       </div>
     </Dialog>

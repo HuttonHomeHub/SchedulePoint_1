@@ -31,9 +31,9 @@ import { clearBaselineTree } from './clear-baseline-tree';
  *    defence even if the service were bypassed — including the FAIL-CLOSED round-trip over every
  *    `ResourceKind` value, which goes red the moment a kind is added without a CHECK branch.
  *
- * Resources have no restore endpoint (they are a sibling library, not a hierarchy level), so the
- * restore half of the cascade is asserted at the DB level: one shared batch id makes the branch a
- * single restore unit, which is what the ADR-0038 precedent buys.
+ * The restore half of the cascade is asserted at the DB level here — one shared batch id makes the
+ * branch a single restore unit, which is what the ADR-0038 precedent buys. The endpoint that uses it
+ * (`POST …/resources/:id/restore`, ADR-0195) is exercised in `library-restore.e2e-spec.ts`.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';

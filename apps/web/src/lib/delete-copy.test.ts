@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deleteCascadeWarning } from './delete-copy';
+import { deleteCascadeWarning, deleteLibraryRowWarning } from './delete-copy';
 
 /**
  * **The sentence must be true on a host that has not armed retention**, which is the default and
@@ -16,6 +16,14 @@ describe('the delete confirmation sentence', () => {
       expect(sentence).not.toMatch(/limited time|days|permanently/i);
       expect(sentence).toContain('You can restore it from Recently deleted.');
     }
+  });
+
+  it('says a deleted library row can be restored, and never promises a deadline for it', () => {
+    // The clear-out sweep removes clients, projects and plans only (ADR-0096 D2), so a resource or an
+    // organisation calendar stays in Recently deleted whatever the server says about retention.
+    expect(deleteLibraryRowWarning('Crane A')).toBe(
+      'Delete “Crane A”? You can restore it from Recently deleted.',
+    );
   });
 
   it('makes no deadline claim when the clear-out is off or the configuration is not known yet', () => {

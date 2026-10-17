@@ -38,6 +38,7 @@ import { Select } from '@/components/ui/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { ApiFetchError } from '@/lib/api/client';
+import { deleteLibraryRowWarning } from '@/lib/delete-copy';
 import {
   ARCHIVED_BADGE,
   ARCHIVED_FILTER_LABELS,
@@ -484,7 +485,7 @@ export function CalendarsTable({
             }}
             onConfirm={confirmDelete}
             title="Delete calendar"
-            description={deleting ? `Delete “${deleting.name}”?` : ''}
+            description={deleting ? deleteLibraryRowWarning(deleting.name) : ''}
             pending={deleteCalendar.isPending}
             pendingLabel="Deleting…"
             error={deleteError}

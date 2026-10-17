@@ -155,3 +155,165 @@ test('a directly-deleted plan can be restored from the recycle bin', async ({ pa
   await page.getByRole('link', { name: 'Depot' }).click();
   await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
 });
+
+/**
+ * The library half of the bin (ADR-0195). Rows are seeded through the API with the browser's own
+ * session — these journeys are about what the screen does with a deleted resource or calendar, not
+ * about authoring one — and the first two each start with a delete made through the real library UI,
+ * because the invalidation that puts the row in the bin is the seam a unit suite cannot see.
+ */
+function libraryApi(page: Page, orgSlug: string) {
+  const base = `/api/v1/organizations/${orgSlug}`;
+  return {
+    async post(path: string, data: unknown): Promise<{ id: string }> {
+      const res = await page.request.post(`${base}${path}`, { data });
+      expect(res.ok(), `POST ${path}: ${res.status()}`).toBe(true);
+      return ((await res.json()) as { data: { id: string } }).data;
+    },
+    async remove(path: string): Promise<void> {
+      const res = await page.request.delete(`${base}${path}`);
+      expect(res.ok(), `DELETE ${path}: ${res.status()}`).toBe(true);
+    },
+  };
+}
+
+test('a resource deleted in the library is restored from the recycle bin (accessible)', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, 'binres');
+  const api = libraryApi(page, orgSlug);
+  await api.post('/resources', { name: 'Crane A', kind: 'EQUIPMENT' });
+
+  await navLink(page, 'Resources').click();
+  await page.getByRole('button', { name: 'Actions for Crane A' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  // Library rows never expire, so the sentence promises recovery and names no deadline.
+  await expect(page.getByRole('alertdialog')).toContainText(
+    'You can restore it from Recently deleted.',
+  );
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('button', { name: 'Actions for Crane A' })).toHaveCount(0);
+
+  await navLink(page, 'Recently deleted').click();
+  await expect(page.getByRole('cell', { name: 'Resource', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crane A', exact: true })).toBeVisible();
+  await expect(page.getByText(/Expires/)).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Restore resource Crane A' }).click();
+  await expect(page.getByText('Resource “Crane A” restored.')).toBeAttached();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+
+  await navLink(page, 'Resources').click();
+  await expect(page.getByRole('button', { name: 'Actions for Crane A' })).toBeVisible();
+});
+
+test('a child deleted before its group needs the group restored first, in two presses', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, 'bingrp');
+  const api = libraryApi(page, orgSlug);
+  const group = await api.post('/resources', { name: 'Groundworks', kind: 'GROUP' });
+  const child = await api.post('/resources', {
+    name: 'Crew A',
+    kind: 'LABOUR',
+    parentId: group.id,
+  });
+  await api.remove(`/resources/${child.id}`);
+  await api.remove(`/resources/${group.id}`);
+
+  await navLink(page, 'Recently deleted').click();
+  await expect(page.getByText(/Blocked by a deleted resource group, .Groundworks./)).toBeVisible();
+  await page.getByRole('button', { name: 'Restore resource group first…: Groundworks' }).click();
+
+  // The confirmation names the group and what comes back with it, then takes a second press.
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Resource “Crew A” sits inside Groundworks');
+  await dialog.getByRole('button', { name: 'Restore Groundworks' }).click();
+
+  await page.getByRole('button', { name: 'Restore resource Crew A' }).click();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+});
+
+test('a calendar deleted in the library is restored from the recycle bin', async ({ page }) => {
+  const orgSlug = await onboard(page, 'bincal');
+  const api = libraryApi(page, orgSlug);
+  await api.post('/calendars', { name: 'Crane hours', workingWeekdays: 31 });
+
+  await navLink(page, 'Calendars').click();
+  await page.getByRole('button', { name: 'Actions for Crane hours' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText(
+    'You can restore it from Recently deleted.',
+  );
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+
+  await navLink(page, 'Recently deleted').click();
+  await expect(page.getByRole('cell', { name: 'Calendar (organisation)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Restore calendar Crane hours' }).click();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+
+  await navLink(page, 'Calendars').click();
+  await expect(page.getByRole('button', { name: 'Actions for Crane hours' })).toBeVisible();
+});
+
+test('a project’s own calendar is listed inside the project’s deletion', async ({ page }) => {
+  const orgSlug = await onboard(page, 'binpcal');
+  const api = libraryApi(page, orgSlug);
+  const client = await api.post('/clients', { name: 'Northgate' });
+  const project = await api.post(`/clients/${client.id}/projects`, { name: 'Tower' });
+  await api.post('/calendars', {
+    name: 'Tower week',
+    workingWeekdays: 31,
+    scope: 'PROJECT',
+    projectId: project.id,
+  });
+  await api.remove(`/projects/${project.id}`);
+
+  await navLink(page, 'Recently deleted').click();
+  // ONE row, rooted at the project, naming the calendar it took — and the calendar is not
+  // separately restorable (it comes back with its project).
+  await expect(page.getByRole('table', { name: /recently deleted/i }).getByRole('row')).toHaveCount(
+    2,
+  );
+  await expect(
+    page.getByRole('button', { name: 'Restore project Tower and 1 calendar' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Restore project Tower and 1 calendar' }).click();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+});
+
+test('the Show filter narrows the bin by the keyboard and survives a reload', async ({ page }) => {
+  const orgSlug = await onboard(page, 'binshow');
+  const api = libraryApi(page, orgSlug);
+  const resource = await api.post('/resources', { name: 'Crane A', kind: 'EQUIPMENT' });
+  const calendar = await api.post('/calendars', { name: 'Crane hours', workingWeekdays: 31 });
+  await api.remove(`/resources/${resource.id}`);
+  await api.remove(`/calendars/${calendar.id}`);
+
+  await navLink(page, 'Recently deleted').click();
+  const group = page.getByRole('radiogroup', { name: 'Show' });
+  await expect(group.getByRole('radio', { name: 'All' })).toBeChecked();
+  await expect(page.getByRole('cell', { name: 'Crane A', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toBeVisible();
+
+  // The APG radiogroup: Arrow keys move the selection (All → Clients, projects & plans → Resources).
+  await group.getByRole('radio', { name: 'All' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Resources' })).toBeChecked();
+  await expect(page).toHaveURL(/[?&]show=resources/);
+  await expect(page.getByRole('cell', { name: 'Crane A', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toHaveCount(0);
+
+  await page.reload();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Show' }).getByRole('radio', { name: 'Resources' }),
+  ).toBeChecked();
+  await expect(page.getByRole('cell', { name: 'Crane hours', exact: true })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(results.violations).toEqual([]);
+});
