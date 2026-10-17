@@ -1289,7 +1289,8 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   falls back to the existing flat fill, so the `fillRect` count never changes either way. The
   month-band ground (ADR-0055 §4) gains its own `View▾ → Structure → Month bands` switch in the
   same milestone — `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default; the switch only lets
-  a user turn an existing layer off for the session.
+  a user turn an existing layer off for the session. The same switch tints the date ruler's
+  odd months with `--canvas-band` (TECH_DEBT #58), so the ruler's stripes continue the diagram's.
 - **TSLD marker channels & the data-date line (`VITE_CANVAS_DATA_DATE`, canvas status & feedback
   M1; proposes ADR-0078)** — the canvas's full-height and near-full-height marks each own a
   **channel** (shape + weight + hue), decided as one vocabulary rather than per-mark, because

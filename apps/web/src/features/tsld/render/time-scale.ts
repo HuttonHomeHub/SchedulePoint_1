@@ -294,16 +294,21 @@ export function rulerTicks(
  * band has a right edge and the label is to be centred — the width of that part. Pure and exported
  * so the geometry is testable without a DOM. A band scrolled partly off either side centres over
  * what remains, the way a month label stays readable while its start is off screen ("sticky"); a
- * band with no visible part gets a zero width.
+ * band with no visible part, or too little to hold the label, is left-pinned instead.
  */
 export function rulerLabelBox(
   tick: { x: number; end?: number },
   viewportWidth: number,
   centre: boolean,
+  /** The label's measured width, padding included; a sliver narrower than it cannot be centred in. */
+  labelWidth = 0,
 ): { left: number; width: number | null } {
   const left = Math.max(0, tick.x);
   if (!centre || tick.end === undefined) return { left, width: null };
-  return { left, width: Math.max(0, Math.min(viewportWidth, tick.end) - left) };
+  const width = Math.max(0, Math.min(viewportWidth, tick.end) - left);
+  // A box narrower than its label overflows to the right and would overprint the next band's label,
+  // so such a sliver falls back to the left pin — which is where it read before it was centred.
+  return { left, width: width <= 0 || width < labelWidth ? null : width };
 }
 
 /**

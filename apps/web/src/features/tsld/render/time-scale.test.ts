@@ -485,8 +485,18 @@ describe('rulerLabelBox', () => {
     expect(rulerLabelBox({ x: 600, end: 5000 }, 800, true)).toEqual({ left: 600, width: 200 });
   });
 
-  it('never reports a negative width for a band wholly off screen', () => {
-    expect(rulerLabelBox({ x: 900, end: 1200 }, 800, true).width).toBe(0);
+  it('left-pins a band wholly off screen rather than reporting a negative width', () => {
+    expect(rulerLabelBox({ x: 900, end: 1200 }, 800, true)).toEqual({ left: 900, width: null });
+  });
+
+  it('left-pins a sliver narrower than the measured label instead of overflowing into the next band', () => {
+    // 20 px of the band is visible; the label needs 36.
+    expect(rulerLabelBox({ x: -380, end: 20 }, 800, true, 36)).toEqual({ left: 0, width: null });
+    expect(rulerLabelBox({ x: 780, end: 5000 }, 800, true, 36)).toEqual({ left: 780, width: null });
+  });
+
+  it('still centres a span exactly as wide as the label', () => {
+    expect(rulerLabelBox({ x: 100, end: 136 }, 800, true, 36)).toEqual({ left: 100, width: 36 });
   });
 
   it('keeps the plain left clamp for a tick with no right edge, or when not centring', () => {
