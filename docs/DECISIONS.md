@@ -21,9 +21,11 @@ their own copies. The bar's body now mounts only while it has a context, so its 
 but the bar's record was cleared by every change of `context`, so a refetch that rebuilt the context while focus
 stayed on a bar command, followed by the selection going, left focus on `<body>`.
 
-**Consequences.** After a click on blank space a later deselect no longer pulls focus to the canvas; the hook
-leaves a reader who has moved on where they are. The record can be stale-true for one frame after such a click,
-which is narrow and accepted.
+**Consequences.** After a click on blank space a later deselect no longer pulls focus to the canvas. The bar's
+wrapper is still in the document when its cleanup runs, so the hook asks the document where focus is and ignores
+its record; focus on `<body>` is "somebody else's", and a reader who has moved on stays where they are. The record
+(and its one-frame staleness after a click on blank space) matters only for a wrapper already detached or for a
+`focusWasInside()` caller such as the strip's withdrawn follow-up button, where it is narrow and accepted.
 
 ---
 

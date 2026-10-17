@@ -335,12 +335,11 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
  * **The single selection bar hands focus on after a refetch rebuilt its context** (`docs/TECH_DEBT.md`
  * #481, ADR-0135).
  *
- * `SelectionActionsBar` keeps a "focus is held" record and clears it in the cleanup that runs on
- * **every** change of `context`, not only on removal. Read, not run: focus a bar command, let a
- * refetch rebuild the context (the bar and focus both stay), then lose the selected activity. The
- * record is already false, so focus falls to `<body>` and every accelerator goes quiet. This test is
- * the red-first probe for that reading; if it is green against the unchanged bar the reading is
- * wrong and the bar needs the hook only for the dedupe.
+ * The bar used to keep a "focus is held" record that its cleanup cleared on **every** change of
+ * `context`, not only on removal. Focus a bar command, let a refetch rebuild the context (the bar
+ * and focus both stay), then lose the selected activity: the record was already false, so focus fell
+ * to `<body>` and every accelerator went quiet. This test was red against that bar in Chromium and
+ * is the regression guard for the shared hook that replaced it.
  *
  * Both edits are made through the API, as another planner would, and the document is nudged with a
  * `visibilitychange` so TanStack Query refetches without the test touching the bar.

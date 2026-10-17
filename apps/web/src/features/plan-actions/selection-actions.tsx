@@ -1173,8 +1173,8 @@ function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React
  * It stays a normal `role="toolbar"` (roving tabindex, pen-gated set) rendered inline, DOM-adjacent
  * to the listbox for a sane Tab order, and it still does **not** auto-focus, so the canvas's
  * parallel listbox keeps its `aria-activedescendant` — the planner Tabs to it when they want it.
- * `restoreFocus` still fires on unmount (deselect, or the last activity deleted) so focus is never
- * stranded on `<body>`; it no longer has a "hidden while still mounted" state to guard, because
+ * `restoreFocus` still fires when the bar goes (deselect, or the last activity deleted) while focus
+ * was inside it, so focus is never stranded on `<body>`; it no longer has a "hidden while still mounted" state to guard, because
  * there is no longer anything that can hide it. Pass `context = null` to render nothing at all.
  */
 export function SelectionActionsBar({
@@ -1220,9 +1220,10 @@ function SelectionActionsBarBody({
   // **This replaces a hand-written copy whose record was cleared on every change of `context`**, so a
   // refetch that rebuilt the context while focus stayed on a bar command, followed by the selection
   // going, found the record false and dropped focus to `<body>`. `multi-select.spec.ts` ("focus on a
-  // selection-bar command survives a context rebuild…") was red against it. The hook keeps the
-  // record until a real move, and a click on blank space then a later deselect no longer pulls focus
-  // back to the canvas — the hook's rule, accepted when the copies were unified.
+  // selection-bar command survives a context rebuild…") was red against it. The bar's wrapper is
+  // still in the document when the hook's cleanup runs, so the hook reads `document.activeElement`
+  // and not its record: a click on blank space then a later deselect no longer pulls focus back to
+  // the canvas — the hook's rule, accepted when the copies were unified.
   const { wrapperProps } = useContainerUnmountHandoff({
     target: () => {
       restoreFocus?.();

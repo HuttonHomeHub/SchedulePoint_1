@@ -67,6 +67,29 @@ describe('the selection bar', () => {
     expect(order).toEqual(['focus', 'open']);
   });
 
+  // Both presses hand focus on themselves BEFORE they act, and the bar then goes. The unmount
+  // cleanup must see focus already moved and stay out of it, or the restore target runs twice.
+  it.each([
+    ['Make milestone…', () => within(bar()).getByRole('button', { name: MAKE_MILESTONE_LABEL })],
+    ['Clear selection', () => screen.getByRole('button', { name: 'Clear selection' })],
+  ])(
+    '%s hands focus on once, and the bar going afterwards does not hand it on again',
+    (_n, find) => {
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      const restore = vi.fn(() => outside.focus());
+      const props = { restoreFocus: restore, onClear: vi.fn() };
+      const { rerender } = render(<SelectionActionsBar context={ctx()} {...props} />);
+      const control = find();
+      control.focus();
+      fireEvent.click(control);
+      rerender(<SelectionActionsBar context={null} {...props} />);
+      expect(restore).toHaveBeenCalledOnce();
+      expect(outside).toHaveFocus();
+      outside.remove();
+    },
+  );
+
   it('is absent when the action does not apply', () => {
     render(<SelectionActionsBar context={ctx({ makeMilestone: { applies: false } })} />);
     expect(within(bar()).queryByRole('button', { name: MAKE_MILESTONE_LABEL })).toBeNull();
