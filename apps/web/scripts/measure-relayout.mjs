@@ -139,7 +139,22 @@ export { netpointReferencePlan } from ${JSON.stringify(`${REPO}/apps/seed-cli/sr
 `,
   );
   const outfile = join(tmp, 'node-bundle.mjs');
-  await build({ ...common, entryPoints: [entry], platform: 'node', outfile, absWorkingDir: HERE });
+  await build({
+    ...common,
+    // `loadFixture` finds the conformance fixtures by `new URL('../fixtures/…', import.meta.url)`.
+    // Bundled into a temp directory that URL points at /tmp/fixtures, so it is pinned to a file in
+    // the package's own `src/` instead; no other module in this bundle reads `import.meta.url`.
+    define: {
+      ...common.define,
+      'import.meta.url': JSON.stringify(
+        pathToFileURL(join(REPO, 'packages/engine-conformance/src/load.ts')).href,
+      ),
+    },
+    entryPoints: [entry],
+    platform: 'node',
+    outfile,
+    absWorkingDir: HERE,
+  });
   return import(pathToFileURL(outfile).href);
 }
 
@@ -232,6 +247,9 @@ async function startServers() {
   start('api', 'pnpm', ['--filter', '@repo/api', 'exec', 'nest', 'start'], REPO, {
     LOG_LEVEL: 'silent',
     // The pen is enforced, as in the arrange journey: the dialog's offer depends on the real gate.
+    // The seeder's own recalculation runs after it has released the pen and is refused 423 here, so
+    // `recalculateHoldingPen` redoes it through the same public endpoint, holding the pen as the web
+    // does; the seeder is left alone because a privileged path would make it stop testing the product.
     PLAN_EDIT_LOCK_ENFORCED: 'true',
     // Seeding ~40 plans is thousands of writes from one client; this instance is the harness's own.
     RATE_LIMIT_LIMIT: '100000',
@@ -330,7 +348,7 @@ async function readPlan(client, org, report) {
 }
 
 async function capture(node) {
-  const { SeedClient } = await import(
+  const { SeedClient, PenHolder } = await import(
     pathToFileURL(join(REPO, 'packages/seed-http/dist/index.js')).href
   );
   const client = new SeedClient({ baseUrl: WEB, concurrency: 6 });
@@ -379,6 +397,27 @@ async function capture(node) {
     ...seed(['--tier', 'all'], 'the catalogue (--tier all)').plans,
     ...seed(['--tier', 'scale', '--activities', String(leaves)], `scale-${leaves}`).plans,
   ];
+
+  // Control 0: every plan is scheduled. The seeder's recalculation is refused while the pen is
+  // enforced (see `startServers`), so it is redone here; a failure stops the capture, because
+  // unscheduled plans carry no dates and would be scored as if they were.
+  const recalcFailures = [];
+  for (const report of reports) {
+    if (report.planId === null) continue;
+    try {
+      await PenHolder.withPen(client, slug, report.planId, () =>
+        client.post(
+          `/api/v1/organizations/${slug}/plans/${report.planId}/schedule/recalculate`,
+          {},
+        ),
+      );
+    } catch (error) {
+      recalcFailures.push(`${report.seedName}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  if (recalcFailures.length > 0) {
+    throw new Error(`CAPTURE CONTROL: recalculation failed on\n  ${recalcFailures.join('\n  ')}`);
+  }
 
   // Control 1: the seeder made every plan the builders produce, plus the scale plan.
   const specs = [...node.loadSpecs('all'), node.scaleSpec({ activities: leaves })];
@@ -591,6 +630,9 @@ async function agreement(node, benchPage, session) {
 const node = await bundleNode();
 const done = node.selfTest();
 say(`Self-test: ${done.length} counter cases agree.`);
+// Loading the catalogue reads the conformance fixture from disk, which broke once the bundle
+// lived in /tmp; doing it here makes `--self-test` catch a path that only resolves in-repo.
+say(`Self-test: ${node.loadSpecs('all').length} catalogue specs load from the bundle.`);
 if (has('self-test')) process.exit(0);
 
 let exitCode = 0;
