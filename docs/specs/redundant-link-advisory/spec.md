@@ -536,6 +536,16 @@ count (`check:counts`, `check:adr-coverage`).
 > reasoning for the "C transparent" exclusion: it is demonstrated by a started successor entered at its
 > **finish** (FF direct, SF chain), not by a pin or a start-bound link (`m0-measurement.md`).
 
+> **Copy amended 2026-10-17 (review of the built row).** The sentences in §2.4 changed as the row was
+> reviewed against what the payload can say: the caveat reads "already implied by **other links in the
+> plan**" (true of a parallel-link witness as well as a chain); the "not checked" sentence reads "N links
+> **could not be judged** (for example a link into started or pinned work, or to a level of effort)",
+> because the count also holds links with an unknown endpoint, links on a stored cycle and links left when
+> the work limit was reached, so a sentence naming one cause would be false for the rest; the spoken
+> summary adds "(N could not be judged)" whenever N is not zero; and pressing an offender announces the
+> activity it selected, "Permit selected in the plan, the later end of Survey → Permit", because the
+> successor is selected and a link cannot be.
+
 Non-critical defaults: no canvas marking in v1; no staff diagnostic (the rule is a graph search, not
 a SQL count); the name is "Redundant links"; no `VITE_` flag (ADR-0088 D1), rollback is the commit
 boundary.

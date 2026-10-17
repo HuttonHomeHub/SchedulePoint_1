@@ -314,7 +314,7 @@ export function redundantLogicUncheckedPlan(): SeedSpec {
     seedName: 'capability-redundant-logic-unchecked',
     name: 'Logic: links the redundant-link check does not judge',
     description:
-      'Redundant links lists nothing and says six links were not checked. R10’s middle is a mandatory ' +
+      'Redundant links lists nothing and says six links could not be judged. R10’s middle is a mandatory ' +
       'start, so the link into it is not judged; R11 runs through a level of effort, which never ' +
       'drives, so the two links that touch it are not judged; R16’s middle is in progress, so the ' +
       'link into it is not judged; R17’s target is pinned, so the two links into it are not judged. ' +
