@@ -180,7 +180,7 @@ test.describe('the pending state', () => {
     // Not busy: the container unmounts when the route arrives, so it is not the element that
     // receives the content; the one sentence is the status beside it.
     await expect(pending).not.toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByRole('status')).toHaveText('Loading…');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading…' })).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })
       .options({
