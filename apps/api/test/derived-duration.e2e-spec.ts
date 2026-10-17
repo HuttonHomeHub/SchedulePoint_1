@@ -163,8 +163,9 @@ describe.skipIf(!hasDatabase)('derived duration (e2e)', () => {
     // The column itself, not the DTO: the DTO gates on type, so only the row can show the write.
     const stored = await prisma.activity.findUniqueOrThrow({ where: { id: summary.id } });
     expect(stored.derivedDurationMinutes).toBe(span);
-    // `duration_minutes` stays the planner's input (ADR-0197 D2).
-    expect(stored.durationMinutes).toBe(0);
+    // `duration_minutes` stays the planner's input (ADR-0197 D2): the creation default, not the span.
+    expect(stored.durationMinutes).toBe(summary.durationMinutes);
+    expect(stored.durationMinutes).not.toBe(span);
   });
 
   it('clears the column when a summary stops being one, on the next recalculation', async () => {
@@ -188,6 +189,12 @@ describe.skipIf(!hasDatabase)('derived duration (e2e)', () => {
       .patch(`${org}/activities/${summary.id}`)
       .send({ type: 'TASK', durationDays: 1, version: current.version })
       .expect(200);
+    // Pre-seed a stale value on the now-TASK row, so that clearing is what is under test: with the
+    // write absent from the UPDATE this stays 999, whatever the first recalculation did.
+    await prisma.activity.update({
+      where: { id: summary.id },
+      data: { derivedDurationMinutes: 999 },
+    });
     await recalculate(actor, planId);
 
     expect(
