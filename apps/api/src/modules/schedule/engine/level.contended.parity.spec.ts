@@ -1,26 +1,13 @@
-import { createHash } from 'node:crypto';
-
 import { scaleSpec } from '@repo/seed';
-import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
+import { digest, levelled, randomPlan } from '../../../../test/legacy-levelling/random-plan';
 import { specToEngineInput } from '../../../../test/pairwise/spec-to-engine';
 
 import { computeSchedule } from './compute';
 import { levelSchedule } from './level';
-import type {
-  EngineActivity,
-  EngineAssignment,
-  EngineEdge,
-  EngineResource,
-  LevelingOptions,
-} from './types';
-import {
-  allMinutesWorkCalendar,
-  buildWorkingTimeCalendar,
-  fullDayWeek,
-  type WorkingTimeCalendar,
-} from './working-time-calendar';
+import type { EngineAssignment } from './types';
+import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * **Contended-resource levelling answers exactly what it answered before #84's speed-up.**
@@ -39,150 +26,6 @@ import {
  * matching means levelling's OUTPUT moved. If the generator is changed on purpose, regenerate the hashes
  * from a tree that still has the old engine, never from the one under test.
  */
-
-/** mulberry32 — a seeded generator, so a failing seed reproduces. */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const DAY = 1440;
-const DATA_DATE = '2026-01-05';
-const WEEKDAYS = buildWorkingTimeCalendar(fullDayWeek([1, 2, 3, 4, 5]), []);
-const SHIFT = buildWorkingTimeCalendar(
-  [0, 1, 2, 3, 4, 5, 6].map((day) =>
-    day < 5
-      ? [
-          { startMinute: 8 * 60, endMinute: 12 * 60 },
-          { startMinute: 13 * 60, endMinute: 17 * 60 },
-        ]
-      : [],
-  ),
-  [],
-);
-const CALENDARS: readonly WorkingTimeCalendar[] = [allMinutesWorkCalendar, WEEKDAYS, SHIFT];
-
-const EDGE_TYPES: readonly DependencyType[] = ['FS', 'FS', 'FS', 'SS', 'FF', 'SF'];
-/** Whole multiples of 2⁻¹⁶ except the last two, so some plans take the stepping path and some do not. */
-const EXACT_UNITS = [1, 1, 1, 0.5, 2, 0.25, 1.5];
-const MIXED_UNITS = [1, 1, 0.5, 2, 0.1, 0.3];
-
-interface RandomPlan {
-  activities: EngineActivity[];
-  edges: EngineEdge[];
-  assignments: EngineAssignment[];
-  resources: EngineResource[];
-  options: LevelingOptions;
-  passC: boolean;
-}
-
-function randomPlan(seed: number): RandomPlan {
-  const rand = rng(seed);
-  const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
-  const int = (lo: number, hi: number): number => lo + Math.floor(rand() * (hi - lo + 1));
-
-  // Every fourth seed is the hot shape: one resource carrying most of a larger plan, which is what
-  // fills enough blocks for the stepping to matter.
-  const hot = seed % 4 === 0;
-  const planCalendar = pick(CALENDARS);
-  const n = hot ? int(150, 260) : int(4, 60);
-  const activities: EngineActivity[] = [];
-  for (let i = 0; i < n; i += 1) {
-    const milestone = rand() < 0.04;
-    const subDay = rand() < 0.3;
-    const activity: EngineActivity = {
-      id: `A${String(i).padStart(3, '0')}`,
-      type: milestone ? 'START_MILESTONE' : 'TASK',
-      durationMinutes: milestone ? 0 : subDay ? int(1, 16) * 60 : int(1, 9) * DAY,
-    };
-    if (rand() < 0.25) activity.calendar = pick(CALENDARS);
-    if (rand() < 0.15) activity.levelingPriority = int(1, 5);
-    activities.push(activity);
-  }
-
-  const edges: EngineEdge[] = [];
-  const edgeCount = Math.floor(n * (rand() < 0.5 ? 0 : rand() * 1.2));
-  for (let k = 0; k < edgeCount; k += 1) {
-    const from = int(0, n - 2);
-    const to = int(from + 1, n - 1);
-    edges.push({
-      id: `E${k}`,
-      predecessorId: activities[from]!.id,
-      successorId: activities[to]!.id,
-      type: pick(EDGE_TYPES),
-      lagMinutes: rand() < 0.7 ? 0 : int(0, 3) * DAY,
-    });
-  }
-
-  const resourceCount = hot ? 1 : int(1, 3);
-  const exact = rand() < 0.6;
-  const units = exact ? EXACT_UNITS : MIXED_UNITS;
-  const resources: EngineResource[] = [];
-  for (let r = 0; r < resourceCount; r += 1) {
-    const capacity = pick(hot ? [1, 2, 3] : [1, 1, 2, 3, 1.5, 0.5, 4]);
-    resources.push({
-      id: `R${r}`,
-      capacity,
-      ...(rand() < 0.15 ? { calendar: allMinutesWorkCalendar } : {}),
-    });
-  }
-
-  const assignments: EngineAssignment[] = [];
-  for (const activity of activities) {
-    if (rand() < (hot ? 0.9 : 0.7)) {
-      const touched = rand() < 0.2 && resourceCount > 1 ? 2 : 1;
-      const first = int(0, resourceCount - 1);
-      for (let t = 0; t < touched; t += 1) {
-        const resource = resources[(first + t) % resourceCount]!;
-        const unitsPerHour = pick(units);
-        assignments.push({
-          activityId: activity.id,
-          resourceId: resource.id,
-          unitsPerHour: rand() < 0.03 ? resource.capacity! + 1 : unitsPerHour,
-          ...(rand() < 0.15 && activity.durationMinutes > 60 ? { lagMinutes: int(1, 4) * 60 } : {}),
-        });
-      }
-    }
-  }
-
-  return {
-    activities,
-    edges,
-    assignments,
-    resources,
-    options: {
-      levelWithinFloatOnly: rand() < 0.2,
-      dataDate: DATA_DATE,
-      planCalendar,
-      anchor: rand() < 0.8 ? 'PLACED' : 'NETWORK',
-    },
-    passC: rand() < 0.5,
-  };
-}
-
-function levelled(plan: RandomPlan): unknown {
-  const network = computeSchedule(plan.activities, plan.edges, {
-    dataDate: plan.options.dataDate,
-    calendar: plan.options.planCalendar,
-  });
-  return levelSchedule(
-    plan.activities,
-    network,
-    plan.passC ? plan.edges : [],
-    plan.assignments,
-    plan.resources,
-    plan.options,
-  );
-}
-
-const digest = (value: unknown): string =>
-  createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 const FROZEN: Record<number, string> = {
   1: '29a18db3f4002900c0400ef66bab9f59dc447a0d269bab2568788a6afbabe8fe',
@@ -250,7 +93,7 @@ const FROZEN: Record<number, string> = {
 describe('levelSchedule — contended-resource output is byte-identical to before #84', () => {
   for (const seed of Object.keys(FROZEN).map(Number)) {
     it(`seed ${seed}`, () => {
-      expect(digest(levelled(randomPlan(seed)))).toBe(FROZEN[seed]);
+      expect(digest(levelled(randomPlan(seed), levelSchedule))).toBe(FROZEN[seed]);
     });
   }
 
@@ -260,27 +103,62 @@ describe('levelSchedule — contended-resource output is byte-identical to befor
 });
 
 describe('levelSchedule — one crew carrying a whole plan does not scale with the square (#84)', () => {
-  it('levels 4,000 activities on a single-unit resource well inside a quadratic budget', () => {
-    const { activities, edges, options } = specToEngineInput(scaleSpec({ activities: 4000 }));
+  /**
+   * Calendar calls are the work the old pass multiplied: every too-short gap it tested cost three
+   * walks of the calendar. Counting them is deterministic where a stopwatch is not.
+   */
+  const levelOneCrew = (activityCount: number): { level: () => number } => {
+    const { activities, edges, options } = specToEngineInput(
+      scaleSpec({ activities: activityCount }),
+    );
     const network = computeSchedule(activities, edges, options);
     const crew: EngineAssignment[] = activities
       .filter(
         (a) => a.durationMinutes > 0 && a.type !== 'WBS_SUMMARY' && a.type !== 'LEVEL_OF_EFFORT',
       )
       .map((a) => ({ activityId: a.id, resourceId: 'CREW', unitsPerHour: 1 }));
+    let calls = 0;
+    const counting: WorkingTimeCalendar = {
+      addWorkingTime: (from, minutes) => {
+        calls += 1;
+        return options.calendar.addWorkingTime(from, minutes);
+      },
+      workingTimeBetween: (from, to) => {
+        calls += 1;
+        return options.calendar.workingTimeBetween(from, to);
+      },
+    };
+    // One calendar object across every `level()` call: anything remembered per calendar by a module
+    // rather than by the pass would show up as the second call doing less work.
+    return {
+      level: () => {
+        calls = 0;
+        levelSchedule(activities, network, [], crew, [{ id: 'CREW', capacity: 1 }], {
+          levelWithinFloatOnly: false,
+          dataDate: options.dataDate,
+          planCalendar: counting,
+          anchor: 'PLACED',
+        });
+        return calls;
+      },
+    };
+  };
 
-    const started = performance.now();
-    levelSchedule(activities, network, [], crew, [{ id: 'CREW', capacity: 1 }], {
-      levelWithinFloatOnly: false,
-      dataDate: options.dataDate,
-      planCalendar: options.calendar,
-      anchor: 'PLACED',
-    });
-    const elapsed = performance.now() - started;
+  it('keeps the calendar work for 4,000 activities far under a quadratic count', () => {
+    const small = levelOneCrew(2000).level();
+    const large = levelOneCrew(4000).level();
+    // Counted 2026-10-17: 35,315 and 71,037 now (a ratio of 2.01); 1,183,266 and 4,550,616 on the
+    // engine before the speed-up (3.85). The bounds sit a factor of five from the first and a factor
+    // of eleven from the second.
+    expect(large).toBeLessThan(400_000);
+    expect(large / small).toBeLessThan(2.5);
+  }, 60_000);
 
-    // Measured 2026-10-17 on the build container: ~0.4 s now, ~10 s before the speed-up, and the old
-    // cost quadruples with each doubling. The bound sits an order of magnitude from both, so machine
-    // noise cannot trip it and the quadratic cannot hide under it.
-    expect(elapsed).toBeLessThan(4_000);
+  it('remembers nothing between passes: a second pass on the same calendar does the same work', () => {
+    const crew = levelOneCrew(1000);
+    const first = crew.level();
+    const second = crew.level();
+    expect(first).toBeGreaterThan(0);
+    expect(second).toBe(first);
   }, 60_000);
 });
