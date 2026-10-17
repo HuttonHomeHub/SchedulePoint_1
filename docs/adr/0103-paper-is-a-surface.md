@@ -5,6 +5,8 @@
 - **Amends:** ADR-0055 §1 (the surface-scope vocabulary), ADR-0097 D1 (the rebound closure)
 - **Builds on:** ADR-0026, ADR-0056, ADR-0059, ADR-0065, ADR-0093, ADR-0102
 - **Closes:** `docs/TECH_DEBT.md` #163, #164 · **Opens:** #166, #167
+- **Amended by:** [ADR-0199](0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md) — D7's parity gate now
+  takes a second roster from every diagram canvas, not only the scene's keys
 
 ## Context
 

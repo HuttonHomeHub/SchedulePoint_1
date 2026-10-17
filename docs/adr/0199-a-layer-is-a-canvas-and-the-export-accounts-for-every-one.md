@@ -1,7 +1,8 @@
 # ADR-0199: A layer is a canvas, and the export accounts for every one
 
-- **Status:** Proposed — 2026-10-17. The spec was approved by the product owner on 2026-10-17 (CQ-1: the strip is
-  included when it is open on screen, as configured; CQ-2: the full layer roster). Milestone 1 (the gate) is built.
+- **Status:** Accepted — 2026-10-17. The spec was approved by the product owner on 2026-10-17 (CQ-1: the strip is
+  included when it is open on screen, as configured; CQ-2: the full layer roster). Milestone 1 (the gate) and
+  milestone 2 (the strip in the PNG, the PDF and the printed diagram) are built.
 - **Spec:** [`docs/specs/resource-strip-export/spec.md`](../specs/resource-strip-export/spec.md) §4.8 · **Plan:**
   [`implementation-plan.md`](../specs/resource-strip-export/implementation-plan.md)
 - **Date:** 2026-10-17
@@ -10,7 +11,7 @@
   [ADR-0049](0049-canvas-axis-aligned-resource-strip.md) (the strip's deliverable).
 - **Builds on:** ADR-0063 §M5, ADR-0088 D1 (no flag), ADR-0093 (a roster has a floor), ADR-0106 (a label is chrome),
   ADR-0110 (a gate is verified red), ADR-0127 D3 (count what you do not draw).
-- **Closes:** `docs/TECH_DEBT.md` #223.
+- **Closes:** `docs/TECH_DEBT.md` #223. **Opens:** #523, #524 (two export-legend findings met on the way).
 
 ## Context
 
@@ -54,9 +55,15 @@ paper contrast sweep.
 
 - **Not decided, and not claimed covered:** DOM chrome (the ruler, the legend panel, the strip's panel) is not a layer.
   Its export equivalents are painted rows that remain hand mirrors (ADR-0106).
-- Until the composer carries the strip, it is listed in a `KNOWN_GAPS` record naming `docs/TECH_DEBT.md` #223 rather
-  than in the screen-only record, whose reasons say "by design". The entry fails the build once the composer names the
-  strip, so it cannot outlive its fix.
+- The gate shipped one commit ahead of the fix, with the strip in a `KNOWN_GAPS` record naming `docs/TECH_DEBT.md`
+  #223 rather than in the screen-only record, whose reasons say "by design". Verified red on that tree (removing the
+  entry names `resource-strip`); the entry failed the build once the composer named the strip, and the record was
+  deleted with it. A future known gap is a decision to be taken again, not a mechanism left standing.
+- The strip is read from the canvas handle (`getResourceStrip`, `null` unless the strip is open), so the export and
+  the screen cannot disagree about what the band holds. The panel publishes a bar-less, captioned snapshot for
+  loading, error and empty, so an open strip is never exported as an unexplained band.
+- The live painter is unchanged: `paintResourceStrip` gains an offset that defaults to `0`, and the snapshot's new
+  `caption` is read by no painter.
 - The export legend's missing over-allocation entry and its silent truncation on a narrow crop are separate findings,
   filed in the register.
 

@@ -2,6 +2,8 @@
 
 - **Status:** Proposed (amends ADR-0026; behind `VITE_CANVAS_RESOURCE_VIEW`, gated on `RESOURCE_CURVES_ENABLED`)
 - **Date:** 2026-07-20
+- **Amended by:** [ADR-0199](0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md) — the strip is part of the
+  exported and printed diagram whenever it is open
 - **Deciders:** James Ewbank (with Claude Code — ui-architect)
 
 ## Context

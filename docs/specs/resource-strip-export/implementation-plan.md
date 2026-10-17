@@ -1,7 +1,7 @@
 # Implementation Plan: The resource strip in the exported and printed diagram
 
 - **Feature spec:** [`spec.md`](./spec.md)
-- **Status:** Approved — with the spec, 2026-10-17
+- **Status:** Approved — with the spec, 2026-10-17. Built 2026-10-17 (milestones 1 to 3)
 - **Owner:** web (builder agent, Sonnet, per CLAUDE.md §19.14), reviewed as listed per milestone
 
 **Nothing in this plan asks the product owner to test on their own devices.** Every check is a unit suite, a

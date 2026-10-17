@@ -1,6 +1,6 @@
 # Feature Spec: The resource strip in the exported and printed diagram (`docs/TECH_DEBT.md` #223)
 
-- **Status:** Approved — by the product owner, 2026-10-17, CQ-1: included when open on screen; CQ-2: the full layer roster.
+- **Status:** Approved — by the product owner, 2026-10-17, CQ-1: included when open on screen; CQ-2: the full layer roster. Built 2026-10-17 (milestones 1 to 3).
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-10-17
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #223 (a register row, not a GitHub issue)

@@ -224,3 +224,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0198](0198-a-guest-sees-what-is-near-critical-and-what-drives.md)                              | A guest sees what is near critical and what drives                                         | Accepted           |
 | [0199](0199-a-link-is-never-louder-than-the-work-it-joins.md)                                   | A link is never louder than the work it joins                                              | Accepted           |
 | [0199](0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)                       | A layer is a canvas, and the export accounts for every one                                 | Proposed           |
+| [0199](0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)                       | A layer is a canvas, and the export accounts for every one                                 | Accepted           |
