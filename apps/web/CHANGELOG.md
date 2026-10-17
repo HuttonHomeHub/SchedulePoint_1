@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.192.3
+
+### Patch Changes
+
+- [#1028](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1028) [`149ee79`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/149ee791d41e73936eb998b7e25d9b2bbf4d00e4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A link's waiting-time label ("24d") is no longer cut off by the edge of the diagram. When a link runs off screen, the label now sits on the part you can see.
+
+- [#1030](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1030) [`027ef77`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/027ef7723e776aab9d33dd0dc938505731fbc5df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The health check's "Beyond the DCMA assessment" section now reads each finding by its own kind, and
+  shows only the name and count for a kind this version does not know. Its closing sentence now says the
+  findings come from the plan's stored activities and links, and the spoken summary lists every finding.
+
+- [#1029](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1029) [`c7962ab`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c7962ab9c058ef68fde639938c3bbc81d54e08dc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Pressing the button that opened a menu now closes it and returns focus where Escape would, instead of closing it and immediately reopening it.
+
+- [#1024](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1024) [`0e6ef4a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0e6ef4a9bb1af0dc0f4ed2b0d32042034fa622b6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The selection bar now words a role refusal one way: a Viewer hovering Edit, Duplicate or Delete reads
+  the same sentence as on Make milestone, "Your role cannot edit activity details."
+
 ## 0.192.2
 
 ### Patch Changes
