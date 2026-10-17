@@ -37,6 +37,7 @@ export {
   StatGrid,
   StatGridSkeleton,
   type StatGridProps,
+  type StatGridSkeletonProps,
   type StatItem,
   type StatTone,
 } from './stat-grid';
@@ -51,5 +52,6 @@ export {
   KeyValueListSkeleton,
   type KeyValueItem,
   type KeyValueListProps,
+  type KeyValueListSkeletonProps,
 } from './key-value-list';
 export { ChildCounts, type ChildCount, type ChildCountsProps } from './child-counts';

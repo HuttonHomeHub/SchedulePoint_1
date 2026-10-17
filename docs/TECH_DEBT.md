@@ -10734,10 +10734,10 @@ Seven first-load states render a text "Loading…" rather than a spinner, so #23
 
 **Next:** decide whether the named verb or the known rows is the better loading statement, then convert or record the decision in the gate's reason. **Trigger:** the next change to the panel's loading state.
 
-### 534. Two shipped props nothing sets: the members tab's `loading` and `error`, and the auth shell's `busy`
+### 534. The members tab's `loading` and `error` props are never passed
 
-**Status:** open · **Verified:** 2026-10-17, by reading `ActivityEditorSession.tsx` (it renders `ActivityMembersPanel` without `loading` or `error`) and by searching `InviteShell`/`AuthShell` callers (none passes `busy` since the invitation card stopped, ADR-0202) · **Raised:** 2026-10-17 (loading-skeletons M5 and M6) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-17, by reading `ActivityEditorSession.tsx` (it renders `ActivityMembersPanel` without `loading` or `error`) · **Raised:** 2026-10-17 (loading-skeletons M5 and M6) · **Size:** S · **Owner:** web
 
-The members tab has a built loading skeleton and a built error state, but its only host passes `planActivities` and never `loading` or `error`, so neither can be reached in the product: the plan's activities are already on screen before the tab can be opened. `AuthShell`'s `busy` reflects `aria-busy` on the landmark and `InviteShell` forwards it; the invitation card was its only caller and no longer sets it, because the status below the shell would sit inside a busy subtree. Neither is a defect today, and both are code a future reader would assume is exercised.
+The members tab has a built loading skeleton and a built error state, but its only host passes `planActivities` and never `loading` or `error`, so neither can be reached in the product: the plan's activities are already on screen before the tab can be opened. It is not a defect today, and it is code a future reader would assume is exercised. (The shell pair's `busy` prop, first filed here, was removed on the accessibility review: `forgot-password.tsx` did set it, around a `Spinner`.)
 
-**Next:** either wire the members tab's two props to the editor's `planActivitiesLoading`/`planActivitiesError` (a behaviour change, so a decision) or delete the dead branches; delete `busy` from the shell pair. **Trigger:** the next change to either component.
+**Next:** either wire the members tab's two props to the editor's `planActivitiesLoading`/`planActivitiesError` (a behaviour change, so a decision) or delete the dead branches. **Trigger:** the next change to either component.

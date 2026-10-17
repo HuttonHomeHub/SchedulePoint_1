@@ -314,22 +314,25 @@ export function ContextStrip({
  * drawn: a skeleton draws what is always there, and a strip that turns out longer wraps further on
  * settling. Hidden from assistive technology on its own root as well as by `LoadingShape`.
  */
-export function ContextStripSkeleton({
-  labels,
-  framed = true,
-  className,
-}: {
-  labels: ReadonlyArray<string>;
+export interface ContextStripSkeletonProps {
+  /** The always-present facts, by their real labels — one flag naming across the skeletons. */
+  items: ReadonlyArray<{ label: string }>;
   framed?: boolean;
   className?: string;
-}): React.ReactElement {
+}
+
+export function ContextStripSkeleton({
+  items,
+  framed = true,
+  className,
+}: ContextStripSkeletonProps): React.ReactElement {
   return (
     <dl aria-hidden="true" className={cn(STRIP_CLASS, framed && STRIP_FRAME_CLASS, className)}>
-      {labels.map((label) => (
+      {items.map(({ label }) => (
         <div key={label} className={FACT_CLASS}>
           <dt className={FACT_LABEL_CLASS}>{label}</dt>
           <dd>
-            <Skeleton on={framed ? 'muted' : 'canvas'} className="h-5 w-16" />
+            <Skeleton on={framed ? 'muted' : 'page'} className="h-5 w-16" />
           </dd>
         </div>
       ))}

@@ -787,11 +787,17 @@ The standard and the decision rule (spinner or skeleton) are in
   the site puts that on the element that persists into the settled state. It is self-contained rather than built on
   the shell's `useAnnounce`, because the guest view, the staff gate and the route-pending screen have no shell
   announcer.
-- **`Skeleton`** — the material. `on: 'canvas' | 'muted'` names the ground it is drawn on (`muted` for a block on a
+- **`Skeleton`** — the material. `on: 'page' | 'muted'` names the ground it is drawn on (this was `surface`, then `on: 'canvas'`; `canvas` is the TSLD's word) (`muted` for a block on a
   `bg-muted` ground, which would otherwise vanish). Always `aria-hidden`; carries `data-skeleton`, the hook for the
   forced-colours outline and for measuring instruments.
 - **`SkeletonText`** — `{ sample, className?, on? }`: a block as wide and tall as `sample` would render, with the
   sample as `visibility: hidden` text. The sample is caller-supplied; the primitive carries no copy.
+- **Skeleton props are `items`.** `StatGridSkeleton`, `KeyValueListSkeleton` and `ContextStripSkeleton` each take
+  `items: { label: string; … }[]` (the real labels; a flag per item for a second line), with an exported `…Props`
+  interface. `ContextStripSkeleton` is exported from `components/ui/form-layout.tsx` beside `ContextStrip`, not from
+  `components/ui/page`: the strip is a form-layout primitive, and `page/` does not import `form-layout`.
+- **`busy` does not exist on `SectionCard`, `AuthShell` or `InviteShell`.** `StatusSection`'s `busy` marks a wrapper
+  around its content, never the section, because its polite sentences must stay outside it.
 - **`DataTableSkeleton`** — `DataTable`'s pending render, exported from `data-table.tsx`. Real header text,
   `aria-hidden` table, one status via `LoadingShape` (the table's `loadingLabel`), and no `data-col-width` (so the
   wrap gate reads nothing from it).

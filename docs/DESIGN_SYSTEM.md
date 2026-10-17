@@ -799,17 +799,17 @@ Before them the frame was hand-written **fourteen** times and the page heading
 **sixteen** — fourteen and sixteen chances for one screen to be padded or ranked
 differently from its neighbour, and no way to change the measure once.
 
-| Archetype                     | Owns                                                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>`   |
-| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                                 |
-| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to     |
-| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                                 |
-| `Skeleton`                    | the loading **material** only (`on: 'canvas' \| 'muted'` names the ground it is drawn on); each archetype owns its **shape**      |
-| `SkeletonText`                | a placeholder sized by a caller-supplied `sample` string (`visibility: hidden` text), so a `fit` column has something to fit      |
-| `LoadingShape`                | a pending surface's accessibility contract: one status sentence outside any `aria-busy` subtree, the shape `aria-hidden`          |
-| `DataTableSkeleton`           | `DataTable`'s pending render (exported from `data-table.tsx`): the real headings, `Column.sample` cells, under one `LoadingShape` |
-| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)              |
+| Archetype                     | Owns                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>`                                                                                                       |
+| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                                                                                                                                     |
+| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to                                                                                                         |
+| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                                                                                                                                     |
+| `Skeleton`                    | the loading **material** only (`on: 'page' \| 'muted'` names the ground it is drawn on (renamed from `surface: default \| muted`, via `on: canvas`; `canvas` collides with the TSLD's vocabulary)); each archetype owns its **shape** |
+| `SkeletonText`                | a placeholder sized by a caller-supplied `sample` string (`visibility: hidden` text), so a `fit` column has something to fit                                                                                                          |
+| `LoadingShape`                | a pending surface's accessibility contract: one status sentence outside any `aria-busy` subtree, the shape `aria-hidden`                                                                                                              |
+| `DataTableSkeleton`           | `DataTable`'s pending render (exported from `data-table.tsx`): the real headings, `Column.sample` cells, under one `LoadingShape`                                                                                                     |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)                                                                                                                  |
 
 **A list row's subject wraps; it never clips** (ADR-0184, extending ADR-0146 D3/D4). `RowSubject`'s name, Draft
 badge and `project · client` are never `truncate`d, ellipsised, clamped or reordered: one line when they fit,

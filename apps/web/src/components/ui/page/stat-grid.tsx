@@ -146,15 +146,17 @@ export function StatGrid({
  * everything beneath them where they will be. Hidden from assistive technology on its own root as
  * well as by `LoadingShape`, so misuse outside one is still silent.
  */
+export interface StatGridSkeletonProps {
+  items: { label: string; sub?: boolean }[];
+  columns?: StatGridProps['columns'];
+  className?: string;
+}
+
 export function StatGridSkeleton({
   items,
   columns = 4,
   className,
-}: {
-  items: { label: string; sub?: boolean }[];
-  columns?: StatGridProps['columns'];
-  className?: string;
-}): React.ReactElement {
+}: StatGridSkeletonProps): React.ReactElement {
   return (
     <div className={cn('@container', className)} aria-hidden="true">
       <dl className={cn(GRID_BASE, GRID_COLUMNS[columns])}>

@@ -3,7 +3,8 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 /**
- * What the placeholder is drawn ON. `bg-muted` rebinds per surface scope (ADR-0055), but a block
+ * What the placeholder is drawn ON (`page` is the ordinary page ground; it is not the TSLD canvas, whose
+ * vocabulary this must not borrow). `bg-muted` rebinds per surface scope (ADR-0055), but a block
  * on a ground that is itself `bg-muted` — a framed `ContextStrip` — would be invisible, so
  * `on: 'muted'` takes the `border` token instead. The value names the ground, not the block's own
  * colour. Both colours are existing tokens.
@@ -11,11 +12,11 @@ import { cn } from '@/lib/utils';
 const skeletonVariants = cva('animate-pulse rounded-md', {
   variants: {
     on: {
-      canvas: 'bg-muted',
+      page: 'bg-muted',
       muted: 'bg-border',
     },
   },
-  defaultVariants: { on: 'canvas' },
+  defaultVariants: { on: 'page' },
 });
 
 /**

@@ -44,7 +44,7 @@ shape would disclose the surface stays generic: the staff identity check shows n
 because that would be the tell the uniform 404 forbids (ADR-0086).
 
 **D2 — Material, content-shaped material, and shape.** `Skeleton` is the material and carries `data-skeleton`; its
-`on: 'canvas' | 'muted'` variant names the ground it is drawn on. `SkeletonText` is content-shaped material: a block
+`on: 'page' | 'muted'` variant names the ground it is drawn on. `SkeletonText` is content-shaped material: a block
 the size of a caller-supplied sample string, the sample set as `visibility: hidden` text and never a transparent
 colour, which forced colours would print. The **archetype or panel that knows the shape owns it** (`PageHeaderSkeleton`,
 `StatGridSkeleton`, `KeyValueListSkeleton`, `ContextStripSkeleton`, `DataTableSkeleton`, `ListRowSkeleton`, and
@@ -107,11 +107,15 @@ not-found state, and the table's own request may fail first for the same reason 
   the post-build SC-2 and SC-3 figures are owed to a run of it, and until they are recorded the withdrawal clause for
   SC-3 (re-argue in writing if a sample cannot reach 8 px) has not been tested.
 - **Debt recorded, not hidden** (`docs/TECH_DEBT.md`): seven first-load states that are plain text "Loading…"; the schedule
-  health panel as a skeleton candidate (ADR-0116's fixed check set); and two shipped props nothing sets
-  (`ActivityMembersPanel`'s `loading` and `error`, and `AuthShell`'s `busy`).
-- **`StatusSection`'s polite paragraph** is inside the section that carries `aria-busy` during a refetch. It predates
-  this decision, is not a loading sentence, and is outside the gate's reach (a prop, not a JSX attribute); it is recorded
-  with the follow-ups rather than changed here.
+  health panel as a skeleton candidate (ADR-0116's fixed check set); and the members tab's `loading` and `error`
+  props, which its only host never passes.
+- **Two places still put a status inside a busy region, found by the accessibility review and fixed in this work.**
+  `AuthShell`'s `busy` put `aria-busy` on the card around the forgot-password screen's `Spinner` (the first version of
+  this ADR said nothing set it; `forgot-password.tsx` did), and `StatusSection` passed `busy` to the section that
+  contained its own polite sentence. Both props are gone: `AuthShell`, `InviteShell` and `SectionCard` no longer have
+  `busy`, and `StatusSection` marks a wrapper around its content only, its sentences being siblings. Gate G4 now treats a
+  `busy` prop on those components as the attribute it used to forward, and `useLateStatus` logs an error in development
+  and test when its node is inside an `aria-busy` element, which catches what a JSX scan cannot see.
 
 ## References
 

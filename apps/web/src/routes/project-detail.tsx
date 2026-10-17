@@ -61,6 +61,8 @@ export function ProjectDetailScreen(): React.ReactElement {
     );
   }
 
+  const pending = project.isPending;
+
   // How many action blocks the settled header will draw: the same gates it applies, all known
   // from the role, so the skeleton's trailing edge is where the buttons will be.
   const importing = SCHEDULE_INTERCHANGE_ENABLED && canImport;
@@ -68,7 +70,7 @@ export function ProjectDetailScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      {project.isPending ? (
+      {pending ? (
         <LoadingShape label="Loading project…" announce="none">
           <Skeleton className="h-5 w-64" />
           <PageHeaderSkeleton className="mt-2" aside actions={actionBlocks} />
@@ -135,7 +137,7 @@ export function ProjectDetailScreen(): React.ReactElement {
       <SectionCard className="mt-6" title="Plans" flush>
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </SectionCard>
-      {project.isPending ? null : (
+      {pending ? null : (
         <div className="mt-10">
           <ProjectCalendarsSection
             orgSlug={orgSlug}

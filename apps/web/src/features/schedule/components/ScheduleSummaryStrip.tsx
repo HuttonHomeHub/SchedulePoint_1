@@ -57,7 +57,10 @@ export function ScheduleSummaryStrip({
   if (summary.isPending) {
     return shell(
       <LoadingShape label="Loading schedule summary…">
-        <ContextStripSkeleton framed={false} labels={Object.values(ALWAYS_FACTS)} />
+        <ContextStripSkeleton
+          framed={false}
+          items={Object.values(ALWAYS_FACTS).map((label) => ({ label }))}
+        />
       </LoadingShape>,
     );
   }

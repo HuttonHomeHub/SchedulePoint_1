@@ -35,7 +35,7 @@ export function ForgotPasswordScreen(): React.ReactElement {
   // enough to type into.
   if (session.isPending) {
     return (
-      <AuthShell title="Reset your password" busy>
+      <AuthShell title="Reset your password">
         <div className="flex justify-center py-4">
           <Spinner label="Checking whether you are signed in…" />
         </div>

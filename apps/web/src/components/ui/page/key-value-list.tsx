@@ -66,13 +66,15 @@ export function KeyValueList({ items, className }: KeyValueListProps): React.Rea
  * (`h-4`). Whether an item HAS a consequence depends on the data, so the caller says which items
  * usually do; an item that turns out not to shortens by one line when it settles.
  */
+export interface KeyValueListSkeletonProps {
+  items: { label: string; consequence?: boolean }[];
+  className?: string;
+}
+
 export function KeyValueListSkeleton({
   items,
   className,
-}: {
-  items: { label: string; consequence?: boolean }[];
-  className?: string;
-}): React.ReactElement {
+}: KeyValueListSkeletonProps): React.ReactElement {
   return (
     <div className={cn('@container', className)} aria-hidden="true">
       <dl className={LIST_CLASS}>

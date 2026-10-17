@@ -173,6 +173,7 @@ function statusesInsideBusy(source: string): string[] {
     a?.initializer && ts.isStringLiteral(a.initializer) ? a.initializer.text : undefined;
 
   const isBusy = (node: ts.JsxOpeningLikeElement): boolean => {
+    if (BUSY_PROP_FORWARDERS.has(node.tagName.getText(file)) && attr(node, 'busy')) return true;
     const a = attr(node, 'aria-busy');
     if (!a) return false;
     // `aria-busy={false}` is not a busy element.
@@ -222,6 +223,16 @@ function statusesInsideBusy(source: string): string[] {
   return found;
 }
 
+/**
+ * Components whose `busy` prop (once) became `aria-busy` on an element that holds their children.
+ * A JSX attribute scan cannot see through a prop, so the prop is named here and treated as the
+ * attribute it forwards. `SectionCard`, `AuthShell` and `InviteShell` no longer HAVE the prop (the
+ * type system refuses it); the names stay so a re-added one is caught at its call site too.
+ * `StatusSection` is deliberately absent: its `busy` marks a wrapper around the content, with its
+ * polite sentences as siblings outside it (`status-section.test.tsx` pins that).
+ */
+const BUSY_PROP_FORWARDERS = new Set(['SectionCard', 'AuthShell', 'InviteShell', 'BrandCard']);
+
 const usesPulse = (source: string): boolean => /\banimate-pulse\b/.test(code(source));
 
 describe('the scanners find what they claim to (pinned positive cases)', () => {
@@ -253,6 +264,14 @@ describe('G4: the busy-subtree scanner finds what it claims to (pinned positive 
       const c = <section aria-busy="true"><LoadingShape label="x"><i /></LoadingShape></section>;
     `;
     expect(statusesInsideBusy(source)).toHaveLength(3);
+  });
+
+  it('treats a busy prop on a component that forwards it as aria-busy', () => {
+    const source = `
+      const a = <AuthShell busy><Spinner label="x" /></AuthShell>;
+      const b = <SectionCard busy={pending}><div role="status" /></SectionCard>;
+    `;
+    expect(statusesInsideBusy(source)).toHaveLength(2);
   });
 
   it('accepts a sibling, an announce="none" shape and aria-busy={false}', () => {

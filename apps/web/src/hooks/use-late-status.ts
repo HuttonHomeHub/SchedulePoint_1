@@ -18,7 +18,18 @@ import { useEffect, useRef } from 'react';
 export function useLateStatus<T extends HTMLElement>(text: string): React.RefObject<T | null> {
   const ref = useRef<T>(null);
   useEffect(() => {
-    if (ref.current) ref.current.textContent = text;
+    const node = ref.current;
+    if (!node) return;
+    // A status inside a busy subtree may have its change deferred past its own lifetime (ARIA 1.2).
+    // The structural gate reads JSX as written and cannot see a prop that forwards `aria-busy`, so
+    // the DOM is asked once the node exists. Dev and test only; production just announces.
+    if (import.meta.env.DEV && node.closest('[aria-busy="true"]') !== null) {
+      console.error(
+        `useLateStatus: the status "${text}" is inside an aria-busy subtree, so assistive technology ` +
+          'may defer it until it has unmounted. Move the status outside the busy element.',
+      );
+    }
+    node.textContent = text;
   }, [text]);
   return ref;
 }

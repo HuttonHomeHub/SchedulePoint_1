@@ -38,21 +38,18 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from '@/component
 export function AuthShell({
   title,
   description,
-  busy = false,
   children,
 }: {
   /** Omit when the children own the heading — the accept-invite card does. */
   title?: string;
   description?: string;
-  /** Reflected as `aria-busy` while an outcome is resolving. */
-  busy?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const hasHeader = title !== undefined;
 
   return (
     <AnnouncerProvider>
-      <BrandCard aria-busy={busy}>
+      <BrandCard>
         {hasHeader ? (
           <CardHeader className="text-center">
             <CardTitle>{title}</CardTitle>
