@@ -881,6 +881,122 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    describe('a calendar that now belongs to another project (ADR-0200 D5)', () => {
+      const root = {
+        deleteBatchId: 'batch-p',
+        organizationId: 'org-1',
+        projectId: 'pr1',
+        calendarId: null,
+      };
+      const projectCalendar = (id: string, projectId: string, over: object = {}) => ({
+        id,
+        name: `Calendar ${id}`,
+        deletedAt: null,
+        deleteBatchId: null,
+        scope: 'PROJECT',
+        projectId,
+        ...over,
+      });
+
+      /** A plan root in batch-p whose first plan lookup is the root and whose later ones answer `stray`. */
+      const aPlan = (stray: unknown) => {
+        tx.plan.findFirst.mockResolvedValueOnce(root).mockResolvedValue(stray);
+        tx.project.findFirst.mockResolvedValue({ clientId: 'c1' });
+        tx.$queryRaw.mockResolvedValue([{ id: 'x' }]);
+      };
+
+      it('refuses a plan of one project whose calendar is now scoped to another, before any write', async () => {
+        aPlan({ id: 'pl-stray' });
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect(error).toBeInstanceOf(ConflictError);
+        expect((error as ConflictError).details).toEqual({
+          reason: 'CALENDAR_WRONG_SCOPE',
+          calendar: { id: 'cal-1', name: 'Calendar cal-1', deleteBatchId: null },
+          projectId: 'pr-other',
+        });
+        expect(tx.plan.updateMany).not.toHaveBeenCalled();
+        // The stray plan was looked for in the batch, outside the calendar's own project.
+        expect(tx.plan.findFirst).toHaveBeenCalledWith({
+          where: {
+            deleteBatchId: 'batch-p',
+            calendarId: 'cal-1',
+            projectId: { not: 'pr-other' },
+          },
+          select: { id: true },
+        });
+      });
+
+      it('allows a project calendar used only inside its own project', async () => {
+        aPlan(null);
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr1')]);
+
+        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
+      });
+
+      it('places an activity by its plan', async () => {
+        aPlan({ id: 'pl-stray' });
+        // The direct plan lookup finds nothing; the activities' plans include one in another project.
+        tx.plan.findFirst
+          .mockReset()
+          .mockResolvedValueOnce(root)
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ id: 'pl9' });
+        tx.activity.findMany.mockImplementation((args: { select?: { planId?: boolean } }) =>
+          Promise.resolve(args.select?.planId ? [{ planId: 'pl9' }] : [{ calendarId: 'cal-1' }]),
+        );
+        tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect((error as ConflictError).details).toMatchObject({
+          reason: 'CALENDAR_WRONG_SCOPE',
+        });
+      });
+
+      it('reports a deleted calendar before a wrong-scope one', async () => {
+        aPlan({ id: 'pl-stray' });
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }, { calendarId: 'cal-2' }]);
+        tx.calendar.findMany.mockResolvedValue([
+          projectCalendar('cal-1', 'pr-other'),
+          projectCalendar('cal-2', 'pr1', { deletedAt: new Date(), deleteBatchId: 'cal-batch' }),
+        ]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect((error as ConflictError).details).toMatchObject({
+          reason: 'CALENDAR_DELETED',
+          calendar: { id: 'cal-2' },
+        });
+      });
+
+      it('looks at no plan for an ORG calendar, or for a project calendar swept in the same batch', async () => {
+        aPlan({ id: 'pl-stray' });
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }, { calendarId: 'cal-2' }]);
+        tx.calendar.findMany.mockResolvedValue([
+          { ...projectCalendar('cal-1', 'pr1'), scope: 'ORG', projectId: null },
+          projectCalendar('cal-2', 'pr-other', { deletedAt: new Date(), deleteBatchId: 'batch-p' }),
+        ]);
+
+        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
+        // Only the root lookup: no stray-plan query was made.
+        expect(tx.plan.findFirst).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not tier-check a root that carries no batch id', async () => {
+        tx.plan.findFirst.mockResolvedValue({ ...root, deleteBatchId: null, calendarId: 'cal-1' });
+        tx.project.findFirst.mockResolvedValue({ clientId: 'c1' });
+        tx.$queryRaw.mockResolvedValue([{ id: 'x' }]);
+        tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
+
+        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
+      });
+    });
+
     describe('the deleted-calendar guard (ADR-0200)', () => {
       const deletedCalendar = (id: string, deleteBatchId: string | null = 'cal-batch') => ({
         id,

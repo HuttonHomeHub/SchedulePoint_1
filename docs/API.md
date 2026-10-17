@@ -1479,6 +1479,13 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
 - A project's **own** calendars, swept with it, come back with it and are not a blocker; an
   **archived** calendar is live (ADR-0053 §4) and is not one either.
 - `PARENT_DELETED` is reported first when both apply.
+- **409 `CALENDAR_WRONG_SCOPE`** (ADR-0200 D5) is the second refusal on the same routes: a plan or
+  activity in the batch uses an active **PROJECT**-tier calendar that now belongs to a different project
+  (an ORG calendar can be narrowed while the plan sits in the bin, because the narrowing guard counts only
+  active users, `docs/TECH_DEBT.md` #521). `details` carries `calendar` `{ id, name, deleteBatchId }` and
+  `projectId`, the project the calendar now belongs to. It is checked after `CALENDAR_DELETED`. The status
+  tells it from the **422** `CALENDAR_WRONG_SCOPE` a binding write answers with. The cure is to make the
+  calendar organisation-wide again (promote, always allowed). Rows restored with no batch id are not checked.
 - Plans and activities that were **already** live on a deleted calendar before this check are not
   repaired; restoring the calendar still marks their plans "edited since calculated".
 - Every restore (including `POST …/calendars/:calendarId/restore` for a PROJECT calendar) takes its

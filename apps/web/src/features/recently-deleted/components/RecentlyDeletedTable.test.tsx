@@ -936,6 +936,63 @@ describe('RecentlyDeletedTable', () => {
         ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');
       });
 
+      it('names a calendar deleted since the list loaded, on a plan row that showed no blocker (ADR-0200)', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(409, 'Restore the calendar first.', {
+            reason: 'CALENDAR_DELETED',
+            calendar: { id: CAL_ID, name: 'Mon-Wed', deleteBatchId: 'b-cal' },
+          }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          {
+            kind: 'plan',
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000055',
+            name: 'Tower A',
+            deletedAt: T,
+            canRestore: true,
+            deleteBatchId: 'b-plan',
+            blockedBy: null,
+          },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore plan Tower A' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(
+          'It uses the calendar “Mon-Wed”, which is deleted. Restore that calendar first, then restore this.',
+        );
+        expect(within(alert).queryByRole('link')).not.toBeInTheDocument();
+      });
+
+      it('links a calendar that moved to another project to the calendars library (ADR-0200 D5)', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(409, 'This calendar now belongs to another project.', {
+            reason: 'CALENDAR_WRONG_SCOPE',
+            calendar: { id: CAL_ID, name: 'Site hours', deleteBatchId: null },
+            projectId: 'p2',
+          }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          {
+            kind: 'plan',
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000056',
+            name: 'Tower B',
+            deletedAt: T,
+            canRestore: true,
+            deleteBatchId: 'b-plan',
+            blockedBy: null,
+          },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore plan Tower B' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('which now belongs to another project');
+        expect(
+          within(alert).getByRole('link', { name: 'Open the calendars library' }),
+        ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');
+      });
+
       it('names the parent that is no longer a group', async () => {
         mockApiFetch.mockRejectedValueOnce(
           refuse(422, 'Only a group can contain resources.', {

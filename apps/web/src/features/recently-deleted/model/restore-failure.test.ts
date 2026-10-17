@@ -55,3 +55,27 @@ describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0200)', () => {
     });
   });
 });
+
+describe('describeRestoreFailure — CALENDAR_WRONG_SCOPE (ADR-0200 D5)', () => {
+  it('names the calendar and links to the calendars library, whatever the row', () => {
+    const failure = describeRestoreFailure(
+      conflict({
+        reason: 'CALENDAR_WRONG_SCOPE',
+        calendar: { id: 'c1', name: 'Site hours', deleteBatchId: null },
+        projectId: 'p2',
+      }),
+      'plan',
+    );
+    expect(failure).toEqual({
+      message:
+        'It uses the calendar “Site hours”, which now belongs to another project. Make it an organisation calendar again, then restore this.',
+      library: 'calendars',
+    });
+  });
+
+  it('still points at the library when the server sent no name', () => {
+    const failure = describeRestoreFailure(conflict({ reason: 'CALENDAR_WRONG_SCOPE' }), 'client');
+    expect(failure.library).toBe('calendars');
+    expect(failure.message).toContain('now belongs to another project');
+  });
+});

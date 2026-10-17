@@ -360,3 +360,44 @@ test('a plan whose calendar was deleted after it is restored in two presses (acc
   await page.getByRole('button', { name: 'Restore plan Tower A' }).click();
   await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
 });
+
+/**
+ * A plan cannot come back onto a calendar that now belongs to another project (ADR-0200 D5). The
+ * server refuses, the alert says why in the planner's words, and its link goes to the library where
+ * the cure (making the calendar organisation-wide again) is made.
+ */
+test('a plan whose calendar moved to another project is refused, with a way to the library', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, 'bincalmove');
+  const api = libraryApi(page, orgSlug);
+  const base = `/api/v1/organizations/${orgSlug}`;
+  const client = await api.post('/clients', { name: 'Northgate' });
+  const project = await api.post(`/clients/${client.id}/projects`, { name: 'Tower' });
+  const elsewhere = await api.post(`/clients/${client.id}/projects`, { name: 'Elsewhere' });
+  const calendar = await api.post('/calendars', { name: 'Site hours', workingWeekdays: 31 });
+  const plan = await api.post(`/projects/${project.id}/plans`, {
+    name: 'Tower A',
+    plannedStart: '2026-01-05',
+  });
+  const planRead = await page.request.get(`${base}/plans/${plan.id}`);
+  const planVersion = ((await planRead.json()) as { data: { version: number } }).data.version;
+  const bound = await page.request.patch(`${base}/plans/${plan.id}`, {
+    data: { calendarId: calendar.id, version: planVersion },
+  });
+  expect(bound.ok(), `PATCH plan: ${bound.status()}`).toBe(true);
+  await api.remove(`/plans/${plan.id}`);
+  const calRead = await page.request.get(`${base}/calendars/${calendar.id}`);
+  const calVersion = ((await calRead.json()) as { data: { version: number } }).data.version;
+  const narrowed = await page.request.patch(`${base}/calendars/${calendar.id}`, {
+    data: { scope: 'PROJECT', projectId: elsewhere.id, version: calVersion },
+  });
+  expect(narrowed.ok(), `PATCH calendar: ${narrowed.status()}`).toBe(true);
+
+  await navLink(page, 'Recently deleted').click();
+  // Not a deleted calendar, so the row predicts nothing and the press is what finds out.
+  await page.getByRole('button', { name: 'Restore plan Tower A' }).click();
+  const alert = page.getByRole('alert').filter({ hasText: 'now belongs to another project' });
+  await expect(alert).toContainText('It uses the calendar “Site hours”');
+  await expect(alert.getByRole('link', { name: 'Open the calendars library' })).toBeVisible();
+});

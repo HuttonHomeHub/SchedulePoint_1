@@ -848,6 +848,10 @@ export class HierarchyLifecycleService {
    * live (ADR-0053 §4). Refused with the lowest deleted id, naming it, so the bin and the 409 agree.
    * Runs under the locks {@link lockBatchCalendars} took.
    *
+   * A calendar that is active but now belongs to ANOTHER project is refused too
+   * ({@link assertProjectCalendarsFit}, ADR-0200 D5): it is the second route to the same defect, and
+   * checked second so the deleted-calendar answer, which the bin predicts, keeps its precedence.
+   *
    * soft-delete: any-state — the whole question is whether each calendar is deleted.
    */
   private async assertCalendarsActive(
@@ -858,12 +862,25 @@ export class HierarchyLifecycleService {
     if (calendarIds.length === 0) return;
     const states = await tx.calendar.findMany({
       where: { id: { in: [...calendarIds] }, organizationId: root.organizationId },
-      select: { id: true, name: true, deletedAt: true, deleteBatchId: true },
+      select: {
+        id: true,
+        name: true,
+        deletedAt: true,
+        deleteBatchId: true,
+        scope: true,
+        projectId: true,
+      },
     });
     const byId = new Map(states.map((state) => [state.id, state]));
+    const projectCalendars: { id: string; name: string; projectId: string }[] = [];
     for (const calendarId of calendarIds) {
       const state = byId.get(calendarId);
-      if (state && state.deletedAt === null) continue;
+      if (state && state.deletedAt === null) {
+        if (state.scope === 'PROJECT' && state.projectId !== null) {
+          projectCalendars.push({ id: state.id, name: state.name, projectId: state.projectId });
+        }
+        continue;
+      }
       if (state && root.deleteBatchId !== null && state.deleteBatchId === root.deleteBatchId) {
         continue;
       }
@@ -875,6 +892,63 @@ export class HierarchyLifecycleService {
           deleteBatchId: state?.deleteBatchId ?? null,
         },
       });
+    }
+    await this.assertProjectCalendarsFit(tx, root, projectCalendars);
+  }
+
+  /**
+   * A PROJECT-tier calendar may be used only inside its own project (ADR-0053). An ORG calendar
+   * narrowed to project Y while a plan of project X sat in the bin passes the narrowing guard, which
+   * counts only ACTIVE users (`docs/TECH_DEBT.md` #521), so the restore would put X's plan on Y's
+   * calendar and a later delete of Y would sweep a calendar something still uses. Refused instead,
+   * naming the calendar and the project it now belongs to.
+   *
+   * Keyed on the batch, so a row restored with no batch id (older than batch ids) is not checked
+   * here. Only plans and activities in the batch are looked at, and an activity is placed by its
+   * plan: the plan is read in any state because a batch restore may bring the plan back with it.
+   *
+   * soft-delete: any-state — the activities and plans read here are those of a deleted batch, and
+   * the plan's state is irrelevant to which project it belongs to.
+   */
+  private async assertProjectCalendarsFit(
+    tx: Prisma.TransactionClient,
+    root: DeletedRoot,
+    calendars: readonly { id: string; name: string; projectId: string }[],
+  ): Promise<void> {
+    const batchId = root.deleteBatchId;
+    if (batchId === null) return;
+    for (const calendar of calendars) {
+      const strayPlan = await tx.plan.findFirst({
+        where: {
+          deleteBatchId: batchId,
+          calendarId: calendar.id,
+          projectId: { not: calendar.projectId },
+        },
+        select: { id: true },
+      });
+      let stray = strayPlan !== null;
+      if (!stray) {
+        const planIds = (
+          await tx.activity.findMany({
+            where: { deleteBatchId: batchId, calendarId: calendar.id },
+            select: { planId: true },
+            distinct: ['planId'],
+          })
+        ).map((row) => row.planId);
+        stray =
+          planIds.length > 0 &&
+          (await tx.plan.findFirst({
+            where: { id: { in: planIds }, projectId: { not: calendar.projectId } },
+            select: { id: true },
+          })) !== null;
+      }
+      if (stray) {
+        throw new ConflictError('This calendar now belongs to another project.', {
+          reason: LIBRARY_RESTORE_REASON.CALENDAR_WRONG_SCOPE,
+          calendar: { id: calendar.id, name: calendar.name, deleteBatchId: null },
+          projectId: calendar.projectId,
+        });
+      }
     }
   }
 

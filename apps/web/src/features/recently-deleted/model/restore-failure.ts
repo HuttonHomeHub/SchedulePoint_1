@@ -20,13 +20,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *
  * Most refusals already carry a sentence that names the cause and the cure — "A resource named
  * “Crane A” already exists. Rename or delete that one, then restore this." — so those pass through
- * untouched and only gain a link to the library where the rename happens. Three do not, and are
+ * untouched and only gain a link to the library where the rename happens. Four do not, and are
  * worded here because the server's text is a rule and the reader needs a name:
  *
  * - **A 404 means gone, not unlucky** (`docs/API.md`, the retention race): the item no longer exists
  *   and retrying cannot help, which "Resource not found." does not say.
  * - **A calendar deleted since the list loaded** (`CALENDAR_DELETED`, ADR-0200): the server's
- *   sentence has no name in it; `details.calendar` does.
+ *   sentence has no name in it; `details.calendar` does. A calendar since moved to another project
+ *   (`CALENDAR_WRONG_SCOPE`, D5) reads the same way and links to the calendars library.
  * - **A parent that has stopped being a group, or sits too deep**, which the server sends with the
  *   parent's name in `details` rather than in the sentence.
  */
@@ -66,6 +67,18 @@ export function describeRestoreFailure(error: Error, kind: DeletedItem['kind']):
           ? `It uses the calendar “${calendar.name}”, which is deleted. Restore that calendar first, then restore this.`
           : 'It uses a calendar that no longer exists.',
       library: null,
+    };
+  }
+  if (reason === 'CALENDAR_WRONG_SCOPE') {
+    // The calendar was narrowed to another project while this sat in the bin (ADR-0200 D5). The cure
+    // is made in the calendars library, so the alert links there.
+    const calendar = isRecord(details.calendar) ? details.calendar : {};
+    return {
+      message:
+        typeof calendar.name === 'string'
+          ? `It uses the calendar “${calendar.name}”, which now belongs to another project. Make it an organisation calendar again, then restore this.`
+          : 'It uses a calendar that now belongs to another project. Make it an organisation calendar again, then restore this.',
+      library: 'calendars',
     };
   }
   const clash = reason === 'NAME_TAKEN' || reason === 'CODE_TAKEN';
