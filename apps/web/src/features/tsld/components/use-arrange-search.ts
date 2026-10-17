@@ -3,8 +3,14 @@ import { useEffect, useState } from 'react';
 import type { LayoutObjective } from '../render/layout-objective';
 import { OPTIMISE_MAX_ACTIVITIES } from '../render/optimise-layout';
 import { workingDaySpanOf, type OptimiseRequest } from '../render/optimise-layout-protocol';
+import {
+  relayoutSeeds,
+  relayoutStartIds,
+  pickBestStart,
+  type StartSeed,
+} from '../render/relayout-starts';
 import { axisDayOf, type RenderActivity, type RenderEdge } from '../render/render-model';
-import { runOptimiseLayout } from '../render/run-optimise-layout';
+import { runOptimiseLayout, runOptimiseLayoutPool } from '../render/run-optimise-layout';
 import { textWidthTable } from '../render/text-width-table';
 import type { TsldViewToggles } from '../render/view-toggles';
 
@@ -21,6 +27,12 @@ import type { TsldViewToggles } from '../render/view-toggles';
  * budget of its seed's rows held it below the height of a layout a planner had already drawn and
  * accepted, and it could never spend a row on readability (`docs/TECH_DEBT.md` #382). Tidy keeps the
  * budget it has always had: its seed IS the diagram.
+ *
+ * **Re-layout searches from up to four starts and keeps the best** ({@link relayoutRuns},
+ * `render/relayout-starts.ts`): today's pack is start 0 and always runs, the others are different
+ * places for the same strict-improvement search to begin. They run at once in a small worker pool; the
+ * pick is by `compareObjectives` over the results in start order, so it does not depend on which
+ * search finishes first or how many cores there are. The dialog shows nothing until all have finished.
  *
  * **Above {@link OPTIMISE_MAX_ACTIVITIES} drawn activities the search is not offered**, because a
  * whole Tidy there is measured past 10 s. Re-layout is then evaluated but not searched, so its
@@ -120,6 +132,38 @@ export function relayoutBudget(
   return rows;
 }
 
+/**
+ * Re-layout's searches: one request per start, each with the budget of the taller of the diagram and
+ * that start's own rows. A plan over the search limit gets start 0 alone, scored and not searched.
+ */
+export function relayoutRuns(
+  input: ArrangeSearchInput,
+  current: ReadonlyMap<string, number>,
+  packed: ReadonlyMap<string, number>,
+  textWidths: [string, number][],
+): { starts: StartSeed[]; requests: OptimiseRequest[] } {
+  const drawn = drawnCount(input.activities);
+  if (drawn > OPTIMISE_MAX_ACTIVITIES) {
+    const starts: StartSeed[] = [{ id: 0, lanes: new Map(packed) }];
+    return { starts, requests: [arrangeRequest(input, packed, { passes: 0 }, textWidths)] };
+  }
+  const starts = relayoutSeeds(
+    { activities: input.activities, edges: input.edges, dataDate: input.dataDate, packed },
+    relayoutStartIds(drawn),
+  );
+  return {
+    starts,
+    requests: starts.map((start) =>
+      arrangeRequest(
+        input,
+        start.lanes,
+        { budget: relayoutBudget(current, start.lanes) },
+        textWidths,
+      ),
+    ),
+  };
+}
+
 export function drawnCount(activities: readonly RenderActivity[]): number {
   return activities.filter((a) => a.drawnStart !== null).length;
 }
@@ -174,15 +218,12 @@ export function useArrangeSearch(
           before = r.seed;
           tidy = { changes: changesBetween(input.activities, r.lanes), before, after: r.final };
         }
-        const r = await runOptimiseLayout(
-          arrangeRequest(
-            input,
-            packed,
-            bounded ? { passes: 0 } : { budget: relayoutBudget(current, packed) },
-            widths,
-          ),
-          { signal, onProgress: progress(tidyEvaluations) },
-        );
+        const { requests } = relayoutRuns(input, current, packed, widths);
+        const results = await runOptimiseLayoutPool(requests, {
+          signal,
+          onProgress: progress(tidyEvaluations),
+        });
+        const r = results[pickBestStart(results)]!;
         // Re-layout's own seed is the pack, so its "before" is the diagram's, never the pack's.
         const relayout: ArrangeOutcome = {
           changes: changesBetween(input.activities, r.lanes),
