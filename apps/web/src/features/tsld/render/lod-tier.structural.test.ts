@@ -65,4 +65,15 @@ describe('the tier thresholds have one home', () => {
     const offenders = files.filter((f) => pattern.test(stripComments(readFileSync(f, 'utf8'))));
     expect(offenders).toEqual([]);
   });
+
+  // The positive half (TECH_DEBT #391 item 9): refusing a copied threshold says nothing about a layer
+  // that was meant to be gated and was never joined to the tier at all. Each file below holds a
+  // tier-gated layer today, so it must still ask `lodTier`.
+  it.each(['paint.ts', 'link-facts.ts', 'row-text-layout.ts'])(
+    '%s asks lodTier for the tier of detail it gates on',
+    (name) => {
+      const source = stripComments(readFileSync(join(TSLD, 'render', name), 'utf8'));
+      expect(source).toMatch(/\blodTier\(view\.pxPerDay\)/);
+    },
+  );
 });

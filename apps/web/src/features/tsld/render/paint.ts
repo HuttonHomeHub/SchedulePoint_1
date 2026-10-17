@@ -1509,9 +1509,9 @@ export function paintScene(
       const lit = new Map<string, Bucket>();
       const plates: { text: string; line: Point[]; ink: string }[] = [];
       const gapLabels = pendingGapLabels;
-      for (const edge of scene.edges) {
-        const line = lines.get(edge);
-        if (!line) continue;
+      // The routed lines, not the plan's edge list: `lines` holds only the culled set, in scene order,
+      // so this walk is O(visible links) rather than O(plan edges) of map misses every frame.
+      for (const [edge, line] of lines) {
         const pred = byId.get(edge.predecessorId);
         const succ = byId.get(edge.successorId);
         if (!pred || !succ) continue;
@@ -2475,8 +2475,10 @@ export function paintScene(
       let at: Point | null = null;
       for (const c of gapLabelCandidates(
         line,
-        Math.min(x0, x1) + NODE_REACH_PX,
-        Math.max(x0, x1) - NODE_REACH_PX,
+        // Clamped to the canvas: a link running off screen keeps its label on the part that can be
+        // seen, rather than centred on a stretch the viewport cuts through (#391 item 11).
+        Math.max(Math.min(x0, x1) + NODE_REACH_PX, 0),
+        Math.min(Math.max(x0, x1) - NODE_REACH_PX, size.width),
         w + 4,
       )) {
         const box: Rect = { x: c.x - w / 2, y: c.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H };

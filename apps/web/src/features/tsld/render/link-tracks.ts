@@ -127,14 +127,21 @@ const OVERLAP_PX = 0.5;
 const isNodeEnd = (end: LinkEnd): boolean =>
   end.kind === 'start-node' || end.kind === 'finish-node';
 
-function verticalSpans(lines: readonly (readonly Point[])[]): Map<string, Span[]> {
-  const byX = new Map<string, Span[]>();
+/**
+ * An x to the hundredth of a pixel, as an integer: the key two verticals share a track by. An
+ * integer key is a number compare where `toFixed(2)` allocated a string per segment per frame; the
+ * magnitude is rounded and the sign put back, as `toFixed` does, so a negative tie rounds the same.
+ */
+const hundredths = (x: number): number => (x < 0 ? -Math.round(-x * 100) : Math.round(x * 100));
+
+function verticalSpans(lines: readonly (readonly Point[])[]): Map<number, Span[]> {
+  const byX = new Map<number, Span[]>();
   lines.forEach((line, link) => {
     for (let i = 1; i < line.length; i += 1) {
       const p = line[i - 1]!;
       const q = line[i]!;
       if (Math.abs(p.x - q.x) > EPS || Math.abs(p.y - q.y) < EPS) continue;
-      const key = p.x.toFixed(2);
+      const key = hundredths(p.x);
       const span: Span = {
         link,
         seg: i - 1,
@@ -307,7 +314,7 @@ export function splitResidueTracks(
   // The pre-pass picture every guard reads, so no track's decision depends on another's.
   const allSpans = verticalSpans(before);
   // The same verticals sorted by x, so "does a moved segment land on one" is a search, not a scan.
-  const spanXs = [...allSpans].map(([key, list]) => ({ x: Number(key), list }));
+  const spanXs = [...allSpans].map(([key, list]) => ({ x: key / 100, list }));
   spanXs.sort((p, q) => p.x - q.x);
   // Each line's box, and the nodes sorted by x, built once and only when a track is opposed.
   let boxes: Box[] | undefined;
@@ -392,7 +399,7 @@ export function splitResidueTracks(
         crossedBefore.set(link, crossed);
         sharedBefore.set(link, shared);
       }
-      const x = Number(key);
+      const x = key / 100;
 
       // One side: down-travelling segments by `downDx`, up-travelling by its opposite.
       const attempt = (
@@ -400,7 +407,9 @@ export function splitResidueTracks(
       ): { moved: Map<number, Point[]>; fail: TrackRefusal | null; cost: number[] } => {
         const moved = new Map<number, Point[]>();
         for (const s of track) {
-          const line = moved.get(s.link) ?? before[s.link]!.map((p) => ({ x: p.x, y: p.y }));
+          // A shallow copy: a moved point is replaced below, never edited, so the pre-pass points
+          // can be shared, and this scratch line is dropped when the side is not chosen.
+          const line = moved.get(s.link) ?? before[s.link]!.slice();
           const dx = s.dir === 1 ? downDx : -downDx;
           line[s.seg] = { x: line[s.seg]!.x + dx, y: line[s.seg]!.y };
           line[s.seg + 1] = { x: line[s.seg + 1]!.x + dx, y: line[s.seg + 1]!.y };

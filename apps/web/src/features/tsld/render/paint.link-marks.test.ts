@@ -207,6 +207,22 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
     expect(chips(paint([A, late], [twice[0]!]))[0]).toEqual(p);
   });
 
+  it('keeps a gap label inside the viewport when its link runs off screen (TECH_DEBT #391 item 11)', () => {
+    // B starts ~200 days on, far past the 1,200 px canvas, so the waiting interval's longer part
+    // lies beyond the right edge: the label must sit on the part that can be seen.
+    const far = act('B', 2, '2026-07-20', '2026-07-24');
+    const log = paint([A, far], [edge({ predecessorId: 'A', successorId: 'B' })]);
+    const at = log.findIndex((l) => /fillText\(\["\d+d"/.test(l));
+    expect(at).toBeGreaterThan(-1);
+    const chip = log
+      .slice(0, at)
+      .reverse()
+      .find((l) => l.startsWith('fillRect('))!;
+    const [x = NaN, , w = NaN] = JSON.parse(chip.slice('fillRect('.length, -1)) as number[];
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(x + w).toBeLessThanOrEqual(SIZE.width);
+  });
+
   it('withholds a gap too short to clear both end nodes, rather than print it on a disc', () => {
     // Same lane, two days apart at 12 px a day: a straight 24 px run from A's node to B's. "2d" on
     // its chip is 18 px, which fits the run (≥ label + 4) but not the run less a node's reach at

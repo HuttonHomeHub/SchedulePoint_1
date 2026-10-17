@@ -29,6 +29,7 @@
  * snapshot, the result does not depend on the order the links arrive in (FC-T5), and the pass never
  * measures its own output.
  */
+import { firstReaching as firstReachingSpan, indexByLane } from './lane-reach-index';
 import { MAX_ROUTE_CANDIDATES, routeCandidateParts, type RouteCandidate } from './link-candidates';
 import { linkEndOf } from './link-ports';
 import type { PlateRoom } from './plate-room';
@@ -74,21 +75,19 @@ export function glyphIndex(
   dataDate: string,
   cache?: RectCache,
 ): GlyphIndex {
-  const byLane = new Map<number, [number, number][]>();
+  const entries: [number, [number, number]][] = [];
   for (const a of activities) {
     const rect = activityRect(a, view, dataDate, cache);
     if (!rect) continue;
     const widen = barGlyphKind(a.type) === 'bar' ? NODE_REACH_PX : 0;
-    const list = byLane.get(a.laneIndex) ?? [];
-    list.push([rect.x - widen, rect.x + rect.w + widen]);
-    byLane.set(a.laneIndex, list);
+    entries.push([a.laneIndex, [rect.x - widen, rect.x + rect.w + widen]]);
   }
-  const index = new Map<number, GlyphLane>();
-  for (const [lane, spans] of byLane) {
-    spans.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
-    index.set(lane, { spans, maxLen: Math.max(...spans.map(([x0, x1]) => x1 - x0)) });
-  }
-  return index;
+  return indexByLane(
+    entries,
+    (p, q) => p[0] - q[0] || p[1] - q[1],
+    ([x0, x1]) => x1 - x0,
+    (spans, maxLen): GlyphLane => ({ spans, maxLen }),
+  );
 }
 
 /** A glyph span of the link's own ends, which its own segments may touch. */
@@ -121,15 +120,7 @@ export function ownSpanOf(activity: RenderActivity, rect: Rect): OwnSpan {
  * what a scan from zero counts.
  */
 function firstReaching(lane: GlyphLane, x: number): number {
-  const target = x - lane.maxLen;
-  let lo = 0;
-  let hi = lane.spans.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (lane.spans[mid]![0] < target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
+  return firstReachingSpan(lane.spans, lane.maxLen, x, (span) => span[0]);
 }
 
 function isOwn(own: readonly OwnSpan[], lane: number, x0: number, x1: number): boolean {

@@ -586,9 +586,9 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
-  /** The on-canvas name row: the activity's **name** (NetPoint grammar M4-T1, spec §4.2 G7), built
-   * at the mapping seam by `canvasLabel` so the render model does no domain string logic. The code
-   * rides separately ({@link code}) and is printed only while `View ▾ ▸ Markers ▸ Activity codes`
+  /** The on-canvas name row: the activity's **name** (NetPoint grammar M4-T1, spec §4.2 G7), and
+   * only the name — `canvasLabel` composes `{code} {name}` once, where the row is printed, so this
+   * must never already carry the code. The code rides separately ({@link code}) and is printed only while `View ▾ ▸ Markers ▸ Activity codes`
    * is on. The accessible name (`activityLabel`) leads with the same words (WCAG 2.5.3). The
    * duration left this row at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
   label: string;

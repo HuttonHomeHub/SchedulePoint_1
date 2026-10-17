@@ -1105,6 +1105,13 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
     },
   );
 
+  // The attachment dot is drawn over a bar, so the mark ink also has to separate from the bar
+  // (ADR-0157; TECH_DEBT #391).
+  it('the direction mark is perceivable on the activity bar (≥ 3:1)', () => {
+    const value = ratio(tokens, '--canvas-bar', '--canvas-link-mark');
+    expect(value, `mark on --canvas-bar is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
   // The gap label's text is the mark ink on an opaque ground chip. The minor ink is 3.37:1 there,
   // which is why it is not the text colour (m0-solved.md, "Two findings").
   it('the gap label text is legible on its ground chip (≥ 4.5:1)', () => {
