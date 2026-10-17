@@ -219,13 +219,29 @@ describe('every exclusion is necessary (M0-T3)', () => {
     expect(found.some((d) => d.field === 'earlyStart' || d.field === 'earlyFinish')).toBe(false);
   });
 
-  it('CE3 C transparent: NOT demonstrated by four constructions, so the exclusion stays', () => {
-    // The spec reasons that a successor pinned or started early gives D a negative gap the chain does
-    // not, moving A's free float. Measured, it does not: the engine pins such a successor's late dates
-    // to its early ones, so the chain's total float is already at or below D's gap and free float
-    // (capped by total float) reads the same either way. The exclusion is kept as conservative and
-    // marked "reasoned, not demonstrated" in the ADR. If one of these starts to diverge, the engine
-    // changed and the exclusion has become necessary rather than conservative.
+  it('CE3 C transparent: a started successor entered at its finish moves free float', () => {
+    // C started before A could finish, and both the chain (SF) and the direct link (FF) bind its
+    // finish. C's finish is frozen by its actuals, so D's gap is negative while the chain's first gap
+    // (A to B) is not, and removing D lifts A's free float. Only A's free float moves.
+    const p = plan(
+      [
+        task('A', 3 * DAY),
+        task('B', DAY),
+        task('C', 60, { actualStart: '2026-01-01', remainingMinutes: 30 }),
+      ],
+      [link('AB', 'A', 'B'), link('BC', 'B', 'C', 'SF'), link('AC', 'A', 'C', 'FF')],
+    );
+    const found = diverges(p, 'AC');
+    expect(fieldsOf(found, 'A')).toEqual(['freeFloat']);
+    expect(found.every((d) => d.subject === 'A')).toBe(true);
+  });
+
+  it('CE3 (negative): a start-bound link into a pinned or started successor does not', () => {
+    // The spec's first argument was that a pinned or started successor gives D a negative gap the chain
+    // does not. For links that bind C's START, measured, it does not: the engine pins such a successor's
+    // late dates to its early ones, so the chain's total float is already at or below D's gap and free
+    // float (capped by total float) reads the same either way. The exclusion is still needed (the case
+    // above, and any pin or start for the other reasons), but the demonstration is the finish-bound one.
     const abc = (c: Partial<OracleActivity>, extra: OracleActivity[] = []) =>
       plan(
         [task('A', 3 * DAY), task('B', DAY), task('C', DAY, c), ...extra],

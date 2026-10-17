@@ -65,7 +65,7 @@ interface RuleOutput {
 type FindRedundantLinks = (
   activities: RuleActivity[],
   dependencies: RuleDependency[],
-  options: { relaxationBudget: number },
+  options: { relaxationLimit: number },
 ) => RuleOutput;
 
 async function loadCandidate(): Promise<FindRedundantLinks> {
@@ -205,7 +205,7 @@ it('measures the redundant-link rule: cost, prevalence, and the levelling previe
   const find = await loadCandidate();
   const budget = Number(process.env['RL_BUDGET'] ?? '5000000');
   const run = (input: ReturnType<typeof toRuleInput>) => () =>
-    find(input.activities, input.dependencies, { relaxationBudget: budget });
+    find(input.activities, input.dependencies, { relaxationLimit: budget });
 
   const timed = [
     time('fixture', run(toRuleInput(fixtureSpec()))),
