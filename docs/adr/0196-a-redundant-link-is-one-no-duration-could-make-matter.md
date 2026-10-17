@@ -91,9 +91,14 @@ that release and never reloaded across two releases, accepted and stated.
 activity, `O(m · V · (V + E))` worst case, bounded by a **relaxation limit** (`relaxationLimit`; the spec said
 "budget", a word the G4 cost-name gate refuses in `health/`). Sources are processed in topological order, so a capped
 result is the same every time; links left unreached are added to `unjudged` and `searchCapped` says so. Measured in
-process (`m0-measurement.md`, a shared four-core machine, so its times are indicative): `scale-2000` needs 24,234
-relaxations, p95 8.9 to 34.5 ms against the 50 ms line; the dense 2,000 × 10 plan needs 437,690; the 2,000 × 40 plan
-needs 6.4 million and is capped. The default limit is **1,000,000**, a ceiling of roughly 130 ms. Links into started or
+process (`m0-measurement.md`, a shared four-core machine, so its times are indicative): `scale-2000` needs 45,100
+relaxations, p95 11 ms (8.9 to 34.5 across runs) against the 50 ms line; the dense 2,000 × 10 plan needs 696,810; the
+2,000 × 40 plan needs 9.8 million and is capped. The default limit is **2,000,000**: a capped plan answers in about
+0.1 s typical and under 0.2 s at p95. The limit charges every step the search takes, including the witness scan and
+each activity a run expands (a review found the first version scanned every rank between a source and its farthest
+target for free, which made 20,000 disjoint pairs take 14 s; the search now visits only what it reaches). What is
+**not** bounded by the limit is the linear set-up, about 90 ms for 20,000 pairs (40,000 activities, twenty times the
+sized envelope). Links into started or
 pinned work, to a level of effort, or with an unknown endpoint are counted as not checked (ADR-0127), apart from the
 offender count and never folded into it. A stored cycle (ADR-0021 forbids one) flags nothing and counts every link.
 

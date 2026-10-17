@@ -124,6 +124,41 @@ function denseInput(perActivity: number): {
   return { activities, dependencies };
 }
 
+/**
+ * `pairs` disjoint A to B links: the widest, flattest plan there is. Nothing is redundant and nothing
+ * is reachable, so the only cost is whatever the search pays per source for looking. It was quadratic
+ * once (a scan from each source to its farthest target, over every rank between them); it is the case
+ * that proved the cost now follows what a run reaches.
+ */
+function widePairs(pairs: number): { activities: RuleActivity[]; dependencies: RuleDependency[] } {
+  const activities: RuleActivity[] = [];
+  const dependencies: RuleDependency[] = [];
+  const make = (id: string): RuleActivity => ({
+    id,
+    code: null,
+    name: id,
+    type: 'TASK',
+    status: 'NOT_STARTED',
+    actualStart: null,
+    actualFinish: null,
+    constraintType: null,
+    secondaryConstraintType: null,
+    schedulingCalendarId: 'PLAN',
+  });
+  for (let i = 0; i < pairs; i += 1) {
+    activities.push(make(`W${String(i)}A`), make(`W${String(i)}B`));
+    dependencies.push({
+      id: `w${String(i)}`,
+      predecessorId: `W${String(i)}A`,
+      successorId: `W${String(i)}B`,
+      type: 'FS',
+      lagMinutes: 0,
+      lagCalendarKey: 'PLAN',
+    });
+  }
+  return { activities, dependencies };
+}
+
 function percentile(sorted: number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)] ?? 0;
 }
@@ -181,7 +216,7 @@ function levelled(spec: SeedSpec, drop: ReadonlySet<string>, capacity?: number):
 
 it('measures the redundant-link rule: cost, prevalence, and the levelling preview', async () => {
   const find = await loadCandidate();
-  const limit = Number(process.env['RL_LIMIT'] ?? '1000000');
+  const limit = Number(process.env['RL_LIMIT'] ?? '2000000');
   const run =
     (input: ReturnType<typeof toRuleInput>, at = limit) =>
     () =>
@@ -193,6 +228,8 @@ it('measures the redundant-link rule: cost, prevalence, and the levelling previe
     ['scale-2000', toRuleInput(scaleSpec({ activities: 2000 }))],
     ['dense 2000 x 10', denseInput(10)],
     ['dense 2000 x 40', denseInput(40)],
+    ['wide sparse 5000 pairs', widePairs(5000)],
+    ['wide sparse 20000 pairs', widePairs(20000)],
   ];
   const timed = inputs.map(([label, input]) => time(label, run(input)));
 

@@ -81,23 +81,40 @@ scripts/measure-redundant-links.mts`: pure and in-process (no database), 20 unco
 relaxation counts are exact and are the figures to rely on. Re-take the times on a quiet machine before
 quoting them (ADR-0128: a measurement belongs on the machine that can take it).
 
-| Plan             | Links  | Flagged | Not checked | Relaxations needed | p50 ms   | p95 ms (range of 3 runs) |
-| ---------------- | ------ | ------- | ----------- | ------------------ | -------- | ------------------------ |
-| fixture (seeded) | 188    | 3       | 29          | 789                | 0.4      | 5.5 to 8.5               |
-| `scale-500`      | 800    | 202     | 88          | 6,207              | 2 to 6   | 21 to 26                 |
-| `scale-2000`     | 3,200  | 816     | 367         | 24,234             | 7 to 9   | **8.9 to 34.5**          |
-| dense 2,000 x 10 | 19,945 | 17,946  | 0           | 437,690            | 56 to 60 | 142 to 285               |
-| dense 2,000 x 40 | 79,180 | 11,856  | 67,020      | 6,427,160 (capped) | 111      | 224                      |
+| Plan                      | Links  | Flagged | Not checked | Relaxations needed | p50 ms | p95 ms |
+| ------------------------- | ------ | ------- | ----------- | ------------------ | ------ | ------ |
+| fixture (seeded)          | 188    | 3       | 29          | 1,657              | 0.4    | 1.2    |
+| `scale-500`               | 800    | 202     | 88          | 11,620             | 3.7    | 9.6    |
+| `scale-2000`              | 3,200  | 816     | 367         | 45,100             | 6.9    | 11.4   |
+| dense 2,000 x 10          | 19,945 | 17,946  | 0           | 696,810            | 52     | 117    |
+| dense 2,000 x 40          | 79,180 | 15,678  | 63,100      | 9,821,240 (capped) | 91     | 169    |
+| wide sparse, 5,000 pairs  | 5,000  | 0       | 0           | 30,000             | 14     | 26     |
+| wide sparse, 20,000 pairs | 20,000 | 0       | 0           | 120,000            | 90     | 159    |
 
-- **FC-5a holds**: `scale-2000` p95 is at most 34.5 ms against the 50 ms line, in steady state. The
-  first calls after process start are 5 to 10 times slower (93, 65 and 34 ms for the first three calls
-  in one run, JIT warm-up), so the first health request after a restart can be a few tens of
-  milliseconds slower; it is the same cold cost every other first call pays.
-- **FC-5b holds, by setting the limit from the measurement.** About 127 ns per relaxation on this machine
-  (dense 2,000 x 10: 56 ms for 437,690). The default limit is **1,000,000** relaxations: 2.3 times what
-  the dense 2,000 x 10 plan needs and 41 times what `scale-2000` needs, and a ceiling of roughly 130 ms
-  on this machine for a plan too dense to finish. The 2,000 x 40 case hits it, answers in about 110 ms
-  and says so (`searchCapped`, 67,020 links counted as not checked).
+(One run on 2026-10-17 after the review fold below; earlier runs of the same cases ranged from 8.9 to 34.5
+ms p95 at `scale-2000` and 142 to 285 at dense 2,000 x 10, on the same noisy machine.)
+
+**Review fold, 2026-10-17 (security and performance review of PR #1033).** Two costs were not charged to
+the limit: the scan over every topological rank from a source to its farthest target, and the witness
+scan over a successor's incoming links. The first made a wide, flat plan quadratic: 20,000 disjoint
+pairs took **14 s** (verified red against the old code) because each of 20,000 sources scanned the other
+20,000. The search now expands only the activities a run reached (a binary heap of reached ranks), and
+the witness scan is charged to the limit. The relaxation counts above include both, which is why they
+are higher than the first table (scale-2000 24,234 to 45,100); the verdicts did not change (the whole
+oracle, soundness and mutant suites were re-run: zero divergences, eight mutants killed). The default
+limit moved from 1,000,000 to **2,000,000** so that the dense 2,000 x 10 plan (696,810) keeps a margin.
+
+- **FC-5a holds**: `scale-2000` p95 is 11.4 ms here (8.9 to 34.5 across earlier runs) against the 50 ms
+  line, in steady state. The first calls after process start are 5 to 10 times slower (93, 65 and 34 ms
+  for the first three calls in one run, JIT warm-up), so the first health request after a restart can be
+  a few tens of milliseconds slower; it is the same cold cost every other first call pays.
+- **FC-5b holds, with the claim stated as measured.** The search is bounded by the limit: the 2,000 x 40
+  plan needs 9.8 million relaxations, hits the 2,000,000 limit, answers in a median 91 ms (p95 169 ms,
+  max 194 ms on this machine) and says so (`searchCapped`, 63,100 links counted as not checked). The
+  earlier "roughly 130 ms ceiling" was the 1,000,000 limit at about 60 ns per relaxation; at 2,000,000 it
+  is **about 0.1 s typical and under 0.2 s at p95**. The remaining cost is **linear set-up** (activity
+  and link tables, topological order, sorting): 20,000 disjoint pairs, 40,000 activities and 20 times the
+  envelope the product is sized for, take a median 90 ms for set-up alone, with nothing to search.
 - **Prevalence on the catalogue's capability plans: 0 flagged of 89 links, 11 not checked.** The
   catalogue was not built to contain redundancy (E16); M3-T1 adds the plan that does. `scale-500` flags
   202 of 800 links (E17's skip links), the figure M3-T2 states in the playbook.

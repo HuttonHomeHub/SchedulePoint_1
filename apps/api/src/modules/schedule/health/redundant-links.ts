@@ -39,7 +39,7 @@ export const REDUNDANT_LINKS_RULE = 'DOMINATED_UNDER_ANY_DURATION';
  * The relaxation budget the service passes. Set from the M2 measurement (`m0-measurement.md`): high
  * enough that no measured plan reaches it, low enough that a dense plan answers in bounded time.
  */
-export const DEFAULT_RELAXATION_LIMIT = 1_000_000;
+export const DEFAULT_RELAXATION_LIMIT = 2_000_000;
 
 /** The activity facts the rule reads. A structural subset of `HealthActivityInput`. */
 export interface RedundantLinksActivity {
@@ -234,6 +234,43 @@ export function findRedundantLinks(
   const parentState = new Int32Array(stateCount).fill(-1);
   const parentLink = new Int32Array(stateCount).fill(-1);
   const touched: number[] = [];
+  // The ranks of reached activities still to be expanded, smallest first. Visiting only what a run
+  // reached (rather than every rank between the source and its farthest target) keeps the cost of a
+  // source proportional to its cone: on a wide plan of disjoint pairs the scan alone was quadratic.
+  const heap: number[] = [];
+  const queued = new Uint8Array(activities.length);
+  const pushRank = (rank: number): void => {
+    let i = heap.length;
+    heap.push(rank);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[parent]! <= rank) break;
+      heap[i] = heap[parent]!;
+      i = parent;
+    }
+    heap[i] = rank;
+  };
+  const popRank = (): number => {
+    const top = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      let i = 0;
+      for (;;) {
+        let child = 2 * i + 1;
+        if (child >= heap.length) break;
+        if (child + 1 < heap.length && heap[child + 1]! < heap[child]!) child += 1;
+        if (heap[child]! >= last) break;
+        heap[i] = heap[child]!;
+        i = child;
+      }
+      heap[i] = last;
+    }
+    return top;
+  };
+  const drainHeap = (): void => {
+    for (const rank of heap) queued[order[rank]!] = 0;
+    heap.length = 0;
+  };
 
   const offenders: RedundantLink[] = [];
   let remaining = options.relaxationLimit;
@@ -245,6 +282,7 @@ export function findRedundantLinks(
    */
   function runDp(a: number, mode: string | null, weak: boolean, stopAt: number): boolean {
     const kCalendar = weak ? calendarOf[a]! : null;
+    heap.length = 0;
     const consider = (link: LinkRow, fromState: number, fromValue: number, first: number) => {
       const y = link.to;
       if (!transparent[y]) return;
@@ -253,6 +291,10 @@ export function findRedundantLinks(
       const candidate = fromValue + link.dep.lagMinutes;
       if (candidate > value[next]!) {
         if (value[next] === Number.NEGATIVE_INFINITY) touched.push(next);
+        if (queued[y] === 0 && topo[y]! <= stopAt) {
+          queued[y] = 1;
+          pushRank(topo[y]!);
+        }
         value[next] = candidate;
         parentState[next] = fromState;
         parentLink[next] = link.index;
@@ -263,10 +305,14 @@ export function findRedundantLinks(
       if (!linkAllowed(link.dep, mode)) continue;
       consider(link, -1, 0, link.pi);
     }
-    if (remaining < 0) return false;
-    for (let rank = topo[a]! + 1; rank <= stopAt; rank += 1) {
-      const x = order[rank]!;
-      if (!transparent[x]) continue;
+    if (remaining < 0) {
+      drainHeap();
+      return false;
+    }
+    while (heap.length > 0) {
+      const x = order[popRank()]!;
+      queued[x] = 0;
+      remaining -= 1;
       for (let e = 0; e < 2; e += 1) {
         for (let first = 0; first < 2; first += 1) {
           const state = x * 4 + e * 2 + first;
@@ -280,7 +326,10 @@ export function findRedundantLinks(
             if (!linkAllowed(link.dep, mode)) continue;
             consider(link, state, have, first);
           }
-          if (remaining < 0) return false;
+          if (remaining < 0) {
+            drainHeap();
+            return false;
+          }
         }
       }
     }
@@ -307,6 +356,9 @@ export function findRedundantLinks(
 
   /** A witness for `d` among the states a finished run reached, or null. */
   function witness(d: LinkRow, mode: string | null, weak: boolean): RedundantLink | null {
+    // Charged to the limit like every other step: a successor with thousands of incoming links, judged
+    // once per candidate, is the same unbounded work as a long scan.
+    remaining -= inLinks[d.to]!.length;
     for (const t of inLinks[d.to]!) {
       if (t.index === d.index) continue;
       if (t.sigma > d.sigma) continue; // W3: bind C at an end at or before D's
@@ -370,12 +422,17 @@ export function findRedundantLinks(
       for (const d of run.members) {
         if (decided.has(d.index)) continue;
         const w = witness(d, run.mode, run.weak);
+        if (remaining < 0) {
+          completed = false;
+          break;
+        }
         if (w !== null) {
           decided.add(d.index);
           found.push(w);
         }
       }
       reset();
+      if (!completed) break;
     }
     if (!completed) {
       // The budget ran out part-way through this source: its results are void, so what it and every

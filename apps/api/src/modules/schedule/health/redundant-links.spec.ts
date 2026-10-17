@@ -336,6 +336,54 @@ describe('totality, determinism and bounds', () => {
     expect(r.unjudged).toBe(3);
   });
 
+  it('a wide, flat plan costs what it reaches, not the width squared (20,000 disjoint pairs)', () => {
+    // Each source's farthest target sits behind every other source in topological order, so a scan
+    // from source to target visits the whole plan: 20,000 sources x 20,000 ranks was 400 million steps.
+    // Measured 2026-10-17: about 120,000 relaxations and 75 ms; the bound below is far above that in
+    // time, so only the quadratic shape can fail it.
+    const pairs = 20_000;
+    const base = buildRuleInput({
+      dataDate: '2026-01-05',
+      calendars: CALENDAR_SHAPES,
+      planCalendar: 'MON_FRI',
+      activities: [task('X')],
+      links: [],
+    }).activities[0]!;
+    const input: RuleInput = {
+      activities: Array.from({ length: pairs * 2 }, (_, i) => {
+        const id = `W${String(i >> 1)}${i % 2 === 0 ? 'A' : 'B'}`;
+        return { ...base, id, code: id, name: id };
+      }),
+      dependencies: Array.from({ length: pairs }, (_, i) => ({
+        id: `w${String(i)}`,
+        predecessorId: `W${String(i)}A`,
+        successorId: `W${String(i)}B`,
+        type: 'FS',
+        lagMinutes: 0,
+        lagCalendarKey: 'PLAN',
+      })),
+    };
+    const started = performance.now();
+    const r = run(input, 300_000);
+    expect(performance.now() - started).toBeLessThan(5_000);
+    expect(r).toEqual({ offenders: [], unjudged: 0, searchCapped: false, cyclic: false });
+  });
+
+  it('charges the witness scan to the limit: a successor with many incoming links stops early', () => {
+    // One target with 3,000 incoming links, each a candidate judged against all of them. Nothing in
+    // this plan is redundant; the point is that the millions of comparisons are counted and the
+    // search stops.
+    const sources = Array.from({ length: 3_000 }, (_, i) => `S${String(i)}`);
+    const r = flag(
+      [...sources.map((id) => task(id)), task('T')],
+      sources.map((id) => link(`l${id}`, id, 'T')),
+      {},
+      100_000,
+    );
+    expect(r.searchCapped).toBe(true);
+    expect(r.offenders).toEqual([]);
+  });
+
   it('the answer does not depend on the order the rows arrive in', () => {
     const input = buildRuleInput({
       dataDate: '2026-01-05',
