@@ -39,10 +39,16 @@
  *   --plant-error         Add one crossing to this script's copy of the reference plan's figures, to
  *                         prove FC-R0 goes red (run once, expect exit 1 and a FAIL on FC-R0).
  *   --budget=seed,current Which row budgets to try for Re-layout (default both). `seed` is today's.
- *   --starts=0,1,2,3      Which start seeds to try (default 0). 1-3 are the prototypes in
- *                         relayout-start-prototypes.ts; `--frontier` is shorthand for all four.
- *   --candidate=current:0 What FC-R2..R6 judge: budget:starts (default current:0, the M1 lever).
- *                         `seed:0` is today's, so every FC-R2 comparison is against itself.
+ *   --starts=0,1,2,3      Which starts to try ALONE (default 0). They are the product's own builders
+ *                         (`relayout-starts.ts`); `--frontier` is shorthand for all four, and is how
+ *                         each start's win or loss on the corpus is read.
+ *   --candidate=product   What FC-R2..R7 judge. `product` (the default) is the Re-layout the dialog
+ *                         shows: the hook's own `relayoutRuns`, best of its starts by the product's own
+ *                         pick, with FC-R6 timed in REAL module workers on the scale plan (today's
+ *                         single search in one worker against the starts in `cores - 1`, and in one).
+ *                         `budget:starts` (e.g. `current:0`, `current:0,1,2,3`) judges a lever
+ *                         without shipping it; `seed:0` is today's, so FC-R2 is then against itself.
+ *   --workers=N           Override the pool size FC-R6 times (default the product's `cores - 1`).
  *   --product=today|m1    An ASSERTION about the tree, never a selector. The Re-layout the dialog runs
  *                         is read from the tree itself (`relayout-product.ts`) and FC-R0 compares the
  *                         dialog with that build's benchmark run; a flag that disagrees stops the run.
@@ -91,8 +97,13 @@ const list = (s) => s.split(',').filter((x) => x !== '');
 const FRONTIER = has('frontier');
 const BUDGETS = list(opt('budget', 'seed,current'));
 const STARTS = (FRONTIER ? ['0', '1', '2', '3'] : list(opt('starts', '0'))).map(Number);
-const [CAND_BUDGET, CAND_STARTS] = opt('candidate', 'current:0').split(':');
-const CANDIDATE = { budget: CAND_BUDGET, starts: list(CAND_STARTS ?? '0').map(Number) };
+const CANDIDATE_FLAG = opt('candidate', 'product');
+const [CAND_BUDGET, CAND_STARTS] = CANDIDATE_FLAG.split(':');
+const CANDIDATE =
+  CANDIDATE_FLAG === 'product'
+    ? { budget: 'current', starts: [0, 1, 2, 3], product: true }
+    : { budget: CAND_BUDGET, starts: list(CAND_STARTS ?? '0').map(Number) };
+const WORKERS = opt('workers', null);
 const PRODUCT_FLAG = opt('product', null);
 const RUNS = Number(opt('runs', '2'));
 const ONLY = list(opt('only', ''));
@@ -178,6 +189,21 @@ async function bundleBrowser() {
     absWorkingDir: HERE,
   });
   return outfile;
+}
+
+/** The product's own worker script as one classic-script string, for the page to start workers from. */
+async function bundleWorker() {
+  const outfile = join(tmp, 'optimise-layout.worker.js');
+  await build({
+    ...common,
+    format: 'iife',
+    entryPoints: [join(HERE, 'src/features/tsld/render/optimise-layout.worker.ts')],
+    platform: 'browser',
+    target: 'chrome120',
+    outfile,
+    absWorkingDir: HERE,
+  });
+  return readFileSync(outfile, 'utf8');
 }
 
 // ── Servers ──────────────────────────────────────────────────────────────────────────────────
@@ -519,20 +545,25 @@ async function openBench(bundle) {
   return { browser, page };
 }
 
-const benchOptions = (runs, reverseUpTo) => ({
+const benchOptions = (runs, reverseUpTo, pool) => ({
   budgets: BUDGETS,
   starts: STARTS,
   runs,
   reverseUpTo,
+  pool,
 });
 
-async function scoreAll(page, plans) {
+async function scoreAll(page, plans, workerSource) {
   const results = [];
   for (const plan of plans) {
     say(`Scoring ${plan.seedName} (${plan.drawn} drawn)…`);
+    // Real workers are timed on the generated scale plan alone: it is the plan FC-R6 is read on.
+    const pool = plan.seedName.startsWith('scale-')
+      ? { workerSource, workers: WORKERS === null ? null : Number(WORKERS) }
+      : null;
     const result = await page.evaluate(
       ([p, o]) => globalThis.relayoutBench.scorePlan(p, o),
-      [plan, benchOptions(RUNS, 150)],
+      [plan, benchOptions(RUNS, 150, pool)],
     );
     results.push(result);
   }
@@ -599,7 +630,7 @@ async function agreement(node, benchPage, session) {
     const plan = node.buildCorpusPlan(raw);
     const result = await benchPage.evaluate(
       ([p, o]) => globalThis.relayoutBench.scorePlan(p, o),
-      [plan, { budgets: ['seed', 'current'], starts: [0], runs: 1, reverseUpTo: 0 }],
+      [plan, { budgets: ['seed', 'current'], starts: [0], runs: 1, reverseUpTo: 0, pool: null }],
     );
     const productRun = node.productRunOf(result, PRODUCT);
     const mine = {
@@ -643,6 +674,7 @@ if (has('self-test')) process.exit(0);
 let exitCode = 0;
 try {
   const bundle = await bundleBrowser();
+  const workerSource = await bundleWorker();
   let corpus;
   let session = null;
   if (SKIP_CAPTURE) {
@@ -667,7 +699,7 @@ try {
   let results;
   let agree = null;
   try {
-    results = await scoreAll(page, plans);
+    results = await scoreAll(page, plans, workerSource);
     if (!SKIP_AGREE && session) {
       const { SeedClient } = await import(
         pathToFileURL(join(REPO, 'packages/seed-http/dist/index.js')).href
@@ -757,7 +789,7 @@ try {
     '',
     `- commit \`${commit}\`, ${new Date().toISOString()}`,
     `- command: \`node scripts/measure-relayout.mjs ${argv.join(' ')}\``,
-    `- candidate ${CANDIDATE.budget}:${CANDIDATE.starts.join(',')}; budgets ${BUDGETS.join(',')}; starts ${STARTS.join(',')}; runs ${RUNS}; product ${PRODUCT}`,
+    `- candidate ${CANDIDATE.product ? 'product' : `${CANDIDATE.budget}:${CANDIDATE.starts.join(',')}`}; budgets ${BUDGETS.join(',')}; starts ${STARTS.join(',')}; runs ${RUNS}; product ${PRODUCT}`,
     `- corpus captured ${corpus.capturedAt} at \`${corpus.commit}\`, ${corpus.plans.length} plans, scale plan ${corpus.scaleLeaves} leaves`,
     `- conditions: docs/specs/relayout-quality/conditions.md`,
     '',

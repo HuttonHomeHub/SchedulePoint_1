@@ -10,8 +10,16 @@ import {
   type OptimiseMessage,
   type OptimiseRequest,
 } from '../src/features/tsld/render/optimise-layout-protocol';
+import { runPool, type RunOne } from '../src/features/tsld/render/optimise-pool';
+import {
+  pickBestStart,
+  relayoutSeeds,
+  START_NAMES,
+  type StartId,
+} from '../src/features/tsld/render/relayout-starts';
 import type { RenderActivity } from '../src/features/tsld/render/render-model';
 import { tableMeasure } from '../src/features/tsld/render/row-text-layout';
+import { poolConcurrency } from '../src/features/tsld/render/run-optimise-layout';
 import { textWidthTable } from '../src/features/tsld/render/text-width-table';
 import { makeWorkingDayPredicate } from '../src/features/tsld/render/time-scale';
 import { DEFAULT_VIEW_TOGGLES } from '../src/features/tsld/render/view-toggles';
@@ -19,7 +27,6 @@ import { DEFAULT_VIEW_TOGGLES } from '../src/features/tsld/render/view-toggles';
 import { bendCount, criticalSpine, travelStats, type CriticalSpine } from './relayout-metrics';
 import { detectProduct } from './relayout-product';
 import type { CorpusPlan } from './relayout-scene';
-import { START_NAMES, startSeed, type StartId } from './relayout-start-prototypes';
 
 /**
  * **The benchmark's browser half** (spec `docs/specs/relayout-quality`, plan M0-T3).
@@ -32,7 +39,7 @@ import { START_NAMES, startSeed, type StartId } from './relayout-start-prototype
  * differs, and the timing is labelled accordingly.
  */
 
-const { arrangeRequest, changesBetween } = arrangeModule;
+const { arrangeRequest, changesBetween, relayoutRuns } = arrangeModule;
 
 export type BudgetMode = 'seed' | 'current';
 
@@ -77,6 +84,35 @@ export interface PlanResult {
   /** Today's Re-layout: the pack seed, the seed's row count as the budget. */
   today: Run;
   variants: Run[];
+  /**
+   * The Re-layout the product's dialog shows: `relayoutRuns` (the hook's own function) searched
+   * start by start on this thread, the best picked by `pickBestStart`. `ms` is the serial sum.
+   */
+  product: Run;
+  productStarts: ProductStart[];
+  /** Real module workers, taken only for the plans the caller asks for. */
+  pool: PoolTiming | null;
+}
+
+export interface ProductStart {
+  id: StartId;
+  evaluations: number;
+  ms: number[];
+  final: LayoutObjective;
+}
+
+/** Wall time of Re-layout in real workers, against today's single search in one worker. */
+export interface PoolTiming {
+  starts: number[];
+  concurrency: number;
+  /** Today's search alone in one worker, per run. */
+  todayMs: number[];
+  /** The product's starts in `concurrency` workers, per run. */
+  poolMs: number[];
+  /** The same starts in one worker, once: what a single-core device waits. */
+  serialMs: number;
+  /** The pick and its lanes are identical with one worker and with `concurrency` (FC-R7). */
+  identical: boolean;
 }
 
 export interface BenchOptions {
@@ -86,6 +122,8 @@ export interface BenchOptions {
   runs: number;
   /** Take the reversed-input check on plans of at most this many drawn activities. */
   reverseUpTo: number;
+  /** Time the product in real workers: the bundled worker script and a worker-count override. */
+  pool: { workerSource: string; workers: number | null } | null;
 }
 
 const rowsOf = (lanes: ReadonlyMap<string, number>): number => {
@@ -93,6 +131,27 @@ const rowsOf = (lanes: ReadonlyMap<string, number>): number => {
   for (const lane of lanes.values()) rows = Math.max(rows, lane + 1);
   return rows;
 };
+
+const packedOf = (plan: CorpusPlan): Map<string, number> => {
+  const lanes = new Map(plan.activities.map((a) => [a.id, a.laneIndex]));
+  for (const c of plan.packChanges) lanes.set(c.id, c.laneIndex);
+  return lanes;
+};
+
+/** One start's seed, by the product's own builders. */
+function seedFor(plan: CorpusPlan, start: StartId): Map<string, number> {
+  const seed = relayoutSeeds(
+    {
+      activities: plan.activities,
+      edges: plan.edges,
+      dataDate: plan.dataDate,
+      packed: packedOf(plan),
+    },
+    [start],
+  )[0];
+  if (seed === undefined) throw new Error(`start ${String(start)} produced no seed`);
+  return seed.lanes;
+}
 
 const lanesKey = (lanes: ReadonlyMap<string, number>): string =>
   JSON.stringify([...lanes].sort((a, b) => (a[0] < b[0] ? -1 : 1)));
@@ -230,7 +289,165 @@ function search(
   };
 }
 
-export function scorePlan(plan: CorpusPlan, options: BenchOptions): PlanResult {
+/** The product's Re-layout for a plan: the hook's own `relayoutRuns`, then its own pick. */
+function productRuns(
+  plan: CorpusPlan,
+  widths: [string, number][],
+  activities: RenderActivity[],
+  edges = plan.edges,
+) {
+  const current = new Map(plan.activities.map((a) => [a.id, a.laneIndex]));
+  return relayoutRuns(inputOf(plan, activities, edges), current, packedOf(plan), widths);
+}
+
+function productSearch(
+  plan: CorpusPlan,
+  widths: [string, number][],
+  options: BenchOptions,
+): { run: Run; starts: ProductStart[] } {
+  const ms: number[] = [];
+  const perStart: ProductStart[] = [];
+  let first: { lanes: Map<string, number>; final: LayoutObjective; id: StartId } | null = null;
+  let totalEvaluations = 0;
+  let passes = 0;
+  let capped = false;
+  let repeatable = true;
+  for (let i = 0; i < options.runs; i += 1) {
+    const { starts, requests } = productRuns(plan, widths, plan.activities);
+    const results = requests.map((r) => execute(r));
+    ms.push(results.reduce((n, r) => n + r.ms, 0));
+    const picked = pickBestStart(results);
+    const best = results[picked]!;
+    const id = starts[picked]!.id;
+    if (first === null) {
+      first = { lanes: best.lanes, final: best.final, id };
+      totalEvaluations = results.reduce((n, r) => n + r.evaluations, 0);
+      passes = best.passes;
+      capped = results.some((r) => r.capped);
+      starts.forEach((start, k) =>
+        perStart.push({
+          id: start.id,
+          evaluations: results[k]!.evaluations,
+          ms: [],
+          final: results[k]!.final,
+        }),
+      );
+    } else if (lanesKey(best.lanes) !== lanesKey(first.lanes)) repeatable = false;
+    results.forEach((r, k) => perStart[k]!.ms.push(r.ms));
+  }
+  if (first === null) throw new Error('runs must be at least 1');
+
+  let reversible: boolean | null = null;
+  if (plan.drawn <= options.reverseUpTo) {
+    const rev = reversed(plan);
+    const { requests } = productRuns(plan, widths, rev.activities, rev.edges);
+    const results = requests.map((r) => execute(r));
+    reversible = lanesKey(results[pickBestStart(results)]!.lanes) === lanesKey(first.lanes);
+  }
+
+  return {
+    starts: perStart,
+    run: {
+      name: `Re-layout (product: start ${String(first.id)}, ${START_NAMES[first.id]})`,
+      start: first.id,
+      budget: 'current',
+      measure: measureOf(plan, first.lanes, first.final, widths),
+      moved: changesBetween(plan.activities, first.lanes).length,
+      evaluations: totalEvaluations,
+      passes,
+      capped,
+      ms,
+      repeatable,
+      reversible,
+      lanes: [...first.lanes],
+    },
+  };
+}
+
+/** A module worker from the bundled worker script, as `runOptimiseLayout` makes one. */
+function blobRunner(workerSource: string): { run: RunOne; dispose: () => void } {
+  const url = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+  const run: RunOne = (request, handlers) =>
+    new Promise((resolve, reject) => {
+      const worker = new Worker(url);
+      handlers.signal?.addEventListener('abort', () => {
+        worker.terminate();
+        reject(new DOMException('cancelled', 'AbortError'));
+      });
+      worker.onmessage = (event: MessageEvent<OptimiseMessage>) => {
+        const message = event.data;
+        if (message.type === 'progress') handlers.onProgress?.(message.evaluations);
+        else {
+          worker.terminate();
+          if (message.type === 'done') resolve(message.result);
+          else reject(new Error(message.message));
+        }
+      };
+      worker.onerror = (event) => {
+        worker.terminate();
+        reject(new Error(event.message));
+      };
+      worker.postMessage(request);
+    });
+  return { run, dispose: () => URL.revokeObjectURL(url) };
+}
+
+/**
+ * Re-layout's wait in real workers (FC-R6, FC-R7): today's single search in one worker, against the
+ * product's starts in `concurrency` workers, and the same starts in one. The workers are the
+ * product's `optimise-layout.worker.ts`, so what is timed is the code that ships, with the thread
+ * start-up and the structured-clone of every request and result that a projection leaves out.
+ */
+async function poolTiming(
+  plan: CorpusPlan,
+  widths: [string, number][],
+  options: BenchOptions,
+  pool: NonNullable<BenchOptions['pool']>,
+): Promise<PoolTiming> {
+  const { run, dispose } = blobRunner(pool.workerSource);
+  try {
+    const { starts, requests } = productRuns(plan, widths, plan.activities);
+    const concurrency = pool.workers ?? poolConcurrency(requests.length);
+    const todayRequest = arrangeRequest(
+      inputOf(plan, plan.activities),
+      seedFor(plan, 0),
+      {},
+      widths,
+    );
+    const todayMs: number[] = [];
+    const poolMs: number[] = [];
+    let parallelKey: string | null = null;
+    let identical = true;
+    for (let i = 0; i < options.runs; i += 1) {
+      let t = performance.now();
+      await run(todayRequest, {});
+      todayMs.push(performance.now() - t);
+
+      t = performance.now();
+      const results = await runPool(run, requests, { concurrency });
+      poolMs.push(performance.now() - t);
+      const key = lanesKey(results[pickBestStart(results)]!.lanes);
+      if (parallelKey === null) parallelKey = key;
+      else if (key !== parallelKey) identical = false;
+    }
+    const t = performance.now();
+    const serial = await runPool(run, requests, { concurrency: 1 });
+    const serialMs = performance.now() - t;
+    if (lanesKey(serial[pickBestStart(serial)]!.lanes) !== parallelKey) identical = false;
+    return {
+      starts: starts.map((s) => s.id),
+      concurrency,
+      todayMs,
+      poolMs,
+      serialMs,
+      identical,
+    };
+  } finally {
+    dispose();
+  }
+}
+
+export async function scorePlan(plan: CorpusPlan, options: BenchOptions): Promise<PlanResult> {
   const bounded = plan.drawn > OPTIMISE_MAX_ACTIVITIES;
   const t0 = performance.now();
   const widths = textWidthTable(plan.activities, DEFAULT_VIEW_TOGGLES);
@@ -250,7 +467,7 @@ export function scorePlan(plan: CorpusPlan, options: BenchOptions): PlanResult {
   );
   const hand = measureOf(plan, current, probe.seed, widths);
 
-  const packed = startSeed(0, { ...plan });
+  const packed = seedFor(plan, 0);
   const today = search(plan, widths, 'Re-layout (today)', 0, 'seed', packed, bounded, options);
 
   const variants: Run[] = [];
@@ -258,7 +475,7 @@ export function scorePlan(plan: CorpusPlan, options: BenchOptions): PlanResult {
     for (const budget of options.budgets) {
       for (const start of options.starts) {
         if (budget === 'seed' && start === 0) continue;
-        const seed = startSeed(start, { ...plan });
+        const seed = seedFor(plan, start);
         variants.push(
           search(
             plan,
@@ -275,6 +492,12 @@ export function scorePlan(plan: CorpusPlan, options: BenchOptions): PlanResult {
     }
   }
 
+  const productResult = productSearch(plan, widths, options);
+  const pool =
+    options.pool !== null && !bounded
+      ? await poolTiming(plan, widths, options, options.pool)
+      : null;
+
   return {
     seedName: plan.seedName,
     planName: plan.planName,
@@ -288,6 +511,9 @@ export function scorePlan(plan: CorpusPlan, options: BenchOptions): PlanResult {
     tidy,
     today,
     variants,
+    product: productResult.run,
+    productStarts: productResult.starts,
+    pool,
   };
 }
 

@@ -21,6 +21,8 @@ export const FIXTURE_SEED = 'fixture-p6-torture-v1';
 export interface Candidate {
   budget: 'seed' | 'current';
   starts: number[];
+  /** Judge the Re-layout the product's dialog shows (`PlanResult.product`), not a budget:starts pair. */
+  product?: boolean;
 }
 
 export type Status = 'PASS' | 'FAIL' | 'REPORT' | 'NOT RUN';
@@ -33,6 +35,7 @@ export interface Verdict {
 
 /** Today's Re-layout is `seed:0` and is always a member, so "never worse than today" is by construction. */
 export function candidateRun(plan: PlanResult, candidate: Candidate): { run: Run; members: Run[] } {
+  if (candidate.product) return { run: plan.product, members: [plan.product] };
   const members: Run[] = [];
   for (const start of candidate.starts) {
     const run =
@@ -212,29 +215,56 @@ export function judge(input: JudgeInput): Verdict[] {
     });
   } else {
     const { members } = candidateRun(scale, candidate);
-    const todayMs = median(scale.today.ms);
-    const serial = members.reduce((n, m) => n + median(m.ms), 0);
-    const parallel = Math.max(...members.map((m) => median(m.ms)));
-    const evaluations = members.reduce((n, m) => n + m.evaluations, 0);
-    const cap = candidate.starts.length * 2000;
-    const ratio = parallel / todayMs;
-    verdicts.push({
-      id: 'FC-R6',
-      status: ratio <= 1.5 && evaluations <= cap ? 'PASS' : 'FAIL',
-      detail: [
-        `${scale.seedName}: ${String(scale.drawn)} drawn activities`,
-        `today     : ${scale.today.ms.map((m) => m.toFixed(0)).join(' / ')} ms (${String(scale.today.evaluations)} evaluations)`,
-        `candidate : ${members.map((m) => `${m.name}: ${m.ms.map((x) => x.toFixed(0)).join(' / ')} ms`).join('; ')}`,
-        `ratio     : ${ratio.toFixed(2)}x if the starts run in parallel (the slowest start), ${(serial / todayMs).toFixed(2)}x if serial`,
-        `evaluations ${String(evaluations)} against a cap of ${String(cap)} (starts x 2,000)`,
-        'single-thread timings on the page, not a worker pool: the parallel ratio is a projection that M2 measures for real',
-      ],
-    });
+    const pool = candidate.product ? scale.pool : null;
+    if (pool !== null) {
+      const todayMs = median(pool.todayMs);
+      const poolMs = median(pool.poolMs);
+      const evaluations = scale.product.evaluations;
+      const cap = scale.productStarts.length * 2000;
+      const ratio = poolMs / todayMs;
+      verdicts.push({
+        id: 'FC-R6',
+        status: ratio <= 1.5 && evaluations <= cap ? 'PASS' : 'FAIL',
+        detail: [
+          `${scale.seedName}: ${String(scale.drawn)} drawn activities, real module workers`,
+          `today     : ${pool.todayMs.map((m) => m.toFixed(0)).join(' / ')} ms (one search in one worker)`,
+          `product   : ${pool.poolMs.map((m) => m.toFixed(0)).join(' / ')} ms (starts ${pool.starts.join(',')} in ${String(pool.concurrency)} workers)`,
+          `ratio     : ${ratio.toFixed(2)}x; one worker would wait ${(pool.serialMs / todayMs).toFixed(2)}x (${pool.serialMs.toFixed(0)} ms)`,
+          `evaluations ${String(evaluations)} against a cap of ${String(cap)} (starts x 2,000)`,
+          ratio > 1.5
+            ? 'over 1.5x: lower RELAYOUT_MULTISTART_MAX_ACTIVITIES to the largest size that passes (CQ-2), re-run at that size'
+            : 'within 1.5x at this size: the gate may stand at it',
+        ],
+      });
+    } else {
+      const todayMs = median(scale.today.ms);
+      const serial = members.reduce((n, m) => n + median(m.ms), 0);
+      const parallel = Math.max(...members.map((m) => median(m.ms)));
+      const evaluations = members.reduce((n, m) => n + m.evaluations, 0);
+      const cap = candidate.starts.length * 2000;
+      const ratio = parallel / todayMs;
+      verdicts.push({
+        id: 'FC-R6',
+        status: ratio <= 1.5 && evaluations <= cap ? 'PASS' : 'FAIL',
+        detail: [
+          `${scale.seedName}: ${String(scale.drawn)} drawn activities`,
+          `today     : ${scale.today.ms.map((m) => m.toFixed(0)).join(' / ')} ms (${String(scale.today.evaluations)} evaluations)`,
+          `candidate : ${members.map((m) => `${m.name}: ${m.ms.map((x) => x.toFixed(0)).join(' / ')} ms`).join('; ')}`,
+          `ratio     : ${ratio.toFixed(2)}x if the starts run in parallel (the slowest start), ${(serial / todayMs).toFixed(2)}x if serial`,
+          `evaluations ${String(evaluations)} against a cap of ${String(cap)} (starts x 2,000)`,
+          'single-thread timings on the page, not a worker pool: a projection. Judge `--candidate=product` for real workers',
+        ],
+      });
+    }
   }
 
   const unstable: string[] = [];
   for (const p of plans) {
-    for (const r of [p.tidy, p.today, ...p.variants]) {
+    if (p.pool !== null && !p.pool.identical)
+      unstable.push(
+        `${p.seedName}: the pick differs between 1 and ${String(p.pool.concurrency)} workers`,
+      );
+    for (const r of [p.tidy, p.today, p.product, ...p.variants]) {
       if (r === null) continue;
       if (!r.repeatable) unstable.push(`${p.seedName}: ${r.name} differs between two runs`);
       if (r.reversible === false)
@@ -253,7 +283,7 @@ export function judge(input: JudgeInput): Verdict[] {
       id: 'FC-R8',
       status: 'NOT RUN',
       detail: [
-        'no committed baseline yet: run once with --write-baseline on unmodified code, and commit it',
+        'no committed baseline yet: node scripts/measure-relayout.mjs --skip-capture --write-baseline --product=today, then commit scripts/fixtures/relayout-baseline.json',
       ],
     });
   } else {

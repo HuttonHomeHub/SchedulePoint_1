@@ -12,12 +12,13 @@ import type { PlanResult, Run } from './relayout-bench';
  * Pure, and importable by both bundles: the browser half reports what it was built with, the node half
  * checks the flag and picks the run to compare.
  */
-export type Product = 'today' | 'm1';
+export type Product = 'today' | 'm1' | 'm2';
 
-export const PRODUCTS: readonly Product[] = ['today', 'm1'];
+export const PRODUCTS: readonly Product[] = ['today', 'm1', 'm2'];
 
 /** The product a tree contains, from the exports of `use-arrange-search` (a namespace import). */
 export function detectProduct(arrange: Record<string, unknown>): Product {
+  if ('relayoutRuns' in arrange) return 'm2';
   return 'relayoutBudget' in arrange ? 'm1' : 'today';
 }
 
@@ -33,7 +34,7 @@ export function resolveProduct(
   writingBaseline: boolean,
 ): Product {
   if (requested !== null && !(PRODUCTS as readonly string[]).includes(requested)) {
-    throw new Error('--product takes `today` or `m1`');
+    throw new Error('--product takes `today`, `m1` or `m2`');
   }
   if (writingBaseline) {
     if (requested !== 'today') {
@@ -53,13 +54,15 @@ export function resolveProduct(
 
 /** The benchmark's run for `product`: the one the dialog of that build would show. */
 export function productRunOf(
-  plan: Pick<PlanResult, 'today' | 'variants' | 'seedName'>,
+  plan: Pick<PlanResult, 'today' | 'variants' | 'product' | 'seedName'>,
   product: Product,
 ): Run {
   const run =
     product === 'today'
       ? plan.today
-      : plan.variants.find((v) => v.budget === 'current' && v.start === 0);
+      : product === 'm2'
+        ? plan.product
+        : plan.variants.find((v) => v.budget === 'current' && v.start === 0);
   if (!run) throw new Error(`no ${product} Re-layout run for ${plan.seedName}`);
   return run;
 }
@@ -86,6 +89,11 @@ export function selfTest(): string[] {
 
   expect('detect: a tree without relayoutBudget is today', detectProduct({}), 'today');
   expect('detect: a tree with relayoutBudget is m1', detectProduct({ relayoutBudget: 1 }), 'm1');
+  expect(
+    'detect: a tree with relayoutRuns is m2, whatever else it has',
+    detectProduct({ relayoutBudget: 1, relayoutRuns: 1 }),
+    'm2',
+  );
   expect('resolve: no flag takes the build', resolveProduct(null, 'm1', false), 'm1');
   expect('resolve: a flag that agrees is accepted', resolveProduct('m1', 'm1', false), 'm1');
   refuses('resolve: a flag that disagrees with the build throws', () =>
@@ -102,12 +110,18 @@ export function selfTest(): string[] {
     seedName: 'p',
     today: run('today', 'seed', 0),
     variants: [run('other', 'current', 1), run('m1', 'current', 0)],
+    product: run('m2', 'current', 2),
   };
   expect("run: today compares today's budget", productRunOf(plan, 'today').name, 'today');
   expect(
     "run: m1 compares the current-budget pack start, never today's",
     productRunOf(plan, 'm1').name,
     'm1',
+  );
+  expect(
+    'run: m2 compares the product pipeline, not a single start',
+    productRunOf(plan, 'm2').name,
+    'm2',
   );
   refuses('run: m1 with no current-budget run throws', () =>
     productRunOf({ ...plan, variants: [] }, 'm1'),
