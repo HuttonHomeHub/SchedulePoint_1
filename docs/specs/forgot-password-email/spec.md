@@ -6,7 +6,7 @@
 - **Tracking:** `docs/TECH_DEBT.md` #242 (`TECH_DEBT.md:1906-1972`)
 - **Roadmap link:** none — closes a specified-but-unproduced capability
 - **Related ADR(s):** [ADR-0074](../../adr/0074-account-recovery-verification-enforcement-and-csp.md), [ADR-0081](../../adr/0081-milestone-entry-point-and-journey.md), [ADR-0085](../../adr/0085-privacy-operations.md), [ADR-0088](../../adr/0088-flag-classification.md), [ADR-0105](../../adr/0105-a-register-row-is-not-a-spec.md), [ADR-0123](../../adr/0123-a-search-param-is-a-string-and-the-shape-is-decided-at-the-router.md)
-- **Plan:** [`plan.md`](plan.md)
+- **Plan:** [`implementation-plan.md`](implementation-plan.md)
 
 ## 0. How to read this
 
@@ -185,4 +185,4 @@ dead URL branch. **User flow.** Unchanged for every reader who arrives via the a
 
 - Row: `docs/TECH_DEBT.md` #242 · Origin: `docs/specs/router-search-params/feature-spec.md:258`,
   ADR-0123 "Follow-up" (`0123-…md:154-157`)
-- Plan: [`plan.md`](plan.md)
+- Plan: [`implementation-plan.md`](implementation-plan.md)
