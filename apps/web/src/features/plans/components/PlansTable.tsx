@@ -62,6 +62,8 @@ export function PlansTable({
     {
       header: 'Status',
       width: 'fit',
+      // The widest label, since a `fit` column is as wide as its widest settled cell.
+      sample: PLAN_STATUS_LABELS.ARCHIVED,
       cell: (plan) => PLAN_STATUS_LABELS[plan.status],
     },
     {
