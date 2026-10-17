@@ -1,7 +1,7 @@
 # Implementation Plan: Loading states take the settled shape (TECH_DEBT #234 + #341)
 
 - **Feature spec:** [./spec.md](./spec.md)
-- **Status:** Approved — with the spec, 2026-10-17
+- **Status:** Accepted — shipped ([ADR-0202](../../adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)). Approved with the spec, 2026-10-17
 - **Owner:** product owner (approval); builder agent (implementation); reviewers per milestone
 
 ## Breakdown
@@ -354,7 +354,7 @@ token; assert the two pending DOMs are identical (no oracle) and carry one statu
 
 ##### Task 1 — docs + ADR (≈ one PR) · S
 
-- ADR-0198 from the spec §4.9 outline; one line in CLAUDE.md §16; banner counts.
+- ADR-0202 from the spec §4.9 outline; one line in CLAUDE.md §16; banner counts.
 - `DESIGN_SYSTEM.md`: inventory rows for `LoadingShape`, `SkeletonText`, the archetype skeletons;
   correct lines 963, 1009, 1211. `COMPONENT_LIBRARY.md`: a "Loading" section (contract, when a
   spinner, when a skeleton, the gate). `UX_STANDARDS.md:61`: the dominant-outcome rule.
@@ -362,7 +362,7 @@ token; assert the two pending DOMs are identical (no oracle) and carry one statu
 - `TECH_DEBT.md`: close #234 and #341 citing the PRs and `m0`/`m2` measurements; open the CQ-1 row
   (text-only loading states) and a row for `ScheduleHealthPanel` as a skeleton candidate (ADR-0116's
   fixed check set), each with a trigger.
-- Spec and plan headers move to `Accepted — shipped (ADR-0198)` (`check:spec-status`).
+- Spec and plan headers move to `Accepted — shipped (ADR-0202)` (`check:spec-status`).
 
 ##### Task 2 — gate pass
 

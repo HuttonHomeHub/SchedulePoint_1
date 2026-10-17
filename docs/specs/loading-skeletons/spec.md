@@ -1,6 +1,6 @@
 # Feature Spec: Loading states take the settled shape (TECH_DEBT #234 + #341)
 
-- **Status:** Approved — by the product owner, 2026-10-17, with the recommended defaults (CQ-1: the seven text-only states become a new register row; CQ-2: yes, the table loads at once) and the conservative live-region contract (no real-screen-reader observation owed)
+- **Status:** Accepted — shipped ([ADR-0202](../../adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)). Approved by the product owner, 2026-10-17, with the recommended defaults (CQ-1: the seven text-only states become a new register row; CQ-2: yes, the table loads at once) and the conservative live-region contract (no real-screen-reader observation owed)
 - **Author(s):** feature-analyst (Claude), for the product owner
 - **Date:** 2026-10-17
 - **Tracking:** `docs/TECH_DEBT.md` #234 (first-load spinners where the shape is known), #341 (a table
@@ -13,7 +13,7 @@
   [ADR-0178](../../adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md),
   [ADR-0086](../../adr/0086-staff-principal.md), [ADR-0088](../../adr/0088-flag-classification.md) D1,
   [ADR-0081](../../adr/0081-milestone-entry-point-and-journey.md), [ADR-0142](../../adr/0142-a-remedy-is-measured-before-it-is-built.md).
-  **New: ADR-0198 (number provisional) — outline in §4.9.**
+  **New: [ADR-0202](../../adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md) (this spec called it ADR-0198 provisionally; 0198–0201 were taken on other branches) — outline in §4.9.**
 
 ## 0. How to read this
 
@@ -411,7 +411,7 @@ None (no input). Type-level: `Spinner`'s `label` becomes **required**; `Column.s
   `measure-column-fit.mjs:356-368` and the ADR-0146 M6 journey assertion (ADR-0146 lines 161-165).
 - `shoot.mjs:649-652` photographs `clients-loading` by `expectText: /Loading clients/` — the label
   stays, so it keeps working; its photograph changes and is re-taken.
-- `pnpm check:counts`: new source files move the CLAUDE.md banner's web-file count, and ADR-0198
+- `pnpm check:counts`: new source files move the CLAUDE.md banner's web-file count, and ADR-0202
   moves the ADR count — each PR updates the banner (§19.8 `pnpm prepush` will refuse otherwise).
 
 ## 4. Solution design
@@ -664,7 +664,7 @@ component that knows them, content-shaped material — applied in thin site grou
 - **Delay threshold before showing any skeleton** — reasonable, but a separate decision with its own
   cost (a blank frame for N ms); not needed to meet SC-1–SC-6.
 
-**ADR-0198 (draft outline, number provisional) — "A loading state is the settled shape, and says one
+**ADR-0202 (filed as the outline below; provisionally ADR-0198) — "A loading state is the settled shape, and says one
 sentence."**
 
 - _Context:_ #234/#341; five a11y mechanisms; the gate-vs-shape question; defects 1–6.
@@ -687,4 +687,4 @@ sentence."**
   1211), `docs/COMPONENT_LIBRARY.md` (new "Loading" section), `docs/UX_STANDARDS.md` (Loading row:
   the dominant-outcome rule), `docs/FRONTEND_ARCHITECTURE.md:271-278`, `docs/TECH_DEBT.md` #234 and
   #341 (closed, with the re-verified enumeration), `apps/web/src/components/ui/page/index.ts` (the
-  archetype count line), CLAUDE.md §16 (one line for ADR-0198) and the stage banner counts.
+  archetype count line), CLAUDE.md §16 (one line for ADR-0202) and the stage banner counts.

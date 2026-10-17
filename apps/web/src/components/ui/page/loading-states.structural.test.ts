@@ -350,6 +350,16 @@ describe('G4: no status inside an aria-busy element', () => {
   });
 });
 
+describe('the loading-skeletons epic is done', () => {
+  it('has emptied every pending bucket (ADR-0202)', () => {
+    // A bucket is a declaration the epic had to empty. A new entry means a first load has been given
+    // a spinner or a pulse without a decision: declare it a gate or an action, or give it a shape.
+    expect(Object.keys(PENDING_SPINNERS)).toEqual([]);
+    expect(Object.keys(PENDING_PULSES)).toEqual([]);
+    expect(Object.keys(PENDING_BUSY)).toEqual([]);
+  });
+});
+
 describe('G2: a pulsing block comes from Skeleton', () => {
   const users = sourceFiles()
     .filter((file) => usesPulse(readFileSync(file, 'utf8')))
