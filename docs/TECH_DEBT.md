@@ -413,8 +413,9 @@ disable), which is moot while the whole subtree unmounts around them.
 > focus-move would be overriding a recorded position to avoid asking a question.
 
 **Re-verified 2026-09-10**: `AssignmentRow.tsx:511` is still `{canWrite ? (`, unchanged, and
-`components/ui/` still contains no checkbox primitive — so neither this row's survivor nor #72's
-has moved since the narrowing.
+`AssignmentRow.tsx:511` is unchanged and its editors still unmount with the pen — a checkbox
+primitive now exists (`CheckboxField`, `components/ui/form.tsx`, used at `AssignmentRow.tsx:645`), so
+the 2026-09-10 sentence saying there was none is corrected; the survivor itself has not moved since the narrowing.
 
 **Already specified**: ADR-0083 D5 cites this exact line and schedules it as **M3** (_"`AssignmentRow`
 (#64's worst case)"_), which has not landed. So no new spec is owed — the work is to delete the
@@ -9567,13 +9568,10 @@ than scoping by section — but ADR-0124 made `sections()` end a section at the 
 shallower**, so any future section-scoped reader of this file inherits the whole 3,090-line tail as
 "Closed numbers". Worth knowing before writing one.
 
-**And the gate's own report banner is stale in the direction that misleads an investigator.**
-`check-debt-status.mjs:314` prints `check:debt-status — REPORT ONLY (not yet armed; see M4)`. It has
-been armed since **2026-08-30**, when `0d0a6dc7` added the `check:debt-status` key to
-`package.json` — and `prepush.sh` derives its roster from those keys, so it blocks today and printed
-`ok` on this pass. The false line is on the `--report` path, i.e. it greets exactly the reader who
-ran the gate to find out what it does. ADR-0076 Class 3, in a gate's own output rather than a
-document.
+~~**And the gate's own report banner is stale in the direction that misleads an investigator.**~~ —
+**closed, verified gone 2026-10-17.** `check-debt-status.mjs` no longer prints
+`REPORT ONLY (not yet armed; see M4)`; the gate has been armed since 2026-08-30 and `prepush.sh`
+derives it from the `check:debt-status` key. What stays open here is the status-coherence ask above.
 
 **One commit is behind an unusual share of tonight's findings, which is worth a sentence on its
 own.** `69207b1d` — _"four delivery gates, the Gantt's typed dates, and a focus-hand-off"_, carrying
@@ -10226,6 +10224,11 @@ width, measure its height, force `white-space: nowrap` through the subtree, and 
 is the ADR-0065 shape exactly — two implementations of one rule, drifting invisibly, because each
 looks right alone and only somebody asking both the same question ever sees the difference.
 
+**Narrowed 2026-10-17: the font-size defect below is fixed; the duplicated implementation is what
+remains.** The journey's copy now sets `fontSize`, `fontFamily` and the other longhands beside the
+shorthand (`composition.spec.ts`, the wrap sweep's `Object.assign(host.style, …)`), so the two copies
+agree.
+
 **Arming the gate is what asked them.** The journey's copy set the clone's font from
 `getComputedStyle(td).font` — the **shorthand** — and Chromium serialises that as the **empty
 string** whenever a longhand it cannot express is non-initial. Tailwind's `text-sm` sets
@@ -10687,10 +10690,10 @@ reviews raised and did not block on.
 4. **Wrap or truncate is decided by link geometry the planner cannot see** (UX). Two similar bars
    can behave differently. Accepted as the trade (text over a link is worse); worth a line at the
    next reconciliation pass.
-5. **A driving link to a hand-placed-late successor draws a long run with no gap label** (UX, and
-   the M3 build record). A gap label means a non-driving tie's waiting time, so labelling this
-   would put drift into that vocabulary; the successor's own feasible-window cue (ADR-0148) is the
-   channel for it. **Accepted by the product owner (2026-09-24)**: kept unlabelled, no work owed.
+5. ~~**A driving link to a hand-placed-late successor draws a long run with no gap label**~~ —
+   **closed 2026-10-17.** The product owner accepted it on 2026-09-24 (kept unlabelled: a gap label
+   means a non-driving tie's waiting time, and the successor's feasible-window cue, ADR-0148, is the
+   channel for drift), so no work is owed.
 6. **Two small counting budgets are unwritten** (performance): node style writes grouped by
    (ink, width) rather than per node, and an attachment-dot count, both true by inspection.
 7. **`paintLinkLanguage` iterates the plan's whole edge list per frame** before the culled
@@ -10726,9 +10729,9 @@ not block on.
    (UX, accessibility). FC-K4 measures it on the painter's paths (Unit 300 at 12 px a day, an
    arrowhead beside a chevron), and no committed picture shows that cell. Anti-aliasing on a DPR 1
    screen could make it read as one thick line.
-2. **The illustrative M3 picture still shows a refused track** (UX). In `m3-tracks-small17-after.png`
-   the track at A180 keeps two arrowheads because splitting it would gain a crossing. The verdict
-   says so; the caption should travel with the picture wherever it is shown.
+2. ~~**The illustrative M3 picture still shows a refused track**~~ — **closed 2026-10-17, no work
+   owed.** `docs/specs/links-and-labels/m3-verdict.md` (lines 200-206) already explains the refused
+   track at A180 in the text directly beside the picture.
 3. **Two runs sharing a gutter at 3 px read close to one line** (UX). That is ADR-0150's channel
    pitch; the M4 fix kept both runs' gap labels but did not change the pitch.
 4. **Small per-frame allocations in the track pass** (performance): `verticalSpans` keys its map with

@@ -29,8 +29,10 @@ that stays the owner's call (ADR-0190).
     12.1.3). #289's two Vitest bootstrap failures do not reproduce on 12.1.3. Nest 12's `ParseUUIDPipe` is
     narrower (v1–8 RFC variant, nil, max), which is harmless because every id is `uuid(7)` or v4. Security
     review passed. Two notes left out on purpose: `@nestjs/common` 12 is ESM-only and loads through
-    Node's `require(esm)` (needs Node ≥ 22.12, the current floor), and `@nestjs/cli` 12 asks for Node
-    `^22.22.3` (dev-only; CI and the Docker image take the latest 22).
+    Node's `require(esm)` (needs Node ≥ 22.12), and `@nestjs/cli` 12 itself
+    accepts Node ≥ 20.11, but its schematics dependencies (`@nestjs/schematics`, `@angular-devkit/*`) want
+    `^22.22.3`, so the `engines.node` floor is now 22.22.3 (CI and the Docker image take the floating `22`,
+    which already resolves above it).
   - **#1017** `fix(web)` (spec §B): closes #335. `DataTable`'s `headClassName`/`cellClassName` now **merge**
     onto the default; actions columns say `pr-0`; five columns that had lost their padding by accident
     get it back. Adds the spec and amends ADR-0145.

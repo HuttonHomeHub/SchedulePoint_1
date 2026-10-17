@@ -99,11 +99,13 @@ Planners who want the graphical experience currently have no browser-native opti
 
 **Could have**
 
-- Resource histogram view.
+- Resource histogram view. **Met** (ADR-0121): a stacked histogram that shows every resource at once, not one at a time.
 - Version history beyond baselines (per-activity change log).
 - Real-time collaborative editing (multiple planners on one plan). _Dropped from 1.0 by the product owner on
   2026-10-12 (`docs/DECISIONS.md`); one planner holds the pen at a time (ADR-0028)._
-- Layout auto-arrange for the network view.
+- Layout auto-arrange for the network view. **Met** (ADR-0069, ADR-0152): `Arrange` on the TSLD packs the
+  drawn bars into the fewest non-overlapping rows (`features/tsld/model/arrange-lanes.ts`,
+  `ArrangeDialog.tsx`), as one undo step; ADR-0152 chose rows for how their links will route.
 - Public API / webhooks.
 
 **Won't have (for now)**
