@@ -56,6 +56,15 @@ export interface DeletedItemsMeta extends PageMeta {
 }
 
 /**
+ * The tables the retention sweep may delete from (ADR-0087). The API's policy and the staff console's
+ * label map both take their vocabulary from here, so a table added to the sweep cannot compile in the
+ * console until it has a name (`docs/TECH_DEBT.md` #310).
+ */
+export const RETENTION_TABLE_NAMES = ['csp_reports', 'mail_events', 'perf_probe_results'] as const;
+
+export type RetentionTableName = (typeof RETENTION_TABLE_NAMES)[number];
+
+/**
  * Organisation-scoped roles, least → most privileged (ADR-0016). The API's
  * runtime `OrganizationRole` enum (apps/api/src/common/auth/principal.ts) is the
  * source of truth for values; this const is the cross-boundary contract the web

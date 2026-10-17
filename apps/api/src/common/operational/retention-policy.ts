@@ -7,12 +7,14 @@
  * nothing but the statement.
  */
 
+import { RETENTION_TABLE_NAMES, type RetentionTableName } from '@repo/types';
+
 /**
  * The tables this feature may delete from. **A closed set, asserted by equality** in
  * `retention-boundary.structural.spec.ts`, so adding a third forces a decision rather than an edit.
  *
  * A `const` array so the vocabulary is enumerable at runtime — the `MAIL_EVENT_KINDS` /
- * `AUDIT_ACTIONS` pattern.
+ * `AUDIT_ACTIONS` pattern. It lives in `@repo/types` so the staff console's label map is total over it.
  *
  * **`audit_events` is not here and may never be** (ADR-0087 D3). It refuses `UPDATE` and `DELETE` in
  * the database, by triggers declared `ENABLE ALWAYS` so the application role cannot bypass them, and
@@ -22,9 +24,9 @@
  * consequence is that ADR-0085 D3's own period stays unenforced, which `docs/TECH_DEBT.md` #118
  * records rather than hides.
  */
-export const RETENTION_TABLES = ['csp_reports', 'mail_events', 'perf_probe_results'] as const;
+export const RETENTION_TABLES = RETENTION_TABLE_NAMES;
 
-export type RetentionTable = (typeof RETENTION_TABLES)[number];
+export type RetentionTable = RetentionTableName;
 
 /** One table's rule: what to delete from, by which column, after how long. */
 export interface RetentionPolicy {

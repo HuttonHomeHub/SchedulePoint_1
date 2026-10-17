@@ -1,3 +1,5 @@
+import type { RetentionTableName } from '@repo/types';
+
 import type { Retention, RetentionTable } from '@/features/staff/api/staff-health';
 
 /**
@@ -14,24 +16,25 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** The tables, named as an operator would say them rather than as Postgres holds them. */
-const TABLE_LABELS: Record<string, string> = {
+/**
+ * The tables, named as an operator would say them rather than as Postgres holds them.
+ *
+ * **Total over the sweep's vocabulary, by type.** `perf_probe_results` once printed raw beside two
+ * human names because this map was a `Record<string, string>` and a table joined the server's list
+ * without it (`#165(e)`, `#310`). Keyed by the shared `RetentionTableName`, a table added to the
+ * sweep does not compile here until it has a label.
+ */
+const TABLE_LABELS: Record<RetentionTableName, string> = {
   csp_reports: 'Policy violation reports',
   mail_events: 'Mail events',
-  // Added 2026-09-12, after the console was PHOTOGRAPHED for the first time (`#165(e)`) and this
-  // row read `perf_probe_results` beside two human names. The table joined the server's
-  // `RETENTION_TABLES` at ADR-0128 and nothing here was extended with it — the same omission the
-  // API's own `retention.configured` boot line made and had already fixed, one workspace over.
-  // The fallback below worked exactly as designed; what is missing is anything that NOTICES a
-  // table arriving without a label, and the vocabulary is closed and enumerable on the server but
-  // not shared, so a gate for it needs `@repo/types` (`#310`).
   perf_probe_results: 'Performance readings',
 };
 
 export function tableLabel(table: string): string {
-  // Falls back to the raw name rather than to a blank: a table added without a label here should
-  // read as unpolished, never as nameless.
-  return TABLE_LABELS[table] ?? table;
+  // The response types `table` as a plain string, so a server newer than this bundle can still send
+  // a name the map does not hold. Fall back to the raw name rather than to a blank: it should read
+  // as unpolished, never as nameless.
+  return (TABLE_LABELS as Record<string, string | undefined>)[table] ?? table;
 }
 
 /**

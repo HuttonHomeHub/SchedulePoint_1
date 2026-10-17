@@ -1,3 +1,4 @@
+import { RETENTION_TABLE_NAMES } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -334,6 +335,13 @@ describe('tableLabel', () => {
     expect(tableLabel('csp_reports')).toBe('Policy violation reports');
     expect(tableLabel('mail_events')).toBe('Mail events');
     expect(tableLabel('perf_probe_results')).toBe('Performance readings');
+  });
+
+  // Totality against the shared list, so a fourth table fails here at once rather than printing as a
+  // raw identifier (`#310`). The map's type already refuses to compile without it; this is the
+  // runtime half, which also catches a label that is the raw name copied across.
+  it.each(RETENTION_TABLE_NAMES)('has a human label for %s', (table) => {
+    expect(tableLabel(table)).not.toBe(table);
   });
 
   it('falls back to the raw name rather than to a blank', () => {
