@@ -105,6 +105,12 @@ export interface GuestActivity {
   lateFinish: string | null;
   totalFloat: number | null;
   isCritical: boolean;
+  /**
+   * The engine's near-critical flag (ADR-0198). **Optional on the wire type** for version skew — an
+   * older API does not send it — and absent reads as `false`, today's picture. Both columns are
+   * NOT NULL, so unlike the placed span there is no `null` state to keep apart from "absent".
+   */
+  isNearCritical?: boolean;
   status: ActivityStatus;
   percentComplete: number;
   actualStart: string | null;
@@ -129,6 +135,8 @@ export interface GuestDependency {
   lagDays: number;
   /** The exact stored lag in signed working minutes (ADR-0070) — `lagDays` rounds it. */
   lagMinutes: number;
+  /** The engine's driving-link flag (ADR-0198) — optional on the wire type, same skew rule as {@link GuestActivity.isNearCritical}. */
+  isDriving?: boolean;
 }
 
 // --- Endpoint readers -----------------------------------------------------------------------------
@@ -184,7 +192,7 @@ export function toWorkingDayCalendar(calendar: GuestCalendar | null): WorkingDay
 
 /**
  * Widen a guest activity to the full {@link ActivitySummary} the canvas renders. Only the guest scope
- * (identity, computed CPM dates, duration/float/critical, lane, progress) carries real values; every
+ * (identity, computed CPM dates, duration/float/critical/near-critical, lane, progress) carries real values; every
  * field OUTSIDE the guest scope (constraints, external/EV/cost, resources, WBS, levelling, visual) is a
  * behaviour-neutral default — the read-only canvas reads none of them, and a guest is never shown them.
  */
@@ -240,7 +248,7 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     totalFloat: activity.totalFloat,
     freeFloat: null,
     isCritical: activity.isCritical,
-    isNearCritical: false,
+    isNearCritical: activity.isNearCritical ?? false,
     constraintViolated: false,
     externalDriven: false,
     loeNoSpan: false,
@@ -291,7 +299,7 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
 /**
  * Widen a guest dependency to the full {@link DependencySummary} the canvas draws edges from. The guest
  * DTO references endpoints by id only (it already has the activity list), so the embedded endpoint
- * summaries carry just the id + a resolved name/code from {@link byId}; engine/audit fields default.
+ * summaries carry just the id + a resolved name/code from {@link byId}; the engine-owned `isDriving` is carried (ADR-0198), audit fields default.
  */
 export function toDependencySummary(
   dependency: GuestDependency,
@@ -311,7 +319,7 @@ export function toDependencySummary(
     lagCalendar: 'PROJECT_DEFAULT',
     predecessor: endpoint(dependency.predecessorId),
     successor: endpoint(dependency.successorId),
-    isDriving: false,
+    isDriving: dependency.isDriving ?? false,
     version: 0,
     createdAt: '',
     updatedAt: '',

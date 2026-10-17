@@ -1,7 +1,7 @@
 # Implementation Plan: A share link shows the near-critical rung and the driving links
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved — with the spec, 2026-10-17
+- **Status:** Accepted — shipped (ADR-0198); approved with the spec, 2026-10-17
 - **Owner:** unassigned (api + web)
 
 ## Breakdown

@@ -287,6 +287,27 @@ describe('describeActivity (Tier 1)', () => {
     ).toContain(', near-critical, 2 days float left');
   });
 
+  it('says "near-critical" with no figure when the float is withheld (a share-link guest, #403)', () => {
+    const s = describeActivity(
+      activity({ isNearCritical: true, totalFloat: 2, remainingFloat: null }),
+    );
+    expect(s).toContain(', near-critical');
+    expect(s).not.toContain('float');
+    expect(s).not.toContain('critical, ');
+  });
+
+  it('leaves a withheld-float activity that is not near-critical silent about float (#403)', () => {
+    const s = describeActivity(activity({ isNearCritical: false, remainingFloat: null }));
+    expect(s).not.toContain('near-critical');
+    expect(s).not.toContain('float');
+  });
+
+  it('keeps a member’s near-critical sentence exactly as it was when a float is known (#403)', () => {
+    const s = describeActivity(activity({ isNearCritical: true, remainingFloat: 2 }));
+    expect(s).toContain(', near-critical, 2 days float left');
+    expect(s.match(/near-critical/g)).toHaveLength(1);
+  });
+
   it('names a positive drift in DAYS, never in "days float"', () => {
     /**
      * **A shipped defect with no coverage at all, found by reading rather than by failing.**

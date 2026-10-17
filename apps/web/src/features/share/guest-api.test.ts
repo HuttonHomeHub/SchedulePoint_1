@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { toActivitySummary, type GuestActivity } from './guest-api';
+import {
+  toActivitySummary,
+  toDependencySummary,
+  type GuestActivity,
+  type GuestDependency,
+} from './guest-api';
 
 import { toRenderActivities } from '@/features/tsld/render/to-render-model';
 import { barDateSourceFor } from '@/lib/bar-dates';
@@ -78,5 +83,64 @@ describe('toActivitySummary — the placed-span skew rule (ADR-0163)', () => {
     const [rendered] = toRenderActivities([summary], barDateSourceFor(false));
     expect(rendered?.drawnStart).toBe(row.visualEffectiveStart);
     expect(rendered?.drawnStart).not.toBe(row.earlyStart);
+  });
+});
+
+/**
+ * #403 (ADR-0198) — the engine's near-critical and driving flags are OPTIONAL on the wire type for
+ * the same version-skew reason as the placed span: an older API does not send them, and the answer
+ * is today's picture (`false`). Unlike the placed span, `null` has no separate meaning here — both
+ * columns are NOT NULL — so `?? false` is the right fallback.
+ */
+describe('toActivitySummary — isNearCritical (ADR-0198)', () => {
+  it('key present true → carried through', () => {
+    expect(toActivitySummary(baseActivity({ isNearCritical: true }), 'plan-1').isNearCritical).toBe(
+      true,
+    );
+  });
+
+  it('key present false → false', () => {
+    expect(
+      toActivitySummary(baseActivity({ isNearCritical: false }), 'plan-1').isNearCritical,
+    ).toBe(false);
+  });
+
+  it('key ABSENT (an older API) → false, today’s picture', () => {
+    const row = baseActivity();
+    expect('isNearCritical' in row).toBe(false);
+    expect(toActivitySummary(row, 'plan-1').isNearCritical).toBe(false);
+  });
+});
+
+describe('toDependencySummary — isDriving (ADR-0198)', () => {
+  function baseDependency(overrides: Partial<GuestDependency> = {}): GuestDependency {
+    return {
+      id: 'dep-1',
+      predecessorId: 'act-1',
+      successorId: 'act-2',
+      type: 'FS',
+      lagDays: 0,
+      lagMinutes: 0,
+      ...overrides,
+    };
+  }
+  const byId = new Map<string, GuestActivity>();
+
+  it('key present true → carried through', () => {
+    expect(toDependencySummary(baseDependency({ isDriving: true }), 'plan-1', byId).isDriving).toBe(
+      true,
+    );
+  });
+
+  it('key present false → false', () => {
+    expect(
+      toDependencySummary(baseDependency({ isDriving: false }), 'plan-1', byId).isDriving,
+    ).toBe(false);
+  });
+
+  it('key ABSENT (an older API) → false, today’s picture', () => {
+    const row = baseDependency();
+    expect('isDriving' in row).toBe(false);
+    expect(toDependencySummary(row, 'plan-1', byId).isDriving).toBe(false);
   });
 });

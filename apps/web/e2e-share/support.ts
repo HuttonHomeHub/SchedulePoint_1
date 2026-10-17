@@ -247,6 +247,7 @@ export async function recalculatePlan(page: Page, orgSlug: string): Promise<void
 interface MemberActivityRow {
   id: string;
   name: string;
+  isNearCritical: boolean;
   earlyStart: string | null;
   visualEffectiveStart: string | null;
   visualEffectiveFinish: string | null;
@@ -360,5 +361,123 @@ export async function barExtentsByRow(
     }
     if (current) bands.push(current);
     return bands;
+  });
+}
+
+/**
+ * Create finish-to-start links in the open plan through the member API (pen held, as for
+ * {@link seedActivities}), in the order given — the order matters to a caller that wants the
+ * non-driving edge listed first, so a "first edge wins" fallback cannot pass for the driving one.
+ */
+export async function seedDependencies(
+  page: Page,
+  orgSlug: string,
+  edges: readonly { predecessorId: string; successorId: string }[],
+): Promise<void> {
+  const planId = openPlanId(page);
+  const bad = await page.evaluate(
+    async ({
+      org,
+      id,
+      rows,
+    }: {
+      org: string;
+      id: string;
+      rows: readonly { predecessorId: string; successorId: string }[];
+    }) => {
+      const failures: string[] = [];
+      for (const row of rows) {
+        const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...row, type: 'FS' }),
+        });
+        if (!response.ok) failures.push(`${String(response.status)} ${await response.text()}`);
+      }
+      return failures;
+    },
+    { org: orgSlug, id: planId, rows: edges },
+  );
+  if (bad.length > 0) throw new Error(`dependency seeding rejected: ${bad.join('; ')}`);
+}
+
+/** The open plan's links from the MEMBER read, for the fixture preconditions (one page of 100). */
+export async function memberDependencies(
+  page: Page,
+  orgSlug: string,
+): Promise<{ id: string; predecessorId: string; successorId: string; isDriving: boolean }[]> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/dependencies?limit=100`,
+        {
+          credentials: 'include',
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`dependencies ${String(response.status)}: ${await response.text()}`);
+      }
+      const body = (await response.json()) as {
+        data: {
+          id: string;
+          isDriving: boolean;
+          predecessor: { id: string };
+          successor: { id: string };
+        }[];
+      };
+      return body.data.map((d) => ({
+        id: d.id,
+        predecessorId: d.predecessor.id,
+        successorId: d.successor.id,
+        isDriving: d.isDriving,
+      }));
+    },
+    { org: orgSlug, id: planId },
+  );
+}
+
+/**
+ * How many pixels on the scene canvas are painted in the near-critical rung's ink.
+ *
+ * The colour is **read from the canvas's own computed `--warning`** (the token the painter binds
+ * `nearCritical` to, `render/palette.ts`), never a hex literal, so a token re-value cannot change
+ * what is counted. It is normalised through a 1×1 canvas because the computed value may be in a
+ * colour space `getImageData` does not return (`oklch(…)`). A per-channel tolerance absorbs
+ * anti-aliasing; the caller asserts a floor, not an exact count. The scene canvas is the largest
+ * one (`canvasInk`'s own rule — the WBS band and strips are siblings).
+ */
+export async function nearCriticalInk(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const TOLERANCE = 24;
+    const canvases = [...globalThis.document.querySelectorAll('canvas')];
+    if (canvases.length === 0)
+      throw new Error('no canvas is mounted — there is no diagram to read');
+    const scene = canvases.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
+    const token = globalThis.getComputedStyle(scene).getPropertyValue('--warning').trim();
+    if (token === '') throw new Error('--warning is not resolvable on the scene canvas');
+    const probe = globalThis.document.createElement('canvas');
+    probe.width = 1;
+    probe.height = 1;
+    const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+    if (probeCtx === null) throw new Error('no 2D context for the colour probe');
+    probeCtx.fillStyle = token;
+    probeCtx.fillRect(0, 0, 1, 1);
+    const [tr = 0, tg = 0, tb = 0] = probeCtx.getImageData(0, 0, 1, 1).data;
+    const ctx = scene.getContext('2d');
+    if (ctx === null) throw new Error('no 2D context — the read would be blank and look like one');
+    const data = ctx.getImageData(0, 0, scene.width, scene.height).data;
+    let count = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (
+        Math.abs((data[i] ?? 0) - tr) <= TOLERANCE &&
+        Math.abs((data[i + 1] ?? 0) - tg) <= TOLERANCE &&
+        Math.abs((data[i + 2] ?? 0) - tb) <= TOLERANCE
+      ) {
+        count += 1;
+      }
+    }
+    return count;
   });
 }

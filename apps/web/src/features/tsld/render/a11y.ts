@@ -187,13 +187,22 @@ export function describeActivity(
   // **A WBS summary speaks no float** (ADR-0197): its float is 0 by convention (`compute.ts`), which the
   // canvas's centre item already withholds, and "0 days float left" would present a convention as a
   // measurement. An LOE keeps its clause, as its centre item does.
+  //
+  // **A withheld float still speaks the rung** (ADR-0198 D3): a share-link guest is never sent
+  // `remainingFloat`, so it reads `null` while `isNearCritical` arrives — say the rung, give no
+  // figure. For a member `remainingFloat` is `null` only before the first calculation, when
+  // `isNearCritical` is still its default `false`, so this branch cannot change a member's sentence.
   const floatPart = a.isCritical
     ? ', critical'
-    : a.type === 'WBS_SUMMARY' || a.remainingFloat === null
+    : a.type === 'WBS_SUMMARY'
       ? ''
-      : a.isNearCritical
-        ? `, near-critical, ${floatDays(a.remainingFloat)}`
-        : `, ${floatDays(a.remainingFloat)}`;
+      : a.remainingFloat === null
+        ? a.isNearCritical
+          ? ', near-critical'
+          : ''
+        : a.isNearCritical
+          ? `, near-critical, ${floatDays(a.remainingFloat)}`
+          : `, ${floatDays(a.remainingFloat)}`;
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
