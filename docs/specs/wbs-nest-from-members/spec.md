@@ -401,6 +401,6 @@ alone (CQ-5).
 
 ## 7. Links
 
-- Implementation plan: [`./plan.md`](./plan.md)
+- Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs this change updates: ADR-0063 (Amendment), CLAUDE.md §16 line for ADR-0063, `docs/BACKLOG.md`
   (mark the row done), `docs/DECISIONS.md` (the shade-vs-omit rule for tree pickers).

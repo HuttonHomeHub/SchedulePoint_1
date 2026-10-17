@@ -507,7 +507,7 @@ count (`check:counts`, `check:adr-coverage`).
 
 ## 5. Links
 
-- Implementation plan: [./plan.md](./plan.md)
+- Implementation plan: [./implementation-plan.md](./implementation-plan.md)
 - Related docs updated by this change: `docs/API.md` (advisories), OpenAPI, `docs/TEST_PLAYBOOK.md`
   (new plan rows; health section rows for the fixture, network-shape and scale tiers),
   `docs/ROADMAP.md`, ADR-0195, CLAUDE.md §16 and banner, `docs/TECH_DEBT.md` (epic row).

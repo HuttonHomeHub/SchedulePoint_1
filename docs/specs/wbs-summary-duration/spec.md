@@ -413,7 +413,7 @@ Next free number at filing; one line in CLAUDE.md §16 in the same commit (`chec
 
 ## 7. Links
 
-- Implementation plan: [`./plan.md`](./plan.md)
+- Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs this change updates: `docs/API.md`, `docs/TECH_DEBT.md` #375 (close the open half),
   `docs/TEST_PLAYBOOK.md` (the `plan:capability-types-and-wbs` row gains the derived duration),
   `docs/DATABASE.md` if the architect adds a constraint, the new ADR + CLAUDE.md §16 line.
