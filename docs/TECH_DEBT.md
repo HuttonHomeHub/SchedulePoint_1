@@ -10809,7 +10809,7 @@ On a narrow **Diagram — current view** crop the title band's key loses its tra
 
 **Next:** count the dropped entries the way the strip caption does (`+N more`), and assert it at a narrow raster. **Trigger:** the next change to the export legend, or a report of a key that seems to be missing entries.
 
-### 521. A plural drag past the top lane collapses the selection's relative lanes
+### 526. A plural drag past the top lane collapses the selection's relative lanes
 
 **Status:** open · **Verified:** 2026-10-17, by reading only (`apps/web/src/features/tsld/model/bulk-move.ts:63-64` clamps each row's lane to `>= 0` on its own; the dragged bar's lane is clamped at `render/viewport.ts:54`). Not seen in a browser.
 **Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** S · **Owner:** web
@@ -10818,7 +10818,7 @@ Drag a selection upward by more lanes than its topmost bar has above it, and `mo
 
 **Next:** confirm in a browser first (a three-bar selection in lanes 0, 1 and 2 dragged up by two), then clamp the drag's lane delta at the set level the way the keyboard does. **Trigger:** a report of a dragged group changing shape at the top, or any change to `movedPlacement`.
 
-### 522. The lane-only routing comment and ADR-0080 §8 name an endpoint `moveMany` does not use
+### 527. The lane-only routing comment and ADR-0080 §8 name an endpoint `moveMany` does not use
 
 **Status:** open · **Verified:** 2026-10-17, by reading (`bulk-move.ts:56-57` says a lane-only move routes "to the cheaper positions endpoint"; `use-plan-workspace-model.ts` `moveMany` sends every move, lane-only included, through `batchPlacements`, and skips only the recalculation)
 **Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** XS · **Owner:** web
@@ -10827,7 +10827,7 @@ A comment and an accepted ADR describe two endpoints; the code uses one. The cos
 
 **Next:** correct the comment in `bulk-move.ts` (and `isLaneOnly`'s docblock if it repeats it). **Trigger:** the next change to `bulk-move.ts`.
 
-### 523. A selection of more than 2,000 activities produces the server's raw validation message when moved
+### 528. A selection of more than 2,000 activities produces the server's raw validation message when moved
 
 **Status:** deferred (on a trigger) · **Verified:** 2026-10-17, by reading (`plan-activities.controller.ts` caps the placements body at 2,000 rows; neither the drag nor the keyboard nudge checks the count before writing, and the thrown message is shown as the banner)
 **Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** XS · **Owner:** web
@@ -10836,7 +10836,7 @@ Both ways of moving a plural selection inherit the cap, and a plan large enough 
 
 **Next:** refuse before writing with a sentence that names the cap, in `moveMany` so the drag and the keyboard share it. **Trigger:** a report of the raw message, or raising the cap.
 
-### 524. The plural-move hint is spoken once, on entering a plural selection, and not again if the pen is taken later
+### 529. The plural-move hint is spoken once, on entering a plural selection, and not again if the pen is taken later
 
 **Status:** deferred (on a trigger) · **Verified:** 2026-10-17, by reading (`TsldPanel.tsx` `announceSelectionCount` appends `pluralMoveHint` only when the previous count was below 2 and `canMovePlural` held at that moment; nothing re-speaks it when `bulk.gate.writable` later turns true)
 **Raised:** 2026-10-17 (keyboard plural nudge review) · **Size:** XS · **Owner:** web
