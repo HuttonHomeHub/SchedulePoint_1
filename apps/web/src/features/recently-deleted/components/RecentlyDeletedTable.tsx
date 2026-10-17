@@ -76,7 +76,7 @@ export function RecentlyDeletedTable({
   const [restoreError, setRestoreError] = useState<RestoreFailure | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   /** The blocked group whose ancestor confirmation is open, by key. */
-  const [ancestorFor, setAncestorFor] = useState<string | null>(null);
+  const [blockerFor, setBlockerFor] = useState<string | null>(null);
   /**
    * The button that opened the ancestor confirmation.
    *
@@ -87,7 +87,7 @@ export function RecentlyDeletedTable({
    * bring it back. Third instance of the class in this repository (ADR-0080, ADR-0095 M6), and the
    * codebase's own answer to an unmount-close is `HierarchyTree.tsx`'s: re-home focus by hand.
    */
-  const ancestorInvokerRef = useRef<HTMLButtonElement | null>(null);
+  const blockerInvokerRef = useRef<HTMLButtonElement | null>(null);
 
   /**
    * Close the confirmation and put focus back where it came from.
@@ -96,9 +96,9 @@ export function RecentlyDeletedTable({
    * successful restore then moves focus to the region, because the invoker it just returned to is
    * about to unmount with the row.
    */
-  const closeAncestor = (): void => {
-    setAncestorFor(null);
-    ancestorInvokerRef.current?.focus();
+  const closeBlocker = (): void => {
+    setBlockerFor(null);
+    blockerInvokerRef.current?.focus();
   };
 
   // Grouping is a pure transform over the array already held — `useDeletedItems` pages to
@@ -111,9 +111,17 @@ export function RecentlyDeletedTable({
   // What is on screen. `groups` (all of them) stays the lookup for a blocker's own deletion, which
   // may sit under another filter: restoring "the group first" must still find it.
   const visible = useMemo(() => filterGroups(groups, show), [groups, show]);
+  // The table's query is the list's loading and error state with the NARROWED groups as its data.
+  // Built field by field rather than spread and cast, so a change to what `DataTable` reads from it
+  // is a type error here and not a silent `undefined`.
   const groupQuery = useMemo(
-    () => ({ ...deleted, data: visible }) as unknown as typeof deleted & { data: DeletionGroup[] },
-    [deleted, visible],
+    () => ({
+      isPending: deleted.isPending,
+      isError: deleted.isError,
+      data: deleted.data === undefined ? undefined : visible,
+      refetch: deleted.refetch,
+    }),
+    [deleted.isPending, deleted.isError, deleted.data, deleted.refetch, visible],
   );
 
   /**
@@ -124,11 +132,20 @@ export function RecentlyDeletedTable({
    * exhaustion) but it is possible mid-refetch, and the caller shades rather than opening a dialog
    * it cannot populate — an empty confirmation is worse than none.
    */
-  const ancestorGroupFor = (group: DeletionGroup): DeletionGroup | null => {
+  const blockerGroupFor = (group: DeletionGroup): DeletionGroup | null => {
     const batch = group.root.blockedBy?.deleteBatchId;
     if (batch === undefined || batch === null) return null;
     return groups.find((candidate) => candidate.key === batch) ?? null;
   };
+
+  /**
+   * A group's row, as the label functions read it. `empty` is what a restore would bring back — a
+   * resource group and nothing else — which the deletion's own members say and the row cannot.
+   */
+  const labelled = (group: DeletionGroup) => ({
+    ...group.root,
+    empty: group.members.length === 0,
+  });
 
   const toggle = (key: string): void =>
     setExpanded((prev) => {
@@ -141,7 +158,7 @@ export function RecentlyDeletedTable({
   /** Named for the whole deletion, so a screen-reader user hears what one press brings back. */
   const restoreLabel = (group: DeletionGroup): string => {
     const summary = describeMembers(group.members);
-    const subject = `${nounOf(group.root)} ${group.root.name}`;
+    const subject = `${nounOf(labelled(group))} ${group.root.name}`;
     return summary === null ? `Restore ${subject}` : `Restore ${subject} and ${summary}`;
   };
 
@@ -162,8 +179,8 @@ export function RecentlyDeletedTable({
           const summary = describeMembers(group.members);
           announce(
             summary === null
-              ? `${sentenceNounOf(item)} “${item.name}” restored.`
-              : `${sentenceNounOf(item)} “${item.name}” and ${summary} restored.`,
+              ? `${sentenceNounOf(labelled(group))} “${item.name}” restored.`
+              : `${sentenceNounOf(labelled(group))} “${item.name}” and ${summary} restored.`,
           );
           regionRef.current?.focus();
         },
@@ -184,7 +201,7 @@ export function RecentlyDeletedTable({
   const columns: Column<DeletionGroup>[] = [
     {
       header: 'Type',
-      cell: (group) => <span className="text-muted-foreground">{typeLabel(group.root)}</span>,
+      cell: (group) => <span className="text-muted-foreground">{typeLabel(labelled(group))}</span>,
     },
     {
       header: 'Name',
@@ -291,7 +308,7 @@ export function RecentlyDeletedTable({
           >
             {restoringIds.has(group.root.id) ? 'Restoring…' : 'Restore'}
           </Button>
-        ) : ancestorGroupFor(group) !== null ? (
+        ) : blockerGroupFor(group) !== null ? (
           // Blocked by a deletion OUTSIDE this one — the only case grouping cannot dissolve. The
           // control is a real button rather than a sentence: the reader can act from here, in two
           // deliberate presses, instead of being told to go and find the row themselves.
@@ -299,8 +316,8 @@ export function RecentlyDeletedTable({
             variant="ghost"
             size="sm"
             onClick={(event) => {
-              ancestorInvokerRef.current = event.currentTarget;
-              setAncestorFor(group.key);
+              blockerInvokerRef.current = event.currentTarget;
+              setBlockerFor(group.key);
             }}
             aria-haspopup="dialog"
             aria-label={`Restore ${blockerNoun(group.root.blockedBy?.kind ?? 'client')} first…: ${group.root.blockedBy?.name ?? ''}`}
@@ -369,7 +386,9 @@ export function RecentlyDeletedTable({
           // The precedent is ADR-0073 C2.5, where the same caveat was reachable only by reading
           // serially — and this one is the safety caveat for a screen about permanent deletion.
           <p id={RETENTION_RULE_ID} className="text-muted-foreground text-sm">
-            Deleted items are kept for {retentionDays} days, then permanently removed.
+            Deleted clients, projects and plans are kept for {retentionDays} days, then permanently
+            removed, and a project’s own calendars go with it. Deleted resources and organisation
+            calendars are kept until you restore them.
           </p>
         )}
         {(() => {
@@ -382,7 +401,7 @@ export function RecentlyDeletedTable({
             </p>
           );
         })()}
-        {groups.length === 0 ? null : (
+        {deleted.data === undefined ? null : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {/* Labelled by its own visible caption, so a serial reader hears "Show" once (ADR-0119):
                 these are alternatives, not toggles. */}
@@ -436,25 +455,25 @@ export function RecentlyDeletedTable({
           }
         />
         {(() => {
-          if (ancestorFor === null) return null;
-          const blocked = groups.find((g) => g.key === ancestorFor);
-          const ancestor = blocked ? ancestorGroupFor(blocked) : null;
+          if (blockerFor === null) return null;
+          const blocked = groups.find((g) => g.key === blockerFor);
+          const blockerGroup = blocked ? blockerGroupFor(blocked) : null;
           // Both can vanish under a refetch between opening and rendering; closing is the honest
           // response, not rendering a dialog about rows that are no longer there.
-          if (!blocked || !ancestor) return null;
+          if (!blocked || !blockerGroup) return null;
           return (
             <RestoreBlockerDialog
               open
-              onClose={closeAncestor}
+              onClose={closeBlocker}
               blocked={blocked}
-              ancestor={ancestor}
+              blockerGroup={blockerGroup}
               onConfirm={() => {
                 // Close FIRST, then restore. Closing re-homes focus onto the invoker, which is
                 // where it must end up if the restore FAILS — the row is still there and the reader
                 // can try again. On success `onRestore` moves it on to the region, because that
                 // invoker unmounts with the row it belongs to.
-                closeAncestor();
-                onRestore(ancestor);
+                closeBlocker();
+                onRestore(blockerGroup);
               }}
             />
           );

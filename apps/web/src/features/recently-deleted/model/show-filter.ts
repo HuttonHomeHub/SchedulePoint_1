@@ -26,10 +26,7 @@ export const SHOW_OPTIONS: ReadonlyArray<{ value: ShowFilter; label: string }> =
 ];
 
 /** The groups whose root is of the chosen kind. `all` is the identity, by reference. */
-export function filterGroups(
-  groups: readonly DeletionGroup[],
-  show: ShowFilter,
-): readonly DeletionGroup[] {
+export function filterGroups(groups: DeletionGroup[], show: ShowFilter): DeletionGroup[] {
   if (show === 'all') return groups;
   return groups.filter(({ root }) => {
     switch (show) {

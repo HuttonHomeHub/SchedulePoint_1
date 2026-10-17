@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 
 /** How many members are named before the rest are summarised. */
-export const ANCESTOR_PREVIEW_LIMIT = 8;
+export const BLOCKER_PREVIEW_LIMIT = 8;
 
 /**
  * **The one case grouping cannot dissolve**, and the confirmation it needs.
@@ -32,7 +32,7 @@ export function RestoreBlockerDialog({
   open,
   onClose,
   blocked,
-  ancestor,
+  blockerGroup,
   onConfirm,
 }: {
   open: boolean;
@@ -40,31 +40,31 @@ export function RestoreBlockerDialog({
   /** The group the reader actually tried to restore. */
   blocked: DeletionGroup;
   /** The blocker's OWN deletion — what this press brings back. A parent, or a calendar. */
-  ancestor: DeletionGroup;
+  blockerGroup: DeletionGroup;
   onConfirm: () => void;
 }): React.ReactElement {
   const [showAll, setShowAll] = useState(false);
 
-  const rows = [ancestor.root, ...ancestor.members];
+  const rows = [blockerGroup.root, ...blockerGroup.members];
   // **Capped, for the same reason the row disclosure is.** A client-rooted cascade can hold
   // hundreds of plans; an uncapped list is a wall of text at the exact moment a reader is deciding.
   // The count is always exact and always shown — the cap changes how much is NAMED, never what is
   // claimed (ADR-0090's "no silent caps").
-  const hidden = showAll ? 0 : Math.max(0, rows.length - ANCESTOR_PREVIEW_LIMIT);
-  const shown = showAll ? rows : rows.slice(0, ANCESTOR_PREVIEW_LIMIT);
+  const hidden = showAll ? 0 : Math.max(0, rows.length - BLOCKER_PREVIEW_LIMIT);
+  const shown = showAll ? rows : rows.slice(0, BLOCKER_PREVIEW_LIMIT);
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={`Restore ${ancestor.root.name} first?`}
+      title={`Restore ${blockerGroup.root.name} first?`}
       description={
         blocked.root.blockedBy?.relation === 'calendar'
           ? `${sentenceNounOf(blocked.root)} “${blocked.root.name}” uses the calendar ` +
-            `“${ancestor.root.name}”, which is also deleted. Restoring ${ancestor.root.name} brings ` +
+            `“${blockerGroup.root.name}”, which is also deleted. Restoring ${blockerGroup.root.name} brings ` +
             `back everything deleted with it — then you can restore ${blocked.root.name} separately.`
           : `${sentenceNounOf(blocked.root)} “${blocked.root.name}” sits inside ` +
-            `${ancestor.root.name}, which is also deleted. Restoring ${ancestor.root.name} brings back ` +
+            `${blockerGroup.root.name}, which is also deleted. Restoring ${blockerGroup.root.name} brings back ` +
             `everything deleted with it — then you can restore ${blocked.root.name} separately.`
       }
     >
@@ -76,7 +76,13 @@ export function RestoreBlockerDialog({
           <ul className="text-muted-foreground mt-2 flex flex-col gap-1 text-sm">
             {shown.map((row) => (
               <li key={`${row.kind}:${row.id}`}>
-                <span>{typeLabel(row)}</span> <span className="text-foreground">{row.name}</span>
+                <span>
+                  {typeLabel({
+                    ...row,
+                    empty: row === blockerGroup.root && blockerGroup.members.length === 0,
+                  })}
+                </span>{' '}
+                <span className="text-foreground">{row.name}</span>
               </li>
             ))}
           </ul>
@@ -111,7 +117,7 @@ export function RestoreBlockerDialog({
               never be true, and a state that cannot be reached is the lit-but-inert shape this
               register keeps recording. Found by checking the test failed red against the wrong
               implementation, which it did not. */}
-          <Button onClick={onConfirm}>Restore {ancestor.root.name}</Button>
+          <Button onClick={onConfirm}>Restore {blockerGroup.root.name}</Button>
         </div>
       </div>
     </Dialog>

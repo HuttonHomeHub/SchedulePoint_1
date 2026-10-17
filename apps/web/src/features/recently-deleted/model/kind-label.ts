@@ -9,10 +9,17 @@ import type { DeletedItem, DeletedItemBlocker } from '@repo/types';
  * never decides what a button does or whether one is shown.
  */
 
-type Labelled = Pick<DeletedItem, 'kind' | 'subtype'>;
+/**
+ * `empty` is true for a resource GROUP whose deletion took nothing else with it (Q3, ADR-0195): a
+ * dissolved group, or a group whose members were all deleted earlier. The API cannot say so on the
+ * row — a dissolve and a delete are the same soft delete — so the caller derives it from the
+ * deletion group it already holds (`members.length === 0`). It is wording only: it says what a
+ * restore brings back (an empty group), and never decides whether one is offered.
+ */
+type Labelled = Pick<DeletedItem, 'kind' | 'subtype'> & { empty?: boolean };
 
 /** The Type column and the rows listed in a confirmation: "Resource group", "Calendar (project)". */
-export function typeLabel({ kind, subtype }: Labelled): string {
+export function typeLabel({ kind, subtype, empty }: Labelled): string {
   switch (kind) {
     case 'client':
       return 'Client';
@@ -21,17 +28,19 @@ export function typeLabel({ kind, subtype }: Labelled): string {
     case 'plan':
       return 'Plan';
     case 'resource':
-      return subtype === 'GROUP' ? 'Resource group' : 'Resource';
+      if (subtype !== 'GROUP') return 'Resource';
+      return empty === true ? 'Empty resource group' : 'Resource group';
     case 'calendar':
       return subtype === 'PROJECT' ? 'Calendar (project)' : 'Calendar (organisation)';
   }
 }
 
 /** The noun inside a sentence, lower case: "restore resource group Groundworks". */
-export function nounOf({ kind, subtype }: Labelled): string {
+export function nounOf({ kind, subtype, empty }: Labelled): string {
   switch (kind) {
     case 'resource':
-      return subtype === 'GROUP' ? 'resource group' : 'resource';
+      if (subtype !== 'GROUP') return 'resource';
+      return empty === true ? 'empty resource group' : 'resource group';
     default:
       // The tier is a column's job; a sentence about one calendar just says "calendar".
       return kind;

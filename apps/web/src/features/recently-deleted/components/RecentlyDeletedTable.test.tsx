@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { RecentlyDeletedTable } from './RecentlyDeletedTable';
-import { ANCESTOR_PREVIEW_LIMIT } from './RestoreBlockerDialog';
+import { BLOCKER_PREVIEW_LIMIT } from './RestoreBlockerDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { ApiFetchError, apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
@@ -387,9 +387,9 @@ describe('RecentlyDeletedTable', () => {
       const dialog = screen.getByRole('dialog');
 
       expect(within(dialog).getByText('This will restore 21 items:')).toBeInTheDocument();
-      expect(within(dialog).getAllByRole('listitem')).toHaveLength(ANCESTOR_PREVIEW_LIMIT);
+      expect(within(dialog).getAllByRole('listitem')).toHaveLength(BLOCKER_PREVIEW_LIMIT);
       const more = within(dialog).getByRole('button', {
-        name: `Show ${21 - ANCESTOR_PREVIEW_LIMIT} more`,
+        name: `Show ${21 - BLOCKER_PREVIEW_LIMIT} more`,
       });
       fireEvent.click(more);
       expect(within(dialog).getAllByRole('listitem')).toHaveLength(21);
@@ -427,8 +427,19 @@ describe('RecentlyDeletedTable', () => {
       // something they came here to check. 45 is the fixture's period — a hardcoded 90 would fail.
       renderTable(true);
       expect(
-        screen.getByText('Deleted items are kept for 45 days, then permanently removed.'),
+        screen.getByText(
+          'Deleted clients, projects and plans are kept for 45 days, then permanently removed, ' +
+            'and a project’s own calendars go with it. Deleted resources and organisation ' +
+            'calendars are kept until you restore them.',
+        ),
       ).toBeInTheDocument();
+    });
+
+    it('does not claim a deadline for the library rows (they never expire)', () => {
+      // ADR-0195 D4. The old sentence said "Deleted items are kept for N days" over a list that now
+      // holds rows no timer removes.
+      renderTable(true);
+      expect(screen.queryByText(/^Deleted items are kept for/)).not.toBeInTheDocument();
     });
 
     it('counts each deletion down by the SERVED period', () => {
@@ -601,6 +612,28 @@ describe('RecentlyDeletedTable', () => {
         screen.getByRole('button', { name: 'Restore resource group Groundworks and 2 resources' }),
       ).toBeInTheDocument();
       expect(screen.queryByText(/first/)).not.toBeInTheDocument();
+    });
+
+    it('calls a deleted group with nothing in its deletion an EMPTY resource group (Q3)', async () => {
+      // A dissolved group is the common case: the same soft delete as a delete, with no members. The
+      // label says what a restore brings back, and the announcement says it too.
+      mockApiFetch.mockResolvedValue(undefined);
+      renderTable(true, [{ ...GROUP_BATCH[0]!, deleteBatchId: 'b-dissolved' }]);
+      expect(screen.getByText('Empty resource group')).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Restore empty resource group Groundworks' }),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent(
+          'Empty resource group “Groundworks” restored.',
+        ),
+      );
+    });
+
+    it('does NOT call a group with members empty', () => {
+      renderTable(true, GROUP_BATCH);
+      expect(screen.queryByText('Empty resource group')).not.toBeInTheDocument();
+      expect(screen.getByText('Resource group')).toBeInTheDocument();
     });
 
     it('labels a leaf resource and both calendar tiers by what they are', () => {
@@ -1010,13 +1043,16 @@ describe('RecentlyDeletedTable', () => {
       expect(sectionCount()).toBe('0');
     });
 
-    it('does not offer a filter over an empty bin, whatever the URL asks for', () => {
+    it('keeps the filter on screen over an empty bin, but says the bin is empty', () => {
+      // Once the list has loaded the control is always there, so it does not appear and vanish as
+      // rows are restored; the sentence stays the whole-bin one, because "No deleted resources."
+      // over an empty bin would be a half-truth.
       renderTable(true, []);
-      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      expect(screen.getByRole('radiogroup', { name: 'Show' })).toBeInTheDocument();
       expect(screen.getByText(/Nothing has been deleted/)).toBeInTheDocument();
     });
 
-    it('still finds a blocker that is filtered out of view', async () => {
+    it('still finds a blocker that is filtered out of view', () => {
       // The resource is blocked by a calendar; narrowing to Resources hides the calendar's row, and
       // "Restore calendar first…" must still open its confirmation — the lookup reads ALL groups.
       renderTable(true, [
@@ -1039,9 +1075,7 @@ describe('RecentlyDeletedTable', () => {
         MIXED[2]!,
       ]);
       fireEvent.click(screen.getByRole('radio', { name: 'Resources' }));
-      expect(
-        screen.queryByRole('cell', { name: 'Crane hours', exact: true }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('cell', { name: 'Crane hours' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Restore calendar first…: Crane hours' }));
       expect(screen.getByRole('dialog')).toHaveTextContent('uses the calendar “Crane hours”');
     });
