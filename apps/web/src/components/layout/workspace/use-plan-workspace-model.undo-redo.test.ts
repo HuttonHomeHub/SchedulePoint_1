@@ -87,71 +87,14 @@ vi.mock('@/features/schedule', () => ({
   usePlanAutoRecalc: () => ({ notify: h.notify }),
 }));
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
-  id: 'a1',
-  planId: 'p1',
+const ACTIVITY: ActivitySummary = anActivity({
   code: null,
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
   version: 3,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 // A WBS summary (`sum-1`) with a child (`child-1`) — the cascade-delete case (ADR-0038). Deleting
 // the summary used to truncate history rather than offer a broken partial undo; since
@@ -209,6 +152,7 @@ const DEPENDENCY = {
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { activityKeys } from '@/lib/query/hierarchy-keys';
+import { anActivity } from '@/test/activity-fixture';
 import { aCrossPlanLink, anAssignment, aStep } from '@/test/fake-plan-server';
 
 // The model now composes the M3 undo/redo wrapper (`usePlanUndoRedo`), which reads the query client to

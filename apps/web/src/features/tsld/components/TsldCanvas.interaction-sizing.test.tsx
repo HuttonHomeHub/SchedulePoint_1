@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * Regression: taking the pen produced a canvas that looked completely dead — no bar grew while
  * drawing, no cursor guideline, no resize readout.
@@ -24,71 +26,18 @@ import { TsldPanel } from './TsldPanel';
 const NO_DEPS: DependencySummary[] = [];
 
 function activity(): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    id: 'a1',
-    planId: 'p1',
+  return anActivity({
     code: null,
-    name: 'Excavate',
-    description: null,
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-  };
+  });
 }
 
 /** The HTML default a canvas carries when nothing has sized it — the bug's signature. */

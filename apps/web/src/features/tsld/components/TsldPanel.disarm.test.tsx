@@ -7,6 +7,8 @@ import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The arm/disarm contract for canvas tool modes** (ADR-0064 F1.2 / T3).
  *
@@ -32,71 +34,18 @@ vi.mock('../../../config/env', async (importOriginal) => {
 const NO_DEPS: DependencySummary[] = [];
 
 function activity(id: string, name: string, laneIndex: number): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
+  return anActivity({
     id,
-    planId: 'p1',
     code: null,
     name,
-    description: null,
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
     laneIndex,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
-    lateStart: null,
-    lateFinish: null,
-    totalFloat: null,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-  };
+  });
 }
 
 const A = activity('a', 'Excavate', 0);

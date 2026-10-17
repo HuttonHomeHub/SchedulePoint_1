@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
+import { anActivity } from '@/test/activity-fixture';
 
 /**
  * The M5-epic advanced activity types (ADR-0035 §21/§24) with `VITE_ADVANCED_ACTIVITY_TYPES` forced ON —
@@ -28,71 +29,20 @@ vi.mock('@/config/env', async (importOriginal) => ({
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
-const BASE_LOE: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
+const BASE_LOE: ActivitySummary = anActivity({
   id: 'loe1',
   planId: 'pl1',
   code: 'LOE1',
   name: 'Supervision',
-  description: null,
   type: 'LEVEL_OF_EFFORT',
   durationDays: 0,
   durationMinutes: 0,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
   version: 3,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();

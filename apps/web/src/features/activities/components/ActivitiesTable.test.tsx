@@ -8,6 +8,8 @@ import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
+import { anActivity } from '@/test/activity-fixture';
+
 // This is the BASE table suite — the M4/M5 flag surfaces (Conflict badge, per-activity calendar
 // column) are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
 // `ActivitiesTable.constraint-violation.test.tsx` / `.calendar.test.tsx` suites.
@@ -17,71 +19,16 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ACTIVITY_CALENDAR_ENABLED: false,
 }));
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
-  id: 'a1',
+const ACTIVITY: ActivitySummary = anActivity({
   planId: 'pl1',
-  code: 'A100',
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
   status: 'IN_PROGRESS',
   percentComplete: 40,
   actualStart: '2026-05-01',
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
-  version: 1,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 /**
  * The gate object the real host always supplies. `usePlanWorkspaceModel` derives it in an

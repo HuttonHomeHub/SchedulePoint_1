@@ -21,51 +21,19 @@ import {
 import { CONFLICT_FLAGS } from './conflicts';
 import { linkRung } from './link-marks';
 
+import { anActivity } from '@/test/activity-fixture';
+
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    id: 'a1',
-    planId: 'p1',
+  return anActivity({
     code: null,
-    name: 'Excavate',
-    description: null,
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
     /**
      * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
      * activity nobody has placed** — and the fixture said `null` opposite non-null early dates,
@@ -80,31 +48,15 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
      */
     visualEffectiveStart: '2026-01-01',
     visualEffectiveFinish: '2026-01-03',
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
     // **Matched to `totalFloat` above, because the engine writes the pair together** (M-E-T7).
     // Left at `null` beside a `totalFloat` of 0, this fixture described a row the product cannot
     // produce — and once the Tier-1 sentence moved to the placed basis it silently stopped saying
     // anything about float at all, which is how a fixture that is merely incomplete turns into one
     // that is wrong.
     remainingFloat: 0,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
-  };
+  });
 }
 
 describe('activityLabel (shared identity) and centreItemText', () => {

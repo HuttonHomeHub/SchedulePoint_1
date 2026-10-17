@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { CLONE_FIELD_DECISIONS, projectClone, type ClonePlacement } from './clone-projection';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The field census.** The headline risk of this epic is silent: a copy that quietly drops a
  * definition field looks correct on every screen, and the planner discovers it weeks later when the
@@ -25,29 +27,17 @@ const PLACEMENT: ClonePlacement = {
 };
 
 function source(): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
+  return anActivity({
     id: 'a',
-    planId: 'p1',
     code: 'A1010',
-    name: 'Excavate',
     description: 'Dig it',
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
     calendarId: 'cal-1',
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
     expectedFinish: '2026-02-02',
     status: 'IN_PROGRESS',
     percentComplete: 60,
     actualStart: '2026-01-02',
-    actualFinish: null,
     remainingDurationDays: 1,
     remainingDurationMinutes: 480,
     suspendDate: '2026-01-05',
@@ -72,9 +62,7 @@ function source(): ActivitySummary {
     visualEffectiveStart: '2026-01-09',
     visualEffectiveFinish: '2026-01-11',
     visualConflict: true,
-    visualConflictReason: null,
     visualDriftDays: 2,
-    remainingFloat: null,
     levelingPriority: 4,
     leveledStart: '2026-01-12',
     leveledFinish: '2026-01-14',
@@ -87,9 +75,8 @@ function source(): ActivitySummary {
     budgetedExpense: 250_000,
     actualExpense: 100_000,
     version: 9,
-    createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-02T00:00:00Z',
-  };
+  });
 }
 
 describe('the clone field census', () => {
