@@ -461,6 +461,16 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(adminRead.body.data.canReadCost).toBe(true);
     expect(viewerRead.body.data.canReadCost).toBe(false);
 
+    // A Planner holds cost:read too, so the flag is true for a role that is not an admin.
+    const planner = await signUp('planner@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: planner.userId, role: 'PLANNER' },
+    });
+    const plannerRead = await planner.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}`)
+      .expect(200);
+    expect(plannerRead.body.data.canReadCost).toBe(true);
+
     const list = await viewer.agent
       .get(`/api/v1/organizations/acme/projects/${projectId}/plans`)
       .expect(200);
