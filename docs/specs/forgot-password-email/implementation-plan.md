@@ -90,11 +90,11 @@ row #242 closed with evidence; changeset present; CI checks read per CLAUDE.md �
 
 ## Risks & assumptions (rollup)
 
-| Risk | Likelihood | Mitigation |
-| ---- | ---------- | ---------- |
-| An external system (support email template, docs site, password manager) links `?email=` | Low — grep of repo finds none; Better Auth targets no such route (`TECH_DEBT.md:1916-1917`) | AC2: the link still works, it just does not prefill |
-| Owner later wants the kindness | Medium | Specify (c) then, against a measured drop-off (ADR-0142) |
-| Census docblocks drift ("nine") | Low | T6/T7 edit them in the same commit; A3's `toEqual` fails on any miss |
+| Risk                                                                                     | Likelihood                                                                                  | Mitigation                                                           |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| An external system (support email template, docs site, password manager) links `?email=` | Low — grep of repo finds none; Better Auth targets no such route (`TECH_DEBT.md:1916-1917`) | AC2: the link still works, it just does not prefill                  |
+| Owner later wants the kindness                                                           | Medium                                                                                      | Specify (c) then, against a measured drop-off (ADR-0142)             |
+| Census docblocks drift ("nine")                                                          | Low                                                                                         | T6/T7 edit them in the same commit; A3's `toEqual` fails on any miss |
 
 ## If Q1 is answered differently (sketch only, not approved scope)
 

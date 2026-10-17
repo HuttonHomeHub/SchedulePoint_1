@@ -23,10 +23,10 @@
 
 #368 was filed on 2026-09-22 with this measurement, taken in Chromium in the canvas scope:
 
-| token                | painted as             | vs ground |
-| -------------------- | ---------------------- | --------- |
-| `--muted-foreground` | every dependency line  | 5.31:1    |
-| `--primary`          | an on-schedule bar     | 3.14:1    |
+| token                | painted as            | vs ground |
+| -------------------- | --------------------- | --------- |
+| `--muted-foreground` | every dependency line | 5.31:1    |
+| `--primary`          | an on-schedule bar    | 3.14:1    |
 
 That is, the commonest bar in any programme was 1.69 times fainter than the lines joining the bars.
 
@@ -36,7 +36,7 @@ epic (ADR-0157, 2026-09-24) changed both marks:
 
 - Bars no longer use `--primary`. `resolveTsldPalette` reads `bar: token('--canvas-bar', …)`
   (`apps/web/src/features/tsld/render/palette.ts:172`). The value is `--canvas-bar:
-  oklch(0.629 0.13 150)` (`apps/web/src/styles/globals.css:859`).
+oklch(0.629 0.13 150)` (`apps/web/src/styles/globals.css:859`).
 - Links no longer use `--muted-foreground`. The link painter picks `palette.linkMinor` for a
   non-driving link and `palette.linkDriving` for an ordinary driving link
   (`paint.ts:1499-1507`). Those read `--canvas-link-minor: oklch(0.643 0.09 295)` and
@@ -52,15 +52,15 @@ is **no longer any link**. `paint.link-marks.test.ts:101` asserts that a link is
 
 **What survives, re-measured against today's tokens on the shipped ground (hand-computed, §4.2):**
 
-| mark (what the painter draws)                | token                 | on `--canvas` |
-| -------------------------------------------- | --------------------- | ------------- |
-| grid day / month / year                      | `--canvas-grid-*`     | 1.15 / 1.50 / 2.00 (published, `m0-solved.md:43-45`) |
-| **non-driving link** (1 px)                  | `--canvas-link-minor` | **3.37:1**    |
-| **ordinary (on-schedule) bar** (6 px) and its node rim | `--canvas-bar` | **3.27:1** |
-| **ordinary driving link** (2 px)             | `--canvas-link`       | **4.22:1**    |
-| near-critical bar, and a near-critical driving link | `--warning`    | 5.44:1        |
-| critical bar, and a critical driving link    | `--destructive`       | 8.43:1        |
-| constraint pin, ghost outlines (not links)   | `--muted-foreground`  | 5.92:1        |
+| mark (what the painter draws)                          | token                 | on `--canvas`                                        |
+| ------------------------------------------------------ | --------------------- | ---------------------------------------------------- |
+| grid day / month / year                                | `--canvas-grid-*`     | 1.15 / 1.50 / 2.00 (published, `m0-solved.md:43-45`) |
+| **non-driving link** (1 px)                            | `--canvas-link-minor` | **3.37:1**                                           |
+| **ordinary (on-schedule) bar** (6 px) and its node rim | `--canvas-bar`        | **3.27:1**                                           |
+| **ordinary driving link** (2 px)                       | `--canvas-link`       | **4.22:1**                                           |
+| near-critical bar, and a near-critical driving link    | `--warning`           | 5.44:1                                               |
+| critical bar, and a critical driving link              | `--destructive`       | 8.43:1                                               |
+| constraint pin, ghost outlines (not links)             | `--muted-foreground`  | 5.92:1                                               |
 
 The inversion the row described **still exists, but it is smaller and it has moved**:
 
@@ -73,8 +73,8 @@ The inversion the row described **still exists, but it is smaller and it has mov
 How it arose is on the record. `--canvas-bar` was solved as "the **lightest** green that clears 3:1"
 (`m0-solved.md:18`). `--canvas-link` was given "clears 4.0:1 on all three grounds"
 (`m0-solved.md:22`), and **no constraint is stated for that 4.0**. The one constraint near that link
-works the other way: the direction mark must clear 3:1 *on* the driving line. It sits at 3.01:1
-(`m0-solved.md:61`), so a lighter driving link would *relax* it.
+works the other way: the direction mark must clear 3:1 _on_ the driving line. It sits at 3.01:1
+(`m0-solved.md:61`), so a lighter driving link would _relax_ it.
 
 There is a second reason the inversion runs against the epic's own aim. ADR-0157 copies NetPoint's
 grammar, and in NetPoint's own picture the link is far quieter than the work: "NetPoint's own link
@@ -93,7 +93,7 @@ painter). The printed and exported diagram (paper) carries the same inks
 
 1. A planner scans a programme for **the work**: where each activity sits and how long it runs.
 2. A planner follows **the logic**: which link drives which activity. The critical and
-   near-critical rungs keep their own loud inks. Only the *ordinary* links are affected here.
+   near-critical rungs keep their own loud inks. Only the _ordinary_ links are affected here.
 3. A reader of an exported PNG/PDF or a printed programme does the same on paper.
 
 ### User journeys
@@ -107,7 +107,7 @@ two tokens. See §4.4.
 
 - **No ordinary link is lighter-contrast than the ordinary bar it joins**, on the screen ground, the
   month band, or paper. The same holds by construction for the critical and near-critical rungs,
-  where the link ink *is* the bar ink.
+  where the link ink _is_ the bar ink.
 - The ordinary bar is slightly stronger: 3.27 → 3.45:1. Its 1 px node rim, drawn in the same ink,
   gains the same amount.
 - Ordinary driving links become quieter, 4.22 → 3.40:1, while keeping their 2 px weight. **Critical
@@ -117,7 +117,7 @@ two tokens. See §4.4.
 ### Success criteria
 
 - SC-1: in `token-contrast.test.ts`, a new ordering block asserts `contrast(--canvas-bar) ≥
-  contrast(link)` for `--canvas-link` and `--canvas-link-minor`, on `--canvas`, `--canvas-band` and
+contrast(link)` for `--canvas-link` and `--canvas-link-minor`, on `--canvas`, `--canvas-band` and
   `--print`. It is **seen red against today's CSS** and green after the change.
 - SC-2: every existing canvas pair stays green with no relaxed floors. That covers the ladder
   (≥ 1.5 untinted and through the minimap tint), the label on the bar (≥ 4.5), the inset ring
@@ -136,13 +136,13 @@ two tokens. See §4.4.
 **Critical (the answer changes the design):**
 
 - **CQ-1: Which hierarchy?** The options are set out with their arithmetic in §4.7.
-  - **A (recommended, default):** *parity*. No ordinary link is louder than the ordinary bar. Two
+  - **A (recommended, default):** _parity_. No ordinary link is louder than the ordinary bar. Two
     token values change and the criticality ladder does not move. The honest limit: the bar ends
     up level with the links (1.01–1.02× in luminance), **not dominant**. Dominance is out of reach
     without moving the ladder. The arithmetic is in §4.3.
-  - **A+:** *dominance*. Bar ≈ 3.7:1, which also darkens near-critical and critical. That is five
+  - **A+:** _dominance_. Bar ≈ 3.7:1, which also darkens near-critical and critical. That is five
     tokens and every warning-hued cue (the conflict triangle, the lane-overlap cue, the minimap).
-  - **B:** close #368 as superseded by ADR-0157 and add only a *reported* ordering line. Nothing
+  - **B:** close #368 as superseded by ADR-0157 and add only a _reported_ ordering line. Nothing
     changes on screen.
 - **CQ-2: Is a short ADR wanted, or an amendment note on ADR-0157?** Default: a short ADR
   (§4.8). The ordering is a rule every future canvas mark must obey. That is the kind of thing
@@ -229,42 +229,42 @@ including the External Guest. **The pen (ADR-0028): no write of any kind, so not
 
 None at the boundary. The "validation" is the contrast matrix:
 
-| rule                                               | floor / ceiling                  | source |
-| -------------------------------------------------- | -------------------------------- | ------ |
-| every ordinary link ≤ ordinary bar (luminance)     | **new**, non-strict              | this spec |
-| bar on ground, band, paper                         | ≥ 3.0                            | `token-contrast.test.ts:1122-1128` |
-| link inks on ground, band, paper                   | ≥ 3.0                            | `:1089-1095`, `:937-961` |
-| bar vs near-critical, untinted                     | ≥ 1.5                            | `:209-213`, `:1130-1137` |
-| ladder through the minimap viewport tint           | ≥ 1.5                            | `:413-425` |
-| `--primary-foreground` on the bar (summary name)   | ≥ 4.5                            | `:252`, `:1139-1142` |
-| `--foreground` on the bar (inset ring)             | ≥ 3.0                            | `:253` |
-| `--canvas-link-mark` on minor, driving, bar, ground | ≥ 3.0 (≥ 4.5 on ground, as text) | `:1100-1120` |
-| link hue vs every bar rung                         | ΔE76 ≥ 5                         | `:1180-1189` |
-| minimap frame pair on bar ink                      | max(stroke, halo) ≥ 3            | `:358-365` |
-| every new value in the sRGB gamut                  | refused if not                   | `oklchInGamut`, `src/test/colour.ts` |
+| rule                                                | floor / ceiling                  | source                               |
+| --------------------------------------------------- | -------------------------------- | ------------------------------------ |
+| every ordinary link ≤ ordinary bar (luminance)      | **new**, non-strict              | this spec                            |
+| bar on ground, band, paper                          | ≥ 3.0                            | `token-contrast.test.ts:1122-1128`   |
+| link inks on ground, band, paper                    | ≥ 3.0                            | `:1089-1095`, `:937-961`             |
+| bar vs near-critical, untinted                      | ≥ 1.5                            | `:209-213`, `:1130-1137`             |
+| ladder through the minimap viewport tint            | ≥ 1.5                            | `:413-425`                           |
+| `--primary-foreground` on the bar (summary name)    | ≥ 4.5                            | `:252`, `:1139-1142`                 |
+| `--foreground` on the bar (inset ring)              | ≥ 3.0                            | `:253`                               |
+| `--canvas-link-mark` on minor, driving, bar, ground | ≥ 3.0 (≥ 4.5 on ground, as text) | `:1100-1120`                         |
+| link hue vs every bar rung                          | ΔE76 ≥ 5                         | `:1180-1189`                         |
+| minimap frame pair on bar ink                       | max(stroke, halo) ≥ 3            | `:358-365`                           |
+| every new value in the sRGB gamut                   | refused if not                   | `oklchInGamut`, `src/test/colour.ts` |
 
 ### Error scenarios
 
-| Scenario                                   | Detection                                    | Result                         | Status |
-| ------------------------------------------ | -------------------------------------------- | ------------------------------ | ------ |
-| a re-tune makes a link out-shout the bar   | ordering block, `token-contrast.test.ts`     | `pnpm test` red, naming the pair | n/a  |
-| new value out of the sRGB gamut            | solver refuses; gate's resolver              | M0 cannot propose it           | n/a    |
-| painter not reading the token (scope bug)  | Chromium pixel census                        | e2e red                        | n/a    |
-| a hard-coded old value left in a harness or test | `nodes.spec.ts:37` exact-value assertion fails | e2e red; fixed in M1-T2  | n/a    |
+| Scenario                                         | Detection                                      | Result                           | Status |
+| ------------------------------------------------ | ---------------------------------------------- | -------------------------------- | ------ |
+| a re-tune makes a link out-shout the bar         | ordering block, `token-contrast.test.ts`       | `pnpm test` red, naming the pair | n/a    |
+| new value out of the sRGB gamut                  | solver refuses; gate's resolver                | M0 cannot propose it             | n/a    |
+| painter not reading the token (scope bug)        | Chromium pixel census                          | e2e red                          | n/a    |
+| a hard-coded old value left in a harness or test | `nodes.spec.ts:37` exact-value assertion fails | e2e red; fixed in M1-T2          | n/a    |
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes |
-| -------------- | ------ | ----- |
-| Frontend       | low    | Two literals in `globals.css`. Fallback hexes in `palette.ts` (6 call sites). Comments beside the tokens. No component, route or state change. |
-| Backend        | none   | |
-| Database       | none   | No schema change, so database-architect is not engaged. |
-| API            | none   | |
-| Security       | none   | No input, no auth surface. |
-| Performance    | none   | A colour value does not change paint cost. Links are bucketed by *rung key*, not by ink value (`paint.ts:1499-1522`), so bucket counts and draw calls are identical. No ADR-0128 hardware reading is owed. |
-| Infrastructure | none   | No new Playwright config. The case joins the existing `e2e-netpoint-grammar` suite. |
-| Observability  | none   | |
-| Testing        | med    | New ordering block (red first). Solver output. One Chromium case with screenshots attached. Update `nodes.spec.ts:37,50` and `crossing-probe.ts:251`. |
+| Area           | Impact | Notes                                                                                                                                                                                                      |
+| -------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | low    | Two literals in `globals.css`. Fallback hexes in `palette.ts` (6 call sites). Comments beside the tokens. No component, route or state change.                                                             |
+| Backend        | none   |                                                                                                                                                                                                            |
+| Database       | none   | No schema change, so database-architect is not engaged.                                                                                                                                                    |
+| API            | none   |                                                                                                                                                                                                            |
+| Security       | none   | No input, no auth surface.                                                                                                                                                                                 |
+| Performance    | none   | A colour value does not change paint cost. Links are bucketed by _rung key_, not by ink value (`paint.ts:1499-1522`), so bucket counts and draw calls are identical. No ADR-0128 hardware reading is owed. |
+| Infrastructure | none   | No new Playwright config. The case joins the existing `e2e-netpoint-grammar` suite.                                                                                                                        |
+| Observability  | none   |                                                                                                                                                                                                            |
+| Testing        | med    | New ordering block (red first). Solver output. One Chromium case with screenshots attached. Update `nodes.spec.ts:37,50` and `crossing-probe.ts:251`.                                                      |
 
 **Recalc parity gate.** The CPM engine is not imported and no scheduling input is added, so
 `computeSchedule` is byte-identical by construction. **Layout parity.** No geometry changes, so
@@ -319,17 +319,17 @@ sRGB.
 The R, G and B rows were also evaluated for each proposed value, to confirm it is inside the gamut
 (every channel in [0, 1]).
 
-| colour | L C h | l / m / s | Y | Y + 0.05 |
-| ------ | ----- | --------- | - | -------- |
-| `--canvas` (ground) | 0.995 0.002 250 | 0.983065 / 0.985645 / 0.992483 | 0.985258 | **1.035258** |
-| `--canvas-band` | 0.988 0.003 250 | 0.961461 / 0.965274 / 0.975404 | 0.964702 | 1.014702 |
-| `--print` (white) | 1 0 0 | — | 1 | 1.05 |
-| `--canvas-bar` **today** | 0.629 0.13 150 | 0.214283 / 0.258150 / 0.171071 | 0.266184 | 0.316184 |
-| `--canvas-bar` **proposed** | **0.616 0.13 150** | 0.200619 / 0.242659 / 0.159332 | 0.250349 | 0.300349 |
-| `--canvas-link` **today** | 0.592 0.13 295 | 0.203660 / 0.209291 / 0.403988 | 0.195558 | 0.245558 |
-| `--canvas-link` **proposed** | **0.645 0.13 295** | 0.263806 / 0.270493 / 0.497258 | 0.254502 | 0.304502 |
-| `--canvas-link-minor` | 0.643 0.09 295 | 0.262725 / 0.267330 / 0.413394 | 0.257041 | 0.307041 |
-| `--plot-warning` | 0.528 0.13 62 | 0.192060 / 0.135977 / 0.052439 | 0.140181 (B clamped, §4.6) | 0.190181 |
+| colour                       | L C h              | l / m / s                      | Y                          | Y + 0.05     |
+| ---------------------------- | ------------------ | ------------------------------ | -------------------------- | ------------ |
+| `--canvas` (ground)          | 0.995 0.002 250    | 0.983065 / 0.985645 / 0.992483 | 0.985258                   | **1.035258** |
+| `--canvas-band`              | 0.988 0.003 250    | 0.961461 / 0.965274 / 0.975404 | 0.964702                   | 1.014702     |
+| `--print` (white)            | 1 0 0              | —                              | 1                          | 1.05         |
+| `--canvas-bar` **today**     | 0.629 0.13 150     | 0.214283 / 0.258150 / 0.171071 | 0.266184                   | 0.316184     |
+| `--canvas-bar` **proposed**  | **0.616 0.13 150** | 0.200619 / 0.242659 / 0.159332 | 0.250349                   | 0.300349     |
+| `--canvas-link` **today**    | 0.592 0.13 295     | 0.203660 / 0.209291 / 0.403988 | 0.195558                   | 0.245558     |
+| `--canvas-link` **proposed** | **0.645 0.13 295** | 0.263806 / 0.270493 / 0.497258 | 0.254502                   | 0.304502     |
+| `--canvas-link-minor`        | 0.643 0.09 295     | 0.262725 / 0.267330 / 0.413394 | 0.257041                   | 0.307041     |
+| `--plot-warning`             | 0.528 0.13 62      | 0.192060 / 0.135977 / 0.052439 | 0.140181 (B clamped, §4.6) | 0.190181     |
 
 Worked example, today's bar on the ground: 1.035258 / 0.316184 = **3.274**.
 
@@ -362,8 +362,8 @@ Figures used but not recomputed here, each taken from where the repository publi
 ### 4.3 Proposed token changes (Route A) and every pair they touch
 
 ```css
---canvas-bar:  oklch(0.616 0.13 150);  /* was 0.629, 3.27:1 → 3.45:1 */
---canvas-link: oklch(0.645 0.13 295);  /* was 0.592, 4.22:1 → 3.40:1 */
+--canvas-bar: oklch(0.616 0.13 150); /* was 0.629, 3.27:1 → 3.45:1 */
+--canvas-link: oklch(0.645 0.13 295); /* was 0.592, 4.22:1 → 3.40:1 */
 /* --canvas-link-minor, --canvas-link-mark, --plot-warning, --plot-destructive: unchanged */
 ```
 
@@ -372,13 +372,13 @@ not move. Only lightness is solved.
 
 **Contrast against each ground (Y + 0.05 of the ground ÷ Y + 0.05 of the ink):**
 
-| ink | `--canvas` today → new | `--canvas-band` today → new | `--print` today → new | floor |
-| --- | ---------------------- | --------------------------- | --------------------- | ----- |
-| `--canvas-link-minor` | 3.37 → 3.37 | 3.30 → 3.30 | 3.42 → 3.42 | ≥ 3 |
-| `--canvas-link` | 4.22 → **3.40** | 4.13 → **3.33** | 4.28 → **3.45** | ≥ 3 |
-| `--canvas-bar` | 3.27 → **3.45** | 3.21 → **3.38** | 3.32 → **3.50** | ≥ 3 |
-| `--warning` | 5.44 | 5.34 | 5.52 | ≥ 3 |
-| `--destructive` | 8.43 | 8.26 | 8.55 | ≥ 3 |
+| ink                   | `--canvas` today → new | `--canvas-band` today → new | `--print` today → new | floor |
+| --------------------- | ---------------------- | --------------------------- | --------------------- | ----- |
+| `--canvas-link-minor` | 3.37 → 3.37            | 3.30 → 3.30                 | 3.42 → 3.42           | ≥ 3   |
+| `--canvas-link`       | 4.22 → **3.40**        | 4.13 → **3.33**             | 4.28 → **3.45**       | ≥ 3   |
+| `--canvas-bar`        | 3.27 → **3.45**        | 3.21 → **3.38**             | 3.32 → **3.50**       | ≥ 3   |
+| `--warning`           | 5.44                   | 5.34                        | 5.52                  | ≥ 3   |
+| `--destructive`       | 8.43                   | 8.26                        | 8.55                  | ≥ 3   |
 
 **The ordering (the new rule).** Compare Y + 0.05. A smaller value is a darker ink and therefore a
 higher contrast on any lighter ground:
@@ -391,18 +391,18 @@ higher contrast on any lighter ground:
 
 **Every pair that involves a changed token, re-checked:**
 
-| pair | today | proposed | floor | computation (proposed) |
-| ---- | ----- | -------- | ----- | ---------------------- |
-| bar vs near-critical | 1.66 | **1.58** | ≥ 1.5 | 0.300349 / 0.190181 |
-| bar vs critical | 2.57 | 2.45 | ≥ 1.5 | 0.300349 / 0.122807 |
-| bar vs near-critical **through the 8 % minimap tint** | ≈ 1.62 (est.) | ≈ 1.54 (est.) | ≥ 1.5 | composited in sRGB; the gate (`token-contrast.test.ts:413-425`) is authoritative |
-| `--primary-foreground` on bar (summary name) | 5.21 | **4.95** | ≥ 4.5 | 0.300349 / 0.060688 |
-| `--foreground` inset ring on bar | 3.81 | **3.62** | ≥ 3 | 0.300349 / 0.083076 |
-| `--canvas-link-mark` on bar (attachment dot) | 3.87 | 3.68 | ≥ 3 | 0.300349 / 0.081710 |
-| `--canvas-link-mark` on driving line | **3.01** | **3.73** | ≥ 3 | 0.304502 / 0.081710 (improves) |
-| `--canvas-link-mark` on minor line | 3.76 | 3.76 | ≥ 3 | unchanged |
-| minimap frame stroke on bar ink | ≈ 4.8 | ≈ 4.6 | max(stroke, halo) ≥ 3 | frame ≈ 15.8:1 on ground (est.) ÷ 3.45 |
-| link inks vs bar rungs (ΔE76) | 82–108 | still ≫ 5 | ≥ 5 | the hues are unchanged; the solver re-reports it |
+| pair                                                  | today         | proposed      | floor                 | computation (proposed)                                                           |
+| ----------------------------------------------------- | ------------- | ------------- | --------------------- | -------------------------------------------------------------------------------- |
+| bar vs near-critical                                  | 1.66          | **1.58**      | ≥ 1.5                 | 0.300349 / 0.190181                                                              |
+| bar vs critical                                       | 2.57          | 2.45          | ≥ 1.5                 | 0.300349 / 0.122807                                                              |
+| bar vs near-critical **through the 8 % minimap tint** | ≈ 1.62 (est.) | ≈ 1.54 (est.) | ≥ 1.5                 | composited in sRGB; the gate (`token-contrast.test.ts:413-425`) is authoritative |
+| `--primary-foreground` on bar (summary name)          | 5.21          | **4.95**      | ≥ 4.5                 | 0.300349 / 0.060688                                                              |
+| `--foreground` inset ring on bar                      | 3.81          | **3.62**      | ≥ 3                   | 0.300349 / 0.083076                                                              |
+| `--canvas-link-mark` on bar (attachment dot)          | 3.87          | 3.68          | ≥ 3                   | 0.300349 / 0.081710                                                              |
+| `--canvas-link-mark` on driving line                  | **3.01**      | **3.73**      | ≥ 3                   | 0.304502 / 0.081710 (improves)                                                   |
+| `--canvas-link-mark` on minor line                    | 3.76          | 3.76          | ≥ 3                   | unchanged                                                                        |
+| minimap frame stroke on bar ink                       | ≈ 4.8         | ≈ 4.6         | max(stroke, halo) ≥ 3 | frame ≈ 15.8:1 on ground (est.) ÷ 3.45                                           |
+| link inks vs bar rungs (ΔE76)                         | 82–108        | still ≫ 5     | ≥ 5                   | the hues are unchanged; the solver re-reports it                                 |
 
 **Why 3.45 and not higher. These are the ceilings that bind without moving the ladder:**
 
@@ -515,7 +515,7 @@ not merely level with them.
 - This spec cannot measure perceived salience, and it does not pretend to.
 - Against it: the 4.0 target has no stated reason (§1), NetPoint's own picture puts links far below
   work, and an unenforced intent is how #368 arose in the first place.
-- If chosen, M1 shrinks to the *reported* ordering line and the row closes.
+- If chosen, M1 shrinks to the _reported_ ordering line and the row closes.
 
 **Route C: bar ≥ 4.44 with a white label (keep driving links loud). Rejected on arithmetic.**
 
@@ -537,7 +537,7 @@ not merely level with them.
 ### 4.8 ADR (proposed, outline)
 
 **ADR-NNNN (next free number): "A link is never louder than the work it joins."** It would
-*amend* ADR-0157 D2 and D4.
+_amend_ ADR-0157 D2 and D4.
 
 - **Context:** #368. This spec's §1 re-measurement. The 4.0 driving-link target with no stated
   constraint.

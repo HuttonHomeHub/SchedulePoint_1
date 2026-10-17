@@ -258,6 +258,7 @@ _If CQ-1 is answered (A), M1 is dropped and M2 is the first shipping milestone._
 critical spine has a start built for it.
 **Entry point:** as M1 (Arrange → Re-layout).
 **Journey:** `e2e-arrange`:
+
 - the M1 reference case updated to M2's recorded figures;
 - a new case: open Arrange, close it during computing, and assert no worker survives (the
   `optimise-layout` named workers are gone, read through the page's worker list);
@@ -393,7 +394,7 @@ critical spine has a start built for it.
   - accessibility-reviewer: only if copy or the progress announcement changed beyond the description
     string. The `RadioCardGroup` keyboard contract is not touched, so ADR-0111 is not triggered.
   - security-reviewer: a light pass on the extra workers and CSP.
-  Fold the blocking findings. File the non-blocking ones as a TECH_DEBT row.
+    Fold the blocking findings. File the non-blocking ones as a TECH_DEBT row.
 - **Complexity:** M
 - **Dependencies:** M1–M3
 - **Risks:** a late blocking finding → fold before closure.
@@ -443,13 +444,13 @@ in the container. Every benchmark figure in a record names its command and commi
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                     | Likelihood | Impact | Mitigation                                                                                  |
-| --------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------- |
-| #382's figures are stale and the problem is smaller (or gone)         | med        | high   | FC-R1 at M0. Stop early if gone.                                                            |
-| No bounded search reaches the hand layout (FC-R3)                     | med        | med    | Ship on FC-R2 + FC-R4. Record the gap. #382 stays open with numbers.                        |
-| Multi-start cost on low-core devices                                  | med        | med    | FC-R6, size gate for extra starts, start 0 always runs.                                     |
-| The budget lever spreads plans (the 2026-09-23 objection)             | med        | med    | Budget anchored on current rows; FC-R5 pictures to the owner before shipping.               |
-| Benchmark disagrees with the dialog                                   | low        | high   | FC-R0 blocks everything until they agree.                                                   |
-| Tidy changes by accident                                              | low        | med    | FC-R8 digest test; Re-layout-only option.                                                   |
-| Corpus thin at realistic sizes                                        | high       | low    | `scale-300` added. FC-R4 names the three plans that carry signal.                           |
-| Assumption: the container has Postgres, the API stack and Playwright Chromium | low  | high   | `scripts/e2e-local.sh` and `/opt/pw-browsers` are already used by existing measurement scripts. |
+| Risk / assumption                                                             | Likelihood | Impact | Mitigation                                                                                      |
+| ----------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------- |
+| #382's figures are stale and the problem is smaller (or gone)                 | med        | high   | FC-R1 at M0. Stop early if gone.                                                                |
+| No bounded search reaches the hand layout (FC-R3)                             | med        | med    | Ship on FC-R2 + FC-R4. Record the gap. #382 stays open with numbers.                            |
+| Multi-start cost on low-core devices                                          | med        | med    | FC-R6, size gate for extra starts, start 0 always runs.                                         |
+| The budget lever spreads plans (the 2026-09-23 objection)                     | med        | med    | Budget anchored on current rows; FC-R5 pictures to the owner before shipping.                   |
+| Benchmark disagrees with the dialog                                           | low        | high   | FC-R0 blocks everything until they agree.                                                       |
+| Tidy changes by accident                                                      | low        | med    | FC-R8 digest test; Re-layout-only option.                                                       |
+| Corpus thin at realistic sizes                                                | high       | low    | `scale-300` added. FC-R4 names the three plans that carry signal.                               |
+| Assumption: the container has Postgres, the API stack and Playwright Chromium | low        | high   | `scripts/e2e-local.sh` and `/opt/pw-browsers` are already used by existing measurement scripts. |

@@ -144,7 +144,7 @@ assert exactly one `role=status` whose text is "Calculating float paths…"; rel
 - **Testing:** the gate itself, plus a fixture case per rule.
 - **Development steps:**
   1. Write with the 14-entry declared map; **temporarily declare the 17 group-A sites as `pending:
-     'loading-skeletons Mn'`**, so each later milestone deletes its entries — a declaration the
+'loading-skeletons Mn'`**, so each later milestone deletes its entries — a declaration the
      epic must empty, not an exemption list that lives on. M7's done-check is that the `pending`
      bucket is empty.
   2. G2 likewise lists its three files as `pending` until M4.
@@ -313,7 +313,9 @@ pending shape and one sentence.
 > **Testing requirements:** unit per site; journeys above; SC-2 re-run for these six.
 
 ##### Task 1 — EV + Summary (≈ one PR) · S
+
 ##### Task 2 — Notes + History + Exceptions (≈ one PR) · M
+
 ##### Task 3 — WBS Members (≈ one PR) · S
 
 Each: build the skeleton beside the component it mirrors → convert the site → unit + journey →
@@ -400,15 +402,15 @@ the PR changes (§19.8).
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| The `aria-busy`/live-region reasoning (defect 5) does not match real screen readers | med | med | Conservative contract: the status is never inside `aria-busy`; reviewed by reading and accessibility-tree assertions (no device observation owed) |
-| E2E locators or measurement scripts match skeleton header text and pass early | med | med | skeleton table `aria-hidden`; text-locator audit in M2; `measure-column-fit.mjs` skips `[data-loading-shape]` with its control re-verified |
-| `SkeletonText` samples mis-size `fit` columns | med | low | SC-3 measured; withdrawal clause re-argues in writing |
-| Forced colours render sample text as fake data | low | high | `visibility:hidden`, never transparent; forced-colours journey |
-| A console-shaped skeleton leaks the staff surface | low | high | identity gate G1-declared `'gate'` with the ADR-0086 reason; security review |
-| Guest skeleton varies by token (oracle) | low | high | DOM-identity assertion across live and dead tokens |
-| CQ-2 concurrent request on a 404 subject | med | low | page replaced by `EntityLoadFailure`; alternative documented if the owner declines |
-| Activity-panel split unreadable before the plan loads | med | low | M0 establishes it; default split used and recorded against SC-2 |
-| Making `Spinner.label` required churns tests | high | low | mechanical; typecheck lists every site |
-| Banner/ADR counts drift (`check:counts`) | high | low | each PR updates CLAUDE.md's banner; `pnpm prepush` refuses otherwise |
+| Risk / assumption                                                                   | Likelihood | Impact | Mitigation                                                                                                                                        |
+| ----------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The `aria-busy`/live-region reasoning (defect 5) does not match real screen readers | med        | med    | Conservative contract: the status is never inside `aria-busy`; reviewed by reading and accessibility-tree assertions (no device observation owed) |
+| E2E locators or measurement scripts match skeleton header text and pass early       | med        | med    | skeleton table `aria-hidden`; text-locator audit in M2; `measure-column-fit.mjs` skips `[data-loading-shape]` with its control re-verified        |
+| `SkeletonText` samples mis-size `fit` columns                                       | med        | low    | SC-3 measured; withdrawal clause re-argues in writing                                                                                             |
+| Forced colours render sample text as fake data                                      | low        | high   | `visibility:hidden`, never transparent; forced-colours journey                                                                                    |
+| A console-shaped skeleton leaks the staff surface                                   | low        | high   | identity gate G1-declared `'gate'` with the ADR-0086 reason; security review                                                                      |
+| Guest skeleton varies by token (oracle)                                             | low        | high   | DOM-identity assertion across live and dead tokens                                                                                                |
+| CQ-2 concurrent request on a 404 subject                                            | med        | low    | page replaced by `EntityLoadFailure`; alternative documented if the owner declines                                                                |
+| Activity-panel split unreadable before the plan loads                               | med        | low    | M0 establishes it; default split used and recorded against SC-2                                                                                   |
+| Making `Spinner.label` required churns tests                                        | high       | low    | mechanical; typecheck lists every site                                                                                                            |
+| Banner/ADR counts drift (`check:counts`)                                            | high       | low    | each PR updates CLAUDE.md's banner; `pnpm prepush` refuses otherwise                                                                              |

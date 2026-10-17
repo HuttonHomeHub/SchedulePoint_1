@@ -101,16 +101,16 @@ which is no worse than today.
 
 ## 3. Technical analysis
 
-| Area            | Impact under (b)                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------------------- |
-| Router          | Delete `forgotPasswordRoute.validateSearch` (`router.tsx:585-588`) and its docblock mention          |
-| Route screen    | Drop `useSearch`/`email` (`forgot-password.tsx:1,29-30,89`)                                          |
-| Component       | Drop the `email` prop and `defaultValues` source (`RequestPasswordResetForm.tsx:37-53`); only caller is `forgot-password.tsx:89`; `message-once.test.tsx:38` already passes none |
-| Gates           | `router-search.test.ts:165-177` block removed; `router-search-census.structural.test.ts:78-88,124` 9→8; `search-consumer-census.structural.test.ts:80,84` (B3 fails on a stale entry, `:154-159`) |
-| Security/privacy| Strictly reduces surface: one fewer place an address can enter a URL                                 |
-| Performance     | None                                                                                                 |
-| Accessibility   | None — the field, label and focus order are unchanged                                                |
-| API / DB        | None                                                                                                 |
+| Area             | Impact under (b)                                                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Router           | Delete `forgotPasswordRoute.validateSearch` (`router.tsx:585-588`) and its docblock mention                                                                                                       |
+| Route screen     | Drop `useSearch`/`email` (`forgot-password.tsx:1,29-30,89`)                                                                                                                                       |
+| Component        | Drop the `email` prop and `defaultValues` source (`RequestPasswordResetForm.tsx:37-53`); only caller is `forgot-password.tsx:89`; `message-once.test.tsx:38` already passes none                  |
+| Gates            | `router-search.test.ts:165-177` block removed; `router-search-census.structural.test.ts:78-88,124` 9→8; `search-consumer-census.structural.test.ts:80,84` (B3 fails on a stale entry, `:154-159`) |
+| Security/privacy | Strictly reduces surface: one fewer place an address can enter a URL                                                                                                                              |
+| Performance      | None                                                                                                                                                                                              |
+| Accessibility    | None — the field, label and focus order are unchanged                                                                                                                                             |
+| API / DB         | None                                                                                                                                                                                              |
 
 **What option (a) would have cost, measured rather than assumed.**
 
@@ -174,12 +174,12 @@ dead URL branch. **User flow.** Unchanged for every reader who arrives via the a
 
 ### Alternatives considered
 
-| Option | What | Why not (default) |
-| ------ | ---- | ----------------- |
-| (a) URL + strip | `SignInForm` gains `onEmailChange`; sign-in screen composes `search: { email }`; forgot-password captures in `useState` and strips with `replace: true` | Referer/log exposure before strip; global history may keep it; address in `href` while typing; jsdom cannot test the mitigation |
-| (c) Navigation state | Same `SignInForm` change; link carries the address in router history `state`, not the URL; route keeps no `?email=` | No Referer/log/CSP exposure. Still a new public contract; history state persists for the tab; relies on TanStack `Link`'s `state` option, a dependency-internals claim that must be registered in `scripts/dependency-claims.json` and was **not verified here** (no `node_modules` in this checkout) |
-| (d) Fragment `#email=` | `share` precedent — fragments are not sent to servers | Still in history and visible; the router's hash handling would need its own verification; same contract change |
-| (e) Leave as is | — | Leaves a specified capability with no producer — the defect the row records |
+| Option                 | What                                                                                                                                                    | Why not (default)                                                                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) URL + strip        | `SignInForm` gains `onEmailChange`; sign-in screen composes `search: { email }`; forgot-password captures in `useState` and strips with `replace: true` | Referer/log exposure before strip; global history may keep it; address in `href` while typing; jsdom cannot test the mitigation                                                                                                                                                                       |
+| (c) Navigation state   | Same `SignInForm` change; link carries the address in router history `state`, not the URL; route keeps no `?email=`                                     | No Referer/log/CSP exposure. Still a new public contract; history state persists for the tab; relies on TanStack `Link`'s `state` option, a dependency-internals claim that must be registered in `scripts/dependency-claims.json` and was **not verified here** (no `node_modules` in this checkout) |
+| (d) Fragment `#email=` | `share` precedent — fragments are not sent to servers                                                                                                   | Still in history and visible; the router's hash handling would need its own verification; same contract change                                                                                                                                                                                        |
+| (e) Leave as is        | —                                                                                                                                                       | Leaves a specified capability with no producer — the defect the row records                                                                                                                                                                                                                           |
 
 ## 5. Links
 

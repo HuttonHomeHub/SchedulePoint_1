@@ -66,7 +66,7 @@ steps land in M2, where the capability becomes reachable (ADR-0081 §2).
 
 - **Description:** add a `CALENDAR_DELETED` branch in
   `apps/web/src/features/recently-deleted/model/restore-failure.ts`. It returns `It uses the calendar
-  “<name>”, which is deleted. Restore that calendar first, then restore this.` When the name is null
+“<name>”, which is deleted. Restore that calendar first, then restore this.` When the name is null
   it returns `It uses a calendar that no longer exists.` `library` is null.
 - **Complexity:** S · **Dependencies:** none
 - **Risks:** this changes today's resource message (`Restore the calendar first.`), so the
@@ -86,8 +86,8 @@ steps land in M2, where the capability becomes reachable (ADR-0081 §2).
     or add a subclass).
   - `use-plan-undo-redo.ts:351-355` already maps `ReplayFailure` to `failed` with `detail`.
   - Build the sentence in `history-result.ts` for each direction: `It uses the calendar “<name>”,
-    which was deleted after your edit. Restore that calendar from Recently deleted, then undo
-    again.` (or `redo again`).
+which was deleted after your edit. Restore that calendar from Recently deleted, then undo
+again.` (or `redo again`).
 - **Complexity:** S · **Dependencies:** none
 - **Risks:** amending ADR-0176 D3 before its ADR lands → the ADR-0198 draft is committed in this PR
   as `Proposed`, and becomes `Accepted` in M2.
@@ -120,7 +120,7 @@ undo strip after `Undo`.
 - In `apps/web/e2e/recently-deleted.spec.ts` (the base journey that already holds the calendar cases
   at `:240-286`): delete a plan, then delete its calendar through the API, open Recently deleted,
   assert the sub-line, press `Restore calendar first…: Mon-Wed`, confirm, then press `Restore plan
-  Plan`, and assert the plan is back. Include the a11y scan the suite already runs.
+Plan`, and assert the plan is back. Include the a11y scan the suite already runs.
 - In `apps/web/e2e-undo/undo.spec.ts`: delete an activity that has its own calendar, delete that
   calendar through the API, press Undo, and assert the strip sentence. Restore the calendar through
   the API, press **Try again**, and assert the activity is back.
@@ -324,11 +324,11 @@ Each task's PR must satisfy the Feature Completion Criteria in [`docs/PROCESS.md
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| ----------------- | ---------- | ------ | ---------- |
-| A deadlock from the new calendar and row locks | low | high | Fixed order (spec §4.6), argued by reading. The barrier test (M3). The full API e2e locally. database-architect review. |
-| The bin lateral is slow on a large client batch | med | med | EXPLAIN on the scale seed before choosing a shape. It runs per page root only. No index without a measurement. |
-| Restore latency regresses at 2,000 activities | low | low | Measure before and after (+10% budget). The guard is two indexed reads plus a handful of locks. |
-| Plans already live on a deleted calendar stay so | med (unknown count) | med | ADR-0195's remedy already covers them (restore the calendar). The owner can run spec §4.10's count query. |
-| Q2 answered "set aside" | — | med | Then 1.2 maps the reason to a new `calendar-deleted` set-aside clause instead of a throw (≈ the same size). The undo journey asserts the clause, not Try again. |
-| Q1 answered "re-point" | — | high | The design changes: an audit field for the re-point, a visible notice, and parity reasoning for the changed dates. Re-plan M2. |
+| Risk / assumption                                | Likelihood          | Impact | Mitigation                                                                                                                                                      |
+| ------------------------------------------------ | ------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A deadlock from the new calendar and row locks   | low                 | high   | Fixed order (spec §4.6), argued by reading. The barrier test (M3). The full API e2e locally. database-architect review.                                         |
+| The bin lateral is slow on a large client batch  | med                 | med    | EXPLAIN on the scale seed before choosing a shape. It runs per page root only. No index without a measurement.                                                  |
+| Restore latency regresses at 2,000 activities    | low                 | low    | Measure before and after (+10% budget). The guard is two indexed reads plus a handful of locks.                                                                 |
+| Plans already live on a deleted calendar stay so | med (unknown count) | med    | ADR-0195's remedy already covers them (restore the calendar). The owner can run spec §4.10's count query.                                                       |
+| Q2 answered "set aside"                          | —                   | med    | Then 1.2 maps the reason to a new `calendar-deleted` set-aside clause instead of a throw (≈ the same size). The undo journey asserts the clause, not Try again. |
+| Q1 answered "re-point"                           | —                   | high   | The design changes: an audit field for the re-point, a visible notice, and parity reasoning for the changed dates. Re-plan M2.                                  |

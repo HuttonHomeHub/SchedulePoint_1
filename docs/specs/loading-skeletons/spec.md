@@ -124,25 +124,25 @@ discriminator is applied, plus one refinement the row needed (see "dominant outc
 
 **A. First load, shape known — skeleton (17 sites; the row said "about fifteen").**
 
-| #   | Site (today)                                                | Row cited                | Settles into                                                                                     | Verdict                                                                                                                                 |
-| --- | ----------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | `routes/client-detail.tsx:22`                               | `:20`                    | breadcrumbs, `PageHeader` (+ `ChildCounts` aside, action), `SectionCard "Projects"` + table      | skeleton; body renders live (CQ-2)                                                                                                      |
-| A2  | `routes/project-detail.tsx:45`                              | `:43`                    | as A1 with `Plans` table + calendars section                                                     | skeleton; Plans renders live, calendars section waits (needs `projectName`, `ProjectCalendarsSection.tsx:334-335`)                      |
-| A3  | `routes/plan-detail.tsx:60`                                 | `:42`                    | the plan workspace (toolbar band, canvas, activity panel, foot row)                              | skeleton; **half-built already** (`:53-65` pulse bars + centred spinner) — finish it                                                    |
-| A4  | `staff/ui/accounts-panel.tsx:112`                           | `staff.tsx` (file gone)  | sentence + `DataTable`                                                                           | skeleton (table)                                                                                                                        |
-| A5  | `staff/ui/installation-panel.tsx:25`                        | ″                        | `KeyValueList` of 6 fixed labels                                                                 | skeleton                                                                                                                                |
-| A6  | `staff/ui/mail-panel.tsx:41`                                | `staff.tsx:149`          | condition line + `StatGrid` (3 fixed labels) + conditional table                                 | skeleton (condition line + stat grid; the table is conditional and not drawn)                                                           |
-| A7  | `staff/ui/retention-panel.tsx:52`                           | ″                        | condition/sentence + `DataTable` + footnote                                                      | skeleton                                                                                                                                |
-| A8  | `staff/ui/alerting-panel.tsx:27`                            | new since survey         | `KeyValueList` + condition strip                                                                 | skeleton                                                                                                                                |
-| A9  | `staff/ui/security-panel.tsx:64`                            | new since survey         | caveat + `DataTable`                                                                             | skeleton                                                                                                                                |
-| A10 | `earned-value/…/EarnedValuePanel.tsx:101`                   | `:122`/`:121`            | `StatGrid columns={3}` (6 fixed labels, 3 with `sub`) + 11-column table                          | skeleton                                                                                                                                |
-| A11 | `schedule/…/ScheduleSummaryStrip.tsx:45`                    | `:54`                    | `ContextStrip` with **5 always-present facts** + conditional facts; or a "not calculated" note   | skeleton of the 5 fixed facts; the rarer branches reflow (stated, accepted)                                                             |
-| A12 | `notes/…/NoteThread.tsx:86`                                 | `:86`                    | list of note items                                                                               | skeleton (3 item shapes)                                                                                                                |
-| A13 | `activity-history/…/ActivityHistoryPanel.tsx:86`            | **not in row** (ADR-0174 shipped after it) | list of history entries                                                         | skeleton                                                                                                                                |
-| A14 | `wbs/…/ActivityMembersPanel.tsx:207`                        | `:140`                   | search field + count line + checkbox list                                                        | skeleton; fixes defect 2                                                                                                                |
-| A15 | `calendars/…/CalendarExceptionsEditor.tsx:433`              | `:433`                   | list of exception rows                                                                           | skeleton                                                                                                                                |
-| A16 | `members/…/AcceptInvitationCard.tsx:75`                     | `:75`                    | **one of five** terminal states — but **every one opens with the same `CardHeader`** (title + description, `:84-87`, `:102-106`, `:118-123`, …) | skeleton of the **card header only**; nothing for the action area, whose shape differs per outcome                                   |
-| A17 | `share/…/GuestPlanView.tsx:66` (rendered from `:170`, `:177`) | `:64`                  | guest header + read-only canvas                                                                  | skeleton; fixes defect 4                                                                                                                |
+| #   | Site (today)                                                  | Row cited                                  | Settles into                                                                                                                                    | Verdict                                                                                                            |
+| --- | ------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| A1  | `routes/client-detail.tsx:22`                                 | `:20`                                      | breadcrumbs, `PageHeader` (+ `ChildCounts` aside, action), `SectionCard "Projects"` + table                                                     | skeleton; body renders live (CQ-2)                                                                                 |
+| A2  | `routes/project-detail.tsx:45`                                | `:43`                                      | as A1 with `Plans` table + calendars section                                                                                                    | skeleton; Plans renders live, calendars section waits (needs `projectName`, `ProjectCalendarsSection.tsx:334-335`) |
+| A3  | `routes/plan-detail.tsx:60`                                   | `:42`                                      | the plan workspace (toolbar band, canvas, activity panel, foot row)                                                                             | skeleton; **half-built already** (`:53-65` pulse bars + centred spinner) — finish it                               |
+| A4  | `staff/ui/accounts-panel.tsx:112`                             | `staff.tsx` (file gone)                    | sentence + `DataTable`                                                                                                                          | skeleton (table)                                                                                                   |
+| A5  | `staff/ui/installation-panel.tsx:25`                          | ″                                          | `KeyValueList` of 6 fixed labels                                                                                                                | skeleton                                                                                                           |
+| A6  | `staff/ui/mail-panel.tsx:41`                                  | `staff.tsx:149`                            | condition line + `StatGrid` (3 fixed labels) + conditional table                                                                                | skeleton (condition line + stat grid; the table is conditional and not drawn)                                      |
+| A7  | `staff/ui/retention-panel.tsx:52`                             | ″                                          | condition/sentence + `DataTable` + footnote                                                                                                     | skeleton                                                                                                           |
+| A8  | `staff/ui/alerting-panel.tsx:27`                              | new since survey                           | `KeyValueList` + condition strip                                                                                                                | skeleton                                                                                                           |
+| A9  | `staff/ui/security-panel.tsx:64`                              | new since survey                           | caveat + `DataTable`                                                                                                                            | skeleton                                                                                                           |
+| A10 | `earned-value/…/EarnedValuePanel.tsx:101`                     | `:122`/`:121`                              | `StatGrid columns={3}` (6 fixed labels, 3 with `sub`) + 11-column table                                                                         | skeleton                                                                                                           |
+| A11 | `schedule/…/ScheduleSummaryStrip.tsx:45`                      | `:54`                                      | `ContextStrip` with **5 always-present facts** + conditional facts; or a "not calculated" note                                                  | skeleton of the 5 fixed facts; the rarer branches reflow (stated, accepted)                                        |
+| A12 | `notes/…/NoteThread.tsx:86`                                   | `:86`                                      | list of note items                                                                                                                              | skeleton (3 item shapes)                                                                                           |
+| A13 | `activity-history/…/ActivityHistoryPanel.tsx:86`              | **not in row** (ADR-0174 shipped after it) | list of history entries                                                                                                                         | skeleton                                                                                                           |
+| A14 | `wbs/…/ActivityMembersPanel.tsx:207`                          | `:140`                                     | search field + count line + checkbox list                                                                                                       | skeleton; fixes defect 2                                                                                           |
+| A15 | `calendars/…/CalendarExceptionsEditor.tsx:433`                | `:433`                                     | list of exception rows                                                                                                                          | skeleton                                                                                                           |
+| A16 | `members/…/AcceptInvitationCard.tsx:75`                       | `:75`                                      | **one of five** terminal states — but **every one opens with the same `CardHeader`** (title + description, `:84-87`, `:102-106`, `:118-123`, …) | skeleton of the **card header only**; nothing for the action area, whose shape differs per outcome                 |
+| A17 | `share/…/GuestPlanView.tsx:66` (rendered from `:170`, `:177`) | `:64`                                      | guest header + read-only canvas                                                                                                                 | skeleton; fixes defect 4                                                                                           |
 
 **B. A gate — the answer decides which layout renders at all; stays a spinner (6).**
 `app/router.tsx:545`, `:562` (route-level guards/Suspense); `routes/forgot-password.tsx:42`
@@ -185,14 +185,14 @@ not scope growth.
 
 ### Users
 
-| Who                                         | Sees today                                    | Needs                                                                    |
-| ------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------ |
-| Planner / Org Admin / Contributor / Viewer  | spinner → jump on detail pages, dialogs, tabs | the page's frame at once; nothing moves under the cursor when data lands |
-| Screen-reader user (any role)               | duplicated or wrong announcements (defects 1–6) | **one** sentence saying what is loading, then the content             |
-| Reduced-motion user                         | already static (global rule, `globals.css:1770-1780`) | unchanged — and proven by a test rather than assumed            |
-| Windows High Contrast user                  | spinner icon visible (currentColor)           | the skeleton must stay visible when backgrounds are forced (§4.6)        |
-| External Guest                              | centred spinner on a bare page                | the shared view's frame; the same frame for every token (no oracle)      |
-| Staff                                       | six spinners, six announcements               | panel-shaped skeletons and one page sentence (ADR-0178 D-6)              |
+| Who                                        | Sees today                                            | Needs                                                                    |
+| ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| Planner / Org Admin / Contributor / Viewer | spinner → jump on detail pages, dialogs, tabs         | the page's frame at once; nothing moves under the cursor when data lands |
+| Screen-reader user (any role)              | duplicated or wrong announcements (defects 1–6)       | **one** sentence saying what is loading, then the content                |
+| Reduced-motion user                        | already static (global rule, `globals.css:1770-1780`) | unchanged — and proven by a test rather than assumed                     |
+| Windows High Contrast user                 | spinner icon visible (currentColor)                   | the skeleton must stay visible when backgrounds are forced (§4.6)        |
+| External Guest                             | centred spinner on a bare page                        | the shared view's frame; the same frame for every token (no oracle)      |
+| Staff                                      | six spinners, six announcements                       | panel-shaped skeletons and one page sentence (ADR-0178 D-6)              |
 
 ### Primary use cases
 
@@ -379,27 +379,27 @@ None (no input). Type-level: `Spinner`'s `label` becomes **required**; `Column.s
 
 ### Error scenarios
 
-| Scenario                         | Detection                  | User-facing result                                   | Status        |
-| -------------------------------- | -------------------------- | ---------------------------------------------------- | ------------- |
-| Subject not found (client, plan) | query error, 404           | `EntityLoadFailure` replaces the page (unchanged)    | 404           |
-| Read failed                      | query error                | the site's existing error + retry (unchanged)        | 5xx / network |
-| EV without `cost:read`           | 403                        | restricted notice (unchanged)                        | 403           |
-| Dead share token / rate-limited  | 404 / 429                  | uniform "no longer available" / "too many requests"  | 404 / 429     |
-| Not staff                        | identity `null`            | the router's `NotFoundScreen` (unchanged, gate kept) | 404           |
+| Scenario                         | Detection        | User-facing result                                   | Status        |
+| -------------------------------- | ---------------- | ---------------------------------------------------- | ------------- |
+| Subject not found (client, plan) | query error, 404 | `EntityLoadFailure` replaces the page (unchanged)    | 404           |
+| Read failed                      | query error      | the site's existing error + retry (unchanged)        | 5xx / network |
+| EV without `cost:read`           | 403              | restricted notice (unchanged)                        | 403           |
+| Dead share token / rate-limited  | 404 / 429        | uniform "no longer available" / "too many requests"  | 404 / 429     |
+| Not staff                        | identity `null`  | the router's `NotFoundScreen` (unchanged, gate kept) | 404           |
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes |
-| -------------- | ------ | ----- |
-| Frontend       | **med** | New `LoadingShape`, `SkeletonText`, five archetype skeletons; contract changes to `Spinner`, `Column`, `QueryPanel` (wraps its `skeleton`), `Skeleton` (`data-skeleton`); 17 sites + 3 hand-rolled pulses + `RoutePending` converge. |
-| Backend        | none   | — |
-| Database       | none   | No schema change, so database-architect is not engaged (§19.3 applies to schema only). |
-| API            | none   | No endpoint, DTO or OpenAPI change. CQ-2 changes **when** an existing list request starts, not what it asks. |
-| Security       | low    | Two invariants: the staff identity gate stays generic (ADR-0086/#459); guest and invitation skeletons are token-invariant (no existence oracle, ADR-0051). Skeletons render no server data. |
+| Area           | Impact  | Notes                                                                                                                                                                                                                                 |
+| -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | **med** | New `LoadingShape`, `SkeletonText`, five archetype skeletons; contract changes to `Spinner`, `Column`, `QueryPanel` (wraps its `skeleton`), `Skeleton` (`data-skeleton`); 17 sites + 3 hand-rolled pulses + `RoutePending` converge.  |
+| Backend        | none    | —                                                                                                                                                                                                                                     |
+| Database       | none    | No schema change, so database-architect is not engaged (§19.3 applies to schema only).                                                                                                                                                |
+| API            | none    | No endpoint, DTO or OpenAPI change. CQ-2 changes **when** an existing list request starts, not what it asks.                                                                                                                          |
+| Security       | low     | Two invariants: the staff identity gate stays generic (ADR-0086/#459); guest and invitation skeletons are token-invariant (no existence oracle, ADR-0051). Skeletons render no server data.                                           |
 | Performance    | low (+) | Skeleton DOM is tens of nodes per surface. CQ-2 removes a request waterfall on client/project detail (two sequential reads become concurrent). No new dependency; bundle delta expected < 1 kB gz (`check-bundle-size.mjs` confirms). |
-| Infrastructure | none   | No new Playwright config, no CI step: journeys extend existing suites. The new structural gate is a Vitest file inside `pnpm test`. |
-| Observability  | none   | — |
-| Testing        | **med** | Unit (each primitive + each site's pending branch), structural gate, journeys with **held** responses in 8 existing suites, reduced-motion + forced-colours assertions, a measurement script for SC-2/SC-3. |
+| Infrastructure | none    | No new Playwright config, no CI step: journeys extend existing suites. The new structural gate is a Vitest file inside `pnpm test`.                                                                                                   |
+| Observability  | none    | —                                                                                                                                                                                                                                     |
+| Testing        | **med** | Unit (each primitive + each site's pending branch), structural gate, journeys with **held** responses in 8 existing suites, reduced-motion + forced-colours assertions, a measurement script for SC-2/SC-3.                           |
 
 ### Dependencies
 
@@ -568,12 +568,12 @@ with the archetype so the two cannot drift — the `HEAD_DEFAULT`/`CELL_DEFAULT`
 for values. Each sets `aria-hidden` on its own root too, so misuse outside `LoadingShape` is still
 silent to assistive technology.
 
-| Skeleton                                   | Props                                                              | Draws                                                                                     |
-| ------------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `PageHeaderSkeleton`                       | `description?: boolean`, `aside?: boolean`, `actions?: 0 \| 1 \| 2` | `h1`-line-height title block, description line, aside block, control-height action blocks — never live controls |
-| `StatGridSkeleton`                         | `items: { label: string; sub?: boolean }[]`, `columns?: 3 \| 4`     | real labels; `text-xl`-line-height value blocks; `text-xs` sub blocks                      |
-| `KeyValueListSkeleton`                     | `items: { label: string; consequence?: boolean }[]`                | real labels; value lines; consequence lines                                               |
-| `ContextStripSkeleton` (`form-layout.tsx`) | `labels: string[]`, `framed?: boolean`                             | real micro-caps labels; value blocks; `surface="muted"` when framed                        |
+| Skeleton                                   | Props                                                               | Draws                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `PageHeaderSkeleton`                       | `description?: boolean`, `aside?: boolean`, `actions?: 0 \| 1 \| 2` | `h1`-line-height title block, description line, aside block, control-height action blocks — never live controls          |
+| `StatGridSkeleton`                         | `items: { label: string; sub?: boolean }[]`, `columns?: 3 \| 4`     | real labels; `text-xl`-line-height value blocks; `text-xs` sub blocks                                                    |
+| `KeyValueListSkeleton`                     | `items: { label: string; consequence?: boolean }[]`                 | real labels; value lines; consequence lines                                                                              |
+| `ContextStripSkeleton` (`form-layout.tsx`) | `labels: string[]`, `framed?: boolean`                              | real micro-caps labels; value blocks; `surface="muted"` when framed                                                      |
 | `DataTableSkeleton<T>` (`data-table.tsx`)  | `columns: Column<T>[]`, `rows?` (default 3, as `SKELETON_ROWS`)     | real header text (`srHeader`/`headerCell` columns: blank); per-cell `SkeletonText` when `sample` set, else today's block |
 
 **`DataTable` / `Column` (#341)** — `Column.sample?: string`: one plausible value for the column
@@ -632,7 +632,7 @@ byte-for-byte what they are today.
 3. `aria-busy` marks the **persisting** container that will receive the content, never a container
    that is about to unmount.
 4. **Reduced motion:** already global (`globals.css:1770-1780`: `animation-duration: 0.01ms
-   !important; animation-iteration-count: 1 !important`), so `animate-pulse` runs one instantaneous
+!important; animation-iteration-count: 1 !important`), so `animate-pulse` runs one instantaneous
    iteration and rests at full opacity. No component-level code; SC-5 proves it in a real browser.
 5. **Forced colours:** `[data-skeleton]` gets a `GrayText` outline (§4.6).
 6. **No live control inside a skeleton** — breadcrumbs, actions and pickers appear as blocks.

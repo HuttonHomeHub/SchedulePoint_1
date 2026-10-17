@@ -95,6 +95,7 @@ says the hint. It then presses `Alt+→` twice, asserts **one** intercepted
   The hint returns "Dragging any of these, or pressing Alt with an arrow key, moves all N
   activities." The drag adopts `pluralMoveAnnouncement` (spec D9). Its `STARTS_NOT_CHANGED_NOTE`
   suffix is kept.
+
 - **Complexity:** S
 - **Dependencies:** T1
 - **Risks:** copy drift between bar and speech. Mitigated by one function used by both, plus a test
@@ -244,13 +245,13 @@ Each task's PR satisfies the Feature Completion Criteria in [`docs/PROCESS.md`](
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                                                | Likelihood | Impact | Mitigation                                                                                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| A burst committed before props reflect the prior write sends stale versions                                                      | med        | low    | Bounded version-advance wait (spec §2 workflow 3). A residual 409 is all-or-nothing and bannered. Unit-tested.                     |
-| The design must not depend on TanStack Query's `onSettled`-await internals. It does not: the wait reads versions, not timing.     | n/a        | n/a    | Stated so no dependency-internals claim is needed (`scripts/dependency-claims.json`).                                              |
-| The single-bar nudge regresses                                                                                                   | low        | high   | Its file is not edited beyond one export, and its suite passes with zero edits.                                                    |
-| Coalescing merges two different selections                                                                                       | low        | med    | The key is derived from the sorted id set, via a shared helper. Negative test.                                                     |
-| The hint misleads a reader who cannot write                                                                                      | low        | med    | `canMove` defaults to `false` and is gated on `bulk.gate.writable`.                                                                |
-| The live-region wording reads badly in a real screen reader                                                                      | med        | low    | accessibility-reviewer before release, executing it (ADR-0111's spirit; not bound by its letter, spec V15).                        |
-| V9 (drag lane collapse) is real and planners see the keyboard and the drag disagree at the top lane                              | med        | low    | Filed as a finding. The keyboard behaviour is the correct one to converge on.                                                      |
-| A WBS summary can be in the selection                                                                                            | unknown    | low    | T4 step 1 verifies before building.                                                                                                 |
+| Risk / assumption                                                                                                             | Likelihood | Impact | Mitigation                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| A burst committed before props reflect the prior write sends stale versions                                                   | med        | low    | Bounded version-advance wait (spec §2 workflow 3). A residual 409 is all-or-nothing and bannered. Unit-tested. |
+| The design must not depend on TanStack Query's `onSettled`-await internals. It does not: the wait reads versions, not timing. | n/a        | n/a    | Stated so no dependency-internals claim is needed (`scripts/dependency-claims.json`).                          |
+| The single-bar nudge regresses                                                                                                | low        | high   | Its file is not edited beyond one export, and its suite passes with zero edits.                                |
+| Coalescing merges two different selections                                                                                    | low        | med    | The key is derived from the sorted id set, via a shared helper. Negative test.                                 |
+| The hint misleads a reader who cannot write                                                                                   | low        | med    | `canMove` defaults to `false` and is gated on `bulk.gate.writable`.                                            |
+| The live-region wording reads badly in a real screen reader                                                                   | med        | low    | accessibility-reviewer before release, executing it (ADR-0111's spirit; not bound by its letter, spec V15).    |
+| V9 (drag lane collapse) is real and planners see the keyboard and the drag disagree at the top lane                           | med        | low    | Filed as a finding. The keyboard behaviour is the correct one to converge on.                                  |
+| A WBS summary can be in the selection                                                                                         | unknown    | low    | T4 step 1 verifies before building.                                                                            |

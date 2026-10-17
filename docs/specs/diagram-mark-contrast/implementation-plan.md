@@ -43,6 +43,7 @@ plan's diagram.
 > **Complexity:** M
 > **Dependencies:** spec approved (CQ-1 answered)
 > **Risks:**
+>
 > - The hand arithmetic in the spec is off by more than 0.01. Mitigation: the solver is the
 >   instrument and the spec's figures are superseded by `m0-solved.md`.
 > - The minimap-tint margin is thinner than the estimate. Mitigation: the solver includes the tint
@@ -131,12 +132,13 @@ plan's diagram.
 - **Development steps:**
   1. Write the block red-first against the shipped CSS. Then add the overlay and see it green.
   2. Record the mutations, then `pnpm prepush`.
-  3. **For Route B**, this task becomes a *reported* ordering line only, the milestone ends, and
+  3. **For Route B**, this task becomes a _reported_ ordering line only, the milestone ends, and
      the epic jumps to M2-T2.
 
 ### Milestone M1: Ship the two values, proven on real pixels
 
 **Outcome:** on every diagram:
+
 - ordinary driving links (≈ 3.40:1) and non-driving links (3.37:1) are no louder than the
   ordinary bar (≈ 3.45:1);
 - critical and near-critical links are unchanged.
@@ -161,6 +163,7 @@ Playwright config.
 > **Complexity:** M
 > **Dependencies:** M0
 > **Risks:**
+>
 > - A hard-coded old value is missed. Mitigation: the grep below, and `nodes.spec.ts:37`'s exact
 >   assertion fails loudly.
 > - The look regresses. Mitigation: screenshots, plus the M2 ux and accessibility reviews.
@@ -196,13 +199,14 @@ Playwright config.
     - `#846cc2` at `:166,273`.
 
     Use M0's exact hex.
+
   - `apps/web/e2e-netpoint-grammar/nodes.spec.ts:37`, the exact token assertion, and `:50`, the
     comment's rgb.
   - `apps/web/scripts/crossing-probe.ts:251` (`bar: '#459e5d'`).
 - **Complexity:** S
 - **Dependencies:** M1-T1
 - **Risks:** a copy outside these files. Mitigation: grep `apps/web` for `459e5d|846cc2|0\.629 0\.13
-  150|0\.592 0\.13 295|69, ?158, ?93` and expect zero hits. The 2026-10-17 grep found exactly the
+150|0\.592 0\.13 295|69, ?158, ?93` and expect zero hits. The 2026-10-17 grep found exactly the
   files above.
 - **Testing:** `palette.test.ts` and `print-palette.structural.test.ts` (fallback parity), and
   `nodes.spec.ts`.
@@ -291,6 +295,7 @@ folded with a test seen red, and #368 is closed with evidence.
 
   The performance reviewer is **not** owed. Bucketing is by rung key (`paint.ts:1499-1522`), so no
   draw-call change is possible from a value change. Say so in the PR.
+
 - **Complexity:** S
 - **Dependencies:** M1
 - **Risks:** none beyond the feature risk above.
@@ -331,6 +336,7 @@ No milestone touches the engine, the API, the schema or geometry, so recalc pari
 parity hold by construction.
 
 Model routing (§19.14):
+
 - this plan and its answers: Opus;
 - M0–M2 build: the **builder** agent (Sonnet);
 - reviews: Sonnet reviewers.
@@ -338,6 +344,7 @@ Model routing (§19.14):
 ## Definition of Done (per task)
 
 Each task's PR satisfies the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md):
+
 - code, tests (`pnpm prepush`, plus `scripts/e2e-local.sh web:netpoint-grammar` for M0-T1 and
   M1-T3);
 - docs;
@@ -352,13 +359,13 @@ reviewer agent.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| ----------------- | ---------- | ------ | ---------- |
-| Hand-computed figures in the spec are off by more than 0.01 | low | low | The M0 solver supersedes them. The spec says so in its header note. |
-| Ladder through the minimap tint lands under 1.5 at bar 3.45 (estimated ≈ 1.54) | med | med | The solver includes the tint as a constraint and lowers the bar if needed. The gate at `token-contrast.test.ts:413-425` fails loudly. |
-| Parity, not dominance, does not satisfy "work leads" | med | low | Stated plainly in the spec (CQ-1). Route A+ is costed. |
-| Quieter ordinary driving links are harder to follow | low | med | Weight (2 px against 1 px) and chroma are unchanged. The mark contrast on the line improves (3.01 → ≈ 3.73). Critical and near-critical links are unchanged. The M2 UX review judges it on pictures. |
-| A hard-coded old value is missed | low | low | The grep in M1-T2, and `nodes.spec.ts:37`'s exact-value assertion. |
-| Gantt composite turns out under 3:1 | med | med | Measured in M0-T1 and filed as its own row. Route A slightly improves it either way. |
-| `--plot-warning` out of gamut | med | low | Confirmed in M0-T1 and filed. The luminance effect is ≈ 0.0005. |
-| The minimap is a different diagram | low | low | It reads the same bar token. Its frame pair and tint pairs are in the gate. |
+| Risk / assumption                                                              | Likelihood | Impact | Mitigation                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------ | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hand-computed figures in the spec are off by more than 0.01                    | low        | low    | The M0 solver supersedes them. The spec says so in its header note.                                                                                                                                  |
+| Ladder through the minimap tint lands under 1.5 at bar 3.45 (estimated ≈ 1.54) | med        | med    | The solver includes the tint as a constraint and lowers the bar if needed. The gate at `token-contrast.test.ts:413-425` fails loudly.                                                                |
+| Parity, not dominance, does not satisfy "work leads"                           | med        | low    | Stated plainly in the spec (CQ-1). Route A+ is costed.                                                                                                                                               |
+| Quieter ordinary driving links are harder to follow                            | low        | med    | Weight (2 px against 1 px) and chroma are unchanged. The mark contrast on the line improves (3.01 → ≈ 3.73). Critical and near-critical links are unchanged. The M2 UX review judges it on pictures. |
+| A hard-coded old value is missed                                               | low        | low    | The grep in M1-T2, and `nodes.spec.ts:37`'s exact-value assertion.                                                                                                                                   |
+| Gantt composite turns out under 3:1                                            | med        | med    | Measured in M0-T1 and filed as its own row. Route A slightly improves it either way.                                                                                                                 |
+| `--plot-warning` out of gamut                                                  | med        | low    | Confirmed in M0-T1 and filed. The luminance effect is ≈ 0.0005.                                                                                                                                      |
+| The minimap is a different diagram                                             | low        | low    | It reads the same bar token. Its frame pair and tint pairs are in the gate.                                                                                                                          |

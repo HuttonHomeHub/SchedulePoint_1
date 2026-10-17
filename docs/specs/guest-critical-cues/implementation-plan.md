@@ -218,12 +218,13 @@ and measures near-critical ink after **Fit to plan** (FC-7, FC-8).
 > **Complexity:** M (the pixel limb)
 > **Dependencies:** M2-T1, M2-T2, M1 deployed in the local stack
 > **Risks:**
+>
 > - The ink count may not discriminate because of anti-aliasing or a missing token. Mitigation:
 >   read the colour from the canvas surface's computed style, use a tolerance, and assert a floor
 >   only. If it cannot discriminate, **stop** (spec §2, after FC-8).
 > - The `i` key is bound only when `CANVAS_MULTI_SELECT_ENABLED`. It is default-on
 >   (`env.ts:1326-1327`), and the suite runs default config.
-> **Testing requirements:** Playwright, Chromium, axe pass on the guest page.
+>   **Testing requirements:** Playwright, Chromium, axe pass on the guest page.
 
 ##### Task M2-T3: `e2e-share` journey
 
@@ -280,12 +281,12 @@ version impact (minor, pre-1.0).
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                     | Likelihood | Impact | Mitigation                                                                                                                   |
-| ------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| R1: `isDriving` lets a guest infer that some non-logic bound (constraint or external date) exists | certain    | low    | Q1 asks the product owner to accept it in words. If declined, drop D2 (a deletion, not a redesign).                          |
-| `ResourceAssignment.isDriving` confused with the link flag                            | low        | high   | Named exclusion in the DTO docblock, the ADR and API.md. The wire forbidden list keeps `resourceAssignments` (FC-4).         |
-| A member a11y sentence changes by accident                                            | low        | med    | FC-6 byte-identical pin. The existing suite passes unchanged.                                                                |
-| The pixel limb is flaky or cannot discriminate                                        | med        | med    | Token-derived colour, a floor not an exact count, and stop rather than ship on text alone.                                   |
-| Every live share link changes on release                                              | certain    | low    | Intended (Q3). The changeset states it.                                                                                      |
-| The near-critical band label is wrong on non-24-hour calendars (N2)                   | unknown    | low    | Out of scope. Filed. Guest and member stay equal either way.                                                                 |
-| Assumption: no OpenAPI snapshot to regenerate                                         | —          | —      | Checked: no `openapi` script in the root or `apps/api` `package.json`. The document is built at boot (`main.ts:48-49`).      |
+| Risk / assumption                                                                                 | Likelihood | Impact | Mitigation                                                                                                              |
+| ------------------------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| R1: `isDriving` lets a guest infer that some non-logic bound (constraint or external date) exists | certain    | low    | Q1 asks the product owner to accept it in words. If declined, drop D2 (a deletion, not a redesign).                     |
+| `ResourceAssignment.isDriving` confused with the link flag                                        | low        | high   | Named exclusion in the DTO docblock, the ADR and API.md. The wire forbidden list keeps `resourceAssignments` (FC-4).    |
+| A member a11y sentence changes by accident                                                        | low        | med    | FC-6 byte-identical pin. The existing suite passes unchanged.                                                           |
+| The pixel limb is flaky or cannot discriminate                                                    | med        | med    | Token-derived colour, a floor not an exact count, and stop rather than ship on text alone.                              |
+| Every live share link changes on release                                                          | certain    | low    | Intended (Q3). The changeset states it.                                                                                 |
+| The near-critical band label is wrong on non-24-hour calendars (N2)                               | unknown    | low    | Out of scope. Filed. Guest and member stay equal either way.                                                            |
+| Assumption: no OpenAPI snapshot to regenerate                                                     | —          | —      | Checked: no `openapi` script in the root or `apps/api` `package.json`. The document is built at boot (`main.ts:48-49`). |

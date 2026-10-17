@@ -120,7 +120,7 @@ with it closed, nothing changes.
   truncated); painter parity test above; `paint.strip-stack.test.ts` and `strip-fill-resolution.test.ts` unchanged.
 - **Development steps:**
   1. Add the type; 2. build the caption from existing state (`granularity`, `stackBy`, `stacked.segments`,
-  `histogram.data`); 3. replace the three `null` returns with captioned empties; keep the unmount `null`.
+     `histogram.data`); 3. replace the three `null` returns with captioned empties; keep the unmount `null`.
 
 ##### Task 2.2 — The handle exposes the strip; the painter takes an offset
 
@@ -208,12 +208,12 @@ docs, security, performance, accessibility, Docker build, CI green (§19.9 roste
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                     | Likelihood | Impact | Mitigation                                                                                          |
-| ------------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------- |
-| The gate is silenced by a parse it cannot read                                        | med        | high   | Refuse on missing `data-layer`, comment-strip first, roster floor; three verified-red checks (T1.2) |
-| `KNOWN_GAPS` becomes a permanent parking lot                                          | low        | med    | It fails once its gap is composed; M2 empties and deletes it                                        |
-| Live strip changes for empty states                                                   | low        | med    | Draw-call parity test null vs empty snapshot (T2.1)                                                 |
-| Fills fail 3:1 on paper                                                               | low        | med    | Paper is lighter than every ground already gated, but asserted, not argued (T2.3)                  |
-| Caption copy unclear on paper                                                         | med        | low    | ux-reviewer before merge                                                                            |
-| Journey flakes on histogram load timing                                               | med        | low    | Wait on the legend; property assertions, no golden                                                  |
-| Assumption: the Gantt shows no strip band, so the printed programme needs nothing     | —          | —      | Verified by grep (spec §0.1); revisit if a Gantt strip is ever specified                            |
+| Risk / assumption                                                                 | Likelihood | Impact | Mitigation                                                                                          |
+| --------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------- |
+| The gate is silenced by a parse it cannot read                                    | med        | high   | Refuse on missing `data-layer`, comment-strip first, roster floor; three verified-red checks (T1.2) |
+| `KNOWN_GAPS` becomes a permanent parking lot                                      | low        | med    | It fails once its gap is composed; M2 empties and deletes it                                        |
+| Live strip changes for empty states                                               | low        | med    | Draw-call parity test null vs empty snapshot (T2.1)                                                 |
+| Fills fail 3:1 on paper                                                           | low        | med    | Paper is lighter than every ground already gated, but asserted, not argued (T2.3)                   |
+| Caption copy unclear on paper                                                     | med        | low    | ux-reviewer before merge                                                                            |
+| Journey flakes on histogram load timing                                           | med        | low    | Wait on the legend; property assertions, no golden                                                  |
+| Assumption: the Gantt shows no strip band, so the printed programme needs nothing | —          | —      | Verified by grep (spec §0.1); revisit if a Gantt strip is ever specified                            |
