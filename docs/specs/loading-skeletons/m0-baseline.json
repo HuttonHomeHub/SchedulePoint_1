@@ -1,0 +1,1144 @@
+{
+  "run": {
+    "sha": "1fa846547d11fcb1557eab9512d42356e6665c6e",
+    "slug": "shoot-co-1792271185901-1646",
+    "takenAt": "2026-10-17T21:06:34.447Z",
+    "ids": {
+      "clientId": "01a14bb0-05a2-78e0-b512-d25db30b2ba9",
+      "projectId": "01a14bb0-05c4-7a13-aed0-f947da8918cf",
+      "planId": "01a14bb0-05dc-7bc1-a835-27e3845cd5e0"
+    }
+  },
+  "notReached": {
+    "staff accounts / installation / mail / retention / alerting / security panels": "need a verified STAFF_EMAILS account and the staff API config (measure-staff-console.mjs boots both)",
+    "earned value dialog": "needs a plan with cost data and a command click inside the workspace",
+    "schedule summary strip": "needs the workspace toolbar popover opened",
+    "notes / activity history / WBS members / calendar exceptions": "need an activity or calendar selected first",
+    "guest plan view": "needs a live share token (and a dead one for the oracle comparison)",
+    "accept invitation": "needs an invitation token"
+  },
+  "widths": {
+    "1646x1000": {
+      "clients": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Created", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 3,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "auto",
+              "pending": 636,
+              "settled": 774,
+              "delta": 138,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Created",
+              "mode": "fit",
+              "pending": 636,
+              "settled": 140,
+              "delta": -496,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 357,
+              "delta": 357,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "calendars": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 4,
+          "failing": [
+            {
+              "key": "th Actions",
+              "dx": -381,
+              "dy": 0,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Working days", "th Scope"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["Loading…"],
+          "insideBusy": ["Loading…"],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 424,
+              "settled": 351,
+              "delta": -73,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Working days",
+              "mode": "fit",
+              "pending": 424,
+              "settled": 102,
+              "delta": -322,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Scope",
+              "mode": "undeclared",
+              "pending": 424,
+              "settled": 437,
+              "delta": 13,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 381,
+              "delta": 381,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "resources": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 2,
+          "failing": [],
+          "absentWhilePending": [],
+          "verdict": "PASS"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 5,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "members": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 9,
+          "failing": [
+            {
+              "key": "h2 Pending invitations",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "h2 What each role can do",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "dt Org Admin",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "dt Planner",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "dt Contributor",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "dt Viewer",
+              "dx": 0,
+              "dy": -20,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Email", "th Joined", "th Role", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 5,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 318,
+              "settled": 183,
+              "delta": -135,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Email",
+              "mode": "undeclared",
+              "pending": 318,
+              "settled": 559,
+              "delta": 241,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Joined",
+              "mode": "fit",
+              "pending": 318,
+              "settled": 140,
+              "delta": -178,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Role",
+              "mode": "undeclared",
+              "pending": 318,
+              "settled": 248,
+              "delta": -70,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 140,
+              "delta": 140,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "audit-log": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th When", "th Event", "th By", "th Subject"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["Loading…"],
+          "insideBusy": ["Loading…"],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "When",
+              "mode": "fit",
+              "pending": 318,
+              "settled": 158,
+              "delta": -160,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Event",
+              "mode": "auto",
+              "pending": 318,
+              "settled": 359,
+              "delta": 41,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "By",
+              "mode": "auto",
+              "pending": 318,
+              "settled": 373,
+              "delta": 55,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Subject",
+              "mode": "auto",
+              "pending": 318,
+              "settled": 381,
+              "delta": 63,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "recently-deleted": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 2,
+          "failing": [],
+          "absentWhilePending": [],
+          "verdict": "PASS"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["Loading…"],
+          "insideBusy": ["Loading…"],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "client-detail": {
+        "pendingShape": "spinner",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": [
+            "h1 Northgate Developments",
+            "h2 Projects",
+            "th Name",
+            "th Actions",
+            "first body row"
+          ],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["Loading…"],
+          "insideBusy": ["Loading…"],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "project-detail": {
+        "pendingShape": "spinner",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": [
+            "h1 Riverside Quarter",
+            "h2 Plans",
+            "th Name",
+            "th Status",
+            "th Planned start",
+            "th Actions",
+            "h2 Calendars",
+            "first body row"
+          ],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "plan-detail": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": ["h1 Riverside — Phase 2 Substructure"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "projects-table": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 2,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 1271,
+              "settled": 778,
+              "delta": -493,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 493,
+              "delta": 493,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "NOTHING_GRADED"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "plans-table": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 5,
+          "failing": [
+            {
+              "key": "th Actions",
+              "dx": -238,
+              "dy": 0,
+              "ok": false
+            },
+            {
+              "key": "h2 Calendars",
+              "dx": 0,
+              "dy": -24,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Status", "th Planned start"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["1 project loaded."],
+          "insideBusy": [],
+          "verdict": "PASS"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 424,
+              "settled": 677,
+              "delta": 253,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Status",
+              "mode": "fit",
+              "pending": 424,
+              "settled": 57,
+              "delta": -367,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Planned start",
+              "mode": "undeclared",
+              "pending": 424,
+              "settled": 299,
+              "delta": -125,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 238,
+              "delta": 238,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "1024x600": {
+      "clients": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Created", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 3,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "auto",
+              "pending": 325,
+              "settled": 349,
+              "delta": 24,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Created",
+              "mode": "fit",
+              "pending": 325,
+              "settled": 140,
+              "delta": -185,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 161,
+              "delta": 161,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "calendars": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 4,
+          "failing": [
+            {
+              "key": "th Actions",
+              "dx": -178,
+              "dy": 0,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Working days", "th Scope"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 216,
+              "settled": 164,
+              "delta": -52,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Working days",
+              "mode": "fit",
+              "pending": 216,
+              "settled": 102,
+              "delta": -114,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Scope",
+              "mode": "undeclared",
+              "pending": 216,
+              "settled": 205,
+              "delta": -11,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 178,
+              "delta": 178,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "resources": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 2,
+          "failing": [],
+          "absentWhilePending": [],
+          "verdict": "PASS"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 5,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "members": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 9,
+          "failing": [
+            {
+              "key": "h2 Pending invitations",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "h2 What each role can do",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "dt Org Admin",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "dt Planner",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "dt Contributor",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "dt Viewer",
+              "dx": 0,
+              "dy": -16,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Email", "th Joined", "th Role", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 5,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 162,
+              "settled": 84,
+              "delta": -78,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Email",
+              "mode": "undeclared",
+              "pending": 162,
+              "settled": 216,
+              "delta": 54,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Joined",
+              "mode": "fit",
+              "pending": 162,
+              "settled": 140,
+              "delta": -22,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Role",
+              "mode": "undeclared",
+              "pending": 162,
+              "settled": 134,
+              "delta": -28,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 76,
+              "delta": 76,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "audit-log": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th When", "th Event", "th By", "th Subject"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "When",
+              "mode": "fit",
+              "pending": 162,
+              "settled": 158,
+              "delta": -4,
+              "graded": true,
+              "verdict": "PASS"
+            },
+            {
+              "header": "Event",
+              "mode": "auto",
+              "pending": 162,
+              "settled": 144,
+              "delta": -18,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "By",
+              "mode": "auto",
+              "pending": 162,
+              "settled": 173,
+              "delta": 11,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Subject",
+              "mode": "auto",
+              "pending": 162,
+              "settled": 174,
+              "delta": 12,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "PASS"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "recently-deleted": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 2,
+          "failing": [],
+          "absentWhilePending": [],
+          "verdict": "PASS"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "client-detail": {
+        "pendingShape": "spinner",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": [
+            "h1 Northgate Developments",
+            "h2 Projects",
+            "th Name",
+            "th Actions",
+            "first body row"
+          ],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "project-detail": {
+        "pendingShape": "spinner",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": [
+            "h1 Riverside Quarter",
+            "h2 Plans",
+            "th Name",
+            "th Status",
+            "th Planned start",
+            "th Actions",
+            "h2 Calendars",
+            "first body row"
+          ],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "plan-detail": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 0,
+          "failing": [],
+          "absentWhilePending": ["h1 Riverside — Phase 2 Substructure"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 0,
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "projects-table": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 3,
+          "failing": [
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Actions"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 0,
+          "texts": [],
+          "insideBusy": [],
+          "verdict": "FAIL"
+        },
+        "tableHeadingsExposedWhilePending": 2,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 649,
+              "settled": 397,
+              "delta": -252,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 252,
+              "delta": 252,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "NOTHING_GRADED"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      },
+      "plans-table": {
+        "pendingShape": "skeleton",
+        "sc2": {
+          "compared": 5,
+          "failing": [
+            {
+              "key": "th Actions",
+              "dx": -116,
+              "dy": 0,
+              "ok": false
+            },
+            {
+              "key": "h2 Calendars",
+              "dx": 0,
+              "dy": -24,
+              "ok": false
+            },
+            {
+              "key": "first body row",
+              "dx": 0,
+              "dy": 20,
+              "ok": false
+            }
+          ],
+          "absentWhilePending": ["th Name", "th Status", "th Planned start"],
+          "verdict": "FAIL"
+        },
+        "sc4": {
+          "count": 1,
+          "texts": ["1 project loaded."],
+          "insideBusy": [],
+          "verdict": "PASS"
+        },
+        "tableHeadingsExposedWhilePending": 4,
+        "sc3": {
+          "columns": [
+            {
+              "header": "Name",
+              "mode": "undeclared",
+              "pending": 216,
+              "settled": 330,
+              "delta": 114,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Status",
+              "mode": "fit",
+              "pending": 216,
+              "settled": 57,
+              "delta": -159,
+              "graded": true,
+              "verdict": "FAIL"
+            },
+            {
+              "header": "Planned start",
+              "mode": "undeclared",
+              "pending": 216,
+              "settled": 146,
+              "delta": -70,
+              "graded": false,
+              "verdict": "REPORTED"
+            },
+            {
+              "header": "Actions",
+              "mode": "undeclared",
+              "pending": 0,
+              "settled": 116,
+              "delta": 116,
+              "graded": false,
+              "verdict": "REPORTED"
+            }
+          ],
+          "verdict": "FAIL"
+        },
+        "sc5": {
+          "runningAnimationsWhilePending": 0,
+          "verdict": "PASS"
+        }
+      }
+    }
+  }
+}
