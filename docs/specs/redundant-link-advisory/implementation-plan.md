@@ -1,7 +1,7 @@
 # Implementation Plan: A redundant link is reported when no duration could ever make it matter
 
 - **Feature spec:** [./spec.md](./spec.md)
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-17, with the spec (see its header and the amendment note under §6)
 - **Owner:** product owner (approval); build by Claude Code sessions (builder agent, Sonnet)
 
 ## Breakdown
