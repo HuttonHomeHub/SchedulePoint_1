@@ -2,8 +2,8 @@
 
 - **Status:** Accepted — 2026-10-17. The spec was approved by the product owner on 2026-10-17 with the recommended
   defaults (CQ-1: Level-of-Effort is in; CQ-2: the activity's own calendar, falling back to the plan's; CQ-3: CSV and
-  MSPDI carry it, XER is unchanged). Milestone 1 (engine, column, API) is built; the web surfaces (M2) and the MSPDI
-  emitter (M3) follow in their own commits.
+  MSPDI carry it, XER is unchanged). Milestone 1 (engine, column, API) and milestone 2 (every web surface and the CSV) are
+  built; the MSPDI emitter (M3) is built in its own commit.
 - **Spec:** [`docs/specs/wbs-summary-duration/spec.md`](../specs/wbs-summary-duration/spec.md) §4.9 · **Plan:**
   [`implementation-plan.md`](../specs/wbs-summary-duration/implementation-plan.md)
 - **Date:** 2026-10-17
@@ -41,7 +41,7 @@ recalculation, carried by the XER/MSPDI round trip and recorded in activity hist
 **D3 — Every reader takes it from the field.** The API returns `derivedDurationMinutes` and `derivedDurationDays` on
 every activity read and on the guest read, **gated on type** at the DTO as well as at the column: a row read between a
 type change and the next recalculation never shows a task a duration it did not have. The web formats it through the
-one Duration cell function (M2) and no surface re-derives it from the rolled-up dates.
+one Duration cell function and no surface re-derives it from the rolled-up dates.
 
 **D4 — Exports.** The CSV and MSPDI carry it for the two types; XER is unchanged (a `PROJWBS` row has no duration
 field, and P6 owns LOE durations on schedule). The organisation export gains the column, appended, and its format

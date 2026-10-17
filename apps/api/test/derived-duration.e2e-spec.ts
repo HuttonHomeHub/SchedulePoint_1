@@ -196,6 +196,38 @@ describe.skipIf(!hasDatabase)('derived duration (e2e)', () => {
     ).toBeNull();
   });
 
+  it('states the derived duration in the MSPDI export for a summary, from the stored column', async () => {
+    const { actor, planId } = await planFor();
+    const summary = await create(actor, planId, {
+      name: 'Phase',
+      code: 'SUM',
+      type: 'WBS_SUMMARY',
+    });
+    const a = await create(actor, planId, {
+      name: 'A',
+      code: 'A',
+      durationDays: 2,
+      parentId: summary.id,
+    });
+    await recalculate(actor, planId);
+    const span = (await prisma.activity.findUniqueOrThrow({ where: { id: summary.id } }))
+      .derivedDurationMinutes;
+    expect(span, 'the fixture must have a span, or this asserts 0 === 0').toBeGreaterThan(0);
+    expect(span).toBe(a.durationMinutes);
+
+    const res = await actor.agent
+      .get(`${org}/plans/${planId}/interchange/export/mspdi`)
+      .responseType('blob')
+      .expect(200);
+    const xml = (res.body as Buffer).toString('utf8');
+    const hours = Math.floor(span! / 60);
+    const minutes = span! % 60;
+    // The summary's own <Task> carries its derived span rather than the stored 0.
+    const task = xml.split('<Task>').find((t) => t.includes('<Name>Phase</Name>'));
+    expect(task, 'the summary is in the file').toBeDefined();
+    expect(task).toContain(`<Duration>PT${String(hours)}H${String(minutes)}M0S</Duration>`);
+  });
+
   it('recalculates a plan with neither type, whose column array is all NULL', async () => {
     const { actor, planId } = await planFor();
     const a = await create(actor, planId, { name: 'A', code: 'A', durationDays: 2 });

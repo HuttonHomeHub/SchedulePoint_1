@@ -190,6 +190,12 @@ export const importActivitySchema = z
      * phase 3 keeps it and packs only the activities the file left without one (spec §4.7).
      */
     laneIndex: z.number().int().min(0).max(10_000).nullish(),
+    /**
+     * The engine-derived duration of a `WBS_SUMMARY` or `LEVEL_OF_EFFORT` (ADR-0197), in working
+     * minutes. **Export only**: no parser writes it, so on import it is always absent. It reaches the
+     * graph so the pure mapper can hand it to the one format that states a summary's duration.
+     */
+    derivedDurationMinutes: z.number().int().min(0).nullish(),
   })
   .strict();
 export type ImportActivity = z.infer<typeof importActivitySchema>;

@@ -167,6 +167,12 @@ export interface ExportMapOptions {
    * nothing SchedulePoint needs back.
    */
   readonly carriesLayout?: boolean;
+  /**
+   * The target format states a summary's and a level-of-effort's duration (ADR-0197: MSPDI; XER has
+   * no field for a summary's and P6 recomputes an LOE's). Decides whether the canonical activity
+   * carries `derivedDurationMinutes`, so an emitter that cannot use it is never handed it.
+   */
+  readonly carriesDerivedDuration?: boolean;
 }
 
 export function mapExportGraphToCanonical(
@@ -217,6 +223,11 @@ export function mapExportGraphToCanonical(
             lane: activity.laneIndex ?? null,
           },
         }),
+    ...(options.carriesDerivedDuration === true &&
+    (activity.type === 'WBS_SUMMARY' || activity.type === 'LEVEL_OF_EFFORT') &&
+    activity.derivedDurationMinutes != null
+      ? { derivedDurationMinutes: activity.derivedDurationMinutes }
+      : {}),
   }));
 
   // The hand-placement (one-planning-surface; amended by layout-interchange M3). Reported **only when

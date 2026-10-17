@@ -206,6 +206,9 @@ export class ExportService {
         name: a.name,
         type: toExportActivityType(a.type),
         durationMinutes: a.durationMinutes,
+        // The engine-derived span of a summary or LOE (ADR-0197), for the one format that states it. The
+        // mapper gates on type and on the format, so a stale value on another type is never emitted.
+        derivedDurationMinutes: a.derivedDurationMinutes,
         calendarKey: calendarKeyOrNull(a.calendarId),
         // A WBS parent is always a same-plan active activity (the cascade soft-deletes the subtree), so it
         // is in the graph; null out defensively if the referenced row is somehow absent.

@@ -890,6 +890,12 @@ calendars sharing a name can have different working weeks. **Export** emits `cln
 stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
 reports the tier as a drop.
 
+**An MSPDI export states a summary's and a Level-of-Effort's derived duration** (ADR-0197). Their
+stored duration is `0`, so `<Duration>` for either is the engine-derived `derivedDurationMinutes`
+where a recalculation has written one, and the stored value otherwise (the Level-of-Effort drop
+finding says which). A task's `<Duration>` is unchanged, the importer reads `<Duration>` for a task
+only, so nothing re-imports differently; the XER export is unchanged.
+
 ### Calendar scope tiers (ADR-0053)
 
 A calendar belongs to one of two **tiers**: **ORG** (the shared organisation library — the default, and

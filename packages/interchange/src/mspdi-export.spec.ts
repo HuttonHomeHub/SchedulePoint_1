@@ -4,7 +4,7 @@ import { exportMspdi } from './export-mspdi.js';
 import { buildExportGraph, buildRichExportGraph, toComparable } from './export.fixtures.js';
 import type { ImportConstraintType } from './import-graph.js';
 import { importSchedule } from './import-schedule.js';
-import { childElements, detectMspdi, parseMspdi } from './mspdi-parser.js';
+import { childElements, childText, detectMspdi, parseMspdi } from './mspdi-parser.js';
 
 /**
  * Tests for the pure MSPDI export pipeline (ADR-0050 M4b): the `exportMspdi` orchestrator + emitter +
@@ -244,6 +244,74 @@ describe('exportMspdi', () => {
     expect(loeDrops[0]?.sourceRef).toBe('A1000'); // the activity's code, so it is findable
     // It is still written — a drop of MEANING, not of the row. The plan is not silently shortened.
     expect(tasksOf(exported.bytes)).toHaveLength(base.activities.length);
+  });
+
+  /**
+   * ADR-0197: a summary's and a Level-of-Effort's stored duration is `0`, so MSPDI stated `PT0H0M0S` for
+   * an eleven-month phase. Where the engine derived their span the file now states that, for these two
+   * types only — the importer reads `<Duration>` for a task alone, so nothing re-imports differently.
+   */
+  describe('the derived duration of a summary and a level-of-effort (ADR-0197)', () => {
+    const durationOf = (bytes: Uint8Array, name: string): string | undefined => {
+      const task = tasksOf(bytes).find((t) => childText(t, 'Name') === name);
+      return task === undefined ? undefined : childText(task, 'Duration');
+    };
+    // A1 becomes an LOE (it has links; a summary may not) and a new summary S1 is added. A2 stays a task.
+    const withTypes = (derived: number | undefined) => {
+      const base = buildExportGraph();
+      const stated = derived === undefined ? {} : { derivedDurationMinutes: derived };
+      return {
+        ...base,
+        activities: [
+          ...base.activities.map((a) =>
+            a.key === 'A1'
+              ? { ...a, type: 'LEVEL_OF_EFFORT' as const, durationMinutes: 0, ...stated }
+              : // A task carrying a stale derived value: it must not be written.
+                a.key === 'A2'
+                ? { ...a, derivedDurationMinutes: 777 }
+                : a,
+          ),
+          {
+            ...base.activities[0]!,
+            key: 'S1',
+            code: 'S100',
+            name: 'Substructure',
+            type: 'WBS_SUMMARY' as const,
+            durationMinutes: 0,
+            calendarKey: null,
+            ...stated,
+          },
+        ],
+      };
+    };
+
+    it('writes the derived span for a summary and an LOE, and the stored duration for a task', () => {
+      const exported = exportMspdi({ graph: withTypes(3000) });
+      expect(exported.ok).toBe(true);
+      if (!exported.ok) return;
+      expect(durationOf(exported.bytes, 'Mobilise')).toBe('PT50H0M0S'); // the LOE
+      expect(durationOf(exported.bytes, 'Substructure')).toBe('PT50H0M0S'); // the summary
+      // The task keeps its stored 4,800 minutes; the stale 777 is never written.
+      expect(durationOf(exported.bytes, 'Excavate')).toBe('PT80H0M0S');
+    });
+
+    it('falls back to the stored duration where the engine derived none', () => {
+      const exported = exportMspdi({ graph: withTypes(undefined) });
+      expect(exported.ok).toBe(true);
+      if (!exported.ok) return;
+      expect(durationOf(exported.bytes, 'Mobilise')).toBe('PT0H0M0S');
+      expect(durationOf(exported.bytes, 'Substructure')).toBe('PT0H0M0S');
+    });
+
+    it('words the Level-of-Effort drop by which duration it wrote', () => {
+      const derived = exportMspdi({ graph: withTypes(3000) });
+      const stored = exportMspdi({ graph: withTypes(undefined) });
+      if (!derived.ok || !stored.ok) throw new Error('expected both exports to succeed');
+      const detail = (r: typeof derived): string =>
+        r.report.drops.find((d) => d.detail.includes('Level of Effort'))!.detail;
+      expect(detail(derived)).toContain('with its derived duration');
+      expect(detail(stored)).toContain('with its stored duration');
+    });
   });
 
   it('serialises a constraint + resource (no longer drops) so they round-trip (M4c)', () => {
