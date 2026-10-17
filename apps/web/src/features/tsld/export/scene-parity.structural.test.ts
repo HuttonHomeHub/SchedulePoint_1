@@ -221,16 +221,6 @@ const SCREEN_ONLY_LAYERS: Record<string, string> = {
   minimap: 'a navigation instrument for a viewport the paper does not have',
 };
 
-/**
- * A layer the screen paints and the export does not, with the register row that owns the gap.
- * **Deliberately not {@link SCREEN_ONLY_LAYERS}**, whose reasons say "by design": this is an omission
- * being fixed, and filing it there would close the question. An entry fails the build the moment the
- * composer names its input, so it cannot outlive its fix.
- */
-const KNOWN_GAPS: Record<string, { input: string; row: string }> = {
-  'resource-strip': { input: 'resourceStrip', row: 'docs/TECH_DEBT.md #223' },
-};
-
 interface CanvasLayer {
   layer: string;
   file: string;
@@ -312,9 +302,9 @@ describe('the exported diagram accounts for every canvas layer the screen render
     expect(new Set(names).size, 'two canvases share a data-layer name').toBe(names.length);
   });
 
-  it('every layer is composed, listed screen-only with a reason, or a named known gap', () => {
+  it('every layer is composed or listed screen-only with a reason', () => {
     const unaccounted = names.filter(
-      (n) => !(n in EXPORT_LAYER_INPUTS) && !(n in SCREEN_ONLY_LAYERS) && !(n in KNOWN_GAPS),
+      (n) => !(n in EXPORT_LAYER_INPUTS) && !(n in SCREEN_ONLY_LAYERS),
     );
     expect(
       unaccounted,
@@ -335,34 +325,17 @@ describe('the exported diagram accounts for every canvas layer the screen render
     ).toEqual([]);
   });
 
-  it('a known gap fails the moment the composer closes it', () => {
-    const closed = Object.entries(KNOWN_GAPS)
-      .filter(([, gap]) => composes(gap.input))
-      .map(([layer, gap]) => `${layer} (${gap.row})`);
-    expect(
-      closed,
-      `the composer now names these layers' inputs: move them from KNOWN_GAPS to ` +
-        `EXPORT_LAYER_INPUTS — ${closed.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  it('the records name no layer the canvases have stopped rendering', () => {
-    const stale = [
-      ...Object.keys(EXPORT_LAYER_INPUTS),
-      ...Object.keys(SCREEN_ONLY_LAYERS),
-      ...Object.keys(KNOWN_GAPS),
-    ].filter((n) => !names.includes(n));
+  it('the two records name no layer the canvases have stopped rendering', () => {
+    const stale = [...Object.keys(EXPORT_LAYER_INPUTS), ...Object.keys(SCREEN_ONLY_LAYERS)].filter(
+      (n) => !names.includes(n),
+    );
     expect(stale, `these layers are no longer rendered by any canvas: ${stale.join(', ')}`).toEqual(
       [],
     );
   });
 
   it('no layer sits in two records at once', () => {
-    const all = [
-      ...Object.keys(EXPORT_LAYER_INPUTS),
-      ...Object.keys(SCREEN_ONLY_LAYERS),
-      ...Object.keys(KNOWN_GAPS),
-    ];
+    const all = [...Object.keys(EXPORT_LAYER_INPUTS), ...Object.keys(SCREEN_ONLY_LAYERS)];
     expect(all.filter((n, i) => all.indexOf(n) !== i)).toEqual([]);
   });
 });

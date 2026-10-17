@@ -64,6 +64,12 @@ export interface PrintDiagramImageInput {
   title: string;
   /** The subtitle line (e.g. "As of 2026-07-20"). */
   subtitle: string;
+  /**
+   * Whether the resource strip is in the picture. The image's `alt` is the only text a screen
+   * reader gets for it (ADR-0122), so it must say what the picture holds — loading under the work
+   * is a fact a reader of the printed page has, and a non-visual reader should not lack.
+   */
+  includesResourceStrip?: boolean;
 }
 
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
@@ -89,7 +95,11 @@ export function printDiagramImage(
       imageUrl={url}
       title={input.title}
       subtitle={input.subtitle}
-      alt={`Diagram of ${input.title}`}
+      alt={
+        input.includesResourceStrip === true
+          ? `Diagram of ${input.title}, with resource loading`
+          : `Diagram of ${input.title}`
+      }
     />,
     { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
   );

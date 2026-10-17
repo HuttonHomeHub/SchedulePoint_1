@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { assignResource, createResource } from '../e2e-resource-view/support';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 import {
@@ -11,7 +12,11 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
-import { EXPORT_MARKER_ROW, EXPORT_TOP_BAND } from '../src/features/tsld/export/export-image';
+import {
+  EXPORT_MARKER_ROW,
+  EXPORT_STRIP_CAPTION_ROW,
+  EXPORT_TOP_BAND,
+} from '../src/features/tsld/export/export-image';
 
 /**
  * **The exported diagram, decoded and measured** (TECH_DEBT #164, W3-M2).
@@ -589,5 +594,140 @@ test.describe('The exported diagram', () => {
     // the programme rather than the diagram.
     await openPrintDocument(page);
     await expectPaperFace(page, '.gantt-print-root', 'printed programme');
+  });
+
+  /**
+   * **The resource strip in the exported and printed picture** (TECH_DEBT #223, ADR-0199).
+   *
+   * The strip is painted on its own canvas from its own ref, and the export composer never read
+   * it — so a planner with Resource view open exported a diagram missing the one panel that
+   * answers "can we resource this?", and nothing said so. The parity gate could not see it either
+   * (it compared the keys of the scene and nothing else; ADR-0199 widened it to every canvas).
+   *
+   * **Only a browser can answer this.** The strip's fills are resolved `--chart-*` colours painted
+   * with `fillStyle`, which silently discards a `var()` — so "are there two coloured bands in the
+   * picture" is a pixel read, and every export unit suite runs in jsdom with no canvas at all.
+   * Asserted as PROPERTIES of the picture, no golden (the title band prints today's date).
+   *
+   * Entry point: Resource view (toolbar) on -> Share & export -> Diagram — whole plan (PNG), then
+   * Print…; and the same export with Resource view off, which must not carry the strip (AC-2.1).
+   */
+  test('carries the resource strip when it is open, and not when it is closed', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const planName = 'Strip export';
+    const orgSlug = await onboard(page, STAMP + 3);
+    // The library is reached from the top nav, so the resources are made before a plan is opened.
+    await createResource(page, 'Crew A');
+    await createResource(page, 'Crew B');
+    await createHierarchy(page);
+    await newPlan(page, planName);
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Excavate', laneIndex: 0, durationDays: 12 },
+      { name: 'Pour slab', laneIndex: 1, durationDays: 12 },
+    ]);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    await assignResource(page, 'Excavate', 'Crew A', 8);
+    await assignResource(page, 'Pour slab', 'Crew B', 6);
+
+    expect(
+      await page.evaluate(() => globalThis.devicePixelRatio),
+      'this scan reads the raster in CSS px, which holds only at deviceScaleFactor 1',
+    ).toBe(1);
+
+    const exportWholePng = async (): Promise<Buffer> => {
+      await page
+        .getByRole('button', { name: /^(share & )?export$/i })
+        .first()
+        .click();
+      const download = page.waitForEvent('download', { timeout: 30_000 });
+      await page.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }).click();
+      const path = await (await download).path();
+      expect(path, 'the export produced no file').toBeTruthy();
+      return (await import('node:fs')).readFileSync(path);
+    };
+
+    // Reads the real artefact back in the browser: the picture's height, the chromatic colours that
+    // fill the bottom `band` rows (exact colours, with a real footprint), and how much dark ink
+    // sits in the `caption` rows above them.
+    const measure = (bytes: Buffer, band: number, caption: number) =>
+      page.evaluate(
+        async (args) => {
+          const binary = atob(args.base64);
+          const buf = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) buf[i] = binary.charCodeAt(i);
+          const bitmap = await createImageBitmap(new Blob([buf], { type: 'image/png' }));
+          const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('no 2d context');
+          ctx.drawImage(bitmap, 0, 0);
+          const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+          const chromatic = new Map<string, number>();
+          let captionDark = 0;
+          for (let y = bitmap.height - args.band - args.caption; y < bitmap.height; y += 1) {
+            for (let x = 0; x < bitmap.width; x += 1) {
+              const i = (y * bitmap.width + x) * 4;
+              const [r, g, b] = [data[i]!, data[i + 1]!, data[i + 2]!];
+              if (y < bitmap.height - args.band) {
+                if ((r + g + b) / 3 < 128) captionDark += 1;
+              } else if (Math.max(r, g, b) - Math.min(r, g, b) > 40) {
+                const key = `${r},${g},${b}`;
+                chromatic.set(key, (chromatic.get(key) ?? 0) + 1);
+              }
+            }
+          }
+          return {
+            height: bitmap.height,
+            captionDark,
+            // Antialiased edges are one-offs; a fill has a real footprint.
+            fills: [...chromatic.entries()].filter(([, n]) => n >= 40).map(([colour]) => colour),
+          };
+        },
+        { base64: bytes.toString('base64'), band, caption },
+      );
+
+    // ── Open: the strip is in the picture.
+    const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+    await toolbar.getByRole('button', { name: 'Resource view' }).click();
+    const panel = page.getByRole('region', { name: 'Resource loading' });
+    // **Wait for the legend, not the panel.** The panel mounts before its histogram arrives; an
+    // export taken then would (correctly) carry the "still loading" caption and no bars.
+    await expect(panel.getByRole('list', { name: 'Legend' })).toBeVisible({ timeout: 30_000 });
+    // The band's height is the screen's own (the canvas is pinned to it), read rather than restated.
+    const stripPx = await page
+      .locator('[data-testid="tsld-resource-strip"]')
+      .evaluate((el) => Math.round(el.getBoundingClientRect().height));
+
+    const open = await measure(await exportWholePng(), stripPx, EXPORT_STRIP_CAPTION_ROW);
+    expect(
+      open.fills.length,
+      `the strip band holds ${String(open.fills.length)} coloured fill(s) — the two trades are not both in the picture`,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      open.captionDark,
+      'no dark ink in the caption row — the mode, bucket, peak and legend are missing',
+    ).toBeGreaterThan(100);
+
+    // ── Print… embeds the same blob, and its alt is the only text a screen reader gets for it.
+    await openPrintDocument(page);
+    await expect(page.locator('.tsld-print-container img')).toHaveAttribute(
+      'alt',
+      `Diagram of ${planName}, with resource loading`,
+    );
+    // Tear the print document down (print() is stubbed, so `afterprint` never comes on its own).
+    await page.evaluate(() => globalThis.dispatchEvent(new Event('afterprint')));
+    await expect(page.locator('.tsld-print-container')).toHaveCount(0);
+
+    // ── Closed: the same export is the prior picture — nothing reserved, no caption.
+    await toolbar.getByRole('button', { name: 'Resource view' }).click();
+    await expect(panel).toBeHidden();
+    const closed = await measure(await exportWholePng(), stripPx, EXPORT_STRIP_CAPTION_ROW);
+    expect(
+      open.height - closed.height,
+      'closing Resource view should drop exactly the caption row and the band from the picture',
+    ).toBe(EXPORT_STRIP_CAPTION_ROW + stripPx);
   });
 });

@@ -4,13 +4,18 @@ import { useCallback } from 'react';
 import {
   buildExportViewport,
   EXPORT_PRINT_TOP_BAND,
+  EXPORT_STRIP_CAPTION_ROW,
   EXPORT_TOP_BAND,
   type ExportExtent,
 } from '../../export/export-image';
 import { renderExportImage } from '../../export/render-export-image';
 import { useCanvasSurface } from '../../render/canvas-surface';
 import type { TsldViewToggles } from '../../render/paint';
-import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../../render/palette';
+import {
+  resolvePrintPalette,
+  resolvePrintResourceStripPalette,
+  resolvePrintWbsBandPalette,
+} from '../../render/palette';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
 import { makeWorkingDayPredicate } from '../../render/time-scale';
@@ -20,7 +25,10 @@ import { wbsBandBars } from '../../render/wbs-band';
 
 import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspace-model';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
-import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
+import {
+  RESOURCE_STRIP_HEIGHT,
+  type TsldCanvasHandle,
+} from '@/features/tsld/components/TsldCanvas';
 import { deriveWbsBandSource } from '@/features/wbs';
 
 /** Options for {@link useDiagramImage}'s build callback. */
@@ -90,6 +98,8 @@ export function useDiagramImage(args: {
   promise: Promise<{ blob: Blob; scaledToFit: boolean }>;
   imageWidth: number;
   imageHeight: number;
+  /** True when the resource strip is in the picture (the printed diagram's `alt` says so). */
+  includesResourceStrip: boolean;
 } | null {
   const {
     plan,
@@ -139,6 +149,12 @@ export function useDiagramImage(args: {
       // currently serves only cast-based test doubles; it is kept because a second host would
       // otherwise ship a silent throw in the one path nobody watches (2026-08-28 component review).
       const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
+      // **The resource strip, iff the planner has it open** (ADR-0199 D1), exactly as configured:
+      // the handle returns the snapshot the live band paints from, or `null` when the strip is
+      // closed. Read here at call time through the handle, so — like the lenses — it needs no
+      // dependency-array entry and cannot go stale. Optional-called for the same reason as above.
+      const strip = canvasControlRef.current?.getResourceStrip?.() ?? null;
+      const stripBand = strip ? RESOURCE_STRIP_HEIGHT : 0;
       // No mode to consult since the collapse (M-F-T1) — the deliverable draws bars where they are
       // placed, exactly as the screen does. The plan is still read here for its name and its data
       // date; only the mode question is gone.
@@ -218,6 +234,8 @@ export function useDiagramImage(args: {
         dpr: globalThis.devicePixelRatio || 1,
         topBand,
         wbsBandHeight: band.height,
+        // Below the diagram, where the strip is on screen: the caption row, then the band.
+        bottomBand: strip ? EXPORT_STRIP_CAPTION_ROW + stripBand : 0,
       });
       const promise = renderExportImage({
         scene,
@@ -249,9 +267,20 @@ export function useDiagramImage(args: {
               },
             }
           : {}),
+        ...(strip
+          ? {
+              resourceStrip: {
+                snapshot: strip,
+                palette: resolvePrintResourceStripPalette(canvasSurface),
+                height: stripBand,
+              },
+            }
+          : {}),
       }).then((blob) => ({ blob, scaledToFit }));
       return {
         promise,
+        // Whether the strip is in the picture, so the printed diagram's `alt` can say so (ADR-0122).
+        includesResourceStrip: strip !== null,
         imageWidth: Math.max(1, Math.round(size.width * dpr)),
         imageHeight: Math.max(1, Math.round(size.height * dpr)),
       };

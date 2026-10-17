@@ -371,6 +371,27 @@ export function resolveResourceStripPalette(root: Element): ResourceStripPalette
 }
 
 /**
+ * The **paper** resource-strip palette for the image export and print (ADR-0199 D4).
+ *
+ * Segment fills are not here: they ride the published snapshot, resolved by the panel, and
+ * `--chart-*` is outside the surface rebind closure so paper would re-resolve the same values —
+ * re-resolving would buy nothing and risk a legend that disagrees with its picture. What paper
+ * does need is its own **ground, rule and tick**: the band is composited onto the paper ground, so
+ * the ground-coloured boundary hairline (the whole WCAG 1.4.11 argument for the stack) must be the
+ * PAPER's, or it would be a faint canvas-coloured scratch on white. `bar` (the isolated band) stays
+ * the screen's hue, as every other diagram hue does (see {@link resolvePrintPalette}).
+ */
+export function resolvePrintResourceStripPalette(root: Element): ResourceStripPalette {
+  const paper = resolvePrintPalette(root);
+  return {
+    ...resolveResourceStripPalette(root),
+    ground: paper.ground,
+    axis: paper.gridLine,
+    tick: paper.mutedInk,
+  };
+}
+
+/**
  * Resolve the Colour-by **lens** palette (spec `docs/specs/canvas-lenses/`, behind
  * `VITE_CANVAS_LENSES`) from the same semantic design tokens (ADR-0006), so the recoloured bars stay
  * theme-aware without hardcoding colour. `critical`/`nearCritical`/`bar` mirror {@link resolveTsldPalette}

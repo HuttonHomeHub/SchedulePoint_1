@@ -214,14 +214,27 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     });
   });
 
-  it('shows the shipped empty state (and publishes null) when no resource is loaded', async () => {
+  it('shows the shipped empty state (and publishes a bar-less, captioned snapshot) when no resource is loaded', async () => {
     vi.mocked(apiFetchEnvelope).mockResolvedValue({
       data: [],
       meta: { granularity: 'WEEK', buckets: [], curveNormalisedCount: 0 },
     });
     const { onSnapshot } = renderPanel();
     expect(await screen.findByText(/No resource loading to show yet/)).toBeInTheDocument();
-    await waitFor(() => expect(onSnapshot).toHaveBeenLastCalledWith(null));
+    // Not `null`: the export has to say WHY an open strip is empty (ADR-0199 D1/D-1). The painter
+    // draws nothing for it, exactly as it drew nothing for `null`.
+    await waitFor(() =>
+      expect(onSnapshot).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          segments: [],
+          max: 0,
+          caption: expect.objectContaining({
+            status: 'empty',
+            emptyMessage: expect.stringContaining('No resource loading to show yet'),
+          }),
+        }),
+      ),
+    );
   });
 
   it('shows the shipped loading copy while the histogram is pending', () => {
@@ -314,5 +327,93 @@ describe('the strip names its colours and admits what it is not showing', () => 
     } | null;
     expect(snapshot).not.toBeNull();
     expect(snapshot?.bucketTotals).toEqual([15, 25, 17]);
+  });
+});
+
+describe('the snapshot states what the strip is, for the exported caption (ADR-0199 D3)', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetchEnvelope).mockReset().mockResolvedValue(HISTOGRAM);
+  });
+
+  const lastCaption = (onSnapshot: ReturnType<typeof vi.fn>) =>
+    (onSnapshot.mock.calls.at(-1)?.[0] as { caption?: unknown } | null)?.caption;
+
+  it('carries mode, bucket size and the legend the screen shows, in stack order', async () => {
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    expect(lastCaption(onSnapshot)).toEqual({
+      status: 'ready',
+      mode: 'resource',
+      granularity: 'WEEK',
+      legend: [
+        { label: 'Crew A', fill: expect.any(String) },
+        { label: 'Crew B', fill: expect.any(String) },
+      ],
+    });
+  });
+
+  it('follows the Stack by and Bucket size pickers', async () => {
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    fireEvent.change(screen.getByLabelText('Stack by'), { target: { value: 'kind' } });
+    fireEvent.change(screen.getByLabelText('Bucket size'), { target: { value: 'MONTH' } });
+    await waitFor(() =>
+      expect(lastCaption(onSnapshot)).toEqual(
+        expect.objectContaining({ mode: 'kind', granularity: 'MONTH' }),
+      ),
+    );
+  });
+
+  it('names the isolated resource and carries no legend', async () => {
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('table');
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    await waitFor(() =>
+      expect(lastCaption(onSnapshot)).toEqual({
+        status: 'ready',
+        mode: 'isolated',
+        granularity: 'WEEK',
+        resourceName: 'Crew A',
+        legend: [],
+      }),
+    );
+  });
+
+  it('carries the truncation counts the screen states', async () => {
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockResolvedValue({ ...HISTOGRAM, meta: { ...HISTOGRAM.meta, hasMore: true, total: 247 } });
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('status');
+    expect(lastCaption(onSnapshot)).toEqual(
+      expect.objectContaining({ status: 'ready', shown: 2, total: 247 }),
+    );
+  });
+
+  it('says it is still loading, rather than publishing nothing', () => {
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockReturnValue(new Promise(() => {}));
+    const { onSnapshot } = renderPanel();
+    expect(onSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        segments: [],
+        caption: expect.objectContaining({ status: 'loading' }),
+      }),
+    );
+  });
+
+  it('says it failed to load', async () => {
+    vi.mocked(apiFetchEnvelope).mockReset().mockRejectedValueOnce(new Error('boom'));
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('alert');
+    expect(lastCaption(onSnapshot)).toEqual(expect.objectContaining({ status: 'error' }));
+  });
+
+  it('still publishes null when the panel unmounts, so the canvas holds no stale strip', async () => {
+    const { onSnapshot, unmount } = renderPanel();
+    await screen.findByRole('table');
+    unmount();
+    expect(onSnapshot).toHaveBeenLastCalledWith(null);
   });
 });

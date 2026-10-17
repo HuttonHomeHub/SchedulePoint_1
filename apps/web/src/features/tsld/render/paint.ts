@@ -2980,7 +2980,7 @@ export interface ResourceStripPalette {
 }
 
 /** Format a demand value (`DECIMAL(18,4)` units) for the max-tick label — ≤ 4 dp, trailing zeros dropped. */
-function formatStripUnits(value: number): string {
+export function formatStripUnits(value: number): string {
   return Number(value.toFixed(4)).toString();
 }
 
@@ -3003,7 +3003,8 @@ const IS_DEV = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
  * `band.width`/`band.height` are the strip canvas's CSS-px size; the backing store is `× dpr`. A `null`
  * snapshot (or an empty series / non-positive max) draws just the axis rule — the DOM band then shows
  * the empty/loading state. The painter uses only rectangles + an optional label, staying within the
- * ADR-0026 draw budget (O(visible buckets)).
+ * ADR-0026 draw budget (O(visible buckets)). `offsetY` (CSS px, default 0) shifts the band down a
+ * shared surface and leaves the transform offset there, as {@link paintWbsBand} does.
  */
 export function paintResourceStrip(
   ctx: Ctx2D,
@@ -3012,8 +3013,12 @@ export function paintResourceStrip(
   band: Size,
   palette: ResourceStripPalette,
   dpr = 1,
+  offsetY = 0,
 ): void {
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // `offsetY` places the band on a larger surface — the export paints it at the bottom of the
+  // picture (ADR-0199) — and is `0` on the live path, whose band owns its own canvas, so the
+  // transform there is the one this function has always set.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, offsetY * dpr);
   ctx.clearRect(0, 0, band.width, band.height);
 
   // A thin top rule (the strip's "zero" reference / separation from the diagram), never colour-only —

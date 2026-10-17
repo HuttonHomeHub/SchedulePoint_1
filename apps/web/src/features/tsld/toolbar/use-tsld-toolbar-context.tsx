@@ -881,6 +881,7 @@ export function useTsldToolbarContext({
             printDiagramImage({
               blob,
               title: plan.name,
+              includesResourceStrip: built.includesResourceStrip,
               // Both dates, in ONE place and one format. The band used to print "As of
               // <iso> · Generated <iso>" under a repeat of the plan name; the document is the
               // better home for them because it is real, selectable text a reader can copy, and

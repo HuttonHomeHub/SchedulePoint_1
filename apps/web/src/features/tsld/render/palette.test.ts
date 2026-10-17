@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolvePrintPalette, resolveTsldPalette } from './palette';
+import {
+  resolvePrintPalette,
+  resolvePrintResourceStripPalette,
+  resolveResourceStripPalette,
+  resolveTsldPalette,
+} from './palette';
 
 /**
  * Contrast verification (WCAG 1.4.3) for the LIGHT-forced **print** palette (spec
@@ -369,4 +374,22 @@ describe('lag-handle core/halo contrast on the bar fills (WCAG 1.4.11-equivalent
       });
     }
   }
+});
+
+describe('resolvePrintResourceStripPalette (ADR-0199 D4)', () => {
+  const root = document.documentElement;
+  const paper = resolvePrintPalette(root);
+  const strip = resolvePrintResourceStripPalette(root);
+
+  it('lays the band onto the paper ground, rule and tick', () => {
+    // The segment-boundary hairline is drawn in `ground`; on paper it has to be the PAPER's, or it
+    // would be a faint canvas-coloured scratch on white.
+    expect(strip.ground).toBe(paper.ground);
+    expect(strip.axis).toBe(paper.gridLine);
+    expect(strip.tick).toBe(paper.mutedInk);
+  });
+
+  it('keeps the screen strip’s isolated-band hue', () => {
+    expect(strip.bar).toBe(resolveResourceStripPalette(root).bar);
+  });
 });

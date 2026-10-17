@@ -178,6 +178,14 @@ export interface TsldCanvasHandle {
    * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
   getViewport: () => { view: Viewport; size: Size };
   /**
+   * Read (never mutate) the resource strip the canvas is painting, or `null` when the strip is not
+   * open. The export composes the strip iff it is open and **as configured** (ADR-0199 D1) — the
+   * stack-by mode, bucket size, isolated resource and scale the planner is looking at — so it reads
+   * the snapshot the band paints from rather than re-deriving anything. Optional-called by the
+   * composer, as {@link getSceneLenses} is.
+   */
+  getResourceStrip: () => ResourceStripSnapshot | null;
+  /**
    * Read (never mutate) the five LENS keys off the live scene — the Colour-by fill/ink maps, the
    * over-allocation highlight, the baseline ghosts, and the filter ∪ isolate ∪ float-path dimming
    * (`docs/TECH_DEBT.md` #167). The export composes THESE rather than re-deriving them, so the
@@ -956,6 +964,8 @@ export function TsldCanvas({
   const interactionCanvasRef = useRef<HTMLCanvasElement>(null);
   const stripCanvasRef = useRef<HTMLCanvasElement>(null);
   const stripRef = useRef<ResourceStripSnapshot | null>(resourceStrip);
+  // Mirrors the prop for `getResourceStrip`, whose handle is created once and so cannot close over it.
+  const stripActiveRef = useRef(resourceStripActive);
   const stripDirtyRef = useRef(true);
   // The WBS band layer (ADR-0063) — the strip's trio reflected to the top of the container: its own
   // re-resolved palette, its own sibling `<canvas>`, its own dirty flag (so a groups-only change
@@ -1521,6 +1531,10 @@ export function TsldCanvas({
       // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
+      // The strip the band is painting right now, or `null` when it is not open — the export
+      // composes the strip iff the planner can see it (ADR-0199 D1). A read of the ref the painter
+      // reads, so the file and the screen cannot disagree about what the band holds.
+      getResourceStrip: () => (stripActiveRef.current ? stripRef.current : null),
       getSceneLenses: () => {
         const {
           barFill,
@@ -1676,6 +1690,9 @@ export function TsldCanvas({
     stripRef.current = resourceStrip;
     stripDirtyRef.current = true;
   }, [resourceStrip]);
+  useEffect(() => {
+    stripActiveRef.current = resourceStripActive;
+  }, [resourceStripActive]);
 
   // Publish the band's groups to the loop, marking ONLY the band dirty — the two-dirty-flag
   // decoupling the strip established, for the same reason: a membership change must not cost the

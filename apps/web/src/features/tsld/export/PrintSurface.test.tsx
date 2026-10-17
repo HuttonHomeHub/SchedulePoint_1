@@ -102,6 +102,33 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     trigger.remove();
   });
 
+  it('says the resource loading is in the picture when it is (ADR-0122)', () => {
+    act(() => {
+      printDiagramImage(
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01', includesResourceStrip: true },
+        { print },
+      );
+    });
+    expect(container()?.querySelector('img')).toHaveAttribute(
+      'alt',
+      'Diagram of North Tower, with resource loading',
+    );
+    // Tear the surface down here, so its fallback timer cannot fire inside a later test's count.
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+  });
+
+  it('keeps the prior alt text when the strip is not in the picture', () => {
+    act(() => {
+      printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print });
+    });
+    expect(container()?.querySelector('img')).toHaveAttribute('alt', 'Diagram of North Tower');
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+  });
+
   it('tears down on the fallback timeout when `afterprint` never fires', () => {
     vi.useFakeTimers();
     act(() => {

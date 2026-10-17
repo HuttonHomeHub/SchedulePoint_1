@@ -889,6 +889,10 @@ const STACK_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   // The strip's own canvas is transparent, so what shows through is the diagram ground.
   ['the diagram ground', '--canvas'],
   ['a month band', '--canvas-band'],
+  // The exported and printed diagram lays the strip onto paper (ADR-0199 D4). `--chart-*` is outside
+  // the rebind closure, so the fills are the same values as on screen — asserted here rather than
+  // argued, because paper is the one ground the strip is composited onto that no scope declares.
+  ['the paper ground', '--print'],
 ];
 
 describe('the stacked histogram is perceivable on every ground it paints on', () => {
@@ -910,6 +914,12 @@ describe('the stacked histogram is perceivable on every ground it paints on', ()
       `${fill} vs ${ground} is ${fmtRatio(value)}, needs 3:1 — a segment a reader cannot ` +
         'separate from the ground is a band they cannot see the extent of',
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(STACK_GROUNDS)('the isolated band is perceivable on %s', (_where, ground) => {
+    // Isolation paints one band in `--primary` (the strip palette's `bar`), not a ramp member.
+    const value = ratio(tokens, '--primary', ground);
+    expect(value, `the isolated band vs ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
   });
 
   it.each(STACK_GROUNDS)('the "Other" aggregate is perceivable on %s', (_where, ground) => {

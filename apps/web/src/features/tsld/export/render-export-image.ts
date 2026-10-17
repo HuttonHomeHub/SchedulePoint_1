@@ -1,8 +1,11 @@
 import { axisMarkers } from '../render/axis-markers';
 import {
   DEFAULT_VIEW_TOGGLES,
+  formatStripUnits,
+  paintResourceStrip,
   paintScene,
   paintWbsBand,
+  type ResourceStripPalette,
   type TsldScene,
   type WbsBandPalette,
 } from '../render/paint';
@@ -12,9 +15,10 @@ import type { PrintPalette } from '../render/palette';
 // edge into it. Shipped as a direct import and reconciled at the gate pass, where the component
 // review noticed the code did not follow its own stated rationale.
 import { FONT_STACK, type Size, type Viewport } from '../render/render-model';
+import type { ResourceStripSnapshot } from '../render/resource-strip';
 import type { WbsBandBar } from '../render/wbs-band';
 
-import { EXPORT_MARKER_ROW } from './export-image';
+import { EXPORT_MARKER_ROW, EXPORT_STRIP_CAPTION_ROW } from './export-image';
 
 import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
 
@@ -136,6 +140,18 @@ export interface RenderExportImageInput {
    * re-derived here.
    */
   wbsBand?: { height: number; bars: readonly WbsBandBar[]; palette: WbsBandPalette };
+  /**
+   * The **resource strip** (ADR-0049), when it is open on screen (ADR-0199 D1). Painted at the
+   * bottom of the picture, in the `height` of band `buildExportViewport` reserved below the
+   * diagram, with its caption row directly above it. `snapshot` is the one the live band paints
+   * from — same stack, same scale — and `palette` is the paper's. Absent (the default) is the
+   * byte-for-byte prior export.
+   */
+  resourceStrip?: {
+    snapshot: ResourceStripSnapshot;
+    palette: ResourceStripPalette;
+    height: number;
+  };
 }
 
 /**
@@ -148,6 +164,7 @@ export interface RenderExportImageInput {
 export const EXPORT_LAYER_INPUTS = {
   scene: 'scene',
   'wbs-band': 'wbsBand',
+  'resource-strip': 'resourceStrip',
 } as const satisfies Record<string, keyof RenderExportImageInput>;
 
 /** Injectable seams so the off-screen render is testable without a real 2D context. */
@@ -198,7 +215,18 @@ export async function renderExportImage(
   input: RenderExportImageInput,
   deps: RenderExportImageDeps = {},
 ): Promise<Blob> {
-  const { scene, viewport, size, dpr, topBand, palette, scaledToFit, meta, wbsBand } = input;
+  const {
+    scene,
+    viewport,
+    size,
+    dpr,
+    topBand,
+    palette,
+    scaledToFit,
+    meta,
+    wbsBand,
+    resourceStrip,
+  } = input;
   const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;
   const bandContent = input.bandContent ?? 'full';
   const createCanvas = deps.createCanvas ?? (() => document.createElement('canvas'));
@@ -249,6 +277,22 @@ export async function renderExportImage(
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  // The strip goes in before the ground for the band's reason: `paintResourceStrip` clears its own
+  // rectangle, which here removes the scene's full-height gridlines and rules that ran down into
+  // the reserved band — exactly what the live strip canvas hides them behind.
+  if (resourceStrip && resourceStrip.height > 0) {
+    paintResourceStrip(
+      ctx,
+      resourceStrip.snapshot,
+      viewport,
+      { width: size.width, height: resourceStrip.height },
+      resourceStrip.palette,
+      dpr,
+      size.height - resourceStrip.height,
+    );
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
   ctx.globalCompositeOperation = 'destination-over';
   ctx.fillStyle = palette.ground;
   ctx.fillRect(0, 0, size.width, size.height);
@@ -256,6 +300,9 @@ export async function renderExportImage(
 
   drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta, bandContent);
   drawAxisMarkerRow(ctx, viewport, size, topBand, markerRow, palette, scene);
+  if (resourceStrip && resourceStrip.height > 0) {
+    drawStripCaption(ctx, resourceStrip.snapshot, size, resourceStrip.height, palette);
+  }
 
   return canvasToPngBlob(canvas);
 }
@@ -319,6 +366,128 @@ function drawTitleBand(
     size.width,
     bandContent === 'full' ? LEGEND_BASELINE : PRINT_LEGEND_BASELINE,
   );
+}
+
+/** The bucket sizes as the caption words them: an adjective, because the line goes on to say "buckets". */
+const STRIP_BUCKET_WORD = { DAY: 'Daily', WEEK: 'Weekly', MONTH: 'Monthly' } as const;
+/** The strip's load-basis sentence — the screen's own (`RESOURCE_LOAD_BASIS_NOTE`), restated here
+ * because this module must not import a feature component; `render-export-image.resource-strip.test`
+ * asserts the two are equal. */
+const STRIP_LOAD_BASIS = 'Load is counted where each bar is drawn.';
+/** Legend swatch geometry for the caption row — smaller than the title band's, so three lines fit. */
+const STRIP_SWATCH = 9;
+const STRIP_LINE_PITCH = 18;
+const STRIP_LINE_FIRST = 16;
+
+/** A line of text that fits `maxWidth`, ending in an ellipsis where it had to be cut. Marking the cut
+ * is the point: a line that silently loses its tail reads as complete. */
+function fitLine(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let end = text.length;
+  while (end > 1 && ctx.measureText(`${text.slice(0, end)}…`).width > maxWidth) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
+
+/** What the caption's first line says, from the snapshot's {@link StripCaption}. Exported for tests. */
+export function stripCaptionHeadline(snapshot: ResourceStripSnapshot): string {
+  const caption = snapshot.caption;
+  if (!caption) return 'Resource loading';
+  if (caption.status === 'loading') return 'Resource loading: still loading when exported';
+  if (caption.status === 'error') return 'Resource loading: could not be loaded';
+  if (caption.status === 'empty') {
+    return `Resource loading: ${caption.emptyMessage ?? 'nothing to show'}`;
+  }
+  const how =
+    caption.mode === 'isolated'
+      ? `${caption.resourceName ?? 'one resource'} only`
+      : `stacked by ${caption.mode}`;
+  return (
+    `Resource loading · ${how} · ${STRIP_BUCKET_WORD[caption.granularity]} buckets · ` +
+    `peak ${formatStripUnits(snapshot.max)} units`
+  );
+}
+
+/**
+ * Draw the **resource strip's caption row** (ADR-0199 D3) directly above the band: what the strip
+ * is (mode, bucket size, peak), what it counts, whether the histogram was truncated, and the legend
+ * that names each colour. ADR-0106 again: a band's label is chrome, and on screen this is the DOM
+ * panel the canvas cannot reach, so the export paints the facts into a reserved row.
+ *
+ * Opaque first — the scene's full-height rules were painted under this row, exactly as under the
+ * marker row — then three lines. **Nothing is dropped silently** (ADR-0127 D3): a legend entry that
+ * does not fit the crop is counted (`+N more`), and a headline that does not fit ends in an
+ * ellipsis. The legend is text beside a swatch, so colour is never the only channel (WCAG 1.4.1).
+ */
+function drawStripCaption(
+  ctx: CanvasRenderingContext2D,
+  snapshot: ResourceStripSnapshot,
+  size: Size,
+  stripHeight: number,
+  palette: PrintPalette,
+): void {
+  const top = size.height - stripHeight - EXPORT_STRIP_CAPTION_ROW;
+  ctx.fillStyle = palette.ground;
+  ctx.fillRect(0, top, size.width, EXPORT_STRIP_CAPTION_ROW);
+  ctx.strokeStyle = palette.gridLine;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(0, top + 0.5);
+  ctx.lineTo(size.width, top + 0.5);
+  ctx.stroke();
+
+  const maxWidth = Math.max(0, size.width - BAND_PAD * 2);
+  const caption = snapshot.caption;
+  ctx.font = LEGEND_FONT;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = palette.ink;
+  ctx.fillText(
+    fitLine(ctx, stripCaptionHeadline(snapshot), maxWidth),
+    BAND_PAD,
+    top + STRIP_LINE_FIRST,
+  );
+
+  const notes = [
+    caption?.status === 'ready' ? STRIP_LOAD_BASIS : null,
+    caption?.shown !== undefined && caption.total !== undefined
+      ? `Showing ${String(caption.shown)} of ${String(caption.total)} resources`
+      : null,
+  ].filter((note): note is string => note !== null);
+  if (notes.length > 0) {
+    ctx.fillStyle = palette.mutedInk;
+    ctx.fillText(
+      fitLine(ctx, notes.join(' · '), maxWidth),
+      BAND_PAD,
+      top + STRIP_LINE_FIRST + STRIP_LINE_PITCH,
+    );
+  }
+
+  const legend = caption?.status === 'ready' ? caption.legend : [];
+  if (legend.length === 0) return;
+  const baseline = top + STRIP_LINE_FIRST + STRIP_LINE_PITCH * 2;
+  const limit = size.width - BAND_PAD;
+  const moreWidth = (n: number): number => ctx.measureText(`+${String(n)} more`).width;
+  let x = BAND_PAD;
+  for (let i = 0; i < legend.length; i += 1) {
+    const entry = legend[i]!;
+    const entryWidth = STRIP_SWATCH + LEGEND_LABEL_GAP + ctx.measureText(entry.label).width;
+    const left = legend.length - i - 1;
+    // Reserve room for the "+N more" the NEXT entry would need if this one is the last that fits, so
+    // the count itself can never be the thing that overflows.
+    const reserve = left > 0 ? LEGEND_ENTRY_GAP + moreWidth(left) : 0;
+    if (x + entryWidth + reserve > limit) {
+      ctx.fillStyle = palette.mutedInk;
+      ctx.fillText(`+${String(legend.length - i)} more`, x, baseline);
+      return;
+    }
+    ctx.fillStyle = entry.fill;
+    ctx.fillRect(x, baseline - STRIP_SWATCH, STRIP_SWATCH, STRIP_SWATCH);
+    ctx.fillStyle = palette.ink;
+    ctx.fillText(entry.label, x + STRIP_SWATCH + LEGEND_LABEL_GAP, baseline);
+    x += entryWidth + LEGEND_ENTRY_GAP;
+  }
 }
 
 /** Marker-chip typography + geometry, matching the ruler's marker rows (`h-3.5` = 14 px, `px-1`). */
