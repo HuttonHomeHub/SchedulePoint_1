@@ -641,7 +641,7 @@ export class HierarchyLifecycleService {
     const root = await this.loadDeletedRoot(tx, entity, id);
     // The calendar locks come BEFORE the parent check: the lock order is calendar, then ancestors
     // (`docs/specs/deleted-calendar-restore/spec.md` §4.6), the order `CalendarsService.restore` takes.
-    const calendarIds = await this.lockBatchCalendars(tx, root);
+    const calendarIds = await this.lockBatchCalendars(tx, entity, root);
     await this.assertParentActive(tx, entity, root);
     const strandedCalendars = await this.assertCalendarsActive(tx, entity, id, root, calendarIds);
 
@@ -828,6 +828,7 @@ export class HierarchyLifecycleService {
    */
   private async lockBatchCalendars(
     tx: Prisma.TransactionClient,
+    entity: HierarchyEntity,
     root: DeletedRoot,
   ): Promise<string[]> {
     const ids = new Set<string>();
@@ -837,11 +838,16 @@ export class HierarchyLifecycleService {
         organizationId: root.organizationId,
         calendarId: { not: null },
       };
-      const plans = await tx.plan.findMany({
-        where,
-        select: { calendarId: true },
-        distinct: ['calendarId'],
-      });
+      // An activity or link batch holds no plan, so that read would match nothing (and costs a
+      // statement on the activity restore, whose budget `activity-history-statements` pins).
+      const plans =
+        entity === 'activity' || entity === 'dependency'
+          ? []
+          : await tx.plan.findMany({
+              where,
+              select: { calendarId: true },
+              distinct: ['calendarId'],
+            });
       const activities = await tx.activity.findMany({
         where,
         select: { calendarId: true },

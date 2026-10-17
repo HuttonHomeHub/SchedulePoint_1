@@ -77,12 +77,18 @@ const OWN_PLACEMENTS = 4;
 // issues before its first write and however many rows: the re-parent (6 to 7), a delete (8 to 9) and
 // a bulk delete (9 to 10) one each, a dissolve two (12 to 14: its own children-and-summary lock, then
 // the cascade's), and the single-activity restore one (20 to 21: the plan lock batch restore takes).
+//
+// Both restores moved on 2026-10-17 (`docs/TECH_DEBT.md` #519, ADR-0200), each by exactly one
+// statement and however many rows: the read of the batch's activities' `calendar_id`s that
+// `lockBatchCalendars` makes so it can take the calendar locks before the first write (21 to 22).
+// An activity batch holds no plan, so the matching read of the plans' calendars is skipped; with no
+// calendar referenced there is no state read or lock after it.
 const OWN_PARENTS = 7;
 const OWN_DISSOLVE = 14;
 const OWN_DELETE = 9;
-const OWN_RESTORE = 21;
+const OWN_RESTORE = 22;
 const OWN_BULK_DELETE = 10;
-const OWN_BATCH_RESTORE = 21;
+const OWN_BATCH_RESTORE = 22;
 const BATCH_RECORDER_STATEMENTS = 3;
 const CROSS_PLAN_RECORDER_STATEMENTS = 3;
 
