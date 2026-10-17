@@ -78,7 +78,7 @@ const OWN_PLACEMENTS = 4;
 // a bulk delete (9 to 10) one each, a dissolve two (12 to 14: its own children-and-summary lock, then
 // the cascade's), and the single-activity restore one (20 to 21: the plan lock batch restore takes).
 //
-// Both restores moved on 2026-10-17 (`docs/TECH_DEBT.md` #519, ADR-0200), each by exactly one
+// Both restores moved on 2026-10-17 (`docs/TECH_DEBT.md` #519, ADR-0201), each by exactly one
 // statement and however many rows: the read of the batch's activities' `calendar_id`s that
 // `lockBatchCalendars` makes so it can take the calendar locks before the first write (21 to 22).
 // An activity batch holds no plan, so the matching read of the plans' calendars is skipped; with no
