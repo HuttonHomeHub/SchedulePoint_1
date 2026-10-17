@@ -43,13 +43,19 @@
  *                         relayout-start-prototypes.ts; `--frontier` is shorthand for all four.
  *   --candidate=current:0 What FC-R2..R6 judge: budget:starts (default current:0, the M1 lever).
  *                         `seed:0` is today's, so every FC-R2 comparison is against itself.
- *   --product=today|m1    Which Re-layout the dialog runs now, for FC-R0 (default today; m1 after M1).
+ *   --product=today|m1    An ASSERTION about the tree, never a selector. The Re-layout the dialog runs
+ *                         is read from the tree itself (`relayout-product.ts`) and FC-R0 compares the
+ *                         dialog with that build's benchmark run; a flag that disagrees stops the run.
+ *                         The one use is `--write-baseline --product=today`.
  *   --runs=2              Searches per layout (timing spread, and the repeatability check).
  *   --only=a,b            Score only these seed names.
  *   --scale-leaves=N      Leaves in the generated plan (default: the largest N <= 300 whose WBS
  *                         summaries keep the DRAWN count within the 300 the search is offered at).
  *   --write-baseline      Record Tidy's lane digests and today's vectors as the committed baseline
- *                         (FC-R8): run it ONCE on unmodified code, then commit the file.
+ *                         (FC-R8). Needs `--product=today`, takes no dialog reading, and computes
+ *                         today's figures with today's budget in the benchmark alone, so it works on
+ *                         any tree whose Tidy is unchanged (see `relayout-baseline.json`'s note).
+ *                         `--skip-capture` scores the committed corpus and starts no servers.
  *   --base=origin/main    The revision FC-R9 diffs against.
  *   --out=<dir>           Where the reports go (default .tmp/relayout).
  *   --self-test           Run step 1 and stop.
@@ -87,21 +93,23 @@ const BUDGETS = list(opt('budget', 'seed,current'));
 const STARTS = (FRONTIER ? ['0', '1', '2', '3'] : list(opt('starts', '0'))).map(Number);
 const [CAND_BUDGET, CAND_STARTS] = opt('candidate', 'current:0').split(':');
 const CANDIDATE = { budget: CAND_BUDGET, starts: list(CAND_STARTS ?? '0').map(Number) };
-const PRODUCT = opt('product', 'today');
+const PRODUCT_FLAG = opt('product', null);
 const RUNS = Number(opt('runs', '2'));
 const ONLY = list(opt('only', ''));
 const BASE_REV = opt('base', 'origin/main');
 const SKIP_CAPTURE = has('skip-capture');
-const SKIP_AGREE = has('skip-agree') || SKIP_CAPTURE;
-const PLANT_ERROR = has('plant-error');
 const WRITE_BASELINE = has('write-baseline');
+// The baseline is today's figures from the benchmark alone: no dialog is read for it.
+const SKIP_AGREE = has('skip-agree') || SKIP_CAPTURE || WRITE_BASELINE;
+const PLANT_ERROR = has('plant-error');
+// The Re-layout the build under test contains; set once the bench bundle can say (`relayout-product.ts`).
+let PRODUCT = 'today';
 if (
   !['seed', 'current'].includes(CANDIDATE.budget) ||
   BUDGETS.some((b) => !['seed', 'current'].includes(b))
 ) {
   throw new Error('--budget and --candidate take `seed` or `current`');
 }
-if (!['today', 'm1'].includes(PRODUCT)) throw new Error('--product takes `today` or `m1`');
 
 const WEB = 'http://localhost:5173';
 const API_HEALTH = 'http://localhost:3000/api/v1/health';
@@ -131,6 +139,7 @@ async function bundleNode() {
   writeFileSync(
     entry,
     `export { selfTest } from ${JSON.stringify(`${HERE}/scripts/relayout-metrics.ts`)};
+export { selfTest as productSelfTest, resolveProduct, productRunOf } from ${JSON.stringify(`${HERE}/scripts/relayout-product.ts`)};
 export { buildCorpusPlan } from ${JSON.stringify(`${HERE}/scripts/relayout-scene.ts`)};
 export { judge, table, REFERENCE_SEED, FIXTURE_SEED } from ${JSON.stringify(`${HERE}/scripts/relayout-verdicts.ts`)};
 export { loadSpecs } from ${JSON.stringify(`${REPO}/apps/seed-cli/src/specs.ts`)};
@@ -592,11 +601,7 @@ async function agreement(node, benchPage, session) {
       ([p, o]) => globalThis.relayoutBench.scorePlan(p, o),
       [plan, { budgets: ['seed', 'current'], starts: [0], runs: 1, reverseUpTo: 0 }],
     );
-    const productRun =
-      PRODUCT === 'm1'
-        ? result.variants.find((v) => v.budget === 'current' && v.start === 0)
-        : result.today;
-    if (!productRun) throw new Error(`no ${PRODUCT} Re-layout run for ${seedName}`);
+    const productRun = node.productRunOf(result, PRODUCT);
     const mine = {
       tidy: dialogFigures(result, result.tidy),
       relayout: dialogFigures(result, productRun),
@@ -628,8 +633,8 @@ async function agreement(node, benchPage, session) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────────────────────
 const node = await bundleNode();
-const done = node.selfTest();
-say(`Self-test: ${done.length} counter cases agree.`);
+const done = [...node.selfTest(), ...node.productSelfTest()];
+say(`Self-test: ${done.length} counter and product cases agree.`);
 // Loading the catalogue reads the conformance fixture from disk, which broke once the bundle
 // lived in /tmp; doing it here makes `--self-test` catch a path that only resolves in-repo.
 say(`Self-test: ${node.loadSpecs('all').length} catalogue specs load from the bundle.`);
@@ -653,6 +658,12 @@ try {
 
   const plans = corpus.plans.filter((p) => ONLY.length === 0 || ONLY.includes(p.seedName));
   const { browser, page } = await openBench(bundle);
+  PRODUCT = node.resolveProduct(
+    PRODUCT_FLAG,
+    await page.evaluate(() => globalThis.relayoutBench.detectProduct()),
+    WRITE_BASELINE,
+  );
+  say(`Product build: ${PRODUCT}${PRODUCT_FLAG === null ? ' (detected from the tree)' : ''}.`);
   let results;
   let agree = null;
   try {
@@ -684,11 +695,38 @@ try {
       );
   }
   if (WRITE_BASELINE) {
+    // Tidy's digests are Tidy's code read at THIS tree, so the baseline is today's only while Tidy is
+    // unchanged. Recording what differs from the base revision lets a reader judge that.
+    let changedRender = [];
+    try {
+      changedRender = execFileSync(
+        'git',
+        ['diff', '--name-only', `${BASE_REV}...HEAD`, '--', 'apps/web/src/features/tsld/'],
+        { cwd: REPO },
+      )
+        .toString()
+        .split('\n')
+        .filter((f) => f !== '' && !/\.test\.tsx?$/.test(f));
+    } catch {
+      changedRender = ['unknown: git diff failed'];
+    }
     writeFileSync(
       BASELINE_PATH,
-      `${JSON.stringify({ commit, tidy: tidyDigests, today: Object.fromEntries(results.map((r) => [r.seedName, r.today.measure.objective])) }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          commit,
+          product: 'today',
+          note: `Today's Re-layout (the seed-row budget, no extra starts) and Tidy, computed by the benchmark alone at ${commit.slice(0, 8)} on the committed corpus. Valid while Tidy's search is unchanged; non-test sources under apps/web/src/features/tsld/ that differ from ${BASE_REV} at write time: ${changedRender.join(', ') || 'none'}.`,
+          tidy: tidyDigests,
+          today: Object.fromEntries(results.map((r) => [r.seedName, r.today.measure.objective])),
+        },
+        null,
+        2,
+      )}\n`,
     );
-    say(`Baseline written to ${BASELINE_PATH} (commit it).`);
+    say(
+      `Baseline written to ${BASELINE_PATH} (commit it). Tidy-affecting files changed since ${BASE_REV}: ${changedRender.join(', ') || 'none'}.`,
+    );
   }
   const baseline = existsSync(BASELINE_PATH)
     ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))

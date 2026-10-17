@@ -1,4 +1,4 @@
-import { arrangeRequest, changesBetween } from '../src/features/tsld/components/use-arrange-search';
+import * as arrangeModule from '../src/features/tsld/components/use-arrange-search';
 import {
   compareObjectives,
   layoutLines,
@@ -17,6 +17,7 @@ import { makeWorkingDayPredicate } from '../src/features/tsld/render/time-scale'
 import { DEFAULT_VIEW_TOGGLES } from '../src/features/tsld/render/view-toggles';
 
 import { bendCount, criticalSpine, travelStats, type CriticalSpine } from './relayout-metrics';
+import { detectProduct } from './relayout-product';
 import type { CorpusPlan } from './relayout-scene';
 import { START_NAMES, startSeed, type StartId } from './relayout-start-prototypes';
 
@@ -30,6 +31,8 @@ import { START_NAMES, startSeed, type StartId } from './relayout-start-prototype
  * therefore runs on this thread, not in a worker — the same code, so the same lanes; only the thread
  * differs, and the timing is labelled accordingly.
  */
+
+const { arrangeRequest, changesBetween } = arrangeModule;
 
 export type BudgetMode = 'seed' | 'current';
 
@@ -298,4 +301,8 @@ export function bestOf(runs: readonly Run[]): Run {
   return best;
 }
 
-(globalThis as unknown as { relayoutBench: unknown }).relayoutBench = { scorePlan, bestOf };
+(globalThis as unknown as { relayoutBench: unknown }).relayoutBench = {
+  scorePlan,
+  bestOf,
+  detectProduct: () => detectProduct(arrangeModule),
+};
