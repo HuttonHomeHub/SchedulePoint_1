@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.94.2
+
+### Patch Changes
+
+- [#1013](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1013) [`4f9942a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4f9942ab37387d723096ba92ef391329b00db405) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A malformed id in a request path is now rejected by Nest's own UUID pipe, so the 400 message reads `Validation failed (uuid is expected)` instead of `Parameter must be a valid UUID.`; the status, the error envelope and the ids accepted (including v7) are unchanged.
+
+- [#1016](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1016) [`5aa4bff`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5aa4bff635b95f418e88cb0c8d92389c34226cfe) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Upgrade the API framework from NestJS 11 to 12 (common, core, platform-express, swagger, terminus, config, testing, CLI). No endpoint, envelope or DTO changes.
+
 ## 0.94.1
 
 ### Patch Changes

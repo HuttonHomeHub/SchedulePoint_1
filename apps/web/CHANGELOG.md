@@ -1,5 +1,23 @@
 # @repo/web
 
+## 0.192.2
+
+### Patch Changes
+
+- [#1018](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1018) [`0b69aeb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0b69aebf6b35f533cff14e2fa42c65fed3a8b025) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A disabled option in a combobox can now be reached with the arrow keys, Home and End, and can say why it is unavailable. Pressing Enter on one announces the reason instead of choosing it. No screen shows a disabled option yet, so nothing changes on screen today.
+
+- [#1017](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1017) [`32d86f3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/32d86f3ef4df2d053f502612b2bac0985efe06da) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A table column's extra classes now add to the default cell padding and header weight instead of
+  replacing them. Five numeric columns (Lag on the two logic tables, Activities on Baselines,
+  Duration and Progress on the activities table) regain the padding the rest of their table has.
+
+- [#1019](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1019) [`7241055`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/72410558326f36625286356888cbfc33058f4c32) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Keep keyboard focus on the plan after Undo or Redo replaces the result strip, and after the selected
+  activity's action bar goes. Both now share one focus hand-off rule with the viewport controls and the
+  panel-size box. The action bar no longer loses its place when the plan refreshes underneath it.
+
+- [#1020](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1020) [`be7f6e8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/be7f6e82a6b05f7d597ae8d3701a50e87d3cb804) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The headline figures in the Earned value dialog and the import review now share one style (larger
+  labels, no tile borders), and the shared plan view's header and the Summary popover share the quieter
+  one, with small capital-letter labels. The figures and their names are unchanged.
+
 ## 0.192.1
 
 ### Patch Changes
