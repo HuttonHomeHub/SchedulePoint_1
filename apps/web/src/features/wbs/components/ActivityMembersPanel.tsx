@@ -8,9 +8,9 @@ import { ancestorIds, subtreeSizes, wouldCloseLoop } from '../model/wbs-tree';
 import { useAnnounce } from '@/components/ui/announcer';
 import { FieldGateProvider } from '@/components/ui/field-gate';
 import { CheckboxField } from '@/components/ui/form';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { SearchField } from '@/components/ui/search-field';
-import { Spinner } from '@/components/ui/spinner';
 import { useUpdateActivityParents } from '@/features/activities';
 import { ApiFetchError } from '@/lib/api/client';
 
@@ -203,9 +203,9 @@ export function ActivityMembersPanel({
 
   if (loading) {
     return (
-      <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
-        <Spinner label="Loading the plan’s activities…" labelOnScreen />
-      </div>
+      <LoadingShape label="Loading the plan’s activities…">
+        <MembersSkeleton />
+      </LoadingShape>
     );
   }
   if (error) {
@@ -294,6 +294,30 @@ export function ActivityMembersPanel({
         />
       </FieldGateProvider>
     </form>
+  );
+}
+
+/**
+ * The members tab's loading shape: the search field, the result count and a bordered checklist of
+ * five rows, in the settled form's own structure. Hidden from assistive technology by its
+ * enclosing `LoadingShape`; nothing in it is focusable.
+ */
+function MembersSkeleton(): React.ReactElement {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-(--control-h) w-full" />
+      </div>
+      <Skeleton className="h-5 w-64" />
+      <ul className="border-border rounded-md border">
+        {[0, 1, 2, 3, 4].map((n) => (
+          <li key={n} className="border-border border-b px-3 py-2 last:border-b-0">
+            <Skeleton className="h-5 w-2/3" />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -4,11 +4,12 @@ import { useActivityHistory } from '../api/use-activity-history';
 import type { HistoryFormatContext } from '../lib/format-history-item';
 
 import { ActivityHistoryItem } from './ActivityHistoryItem';
+import { HistoryEntrySkeleton } from './HistoryEntrySkeleton';
 
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape } from '@/components/ui/page';
 import { QueryErrorState } from '@/components/ui/query-error-state';
-import { Spinner } from '@/components/ui/spinner';
 import { formatCalendarDate } from '@/lib/format-date';
 
 export interface ActivityHistoryPanelProps {
@@ -82,9 +83,13 @@ export function ActivityHistoryPanel({
       </h3>
       <p ref={status} role="status" aria-live="polite" className="sr-only" />
       {history.isPending ? (
-        <div className="py-6">
-          <Spinner label="Loading history…" />
-        </div>
+        <LoadingShape label="Loading history…">
+          <ol className="flex flex-col gap-2">
+            {[0, 1, 2].map((n) => (
+              <HistoryEntrySkeleton key={n} />
+            ))}
+          </ol>
+        </LoadingShape>
       ) : history.isError ? (
         <QueryErrorState label="Couldn’t load history. Please try again." onRetry={retry} />
       ) : entries.length === 0 ? (

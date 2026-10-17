@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 
 /**
@@ -185,3 +186,29 @@ function endOf(dialog: Locator, day: string, index: number): Locator {
     .getByRole('textbox', { name: /^End time/ })
     .nth(index);
 }
+
+/**
+ * **A calendar's Exceptions draw their row shape while the calendar read is held**
+ * (`docs/specs/loading-skeletons/` M5): three exception-shaped placeholders inside the list region,
+ * one spoken sentence, no spinner, and the empty state once the read is released.
+ */
+test('Exceptions show row-shaped placeholders and one sentence while the calendar read is held', async ({
+  page,
+}) => {
+  const stamp = Date.now() + 1;
+  await onboard(page, stamp);
+  await navLink(page, 'Calendars').click();
+
+  const held = await holdRead(page, /\/organizations\/[^/]+\/calendars\/[0-9a-f-]{36}$/);
+  await openCalendar(page, 'Standard');
+  const dialog = page.getByRole('dialog');
+
+  const loading = dialog.getByRole('status').filter({ hasText: 'Loading exceptions…' });
+  await expect(loading).toHaveCount(1);
+  await expect(dialog.locator('[data-loading-shape] li')).toHaveCount(3);
+  expect(await dialog.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+
+  held.release();
+  await expect(dialog.getByText('No exceptions yet.')).toBeVisible();
+  await expect(loading).toHaveCount(0);
+});

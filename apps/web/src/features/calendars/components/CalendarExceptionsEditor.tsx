@@ -33,8 +33,8 @@ import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
 import { WindowListEditor } from '@/components/ui/window-list-editor';
 import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -430,7 +430,13 @@ export function CalendarExceptionsEditor({
 
       <div ref={listRegionRef} tabIndex={-1} className="outline-none">
         {calendar.isPending ? (
-          <Spinner label="Loading exceptions…" />
+          <LoadingShape label="Loading exceptions…">
+            <ul className="flex flex-col gap-2">
+              {[0, 1, 2].map((n) => (
+                <ExceptionRowSkeleton key={n} readOnly={readOnly} />
+              ))}
+            </ul>
+          </LoadingShape>
         ) : calendar.isError ? (
           <div className="flex flex-col items-start gap-3">
             <p role="alert" className="text-destructive-text text-sm">
@@ -576,5 +582,20 @@ export function CalendarExceptionsEditor({
         </form>
       )}
     </section>
+  );
+}
+
+/**
+ * An exception row's loading shape: the row's own box, the date span and badge as one block, and —
+ * for a reader who can edit — the Edit/Remove pair at the small control height. Whether the reader
+ * can edit is known (`readOnly`), so the trailing block is drawn only when the buttons will be.
+ * Hidden from assistive technology by its enclosing `LoadingShape`.
+ */
+function ExceptionRowSkeleton({ readOnly }: { readOnly: boolean }): React.ReactElement {
+  return (
+    <li className="border-border flex items-center justify-between gap-3 rounded-md border p-2">
+      <Skeleton className="h-5 w-48" />
+      {readOnly ? null : <Skeleton className="h-(--control-h-sm) w-28 shrink-0" />}
+    </li>
   );
 }

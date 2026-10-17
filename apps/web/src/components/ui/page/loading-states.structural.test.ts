@@ -108,27 +108,6 @@ const DECLARED: Record<string, Declared> = {
 
 /** Group A: first loads whose settled shape is known. Each milestone deletes its own entries. */
 const PENDING_SPINNERS: Record<string, { sites: number; milestone: string }> = {
-  'features/earned-value/components/EarnedValuePanel.tsx': {
-    sites: 1,
-    milestone: 'loading-skeletons M5',
-  },
-  'features/schedule/components/ScheduleSummaryStrip.tsx': {
-    sites: 1,
-    milestone: 'loading-skeletons M5',
-  },
-  'features/notes/components/NoteThread.tsx': { sites: 1, milestone: 'loading-skeletons M5' },
-  'features/activity-history/components/ActivityHistoryPanel.tsx': {
-    sites: 1,
-    milestone: 'loading-skeletons M5',
-  },
-  'features/wbs/components/ActivityMembersPanel.tsx': {
-    sites: 1,
-    milestone: 'loading-skeletons M5',
-  },
-  'features/calendars/components/CalendarExceptionsEditor.tsx': {
-    sites: 1,
-    milestone: 'loading-skeletons M5',
-  },
   'features/members/components/AcceptInvitationCard.tsx': {
     sites: 1,
     milestone: 'loading-skeletons M6',

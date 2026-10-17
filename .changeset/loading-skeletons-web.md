@@ -16,3 +16,5 @@ per panel.
 A client or project page now opens in its own frame, with the real column headings of its table, and
 the plan opens in a workspace-shaped placeholder instead of a spinner, so nothing slides into place
 when the page arrives.
+Earned value, the schedule summary, notes, history, a calendar's exceptions and a summary's members tab
+show the shape of what they are loading, with one spoken sentence, instead of a spinner.

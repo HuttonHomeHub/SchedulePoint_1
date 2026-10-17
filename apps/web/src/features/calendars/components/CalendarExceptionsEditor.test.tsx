@@ -64,6 +64,21 @@ describe('CalendarExceptionsEditor', () => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(DETAIL);
   });
 
+  it('draws exception-shaped rows and one status while the calendar read is pending', () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <CalendarExceptionsEditor orgSlug="acme" calendarId="cal-1" />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Loading exceptions…');
+    expect(container.querySelectorAll('[data-loading-shape] li')).toHaveLength(3);
+    // The list region is the focus sink: the skeleton sits inside it and it is not marked busy.
+    expect(screen.getByRole('status').closest('[aria-busy="true"]')).toBeNull();
+    expect(screen.getByRole('status').closest('[tabindex="-1"]')).not.toBeNull();
+  });
+
   it('lists existing exceptions with a text indicator and a remove action', () => {
     renderEditor();
     expect(screen.getByText('25 Dec 2026')).toBeInTheDocument();

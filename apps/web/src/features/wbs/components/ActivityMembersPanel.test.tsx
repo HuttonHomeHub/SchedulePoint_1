@@ -208,6 +208,8 @@ describe('ActivityMembersPanel', () => {
     // The sentence is drawn on screen and announced by the status: two elements, one `label`.
     expect(screen.getAllByText(/Loading the plan/).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    // A checklist-shaped placeholder, not an icon beside a sentence.
+    expect(document.querySelectorAll('[data-loading-shape] li')).toHaveLength(5);
   });
 
   it('announces the loading sentence it shows, not a generic "Loading…"', () => {

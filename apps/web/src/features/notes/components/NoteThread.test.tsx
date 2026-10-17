@@ -57,10 +57,35 @@ describe('NoteThread', () => {
     vi.mocked(apiFetch).mockReset();
   });
 
-  it('shows the loading state while the first page is in flight', () => {
+  it('shows three note-shaped placeholders and one status while the first page is in flight', () => {
     vi.mocked(apiFetchEnvelope).mockReturnValue(new Promise(() => {}));
-    renderThread();
-    expect(screen.getByText('Loading notes…')).toBeInTheDocument();
+    const { container } = renderThread();
+    const statuses = screen
+      .getAllByRole('status')
+      .filter((el) => (el.textContent ?? '').includes('Loading notes…'));
+    expect(statuses).toHaveLength(1);
+    // The status is not inside a busy subtree, and the placeholders are hidden from assistive tech.
+    expect(statuses[0]?.closest('[aria-busy="true"]')).toBeNull();
+    const shape = container.querySelector('[data-loading-shape]');
+    expect(shape?.querySelectorAll('li')).toHaveLength(3);
+    expect(shape?.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('draws the skeleton INSIDE the focus region, which is the same node once notes arrive', async () => {
+    // The region is the focus sink for after a delete: its identity must not depend on what the
+    // thread holds (see the docblock on `NoteThread`).
+    let settle: (value: ReturnType<typeof page>) => void = () => {};
+    vi.mocked(apiFetchEnvelope).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const { container } = renderThread();
+    const region = container.querySelector('[data-loading-shape]')?.closest('[tabindex="-1"]');
+    expect(region).not.toBeNull();
+    settle(page([note()], { nextCursor: null, hasMore: false }));
+    const settled = (await screen.findByText('A note')).closest('[tabindex="-1"]');
+    expect(settled).toBe(region);
   });
 
   it('shows the empty state when there are no notes', async () => {
