@@ -153,6 +153,40 @@ describe('the rule on the spec §2.3 table', () => {
     expect(ids(chain(['MON_SAT', 'MON_FRI', 'MON_SAT']))).toEqual([]);
   });
 
+  // W5, amended 2026-10-17: single-calendar mode no longer needs the chain's non-zero lags on the shared
+  // calendar when D's lag is not positive. These two pin both halves: relaxed, and still required.
+  const sameCalendarChain = (
+    dLag: number,
+    chainKey: NonNullable<OracleLink['lagCalendar']>,
+    dKey: NonNullable<OracleLink['lagCalendar']> = 'PROJECT_DEFAULT',
+  ) =>
+    flag(
+      [
+        task('A', { calendar: 'MON_SAT' }),
+        task('B', { calendar: 'MON_SAT' }),
+        task('C', { calendar: 'MON_SAT' }),
+      ],
+      [
+        // Enters B at its finish and B is left at its finish: only single-calendar mode may pass it.
+        link('AB', 'A', 'B', 'FF', DAY, { lagCalendar: chainKey }),
+        link('BC', 'B', 'C'),
+        link('AC', 'A', 'C', 'FS', dLag, { lagCalendar: dKey }),
+      ],
+    );
+
+  it('W5 relaxed: a chain lag on another calendar is fine when D has no positive lag', () => {
+    // The chain's SS lag is elapsed (24 hours), not on MON_SAT; D is a zero-lag FS.
+    expect(ids(sameCalendarChain(0, 'TWENTY_FOUR_HOUR'))).toEqual(['AC']);
+    expect(ids(sameCalendarChain(-DAY, 'TWENTY_FOUR_HOUR'))).toEqual(['AC']);
+  });
+
+  it('W5 kept for a positive D lag: the same calendar is still required', () => {
+    // D = +1 day on its successor's calendar (the shared MON_SAT), the chain's lag on elapsed time:
+    // two keys, not flagged. The same D with the chain's lag on MON_SAT too is flagged.
+    expect(ids(sameCalendarChain(DAY, 'TWENTY_FOUR_HOUR', 'SUCCESSOR'))).toEqual([]);
+    expect(ids(sameCalendarChain(DAY, 'SUCCESSOR', 'SUCCESSOR'))).toEqual(['AC']);
+  });
+
   it('R10: a mandatory-start intermediate is not flagged', () => {
     expect(
       ids(abc({}, { b: { constraintType: 'MANDATORY_START', constraintDate: '2026-01-05' } })),
@@ -353,15 +387,12 @@ describe('the fixture (spec E14, E15)', () => {
     return index < 0 ? undefined : `edge-${String(index)}`;
   };
 
-  it('R0056 (A4110 to A4600) is NOT flagged even unprogressed: its chain mixes lag calendars (spec SC-2 is wrong here)', () => {
-    // The spec (E14, SC-2) expected R0056 flagged once progress is taken out. Every route from A4110 to
-    // A4600 either leaves an activity at its start (SS), which needs single-calendar mode, or carries a
-    // lead; and single-calendar mode (W5) needs every non-zero lag on the activities' own calendar. The
-    // fixture's activities schedule on CAL-02 while its project-default lags (`SS 2400`) are measured on
-    // the plan calendar CAL-01, so W5 fails. Relaxing W5's lag-key clause for a non-positive D lag flags
-    // R0056 and survives the oracle (m0-measurement.md), but the spec states the clause, no
-    // counterexample breaks it, and §4.7 keeps such a clause as conservative. This test pins the rule
-    // as specified; it flips visibly if the clause is ever relaxed.
+  it('R0056 (A4110 to A4600) is flagged on the unprogressed fixture (spec SC-2, with W5 relaxed)', () => {
+    // Every route from A4110 to A4600 leaves an activity at its start (`SS 2400`) or carries a lead, so
+    // only single-calendar mode can pass it. The fixture's activities schedule on CAL-02 and its
+    // project-default lags are on the plan calendar CAL-01. As first written W5 wanted those lags on
+    // CAL-02 and refused; the product owner relaxed that for a non-positive D lag (2026-10-17), after the
+    // oracle found no counterexample, and this is the case that made the difference.
     const spec = fixtureSpec();
     const unprogressed: SeedSpec = {
       ...spec,
@@ -369,7 +400,7 @@ describe('the fixture (spec E14, E15)', () => {
     };
     const id = edgeOf(unprogressed);
     expect(id).toBeDefined();
-    expect(ids(run(ruleInputOfSpec(unprogressed)))).not.toContain(id);
+    expect(ids(run(ruleInputOfSpec(unprogressed)))).toContain(id);
   });
 
   it('R0056 is not flagged on the seeded fixture: its chain passes through started work (CQ-4)', () => {

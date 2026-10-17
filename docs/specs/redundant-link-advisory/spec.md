@@ -158,8 +158,9 @@ transparent. `A` may be anything else — started, complete, pinned. A non-candi
 - **W4 — lag.** If `L(D) ≤ 0`, nothing more. If `L(D) > 0`: `Σ L(ti) ≥ L(D)`, and every `ti` with
   `L(ti) > 0` has the same lag-calendar key as D.
 - **W5 — single-calendar mode** (only needed to use W2's weaker form): A, C and every intermediate
-  share one scheduling calendar `K`, and every link on the chain and D with a non-zero lag has key
-  `K`.
+  share one scheduling calendar `K`, and, **when `L(D) > 0`**, `D` has key `K` (and W4 already puts every
+  positive lag on the chain on D's key). For `L(D) ≤ 0` the chain's lags and `D` may be on any calendar
+  (amended 2026-10-17, see the note under §6).
 
 **D is redundant iff a witness exists.**
 
@@ -470,7 +471,7 @@ delete each flagged link, recalculate, re-read every activity, compare (ADR-0066
    so "a witness not using D" is one lookup (the second-best when the best's first link is D).
 4. D is redundant iff the best admissible value at `σ(D)`'s compatible ends is `≥ L(D)` (W3/W4).
    Witness labels come from parent pointers set on strict improvement only (deterministic).
-5. A deterministic **relaxation budget** caps the work; sources are processed in topological order
+5. A deterministic **relaxation limit** caps the work; sources are processed in topological order
    so a capped result is stable.
 
 Cost: `O(m · V · (V + E))` with `m` modes per source (1–3 in practice), against `O(V + E)` for the
@@ -521,6 +522,19 @@ count (`check:counts`, `check:adr-coverage`).
 | CQ-3 | On plans with **more than one calendar**, accept that chains entering an activity at its finish, or leaving at its start, are not used (R9 off a single calendar)? | **Yes.** The worked counterexample (§2.2) shows the engine's calendar round trip can make such a link drive. Revisit only if M0's prevalence count says real plans lose most findings to it. |
 | CQ-4 | Treat **started work** as breaking a chain, so the fixture's R0056 is not flagged on the seeded (progressed) plan?                                                 | **Yes.** An actual start ignores its predecessors; the alternative reasons about actual dates and calendars inside an engine-free module.                                                    |
 | CQ-5 | Remedy: the existing jump plus **Logic** on the selection bar, or a **Delete link** action in the panel?                                                           | **Existing path only.** A panel delete is a new pen-gated structural write with an undo entry and its own spec weight; nothing about the finding needs it.                                   |
+
+> **Amended 2026-10-17 by the product owner (CQ-3, §2.1 W5, §2.3 R9, SC-2).** M0-M2 measured that W5
+> as first written (every non-zero lag on the chain, and D's, on the shared calendar) flags **not** the
+> fixture's R0056 even on the unprogressed plan: its chains leave an activity at its start, which needs
+> single-calendar mode, and the fixture's activities (CAL-02) have project-default lags on the plan
+> calendar (CAL-01). The owner loosened the clause: **when D's lag is not positive, the lag-key
+> condition of single-calendar mode is dropped**; a positive D lag still needs the same calendar. The
+> differential oracle (500 plans x 5 draws, 3,000 triangles, the catalogue, `scale-500`) and the eight
+> rule mutants were re-run after the change with zero divergences and eight kills; R0056 is now flagged
+> unprogressed and still not flagged on the seeded fixture (CQ-4). A ninth mutant (dropping the clause
+> that is kept) survives and the clause stays as conservative. The same measurement corrected the
+> reasoning for the "C transparent" exclusion: it is demonstrated by a started successor entered at its
+> **finish** (FF direct, SF chain), not by a pin or a start-bound link (`m0-measurement.md`).
 
 Non-critical defaults: no canvas marking in v1; no staff diagnostic (the rule is a graph search, not
 a SQL count); the name is "Redundant links"; no `VITE_` flag (ADR-0088 D1), rollback is the commit

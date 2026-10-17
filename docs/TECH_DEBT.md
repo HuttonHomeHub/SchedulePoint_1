@@ -11156,7 +11156,7 @@ Falsification conditions, committed before any product code:
 - **FC-2** Zero oracle divergences, alone and all-at-once, over the populations in spec §4.7.
 - **FC-3** Each exclusion has a red counterexample or is marked "reasoned, not demonstrated" in the ADR.
 - **FC-4** The fourteen metrics and `summary` deep-equal with and without the advisory.
-- **FC-5** At most 50 ms p95 advisory compute at `scale-2000`; the dense case is bounded by the work budget.
+- **FC-5** At most 50 ms p95 advisory compute at `scale-2000`; the dense case is bounded by the work limit.
 - **FC-6** The producer (M2-T3) merges after a release containing the tolerant web reader (M1).
 - **FC-7** N3's links and R2, R4, R7 and R8 are never flagged.
 

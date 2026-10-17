@@ -21,7 +21,8 @@
  * finish; W3 the first link leaves A at an end at or after D's and the last binds C at an end at or
  * before D's; W4 if D has a positive lag, the chain's lags sum to at least it and every positive lag
  * on the chain is on D's lag calendar; W5 (single-calendar mode) lets W2 relax to "entered no later
- * than left" when A, C and every intermediate share one scheduling calendar.
+ * than left" when A, C and every intermediate share one scheduling calendar (and, when D's lag is
+ * positive, D's lag is on it).
  *
  * **Algorithm.** A max-plus dynamic programme per source activity and per mode, over the cone of
  * transparent activities its links reach, in topological order. A state is (activity, end it was
@@ -145,14 +146,19 @@ function isCandidate(pred: RedundantLinksActivity, succ: RedundantLinksActivity)
   );
 }
 
-/** Whether a link may sit on a witness chain in a search mode (W1, W4, and W5's key rule). */
-function linkAllowed(dep: RedundantLinksDependency, mode: string | null, calendar: string | null) {
+/**
+ * Whether a link may sit on a witness chain in a search mode (W1 and W4).
+ *
+ * A positive lag on the chain must be on D's own lag calendar when D's lag is positive (`mode`), and
+ * may be on any calendar when it is not. Single-calendar mode (W5) once demanded the shared calendar
+ * of every non-zero lag as well; the product owner relaxed that for a non-positive D lag on 2026-10-17
+ * (spec CQ-3 amendment), after the oracle found no counterexample, because it is what separates
+ * flagging the fixture's R0056 from not.
+ */
+function linkAllowed(dep: RedundantLinksDependency, mode: string | null): boolean {
   if (dep.lagMinutes < 0) return false;
   if (dep.lagMinutes === 0) return true;
-  // A positive lag: any key when D's own lag is not positive (`mode === null`), D's key otherwise.
-  // Single-calendar mode additionally needs every non-zero lag on the shared calendar.
-  if (mode !== null) return dep.lagCalendarKey === mode;
-  return calendar === null || dep.lagCalendarKey === calendar;
+  return mode === null || dep.lagCalendarKey === mode;
 }
 
 export function findRedundantLinks(
@@ -254,7 +260,7 @@ export function findRedundantLinks(
     };
     for (const link of outLinks[a]!) {
       remaining -= 1;
-      if (!linkAllowed(link.dep, mode, kCalendar)) continue;
+      if (!linkAllowed(link.dep, mode)) continue;
       consider(link, -1, 0, link.pi);
     }
     if (remaining < 0) return false;
@@ -271,7 +277,7 @@ export function findRedundantLinks(
             // W2: enter at S and leave at F; single-calendar mode relaxes to "entered no later than
             // left", never F then S.
             if (weak ? e > link.pi : !(e === S && link.pi === F)) continue;
-            if (!linkAllowed(link.dep, mode, kCalendar)) continue;
+            if (!linkAllowed(link.dep, mode)) continue;
             consider(link, state, have, first);
           }
           if (remaining < 0) return false;
@@ -301,11 +307,10 @@ export function findRedundantLinks(
 
   /** A witness for `d` among the states a finished run reached, or null. */
   function witness(d: LinkRow, mode: string | null, weak: boolean): RedundantLink | null {
-    const kCalendar = weak ? calendarOf[d.from]! : null;
     for (const t of inLinks[d.to]!) {
       if (t.index === d.index) continue;
       if (t.sigma > d.sigma) continue; // W3: bind C at an end at or before D's
-      if (!linkAllowed(t.dep, mode, kCalendar)) continue;
+      if (!linkAllowed(t.dep, mode)) continue;
       const need = d.dep.lagMinutes > 0 ? d.dep.lagMinutes : Number.NEGATIVE_INFINITY;
       if (t.from === d.from) {
         // k = 1: another link between the same pair. W3's first-end rule applies to it directly.
@@ -350,7 +355,7 @@ export function findRedundantLinks(
       add(false);
       const k = calendarOf[d.from]!;
       const weakAllowed =
-        calendarOf[d.to] === k && (d.dep.lagMinutes === 0 || d.dep.lagCalendarKey === k);
+        calendarOf[d.to] === k && (d.dep.lagMinutes <= 0 || d.dep.lagCalendarKey === k);
       if (weakAllowed) add(true);
     }
 
