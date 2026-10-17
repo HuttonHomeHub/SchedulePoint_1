@@ -68,21 +68,67 @@ expiry, a server-side `kind` filter, a flag, and partial restore. Each is reject
 
 ## Acceptance-status ledger
 
-Built 2026-10-17 on `work/restore-library`; the readings marked **owed** need the database or a browser
-and had not been taken when this was written.
+Built 2026-10-17 on `work/restore-library`. The readings were taken the same day on the local database and
+headless Chromium; the e2e, red-first and journey runs below are on rebased main `149ee791`.
 
-| Decision                                               | Built in                                                  | Evidence                                                                                                         |
-| ------------------------------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| D1 per-entity, batch-keyed, all-or-nothing             | `ResourcesService.restore`, `CalendarsService.restore`    | `resources.service.spec.ts`, `calendars.service.spec.ts`; `test/library-restore.e2e-spec.ts` (**owed**: API run) |
-| D2 refuse a clash, name the holder                     | `assertNoLiveHolder`; the calendar pre-check              | the unit specs; the e2e (**owed**)                                                                               |
-| D3 a blocker is a parent or a dependency, parent first | `RecycleBinRepository.findDeletedPage`                    | `recycle-bin.service.spec.ts`, `group-deletions.test.ts`; `recycle-bin.e2e-spec.ts` (**owed**)                   |
-| D4 library rows do not expire                          | `expiresAt` per row                                       | `recycle-bin.service.spec.ts`, `expiry-copy.test.ts`, `RecentlyDeletedTable.test.tsx`                            |
-| D5 `resource:restore`, `calendar:restore`              | `org-permissions.ts`                                      | `org-permissions.spec.ts`                                                                                        |
-| D6 a dissolved group restores empty                    | no special case                                           | `library-restore.e2e-spec.ts` (**owed**)                                                                         |
-| D7 a calendar restore stamps the plans using it        | `markScheduleInputsChanged` in `CalendarsService.restore` | `schedule-inputs.structural.spec.ts`; the e2e (**owed**)                                                         |
-| Bin query cost                                         | `test/measure/recycle-bin-library.measure.ts`             | **owed**: the reading decides whether the conditional index goes to database-architect                           |
-| Engine untouched                                       | nothing under `apps/api/src/modules/schedule/` changed    | the diff of that directory against the base commit is empty, read 2026-10-17                                     |
-| Journeys                                               | `apps/web/e2e/recently-deleted.spec.ts`                   | **owed**: a browser run                                                                                          |
+| Decision                                               | Built in                                                  | Evidence                                                                                                                           |
+| ------------------------------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| D1 per-entity, batch-keyed, all-or-nothing             | `ResourcesService.restore`, `CalendarsService.restore`    | `resources.service.spec.ts`, `calendars.service.spec.ts`; `test/library-restore.e2e-spec.ts`                                       |
+| D2 refuse a clash, name the holder                     | `assertNoLiveHolder`; the calendar pre-check              | the unit specs; the e2e                                                                                                            |
+| D3 a blocker is a parent or a dependency, parent first | `RecycleBinRepository.findDeletedPage`                    | `recycle-bin.service.spec.ts`, `group-deletions.test.ts`; `recycle-bin.e2e-spec.ts`                                                |
+| D4 library rows do not expire                          | `expiresAt` per row                                       | `recycle-bin.service.spec.ts`, `expiry-copy.test.ts`, `RecentlyDeletedTable.test.tsx`                                              |
+| D5 `resource:restore`, `calendar:restore`              | `org-permissions.ts`                                      | `org-permissions.spec.ts`                                                                                                          |
+| D6 a dissolved group restores empty                    | no special case                                           | `library-restore.e2e-spec.ts`                                                                                                      |
+| D7 a calendar restore stamps the plans using it        | `markScheduleInputsChanged` in `CalendarsService.restore` | `schedule-inputs.structural.spec.ts`; the e2e                                                                                      |
+| Bin query cost                                         | `test/measure/recycle-bin-library.measure.ts`             | Measured, no index (below)                                                                                                         |
+| Engine untouched                                       | nothing under `apps/api/src/modules/schedule/` changed    | the diff of that directory against the base commit is empty, read 2026-10-17                                                       |
+| Journeys                                               | `apps/web/e2e/recently-deleted.spec.ts`                   | `e2e-local.sh web` 28 passed (the 7 library and filter journeys among them); `web:library` 3 passed; the filter fits at 1024 x 600 |
+
+### The bin query reading (2026-10-17)
+
+One organisation, 5,000 resources and 5,000 calendars (the ADR-0053 ceiling) with a deleted minority: 1,560
+resources (60 groups of 25, a fifth of the children on a deleted calendar), 400 calendars, 600 plans, 50
+projects. First page of 101 rows, 15 runs, wall time of the repository call:
+
+| Query                    | p50     | p95     | Execution (EXPLAIN ANALYZE) |
+| ------------------------ | ------- | ------- | --------------------------- |
+| three tables, as on main | 1.3 ms  | 2.6 ms  | 0.7 ms                      |
+| five tables, as shipped  | 11.2 ms | 15.5 ms | 6.8 ms, 2,333 buffers       |
+
+p95 is about 13x the old query and about 8% of the 200 ms read target in `docs/PERFORMANCE.md` (CLAUDE.md §15).
+The plan sequentially scans `resources` and `calendars` filtered by organisation (98 and 81 buffers) and hash-joins
+the parent table; the batch-wide calendar lookup runs for the 101 page rows only, through
+`idx_resources_delete_batch_id`. **Decision: no index.** The partial index
+`(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` goes to database-architect when either
+(a) p95 for a 101-row page passes 100 ms on this harness (the scan is linear in the organisation's library, so
+roughly ten times this seed, about 50,000 resources, by extrapolation and not by measurement), or (b) a tenant's
+library bin passes ~1,000 rows, the point CLAUDE.md's risk row already names.
+
+### Red-first matrix (2026-10-17)
+
+Each naive mutation applied alone to the shipped code, the named `library-restore.e2e-spec.ts` tests run, the
+source restored (the tree was clean of source changes after every run).
+
+| Mutation                                 | Tests that went red                                              |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| skip the deleted-parent check            | later-deleted group; restore by a member's id                    |
+| skip the tree guard in restore           | parent no longer a group; tree too deep                          |
+| drop the supplied branch height          | tree too deep                                                    |
+| skip the name and code holder check      | name clash; archived holder; code clash                          |
+| skip the calendar check                  | own calendar deleted; whole group refused for a child's calendar |
+| drop the calendar advisory locks         | restore against a calendar delete (8 rounds)                     |
+| restore by parent links as well as batch | group restore leaves an earlier-deleted child deleted            |
+| restore every exception, not the batch   | calendar: exception removed earlier stays removed                |
+| do not stamp the plans                   | calendar restore re-dates the plan (F11)                         |
+| skip the project-active check            | calendar swept with its project                                  |
+| skip the calendar name pre-check         | calendar name clash, archived holder                             |
+
+**Two findings from running it.** (1) My first mutation of the tree guard hit `create`, the first match in the
+file, and stayed green; re-aimed at the restore it is red, which is why this table names the restore. (2)
+Removing the organisation filter from the any-state load alone, or from all three of the load, the batch read and
+the write, leaves the foreign-id test green: a fourth layer, the scoped re-read of the root inside the same
+transaction, throws and rolls the write back. That is defence in depth working and not a vacuous test, and it
+means no single mutation proves the filter; the test asserts the behaviour (404, row still deleted).
 
 ## References
 
