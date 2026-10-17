@@ -6,6 +6,12 @@ import { LIBRARY_RESTORE_REASON } from '@repo/types';
 
 import { lockActivityIdsInIdOrder, lockPlanActivityRowsInIdOrder } from '../db/activity-row-lock';
 import { acquireCalendarWriteLock } from '../db/calendar-advisory-lock';
+import {
+  lockActiveClientForShare,
+  lockActiveProjectChainForShare,
+  lockClientRowForDelete,
+  lockProjectRowForDelete,
+} from '../db/hierarchy-row-lock';
 import { assertVersionMatches } from '../db/locked-version';
 import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
@@ -393,6 +399,10 @@ export class HierarchyLifecycleService {
     // Children are stamped before parents (activities → plans → projects → client),
     // all with the same batch id, so a restore of the root reactivates the subtree.
     if (entity === 'client') {
+      // The root row first, BEFORE the subtree is read: a restore that holds this client `FOR SHARE`
+      // makes the delete wait, and its reads below then see what the restore brought back
+      // (ADR-0200 D3, `docs/TECH_DEBT.md` #520).
+      await lockClientRowForDelete(tx, id);
       // Resolve the active subtree top-down BEFORE deleting it: the client's active
       // projects, then the active plans under them, then those plans' activities —
       // active-only so separately-deleted subtrees (their own batch) are untouched.
@@ -434,6 +444,7 @@ export class HierarchyLifecycleService {
         await tx.client.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'project') {
+      await lockProjectRowForDelete(tx, id);
       const planIds = (
         await tx.plan.findMany({ where: { projectId: id, deletedAt: null }, select: { id: true } })
       ).map((p) => p.id);
@@ -993,6 +1004,24 @@ export class HierarchyLifecycleService {
     };
   }
 
+  /**
+   * The client a project belongs to, whatever state the project is in, so a plan restore can lock the
+   * ancestors top-down. A project never moves between clients, so reading it before the locks is safe.
+   *
+   * soft-delete: any-state — the project is the plan's parent and may itself be deleted; whether it
+   * is active is decided by the locking read that follows, not by this one.
+   */
+  private async clientIdOfProject(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+  ): Promise<string | null> {
+    const project = await tx.project.findFirst({
+      where: { id: projectId },
+      select: { clientId: true },
+    });
+    return project?.clientId ?? null;
+  }
+
   /** A client's parent is its org (always active here); a project/plan/activity/
    * dependency's is its client/project/plan/plan — which must be active to restore
    * under it. */
@@ -1002,16 +1031,21 @@ export class HierarchyLifecycleService {
     root: Pick<DeletedRoot, 'parentId' | 'wbsParentId'>,
   ): Promise<void> {
     if (entity !== 'client' && root.parentId !== null) {
-      let parentActive: unknown;
+      let parentActive: boolean;
       if (entity === 'project') {
-        parentActive = await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } });
+        parentActive = await lockActiveClientForShare(tx, root.parentId);
       } else if (entity === 'plan') {
-        parentActive = await tx.project.findFirst({
-          where: { id: root.parentId, deletedAt: null },
-        });
+        // Every ancestor, top-down: a client delete does not take its project rows until it stamps
+        // them, so a plan restore that locked only its project would never meet the client's lock.
+        const clientId = await this.clientIdOfProject(tx, root.parentId);
+        parentActive =
+          clientId !== null &&
+          (await lockActiveProjectChainForShare(tx, { clientId, projectId: root.parentId }));
       } else {
-        // activity or dependency — the parent is the plan.
-        parentActive = await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } });
+        // activity or dependency — the parent is the plan. Its own delete/restore race is already
+        // serialised by the plan advisory lock every activity restore and plan delete takes.
+        parentActive =
+          (await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } })) !== null;
       }
       if (!parentActive) {
         throw new ConflictError('Restore the parent first.', {

@@ -1481,6 +1481,12 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
 - `PARENT_DELETED` is reported first when both apply.
 - Plans and activities that were **already** live on a deleted calendar before this check are not
   repaired; restoring the calendar still marks their plans "edited since calculated".
+- Every restore (including `POST …/calendars/:calendarId/restore` for a PROJECT calendar) takes its
+  ancestors `FOR SHARE`, top-down (client, then project), and a client or project delete takes its own
+  row `FOR NO KEY UPDATE` before it reads its subtree (ADR-0200 D3, `docs/TECH_DEBT.md` #520). A restore
+  and a delete of its ancestor therefore end consistently: either the delete sweeps the restored rows, or
+  the restore answers `PARENT_DELETED`. Nothing is left active under a deleted ancestor, and the loser
+  waits rather than failing.
 
 ### The organisation overview (ADR-0098)
 
