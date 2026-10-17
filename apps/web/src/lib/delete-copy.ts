@@ -38,6 +38,20 @@ export function deleteCascadeWarning(
 }
 
 /**
+ * The confirmation for deleting a **library** row — a resource or a calendar (ADR-0195).
+ *
+ * It carries the restore sentence and nothing about a deadline, and that is the point rather than
+ * an omission: the clear-out sweep removes clients, projects and plans only, so a deleted resource
+ * or organisation calendar stays in Recently deleted indefinitely whatever the server says about
+ * retention. The hierarchy's second sentence ("…for N days, then permanently removed") would be
+ * false here on every host. The one sentence is shared with {@link deleteCascadeWarning}, so the
+ * two cannot come to disagree about how a restore is described.
+ */
+export function deleteLibraryRowWarning(name: string): string {
+  return `Delete “${name}”? ${recoveryClause(undefined)}`;
+}
+
+/**
  * The server's clear-out configuration as the organisation list carries it. Absent while that list
  * is loading or when the organisation is not in it — and absent means the unconditional sentence,
  * which is the one that is true on every host.

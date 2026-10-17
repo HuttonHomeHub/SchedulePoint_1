@@ -23,7 +23,7 @@ import type {
 } from '../schemas/calendar-schemas';
 
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
-import { calendarKeys } from '@/lib/query/hierarchy-keys';
+import { calendarKeys, deletedItemKeys } from '@/lib/query/hierarchy-keys';
 
 export { calendarKeys };
 
@@ -367,7 +367,12 @@ export function useDeleteCalendar(orgSlug: string) {
   return useMutation({
     mutationFn: (calendarId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/calendars/${calendarId}`, { method: 'DELETE' }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: calendarKeys.list(orgSlug) }),
+    // A soft delete moves the row INTO Recently deleted, which lists calendars since ADR-0195.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarKeys.list(orgSlug) }),
+        queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) }),
+      ]),
   });
 }
 

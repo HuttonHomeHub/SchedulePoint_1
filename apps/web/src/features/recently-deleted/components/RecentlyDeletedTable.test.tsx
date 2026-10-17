@@ -1,17 +1,39 @@
-import type { DeletedHierarchyItem } from '@repo/types';
+import type { DeletedItem } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import { RecentlyDeletedTable } from './RecentlyDeletedTable';
-import { ANCESTOR_PREVIEW_LIMIT } from './RestoreAncestorDialog';
+import { ANCESTOR_PREVIEW_LIMIT } from './RestoreBlockerDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
+import { ApiFetchError, apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
 import { deletedItemKeys } from '@/lib/query/hierarchy-keys';
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPagesWithMeta: vi.fn() }));
+// `ApiFetchError` stays real: the refusals below are classified by `instanceof`, so a mock class would
+// make every one of them read as a plain Error.
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetch: vi.fn(),
+  apiFetchAllPagesWithMeta: vi.fn(),
+}));
+// The clash alert links to a library; a bare anchor is enough to read its target here.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    children,
+    className,
+  }: {
+    to: string;
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  ),
+}));
 const mockApiFetch = vi.mocked(apiFetch);
 
 /**
@@ -23,6 +45,33 @@ const META = { nextCursor: null, hasMore: false, retentionDays: 45, retentionAct
 // resolves here rather than through `apiFetch` (which serves only the restore POST).
 const mockApiFetchAllPages = vi.mocked(apiFetchAllPagesWithMeta);
 
+/**
+ * A fixture row. `subtype`, `expiresAt` and a blocker's `relation` are filled in by {@link serve} the
+ * way the API would, so the cascade cases below stay about what they are about.
+ */
+type Fixture = Omit<DeletedItem, 'subtype' | 'expiresAt' | 'blockedBy'> &
+  Partial<Pick<DeletedItem, 'subtype' | 'expiresAt'>> & {
+    blockedBy:
+      | (Omit<NonNullable<DeletedItem['blockedBy']>, 'relation'> &
+          Partial<Pick<NonNullable<DeletedItem['blockedBy']>, 'relation'>>)
+      | null;
+  };
+
+const DAY_MS = 86_400_000;
+
+/** What the API serves: a timer for the hierarchy only, and every blocker a parent unless stated. */
+function serve(row: Fixture): DeletedItem {
+  const hierarchy = row.kind === 'client' || row.kind === 'project' || row.kind === 'plan';
+  return {
+    subtype: null,
+    expiresAt: hierarchy
+      ? new Date(new Date(row.deletedAt).getTime() + META.retentionDays * DAY_MS).toISOString()
+      : null,
+    ...row,
+    blockedBy: row.blockedBy === null ? null : { relation: 'parent', ...row.blockedBy },
+  };
+}
+
 const CLIENT_ID = '00000000-0000-4000-8000-000000000001';
 const PLAN_ID = '00000000-0000-4000-8000-000000000002';
 
@@ -31,7 +80,7 @@ const PLAN_ID = '00000000-0000-4000-8000-000000000002';
  * own batch. Grouping (ADR-0096) collapses a cascade into one row, so a fixture whose rows shared a
  * batch id would render one entry and quietly stop exercising most of these cases.
  */
-const ITEMS: DeletedHierarchyItem[] = [
+const ITEMS: Fixture[] = [
   {
     kind: 'client',
     id: CLIENT_ID,
@@ -57,13 +106,13 @@ const ITEMS: DeletedHierarchyItem[] = [
   },
 ];
 
-function renderTable(canWrite: boolean, data: DeletedHierarchyItem[] = ITEMS) {
+function renderTable(canWrite: boolean, data: Fixture[] = ITEMS) {
   // staleTime Infinity: the seeded list is fresh, so it doesn't refetch on mount
   // (which would otherwise consume a mocked-once response before the restore call).
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  queryClient.setQueryData(deletedItemKeys.list('acme'), { rows: data, meta: META });
+  queryClient.setQueryData(deletedItemKeys.list('acme'), { rows: data.map(serve), meta: META });
   return render(
     <QueryClientProvider client={queryClient}>
       <AnnouncerProvider>
@@ -74,7 +123,7 @@ function renderTable(canWrite: boolean, data: DeletedHierarchyItem[] = ITEMS) {
 }
 
 beforeEach(() => {
-  mockApiFetchAllPages.mockResolvedValue({ rows: ITEMS, meta: META });
+  mockApiFetchAllPages.mockResolvedValue({ rows: ITEMS.map(serve), meta: META });
 });
 
 afterEach(() => {
@@ -244,7 +293,7 @@ describe('RecentlyDeletedTable', () => {
   describe('the cross-batch ancestor', () => {
     const PROJECT_ID = '00000000-0000-4000-8000-000000000020';
     /** A plan deleted alone, then its project deleted later — two batches, so grouping cannot help. */
-    const CROSS: DeletedHierarchyItem[] = [
+    const CROSS: Fixture[] = [
       {
         kind: 'project',
         id: PROJECT_ID,
@@ -283,7 +332,7 @@ describe('RecentlyDeletedTable', () => {
     it('names everything the confirmation will bring back, including unseen siblings', () => {
       // A sibling the blocked row cannot see. This is exactly why an auto-cascade was rejected:
       // one press on the plan would have resurrected this too, with nothing on screen saying so.
-      const withSibling: DeletedHierarchyItem[] = [
+      const withSibling: Fixture[] = [
         ...CROSS,
         {
           kind: 'plan',
@@ -315,7 +364,7 @@ describe('RecentlyDeletedTable', () => {
     it('caps a large ancestor batch and still states the exact total', () => {
       // A client-rooted cascade can hold hundreds. The cap changes how much is NAMED, never what is
       // CLAIMED — a silent truncation would read as "that is all of it" (ADR-0090's no-silent-caps).
-      const many: DeletedHierarchyItem[] = [
+      const many: Fixture[] = [
         CROSS[1]!,
         CROSS[0]!,
         ...Array.from({ length: 20 }, (_, n) => ({
@@ -396,7 +445,7 @@ describe('RecentlyDeletedTable', () => {
         defaultOptions: { queries: { retry: false, staleTime: Infinity } },
       });
       queryClient.setQueryData(deletedItemKeys.list('acme'), {
-        rows: ITEMS,
+        rows: ITEMS.map(serve),
         meta: { ...META, retentionActive: false },
       });
       render(
@@ -509,5 +558,354 @@ describe('RecentlyDeletedTable', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(invoker);
+  });
+
+  describe('resources and calendars (ADR-0195)', () => {
+    const GROUP_ID = '00000000-0000-4000-8000-000000000030';
+    const CAL_ID = '00000000-0000-4000-8000-000000000031';
+    const T = '2026-07-12T09:00:00.000Z';
+
+    /** A group deleted with two members: one deletion, one row. */
+    const GROUP_BATCH: Fixture[] = [
+      {
+        kind: 'resource',
+        subtype: 'GROUP',
+        id: GROUP_ID,
+        name: 'Groundworks',
+        deletedAt: T,
+        canRestore: true,
+        deleteBatchId: 'batch-group',
+        blockedBy: null,
+      },
+      ...['Crew A', 'Crew B'].map((name, n): Fixture => ({
+        kind: 'resource',
+        subtype: 'LABOUR',
+        id: `00000000-0000-4000-8000-00000000004${String(n)}`,
+        name,
+        deletedAt: T,
+        canRestore: false,
+        deleteBatchId: 'batch-group',
+        blockedBy: {
+          kind: 'resource',
+          id: GROUP_ID,
+          name: 'Groundworks',
+          deleteBatchId: 'batch-group',
+        },
+      })),
+    ];
+
+    it('shows a resource group as ONE row named for everything a press brings back', () => {
+      renderTable(true, GROUP_BATCH);
+      expect(screen.getByText('Resource group')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Restore resource group Groundworks and 2 resources' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/first/)).not.toBeInTheDocument();
+    });
+
+    it('labels a leaf resource and both calendar tiers by what they are', () => {
+      renderTable(true, [
+        { ...GROUP_BATCH[1]!, canRestore: true, blockedBy: null, deleteBatchId: 'b1' },
+        {
+          kind: 'calendar',
+          subtype: 'ORG',
+          id: CAL_ID,
+          name: 'Crane hours',
+          deletedAt: T,
+          canRestore: true,
+          deleteBatchId: 'b2',
+          blockedBy: null,
+        },
+        {
+          kind: 'calendar',
+          subtype: 'PROJECT',
+          id: '00000000-0000-4000-8000-000000000032',
+          name: 'Riverside week',
+          deletedAt: T,
+          canRestore: true,
+          deleteBatchId: 'b3',
+          blockedBy: null,
+        },
+      ]);
+      expect(screen.getByText('Resource')).toBeInTheDocument();
+      expect(screen.getByText('Calendar (organisation)')).toBeInTheDocument();
+      expect(screen.getByText('Calendar (project)')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Restore calendar Crane hours' }),
+      ).toBeInTheDocument();
+    });
+
+    it('prints NO countdown on a row no timer removes, even while the sweep is armed', () => {
+      // The fixture's hierarchy rows get `deletedAt + 45 days`; a resource and an organisation
+      // calendar get none, so the only "Expires" in the document belongs to the client.
+      renderTable(true, [
+        ITEMS[0]!,
+        { ...GROUP_BATCH[0]!, deleteBatchId: 'b-res', deletedAt: '2026-07-11T09:00:00.000Z' },
+      ]);
+      expect(screen.getAllByText(/Expir(es|ing)/)).toHaveLength(1);
+    });
+
+    it('counts a project calendar down from its PROJECT’s clock, as the server serves it', () => {
+      const soon = new Date(Date.now() + 3 * DAY_MS + 3_600_000).toISOString();
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      queryClient.setQueryData(deletedItemKeys.list('acme'), {
+        rows: [
+          {
+            ...serve({
+              kind: 'calendar',
+              subtype: 'PROJECT',
+              id: CAL_ID,
+              name: 'Riverside week',
+              deletedAt: '2020-01-01T00:00:00.000Z',
+              canRestore: true,
+              deleteBatchId: 'b-cal',
+              blockedBy: null,
+            }),
+            expiresAt: soon,
+          },
+        ],
+        meta: META,
+      });
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AnnouncerProvider>
+            <RecentlyDeletedTable orgSlug="acme" canWrite />
+          </AnnouncerProvider>
+        </QueryClientProvider>,
+      );
+      // Deleted in 2020 yet "in 3 days": the sentence follows `expiresAt`, never `deletedAt`.
+      expect(screen.getByText('Expires in 3 days')).toBeInTheDocument();
+    });
+
+    it('says a resource USES a deleted calendar, and offers to restore the calendar first', () => {
+      renderTable(true, [
+        {
+          kind: 'resource',
+          subtype: 'EQUIPMENT',
+          id: '00000000-0000-4000-8000-000000000033',
+          name: 'Crane A',
+          deletedAt: T,
+          canRestore: false,
+          deleteBatchId: 'b-res',
+          blockedBy: {
+            kind: 'calendar',
+            relation: 'calendar',
+            id: CAL_ID,
+            name: 'Crane hours',
+            deleteBatchId: 'b-cal',
+          },
+        },
+        {
+          kind: 'calendar',
+          subtype: 'ORG',
+          id: CAL_ID,
+          name: 'Crane hours',
+          deletedAt: '2026-07-11T09:00:00.000Z',
+          canRestore: true,
+          deleteBatchId: 'b-cal',
+          blockedBy: null,
+        },
+      ]);
+      // A dependency, not a parent: "Blocked by a deleted calendar" would say the calendar holds it.
+      expect(screen.getByText('Uses deleted calendar “Crane hours”')).toBeInTheDocument();
+      expect(screen.queryByText(/Blocked by a deleted/)).not.toBeInTheDocument();
+      const trigger = screen.getByRole('button', { name: 'Restore calendar first…: Crane hours' });
+      expect(trigger).toHaveTextContent('Restore calendar first…');
+
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveTextContent('Resource “Crane A” uses the calendar “Crane hours”');
+      expect(dialog).not.toHaveTextContent('sits inside');
+    });
+
+    it('offers “Restore resource group first…” for a child blocked by a later-deleted group', () => {
+      renderTable(true, [
+        {
+          kind: 'resource',
+          subtype: 'LABOUR',
+          id: '00000000-0000-4000-8000-000000000034',
+          name: 'Crew A',
+          deletedAt: T,
+          canRestore: false,
+          deleteBatchId: 'b-child',
+          blockedBy: {
+            kind: 'resource',
+            id: GROUP_ID,
+            name: 'Groundworks',
+            deleteBatchId: 'b-group',
+          },
+        },
+        { ...GROUP_BATCH[0]!, deleteBatchId: 'b-group', deletedAt: '2026-07-13T09:00:00.000Z' },
+      ]);
+      expect(
+        screen.getByText(/Blocked by a deleted resource group, .Groundworks./),
+      ).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Restore resource group first…: Groundworks' }),
+      );
+      expect(screen.getByRole('dialog')).toHaveTextContent('sits inside');
+    });
+
+    it('restores a resource through ITS route, announcing the whole branch', async () => {
+      mockApiFetch.mockResolvedValue(undefined);
+      renderTable(true, GROUP_BATCH);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Restore resource group Groundworks and 2 resources' }),
+      );
+      await waitFor(() =>
+        expect(mockApiFetch).toHaveBeenCalledWith(
+          `/organizations/acme/resources/${GROUP_ID}/restore`,
+          { method: 'POST' },
+        ),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent(
+          'Resource group “Groundworks” and 2 resources restored.',
+        ),
+      );
+    });
+
+    it('restores a calendar through ITS route', async () => {
+      mockApiFetch.mockResolvedValue(undefined);
+      renderTable(true, [
+        {
+          kind: 'calendar',
+          subtype: 'ORG',
+          id: CAL_ID,
+          name: 'Crane hours',
+          deletedAt: T,
+          canRestore: true,
+          deleteBatchId: 'b-cal',
+          blockedBy: null,
+        },
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Restore calendar Crane hours' }));
+      await waitFor(() =>
+        expect(mockApiFetch).toHaveBeenCalledWith(
+          `/organizations/acme/calendars/${CAL_ID}/restore`,
+          { method: 'POST' },
+        ),
+      );
+    });
+
+    describe('a refused restore', () => {
+      const refuse = (status: number, message: string, details?: unknown) =>
+        new ApiFetchError(status, { code: 'CONFLICT', message, ...(details ? { details } : {}) });
+
+      it('names the live holder of a clashing name and links to the library to rename it', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(
+            409,
+            'A resource named “Crane A” already exists. Rename or delete that one, then restore this.',
+            { reason: 'NAME_TAKEN', conflicts: [], total: 1 },
+          ),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        const stays: Fixture = {
+          ...GROUP_BATCH[1]!,
+          canRestore: true,
+          blockedBy: null,
+          deleteBatchId: 'b1',
+        };
+        // The post-failure refetch still lists it: a refused restore changes nothing.
+        mockApiFetchAllPages.mockResolvedValue({ rows: [serve(stays)], meta: META });
+        renderTable(true, [stays]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore resource Crew A' }));
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('A resource named “Crane A” already exists.');
+        expect(
+          within(alert).getByRole('link', { name: 'Open the resources library' }),
+        ).toHaveAttribute('href', '/orgs/$orgSlug/resources');
+        // The row stays, so the reader can rename and retry.
+        expect(screen.getByRole('button', { name: 'Restore resource Crew A' })).toBeInTheDocument();
+      });
+
+      it('links a calendar clash to the calendars library', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(409, 'A calendar named “Hours” already exists.', { reason: 'NAME_TAKEN' }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          {
+            kind: 'calendar',
+            subtype: 'ORG',
+            id: CAL_ID,
+            name: 'Hours',
+            deletedAt: T,
+            canRestore: true,
+            deleteBatchId: 'b-cal',
+            blockedBy: null,
+          },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore calendar Hours' }));
+        const alert = await screen.findByRole('alert');
+        expect(
+          within(alert).getByRole('link', { name: 'Open the calendars library' }),
+        ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');
+      });
+
+      it('names the parent that is no longer a group', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(422, 'Only a group can contain resources.', {
+            reason: 'RESOURCE_PARENT_NOT_GROUP',
+            parentName: 'Old group',
+          }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          { ...GROUP_BATCH[1]!, canRestore: true, blockedBy: null, deleteBatchId: 'b1' },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore resource Crew A' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('“Old group” is no longer a resource group');
+        expect(within(alert).queryByRole('link')).not.toBeInTheDocument();
+      });
+
+      it('says a 404 means the item is gone, not that a retry might work', async () => {
+        mockApiFetch.mockRejectedValueOnce(refuse(404, 'Resource not found.'));
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          { ...GROUP_BATCH[1]!, canRestore: true, blockedBy: null, deleteBatchId: 'b1' },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore resource Crew A' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('This item no longer exists.');
+      });
+    });
+
+    it('has no axe violations with library rows, a blocked row and an alert present', async () => {
+      const { container } = renderTable(true, [
+        ...GROUP_BATCH,
+        {
+          kind: 'resource',
+          subtype: 'EQUIPMENT',
+          id: '00000000-0000-4000-8000-000000000035',
+          name: 'Crane A',
+          deletedAt: '2026-07-10T09:00:00.000Z',
+          canRestore: false,
+          deleteBatchId: 'b-res',
+          blockedBy: {
+            kind: 'calendar',
+            relation: 'calendar',
+            id: CAL_ID,
+            name: 'Crane hours',
+            deleteBatchId: 'b-cal',
+          },
+        },
+        {
+          kind: 'calendar',
+          subtype: 'ORG',
+          id: CAL_ID,
+          name: 'Crane hours',
+          deletedAt: '2026-07-09T09:00:00.000Z',
+          canRestore: true,
+          deleteBatchId: 'b-cal',
+          blockedBy: null,
+        },
+      ]);
+      expect((await axe(container)).violations).toEqual([]);
+    });
   });
 });

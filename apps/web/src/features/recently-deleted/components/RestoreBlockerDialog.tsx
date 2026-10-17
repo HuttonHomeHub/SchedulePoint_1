@@ -1,7 +1,7 @@
-import type { DeletedHierarchyItem } from '@repo/types';
 import { useState } from 'react';
 
 import type { DeletionGroup } from '../model/group-deletions';
+import { sentenceNounOf, typeLabel } from '../model/kind-label';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -9,18 +9,15 @@ import { Dialog } from '@/components/ui/dialog';
 /** How many members are named before the rest are summarised. */
 export const ANCESTOR_PREVIEW_LIMIT = 8;
 
-const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
-  client: 'Client',
-  project: 'Project',
-  plan: 'Plan',
-};
-
 /**
  * **The one case grouping cannot dissolve**, and the confirmation it needs.
  *
  * A plan deleted on Monday whose project was deleted on Tuesday are two different cascades.
  * Restoring the plan's group is not enough and never will be — its parent is still deleted, and the
- * parent belongs to a batch of its own.
+ * parent belongs to a batch of its own. The same is true of a resource deleted before its group, and
+ * of a resource whose calendar was deleted after it (ADR-0195): the blocker is a **parent** in the
+ * first two and a **dependency** in the last, and the sentence below says which, because "sits
+ * inside" is false for a calendar.
  *
  * The obvious fix, restoring the ancestor automatically when the reader presses Restore, was
  * **rejected**: the ancestor's batch may hold siblings that are nowhere on the row pressed, so one
@@ -31,7 +28,7 @@ const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
  * destructive confirmations, and using it here would tell an assistive-technology user this action
  * is dangerous when it is reversible by deleting again.
  */
-export function RestoreAncestorDialog({
+export function RestoreBlockerDialog({
   open,
   onClose,
   blocked,
@@ -42,7 +39,7 @@ export function RestoreAncestorDialog({
   onClose: () => void;
   /** The group the reader actually tried to restore. */
   blocked: DeletionGroup;
-  /** The blocker's OWN deletion — what this press brings back. */
+  /** The blocker's OWN deletion — what this press brings back. A parent, or a calendar. */
   ancestor: DeletionGroup;
   onConfirm: () => void;
 }): React.ReactElement {
@@ -62,9 +59,13 @@ export function RestoreAncestorDialog({
       onClose={onClose}
       title={`Restore ${ancestor.root.name} first?`}
       description={
-        `${KIND_LABEL[blocked.root.kind]} “${blocked.root.name}” sits inside ` +
-        `${ancestor.root.name}, which is also deleted. Restoring ${ancestor.root.name} brings back ` +
-        `everything deleted with it — then you can restore ${blocked.root.name} separately.`
+        blocked.root.blockedBy?.relation === 'calendar'
+          ? `${sentenceNounOf(blocked.root)} “${blocked.root.name}” uses the calendar ` +
+            `“${ancestor.root.name}”, which is also deleted. Restoring ${ancestor.root.name} brings ` +
+            `back everything deleted with it — then you can restore ${blocked.root.name} separately.`
+          : `${sentenceNounOf(blocked.root)} “${blocked.root.name}” sits inside ` +
+            `${ancestor.root.name}, which is also deleted. Restoring ${ancestor.root.name} brings back ` +
+            `everything deleted with it — then you can restore ${blocked.root.name} separately.`
       }
     >
       <div className="flex flex-col gap-4">
@@ -75,8 +76,7 @@ export function RestoreAncestorDialog({
           <ul className="text-muted-foreground mt-2 flex flex-col gap-1 text-sm">
             {shown.map((row) => (
               <li key={`${row.kind}:${row.id}`}>
-                <span>{KIND_LABEL[row.kind]}</span>{' '}
-                <span className="text-foreground">{row.name}</span>
+                <span>{typeLabel(row)}</span> <span className="text-foreground">{row.name}</span>
               </li>
             ))}
           </ul>

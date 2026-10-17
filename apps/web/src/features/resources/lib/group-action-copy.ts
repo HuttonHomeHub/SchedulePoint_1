@@ -2,6 +2,8 @@ import type { ResourceSummary } from '@repo/types';
 
 import { isResourceGroup } from '../schemas/resource-schemas';
 
+import { deleteLibraryRowWarning } from '@/lib/delete-copy';
+
 type LibraryRow = Pick<ResourceSummary, 'id' | 'name' | 'parentId'>;
 
 /**
@@ -36,11 +38,11 @@ export function deleteResourceDescription(
   library: readonly LibraryRow[],
 ): string {
   const name = `“${resource.name}”`;
-  if (!isResourceGroup(resource)) return `Delete ${name}?`;
+  if (!isResourceGroup(resource)) return deleteLibraryRowWarning(resource.name);
 
   const consequence =
-    'Deleting a group deletes everything in it, and deleted resources can’t be restored. ' +
-    'To keep them, dissolve the group instead.';
+    'Deleting a group deletes everything in it. You can restore them from Recently deleted. ' +
+    'To keep the resources, dissolve the group instead.';
   if (!library.some((r) => r.id === resource.id)) {
     return `Delete the group ${name}? ${consequence}`;
   }
@@ -54,9 +56,10 @@ export function deleteResourceDescription(
  * Dissolving a group removes the grouping and keeps the resources. Three things have to land: the
  * resources are **kept**, **where** they go (the group's own parent, or the top level — a planner
  * needs to know which before agreeing), and that this **cannot be undone**. That last one is the
- * claim most likely to be assumed wrongly, because most deletions here are restorable; a resource
- * dissolve has no restore (and resources are not in Recently deleted), so the copy names the way
- * back instead (create the group again and move them in). The verb and pronoun follow the count —
+ * claim most likely to be assumed wrongly, because most deletions here are restorable. The emptied
+ * group does appear in Recently deleted, but restoring it brings back an EMPTY group and not the
+ * grouping (ADR-0195 D6), so the copy still names the way back that works (create the group again
+ * and move them in). The verb and pronoun follow the count —
  * "it moves up" for one, "they move up" otherwise.
  *
  * Counts only DIRECT children: dissolve moves one level, and a grandchild stays under its own

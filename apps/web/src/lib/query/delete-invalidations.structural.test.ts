@@ -25,6 +25,11 @@ const HOOKS = [
   ['features/clients/api/use-clients.ts', 'useDeleteClient'],
   ['features/projects/api/use-projects.ts', 'useDeleteProject'],
   ['features/plans/api/use-plans.ts', 'useDeletePlan'],
+  // The libraries joined the bin in ADR-0195. A dissolve is a delete of the emptied group, so it
+  // moves a row into the bin too.
+  ['features/resources/api/use-resources.ts', 'useDeleteResource'],
+  ['features/resources/api/use-resources.ts', 'useDissolveResourceGroup'],
+  ['features/calendars/api/use-calendars.ts', 'useDeleteCalendar'],
 ] as const;
 
 const WEB_SRC = join(__dirname, '..', '..');
@@ -51,5 +56,11 @@ describe('a soft delete moves a row into the recycle bin', () => {
     expect(
       hookBody('features/recently-deleted/api/use-deleted-items.ts', 'useRestoreItem'),
     ).toContain('deletedItemKeys.all(orgSlug)');
+  });
+
+  it('and the restore refreshes both libraries, which it can now change', () => {
+    const body = hookBody('features/recently-deleted/api/use-deleted-items.ts', 'useRestoreItem');
+    expect(body).toContain('resourceKeys.all(orgSlug)');
+    expect(body).toContain('calendarKeys.all(orgSlug)');
   });
 });

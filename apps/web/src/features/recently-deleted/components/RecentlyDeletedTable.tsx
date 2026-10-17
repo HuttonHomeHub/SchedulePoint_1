@@ -1,28 +1,24 @@
-import type { DeletedHierarchyItem } from '@repo/types';
+import { Link } from '@tanstack/react-router';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
 import { useDeletedItems, useRestoreItem } from '../api/use-deleted-items';
 import { expirySentence, expirySummary } from '../model/expiry-copy';
 import { describeMembers, groupDeletions, type DeletionGroup } from '../model/group-deletions';
+import { blockerNoun, nounOf, sentenceNounOf, typeLabel } from '../model/kind-label';
+import { describeRestoreFailure, type RestoreFailure } from '../model/restore-failure';
 
-import { RestoreAncestorDialog } from './RestoreAncestorDialog';
+import { RestoreBlockerDialog } from './RestoreBlockerDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { SectionCard } from '@/components/ui/page';
+import { textLinkVariants } from '@/components/ui/text-link';
 import { formatTimestamp } from '@/lib/format-date';
 
 /** The retention caveat's id, so the table can point at it rather than merely sit under it. */
 const RETENTION_RULE_ID = 'recently-deleted-retention-rule';
-
-/** Human labels for each hierarchy level. */
-const KIND_LABEL: Record<DeletedHierarchyItem['kind'], string> = {
-  client: 'Client',
-  project: 'Project',
-  plan: 'Plan',
-};
 
 /**
  * The organisation's recycle bin, **one row per deletion rather than one per deleted thing**
@@ -52,7 +48,7 @@ export function RecentlyDeletedTable({
   // A set (not a single id) so two rows restored back-to-back each keep their own
   // pending state — there's no confirm dialog serialising them like delete has.
   const [restoringIds, setRestoringIds] = useState<ReadonlySet<string>>(new Set());
-  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<RestoreFailure | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   /** The blocked group whose ancestor confirmation is open, by key. */
   const [ancestorFor, setAncestorFor] = useState<string | null>(null);
@@ -117,7 +113,7 @@ export function RecentlyDeletedTable({
   /** Named for the whole deletion, so a screen-reader user hears what one press brings back. */
   const restoreLabel = (group: DeletionGroup): string => {
     const summary = describeMembers(group.members);
-    const subject = `${KIND_LABEL[group.root.kind].toLowerCase()} ${group.root.name}`;
+    const subject = `${nounOf(group.root)} ${group.root.name}`;
     return summary === null ? `Restore ${subject}` : `Restore ${subject} and ${summary}`;
   };
 
@@ -138,15 +134,15 @@ export function RecentlyDeletedTable({
           const summary = describeMembers(group.members);
           announce(
             summary === null
-              ? `${KIND_LABEL[item.kind]} “${item.name}” restored.`
-              : `${KIND_LABEL[item.kind]} “${item.name}” and ${summary} restored.`,
+              ? `${sentenceNounOf(item)} “${item.name}” restored.`
+              : `${sentenceNounOf(item)} “${item.name}” and ${summary} restored.`,
           );
           regionRef.current?.focus();
         },
         // On error the row stays; the button (aria-disabled, not natively
         // disabled) keeps focus, so the user can retry. The error is surfaced by
         // the role="alert" below — no extra announce (that would double-speak it).
-        onError: (error) => setRestoreError(error.message),
+        onError: (error) => setRestoreError(describeRestoreFailure(error, item.kind)),
         onSettled: () =>
           setRestoringIds((prev) => {
             const next = new Set(prev);
@@ -160,7 +156,7 @@ export function RecentlyDeletedTable({
   const columns: Column<DeletionGroup>[] = [
     {
       header: 'Type',
-      cell: (group) => <span className="text-muted-foreground">{KIND_LABEL[group.root.kind]}</span>,
+      cell: (group) => <span className="text-muted-foreground">{typeLabel(group.root)}</span>,
     },
     {
       header: 'Name',
@@ -186,7 +182,11 @@ export function RecentlyDeletedTable({
                 names beside it.
               */
               <span className="text-muted-foreground text-xs">
-                Blocked by a deleted {group.root.blockedBy.kind}, “{group.root.blockedBy.name}”
+                {group.root.blockedBy.relation === 'calendar'
+                  ? // A dependency, not a parent: "blocked by a deleted calendar" would read as though
+                    // the calendar contained this, and it is the other way round (ADR-0195 D3).
+                    `Uses deleted calendar “${group.root.blockedBy.name}”`
+                  : `Blocked by a deleted ${blockerNoun(group.root.blockedBy.kind)}, “${group.root.blockedBy.name}”`}
               </span>
             )}
             {summary === null ? null : (
@@ -226,10 +226,9 @@ export function RecentlyDeletedTable({
     {
       header: 'Deleted',
       cell: (group) => {
-        const expiry =
-          retentionDays === null
-            ? null
-            : expirySentence(group.root.deletedAt, retentionDays, retentionActive);
+        // The row's own instant, served by the API — a resource and an organisation calendar have
+        // none, and a project calendar counts from its project's deletion (ADR-0195 D4).
+        const expiry = expirySentence(group.root.expiresAt, retentionActive);
         return (
           <div className="flex flex-col gap-0.5">
             <span className="text-muted-foreground">{formatTimestamp(group.root.deletedAt)}</span>
@@ -276,17 +275,19 @@ export function RecentlyDeletedTable({
               setAncestorFor(group.key);
             }}
             aria-haspopup="dialog"
-            aria-label={`Restore ${group.root.blockedBy?.kind ?? 'parent'} first…: ${group.root.blockedBy?.name ?? ''}`}
+            aria-label={`Restore ${blockerNoun(group.root.blockedBy?.kind ?? 'client')} first…: ${group.root.blockedBy?.name ?? ''}`}
           >
             {/* The visible label is contiguous at the START of the accessible name, which is what
                 WCAG 2.5.3 requires — the name may add to the label, never replace or reorder it. */}
-            Restore {group.root.blockedBy?.kind ?? 'parent'} first…
+            Restore {blockerNoun(group.root.blockedBy?.kind ?? 'client')} first…
           </Button>
         ) : (
           // The blocker is not in the fetched set — possible mid-refetch. Say what is true rather
           // than offering a button that would open an empty confirmation.
           <span className="text-muted-foreground text-sm">
-            {`Restore its ${group.root.blockedBy?.kind ?? 'parent'} first`}
+            {group.root.blockedBy?.relation === 'calendar'
+              ? 'Restore its calendar first'
+              : `Restore its ${group.root.blockedBy === null ? 'parent' : blockerNoun(group.root.blockedBy.kind)} first`}
           </span>
         ),
     });
@@ -310,7 +311,25 @@ export function RecentlyDeletedTable({
       <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
         {restoreError ? (
           <p role="alert" className="text-destructive-text text-sm">
-            {restoreError}
+            {restoreError.message}
+            {restoreError.library === null ? null : (
+              <>
+                {' '}
+                <Link
+                  to={
+                    restoreError.library === 'resources'
+                      ? '/orgs/$orgSlug/resources'
+                      : '/orgs/$orgSlug/calendars'
+                  }
+                  params={{ orgSlug }}
+                  className={textLinkVariants()}
+                >
+                  {restoreError.library === 'resources'
+                    ? 'Open the resources library'
+                    : 'Open the calendars library'}
+                </Link>
+              </>
+            )}
           </p>
         ) : null}
         {/* **The rule, stated — not left to be inferred from a countdown.** Without this the first
@@ -326,8 +345,7 @@ export function RecentlyDeletedTable({
           </p>
         )}
         {(() => {
-          const summary =
-            retentionDays === null ? null : expirySummary(groups, retentionDays, retentionActive);
+          const summary = expirySummary(groups, retentionActive);
           // A subset, said as a subset: "1 of 3" rather than a bare count that reads as though the
           // whole list is imminent and sends a reader restoring things with months left.
           return summary === null ? null : (
@@ -350,7 +368,7 @@ export function RecentlyDeletedTable({
                 <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
                   {group.members.map((member) => (
                     <li key={`${member.kind}:${member.id}`}>
-                      <span className="text-muted-foreground">{KIND_LABEL[member.kind]}</span>{' '}
+                      <span className="text-muted-foreground">{typeLabel(member)}</span>{' '}
                       <span className="text-foreground">{member.name}</span>
                     </li>
                   ))}
@@ -362,8 +380,8 @@ export function RecentlyDeletedTable({
           errorLabel="Couldn’t load recently deleted items. Please try again."
           empty={
             <>
-              Nothing has been deleted. Deleted clients, projects and plans appear here so you can
-              restore them.
+              Nothing has been deleted. Deleted clients, projects, plans, resources and calendars
+              appear here so you can restore them.
             </>
           }
         />
@@ -375,7 +393,7 @@ export function RecentlyDeletedTable({
           // response, not rendering a dialog about rows that are no longer there.
           if (!blocked || !ancestor) return null;
           return (
-            <RestoreAncestorDialog
+            <RestoreBlockerDialog
               open
               onClose={closeAncestor}
               blocked={blocked}

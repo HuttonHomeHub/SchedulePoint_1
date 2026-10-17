@@ -1,4 +1,4 @@
-import type { DeletedHierarchyItem, DeletedItemsMeta } from '@repo/types';
+import type { DeletedItem, DeletedItemsMeta } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -8,9 +8,16 @@ import {
 } from '@tanstack/react-query';
 
 import { apiFetch, apiFetchAllPagesWithMeta } from '@/lib/api/client';
-import { clientKeys, deletedItemKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
+import {
+  calendarKeys,
+  clientKeys,
+  deletedItemKeys,
+  planKeys,
+  projectKeys,
+  resourceKeys,
+} from '@/lib/query/hierarchy-keys';
 
-/** The soft-deleted clients/projects/plans in an org, newest-deleted first. */
+/** The soft-deleted clients, projects, plans, resources and calendars in an org, newest-deleted first. */
 export function deletedItemsQueryOptions(orgSlug: string) {
   return queryOptions({
     queryKey: deletedItemKeys.list(orgSlug),
@@ -20,15 +27,13 @@ export function deletedItemsQueryOptions(orgSlug: string) {
     // the SERVER's number — a client constant is silently wrong on any host that overrode it
     // (ADR-0096 D2). The rows are unchanged; only the envelope's tail is kept.
     queryFn: () =>
-      apiFetchAllPagesWithMeta<DeletedHierarchyItem, DeletedItemsMeta>(
-        `/organizations/${orgSlug}/deleted`,
-      ),
+      apiFetchAllPagesWithMeta<DeletedItem, DeletedItemsMeta>(`/organizations/${orgSlug}/deleted`),
   });
 }
 
 /** The bin's rows, plus the retention facts the screen has to state truthfully. */
 export interface DeletedItemsPage {
-  rows: DeletedHierarchyItem[];
+  rows: DeletedItem[];
   meta: DeletedItemsMeta | null;
 }
 
@@ -37,14 +42,15 @@ export function useDeletedItems(orgSlug: string): UseQueryResult<DeletedItemsPag
 }
 
 /** The subset of a deleted item needed to address its per-entity restore route. */
-export type RestorableItem = Pick<DeletedHierarchyItem, 'kind' | 'id'>;
+export type RestorableItem = Pick<DeletedItem, 'kind' | 'id'>;
 
 /**
  * Restore a soft-deleted row via its own entity's writer-only restore route
- * (selected by `kind`). Restoring a client also brings back its projects/plans,
- * so on settle we refresh the deleted list and every hierarchy list — a 409
- * (`PARENT_DELETED`/`NAME_TAKEN`) is surfaced by the caller from the thrown
- * `ApiFetchError`.
+ * (selected by `kind`, which is the route's singular: `clients`, `resources`, `calendars`…).
+ * Restoring a client also brings back its projects/plans, a project its calendars, and a resource
+ * group its members, so on settle we refresh the deleted list and every list a restore can change —
+ * the hierarchy's and both libraries'. A 409 (`PARENT_DELETED`, `CALENDAR_DELETED`, `NAME_TAKEN`)
+ * or a 422 is surfaced by the caller from the thrown `ApiFetchError`.
  */
 export function useRestoreItem(orgSlug: string) {
   const queryClient = useQueryClient();
@@ -58,6 +64,8 @@ export function useRestoreItem(orgSlug: string) {
       void queryClient.invalidateQueries({ queryKey: clientKeys.all(orgSlug) });
       void queryClient.invalidateQueries({ queryKey: projectKeys.all(orgSlug) });
       void queryClient.invalidateQueries({ queryKey: planKeys.all(orgSlug) });
+      void queryClient.invalidateQueries({ queryKey: resourceKeys.all(orgSlug) });
+      void queryClient.invalidateQueries({ queryKey: calendarKeys.all(orgSlug) });
     },
   });
 }

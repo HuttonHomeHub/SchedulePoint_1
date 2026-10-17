@@ -1,4 +1,4 @@
-import type { DeletedHierarchyItem } from '@repo/types';
+import type { DeletedItem } from '@repo/types';
 
 /**
  * **One row per deletion, not one row per deleted thing** (ADR-0096).
@@ -18,9 +18,9 @@ export interface DeletionGroup {
   /** Stable key: the batch id, or the lone row's own key when it predates batch ids. */
   key: string;
   /** The row a reader acts on — see {@link rootOf} for what makes it the root. */
-  root: DeletedHierarchyItem;
+  root: DeletedItem;
   /** Everything else the same deletion took, in the order the server returned it. */
-  members: readonly DeletedHierarchyItem[];
+  members: readonly DeletedItem[];
   /** The root's, because the root is what the Restore button acts on. */
   canRestore: boolean;
 }
@@ -35,7 +35,7 @@ export interface DeletionGroup {
  * parent is still alive; and for the cross-batch case the plan's blocker sits in a **different**
  * batch, which is exactly what makes that group blocked rather than restorable.
  */
-function rootOf(rows: readonly DeletedHierarchyItem[], batchId: string): DeletedHierarchyItem {
+function rootOf(rows: readonly DeletedItem[], batchId: string): DeletedItem {
   const root = rows.find(
     (row) => row.blockedBy === null || row.blockedBy.deleteBatchId !== batchId,
   );
@@ -45,9 +45,9 @@ function rootOf(rows: readonly DeletedHierarchyItem[], batchId: string): Deleted
   return root ?? rows[0]!;
 }
 
-export function groupDeletions(items: readonly DeletedHierarchyItem[]): DeletionGroup[] {
-  const byBatch = new Map<string, DeletedHierarchyItem[]>();
-  const ungrouped: DeletedHierarchyItem[] = [];
+export function groupDeletions(items: readonly DeletedItem[]): DeletionGroup[] {
+  const byBatch = new Map<string, DeletedItem[]>();
+  const ungrouped: DeletedItem[] = [];
 
   for (const item of items) {
     // A row deleted before batch ids existed stands alone. It cannot be grouped with anything —
@@ -88,13 +88,13 @@ export function groupDeletions(items: readonly DeletedHierarchyItem[]): Deletion
 }
 
 /** "+ 1 project, 1 plan" — what the deletion took beyond its root, named rather than counted. */
-export function describeMembers(members: readonly DeletedHierarchyItem[]): string | null {
+export function describeMembers(members: readonly DeletedItem[]): string | null {
   if (members.length === 0) return null;
-  const counts = new Map<DeletedHierarchyItem['kind'], number>();
+  const counts = new Map<DeletedItem['kind'], number>();
   for (const m of members) counts.set(m.kind, (counts.get(m.kind) ?? 0) + 1);
   const parts: string[] = [];
   // Fixed order, not insertion order, so the same deletion reads the same way every time.
-  for (const kind of ['client', 'project', 'plan'] as const) {
+  for (const kind of ['client', 'project', 'plan', 'resource', 'calendar'] as const) {
     const n = counts.get(kind);
     if (n === undefined) continue;
     parts.push(`${n} ${kind}${n === 1 ? '' : 's'}`);

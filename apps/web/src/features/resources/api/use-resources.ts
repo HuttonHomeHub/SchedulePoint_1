@@ -29,6 +29,7 @@ import { majorInputToMinor } from '@/lib/format-money';
 import {
   activityKeys,
   assignmentKeys,
+  deletedItemKeys,
   resourceKeys,
   scheduleKeys,
 } from '@/lib/query/hierarchy-keys';
@@ -321,7 +322,12 @@ export function useDeleteResource(orgSlug: string) {
   return useMutation({
     mutationFn: (resourceId: string) =>
       apiFetch<void>(`/organizations/${orgSlug}/resources/${resourceId}`, { method: 'DELETE' }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
+    // A soft delete moves the row INTO Recently deleted, which lists resources since ADR-0195.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
+        queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) }),
+      ]),
   });
 }
 
@@ -358,7 +364,12 @@ export function useDissolveResourceGroup(orgSlug: string) {
         },
       );
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
+    // The emptied group is soft-deleted, so it lands in Recently deleted (and restores empty).
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: resourceKeys.list(orgSlug) }),
+        queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) }),
+      ]),
   });
 }
 
