@@ -48,8 +48,12 @@ describe('G1 — disjoint vocabularies', () => {
   it('no health advisory id is a conflict key or a metric id', () => {
     const conflictKeys = new Set<string>(CONFLICT_FLAGS.map((f) => f.key));
     const metricIds = new Set<string>(HEALTH_METRIC_IDS);
-    expect(HEALTH_ADVISORY_IDS.filter((id) => conflictKeys.has(id))).toEqual([]);
-    expect(HEALTH_ADVISORY_IDS.filter((id) => metricIds.has(id))).toEqual([]);
+    // REDUNDANT_LINKS is named here before the tuple emits it (redundant-link-advisory M1 admits it
+    // to the union first), so the disjointness holds from the commit that introduces the id and M2
+    // cannot forget to check it.
+    const ids: string[] = [...HEALTH_ADVISORY_IDS, 'REDUNDANT_LINKS'];
+    expect(ids.filter((id) => conflictKeys.has(id))).toEqual([]);
+    expect(ids.filter((id) => metricIds.has(id))).toEqual([]);
     expect(HEALTH_ADVISORY_IDS.length).toBeGreaterThan(0);
   });
 });

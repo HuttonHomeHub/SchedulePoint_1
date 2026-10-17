@@ -176,7 +176,7 @@ describe('ScheduleHealthPrintDocument (health M4)', () => {
       expect(text).toContain('Zero-duration tasks — 3 findings');
       expect(text).toContain('Z0 Handover 0 — 1 resource assignment');
       expect(text).toContain(
-        'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.',
+        "Found from the plan's stored activities and links, whether or not the plan has been calculated, and not part of the DCMA assessment above.",
       );
       const table = container.querySelector('table');
       const heading = [...container.querySelectorAll('h2')].find(
@@ -187,6 +187,41 @@ describe('ScheduleHealthPrintDocument (health M4)', () => {
       expect(
         table!.compareDocumentPosition(heading!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
+    });
+
+    it('prints a redundant-links row by its own id, with its sentences', () => {
+      const redundant = {
+        id: 'REDUNDANT_LINKS' as const,
+        name: 'Redundant links',
+        measured: { count: 1, denominator: 12, percent: null, ratio: null },
+        offenderCount: 1,
+        offendersTruncated: false,
+        offenders: [
+          {
+            kind: 'RELATIONSHIP' as const,
+            id: 'l0',
+            code: null,
+            name: 'A → C',
+            note: 'FS; already implied through B',
+            activityId: 'c',
+          },
+        ],
+        detail: {
+          rule: 'DOMINATED_UNDER_ANY_DURATION' as const,
+          unjudged: 2,
+          searchCapped: true,
+        },
+      };
+      const { container } = render(
+        <ScheduleHealthPrintDocument report={report({ advisories: [redundant] })} />,
+      );
+      const text = container.textContent ?? '';
+      expect(text).toContain('Redundant links: 1 redundant link out of 12 relationships');
+      expect(text).toContain('whatever the durations');
+      expect(text).toContain(
+        'The check stopped early on a plan this size; 2 links were not checked.',
+      );
+      expect(text).not.toContain('undefined');
     });
 
     it('states the cap on paper exactly as the metrics do (spec E33)', () => {

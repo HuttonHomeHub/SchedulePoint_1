@@ -51,7 +51,8 @@ describe('advisories — totality and shape', () => {
         expect(advisory.offendersTruncated).toBe(
           advisory.offenderCount > advisory.offenders.length,
         );
-        expect(typeof advisory.detail.resourced).toBe('number');
+        if (advisory.id === 'ZERO_DURATION_TASKS')
+          expect(typeof advisory.detail.resourced).toBe('number');
       }
     });
 

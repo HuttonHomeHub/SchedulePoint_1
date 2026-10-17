@@ -1107,6 +1107,7 @@ describe('ScheduleService.getHealthCheck', () => {
     const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
 
     const advisory = result.advisories[0]!;
+    if (advisory.id !== 'ZERO_DURATION_TASKS') throw new Error('expected the zero-duration row');
     expect(advisory.offenders.map((o) => [o.id, o.note])).toEqual([
       ['zero-2', '2 resource assignments'],
       ['zero-0', 'no resource assignment'],

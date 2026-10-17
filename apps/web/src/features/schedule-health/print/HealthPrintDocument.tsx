@@ -3,10 +3,12 @@ import type { ScheduleHealthReport } from '@repo/types';
 import './HealthPrintDocument.css';
 
 import {
+  advisoryCaveat,
+  advisorySummary,
+  advisoryUnjudgedSentence,
   buildHealthRows,
   HEALTH_ADVISORY_FOOTER,
   healthAdvisoriesOf,
-  zeroDurationSummary,
 } from '../model/health-rows';
 
 import { HealthOffenderPrintSection } from './HealthOffenderPrintSection';
@@ -98,7 +100,13 @@ export function ScheduleHealthPrintDocument({
             {advisories.map((advisory) => (
               // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
               <li role="listitem" key={advisory.id}>
-                <strong>{advisory.name}:</strong> {zeroDurationSummary(advisory)}
+                <strong>{advisory.name}:</strong> {advisorySummary(advisory)}
+                {advisory.offenderCount > 0 && advisoryCaveat(advisory) !== null ? (
+                  <p>{advisoryCaveat(advisory)}</p>
+                ) : null}
+                {advisoryUnjudgedSentence(advisory) === null ? null : (
+                  <p>{advisoryUnjudgedSentence(advisory)}</p>
+                )}
               </li>
             ))}
           </ul>

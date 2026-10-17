@@ -2,7 +2,9 @@ import type {
   HealthAdvisoryResult,
   HealthMetricResult,
   HealthNotAssessableReason,
+  RedundantLinksAdvisory,
   ScheduleHealthReport,
+  ZeroDurationTasksAdvisory,
 } from '@repo/types';
 
 /**
@@ -202,10 +204,12 @@ export function mergeCriticalPathResult(
 export function healthAnnouncement(report: ScheduleHealthReport): string {
   const s = report.summary;
   const headline = `Health check: ${s.failed} failed, ${s.passed} passed, ${s.notAssessable} not assessed, ${s.informational} informational.`;
-  const zero = healthAdvisoriesOf(report)?.find((a) => a.id === 'ZERO_DURATION_TASKS');
-  return zero === undefined
+  const advisories = healthAdvisoriesOf(report);
+  // Every advisory, always, in the payload's order: the visible section lists them all, and a live
+  // region that names only the first hands a screen-reader user a different report (ADR-0116 M5).
+  return advisories === null || advisories.length === 0
     ? headline
-    : `${headline} Beyond the DCMA assessment: ${zeroDurationPhrase(zero.offenderCount)}.`;
+    : `${headline} Beyond the DCMA assessment: ${advisories.map(advisoryPhrase).join(', ')}.`;
 }
 
 /**
@@ -223,17 +227,70 @@ export function healthAdvisoriesOf(
 
 /**
  * The one sentence that closes the "Beyond the DCMA assessment" section, on screen and on paper
- * (ADR-0162 D1): what the finding is read from, and that it is not part of the assessment above it.
+ * (ADR-0162 D1): what the findings are read from, and that they are not part of the assessment above
+ * it. It names stored activities and links, not durations alone, because it is true of every
+ * advisory — "found from stored durations" was false for a finding about links.
  */
 export const HEALTH_ADVISORY_FOOTER =
-  'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.';
+  "Found from the plan's stored activities and links, whether or not the plan has been calculated, and not part of the DCMA assessment above.";
 
 /**
- * The advisory row's summary line: the count, the activities it is out of, and how many of the
- * offenders hold a resource assignment — "3 zero-duration tasks out of 40 activities; 1 has resource
- * assignments". At zero the row reads "None" (US-1): the row is present and says so, never absent.
+ * The advisory row's summary line, per advisory id. An id this bundle does not know — an API newer
+ * than the web — is rendered as its count and nothing else: its name travels in the payload, but
+ * what its figures MEAN does not, and a sentence invented for it would be a claim nobody made.
  */
-export function zeroDurationSummary(advisory: HealthAdvisoryResult): string {
+export function advisorySummary(advisory: HealthAdvisoryResult): string {
+  const { offenderCount } = advisory;
+  switch (advisory.id) {
+    case 'ZERO_DURATION_TASKS':
+      return zeroDurationSummary(advisory);
+    case 'REDUNDANT_LINKS':
+      return redundantLinksSummary(advisory);
+    default:
+      return offenderCount === 0 ? 'None' : String(offenderCount);
+  }
+}
+
+/**
+ * The scope sentence a row with findings carries, keyed on the token the PAYLOAD names in
+ * `detail.rule` (the `detail.narrowing` precedent): the server owns which rule ran, this module owns
+ * the words. An unrecognised token is named rather than described.
+ */
+const REDUNDANT_RULE_SENTENCES: Record<string, string> = {
+  DOMINATED_UNDER_ANY_DURATION:
+    "Each is already implied by a longer chain of links. Deleting it would not change any activity's dates or float, whatever the durations — though it may start to matter if that chain changes.",
+};
+
+export function advisoryCaveat(advisory: HealthAdvisoryResult): string | null {
+  if (advisory.id !== 'REDUNDANT_LINKS') return null;
+  const rule: unknown = advisory.detail.rule;
+  if (typeof rule !== 'string') return null;
+  return (
+    REDUNDANT_RULE_SENTENCES[rule] ?? `Judged by a rule this page does not describe — ${rule}.`
+  );
+}
+
+/**
+ * What the check could not judge (ADR-0127: an overlay counts what it does not know). When the work
+ * cap was reached the count covers every link left unchecked, so that sentence replaces the first
+ * rather than adding a second number for the same links.
+ */
+export function advisoryUnjudgedSentence(advisory: HealthAdvisoryResult): string | null {
+  if (advisory.id !== 'REDUNDANT_LINKS') return null;
+  const { unjudged, searchCapped } = advisory.detail;
+  if (typeof unjudged !== 'number' || unjudged <= 0) return null;
+  const links = unjudged === 1 ? '1 link was' : `${String(unjudged)} links were`;
+  return searchCapped === true
+    ? `The check stopped early on a plan this size; ${links} not checked.`
+    : `${unjudged === 1 ? '1 link' : `${String(unjudged)} links`} into started or pinned work, or touching a level of effort, ${unjudged === 1 ? 'was' : 'were'} not checked.`;
+}
+
+/**
+ * The zero-duration advisory's summary line: the count, the activities it is out of, and how many of
+ * the offenders hold a resource assignment — "3 zero-duration tasks out of 40 activities; 1 has
+ * resource assignments". At zero the row reads "None" (US-1): present and saying so, never absent.
+ */
+export function zeroDurationSummary(advisory: ZeroDurationTasksAdvisory): string {
   const count = advisory.offenderCount;
   if (count === 0) return 'None';
   const denominator = advisory.measured.denominator;
@@ -249,8 +306,39 @@ export function zeroDurationSummary(advisory: HealthAdvisoryResult): string {
   return `${zeroDurationPhrase(count)}${outOf}; ${resourced}`;
 }
 
+/** "N redundant links out of M relationships"; the denominator is the plan's live links. */
+export function redundantLinksSummary(advisory: RedundantLinksAdvisory): string {
+  const count = advisory.offenderCount;
+  if (count === 0) return 'None';
+  const denominator = advisory.measured.denominator;
+  const outOf =
+    denominator === null
+      ? ''
+      : ` out of ${String(denominator)} ${denominator === 1 ? 'relationship' : 'relationships'}`;
+  return `${redundantLinksPhrase(count)}${outOf}`;
+}
+
 /** "no zero-duration tasks" / "1 zero-duration task" / "3 zero-duration tasks". */
 export function zeroDurationPhrase(count: number): string {
   if (count === 0) return 'no zero-duration tasks';
   return count === 1 ? '1 zero-duration task' : `${String(count)} zero-duration tasks`;
+}
+
+/** "no redundant links" / "1 redundant link" / "4 redundant links". */
+export function redundantLinksPhrase(count: number): string {
+  if (count === 0) return 'no redundant links';
+  return count === 1 ? '1 redundant link' : `${String(count)} redundant links`;
+}
+
+/** One advisory's clause in the announcement; an unknown id is its name and count, no more. */
+function advisoryPhrase(advisory: HealthAdvisoryResult): string {
+  const { name, offenderCount } = advisory;
+  switch (advisory.id) {
+    case 'ZERO_DURATION_TASKS':
+      return zeroDurationPhrase(advisory.offenderCount);
+    case 'REDUNDANT_LINKS':
+      return redundantLinksPhrase(advisory.offenderCount);
+    default:
+      return `${name}: ${String(offenderCount)}`;
+  }
 }

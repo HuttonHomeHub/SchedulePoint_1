@@ -8,13 +8,15 @@ import { CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
 import {
+  advisoryCaveat,
+  advisorySummary,
+  advisoryUnjudgedSentence,
   buildHealthRows,
   HEALTH_ADVISORY_FOOTER,
   healthAdvisoriesOf,
   healthAnnouncement,
   mergeCriticalPathResult,
   REMEDY_ROLE_SENTENCES,
-  zeroDurationSummary,
   type HealthRowView,
 } from '../model/health-rows';
 import { printHealthReport } from '../print/HealthPrintDocument';
@@ -468,6 +470,8 @@ function HealthAdvisoryRow({
 }): React.ReactElement {
   const summaryId = useId();
   const count = advisory.offenderCount;
+  const caveat = advisoryCaveat(advisory);
+  const unjudged = advisoryUnjudgedSentence(advisory);
   return (
     // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`.
     <li role="listitem" className="border-border rounded-md border px-2 py-1.5 text-sm">
@@ -489,8 +493,16 @@ function HealthAdvisoryRow({
       >
         {count === 0 ? null : (
           <p id={summaryId} className="text-muted-foreground pl-5 text-xs">
-            {zeroDurationSummary(advisory)}
+            {advisorySummary(advisory)}
           </p>
+        )}
+        {caveat === null || count === 0 ? null : (
+          <p className="text-muted-foreground pl-5 text-xs">{caveat}</p>
+        )}
+        {/* Shown at zero too: a row that says "None" while links went unchecked would be a claim of
+            absence the check cannot make (ADR-0127). */}
+        {unjudged === null ? null : (
+          <p className="text-muted-foreground pl-5 text-xs">{unjudged}</p>
         )}
       </HealthOffenderDisclosure>
     </li>
