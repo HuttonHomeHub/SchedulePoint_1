@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { EXPORT_LAYER_INPUTS } from './render-export-image';
 
 const SRC = join(__dirname, '..', '..', '..');
 
@@ -67,6 +69,17 @@ const SCREEN_ONLY: Record<string, string> = {
 };
 
 /**
+ * A source file with its comments removed and its line numbers kept (each block comment is replaced
+ * by the newlines it contained), so a finding can name a real line. Shared by both halves of this
+ * gate because the ordering rule is the same for both: strip BEFORE matching anything.
+ */
+function readStripped(file: string): string {
+  return readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ''))
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
+/**
  * Parse the top-level keys of a scene composition.
  *
  * The two files spell it differently — the canvas seeds a ref (`useRef<TsldScene>({ … })`), the
@@ -83,9 +96,7 @@ function sceneKeys(file: string, anchor: string): string[] {
   // that point vanished from the roster. Reproduced: a comment reading "mirrors the } that closes
   // the band block" placed above a brand-new unexported key made all three assertions pass. The
   // gate could be silenced, on the exact defect it exists to catch, by a comment.
-  const text = readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  const text = readStripped(file);
   const start = text.indexOf(anchor);
   if (start === -1) {
     throw new Error(
@@ -180,5 +191,178 @@ describe('the exported diagram composes the same scene as the screen (structural
       stale,
       `SCREEN_ONLY names keys the canvas no longer composes: ${stale.join(', ')}`,
     ).toEqual([]);
+  });
+});
+
+/**
+ * **The LAYER half of the gate** (ADR-0198, `docs/TECH_DEBT.md` #223). The scene-key half above can
+ * only see what lives inside `TsldScene`, and a layer that gets its own ref and its own `<canvas>` is
+ * not a scene key — so the resource strip, which the screen has painted under the diagram since
+ * ADR-0049, was absent from every export and not one assertion above could have said so. It is not a
+ * one-off: the WBS band, the interaction layer and the minimap are canvases too.
+ *
+ * A layer is a `<canvas>` because that is what makes it one: anything painted into the scene's own
+ * bitmap is a scene key and the half above already covers it. So the roster is taken from the
+ * canvases (not from a ref name, which the next layer would not share), each named by a literal
+ * `data-layer`, and each must be composed by the export or listed screen-only with a reason.
+ *
+ * **What this cannot see, stated rather than implied:** DOM chrome (the ruler, the legend, the
+ * strip's panel). Those are not layers; their export equivalents are painted rows that are hand
+ * mirrors (ADR-0106), and that residue is recorded in ADR-0198 rather than claimed covered.
+ */
+const COMPONENTS = join(SRC, 'features/tsld/components');
+
+/**
+ * Layers the export deliberately does not compose, each with the reason. Same discipline as
+ * {@link SCREEN_ONLY}: a wrong reason closes a question, so a reason states what the layer is FOR.
+ */
+const SCREEN_ONLY_LAYERS: Record<string, string> = {
+  interaction: 'hover, selection and drag feedback; a raster has no pointer',
+  minimap: 'a navigation instrument for a viewport the paper does not have',
+};
+
+/**
+ * A layer the screen paints and the export does not, with the register row that owns the gap.
+ * **Deliberately not {@link SCREEN_ONLY_LAYERS}**, whose reasons say "by design": this is an omission
+ * being fixed, and filing it there would close the question. An entry fails the build the moment the
+ * composer names its input, so it cannot outlive its fix.
+ */
+const KNOWN_GAPS: Record<string, { input: string; row: string }> = {
+  'resource-strip': { input: 'resourceStrip', row: 'docs/TECH_DEBT.md #223' },
+};
+
+interface CanvasLayer {
+  layer: string;
+  file: string;
+  line: number;
+}
+
+/** The JSX opening tag starting at `from`: ends at the first `>` that is outside braces. */
+function tagExtent(text: string, from: number): string {
+  let depth = 0;
+  for (let i = from; i < text.length; i += 1) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}') depth -= 1;
+    else if (text[i] === '>' && depth === 0) return text.slice(from, i);
+  }
+  throw new Error(`an unterminated <canvas tag: ${text.slice(from, from + 40)}…`);
+}
+
+/**
+ * Every `<canvas>` under the diagram's components, with its literal `data-layer`. **Refuses** a
+ * canvas without one: an unnamed layer cannot be classified, and a default would read as parity.
+ */
+function canvasLayers(): CanvasLayer[] {
+  const layers: CanvasLayer[] = [];
+  const files = readdirSync(COMPONENTS).filter((f) => f.endsWith('.tsx') && !f.includes('.test.'));
+  for (const name of files) {
+    const file = join(COMPONENTS, name);
+    const text = readStripped(file);
+    for (const match of text.matchAll(/<canvas\b/g)) {
+      const line = text.slice(0, match.index).split('\n').length;
+      const layer = /\bdata-layer="([a-z][a-z-]*)"/.exec(tagExtent(text, match.index))?.[1];
+      if (layer === undefined) {
+        throw new Error(
+          `${file}:${line} renders a <canvas> with no literal data-layer="…". A diagram layer the ` +
+            `export is not told about is the #223 defect; name it, then compose it or list it in ` +
+            `SCREEN_ONLY_LAYERS with a reason.`,
+        );
+      }
+      layers.push({ layer, file, line });
+    }
+  }
+  return layers;
+}
+
+/**
+ * The composer's `renderExportImage({ … })` call, brace-matched. Searched for a literal key rather
+ * than parsed for top-level keys: the WBS band rides a conditional spread, which the scene parser
+ * above would (rightly) refuse.
+ */
+function composerCall(): string {
+  const text = readStripped(EXPORT);
+  const anchor = 'renderExportImage({';
+  const start = text.indexOf(anchor);
+  if (start === -1) {
+    throw new Error(`no \`${anchor}\` in ${EXPORT}; the layer gate cannot see the composition.`);
+  }
+  const open = start + anchor.length - 1;
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(open, i + 1);
+    }
+  }
+  throw new Error(`unbalanced braces in the renderExportImage call in ${EXPORT}`);
+}
+
+describe('the exported diagram accounts for every canvas layer the screen renders (structural)', () => {
+  const found = canvasLayers();
+  const names = found.map((l) => l.layer);
+  const call = composerCall();
+  const composes = (input: string): boolean =>
+    new RegExp(`(?:^|[\\s{,])${input}\\s*(?::|,|\\})`).test(call);
+
+  it('the roster is plausibly sized, so a truncated parse cannot read as parity', () => {
+    // ADR-0093's second assertion: five canvases today (wbs-band, scene, interaction,
+    // resource-strip, minimap). A roster that parsed fewer would satisfy every check below.
+    expect(names.length, 'the layer roster looks truncated').toBeGreaterThanOrEqual(5);
+    expect(new Set(names).size, 'two canvases share a data-layer name').toBe(names.length);
+  });
+
+  it('every layer is composed, listed screen-only with a reason, or a named known gap', () => {
+    const unaccounted = names.filter(
+      (n) => !(n in EXPORT_LAYER_INPUTS) && !(n in SCREEN_ONLY_LAYERS) && !(n in KNOWN_GAPS),
+    );
+    expect(
+      unaccounted,
+      `these canvas layers are on the screen and the export has not been told about them: ` +
+        `${unaccounted.join(', ')}.\nCompose them (EXPORT_LAYER_INPUTS) or name them in ` +
+        `SCREEN_ONLY_LAYERS with a reason.`,
+    ).toEqual([]);
+  });
+
+  it('every composed layer is named in the composer, as a literal key', () => {
+    const silent = Object.entries(EXPORT_LAYER_INPUTS)
+      .filter(([, input]) => !composes(input))
+      .map(([layer, input]) => `${layer} (${input})`);
+    expect(
+      silent,
+      `EXPORT_LAYER_INPUTS says these layers are composed, and the composer's renderExportImage ` +
+        `call does not name their input: ${silent.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('a known gap fails the moment the composer closes it', () => {
+    const closed = Object.entries(KNOWN_GAPS)
+      .filter(([, gap]) => composes(gap.input))
+      .map(([layer, gap]) => `${layer} (${gap.row})`);
+    expect(
+      closed,
+      `the composer now names these layers' inputs: move them from KNOWN_GAPS to ` +
+        `EXPORT_LAYER_INPUTS — ${closed.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('the records name no layer the canvases have stopped rendering', () => {
+    const stale = [
+      ...Object.keys(EXPORT_LAYER_INPUTS),
+      ...Object.keys(SCREEN_ONLY_LAYERS),
+      ...Object.keys(KNOWN_GAPS),
+    ].filter((n) => !names.includes(n));
+    expect(stale, `these layers are no longer rendered by any canvas: ${stale.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
+  it('no layer sits in two records at once', () => {
+    const all = [
+      ...Object.keys(EXPORT_LAYER_INPUTS),
+      ...Object.keys(SCREEN_ONLY_LAYERS),
+      ...Object.keys(KNOWN_GAPS),
+    ];
+    expect(all.filter((n, i) => all.indexOf(n) !== i)).toEqual([]);
   });
 });

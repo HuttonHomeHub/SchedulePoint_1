@@ -602,6 +602,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
 - **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
 - **ADR-0199** _(Accepted; amends ADR-0157 D2 and D4)_ — A link is never louder than the work it joins → [`0199-a-link-is-never-louder-than-the-work-it-joins.md`](docs/adr/0199-a-link-is-never-louder-than-the-work-it-joins.md)
+- **ADR-0199** _(Proposed; amends ADR-0103 D7 and ADR-0049)_ — A layer is a canvas, and the export accounts for every one → [`0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md`](docs/adr/0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

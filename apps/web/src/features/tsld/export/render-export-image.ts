@@ -138,6 +138,18 @@ export interface RenderExportImageInput {
   wbsBand?: { height: number; bars: readonly WbsBandBar[]; palette: WbsBandPalette };
 }
 
+/**
+ * **Which renderer input composes each diagram layer** (ADR-0198). A layer is a `<canvas>` the
+ * diagram renders, named by its `data-layer`; `scene-parity.structural.test.ts` takes the roster
+ * from the canvases and demands that every one is a key here (and named in the composer) or is
+ * listed there as screen-only with a reason. `satisfies` makes the compiler refuse a mapping to an
+ * input this renderer does not have, so the table cannot name a field that was renamed away.
+ */
+export const EXPORT_LAYER_INPUTS = {
+  scene: 'scene',
+  'wbs-band': 'wbsBand',
+} as const satisfies Record<string, keyof RenderExportImageInput>;
+
 /** Injectable seams so the off-screen render is testable without a real 2D context. */
 export interface RenderExportImageDeps {
   createCanvas?: () => HTMLCanvasElement;

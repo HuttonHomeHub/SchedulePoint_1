@@ -2695,6 +2695,7 @@ export function TsldCanvas({
         <canvas
           ref={wbsBandCanvasRef}
           aria-hidden="true"
+          data-layer="wbs-band"
           data-testid="tsld-wbs-band"
           style={{ top: RULER_HEIGHT, height: wbsBandHeightPx }}
           className="absolute inset-x-0 block cursor-pointer"
@@ -2715,6 +2716,7 @@ export function TsldCanvas({
       <canvas
         ref={canvasRef}
         aria-hidden="true"
+        data-layer="scene"
         style={{ top: sceneTopOffset(wbsBandHeightPx) }}
         className={`absolute inset-x-0 block touch-none ${
           editing && writeBusy
@@ -3037,6 +3039,7 @@ export function TsldCanvas({
         <canvas
           ref={interactionCanvasRef}
           aria-hidden="true"
+          data-layer="interaction"
           style={{ top: sceneTopOffset(wbsBandHeightPx) }}
           className="pointer-events-none absolute inset-x-0"
         />
@@ -3049,6 +3052,7 @@ export function TsldCanvas({
         <canvas
           ref={stripCanvasRef}
           aria-hidden="true"
+          data-layer="resource-strip"
           data-testid="tsld-resource-strip"
           style={{ height: RESOURCE_STRIP_HEIGHT }}
           className="pointer-events-none absolute inset-x-0 bottom-0 block"

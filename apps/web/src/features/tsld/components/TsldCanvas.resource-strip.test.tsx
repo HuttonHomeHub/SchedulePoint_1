@@ -85,6 +85,8 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
     const strip = getByTestId('tsld-resource-strip');
     expect(strip.tagName).toBe('CANVAS');
     expect(strip).toHaveAttribute('aria-hidden', 'true');
+    // The layer gate (`scene-parity.structural`) reads this name; the export must account for it.
+    expect(strip).toHaveAttribute('data-layer', 'resource-strip');
     expect(strip.className).toContain('pointer-events-none');
     expect(strip.className).toContain('bottom-0');
     expect(strip.style.height).toBe(`${RESOURCE_STRIP_HEIGHT}px`);

@@ -49,6 +49,7 @@ describe('TsldMinimap', () => {
     expect(group).toBeInTheDocument();
     const picture = screen.getByTestId('tsld-minimap-picture');
     expect(picture).toHaveAttribute('aria-hidden', 'true');
+    expect(picture).toHaveAttribute('data-layer', 'minimap');
     expect(screen.getByTestId('tsld-minimap-rect')).toBeInTheDocument();
   });
 

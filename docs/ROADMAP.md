@@ -931,6 +931,11 @@ discriminators. Each becomes a spec/plan before build:
   stronger and an ordinary driving link slightly quieter, so the work is never the faintest meaningful
   mark on the diagram, and a gate and a Chromium case hold the ordering. Critical and near-critical
   links are unchanged.
+- **The resource strip reaches the exported diagram** — **in progress** (approved 2026-10-17,
+  [ADR-0199](adr/0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md); spec and plan at
+  [`docs/specs/resource-strip-export/`](specs/resource-strip-export/)): the loading strip a planner has
+  open is carried into the PNG, PDF and printed diagram, and the export parity gate accounts for every
+  canvas layer rather than only the scene's keys. The gate is built; the export is next.
 - **Canvas authoring flow & link routing** — **shipped** (ADR-0064
   `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
   one arm/disarm contract across all four tool modes with a mode statement band above the scene,
