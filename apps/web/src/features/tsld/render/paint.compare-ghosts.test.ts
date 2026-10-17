@@ -115,8 +115,8 @@ function bigPlan(): RenderActivity[] {
       type: 'TASK' as const,
       laneIndex: i % 50,
       label: `A${i} Activity ${i} · 5d`,
-      earlyStart: start,
-      earlyFinish: finish,
+      drawnStart: start,
+      drawnFinish: finish,
       isCritical: i % 7 === 0,
       isNearCritical: false,
     };

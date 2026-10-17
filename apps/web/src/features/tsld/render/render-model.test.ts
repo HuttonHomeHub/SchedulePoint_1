@@ -89,8 +89,8 @@ function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 'a1',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -157,7 +157,7 @@ describe('isMilestone', () => {
 
 describe('activityRect', () => {
   it('spans start..finish+1 day so a 1-day task is one column wide', () => {
-    const oneDay = activityRect(activity({ earlyFinish: '2026-01-01' }), VIEW, DATA_DATE)!;
+    const oneDay = activityRect(activity({ drawnFinish: '2026-01-01' }), VIEW, DATA_DATE)!;
     expect(oneDay.x).toBe(100);
     expect(oneDay.w).toBe(10); // exactly one day column at pxPerDay=10
     const fiveDay = activityRect(activity(), VIEW, DATA_DATE)!;
@@ -165,12 +165,12 @@ describe('activityRect', () => {
   });
 
   it('returns null when the activity has no computed start', () => {
-    expect(activityRect(activity({ earlyStart: null }), VIEW, DATA_DATE)).toBeNull();
+    expect(activityRect(activity({ drawnStart: null }), VIEW, DATA_DATE)).toBeNull();
   });
 
   it('places a start milestone as a diamond bounding box centred on the start of its day', () => {
     const rect = activityRect(
-      activity({ type: 'START_MILESTONE', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+      activity({ type: 'START_MILESTONE', drawnStart: '2026-01-03', drawnFinish: '2026-01-03' }),
       VIEW,
       DATA_DATE,
     )!;
@@ -183,12 +183,12 @@ describe('activityRect', () => {
     // A task dated 1–3 Jan ends at screen 130 (day 3's right edge). The finish milestone after it is
     // dated 3 Jan too, and its diamond belongs on that same edge — one day right of a start milestone.
     const task = activityRect(
-      activity({ earlyStart: '2026-01-01', earlyFinish: '2026-01-03' }),
+      activity({ drawnStart: '2026-01-01', drawnFinish: '2026-01-03' }),
       VIEW,
       DATA_DATE,
     )!;
     const rect = activityRect(
-      activity({ type: 'FINISH_MILESTONE', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+      activity({ type: 'FINISH_MILESTONE', drawnStart: '2026-01-03', drawnFinish: '2026-01-03' }),
       VIEW,
       DATA_DATE,
     )!;
@@ -200,9 +200,9 @@ describe('activityRect', () => {
 describe('cull', () => {
   const size = { width: 300, height: 200 };
   it('keeps on-screen activities and drops off-screen ones', () => {
-    const onScreen = activity({ id: 'on', earlyStart: '2026-01-02', earlyFinish: '2026-01-03' });
-    const offRight = activity({ id: 'off', earlyStart: '2026-06-01', earlyFinish: '2026-06-02' });
-    const noDates = activity({ id: 'none', earlyStart: null, earlyFinish: null });
+    const onScreen = activity({ id: 'on', drawnStart: '2026-01-02', drawnFinish: '2026-01-03' });
+    const offRight = activity({ id: 'off', drawnStart: '2026-06-01', drawnFinish: '2026-06-02' });
+    const noDates = activity({ id: 'none', drawnStart: null, drawnFinish: null });
     const visible = cull([onScreen, offRight, noDates], VIEW, size, DATA_DATE);
     expect(visible).toEqual(['on']);
   });
@@ -214,14 +214,14 @@ describe('dependencyPolyline', () => {
   // exact bar width.
   const predBar = activity({
     id: 'p',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-03',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-03',
     laneIndex: 0,
   });
   const succBar = activity({
     id: 's',
-    earlyStart: '2026-01-10',
-    earlyFinish: '2026-01-12',
+    drawnStart: '2026-01-10',
+    drawnFinish: '2026-01-12',
     laneIndex: 2,
   });
   const pRect = activityRect(predBar, VIEW, DATA_DATE)!;
@@ -258,14 +258,14 @@ describe('dependencyPolyline', () => {
   it('routes a straight line between activities on the same lane', () => {
     const pred = activity({
       id: 'p',
-      earlyStart: '2026-01-01',
-      earlyFinish: '2026-01-02',
+      drawnStart: '2026-01-01',
+      drawnFinish: '2026-01-02',
       laneIndex: 0,
     });
     const succ = activity({
       id: 's',
-      earlyStart: '2026-01-05',
-      earlyFinish: '2026-01-06',
+      drawnStart: '2026-01-05',
+      drawnFinish: '2026-01-06',
       laneIndex: 0,
     });
     const line = dependencyPolyline(pred, succ, 'FS', VIEW, DATA_DATE)!;
@@ -280,7 +280,7 @@ describe('dependencyPolyline', () => {
   });
 
   it('returns null when an endpoint has no geometry', () => {
-    const pred = activity({ id: 'p', earlyStart: null });
+    const pred = activity({ id: 'p', drawnStart: null });
     expect(dependencyPolyline(pred, activity(), 'FS', VIEW, DATA_DATE)).toBeNull();
   });
 });
@@ -329,11 +329,11 @@ describe('makeWorkingDayWalk / ELAPSED_DAY_WALK', () => {
 describe('lagAnchorPoints', () => {
   // Predecessor days 0–2 (right edge x=130) in lane 0; a wide successor days 0–14 (x 100–250) in
   // lane 2, so walked anchors land ON the successor without the clamp biting (asserted separately).
-  const pred = activity({ id: 'p', earlyFinish: '2026-01-03', laneIndex: 0 });
+  const pred = activity({ id: 'p', drawnFinish: '2026-01-03', laneIndex: 0 });
   const succ = activity({
     id: 's',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-15',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-15',
     laneIndex: 2,
   });
   const plan = makeWorkingDayWalk(working);
@@ -392,18 +392,18 @@ describe('lagAnchorPoints', () => {
   });
 
   it('returns null (the extreme-end fallback) when either end has no computed dates', () => {
-    const unscheduled = activity({ id: 'u', earlyStart: null, earlyFinish: null });
+    const unscheduled = activity({ id: 'u', drawnStart: null, drawnFinish: null });
     expect(lagAnchorPoints(unscheduled, succ, 'FS', 2, VIEW, DATA_DATE, plan)).toBeNull();
     expect(lagAnchorPoints(pred, unscheduled, 'FS', 2, VIEW, DATA_DATE, plan)).toBeNull();
   });
 });
 
 describe('dependencyPolylineTimeTrue', () => {
-  const pred = activity({ id: 'p', earlyFinish: '2026-01-03', laneIndex: 0 });
+  const pred = activity({ id: 'p', drawnFinish: '2026-01-03', laneIndex: 0 });
   const succ = activity({
     id: 's',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-15',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-15',
     laneIndex: 2,
   });
   const plan = makeWorkingDayWalk(working);
@@ -426,7 +426,7 @@ describe('dependencyPolylineTimeTrue', () => {
   });
 
   it('returns null when an endpoint has no geometry (the caller’s fallback contract)', () => {
-    const unscheduled = activity({ id: 'u', earlyStart: null });
+    const unscheduled = activity({ id: 'u', drawnStart: null });
     expect(
       dependencyPolylineTimeTrue(unscheduled, succ, 'FS', 2, VIEW, DATA_DATE, plan),
     ).toBeNull();
@@ -557,7 +557,7 @@ describe('classifyHit', () => {
   });
 
   it('ignores activities without computed dates', () => {
-    const acts = [activity({ earlyStart: null, earlyFinish: null })];
+    const acts = [activity({ drawnStart: null, drawnFinish: null })];
     expect(classifyHit(acts, { x: 120, y: barMidY() }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
   });
 });
@@ -600,7 +600,7 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
       });
     }
     // A milestone's diamond bounding box likewise classifies wholly as body.
-    const milestone = [activity({ type: 'START_MILESTONE', earlyFinish: '2026-01-01' })];
+    const milestone = [activity({ type: 'START_MILESTONE', drawnFinish: '2026-01-01' })];
     const rect = activityRect(milestone[0]!, VIEW, DATA_DATE)!;
     expect(
       classifyHit(milestone, { x: rect.x + 1, y: rect.y + rect.h / 2 }, VIEW, DATA_DATE, RESIZE),
@@ -690,11 +690,11 @@ describe('lagAnchorDay / lagFromAnchorDay (ADR-0052 M3 — the shared mapping + 
 
   it('matches the drawn anchor: lagAnchorPoints places the anchor at lagAnchorDay', () => {
     // The forward mapping IS the render mapping — same fn, so assert the wiring stayed shared.
-    const pred = activity({ id: 'p', earlyFinish: '2026-01-03' });
+    const pred = activity({ id: 'p', drawnFinish: '2026-01-03' });
     const succ = activity({
       id: 's',
-      earlyStart: '2026-01-01',
-      earlyFinish: '2026-01-15',
+      drawnStart: '2026-01-01',
+      drawnFinish: '2026-01-15',
       laneIndex: 2,
     });
     const anchors = lagAnchorPoints(pred, succ, 'FS', 2, VIEW, DATA_DATE, walk)!;
@@ -712,11 +712,11 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
   const walk = makeWorkingDayWalk(working);
   // Predecessor days 0..2 in lane 0; a wide successor days 0..14 in lane 2 (the M1 anchor
   // fixture). An FS+1 anchor walks to day 4 → x=140, on the successor's centre line (y=120).
-  const pred = activity({ id: 'p', earlyFinish: '2026-01-03' });
+  const pred = activity({ id: 'p', drawnFinish: '2026-01-03' });
   const succ = activity({
     id: 's',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-15',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-15',
     laneIndex: 2,
   });
   const acts = [pred, succ];
@@ -936,29 +936,29 @@ describe('centerOnWorld', () => {
 describe('worldExtent', () => {
   it('returns null when nothing is placeable (empty, and all-uncomputed)', () => {
     expect(worldExtent([], DATA_DATE)).toBeNull();
-    expect(worldExtent([activity({ earlyStart: null, earlyFinish: null })], DATA_DATE)).toBeNull();
+    expect(worldExtent([activity({ drawnStart: null, drawnFinish: null })], DATA_DATE)).toBeNull();
   });
 
   it('a single activity: inclusive minDay, exclusive maxDay (finish + 1), its own lane', () => {
-    const a = activity({ earlyStart: '2026-01-03', earlyFinish: '2026-01-05', laneIndex: 4 });
+    const a = activity({ drawnStart: '2026-01-03', drawnFinish: '2026-01-05', laneIndex: 4 });
     expect(worldExtent([a], DATA_DATE)).toEqual({ minDay: 2, maxDay: 5, maxLane: 4 });
   });
 
   it('folds min/max across activities and treats a null finish as a zero-span day', () => {
     const early = activity({
       id: 'a',
-      earlyStart: '2026-01-02',
-      earlyFinish: '2026-01-04',
+      drawnStart: '2026-01-02',
+      drawnFinish: '2026-01-04',
       laneIndex: 1,
     });
-    const late = activity({ id: 'b', earlyStart: '2026-02-01', earlyFinish: null, laneIndex: 7 });
+    const late = activity({ id: 'b', drawnStart: '2026-02-01', drawnFinish: null, laneIndex: 7 });
     // b: start day 31, null finish => finish = start, maxDay = 32.
     expect(worldExtent([early, late], DATA_DATE)).toEqual({ minDay: 1, maxDay: 32, maxLane: 7 });
   });
 
   it('a single-lane plan reports maxLane 0, and an uncomputed activity contributes no lane', () => {
     const placed = activity({ id: 'a', laneIndex: 0 });
-    const unplaced = activity({ id: 'b', earlyStart: null, earlyFinish: null, laneIndex: 40 });
+    const unplaced = activity({ id: 'b', drawnStart: null, drawnFinish: null, laneIndex: 40 });
     expect(worldExtent([placed, unplaced], DATA_DATE)?.maxLane).toBe(0);
   });
 
@@ -966,8 +966,8 @@ describe('worldExtent', () => {
     // M4 architecture gate S2: the previous version of this case NAMED fitToContent and
     // asserted only `dayExtent` — a delegate with no production caller, since deleted (S1).
     const acts = [
-      activity({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-10', laneIndex: 2 }),
-      activity({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-20', laneIndex: 5 }),
+      activity({ id: 'a', drawnStart: '2026-01-02', drawnFinish: '2026-01-10', laneIndex: 2 }),
+      activity({ id: 'b', drawnStart: '2026-01-06', drawnFinish: '2026-01-20', laneIndex: 5 }),
     ];
     const extent = worldExtent(acts, DATA_DATE)!;
     const size = { width: 1000, height: 500 };
@@ -982,7 +982,7 @@ describe('fitToContent', () => {
   const SIZE: Size = { width: 832, height: 400 };
 
   it('returns the default viewport when nothing is computed', () => {
-    const uncomputed = activity({ earlyStart: null, earlyFinish: null });
+    const uncomputed = activity({ drawnStart: null, drawnFinish: null });
     expect(fitToContent([uncomputed], SIZE, DATA_DATE, MAX_PX_PER_DAY)).toEqual(DEFAULT_VIEWPORT);
     expect(fitToContent([], SIZE, DATA_DATE, MAX_PX_PER_DAY)).toEqual(DEFAULT_VIEWPORT);
   });
@@ -998,7 +998,7 @@ describe('fitToContent', () => {
 
   it('offsets originX so a later start day sits at the left padding', () => {
     const view = fitToContent(
-      [activity({ earlyStart: '2026-01-11', earlyFinish: '2026-01-15' })],
+      [activity({ drawnStart: '2026-01-11', drawnFinish: '2026-01-15' })],
       SIZE,
       DATA_DATE,
       MAX_PX_PER_DAY,
@@ -1290,11 +1290,11 @@ describe('routeOrthogonal — elbow shift (fan-out de-crowding)', () => {
 describe('lagRunSegment (the on-bar waiting-time depiction)', () => {
   const walk = makeWorkingDayWalk(working);
   // Pred days 0–2 (x 100–130) lane 0; a wide successor days 0–14 (x 100–250) lane 2.
-  const pred = activity({ id: 'p', earlyFinish: '2026-01-03', laneIndex: 0 });
+  const pred = activity({ id: 'p', drawnFinish: '2026-01-03', laneIndex: 0 });
   const succ = activity({
     id: 's',
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-15',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-15',
     laneIndex: 2,
   });
 
@@ -1323,13 +1323,13 @@ describe('lagRunSegment (the on-bar waiting-time depiction)', () => {
     // The anchor clamps onto the edge: a successor starting after the constrained point.
     const late = activity({
       id: 'l',
-      earlyStart: '2026-01-11',
-      earlyFinish: '2026-01-15',
+      drawnStart: '2026-01-11',
+      drawnFinish: '2026-01-15',
       laneIndex: 2,
     });
     expect(lagRunSegment(pred, late, 'FS', 1, VIEW, DATA_DATE, walk)).toBeNull();
     // Missing geometry.
-    const unscheduled = activity({ id: 'u', earlyStart: null, earlyFinish: null });
+    const unscheduled = activity({ id: 'u', drawnStart: null, drawnFinish: null });
     expect(lagRunSegment(unscheduled, succ, 'SS', 2, VIEW, DATA_DATE, walk)).toBeNull();
     expect(lagRunSegment(pred, unscheduled, 'FS', 2, VIEW, DATA_DATE, walk)).toBeNull();
   });
@@ -1358,10 +1358,10 @@ describe('linkHighlightIds / edgeTouches (incident-link highlight selection)', (
 });
 
 describe('slackByDependencyId (the one shared per-tie gap, ADR-0054 §5)', () => {
-  const a = (id: string, earlyStart: string | null, earlyFinish: string | null) => ({
+  const a = (id: string, drawnStart: string | null, drawnFinish: string | null) => ({
     id,
-    earlyStart,
-    earlyFinish,
+    drawnStart,
+    drawnFinish,
   });
   const d = (
     id: string,

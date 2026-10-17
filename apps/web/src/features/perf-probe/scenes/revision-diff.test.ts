@@ -21,8 +21,8 @@ const activity = (i: number, over: Partial<RenderActivity> = {}): RenderActivity
   type: 'TASK',
   laneIndex: i,
   label: `A${String(i)}`,
-  earlyStart: '2026-01-10',
-  earlyFinish: '2026-01-15',
+  drawnStart: '2026-01-10',
+  drawnFinish: '2026-01-15',
   isCritical: false,
   isNearCritical: false,
   ...over,
@@ -61,11 +61,11 @@ describe('changedSet', () => {
   });
 
   it('SKIPS an activity with no dates rather than inventing them', () => {
-    // `earlyStart`/`earlyFinish` are null until the plan is recalculated. An activity with no dates
+    // `drawnStart`/`drawnFinish` are null until the plan is recalculated. An activity with no dates
     // draws no bar, so it can have no ghost — coercing would invent a date and draw a rectangle the
     // product never would, and the probe would then count it as visible work.
     const activities = Array.from({ length: 20 }, (_, i) =>
-      activity(i, { earlyStart: null, earlyFinish: null }),
+      activity(i, { drawnStart: null, drawnFinish: null }),
     );
     expect(changedSet(activities, []).ghosts).toHaveLength(0);
   });
@@ -103,8 +103,8 @@ describe('countVisible', () => {
 
   it('counts only what is inside the viewport — the point of the whole function', () => {
     // "Count what is actually on screen, so a PASS cannot mean the treatment drew nothing."
-    const onScreen = activity(0, { earlyStart: '2026-01-10', earlyFinish: '2026-01-15' });
-    const offScreen = activity(1, { earlyStart: '2027-06-01', earlyFinish: '2027-06-10' });
+    const onScreen = activity(0, { drawnStart: '2026-01-10', drawnFinish: '2026-01-15' });
+    const offScreen = activity(1, { drawnStart: '2027-06-01', drawnFinish: '2027-06-10' });
     const { ghosts } = changedSet([onScreen], []);
     const { ghosts: far } = changedSet([offScreen], []);
 
@@ -115,8 +115,8 @@ describe('countVisible', () => {
   it('counts a link when EITHER endpoint is on screen, not only when both are', () => {
     // A link with one end off screen is still drawn and still costs the painter; requiring both
     // would under-count exactly the dense hub cases the overlay is hardest on.
-    const near = activity(0, { earlyStart: '2026-01-05', earlyFinish: '2026-01-08' });
-    const far = activity(1, { earlyStart: '2027-06-01', earlyFinish: '2027-06-10' });
+    const near = activity(0, { drawnStart: '2026-01-05', drawnFinish: '2026-01-08' });
+    const far = activity(1, { drawnStart: '2027-06-01', drawnFinish: '2027-06-10' });
     const link = { id: 'e0', predecessorId: 'a0', successorId: 'a1', type: 'FS' } as RenderEdge;
     const counts = countVisible([], [link], [link], [near, far], view, SIZE);
     expect(counts.visibleChangedLinks).toBe(1);
@@ -124,8 +124,8 @@ describe('countVisible', () => {
 
   it('does not count a link whose endpoints have no dates', () => {
     // An undated activity draws no bar, so an edge into it has no geometry to be on screen.
-    const a = activity(0, { earlyStart: null, earlyFinish: null });
-    const b = activity(1, { earlyStart: null, earlyFinish: null });
+    const a = activity(0, { drawnStart: null, drawnFinish: null });
+    const b = activity(1, { drawnStart: null, drawnFinish: null });
     const link = { id: 'e0', predecessorId: 'a0', successorId: 'a1', type: 'FS' } as RenderEdge;
     expect(countVisible([], [link], [link], [a, b], view, SIZE).visibleChangedLinks).toBe(0);
   });
@@ -147,7 +147,7 @@ describe('countVisible', () => {
     // "3 changed bars visible" means something different on a screen showing 10 bars and one
     // showing 2,000. Both numbers travel together or neither is interpretable.
     const activities = Array.from({ length: 30 }, (_, i) =>
-      activity(i, { earlyStart: '2026-01-10', earlyFinish: '2026-01-15' }),
+      activity(i, { drawnStart: '2026-01-10', drawnFinish: '2026-01-15' }),
     );
     const { ghosts } = changedSet(activities, []);
     const counts = countVisible(ghosts, [], [], activities, view, SIZE);

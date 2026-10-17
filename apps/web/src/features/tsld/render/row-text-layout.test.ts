@@ -34,8 +34,8 @@ function act(over: Partial<RenderActivity> & { id: string }): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: over.id,
-    earlyStart: '2026-01-05',
-    earlyFinish: '2026-01-20',
+    drawnStart: '2026-01-05',
+    drawnFinish: '2026-01-20',
     isCritical: false,
     isNearCritical: false,
     ...over,
@@ -197,8 +197,8 @@ describe('the dates row (layer 3.7)', () => {
     const m = act({
       id: 'm',
       type: 'FINISH_MILESTONE',
-      earlyStart: '2026-01-20',
-      earlyFinish: '2026-01-20',
+      drawnStart: '2026-01-20',
+      drawnFinish: '2026-01-20',
     });
     const { args } = input([[{ activity: m, rect: rect(300, 14) }]]);
     const step = layoutRowText(args).dates!.reserved[0]!;
@@ -218,7 +218,7 @@ describe('the dates row (layer 3.7)', () => {
 
   it('writes one date per node: the finish is withheld where the next bar starts there (#379)', () => {
     const a = act({ id: 'a' });
-    const b = act({ id: 'b', earlyStart: '2026-01-21', earlyFinish: '2026-02-05' });
+    const b = act({ id: 'b', drawnStart: '2026-01-21', drawnFinish: '2026-02-05' });
     const { args } = input([
       [
         { activity: a, rect: rect(100, 200) },

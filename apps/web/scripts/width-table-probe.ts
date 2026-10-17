@@ -10,7 +10,7 @@
  * - `label`, `label-prefix`, `ellipsis`: an activity's canvas label in its font (bold for a
  *   milestone), the ellipsis, and every prefix of the label plus the ellipsis, trimmed or not —
  *   `truncateToWidth`'s binary search (`geometry.ts:863-881`).
- * - `date`: `formatCanvasDate` of an activity's `earlyStart` or `earlyFinish`.
+ * - `date`: `formatCanvasDate` of an activity's `drawnStart` or `drawnFinish`.
  * - `centre`: `centreItemText` of an activity, full or short (only with `centreItem` on).
  * - `wrap`: a word prefix of a label, or its remainder truncated — the two-line wrap. §4.4 leaves it
  *   out on purpose, because the router does not wrap (D-4); it is counted so that is visible.
@@ -86,8 +86,8 @@ export function predictedTable(scene: TsldScene, toggles: TsldViewToggles): Set<
       out.add(keyOf(label.slice(0, k) + LABEL_ELLIPSIS, font));
       out.add(keyOf(label.slice(0, k).trimEnd() + LABEL_ELLIPSIS, font));
     }
-    if (a.earlyStart) out.add(keyOf(formatCanvasDate(a.earlyStart), undefined));
-    if (a.earlyFinish) out.add(keyOf(formatCanvasDate(a.earlyFinish), undefined));
+    if (a.drawnStart) out.add(keyOf(formatCanvasDate(a.drawnStart), undefined));
+    if (a.drawnFinish) out.add(keyOf(formatCanvasDate(a.drawnFinish), undefined));
     if (toggles.centreItem === true && a.durationDays !== undefined) {
       const item = {
         durationDays: a.durationDays,

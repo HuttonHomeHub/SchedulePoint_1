@@ -126,8 +126,8 @@ export function slackByDependencyId(args: {
   activities: readonly {
     id: string;
     type?: ActivityType;
-    earlyStart: string | null;
-    earlyFinish: string | null;
+    drawnStart: string | null;
+    drawnFinish: string | null;
   }[];
   dependencies: readonly {
     id: string;
@@ -145,16 +145,16 @@ export function slackByDependencyId(args: {
   for (const edge of dependencies) {
     const pred = byId.get(edge.predecessor.id);
     const succ = byId.get(edge.successor.id);
-    if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish) continue;
+    if (!pred?.drawnStart || !pred.drawnFinish || !succ?.drawnStart || !succ.drawnFinish) continue;
     slack.set(
       edge.id,
       linkGap(
         {
           type: edge.type,
-          predStartDay: axisDayOf(pred.type, dataDate, pred.earlyStart),
-          predFinishDay: axisDayOf(pred.type, dataDate, pred.earlyFinish),
-          succStartDay: axisDayOf(succ.type, dataDate, succ.earlyStart),
-          succFinishDay: axisDayOf(succ.type, dataDate, succ.earlyFinish),
+          predStartDay: axisDayOf(pred.type, dataDate, pred.drawnStart),
+          predFinishDay: axisDayOf(pred.type, dataDate, pred.drawnFinish),
+          succStartDay: axisDayOf(succ.type, dataDate, succ.drawnStart),
+          succFinishDay: axisDayOf(succ.type, dataDate, succ.drawnFinish),
           lagDays: edge.lagDays,
         },
         isWorkingDay,

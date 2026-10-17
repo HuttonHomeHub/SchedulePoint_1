@@ -649,12 +649,12 @@ function lagGrabOf(
   const anchorBarId =
     edge.type === 'FS' || edge.type === 'FF' ? edge.successorId : edge.predecessorId;
   const anchorBar = activities.find((a) => a.id === anchorBarId);
-  if (!pred || pred.earlyStart === null || !anchorBar) return undefined;
+  if (!pred || pred.drawnStart === null || !anchorBar) return undefined;
   const rect = activityRect(anchorBar, view, dataDate);
   if (!rect) return undefined;
-  const predStartDay = axisDayOf(pred.type, dataDate, pred.earlyStart);
+  const predStartDay = axisDayOf(pred.type, dataDate, pred.drawnStart);
   const predFinishDay =
-    pred.earlyFinish === null ? predStartDay : axisDayOf(pred.type, dataDate, pred.earlyFinish);
+    pred.drawnFinish === null ? predStartDay : axisDayOf(pred.type, dataDate, pred.drawnFinish);
   return {
     dependencyId,
     type: edge.type,
@@ -720,9 +720,9 @@ function bodyGrab(
   dataDate: string,
 ): BodyGrab | undefined {
   const a = activities.find((x) => x.id === id);
-  if (!a || a.earlyStart === null) return undefined;
-  const startDay = axisDayOf(a.type, dataDate, a.earlyStart);
-  const endDay = a.earlyFinish === null ? startDay : axisDayOf(a.type, dataDate, a.earlyFinish);
+  if (!a || a.drawnStart === null) return undefined;
+  const startDay = axisDayOf(a.type, dataDate, a.drawnStart);
+  const endDay = a.drawnFinish === null ? startDay : axisDayOf(a.type, dataDate, a.drawnFinish);
   return {
     id,
     startDay,
@@ -1423,7 +1423,7 @@ export function TsldCanvas({
         // An unmeasured canvas has no width to divide by, so every derived scale would be garbage.
         if (size.width <= 1) return false;
         const activity = sceneRef.current.activities.find((a) => a.id === id);
-        if (!activity || activity.earlyStart === null) return false;
+        if (!activity || activity.drawnStart === null) return false;
         // It IS `fitToContent`, handed a one-element array — not a second implementation of "frame
         // these". A parallel one would drift from `Fit to plan` about padding and the lane axis, and
         // the drift would only ever be visible to someone using both on the same plan.
@@ -1449,7 +1449,7 @@ export function TsldCanvas({
         // this command fires with the selection already set. Same `revealOffset` as that effect —
         // one arithmetic, never a second opinion.
         {
-          // `activityRect` is null only for an undrawn activity, and the `earlyStart === null`
+          // `activityRect` is null only for an undrawn activity, and the `drawnStart === null`
           // guard above already returned false for that — the check satisfies the type.
           const rect = activityRect(activity, viewRef.current, sceneRef.current.dataDate);
           if (rect) {
@@ -2003,7 +2003,7 @@ export function TsldCanvas({
       const size = sizeRef.current;
       const dpr = getDpr();
       if (!fittedRef.current && size.width > 1) {
-        const withDates = sceneRef.current.activities.some((a) => a.earlyStart !== null);
+        const withDates = sceneRef.current.activities.some((a) => a.drawnStart !== null);
         viewRef.current = withDates
           ? fitToContent(
               sceneRef.current.activities,

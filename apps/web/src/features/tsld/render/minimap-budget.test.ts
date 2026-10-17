@@ -105,8 +105,8 @@ function plan(count: number): RenderActivity[] {
     type: 'TASK' as const,
     laneIndex: i % 200,
     label: `a${i}`,
-    earlyStart: i === 0 ? '2026-01-01' : '2026-01-05',
-    earlyFinish: '2026-03-01',
+    drawnStart: i === 0 ? '2026-01-01' : '2026-01-05',
+    drawnFinish: '2026-03-01',
     isCritical: i % 3 === 0,
     isNearCritical: false,
   }));
@@ -145,8 +145,8 @@ describe('minimap draw budget', () => {
       type: 'TASK' as const,
       laneIndex: i % 8,
       label: `a${i}`,
-      earlyStart: i === 0 ? '2026-01-01' : '2026-01-05',
-      earlyFinish: '2026-03-01',
+      drawnStart: i === 0 ? '2026-01-01' : '2026-01-05',
+      drawnFinish: '2026-03-01',
       isCritical: i % 3 === 0,
       isNearCritical: false,
     }));

@@ -131,8 +131,8 @@ function task(id: string, laneIndex: number, startDay: number, days: number): Re
     type: 'TASK',
     laneIndex,
     label: id,
-    earlyStart: iso(startDay),
-    earlyFinish: iso(startDay + days - 1),
+    drawnStart: iso(startDay),
+    drawnFinish: iso(startDay + days - 1),
     isCritical: false,
     isNearCritical: false,
   };

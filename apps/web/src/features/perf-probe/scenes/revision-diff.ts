@@ -104,16 +104,16 @@ export function changedSet(
   for (let i = 0; i < activities.length; i += stride) {
     const a = activities[i];
     if (!a) continue;
-    // `earlyStart`/`earlyFinish` are null until the plan is recalculated (`geometry.ts:380`). An
+    // `drawnStart`/`drawnFinish` are null until the plan is recalculated (`geometry.ts:380`). An
     // activity with no dates draws no bar, so it can have no ghost either - skipped rather than
     // coerced, which would invent a date and draw a rectangle the product never would.
-    if (a.earlyStart === null || a.earlyFinish === null) continue;
+    if (a.drawnStart === null || a.drawnFinish === null) continue;
     ghosts.push({
       id: a.id,
       // The OLD dates — the whole point of a ghost. Shifted earlier, which is what a slipped
       // activity looks like and is the common case a planner opens this feature to see.
-      baselineStart: shiftIso(a.earlyStart, -GHOST_SHIFT_DAYS),
-      baselineFinish: shiftIso(a.earlyFinish, -GHOST_SHIFT_DAYS),
+      baselineStart: shiftIso(a.drawnStart, -GHOST_SHIFT_DAYS),
+      baselineFinish: shiftIso(a.drawnFinish, -GHOST_SHIFT_DAYS),
       laneIndex: a.laneIndex,
       type: a.type,
     });
@@ -198,8 +198,8 @@ export function countVisible(
     const p = byId.get(e.predecessorId);
     const q = byId.get(e.successorId);
     if (!p || !q) return false;
-    if (p.earlyFinish === null || q.earlyStart === null) return false;
-    return onScreenX(p.earlyFinish) || onScreenX(q.earlyStart);
+    if (p.drawnFinish === null || q.drawnStart === null) return false;
+    return onScreenX(p.drawnFinish) || onScreenX(q.drawnStart);
   };
 
   let visibleChangedLinks = 0;
@@ -208,8 +208,8 @@ export function countVisible(
   // The denominators, over the WHOLE scene rather than the changed subset.
   let visibleBars = 0;
   for (const a of activities) {
-    if (a.earlyStart === null || a.earlyFinish === null) continue;
-    if (onScreenX(a.earlyStart) || onScreenX(a.earlyFinish)) visibleBars += 1;
+    if (a.drawnStart === null || a.drawnFinish === null) continue;
+    if (onScreenX(a.drawnStart) || onScreenX(a.drawnFinish)) visibleBars += 1;
   }
   let visibleLinks = 0;
   for (const e of allEdges) if (edgeOnScreen(e)) visibleLinks += 1;
@@ -353,8 +353,8 @@ export function fixtureScene(): {
     type: 'TASK' as const,
     laneIndex: i % lanes,
     label: `F${String(i)} Fixture activity ${String(i)} · 5d`,
-    earlyStart: iso(Math.floor(i / lanes) * 6),
-    earlyFinish: iso(Math.floor(i / lanes) * 6 + 4),
+    drawnStart: iso(Math.floor(i / lanes) * 6),
+    drawnFinish: iso(Math.floor(i / lanes) * 6 + 4),
     isCritical: i % 5 === 0,
     isNearCritical: false,
   }));
@@ -398,9 +398,9 @@ export async function runRevisionDiff(
   // Fit derives px/day from the plan's own span rather than a constant, so "whole plan" means the
   // whole plan at every scene size instead of whatever 2 px/day happens to frame.
   const days = source.activities.reduce((max, a) => {
-    if (a.earlyFinish === null) return max;
+    if (a.drawnFinish === null) return max;
     const d =
-      (new Date(`${a.earlyFinish}T00:00:00Z`).getTime() - Date.UTC(2026, 0, 1)) / 86_400_000;
+      (new Date(`${a.drawnFinish}T00:00:00Z`).getTime() - Date.UTC(2026, 0, 1)) / 86_400_000;
     return Math.max(max, d);
   }, 1);
   const pxPerDay = opts.preset === 'week' ? 12 : Math.max(0.4, size.width / days);

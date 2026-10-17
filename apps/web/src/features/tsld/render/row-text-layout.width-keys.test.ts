@@ -75,8 +75,8 @@ function plan(seed: number): RenderActivity[] {
       code: rand() < 0.5 ? `A${1000 + i * 10}` : null,
       durationDays: length,
       remainingFloat: rand() < 0.5 ? Math.floor(rand() * 10) : null,
-      earlyStart: day(start),
-      earlyFinish: day(start + length),
+      drawnStart: day(start),
+      drawnFinish: day(start + length),
       isCritical: rand() < 0.3,
       isNearCritical: false,
     };

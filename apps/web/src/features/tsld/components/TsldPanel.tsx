@@ -1719,7 +1719,7 @@ export function TsldPanel({
   // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
   // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
   // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
-  // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
+  // bars simply don't paint (`paint.ts` skips `drawnStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
 
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
@@ -1893,7 +1893,7 @@ export function TsldPanel({
   // planner can get it (WCAG 1.1.1). Empty (and the sentence unchanged) until the plan has dates.
   //
   // **Same builder is not enough: it must be fed the same DATES.** The chip is computed from the
-  // render model, whose `earlyStart`/`earlyFinish` hold the drawn span; this was fed the API rows,
+  // render model, whose `drawnStart`/`drawnFinish` hold the drawn span; this was fed the API rows,
   // whose fields of the same name hold the network's — so a hand-placed successor showed a gap on
   // the canvas and was announced with none (reported 2026-09-23; `docs/TECH_DEBT.md` #372 is the
   // naming trap that made the two lines look identical).
@@ -1901,7 +1901,7 @@ export function TsldPanel({
     if (!dataDate) return new Map<string, LinkGap>();
     const drawn = activities.map((a) => {
       const { start, finish } = barDatesFor(a, barDateSource);
-      return { id: a.id, earlyStart: start, earlyFinish: finish };
+      return { id: a.id, drawnStart: start, drawnFinish: finish };
     });
     // In working days on the plan calendar, the unit the canvas's gap labels print (NetPoint
     // grammar M3-T2); calendar days, said as such, when no calendar is loaded.

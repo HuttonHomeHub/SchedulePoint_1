@@ -39,8 +39,8 @@ function task(id: string, laneIndex: number, start: string, finish: string): Ren
     type: 'TASK',
     laneIndex,
     label: id,
-    earlyStart: start,
-    earlyFinish: finish,
+    drawnStart: start,
+    drawnFinish: finish,
     isCritical: false,
     isNearCritical: false,
   };

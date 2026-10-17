@@ -311,12 +311,12 @@ export function minimapRects(
   const { view, pxPerLane } = mapping;
   const rects: MinimapRect[] = [];
   for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const x0 = screenXOfDay(axisDayOf(a.type, dataDate, a.earlyStart), view);
+    if (a.drawnStart === null) continue;
+    const x0 = screenXOfDay(axisDayOf(a.type, dataDate, a.drawnStart), view);
     const x1 =
-      a.earlyFinish === null
+      a.drawnFinish === null
         ? x0
-        : screenXOfDay(axisDayOf(a.type, dataDate, a.earlyFinish) + 1, view);
+        : screenXOfDay(axisDayOf(a.type, dataDate, a.drawnFinish) + 1, view);
     rects.push({
       x: x0,
       y: a.laneIndex * pxPerLane,

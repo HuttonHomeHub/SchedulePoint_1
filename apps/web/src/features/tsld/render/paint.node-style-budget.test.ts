@@ -103,8 +103,8 @@ function plan(): { activities: RenderActivity[]; edges: RenderEdge[] } {
       type: 'TASK',
       laneIndex: i % LANES,
       label: `A${i}`,
-      earlyStart: day(startDay),
-      earlyFinish: day(startDay + 4),
+      drawnStart: day(startDay),
+      drawnFinish: day(startDay + 4),
       isCritical: i % 5 === 0,
       isNearCritical: i % 5 === 1,
     };

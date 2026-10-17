@@ -427,8 +427,8 @@ export function sceneFor(
     type: a.type as never,
     laneIndex: layout.laneOf.get(a.key) ?? 0,
     label: a.key,
-    earlyStart: iso(asap.start.get(a.key) ?? 0),
-    earlyFinish: iso(asap.finish.get(a.key) ?? 0),
+    drawnStart: iso(asap.start.get(a.key) ?? 0),
+    drawnFinish: iso(asap.finish.get(a.key) ?? 0),
     // The span in days, standing in for the working-day duration so the centre item (NetPoint
     // M1) is drawn and counted by FC-N6a; the harness has no calendar to give the real figure.
     durationDays: a.type.endsWith('MILESTONE')
@@ -2440,7 +2440,7 @@ export function inkDistribution(
  * **A plan in the shape `readVector` reads, from `scaleScene`** (NetPoint-layout M0-T2).
  *
  * `scale-2000` is a drawn scene, not a plan: the generator lays bars out without scheduling them
- * (`scale-scene.ts`), so its `earlyStart`/`earlyFinish` ARE its drawn spans. They are converted to
+ * (`scale-scene.ts`), so its `drawnStart`/`drawnFinish` ARE its drawn spans. They are converted to
  * whole days from the same `DATA_DATE` the scene uses, and its own lanes become a layout — the
  * generator's, which is NOT a `packLanes` result, so {@link packedOnDrawn} gives the one that is.
  */
@@ -2456,9 +2456,9 @@ export function scalePlan(count: number): {
   const start = new Map<string, number>();
   const finish = new Map<string, number>();
   for (const a of source.activities) {
-    if (a.earlyStart === null) continue;
-    start.set(a.id, dayOf(a.earlyStart));
-    finish.set(a.id, dayOf(a.earlyFinish ?? a.earlyStart));
+    if (a.drawnStart === null) continue;
+    start.set(a.id, dayOf(a.drawnStart));
+    finish.set(a.id, dayOf(a.drawnFinish ?? a.drawnStart));
   }
   const asap = {
     activities: source.activities.map((a) => ({ key: a.id, type: a.type })),

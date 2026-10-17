@@ -1059,8 +1059,8 @@ const act = (
   id,
   type: 'TASK',
   label: id,
-  earlyStart: start,
-  earlyFinish: finish,
+  drawnStart: start,
+  drawnFinish: finish,
   isCritical: false,
   isNearCritical: false,
   laneIndex: lane,
@@ -1188,7 +1188,7 @@ function sizeFor(scene: TsldScene): Fixture['sizeAt'] {
   const days = Math.max(
     ...scene.activities.map(
       (a) =>
-        (Date.parse(`${a.earlyFinish ?? a.earlyStart}T00:00:00Z`) -
+        (Date.parse(`${a.drawnFinish ?? a.drawnStart}T00:00:00Z`) -
           Date.parse(`${scene.dataDate}T00:00:00Z`)) /
         86_400_000,
     ),

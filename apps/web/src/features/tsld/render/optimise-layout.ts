@@ -35,7 +35,7 @@ import type { PlacedText } from './row-text-layout';
  * **The budget is the seed's row count** (CQ-1, answered 2026-09-23): the search may reorder rows and
  * move bars between them but does not add rows beyond what the seed used.
  *
- * **It takes `RenderActivity`, so `earlyStart`/`earlyFinish` are the DRAWN dates** (ADR-0148): the
+ * **It takes `RenderActivity`, so `drawnStart`/`drawnFinish` are the DRAWN dates** (ADR-0148): the
  * caller builds them from `barDatesFor(…, 'visual')`, never from an `ActivitySummary`'s early dates.
  * That is why this file lives in `render/` beside the objective and not in `model/`, where
  * `drawn-span.structural.test.ts` holds files to `ActivitySummary`'s meaning of the same field names.
@@ -121,10 +121,10 @@ export function optimiseLayout(
   // lane, so a later recalculation that does draw it finds it where it was.
   const bars: Bar[] = [];
   for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const startDay = axisDayOf(a.type, input.dataDate, a.earlyStart);
+    if (a.drawnStart === null) continue;
+    const startDay = axisDayOf(a.type, input.dataDate, a.drawnStart);
     const endDay =
-      a.earlyFinish === null ? startDay : axisDayOf(a.type, input.dataDate, a.earlyFinish);
+      a.drawnFinish === null ? startDay : axisDayOf(a.type, input.dataDate, a.drawnFinish);
     bars.push({ id: a.id, startDay, endDay });
   }
   const order = [...bars].sort((a, b) => a.startDay - b.startDay || byKey(a.id, b.id));

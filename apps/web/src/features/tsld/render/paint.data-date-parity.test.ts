@@ -70,8 +70,8 @@ function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 't',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -86,7 +86,7 @@ const CORPUS: ReadonlyArray<[string, TsldScene]> = [
     {
       activities: [
         task({ id: 'a', isCritical: true }),
-        task({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-08', laneIndex: 1 }),
+        task({ id: 'b', drawnStart: '2026-01-06', drawnFinish: '2026-01-08', laneIndex: 1 }),
       ],
       edges: [{ predecessorId: 'a', successorId: 'b', type: 'FS', isDriving: true }],
       dataDate: DATA_DATE,

@@ -42,8 +42,8 @@ const ACTIVITIES: RenderActivity[] = [
     type: 'TASK',
     laneIndex: 0,
     label: 'a1',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
   },
@@ -429,14 +429,14 @@ describe('TsldCanvas minimap build discipline (ADR-0100, M2-T4)', () => {
     expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
 
     const changed: RenderActivity[] = [
-      { ...ACTIVITIES[0]!, earlyFinish: '2026-01-08' },
+      { ...ACTIVITIES[0]!, drawnFinish: '2026-01-08' },
       {
         id: 'a2',
         type: 'TASK',
         laneIndex: 1,
         label: 'a2',
-        earlyStart: '2026-01-03',
-        earlyFinish: '2026-01-06',
+        drawnStart: '2026-01-03',
+        drawnFinish: '2026-01-06',
         isCritical: true,
         isNearCritical: false,
       },

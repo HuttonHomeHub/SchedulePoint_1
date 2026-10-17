@@ -23,8 +23,8 @@ function activity(over: Partial<RenderActivity> & Pick<RenderActivity, 'id'>): R
     type: 'TASK',
     laneIndex: 0,
     label: over.id,
-    earlyStart: '2026-01-01',
-    earlyFinish: '2026-01-01',
+    drawnStart: '2026-01-01',
+    drawnFinish: '2026-01-01',
     isCritical: false,
     isNearCritical: false,
     ...over,
@@ -42,9 +42,9 @@ describe('buildExportViewport — whole extent', () => {
   it('frames the full activity extent at the live zoom (inclusive-finish right edge)', () => {
     const activities = [
       // day 0 → 4 (inclusive finish 2026-01-05), lane 0
-      activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2026-01-05', laneIndex: 0 }),
+      activity({ id: 'a', drawnStart: '2026-01-01', drawnFinish: '2026-01-05', laneIndex: 0 }),
       // day 2 → 3, lane 2 (deepest lane)
-      activity({ id: 'b', earlyStart: '2026-01-03', earlyFinish: '2026-01-04', laneIndex: 2 }),
+      activity({ id: 'b', drawnStart: '2026-01-03', drawnFinish: '2026-01-04', laneIndex: 2 }),
     ];
     const result = buildExportViewport(activities, DATA_DATE, {
       extent: 'whole',
@@ -94,7 +94,7 @@ describe('buildExportViewport — whole extent', () => {
   it('clamps BOTH axes to maxPx and flags scaledToFit (a uniform down-scale)', () => {
     // 10 days × 20px = 200px wide, 1 lane = 28px tall; at dpr 2 → 400×56 raster.
     const activities = [
-      activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2026-01-10', laneIndex: 0 }),
+      activity({ id: 'a', drawnStart: '2026-01-01', drawnFinish: '2026-01-10', laneIndex: 0 }),
     ];
     const result = buildExportViewport(activities, DATA_DATE, {
       extent: 'whole',
@@ -115,7 +115,7 @@ describe('buildExportViewport — whole extent', () => {
   it('flips scaledToFit exactly at the cap boundary', () => {
     // width = 10 days × 10px = 100px; raster at dpr 1 = 100px.
     const activities = [
-      activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2026-01-10', laneIndex: 0 }),
+      activity({ id: 'a', drawnStart: '2026-01-01', drawnFinish: '2026-01-10', laneIndex: 0 }),
     ];
     const opts = {
       extent: 'whole' as const,
@@ -161,7 +161,7 @@ describe('buildExportViewport — view extent', () => {
   });
 
   it('falls back to the live viewport for whole when nothing is placeable', () => {
-    const undated = [activity({ id: 'a', earlyStart: null, earlyFinish: null })];
+    const undated = [activity({ id: 'a', drawnStart: null, drawnFinish: null })];
     const result = buildExportViewport(undated, DATA_DATE, {
       extent: 'whole',
       liveViewport: live({ pxPerDay: 9, originX: 3, originY: 4 }, 320, 180),
@@ -256,8 +256,8 @@ describe('buildExportViewport — WBS band reservation', () => {
         id: 'a',
         name: 'A',
         laneIndex: 0,
-        earlyStart: '2026-01-01',
-        earlyFinish: '2026-01-10',
+        drawnStart: '2026-01-01',
+        drawnFinish: '2026-01-10',
       },
     ] as unknown as Parameters<typeof buildExportViewport>[0];
     const without = buildExportViewport(activities, '2026-01-01', {

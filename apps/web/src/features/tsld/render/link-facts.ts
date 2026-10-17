@@ -57,8 +57,8 @@ export function linkFactsOf(
     let d = axisDays.get(a.id);
     if (!d) {
       d = {
-        start: axisDayOf(a.type, scene.dataDate, a.earlyStart!),
-        finish: axisDayOf(a.type, scene.dataDate, a.earlyFinish!),
+        start: axisDayOf(a.type, scene.dataDate, a.drawnStart!),
+        finish: axisDayOf(a.type, scene.dataDate, a.drawnFinish!),
       };
       axisDays.set(a.id, d);
     }
@@ -81,10 +81,10 @@ export function linkFactsOf(
       if (
         !gapsOn ||
         edge.isDriving ||
-        !pred.earlyStart ||
-        !pred.earlyFinish ||
-        !succ.earlyStart ||
-        !succ.earlyFinish
+        !pred.drawnStart ||
+        !pred.drawnFinish ||
+        !succ.drawnStart ||
+        !succ.drawnFinish
       ) {
         return null;
       }

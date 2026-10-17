@@ -52,8 +52,8 @@ export function scaleScene(count: number): ScaleScene {
       // under the bar as the centre item.
       label: `${activity.code} ${activity.name}`,
       durationDays: activity.durationMinutes / 1440,
-      earlyStart: iso(bar.startDay),
-      earlyFinish: iso(bar.finishDay),
+      drawnStart: iso(bar.startDay),
+      drawnFinish: iso(bar.finishDay),
       // The generator does not compute criticality (it does not schedule), so the flag is dealt to
       // the chain spine — the bars a real critical path runs through. It changes the palette a bar
       // is drawn with, which is the only thing the painter reads it for.

@@ -29,7 +29,7 @@ import { finishMilestoneDayShift } from '@/lib/milestone-day';
  * **An activity's date as a day on the time axis** — `daysBetween` plus the finish-milestone shift
  * (#381, ADR-0155, `lib/milestone-day.ts`). A finish milestone is dated by the day it closes and
  * drawn on that day's END boundary, so its day here is one later than its date. Every site that puts
- * an activity's `earlyStart`/`earlyFinish` on the axis goes through this, which
+ * an activity's `drawnStart`/`drawnFinish` on the axis goes through this, which
  * `finish-milestone-day.structural.test.ts` enforces; a bare `daysBetween` on one of those fields
  * draws every finish milestone a day early on a 24-hour calendar and a weekend early after a Friday.
  */
@@ -606,11 +606,12 @@ export interface RenderActivity {
    * The inclusive dates (`YYYY-MM-DD`) the bar is **drawn** at, or null until the plan is
    * recalculated. Sourced per the active view at the mapping seam (ADR-0033): EARLY → the CPM
    * earliest dates, VISUAL → the engine's effective-Visual dates, Late overlay → the late dates.
-   * The field names keep their EARLY-mode heritage; `activityRect` reads them verbatim, blind to
-   * which mode chose them.
+   * Named for what they are — the DRAWN span — because they used to be `earlyStart`/`earlyFinish`,
+   * the same names as the network's early dates on `ActivitySummary` (`docs/TECH_DEBT.md` #372).
+   * `activityRect` reads them verbatim, blind to which mode chose them.
    */
-  earlyStart: string | null;
-  earlyFinish: string | null;
+  drawnStart: string | null;
+  drawnFinish: string | null;
   isCritical: boolean;
   isNearCritical: boolean;
   /** Engine-owned (ADR-0033): true when the placement conflicts — see {@link visualConflictReason}
@@ -740,7 +741,7 @@ export type RectCache = Map<string, Rect | null>;
 
 /**
  * The screen-space rectangle for an activity, or null if it has no computed dates yet
- * (nothing to place). A task spans `[earlyStart, earlyFinish + 1 day)` — the inclusive
+ * (nothing to place). A task spans `[drawnStart, drawnFinish + 1 day)` — the inclusive
  * finish plus one day so a 1-day task is one column wide (ADR-0023). A milestone is a
  * zero-duration diamond centred on its day: the rect is the diamond's bounding box.
  *
@@ -768,8 +769,8 @@ function computeActivityRect(
   view: Viewport,
   dataDateIso: string,
 ): Rect | null {
-  if (activity.earlyStart === null) return null;
-  const startDay = axisDayOf(activity.type, dataDateIso, activity.earlyStart);
+  if (activity.drawnStart === null) return null;
+  const startDay = axisDayOf(activity.type, dataDateIso, activity.drawnStart);
   const top = screenYOfLane(activity.laneIndex, view) + BAR_PAD;
 
   if (isMilestone(activity.type)) {
@@ -783,9 +784,9 @@ function computeActivityRect(
   }
 
   const finishDay =
-    activity.earlyFinish === null
+    activity.drawnFinish === null
       ? startDay
-      : axisDayOf(activity.type, dataDateIso, activity.earlyFinish);
+      : axisDayOf(activity.type, dataDateIso, activity.drawnFinish);
   const x1 = screenXOfDay(startDay, view);
   const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
   return { x: x1, y: top, w: Math.max(2, x2 - x1), h: BAR_HEIGHT };
@@ -941,9 +942,9 @@ export function worldExtent(
   let maxDay = -Infinity;
   let maxLane = 0;
   for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const start = axisDayOf(a.type, dataDateIso, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : axisDayOf(a.type, dataDateIso, a.earlyFinish);
+    if (a.drawnStart === null) continue;
+    const start = axisDayOf(a.type, dataDateIso, a.drawnStart);
+    const finish = a.drawnFinish === null ? start : axisDayOf(a.type, dataDateIso, a.drawnFinish);
     minDay = Math.min(minDay, start);
     maxDay = Math.max(maxDay, finish + 1);
     maxLane = Math.max(maxLane, a.laneIndex);

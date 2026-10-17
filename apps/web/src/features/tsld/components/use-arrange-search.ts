@@ -68,9 +68,9 @@ export function arrangeRequest(
   let from = 0;
   let to = 0;
   for (const a of input.activities) {
-    if (a.earlyStart === null) continue;
-    from = Math.min(from, axisDayOf(a.type, input.dataDate, a.earlyStart));
-    to = Math.max(to, axisDayOf(a.type, input.dataDate, a.earlyFinish ?? a.earlyStart));
+    if (a.drawnStart === null) continue;
+    from = Math.min(from, axisDayOf(a.type, input.dataDate, a.drawnStart));
+    to = Math.max(to, axisDayOf(a.type, input.dataDate, a.drawnFinish ?? a.drawnStart));
   }
   return {
     activities: input.activities.map((a) => ({ ...a, laneIndex: seed.get(a.id) ?? a.laneIndex })),
@@ -98,7 +98,7 @@ export function changesBetween(
 }
 
 export function drawnCount(activities: readonly RenderActivity[]): number {
-  return activities.filter((a) => a.earlyStart !== null).length;
+  return activities.filter((a) => a.drawnStart !== null).length;
 }
 
 export function useArrangeSearch(

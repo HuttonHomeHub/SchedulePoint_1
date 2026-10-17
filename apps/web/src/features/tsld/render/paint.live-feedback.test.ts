@@ -72,8 +72,8 @@ function task(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 'A100 Excavate · 4d',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -373,13 +373,13 @@ describe("the feasible window (one-planning-surface M-E, replacing ADR-0054 §4'
 });
 
 describe('relationship slack on the selection (ADR-0054 §5)', () => {
-  const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' });
+  const pred = task({ id: 'p', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' });
   // Starts 5 days after the predecessor finishes, so this FS tie carries 5 days of slack.
   const succ = task({
     id: 's',
     laneIndex: 1,
-    earlyStart: '2026-01-11',
-    earlyFinish: '2026-01-14',
+    drawnStart: '2026-01-11',
+    drawnFinish: '2026-01-14',
   });
   const edges = [
     { predecessorId: 'p', successorId: 's', type: 'FS' as const, isDriving: false, lagDays: 0 },

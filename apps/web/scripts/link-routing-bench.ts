@@ -78,8 +78,8 @@ function plan(): RenderActivity[] {
     type: 'TASK' as const,
     laneIndex: i % LANES,
     label: `A${i} Activity ${i} · 5d`,
-    earlyStart: iso(Math.floor(i / LANES) * 6),
-    earlyFinish: iso(Math.floor(i / LANES) * 6 + 4),
+    drawnStart: iso(Math.floor(i / LANES) * 6),
+    drawnFinish: iso(Math.floor(i / LANES) * 6 + 4),
     isCritical: i % 7 === 0,
     isNearCritical: false,
   }));

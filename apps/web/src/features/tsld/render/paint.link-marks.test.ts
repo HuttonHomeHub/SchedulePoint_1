@@ -49,8 +49,8 @@ function act(id: string, lane: number, start: string, finish: string, crit = 0):
     type: 'TASK',
     laneIndex: lane,
     label: id,
-    earlyStart: start,
-    earlyFinish: finish,
+    drawnStart: start,
+    drawnFinish: finish,
     isCritical: crit === 2,
     isNearCritical: crit === 1,
   };

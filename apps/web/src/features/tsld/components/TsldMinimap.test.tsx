@@ -18,8 +18,8 @@ function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: 'Substructure piling',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-03-01',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-03-01',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -94,7 +94,7 @@ describe('TsldMinimap', () => {
   });
 
   it('states there is nothing to show when no activity has computed dates (AC-1.4)', () => {
-    mount({ activities: [activity({ earlyStart: null, earlyFinish: null })] });
+    mount({ activities: [activity({ drawnStart: null, drawnFinish: null })] });
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();
     expect(screen.queryByTestId('tsld-minimap-picture')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tsld-minimap-rect')).not.toBeInTheDocument();
@@ -107,14 +107,14 @@ describe('TsldMinimap', () => {
         // A one-day activity in a high lane of a long plan: raw geometry well under 1px.
         activity({
           id: 'dot',
-          earlyStart: '2026-01-05',
-          earlyFinish: '2026-01-05',
+          drawnStart: '2026-01-05',
+          drawnFinish: '2026-01-05',
           laneIndex: 199,
         }),
         activity({
           id: 'far',
-          earlyStart: '2036-01-01',
-          earlyFinish: '2036-02-01',
+          drawnStart: '2036-01-01',
+          drawnFinish: '2036-02-01',
           laneIndex: 120,
         }),
       ],

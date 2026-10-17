@@ -173,12 +173,12 @@ export function withMinimumSpan(
   dataDateIso: string,
   minDays: number,
 ): RenderActivity[] {
-  if (activity.earlyStart === null) return [];
-  const start = axisDayOf(activity.type, dataDateIso, activity.earlyStart);
+  if (activity.drawnStart === null) return [];
+  const start = axisDayOf(activity.type, dataDateIso, activity.drawnStart);
   const finish =
-    activity.earlyFinish === null
+    activity.drawnFinish === null
       ? start
-      : axisDayOf(activity.type, dataDateIso, activity.earlyFinish);
+      : axisDayOf(activity.type, dataDateIso, activity.drawnFinish);
   const span = finish - start;
   if (span >= minDays) return [activity];
   // Grow symmetrically about the midpoint, so a short task stays where the planner is looking rather
@@ -187,8 +187,8 @@ export function withMinimumSpan(
   return [
     {
       ...activity,
-      earlyStart: addCalendarDays(dataDateIso, Math.floor(start - pad)),
-      earlyFinish: addCalendarDays(dataDateIso, Math.ceil(finish + pad)),
+      drawnStart: addCalendarDays(dataDateIso, Math.floor(start - pad)),
+      drawnFinish: addCalendarDays(dataDateIso, Math.ceil(finish + pad)),
     },
   ];
 }

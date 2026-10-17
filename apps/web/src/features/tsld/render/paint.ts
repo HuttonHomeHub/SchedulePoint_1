@@ -2259,15 +2259,15 @@ export function paintScene(
       const succ = byId.get(edge.successorId);
       const predRect = rects.get(edge.predecessorId);
       const succRect = rects.get(edge.successorId);
-      if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish)
+      if (!pred?.drawnStart || !pred.drawnFinish || !succ?.drawnStart || !succ.drawnFinish)
         continue;
       if (!predRect || !succRect) continue; // both ends culled off-screen ⇒ nothing to annotate
       const gap = edgeGapDays({
         type: edge.type,
-        predStartDay: axisDayOf(pred.type, scene.dataDate, pred.earlyStart),
-        predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.earlyFinish),
-        succStartDay: axisDayOf(succ.type, scene.dataDate, succ.earlyStart),
-        succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.earlyFinish),
+        predStartDay: axisDayOf(pred.type, scene.dataDate, pred.drawnStart),
+        predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.drawnFinish),
+        succStartDay: axisDayOf(succ.type, scene.dataDate, succ.drawnStart),
+        succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.drawnFinish),
         lagDays: edge.lagDays ?? 0,
       });
       if (gap <= 0) continue; // driving / binding: no slack to report

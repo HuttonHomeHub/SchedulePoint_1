@@ -98,8 +98,8 @@ function activity(overrides: Partial<RenderActivity> & { id: string }): RenderAc
     type: 'TASK',
     laneIndex: SUBJECT_LANE,
     label: 'A100 Excavate',
-    earlyStart: '2026-01-02',
-    earlyFinish: '2026-01-05',
+    drawnStart: '2026-01-02',
+    drawnFinish: '2026-01-05',
     isCritical: false,
     isNearCritical: false,
     ...overrides,
@@ -239,8 +239,8 @@ const CASES: readonly Case[] = [
       activity({
         id: 'm',
         type: 'START_MILESTONE',
-        earlyStart: '2026-01-06',
-        earlyFinish: '2026-01-06',
+        drawnStart: '2026-01-06',
+        drawnFinish: '2026-01-06',
       }),
     ]),
   },
@@ -348,8 +348,8 @@ const CASES: readonly Case[] = [
       activity({
         id: 'mc',
         type: 'START_MILESTONE',
-        earlyStart: '2026-01-06',
-        earlyFinish: '2026-01-06',
+        drawnStart: '2026-01-06',
+        drawnFinish: '2026-01-06',
         isCritical: true,
       }),
     ]),
@@ -358,8 +358,8 @@ const CASES: readonly Case[] = [
     name: 'gap label on a waiting link',
     scene: sceneOf(
       [
-        activity({ id: 'ga', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
-        activity({ id: 'gb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'ga', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' }),
+        activity({ id: 'gb', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [{ id: 'g1', predecessorId: 'ga', successorId: 'gb', type: 'FS', isDriving: false }],
@@ -368,8 +368,8 @@ const CASES: readonly Case[] = [
     ),
     withoutMark: sceneOf(
       [
-        activity({ id: 'ga', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
-        activity({ id: 'gb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'ga', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' }),
+        activity({ id: 'gb', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [{ id: 'g1', predecessorId: 'ga', successorId: 'gb', type: 'FS', isDriving: false }],
@@ -381,8 +381,8 @@ const CASES: readonly Case[] = [
     name: 'lag plate',
     scene: sceneOf(
       [
-        activity({ id: 'la', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
-        activity({ id: 'lb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'la', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' }),
+        activity({ id: 'lb', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [
@@ -400,8 +400,8 @@ const CASES: readonly Case[] = [
     ),
     withoutMark: sceneOf(
       [
-        activity({ id: 'la', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
-        activity({ id: 'lb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'la', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' }),
+        activity({ id: 'lb', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [{ id: 'l1', predecessorId: 'la', successorId: 'lb', type: 'FS', isDriving: false }],
@@ -413,8 +413,8 @@ const CASES: readonly Case[] = [
     name: 'attachment dot',
     scene: sceneOf(
       [
-        activity({ id: 'da', earlyStart: '2026-01-02', earlyFinish: '2026-01-09' }),
-        activity({ id: 'db', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'da', drawnStart: '2026-01-02', drawnFinish: '2026-01-09' }),
+        activity({ id: 'db', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [
@@ -432,8 +432,8 @@ const CASES: readonly Case[] = [
     // The same link joined at the bar's start: no lag, so nothing partway along it.
     withoutMark: sceneOf(
       [
-        activity({ id: 'da', earlyStart: '2026-01-02', earlyFinish: '2026-01-09' }),
-        activity({ id: 'db', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+        activity({ id: 'da', drawnStart: '2026-01-02', drawnFinish: '2026-01-09' }),
+        activity({ id: 'db', drawnStart: '2026-01-20', drawnFinish: '2026-01-22' }),
       ],
       {
         edges: [{ id: 'd1', predecessorId: 'da', successorId: 'db', type: 'SS', isDriving: false }],
@@ -461,10 +461,10 @@ const CASES: readonly Case[] = [
       activity({
         id: 'wrap',
         label: 'Mechanical and electrical first fix to the east wing plant rooms',
-        earlyStart: '2026-01-02',
-        earlyFinish: '2026-01-05',
+        drawnStart: '2026-01-02',
+        drawnFinish: '2026-01-05',
       }),
-      activity({ id: 'next', label: 'B', earlyStart: '2026-01-09', earlyFinish: '2026-01-12' }),
+      activity({ id: 'next', label: 'B', drawnStart: '2026-01-09', drawnFinish: '2026-01-12' }),
     ]),
     // **Pinned, and it is the recorder rather than the ink.** The first measurement put the upper
     // line 2.6 px above the lane: spec §4.13 A4 was unbuilt, and it is built now (`WRAP_LINE_H`).

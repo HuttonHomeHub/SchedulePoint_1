@@ -62,8 +62,8 @@ function act(over: Partial<RenderActivity> & { id: string }): RenderActivity {
     type: 'TASK',
     laneIndex: 0,
     label: over.id,
-    earlyStart: '2026-01-05',
-    earlyFinish: '2026-02-27',
+    drawnStart: '2026-01-05',
+    drawnFinish: '2026-02-27',
     isCritical: false,
     isNearCritical: false,
     ...over,
@@ -110,8 +110,8 @@ describe('the canvas label (M4-T1)', () => {
       id: 'm',
       type: 'FINISH_MILESTONE',
       label: 'Handover',
-      earlyStart: '2026-01-10',
-      earlyFinish: '2026-01-10',
+      drawnStart: '2026-01-10',
+      drawnFinish: '2026-01-10',
     });
     const log = paint([m], 12);
     const at = log.findIndex((l) => l.startsWith('fillText(["Handover"'));
@@ -134,22 +134,22 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
   // one gap east of the node, which is why it used days 6 and 7.)
   const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
   const plan = (pf: number): RenderActivity[] => [
-    act({ id: 'p', laneIndex: 0, earlyStart: d(2), earlyFinish: d(pf), label: 'P' }),
-    act({ id: 's', laneIndex: 2, earlyStart: d(20), earlyFinish: d(22), label: 'S' }),
+    act({ id: 'p', laneIndex: 0, drawnStart: d(2), drawnFinish: d(pf), label: 'P' }),
+    act({ id: 's', laneIndex: 2, drawnStart: d(20), drawnFinish: d(22), label: 'S' }),
     act({
       id: 'm1',
       type: 'FINISH_MILESTONE',
       laneIndex: 1,
-      earlyStart: d(6),
-      earlyFinish: d(6),
+      drawnStart: d(6),
+      drawnFinish: d(6),
       label: 'ABCDE FGHIJKLMNOP',
     }),
     act({
       id: 'm2',
       type: 'FINISH_MILESTONE',
       laneIndex: 1,
-      earlyStart: d(11),
-      earlyFinish: d(11),
+      drawnStart: d(11),
+      drawnFinish: d(11),
       label: 'N',
     }),
   ];
@@ -175,7 +175,7 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
     // gutter above lane 1 instead, clear of the one-line name and across the wrap's first line.
     const blocked = [
       ...plan(7),
-      act({ id: 'q', laneIndex: 0, earlyStart: d(9), earlyFinish: d(30), label: 'Q' }),
+      act({ id: 'q', laneIndex: 0, drawnStart: d(9), drawnFinish: d(30), label: 'Q' }),
     ];
     expect(names(paint(blocked, 12, {}, link))).toEqual(['ABCD…']);
   });
@@ -206,7 +206,7 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
 
 describe('the tiers (M4-T4, spec §4.2 G11)', () => {
   it('withholds dates at the overview tier and draws them from the working tier', () => {
-    const a = act({ id: 'a', label: 'Frame', earlyFinish: '2026-12-30' });
+    const a = act({ id: 'a', label: 'Frame', drawnFinish: '2026-12-30' });
     const dated = (log: string[]): boolean =>
       texts(log).some((t) => /\d{1,2} [A-Z][a-z]{2}/.test(t));
     expect(dated(paint([a], 2, { dates: true }))).toBe(false);
@@ -214,13 +214,13 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
   });
 
   it('draws the lag plate at the detail tier only', () => {
-    const a = act({ id: 'a', label: 'A', earlyStart: '2026-01-05', earlyFinish: '2026-01-20' });
+    const a = act({ id: 'a', label: 'A', drawnStart: '2026-01-05', drawnFinish: '2026-01-20' });
     const b = act({
       id: 'b',
       label: 'B',
       laneIndex: 2,
-      earlyStart: '2026-03-01',
-      earlyFinish: '2026-03-20',
+      drawnStart: '2026-03-01',
+      drawnFinish: '2026-03-20',
     });
     const lagged: RenderEdge[] = [
       { id: 'e', predecessorId: 'a', successorId: 'b', type: 'FS', isDriving: true, lagDays: 2 },
@@ -240,14 +240,14 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
    */
   it('stops an arrowhead into a milestone at the triangle, not under it', () => {
     const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
-    const task = act({ id: 't', label: 'T', laneIndex: 0, earlyStart: d(2), earlyFinish: d(9) });
+    const task = act({ id: 't', label: 'T', laneIndex: 0, drawnStart: d(2), drawnFinish: d(9) });
     const milestone = act({
       id: 'm',
       label: 'M',
       type: 'START_MILESTONE',
       laneIndex: 2,
-      earlyStart: d(10),
-      earlyFinish: d(10),
+      drawnStart: d(10),
+      drawnFinish: d(10),
     });
     const log = paint([task, milestone], 12, {}, [
       { id: 'e', predecessorId: 't', successorId: 'm', type: 'FS', isDriving: true },
