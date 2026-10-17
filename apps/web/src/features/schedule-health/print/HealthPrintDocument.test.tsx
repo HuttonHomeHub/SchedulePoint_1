@@ -219,7 +219,7 @@ describe('ScheduleHealthPrintDocument (health M4)', () => {
       expect(text).toContain('Redundant links: 1 redundant link out of 12 relationships');
       expect(text).toContain('whatever the durations');
       expect(text).toContain(
-        'The check stopped early on a plan this size; 2 links were not checked.',
+        'The check stopped early on a plan this size; 2 links could not be judged.',
       );
       expect(text).not.toContain('undefined');
     });

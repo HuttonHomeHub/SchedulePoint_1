@@ -15,6 +15,7 @@ import {
   HEALTH_ADVISORY_FOOTER,
   healthAdvisoriesOf,
   healthAnnouncement,
+  offenderAnnouncement,
   mergeCriticalPathResult,
   REMEDY_ROLE_SENTENCES,
   type HealthRowView,
@@ -279,7 +280,7 @@ export function ScheduleHealthPanel({
                     onActivateActivity(offender.activityId);
                     // Spoken from HERE, inside the focus frame — focus stays on the offender
                     // button, so nothing else announces over it (the ADR-0080 lesson).
-                    announce(`${offender.name} selected in the plan.`);
+                    announce(offenderAnnouncement(offender));
                   }}
                   onRecalculate={onRecalculate}
                   onOpenBaselines={onOpenBaselines}
@@ -292,7 +293,7 @@ export function ScheduleHealthPanel({
               offenderCap={effectiveReport.offenderCap}
               onActivateActivity={(offender) => {
                 onActivateActivity(offender.activityId);
-                announce(`${offender.name} selected in the plan.`);
+                announce(offenderAnnouncement(offender));
               }}
             />
 
@@ -470,6 +471,7 @@ function HealthAdvisoryRow({
 }): React.ReactElement {
   const summaryId = useId();
   const count = advisory.offenderCount;
+  const summary = advisorySummary(advisory);
   const caveat = advisoryCaveat(advisory);
   const unjudged = advisoryUnjudgedSentence(advisory);
   return (
@@ -484,16 +486,16 @@ function HealthAdvisoryRow({
             {count === 0 ? 'None' : String(count)}
           </span>
         }
-        describedBy={count === 0 ? undefined : summaryId}
+        describedBy={count === 0 || summary === null ? undefined : summaryId}
         offenders={advisory.offenders}
         offenderCount={count}
         offendersTruncated={advisory.offendersTruncated}
         offenderCap={offenderCap}
         onActivate={onActivateActivity}
       >
-        {count === 0 ? null : (
+        {count === 0 || summary === null ? null : (
           <p id={summaryId} className="text-muted-foreground pl-5 text-xs">
-            {advisorySummary(advisory)}
+            {summary}
           </p>
         )}
         {caveat === null || count === 0 ? null : (

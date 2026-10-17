@@ -137,9 +137,20 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   // Axe over the open panel with the new row expanded (CLAUDE.md §13; whole page, as above).
   const redundantAxe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(redundantAxe.violations).toEqual([]);
-  await advisory.getByRole('button', { name: /Survey → Permit/ }).click();
+  const offenderButton = advisory.getByRole('button', { name: /Survey → Permit/ });
+  // The button says what it will select before it is pressed (the successor, not the link).
+  await expect(offenderButton).toHaveAccessibleDescription(
+    `Selects ${redundantTargetName} in the plan, the later end of this link. A link itself cannot be selected.`,
+  );
+  await offenderButton.click();
   await expect(canvasListbox(page).locator('[aria-selected="true"]')).toContainText(
     redundantTargetName,
+  );
+  // Focus stays on the button that was pressed (nothing else takes it, so nothing re-announces over
+  // it, the ADR-0080 lesson), and the live region says what was selected, not "Survey → Permit".
+  await expect(offenderButton).toBeFocused();
+  await expect(page.getByTestId('announcer')).toHaveText(
+    `${redundantTargetName} selected in the plan, the later end of Survey → Permit.`,
   );
 
   // ── 4 · Close restores focus to the trigger, never `<body>` (WCAG 2.4.3) ───────────────────
