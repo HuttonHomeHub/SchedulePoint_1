@@ -1044,12 +1044,15 @@ describe('HierarchyLifecycleService', () => {
           tx.project.findFirst.mockResolvedValue(projectRoot);
           tx.project.findMany.mockResolvedValue([{ id: 'pr1' }]);
           tx.$queryRaw.mockResolvedValue([{ id: 'c1' }]);
-          tx.plan.findMany.mockImplementation((args: { select: { projectId?: boolean } }) =>
-            Promise.resolve(
-              args.select.projectId
-                ? [{ calendarId: 'cal-1', projectId: 'pr1' }]
-                : [{ calendarId: 'cal-1' }],
-            ),
+          tx.plan.findMany.mockImplementation(
+            (args: { select: { projectId?: boolean; id?: boolean } }) =>
+              Promise.resolve(
+                args.select.id
+                  ? [{ id: 'pl1' }]
+                  : args.select.projectId
+                    ? [{ calendarId: 'cal-1', projectId: 'pr1' }]
+                    : [{ calendarId: 'cal-1' }],
+              ),
           );
         };
 
@@ -1080,6 +1083,8 @@ describe('HierarchyLifecycleService', () => {
             data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
           });
           expect(counts.calendars).toBe(2);
+          // The plans that use it are stamped "edited since calculated", as a calendar restore does.
+          expect(tx.$executeRaw.mock.calls.map((call) => call[2])).toContainEqual(['pl1']);
         });
 
         it('refuses NAME_TAKEN, before any write, when the project already has that name', async () => {

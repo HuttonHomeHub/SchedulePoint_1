@@ -15,6 +15,7 @@ import {
 import { assertVersionMatches } from '../db/locked-version';
 import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
+import { markScheduleInputsChanged } from '../schedule-inputs/mark-schedule-inputs-changed';
 
 /**
  * The four levels of the Client → Project → Plan → Activity hierarchy, plus
@@ -997,10 +998,11 @@ export class HierarchyLifecycleService {
 
   /**
    * Bring back the calendars {@link assertCalendarsActive} let through, with the exceptions that went
-   * with each one (the calendar's own batch), under the advisory locks already held. Returns how
-   * many calendars came back.
+   * with each one (the calendar's own batch), under the advisory locks already held, and stamp the
+   * plans that use them as edited. Returns how many calendars came back.
    *
-   * soft-delete: deleted-only — each calendar was read deleted under its lock a moment ago.
+   * soft-delete: deleted-only — each calendar was read deleted under its lock a moment ago; the
+   * plan and activity reads below state `deletedAt: null` themselves.
    */
   private async restoreStrandedCalendars(
     tx: Prisma.TransactionClient,
@@ -1029,6 +1031,31 @@ export class HierarchyLifecycleService {
           data: restore,
         });
       }
+    }
+    if (restored > 0) {
+      // As a standalone calendar restore does (ADR-0195 D7): the plans that use it were last
+      // calculated while it was absent, round the clock, so they are stamped "edited since
+      // calculated" and the next run uses the calendar again. Read after the batch's plans and
+      // activities are reactivated, so the restored project's own plans are among them.
+      const ids = calendars.map((calendar) => calendar.id);
+      const plans = await tx.plan.findMany({
+        where: { organizationId, deletedAt: null, calendarId: { in: ids } },
+        select: { id: true },
+      });
+      const activities = await tx.activity.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          calendarId: { in: ids },
+          plan: { deletedAt: null },
+        },
+        select: { planId: true },
+        distinct: ['planId'],
+      });
+      await markScheduleInputsChanged(tx, organizationId, [
+        ...plans.map((plan) => plan.id),
+        ...activities.map((activity) => activity.planId),
+      ]);
     }
     return restored;
   }

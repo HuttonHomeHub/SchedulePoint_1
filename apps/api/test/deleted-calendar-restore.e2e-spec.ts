@@ -360,6 +360,9 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
       const plan = await prisma.plan.findUniqueOrThrow({ where: { id: w.planId } });
       expect(plan.deletedAt).toBe(null);
       expect(plan.calendarId).toBe(calendarId);
+      // As a standalone calendar restore does (ADR-0195): the plan was last calculated without it.
+      const read = await w.actor.agent.get(`${API}/plans/${w.planId}`).expect(200);
+      expect(read.body.data.editedSinceCalculated).toBe(true);
     });
 
     it('does the same for a client restore', async () => {
@@ -384,6 +387,8 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
       expect((await prisma.calendar.findUniqueOrThrow({ where: { id: own.id } })).deletedAt).toBe(
         null,
       );
+      const read = await w.actor.agent.get(`${API}/plans/${w.planId}`).expect(200);
+      expect(read.body.data.editedSinceCalculated).toBe(true);
     });
   });
 
