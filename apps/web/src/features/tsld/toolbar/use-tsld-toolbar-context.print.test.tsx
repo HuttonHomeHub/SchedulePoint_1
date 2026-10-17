@@ -364,11 +364,11 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
     const canvasUi = makeCanvasUi();
     // `dependencies` is a MUTABLE wrapper, mutated in place below — the same object identity,
     // a new `.data` array. That isolates the missing-dependency defect from E13's unrelated
-    // churn: `exportMatch` lists the whole `model.dependencies` WRAPPER, so if the wrapper's own
-    // reference changed too (as a real refetch's `trackResult` Proxy would), `exportMatch` would
-    // recompute for its OWN reason and incidentally carry the context memo along with it,
-    // masking this defect rather than isolating it. Holding the wrapper steady and changing only
-    // its `.data` is exactly "a new `dependencies.data` array" (M1-T1's own words).
+    // churn: `exportMatch` keys on the stabilised `dependencies` edges, so any new `.data` makes it
+    // recompute and return a fresh object. The context memo therefore lists its three fields rather
+    // than the object (`docs/TECH_DEBT.md` #408); with no filter they stay equal, so only the outer
+    // memo's own `dependencies` entry can carry this change. Holding the wrapper steady and changing
+    // only its `.data` is exactly "a new `dependencies.data` array" (M1-T1's own words).
     const dependencies: { data: DependencySummary[] } = { data: [] };
     const model = { ...makeModel(), dependencies } as PlanWorkspaceModel;
     // Every prop the outer memo lists is hoisted and created ONCE, so only `dependencies.data`
