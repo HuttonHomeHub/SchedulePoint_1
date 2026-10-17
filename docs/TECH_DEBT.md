@@ -10848,3 +10848,12 @@ The share view mounts the same legend as a member, and one of its shared rows is
 On an eight-hour-day calendar 7,200 working minutes is 15 working days, not 5, so the label may understate the band. This is an engine-semantics question that affects members and guests equally (the guest and member flags stay equal either way, ADR-0198). A search of this register for "7,200" and "7200" on 2026-10-17 found no existing row.
 
 **Next:** measure the band on an 8-hour calendar, then either change the threshold to be calendar-relative (an engine change under ADR-0034's parity gate) or correct the label. **Trigger:** a planner reports a near-critical activity with more float than the label states.
+
+### 523. `--plot-warning` is outside the sRGB gamut, so the gate computes a colour the screen never shows
+
+**Status:** open · **Verified:** 2026-10-17, by running `apps/web/scripts/solve-mark-contrast.ts` (`oklchInGamut(0.528, 0.13, 62)` is `false` at the helper's 1e-4 tolerance), and by hand (the linear blue channel is about -0.0069). The shipped fallback `#9f5600`, with blue exactly `00`, is consistent with a clamp. Not measured in a browser.
+**Raised:** 2026-10-17 (diagram mark contrast, `docs/specs/diagram-mark-contrast/spec.md` §4.6) · **Size:** S · **Owner:** web
+
+The near-critical ink (`--warning`, resolved from `--plot-warning` in the canvas scope) asks for a blue channel below zero, so a browser clamps it and paints a colour nobody wrote down. The luminance effect is about 0.0005, so 5.44:1 on the ground reads as roughly 5.43:1 and no floor is at risk. It still means the contrast matrix may describe a colour the screen does not show, the same shape `globals.css` already warns about for the critical ink.
+
+**Next:** re-solve `--plot-warning` at a lightness and chroma that stay in gamut, in the same pass that next moves the criticality ladder (it is the Route A+ cascade the mark-contrast spec costed and did not take). **Trigger:** any change to the near-critical ink, or a Chromium reading of its painted RGB that differs from the gate's.
