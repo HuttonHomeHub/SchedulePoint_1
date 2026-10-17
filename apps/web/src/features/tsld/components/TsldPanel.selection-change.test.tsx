@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * The F0 selection lift (toolbar quick-wins): `TsldPanel` reports its selection to the host via
  * `onSelectionChange` on every REAL transition (select / deselect), so the main toolbar's
@@ -13,72 +15,20 @@ import { TsldPanel } from './TsldPanel';
  * model setter — a broken effect/prop would fail.
  */
 function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    id: 'a1',
-    planId: 'p1',
+  return anActivity({
     code: null,
     name: 'Survey',
-    description: null,
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     ...over,
-  };
+  });
 }
 
 const A = activity({ id: 'a1', name: 'Survey' });

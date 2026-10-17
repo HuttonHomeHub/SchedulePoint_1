@@ -24,6 +24,8 @@ import { BAR_HEIGHT, BAR_PAD, DEFAULT_VIEWPORT, LANE_HEIGHT } from '../render/re
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * The vertical centre of a lane's bar under `DEFAULT_VIEWPORT` — what a pointer aims at.
  *
@@ -38,72 +40,19 @@ const LANE_MID_1 = laneMid(1);
 beforeEach(() => announceSpy.mockClear());
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
-  const row: ActivitySummary = {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    id: 'a1',
-    planId: 'p1',
-    code: 'A100',
-    name: 'Excavate',
-    description: null,
-    type: 'TASK',
+  const row: ActivitySummary = anActivity({
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
-    freeFloat: null,
     isCritical: true,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
-  };
+  });
   // Unplaced unless the case says otherwise, so drawn at the early dates the case chose — the state a
   // recalculation writes, and the span Arrange packs (`model/drawn-span.ts`).
   return {

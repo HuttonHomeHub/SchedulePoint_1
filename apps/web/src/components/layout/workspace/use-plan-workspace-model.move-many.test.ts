@@ -4,6 +4,9 @@ import { renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **`moveMany` — the plural drag's write seam** (`docs/TECH_DEBT.md` #108).
  *
@@ -103,71 +106,14 @@ vi.mock('@/features/schedule', () => ({
   usePlanAutoRecalc: () => ({ notify: h.notify, hold: h.hold, release: h.release }),
 }));
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
-  id: 'a1',
-  planId: 'p1',
+const ACTIVITY: ActivitySummary = anActivity({
   code: null,
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
   laneIndex: 2,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
-  earlyStart: '2026-02-02',
-  earlyFinish: '2026-02-06',
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
   visualStart: '2026-02-02',
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
   version: 7,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 const OTHER: ActivitySummary = { ...ACTIVITY, id: 'a2', name: 'Pour', laneIndex: 3, version: 4 };
 
 // **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock

@@ -6,6 +6,8 @@ import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The `Arrange` offer in the canvas dock** (diagram-legibility M-C2, NetPoint-layout M5), closing
  * the second half of `docs/TECH_DEBT.md` #363: the command existed and nothing ever told a planner it
@@ -44,73 +46,22 @@ function activity(
   earlyStart: string,
   earlyFinish: string,
 ): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
+  return anActivity({
     id,
-    planId: 'p1',
     code: null,
     name: id,
-    description: null,
-    type: 'TASK',
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
     laneIndex,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart,
     earlyFinish,
-    lateStart: null,
-    lateFinish: null,
-    totalFloat: null,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
     // Unplaced, so drawn at its early dates — the state a recalculation writes, and the span Arrange
     // packs (`model/drawn-span.ts`). Null here described a row the engine never produces.
     visualEffectiveStart: earlyStart,
     visualEffectiveFinish: earlyFinish,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-  };
+  });
 }
 
 /** Two bars drawn on top of each other in one row: the state the offer exists for. */

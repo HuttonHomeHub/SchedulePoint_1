@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityCreateDialog } from './ActivityCreateDialog';
 
 import { apiFetch } from '@/lib/api/client';
+import { anActivity } from '@/test/activity-fixture';
 
 /**
  * The per-activity calendar picker (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR` forced ON — the
@@ -71,71 +72,15 @@ const CALENDARS: CalendarSummary[] = [
   },
 ];
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
-  id: 'a1',
+const ACTIVITY: ActivitySummary = anActivity({
   planId: 'pl1',
-  code: 'A100',
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
   calendarId: 'cal-247',
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
   version: 4,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateDialog>> = {}) {
   const queryClient = new QueryClient();

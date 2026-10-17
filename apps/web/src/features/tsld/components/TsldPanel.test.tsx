@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 // This file exercises the M1 read-only surface, so it pins the editing flag OFF
 // (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
 // surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
@@ -16,50 +18,16 @@ vi.mock('../../../config/env', async (importOriginal) => {
 });
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    id: 'a1',
-    planId: 'p1',
-    code: 'A100',
-    name: 'Excavate',
-    description: null,
-    type: 'TASK',
+  return anActivity({
     durationDays: 3,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-01',
     earlyFinish: '2026-01-03',
     lateStart: '2026-01-01',
     lateFinish: '2026-01-03',
     totalFloat: 0,
-    freeFloat: null,
     isCritical: true,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
     /**
      * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
      * activity nobody has placed** — and this said `null` opposite non-null early dates, which is a
@@ -72,26 +40,9 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
      */
     visualEffectiveStart: '2026-01-01',
     visualEffectiveFinish: '2026-01-03',
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
-  };
+  });
 }
 
 const NO_DEPS: DependencySummary[] = [];

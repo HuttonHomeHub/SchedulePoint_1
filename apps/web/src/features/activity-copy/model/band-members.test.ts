@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { bandMembers } from './band-members';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * The band set (`docs/specs/activity-copy-paste/` M2-T1).
  *
@@ -12,71 +14,17 @@ import { bandMembers } from './band-members';
  * building on it is the whole reason this module is four lines of closure rather than its own walk.
  */
 function activity(over: Partial<ActivitySummary> & { id: string }): ActivitySummary {
-  return {
-    drivingResourceCalendarId: null,
-    resourceAssignmentCount: null,
-    planId: 'p1',
+  return anActivity({
     name: over.id,
     code: null,
-    description: null,
-    type: 'TASK',
     durationDays: 1,
     durationMinutes: 1440,
-    constraintType: null,
-    constraintDate: null,
-    secondaryConstraintType: null,
-    secondaryConstraintDate: null,
-    calendarId: null,
-    laneIndex: 0,
-    scheduleAsLateAsPossible: false,
-    expectedFinish: null,
-    status: 'NOT_STARTED',
-    percentComplete: 0,
-    actualStart: null,
-    actualFinish: null,
-    remainingDurationDays: null,
-    remainingDurationMinutes: null,
-    suspendDate: null,
-    resumeDate: null,
     earlyStart: '2026-01-05',
     earlyFinish: '2026-01-06',
-    lateStart: null,
-    lateFinish: null,
-    totalFloat: null,
-    freeFloat: null,
-    isCritical: false,
-    isNearCritical: false,
-    constraintViolated: false,
-    externalDriven: false,
-    loeNoSpan: false,
-    resourceDriverMissing: false,
-    externalEarlyStart: null,
-    externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-    parentId: null,
-    visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
-    visualConflict: false,
-    visualConflictReason: null,
-    visualDriftDays: null,
-    remainingFloat: null,
-    levelingPriority: null,
-    leveledStart: null,
-    leveledFinish: null,
-    levelingDelayDays: null,
-    levelingWindowExceeded: false,
-    selfOverAllocated: false,
-    percentCompleteType: 'DURATION',
     accrualType: 'UNIFORM',
-    physicalPercentComplete: null,
-    budgetedExpense: null,
-    actualExpense: null,
-    version: 1,
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     ...over,
-  };
+  });
 }
 
 //  root ─┬─ mid ─┬─ leaf1

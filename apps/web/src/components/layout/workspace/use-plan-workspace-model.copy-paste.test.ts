@@ -4,7 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiFetchError } from '@/lib/api/client';
+// eslint-disable-next-line import/order -- above the vi.mock() block because the fixtures below use it before the mocked imports load
+import { anActivity } from '@/test/activity-fixture';
 
 /**
  * **The copy/paste composites** (`docs/specs/activity-copy-paste/` M1-T2 / M2-T3 / M3).
@@ -113,71 +114,15 @@ vi.mock('@/features/activity-copy/api/use-clone-carriage', () => ({
   useCloneCarriage: () => ({ readSource: h.readSource, carry: h.carry }),
 }));
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
+const ACTIVITY: ActivitySummary = anActivity({
   id: 'start',
-  planId: 'p1',
   code: null,
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
-  durationDays: 5,
-  durationMinutes: 2400,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
   version: 3,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 const FINISH: ActivitySummary = { ...ACTIVITY, id: 'finish', name: 'Pour', laneIndex: 1 };
 const DEPENDENCY = {
   id: 'dep-1',
@@ -217,8 +162,9 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 }));
 
 // Imported AFTER the mocks are declared (so the model sees the mocked hooks/env).
-// eslint-disable-next-line import/order -- must load after the vi.mock() calls above
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
+
+import { ApiFetchError } from '@/lib/api/client';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(QueryClientProvider, { client: new QueryClient() }, children);

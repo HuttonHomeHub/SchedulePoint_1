@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * **The Late-Start overlay's sentences read the late dates the overlay draws** (#402).
  *
@@ -13,71 +15,21 @@ import { TsldPanel } from './TsldPanel';
  * (`use-late-overlay-announcement.ts`, #417), so this suite no longer covers it.
  */
 
-const ACTIVITY: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
+const ACTIVITY: ActivitySummary = anActivity({
   id: 'a',
-  planId: 'p1',
   code: null,
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
   durationDays: 3,
   durationMinutes: 1440,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
-  calendarId: null,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: '2026-01-01',
   earlyFinish: '2026-01-03',
   lateStart: '2026-02-10',
   lateFinish: '2026-02-12',
   totalFloat: 40,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
   visualEffectiveStart: '2026-01-01',
   visualEffectiveFinish: '2026-01-03',
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
-  version: 1,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 function rowText(barDateSource: 'visual' | 'late'): string {
   render(

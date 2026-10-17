@@ -8,6 +8,8 @@ import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
+import { anActivity } from '@/test/activity-fixture';
+
 /**
  * The Duration column reads on the calendar the work happens on (`docs/TECH_DEBT.md` #86).
  *
@@ -56,71 +58,16 @@ const CREW_8H = 'cal-crew-8h';
 const CRANE_24H = 'cal-crane-24h';
 const CALENDARS: CalendarSummary[] = [calendar(CREW_8H, 8), calendar(CRANE_24H, 24)];
 
-const BASE: ActivitySummary = {
-  drivingResourceCalendarId: null,
-  resourceAssignmentCount: null,
-  id: 'a1',
+const BASE: ActivitySummary = anActivity({
   planId: 'pl1',
-  code: 'A100',
-  name: 'Excavate',
-  description: null,
-  type: 'TASK',
   durationDays: 1,
   durationMinutes: 600,
-  constraintType: null,
-  constraintDate: null,
-  secondaryConstraintType: null,
-  secondaryConstraintDate: null,
   calendarId: CREW_8H,
-  laneIndex: 0,
-  scheduleAsLateAsPossible: false,
-  expectedFinish: null,
-  status: 'NOT_STARTED',
-  percentComplete: 0,
-  actualStart: null,
-  actualFinish: null,
-  remainingDurationDays: null,
-  remainingDurationMinutes: null,
-  suspendDate: null,
-  resumeDate: null,
   earlyStart: null,
   earlyFinish: null,
-  lateStart: null,
-  lateFinish: null,
-  totalFloat: null,
-  freeFloat: null,
-  isCritical: false,
-  isNearCritical: false,
-  constraintViolated: false,
-  externalDriven: false,
-  loeNoSpan: false,
-  resourceDriverMissing: false,
-  externalEarlyStart: null,
-  externalLateFinish: null,
   durationType: 'FIXED_DURATION_AND_UNITS_TIME',
-  parentId: null,
-  visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
-  visualConflict: false,
-  visualConflictReason: null,
-  visualDriftDays: null,
-  remainingFloat: null,
-  levelingPriority: null,
-  leveledStart: null,
-  leveledFinish: null,
-  levelingDelayDays: null,
-  levelingWindowExceeded: false,
-  selfOverAllocated: false,
-  percentCompleteType: 'DURATION',
   accrualType: 'UNIFORM',
-  physicalPercentComplete: null,
-  budgetedExpense: null,
-  actualExpense: null,
-  version: 1,
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-};
+});
 
 function renderTable(data: ActivitySummary[]) {
   const queryClient = new QueryClient();
