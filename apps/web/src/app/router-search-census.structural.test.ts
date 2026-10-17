@@ -38,7 +38,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
  *    validator, so a census keyed on `validateSearch` structurally cannot see them. Gate B, below,
  *    is what covers those.
  *
- * **Verified red three ways** before it was trusted (ADR-0110 D5): by deleting `/forgot-password`'s
+ * **Verified red three ways** before it was trusted (ADR-0110 D5): by deleting a covered route's
  * case from the suite (A1 fails naming it), by asserting a route count of 23 (A2 fails), and by
  * emptying the extraction regex so the covered set comes back empty (A3 fails rather than A1
  * passing vacuously — which is the ADR-0093 lesson, and the failure ADR-0108's own census hit on
@@ -72,12 +72,11 @@ function routesDeclaringValidateSearch(): string[] {
 }
 
 /**
- * The nine, named. This is the **pinned positive case**: without it, "every route with a validator
+ * The eight, named. This is the **pinned positive case**: without it, "every route with a validator
  * has a case" passes just as happily against a census that found no routes at all.
  */
 const KNOWN_VALIDATORS = [
   '/accept-invite',
-  '/forgot-password',
   '/orgs/$orgSlug/calendars',
   '/orgs/$orgSlug/plans/$planId',
   '/orgs/$orgSlug/recently-deleted',
@@ -121,7 +120,7 @@ describe('Gate A — the route search census', () => {
     }
   });
 
-  it('A3 — the census is not empty, and holds the nine validators it was written for', () => {
+  it('A3 — the census is not empty, and holds the eight validators it was written for', () => {
     const declaring = routesDeclaringValidateSearch();
     expect(declaring).toEqual([...KNOWN_VALIDATORS]);
     const covered = coveredPaths();

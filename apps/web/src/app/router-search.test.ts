@@ -162,20 +162,6 @@ describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
  * behaviour we want would make M4's diff meaningless; written against the behaviour we have, the
  * flip's diff is pre-reviewed. Each case M4 changes says so on the line.
  */
-describe('/forgot-password search params', () => {
-  it('carries a prefilled address', () => {
-    expect(validate('/forgot-password', '?email=ada%40example.com')).toEqual({
-      email: 'ada@example.com',
-    });
-  });
-
-  it('coerces a foreign-typed address rather than dropping it', () => {
-    // `?email=1` arrives as the NUMBER 1. Silly as an address, and the point is that the route
-    // carries what was written instead of rendering its empty state as though nothing was sent.
-    expect(validate('/forgot-password', '?email=1')).toEqual({ email: '1' });
-  });
-});
-
 describe('/accept-invite search params', () => {
   it('carries a real base64url token unchanged', () => {
     // 43 characters of base64url is what `generateOpaqueToken` produces

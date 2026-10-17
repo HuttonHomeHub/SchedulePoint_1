@@ -575,17 +575,14 @@ const shareGuestRoute = createRoute({
  * constant. Splitting them is the stranding failure the flag's docblock describes: a link to a
  * conditionally-registered route compiles in both branches, so typecheck cannot catch it.
  *
- * `validateSearch` is permissive on both. Better Auth composes the `?token=` / `?error=` redirect
- * itself, a mail client may mangle the query, and a hand-edited URL must degrade to a state rather
- * than throw — the house rule already stated twice above.
+ * Only `/reset-password` parses search, and `validateSearch` is permissive there. Better Auth
+ * composes the `?token=` / `?error=` redirect itself, a mail client may mangle the query, and a
+ * hand-edited URL must degrade to a state rather than throw — the house rule already stated twice
+ * above. `/forgot-password` takes none: nothing produces an `?email=`, so none is read (#242).
  */
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/forgot-password',
-  validateSearch: (search: Record<string, unknown>): { email?: string } => {
-    const email = searchString(search.email);
-    return email ? { email } : {};
-  },
   component: ForgotPasswordScreen,
 });
 

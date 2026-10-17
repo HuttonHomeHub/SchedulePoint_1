@@ -1,4 +1,4 @@
-import { Link, useSearch } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Alert } from '@/components/ui/alert';
@@ -26,8 +26,6 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 export function ForgotPasswordScreen(): React.ReactElement {
   useNoindex();
   useDocumentTitle('Reset your password');
-  const search = useSearch({ strict: false });
-  const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const session = useSession();
   const request = useRequestPasswordReset();
   const outcomeRef = useOutcomeFocus<HTMLDivElement>(request.isSuccess);
@@ -86,7 +84,7 @@ export function ForgotPasswordScreen(): React.ReactElement {
 
   return (
     <AuthShell title="Reset your password" description="We'll email you a link to set a new one.">
-      <RequestPasswordResetForm email={email} request={request} />
+      <RequestPasswordResetForm request={request} />
       <p className="text-muted-foreground text-sm">
         Remembered it?{' '}
         <Link to="/sign-in" className={textLinkVariants()}>

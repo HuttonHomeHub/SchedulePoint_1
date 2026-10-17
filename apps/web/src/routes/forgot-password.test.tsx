@@ -9,6 +9,9 @@ import { apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
 /** ADR-0074 M4-T2 — asking for a reset link. */
+
+// The screen no longer reads search (#242). The mock stays so the case below can hand it an
+// `?email=` and prove it is ignored — without it, a screen that read search would go unnoticed.
 const search = vi.hoisted((): { current: Record<string, unknown> } => ({ current: {} }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -48,9 +51,9 @@ function renderScreen(params: Record<string, unknown> = {}, session: MeResponse 
 afterEach(() => vi.clearAllMocks());
 
 describe('ForgotPasswordScreen', () => {
-  it('prefills the address from ?email=', async () => {
+  it('does not prefill the address from ?email=', async () => {
     renderScreen({ email: 'ada@example.com' });
-    expect(await screen.findByLabelText('Email')).toHaveValue('ada@example.com');
+    expect(await screen.findByLabelText('Email')).toHaveValue('');
   });
 
   it('sends the request with a same-origin redirect target', async () => {
