@@ -944,8 +944,8 @@ export interface CrossPlanDependencySummary {
 
 /**
  * A soft-deleted row surfaced in the "recently deleted" list. `kind`
- * discriminates which entity it is; `canRestore` is false when a parent (or, for a resource, its
- * calendar) is still deleted — restore that first. Clients, projects and plans are the hierarchy;
+ * discriminates which entity it is; `canRestore` is false when a parent (or, for a resource, plan,
+ * project or client, a calendar it uses) is still deleted — restore that first. Clients, projects and plans are the hierarchy;
  * resources and calendars are the two libraries (ADR-0195).
  */
 export interface DeletedItem {
@@ -2283,7 +2283,7 @@ export interface ReplaceActivityStepsRequest {
 export const LIBRARY_RESTORE_REASON = {
   /** The row's parent group, or a calendar's project, is still deleted (409). */
   PARENT_DELETED: 'PARENT_DELETED',
-  /** A resource in the batch uses a calendar that is deleted (409). */
+  /** A row in the batch (a resource, plan or activity) uses a calendar that is deleted (409). */
   CALENDAR_DELETED: 'CALENDAR_DELETED',
   /** A live row already holds a restored row's name (409). */
   NAME_TAKEN: 'NAME_TAKEN',

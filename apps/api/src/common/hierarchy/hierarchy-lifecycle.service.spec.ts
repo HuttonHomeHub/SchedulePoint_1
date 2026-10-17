@@ -755,5 +755,186 @@ describe('HierarchyLifecycleService', () => {
         NotFoundError,
       );
     });
+
+    describe('the deleted-calendar guard (ADR-0200)', () => {
+      const deletedCalendar = (id: string, deleteBatchId: string | null = 'cal-batch') => ({
+        id,
+        name: `Calendar ${id}`,
+        deletedAt: new Date('2026-01-01T00:00:00Z'),
+        deleteBatchId,
+      });
+
+      /** A deleted plan in batch `batch-p` whose active parent project is in place. */
+      const aDeletedPlan = (calendarId: string | null = null) => {
+        tx.plan.findFirst.mockResolvedValue({
+          deleteBatchId: 'batch-p',
+          organizationId: 'org-1',
+          projectId: 'pr1',
+          calendarId,
+        });
+        tx.project.findFirst.mockResolvedValue({ id: 'pr1' });
+      };
+
+      const writes = () =>
+        [tx.client, tx.project, tx.plan, tx.activity, tx.calendar].map(
+          (m) => m.updateMany.mock.calls.length,
+        );
+
+      it('refuses a plan whose calendar was deleted separately, before writing anything', async () => {
+        aDeletedPlan();
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1')]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect(error).toBeInstanceOf(ConflictError);
+        expect((error as ConflictError).details).toEqual({
+          reason: 'CALENDAR_DELETED',
+          calendar: { id: 'cal-1', name: 'Calendar cal-1', deleteBatchId: 'cal-batch' },
+        });
+        expect(writes()).toEqual([0, 0, 0, 0, 0]);
+      });
+
+      it('names the lowest id when several calendars are deleted', async () => {
+        aDeletedPlan();
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-9' }]);
+        tx.activity.findMany.mockResolvedValue([{ calendarId: 'cal-2' }, { calendarId: 'cal-9' }]);
+        tx.calendar.findMany.mockResolvedValue([
+          deletedCalendar('cal-9'),
+          deletedCalendar('cal-2'),
+        ]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect((error as ConflictError).details).toMatchObject({ calendar: { id: 'cal-2' } });
+      });
+
+      it('allows a calendar that is deleted in the same batch (it comes back with the batch)', async () => {
+        aDeletedPlan();
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1', 'batch-p')]);
+
+        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
+        expect(tx.calendar.updateMany).toHaveBeenCalledWith({
+          where: { deleteBatchId: 'batch-p' },
+          data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+        });
+      });
+
+      it('allows an active (or archived) calendar', async () => {
+        aDeletedPlan();
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([{ ...deletedCalendar('cal-1'), deletedAt: null }]);
+
+        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
+      });
+
+      it('treats a calendar row that is gone as deleted, with no name', async () => {
+        aDeletedPlan();
+        tx.activity.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect((error as ConflictError).details).toEqual({
+          reason: 'CALENDAR_DELETED',
+          calendar: { id: 'cal-1', name: null, deleteBatchId: null },
+        });
+      });
+
+      it('reports a deleted parent before a deleted calendar', async () => {
+        aDeletedPlan();
+        tx.project.findFirst.mockResolvedValue(null);
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1')]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect((error as ConflictError).details).toEqual({
+          reason: HIERARCHY_CONFLICT.PARENT_DELETED,
+        });
+      });
+
+      it('locks the calendars in ascending id order, before the calendar read and any write', async () => {
+        aDeletedPlan();
+        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-b' }]);
+        tx.activity.findMany.mockResolvedValue([{ calendarId: 'cal-a' }, { calendarId: 'cal-b' }]);
+        tx.calendar.findMany.mockResolvedValue([]);
+
+        await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch(() => undefined);
+
+        // One advisory-lock statement per distinct calendar, the id as the last template value.
+        const locked = tx.$executeRaw.mock.calls.map((call) => call[call.length - 1]);
+        expect(locked).toEqual(['cal-a', 'cal-b']);
+        const lastLock = Math.max(...tx.$executeRaw.mock.invocationCallOrder);
+        expect(lastLock).toBeLessThan(tx.calendar.findMany.mock.invocationCallOrder[0] ?? Infinity);
+        // …and the parent is read after the locks, so the order is calendar then ancestors.
+        expect(lastLock).toBeLessThan(tx.project.findFirst.mock.invocationCallOrder[0] ?? Infinity);
+      });
+
+      it('takes no lock and reads no calendar when nothing in the batch uses one', async () => {
+        aDeletedPlan();
+
+        await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+        expect(tx.$executeRaw).not.toHaveBeenCalled();
+        expect(tx.calendar.findMany).not.toHaveBeenCalled();
+      });
+
+      it('reads the batch rows scoped to the organisation', async () => {
+        aDeletedPlan();
+
+        await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+        expect(tx.activity.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              deleteBatchId: 'batch-p',
+              organizationId: 'org-1',
+              calendarId: { not: null },
+            },
+          }),
+        );
+      });
+
+      it('guards a legacy root with no batch id by its own calendar', async () => {
+        tx.plan.findFirst.mockResolvedValue({
+          deleteBatchId: null,
+          organizationId: 'org-1',
+          projectId: 'pr1',
+          calendarId: 'cal-1',
+        });
+        tx.project.findFirst.mockResolvedValue({ id: 'pr1' });
+        tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1')]);
+
+        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+        expect(error).toBeInstanceOf(ConflictError);
+        expect(tx.plan.update).not.toHaveBeenCalled();
+      });
+
+      it.each(['client', 'project', 'activity'] as const)(
+        'guards a %s restore through the same path',
+        async (entity) => {
+          const root = { deleteBatchId: 'batch-x', organizationId: 'org-1' };
+          tx.client.findFirst.mockResolvedValue({ ...root, id: 'c1' });
+          tx.project.findFirst.mockResolvedValue({ ...root, clientId: 'c1', id: 'pr1' });
+          tx.plan.findFirst.mockResolvedValue({ id: 'pl1' });
+          tx.activity.findFirst.mockResolvedValue({
+            ...root,
+            planId: 'pl1',
+            parentId: null,
+            calendarId: null,
+          });
+          tx.activity.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+          tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1')]);
+
+          const error = await service.restoreBatch(asTx(), entity, 'x', ACTOR).catch((e) => e);
+
+          expect((error as ConflictError).details).toMatchObject({ reason: 'CALENDAR_DELETED' });
+          expect(writes()).toEqual([0, 0, 0, 0, 0]);
+        },
+      );
+    });
   });
 });

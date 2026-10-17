@@ -1,6 +1,6 @@
 # ADR-0200: A restore brings nothing back onto a deleted calendar
 
-- **Status:** Proposed — becomes Accepted when the API half lands (milestone 2 of the plan).
+- **Status:** Accepted — 2026-10-17, with the API half (milestone 2 of the plan). D3 is built in milestone 3 and D5 in milestone 4.
 - **Date:** 2026-10-17
 - **Deciders:** James Ewbank (product owner — approved the spec on 2026-10-17 with the recommended default for
   every open question: Q1 refuse, Q2 keep the undo step, Q3 include the tier check), with Claude Code.
@@ -73,3 +73,12 @@ holder sat in the bin is a second route to the same defect.
 
 - `docs/TECH_DEBT.md` #519, #520.
 - ADR-0195, ADR-0176, ADR-0096.
+
+## Acceptance-status ledger
+
+| Decision                                 | Built in                                                                                 | Evidence                                                                                                     |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| D1 refuse on a deleted calendar          | `HierarchyLifecycleService.restoreBatch` (`lockBatchCalendars`, `assertCalendarsActive`) | `hierarchy-lifecycle.service.spec.ts`; `deleted-calendar-restore.e2e-spec.ts`; `library-restore.e2e-spec.ts` |
+| D2 the bin predicts it                   | `RecycleBinRepository.findDeletedPage` (the `hb` lateral)                                | `deleted-calendar-restore.e2e-spec.ts`; `RecentlyDeletedTable.test.tsx`; `recently-deleted.spec.ts`          |
+| D4 undo keeps the step                   | `CalendarDeletedFailure` (`replay.ts`), `calendarDeletedDetail` (`history-result.ts`)    | `commands.test.ts`, `use-plan-undo-redo.test.ts`, `history-result.test.ts`; `e2e-undo/undo.spec.ts`          |
+| Bin query cost, restore latency at 2,000 | **Not measured.** Needs a database; owed on the scale seed (ADR-0142).                   | The batch-keyed lookup uses the three partial `delete_batch_id` indexes by reading, not by EXPLAIN           |

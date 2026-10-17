@@ -813,22 +813,43 @@ describe.skipIf(!hasDatabase)('Library restore (e2e)', () => {
       return { actor, planId, calendarId: calendar.id, finish, recalculate };
     }
 
-    it('reproduces the gap, then closes the symptom: restoring the calendar re-dates the plan', async () => {
+    it('refuses the plan restore that used to reproduce the gap; restoring the calendar first re-dates it correctly', async () => {
       const w = await worldWithPlan();
       expect(await w.finish()).toBe('2026-01-13');
 
-      // Delete the plan, delete its calendar (the in-use guard counts ACTIVE plans only), restore
-      // the plan (it checks no calendar). The plan is now live on a deleted calendar.
+      // Delete the plan, then its calendar (the in-use guard counts ACTIVE plans only). The plan
+      // restore used to succeed here and the plan then finished on 2026-01-09, round the clock
+      // (F11, TECH_DEBT #519). It is now refused (ADR-0200), so that state cannot be reached.
       await w.actor.agent.delete(`${API}/plans/${w.planId}`).expect(204);
       await w.actor.agent.delete(`${API}/calendars/${w.calendarId}`).expect(204);
+      const refused = await w.actor.agent.post(`${API}/plans/${w.planId}/restore`).expect(409);
+      expect(refused.body.error.details).toMatchObject({
+        reason: 'CALENDAR_DELETED',
+        calendar: { id: w.calendarId, name: 'Mon-Wed' },
+      });
+
+      // The cure is two presses, and the schedule is the Mon-Wed one.
+      await restoreCalendar(w.actor, w.calendarId).expect(200);
       await w.actor.agent.post(`${API}/plans/${w.planId}/restore`).expect(200);
       await w.recalculate();
-      // CHARACTERISATION (F11, TECH_DEBT #519): the engine treats the deleted calendar as absent and
-      // schedules round the clock. This is the defect the epic remedies the symptom of and does not
-      // close; if it is ever fixed, this assertion is the one to invert.
+      expect(await w.finish()).toBe('2026-01-13');
+    });
+
+    it('still re-dates a plan that is ALREADY live on a deleted calendar (legacy data, ADR-0195 D7)', async () => {
+      const w = await worldWithPlan();
+      // LEGACY FIXTURE: rows restored before ADR-0200 can be live on a deleted calendar, and no
+      // public path makes one any more, so the old restore is replayed directly on the rows.
+      await w.actor.agent.delete(`${API}/plans/${w.planId}`).expect(204);
+      await w.actor.agent.delete(`${API}/calendars/${w.calendarId}`).expect(204);
+      const live = { deletedAt: null, deleteBatchId: null };
+      await prisma.plan.update({ where: { id: w.planId }, data: live });
+      await prisma.activity.updateMany({ where: { planId: w.planId }, data: live });
+      await w.recalculate();
+      // The engine treats a deleted calendar as absent and schedules round the clock.
       expect(await w.finish()).toBe('2026-01-09');
 
-      // The remedy: restoring the calendar marks the plan edited, and its next run uses it again.
+      // The remedy ADR-0195 shipped: restoring the calendar marks the plan edited, and its next run
+      // uses the calendar again.
       await restoreCalendar(w.actor, w.calendarId).expect(200);
       const plan = await w.actor.agent.get(`${API}/plans/${w.planId}`).expect(200);
       expect(plan.body.data.editedSinceCalculated).toBe(true);

@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
+import { LIBRARY_RESTORE_REASON } from '@repo/types';
 
 import { lockActivityIdsInIdOrder, lockPlanActivityRowsInIdOrder } from '../db/activity-row-lock';
+import { acquireCalendarWriteLock } from '../db/calendar-advisory-lock';
 import { assertVersionMatches } from '../db/locked-version';
 import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
@@ -84,6 +86,16 @@ export interface KnockOn {
 /** `push(...items)` throws a RangeError past ~100,000 arguments; a subtree can be that large. */
 function appendAll<T>(into: T[], items: readonly T[]): void {
   for (const item of items) into.push(item);
+}
+
+/** The deleted row a restore starts from, as `loadDeletedRoot` reads it. */
+interface DeletedRoot {
+  deleteBatchId: string | null;
+  organizationId: string;
+  parentId: string | null;
+  wbsParentId?: string | null;
+  /** The root's own calendar: only used when the root carries no batch id to key a read on. */
+  calendarId: string | null;
 }
 
 const stampedLinkSelect = {
@@ -586,7 +598,8 @@ export class HierarchyLifecycleService {
   /**
    * Restore `entity` #id and everything soft-deleted with it (same batch).
    * Throws {@link NotFoundError} if the row is missing or not deleted,
-   * `PARENT_DELETED` if its parent is still deleted, or `NAME_TAKEN` if
+   * `PARENT_DELETED` if its parent is still deleted, `CALENDAR_DELETED` if a plan or activity in
+   * the batch uses a calendar that is deleted outside it (ADR-0200), or `NAME_TAKEN` if
    * reactivating would collide with an active sibling.
    *
    * soft-delete: deleted-only — every write here reactivates rows selected by the batch id the
@@ -606,7 +619,11 @@ export class HierarchyLifecycleService {
     knockOn?: KnockOn,
   ): Promise<CascadeCounts> {
     const root = await this.loadDeletedRoot(tx, entity, id);
+    // The calendar locks come BEFORE the parent check: the lock order is calendar, then ancestors
+    // (`docs/specs/deleted-calendar-restore/spec.md` §4.6), the order `CalendarsService.restore` takes.
+    const calendarIds = await this.lockBatchCalendars(tx, root);
     await this.assertParentActive(tx, entity, root);
+    await this.assertCalendarsActive(tx, root, calendarIds);
 
     // Every soft-deleted row carries a batch id; fall back to the row itself for
     // defensiveness. Restore across all four tables so a client's batch (which
@@ -774,6 +791,83 @@ export class HierarchyLifecycleService {
   }
 
   /**
+   * Take the calendar advisory lock — the one the delete-in-use guard and every binding seam take —
+   * on each calendar the batch's plans and activities point at, in ascending id order, and return
+   * the ids. A calendar then cannot be deleted between {@link assertCalendarsActive} and the
+   * commit. Calendars deleted in the same batch are locked too (one extra lock each; they are told
+   * apart only by the state read), which keeps this a single pass before the first write.
+   *
+   * soft-delete: deleted-only — the plans and activities read here are the ones stamped with the
+   * batch id, which are soft-deleted by construction; a `deletedAt` filter would only restate it.
+   */
+  private async lockBatchCalendars(
+    tx: Prisma.TransactionClient,
+    root: DeletedRoot,
+  ): Promise<string[]> {
+    const ids = new Set<string>();
+    if (root.deleteBatchId) {
+      const where = {
+        deleteBatchId: root.deleteBatchId,
+        organizationId: root.organizationId,
+        calendarId: { not: null },
+      };
+      const plans = await tx.plan.findMany({
+        where,
+        select: { calendarId: true },
+        distinct: ['calendarId'],
+      });
+      const activities = await tx.activity.findMany({
+        where,
+        select: { calendarId: true },
+        distinct: ['calendarId'],
+      });
+      for (const row of [...plans, ...activities]) if (row.calendarId) ids.add(row.calendarId);
+    } else if (root.calendarId) {
+      // The legacy no-batch path restores the root alone, so its own calendar is the only reference.
+      ids.add(root.calendarId);
+    }
+    const sorted = [...ids].sort();
+    for (const calendarId of sorted) await acquireCalendarWriteLock(tx, calendarId);
+    return sorted;
+  }
+
+  /**
+   * Every calendar the batch points at must be active, or be restored by this very batch (a
+   * project's own calendars are swept with it and come back with it). An archived calendar is
+   * live (ADR-0053 §4). Refused with the lowest deleted id, naming it, so the bin and the 409 agree.
+   * Runs under the locks {@link lockBatchCalendars} took.
+   *
+   * soft-delete: any-state — the whole question is whether each calendar is deleted.
+   */
+  private async assertCalendarsActive(
+    tx: Prisma.TransactionClient,
+    root: DeletedRoot,
+    calendarIds: readonly string[],
+  ): Promise<void> {
+    if (calendarIds.length === 0) return;
+    const states = await tx.calendar.findMany({
+      where: { id: { in: [...calendarIds] }, organizationId: root.organizationId },
+      select: { id: true, name: true, deletedAt: true, deleteBatchId: true },
+    });
+    const byId = new Map(states.map((state) => [state.id, state]));
+    for (const calendarId of calendarIds) {
+      const state = byId.get(calendarId);
+      if (state && state.deletedAt === null) continue;
+      if (state && root.deleteBatchId !== null && state.deleteBatchId === root.deleteBatchId) {
+        continue;
+      }
+      throw new ConflictError('Restore the calendar first.', {
+        reason: LIBRARY_RESTORE_REASON.CALENDAR_DELETED,
+        calendar: {
+          id: calendarId,
+          name: state?.name ?? null,
+          deleteBatchId: state?.deleteBatchId ?? null,
+        },
+      });
+    }
+  }
+
+  /**
    * Reactivate the dependencies stamped with `batchId`, but only where BOTH
    * endpoint activities are currently active. Links whose other end was deleted
    * in a different batch (a single-activity delete) stay soft-deleted — the
@@ -822,53 +916,81 @@ export class HierarchyLifecycleService {
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
     id: string,
-  ): Promise<{
-    deleteBatchId: string | null;
-    parentId: string | null;
-    wbsParentId?: string | null;
-  }> {
+  ): Promise<DeletedRoot> {
     if (entity === 'client') {
       const row = await tx.client.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true },
+        select: { deleteBatchId: true, organizationId: true },
       });
       if (!row) throw new NotFoundError('Client not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: null };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: null,
+        calendarId: null,
+      };
     }
     if (entity === 'project') {
       const row = await tx.project.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, clientId: true },
+        select: { deleteBatchId: true, organizationId: true, clientId: true },
       });
       if (!row) throw new NotFoundError('Project not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: row.clientId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.clientId,
+        calendarId: null,
+      };
     }
     if (entity === 'plan') {
       const row = await tx.plan.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, projectId: true },
+        select: { deleteBatchId: true, organizationId: true, projectId: true, calendarId: true },
       });
       if (!row) throw new NotFoundError('Plan not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: row.projectId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.projectId,
+        calendarId: row.calendarId,
+      };
     }
     if (entity === 'activity') {
       const row = await tx.activity.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, planId: true, parentId: true },
+        select: {
+          deleteBatchId: true,
+          organizationId: true,
+          planId: true,
+          parentId: true,
+          calendarId: true,
+        },
       });
       if (!row) throw new NotFoundError('Activity not found.');
       // An activity restores under its plan AND (if grouped) its WBS-summary parent
       // (ADR-0038): both must be active so no active row lands under a deleted ancestor.
-      return { deleteBatchId: row.deleteBatchId, parentId: row.planId, wbsParentId: row.parentId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.planId,
+        wbsParentId: row.parentId,
+        calendarId: row.calendarId,
+      };
     }
     // Dependency — its parent for the restore guard is its plan (this slice has no
     // standalone dependency-restore endpoint; links come back with their batch).
     const row = await tx.activityDependency.findFirst({
       where: { id, deletedAt: { not: null } },
-      select: { deleteBatchId: true, planId: true },
+      select: { deleteBatchId: true, organizationId: true, planId: true },
     });
     if (!row) throw new NotFoundError('Dependency not found.');
-    return { deleteBatchId: row.deleteBatchId, parentId: row.planId };
+    return {
+      deleteBatchId: row.deleteBatchId,
+      organizationId: row.organizationId,
+      parentId: row.planId,
+      calendarId: null,
+    };
   }
 
   /** A client's parent is its org (always active here); a project/plan/activity/
@@ -877,7 +999,7 @@ export class HierarchyLifecycleService {
   private async assertParentActive(
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
-    root: { parentId: string | null; wbsParentId?: string | null },
+    root: Pick<DeletedRoot, 'parentId' | 'wbsParentId'>,
   ): Promise<void> {
     if (entity !== 'client' && root.parentId !== null) {
       let parentActive: unknown;

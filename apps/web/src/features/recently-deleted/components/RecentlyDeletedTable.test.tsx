@@ -753,6 +753,62 @@ describe('RecentlyDeletedTable', () => {
       expect(dialog).not.toHaveTextContent('sits inside');
     });
 
+    it.each([
+      {
+        kind: 'plan',
+        name: 'Tower A',
+        subLine: 'Uses deleted calendar “Mon-Wed”',
+        dialog: 'Plan “Tower A” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+      {
+        kind: 'project',
+        name: 'Tower',
+        subLine: 'Work in it uses deleted calendar “Mon-Wed”',
+        dialog: 'Work in project “Tower” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+      {
+        kind: 'client',
+        name: 'Northgate',
+        subLine: 'Work in it uses deleted calendar “Mon-Wed”',
+        dialog: 'Work in client “Northgate” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+    ] as const)(
+      'says a $kind row’s work uses a deleted calendar, in words true of that row (ADR-0200)',
+      ({ kind, name, subLine, dialog }) => {
+        renderTable(true, [
+          {
+            kind,
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000044',
+            name,
+            deletedAt: T,
+            canRestore: false,
+            deleteBatchId: 'b-root',
+            blockedBy: {
+              kind: 'calendar',
+              relation: 'calendar',
+              id: CAL_ID,
+              name: 'Mon-Wed',
+              deleteBatchId: 'b-cal',
+            },
+          },
+          {
+            kind: 'calendar',
+            subtype: 'ORG',
+            id: CAL_ID,
+            name: 'Mon-Wed',
+            deletedAt: '2026-07-11T09:00:00.000Z',
+            canRestore: true,
+            deleteBatchId: 'b-cal',
+            blockedBy: null,
+          },
+        ]);
+        expect(screen.getByText(subLine)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Restore calendar first…: Mon-Wed' }));
+        expect(screen.getByRole('dialog')).toHaveTextContent(dialog);
+      },
+    );
+
     it('offers “Restore resource group first…” for a child blocked by a later-deleted group', () => {
       renderTable(true, [
         {

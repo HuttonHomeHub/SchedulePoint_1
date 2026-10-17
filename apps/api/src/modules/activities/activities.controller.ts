@@ -222,7 +222,11 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Restore a soft-deleted activity.' })
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiConflictResponse({ description: 'The parent plan is still deleted (restore it first).' })
+  @ApiConflictResponse({
+    description:
+      'The parent plan is still deleted (PARENT_DELETED), or the activity uses a calendar that is ' +
+      'deleted (CALENDAR_DELETED; restore that calendar first).',
+  })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async restore(
     @CurrentUser() principal: Principal,
