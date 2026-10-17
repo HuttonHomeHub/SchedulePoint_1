@@ -209,6 +209,11 @@ describe('ActivityMembersPanel', () => {
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
 
+  it('announces the loading sentence it shows, not a generic "Loading…"', () => {
+    renderPanel([], WRITABLE, { loading: true });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the plan’s activities…');
+  });
+
   it('renders an error state rather than pretending the plan is empty', () => {
     renderPanel([], WRITABLE, { error: true });
     expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');

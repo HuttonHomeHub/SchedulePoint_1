@@ -184,8 +184,7 @@ export function FloatPathsPanel({
 
         {isPending ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Spinner className="size-4" aria-hidden="true" />
-            Calculating float paths…
+            <Spinner className="size-4" label="Calculating float paths…" showLabel />
           </p>
         ) : null}
 

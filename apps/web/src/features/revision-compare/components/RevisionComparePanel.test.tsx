@@ -727,6 +727,14 @@ describe('the cross-plan surface — the M4 ux review\u2019s findings, pinned', 
     expect(screen.getByText(/comparing/i)).toBeInTheDocument();
   });
 
+  it('announces "Comparing…" as the one status, not a generic "Loading…"', () => {
+    renderPanel({ comparePlanId: 'other-plan', from: null, isPending: true, compare: null });
+    const statuses = screen
+      .getAllByRole('status')
+      .filter((s) => /comparing|loading/i.test(s.textContent ?? ''));
+    expect(statuses.map((s) => s.textContent)).toEqual(['Comparing…']);
+  });
+
   it('still shows it for a SAME-PLAN request, which is what always worked', () => {
     // Asserted beside it because one passing does not imply the other: a fix that dropped the
     // `from` limb entirely would satisfy the case above and start showing a spinner on a panel

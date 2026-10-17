@@ -138,6 +138,14 @@ describe('FloatPathsPanel', () => {
     expect(screen.getByText(/calculating float paths/i)).toBeInTheDocument();
   });
 
+  it('announces the sentence it shows as its one busy status — not a generic "Loading…"', () => {
+    renderPanel({ isPending: true, model: null });
+    const busy = screen
+      .getAllByRole('status')
+      .filter((s) => /calculating|loading/i.test(s.textContent ?? ''));
+    expect(busy.map((s) => s.textContent)).toEqual(['Calculating float paths…']);
+  });
+
   it('explains a never-calculated plan rather than reporting an error', () => {
     renderPanel({ planNotScheduled: true, isError: true, model: null });
     // The SHARED sentence for this 422, not a second one invented for this panel.
