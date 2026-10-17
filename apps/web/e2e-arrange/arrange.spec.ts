@@ -168,6 +168,44 @@ test('Re-layout says it may use the rows the diagram has, and does not spend the
   expect(await lanesByName(page, orgSlug)).toEqual({ Mobilise: 0, Excavate: 4, Pour: 9 });
 });
 
+test('closing the dialog while Re-layout is searching leaves no worker running and writes nothing', async ({
+  page,
+}) => {
+  /**
+   * `docs/specs/relayout-quality` M2. Re-layout now searches from up to four starts in a pool of
+   * module workers, one each, under one abort signal. Only a real browser has workers to count:
+   * jsdom has none, and `optimise-pool.test.ts` can only say the signal reached the fakes. So the
+   * press is cancelled at once, before the answer can have arrived, and the page's worker list must
+   * empty. The plan has two chains in scattered rows so the starts differ and more than one worker
+   * is started.
+   */
+  const stamp = Date.now() + 7;
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'Pooled');
+  await ensurePen(page);
+  const [a, b, c, d] = await seedActivities(page, orgSlug, [
+    { name: 'Dig', laneIndex: 0, durationDays: 5 },
+    { name: 'Pour', laneIndex: 6, durationDays: 5 },
+    { name: 'Wire', laneIndex: 2, durationDays: 8 },
+    { name: 'Test', laneIndex: 9, durationDays: 3 },
+  ]);
+  await seedDependency(page, orgSlug, a!.id, b!.id);
+  await seedDependency(page, orgSlug, c!.id, d!.id);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  const before = await lanesByName(page, orgSlug);
+
+  await page.locator('[data-toolbar-item="auto-arrange"]').click();
+  const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect.poll(() => page.workers().length, { timeout: 10_000 }).toBe(0);
+  expect(await lanesByName(page, orgSlug)).toEqual(before);
+});
+
 test('an already-arranged plan opens the dialog and says there is nothing to move', async ({
   page,
 }) => {

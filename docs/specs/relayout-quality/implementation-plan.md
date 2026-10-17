@@ -317,6 +317,21 @@ critical spine has a start built for it.
   3. Write the tests.
   4. Check the CSP journey (`e2e-csp`) stays green with N workers.
 
+##### Build notes for M2-T1 and M2-T2 (2026-10-17, as built)
+
+- **Starts 1 and 2 place with a first-fit of their own, not `packLanes`.** `packLanes` orders by start
+  date and these two exist to change the order, so the plan's "pack their remainder with `packLanes`"
+  cannot hold without changing the construction that was measured. Starts 0 and 3 are `packLanes`.
+- **Start 0 is the M1 run (budget: the taller of the diagram and the pack), not today's seed budget.**
+  "Never worse than today" is therefore checked by FC-R2 on the corpus (`--candidate=product`), not true
+  by construction: a larger budget changes which moves the search can make.
+- **`RELAYOUT_MULTISTART_MAX_ACTIVITIES` is provisional** (300, the search limit). The pool is
+  `min(starts, max(1, cores - 1))`, so on a 4-core machine four starts wait two waves; FC-R6 with real
+  workers (`measure-relayout.mjs`, default candidate) is what says whether 300 stands, and if not the
+  constant is lowered to the largest size that passes.
+- **Which starts run depends on the drawn count alone**, never on the machine, so FC-R7 (1 vs N workers)
+  holds by construction and the benchmark checks it.
+
 ##### Task M2-T3 — Verdict and release
 
 - **Description:** run the benchmark and write `m2-verdict.md` with FC-R2 to R8, plus FC-R3's verdict.
