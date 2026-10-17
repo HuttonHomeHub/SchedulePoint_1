@@ -175,7 +175,7 @@ describe('relayoutSeeds', () => {
     );
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
     expect(specifiers.sort()).toEqual(
-      ['./layout-objective', './optimise-layout', './render-model', '@repo/layout'].sort(),
+      ['./layout-objective', './render-model', '@repo/layout'].sort(),
     );
   });
 });
