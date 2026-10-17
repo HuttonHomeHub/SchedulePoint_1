@@ -326,6 +326,18 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
   // ---------------------------------------------------------------------------------------------
   describe('a project calendar deleted on its own before its project (ADR-0201 D6)', () => {
     /**
+     * Calculate the plan once, so the restore has a "last calculated" to be edited since — an
+     * uncalculated plan never reads as edited (`isEditedSinceCalculated`).
+     */
+    async function calculate(w: World): Promise<void> {
+      await w.actor.agent.post(`${API}/plans/${w.planId}/edit-lock`).send({}).expect(200);
+      await w.actor.agent
+        .post(`${API}/plans/${w.planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+    }
+
+    /**
      * The bad state the product used to allow: the calendar sits in its own batch, so the project's
      * sweep skipped it, while the project's plan still points at it. Seeded directly because no
      * route can make it any more.
@@ -341,6 +353,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
         .patch(`${API}/plans/${w.planId}`)
         .send({ calendarId: own.id, version: plan.version })
         .expect(200);
+      await calculate(w);
       await w.actor.agent.delete(`${API}/projects/${w.projectId}`).expect(204);
       await prisma.calendar.update({
         where: { id: own.id },
@@ -376,6 +389,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
         .patch(`${API}/plans/${w.planId}`)
         .send({ calendarId: own.id, version: plan.version })
         .expect(200);
+      await calculate(w);
       await w.actor.agent.delete(`${API}/clients/${w.clientId}`).expect(204);
       await prisma.calendar.update({
         where: { id: own.id },
