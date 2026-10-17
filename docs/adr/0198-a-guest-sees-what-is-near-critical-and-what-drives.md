@@ -34,6 +34,10 @@ partly-derivable kind of disclosure ADR-0163 accepted for drift and remaining fl
 notes kind it refused (`visualConflictReason`). The driving chain also becomes explicit when combined with
 `isCritical`, which is the critical path ADR-0051 §4 already promises.
 
+This residual is the same class of disclosure ADR-0163 refused for `visualConflictReason`
+(`LATER_THAN_BOUND` would reveal that a constraint exists), but weaker: existence only, never type or
+date. The product owner accepted it on 2026-10-17.
+
 **D3 — The spoken sentence says "near-critical" without a figure**, because `remainingFloat` stays excluded.
 
 ## Alternatives considered

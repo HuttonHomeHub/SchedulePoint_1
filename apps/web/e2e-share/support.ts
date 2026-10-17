@@ -447,6 +447,11 @@ export async function memberDependencies(
  * colour space `getImageData` does not return (`oklch(…)`). A per-channel tolerance absorbs
  * anti-aliasing; the caller asserts a floor, not an exact count. The scene canvas is the largest
  * one (`canvasInk`'s own rule — the WBS band and strips are siblings).
+ *
+ * `--warning` is also used by minor chrome painted on the scene (today line, chips), which is a
+ * few dozen pixels at most, so callers assert a floor in the hundreds: a bar fill clears it by a
+ * wide margin and chrome alone cannot. A bar painted with alpha blends off the token and is not
+ * counted, which only makes the count conservative.
  */
 export async function nearCriticalInk(page: Page): Promise<number> {
   return page.evaluate(() => {

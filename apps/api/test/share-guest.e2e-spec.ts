@@ -320,6 +320,40 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     'userId',
   ];
 
+  const GUEST_ACTIVITY_KEYS = [
+    'actualFinish',
+    'actualStart',
+    'code',
+    'derivedDurationDays',
+    'derivedDurationMinutes',
+    'durationDays',
+    'durationMinutes',
+    'earlyFinish',
+    'earlyStart',
+    'id',
+    'isCritical',
+    'isNearCritical',
+    'laneIndex',
+    'lateFinish',
+    'lateStart',
+    'name',
+    'percentComplete',
+    'status',
+    'totalFloat',
+    'type',
+    'visualEffectiveFinish',
+    'visualEffectiveStart',
+  ];
+  const GUEST_DEPENDENCY_KEYS = [
+    'id',
+    'isDriving',
+    'lagDays',
+    'lagMinutes',
+    'predecessorId',
+    'successorId',
+    'type',
+  ];
+
   /** The uniform 404 the guard/service return for every dead-token reason (ADR-0051 §5). */
   const UNIFORM_NOT_FOUND = {
     error: { code: 'NOT_FOUND', message: 'This share link is no longer available.' },
@@ -702,6 +736,8 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
       .body.data as ActivityFlags[];
     const guestActivities = (await guestGet('/api/v1/share/activities', token).expect(200)).body
       .data as ActivityFlags[];
+    // The exact wire key sets (ADR-0198): the two new fields are the only growth.
+    expect(Object.keys(guestActivities[0] ?? {}).sort()).toEqual(GUEST_ACTIVITY_KEYS);
     // Precondition: the member read has a near-critical row, or equality below is vacuous.
     expect(memberActivities.some((row) => row.isNearCritical)).toBe(true);
     expect(guestActivities).toHaveLength(memberActivities.length);
@@ -718,6 +754,7 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
       .body.data as DependencyFlags[];
     const guestDependencies = (await guestGet('/api/v1/share/dependencies', token).expect(200)).body
       .data as DependencyFlags[];
+    expect(Object.keys(guestDependencies[0] ?? {}).sort()).toEqual(GUEST_DEPENDENCY_KEYS);
     // Precondition: at least one driving and one non-driving link on the member read.
     expect(memberDependencies.some((row) => row.isDriving)).toBe(true);
     expect(memberDependencies.some((row) => !row.isDriving)).toBe(true);

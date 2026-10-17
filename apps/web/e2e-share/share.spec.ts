@@ -485,12 +485,18 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
   const listbox = guestPage.getByRole('listbox', { name: 'Activities in the diagram' });
   await listbox.focus();
   const announcer = guestPage.getByTestId('announcer');
-  for (let step = 0; step < 6; step += 1) {
+  const activeOption = async (): Promise<string> => {
+    await expect(listbox).toHaveAttribute('aria-activedescendant', /.+/);
     const activeId = await listbox.getAttribute('aria-activedescendant');
-    const activeText = activeId ? await guestPage.locator(`[id="${activeId}"]`).textContent() : '';
-    if (activeText?.includes('Frame')) break;
+    if (activeId === null) throw new Error('the listbox published no active option');
+    return (await guestPage.locator(`[id="${activeId}"]`).textContent()) ?? '';
+  };
+  for (let step = 0; step < 6 && !(await activeOption()).includes('Frame'); step += 1) {
     await guestPage.keyboard.press('ArrowDown');
+    // The cursor moves on the next render; wait for it rather than re-reading immediately.
+    await expect.poll(activeOption).not.toBe('');
   }
+  expect(await activeOption()).toContain('Frame');
 
   // FC-7, text limb 2: `i` names the driver — Foundation, not the first-listed Survey.
   await guestPage.keyboard.press('i');
@@ -506,7 +512,12 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
     .poll(() => nearCriticalInk(guestPage), {
       message: 'waiting for near-critical ink on the guest canvas after Fit to plan',
     })
-    .toBeGreaterThan(20);
+    .toBeGreaterThan(500);
+
+  // The legend rows match what is now drawn: the near-critical rung is keyed on the guest too.
+  await expect(
+    guestPage.getByRole('list', { name: 'Legend' }).getByText('Near-critical', { exact: true }),
+  ).toBeVisible();
 
   expect(
     (await new AxeBuilder({ page: guestPage }).withTags(['wcag2a', 'wcag2aa']).analyze())
