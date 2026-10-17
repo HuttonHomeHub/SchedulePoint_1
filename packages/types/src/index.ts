@@ -2288,10 +2288,10 @@ export const LIBRARY_RESTORE_REASON = {
   /**
    * A plan or activity in the batch uses a calendar that now belongs to a different project (409,
    * ADR-0200 D5). `details.calendar` names it and `details.projectId` is the project it belongs to.
-   * The same string is the 422 reason when a binding write names such a calendar
-   * (`CALENDAR_ERROR`); the status says which.
+   * Deliberately NOT `CALENDAR_WRONG_SCOPE`, the 422 reason a binding write answers with
+   * (`CALENDAR_ERROR`): one string per refusal, so no handler has to read the status to tell them.
    */
-  CALENDAR_WRONG_SCOPE: 'CALENDAR_WRONG_SCOPE',
+  CALENDAR_OTHER_PROJECT: 'CALENDAR_OTHER_PROJECT',
   /** A live row already holds a restored row's name (409). */
   NAME_TAKEN: 'NAME_TAKEN',
   /** A live row already holds a restored resource's code (409). */

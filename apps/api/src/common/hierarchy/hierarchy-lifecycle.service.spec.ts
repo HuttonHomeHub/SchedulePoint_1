@@ -898,69 +898,102 @@ describe('HierarchyLifecycleService', () => {
         ...over,
       });
 
-      /** A plan root in batch-p whose first plan lookup is the root and whose later ones answer `stray`. */
-      const aPlan = (stray: unknown) => {
-        tx.plan.findFirst.mockResolvedValueOnce(root).mockResolvedValue(stray);
+      /**
+       * A plan root in batch-p. `tier` is what the grouped tier read finds for the batch's plans
+       * (`{ calendarId, projectId }`), `activityPlans` the plans the batch's activities sit in.
+       */
+      const aPlan = (opts: {
+        tier?: { calendarId: string; projectId: string }[];
+        activities?: { calendarId: string; planId: string }[];
+        activityPlans?: { id: string; projectId: string }[];
+      }) => {
+        tx.plan.findFirst.mockResolvedValueOnce(root);
         tx.project.findFirst.mockResolvedValue({ clientId: 'c1' });
         tx.$queryRaw.mockResolvedValue([{ id: 'x' }]);
+        tx.plan.findMany.mockImplementation(
+          (args: { where: { id?: unknown }; select: { projectId?: boolean } }) => {
+            if (args.where.id) return Promise.resolve(opts.activityPlans ?? []);
+            const tier = opts.tier ?? [];
+            return Promise.resolve(
+              args.select.projectId ? tier : tier.map(({ calendarId }) => ({ calendarId })),
+            );
+          },
+        );
+        tx.activity.findMany.mockImplementation((args: { select: { planId?: boolean } }) =>
+          Promise.resolve(
+            args.select.planId
+              ? (opts.activities ?? [])
+              : (opts.activities ?? []).map(({ calendarId }) => ({ calendarId })),
+          ),
+        );
       };
 
       it('refuses a plan of one project whose calendar is now scoped to another, before any write', async () => {
-        aPlan({ id: 'pl-stray' });
-        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        aPlan({ tier: [{ calendarId: 'cal-1', projectId: 'pr1' }] });
         tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
 
         const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
 
         expect(error).toBeInstanceOf(ConflictError);
         expect((error as ConflictError).details).toEqual({
-          reason: 'CALENDAR_WRONG_SCOPE',
+          reason: 'CALENDAR_OTHER_PROJECT',
           calendar: { id: 'cal-1', name: 'Calendar cal-1', deleteBatchId: null },
           projectId: 'pr-other',
         });
         expect(tx.plan.updateMany).not.toHaveBeenCalled();
-        // The stray plan was looked for in the batch, outside the calendar's own project.
-        expect(tx.plan.findFirst).toHaveBeenCalledWith({
-          where: {
-            deleteBatchId: 'batch-p',
-            calendarId: 'cal-1',
-            projectId: { not: 'pr-other' },
-          },
-          select: { id: true },
+      });
+
+      it('reads the batch once for all of its calendars, however many there are', async () => {
+        aPlan({
+          tier: [
+            { calendarId: 'cal-1', projectId: 'pr1' },
+            { calendarId: 'cal-2', projectId: 'pr1' },
+          ],
+        });
+        tx.calendar.findMany.mockResolvedValue([
+          projectCalendar('cal-1', 'pr1'),
+          projectCalendar('cal-2', 'pr1'),
+        ]);
+
+        await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+        const tierReads = tx.plan.findMany.mock.calls.filter(
+          (call) => (call[0] as { select: { projectId?: boolean } }).select.projectId,
+        );
+        expect(tierReads).toHaveLength(1);
+        expect(tierReads[0]?.[0]).toMatchObject({
+          where: { deleteBatchId: 'batch-p', calendarId: { in: ['cal-1', 'cal-2'] } },
         });
       });
 
       it('allows a project calendar used only inside its own project', async () => {
-        aPlan(null);
-        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }]);
+        aPlan({ tier: [{ calendarId: 'cal-1', projectId: 'pr1' }] });
         tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr1')]);
 
         await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
       });
 
       it('places an activity by its plan', async () => {
-        aPlan({ id: 'pl-stray' });
-        // The direct plan lookup finds nothing; the activities' plans include one in another project.
-        tx.plan.findFirst
-          .mockReset()
-          .mockResolvedValueOnce(root)
-          .mockResolvedValueOnce(null)
-          .mockResolvedValueOnce({ id: 'pl9' });
-        tx.activity.findMany.mockImplementation((args: { select?: { planId?: boolean } }) =>
-          Promise.resolve(args.select?.planId ? [{ planId: 'pl9' }] : [{ calendarId: 'cal-1' }]),
-        );
+        aPlan({
+          activities: [{ calendarId: 'cal-1', planId: 'pl9' }],
+          activityPlans: [{ id: 'pl9', projectId: 'pr1' }],
+        });
         tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
 
         const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
 
         expect((error as ConflictError).details).toMatchObject({
-          reason: 'CALENDAR_WRONG_SCOPE',
+          reason: 'CALENDAR_OTHER_PROJECT',
         });
       });
 
       it('reports a deleted calendar before a wrong-scope one', async () => {
-        aPlan({ id: 'pl-stray' });
-        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }, { calendarId: 'cal-2' }]);
+        aPlan({
+          tier: [
+            { calendarId: 'cal-1', projectId: 'pr1' },
+            { calendarId: 'cal-2', projectId: 'pr1' },
+          ],
+        });
         tx.calendar.findMany.mockResolvedValue([
           projectCalendar('cal-1', 'pr-other'),
           projectCalendar('cal-2', 'pr1', { deletedAt: new Date(), deleteBatchId: 'cal-batch' }),
@@ -975,16 +1008,122 @@ describe('HierarchyLifecycleService', () => {
       });
 
       it('looks at no plan for an ORG calendar, or for a project calendar swept in the same batch', async () => {
-        aPlan({ id: 'pl-stray' });
-        tx.plan.findMany.mockResolvedValue([{ calendarId: 'cal-1' }, { calendarId: 'cal-2' }]);
+        aPlan({
+          tier: [
+            { calendarId: 'cal-1', projectId: 'pr-x' },
+            { calendarId: 'cal-2', projectId: 'pr-x' },
+          ],
+        });
         tx.calendar.findMany.mockResolvedValue([
           { ...projectCalendar('cal-1', 'pr1'), scope: 'ORG', projectId: null },
           projectCalendar('cal-2', 'pr-other', { deletedAt: new Date(), deleteBatchId: 'batch-p' }),
         ]);
 
         await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
-        // Only the root lookup: no stray-plan query was made.
-        expect(tx.plan.findFirst).toHaveBeenCalledTimes(1);
+        // Neither is a candidate, so the grouped tier read is never made.
+        expect(
+          tx.plan.findMany.mock.calls.filter(
+            (call) => (call[0] as { select: { projectId?: boolean } }).select.projectId,
+          ),
+        ).toHaveLength(0);
+      });
+
+      describe('a calendar deleted on its own before its project (ADR-0200 D6)', () => {
+        const projectRoot = {
+          deleteBatchId: 'batch-pr',
+          organizationId: 'org-1',
+          clientId: 'c1',
+        };
+        const stranded = (over: object = {}) =>
+          projectCalendar('cal-1', 'pr1', {
+            deletedAt: new Date('2026-01-01T00:00:00Z'),
+            deleteBatchId: 'cal-batch',
+            ...over,
+          });
+        const aProject = () => {
+          tx.project.findFirst.mockResolvedValue(projectRoot);
+          tx.project.findMany.mockResolvedValue([{ id: 'pr1' }]);
+          tx.$queryRaw.mockResolvedValue([{ id: 'c1' }]);
+          tx.plan.findMany.mockImplementation((args: { select: { projectId?: boolean } }) =>
+            Promise.resolve(
+              args.select.projectId
+                ? [{ calendarId: 'cal-1', projectId: 'pr1' }]
+                : [{ calendarId: 'cal-1' }],
+            ),
+          );
+        };
+
+        it('restores it with the project, and its exceptions, instead of refusing', async () => {
+          aProject();
+          tx.calendar.findMany.mockResolvedValue([stranded()]);
+          tx.calendar.findFirst.mockResolvedValue(null);
+          tx.calendar.updateMany.mockResolvedValue({ count: 1 });
+
+          const counts = await service.restoreBatch(asTx(), 'project', 'pr1', ACTOR);
+
+          expect(tx.calendar.updateMany).toHaveBeenCalledWith({
+            where: {
+              id: 'cal-1',
+              organizationId: 'org-1',
+              deleteBatchId: 'cal-batch',
+              deletedAt: { not: null },
+            },
+            data: {
+              deletedAt: null,
+              deleteBatchId: null,
+              updatedBy: ACTOR,
+              version: { increment: 1 },
+            },
+          });
+          expect(tx.calendarException.updateMany).toHaveBeenCalledWith({
+            where: { calendarId: 'cal-1', organizationId: 'org-1', deleteBatchId: 'cal-batch' },
+            data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+          });
+          expect(counts.calendars).toBe(2);
+        });
+
+        it('refuses NAME_TAKEN, before any write, when the project already has that name', async () => {
+          aProject();
+          tx.calendar.findMany.mockResolvedValue([stranded()]);
+          tx.calendar.findFirst.mockResolvedValue({ id: 'cal-live', archivedAt: null });
+
+          const error = await service.restoreBatch(asTx(), 'project', 'pr1', ACTOR).catch((e) => e);
+
+          expect((error as ConflictError).details).toMatchObject({
+            reason: HIERARCHY_CONFLICT.NAME_TAKEN,
+            conflicts: [
+              { field: 'name', value: 'Calendar cal-1', id: 'cal-live', archived: false },
+            ],
+          });
+          expect(tx.project.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('still refuses when the calendar belongs to a project this batch does not restore', async () => {
+          aProject();
+          tx.calendar.findMany.mockResolvedValue([stranded({ projectId: 'pr-elsewhere' })]);
+
+          const error = await service.restoreBatch(asTx(), 'project', 'pr1', ACTOR).catch((e) => e);
+
+          expect((error as ConflictError).details).toMatchObject({
+            reason: 'CALENDAR_DELETED',
+            calendar: { id: 'cal-1' },
+          });
+        });
+
+        it('still refuses a plan restore, whose project is already active', async () => {
+          aProject();
+          tx.plan.findFirst.mockResolvedValue({
+            deleteBatchId: 'batch-p',
+            organizationId: 'org-1',
+            projectId: 'pr1',
+            calendarId: null,
+          });
+          tx.calendar.findMany.mockResolvedValue([stranded()]);
+
+          const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
+
+          expect((error as ConflictError).details).toMatchObject({ reason: 'CALENDAR_DELETED' });
+        });
       });
 
       it('does not tier-check a root that carries no batch id', async () => {

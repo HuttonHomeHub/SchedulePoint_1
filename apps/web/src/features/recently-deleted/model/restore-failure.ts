@@ -27,7 +27,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *   and retrying cannot help, which "Resource not found." does not say.
  * - **A calendar deleted since the list loaded** (`CALENDAR_DELETED`, ADR-0200): the server's
  *   sentence has no name in it; `details.calendar` does. A calendar since moved to another project
- *   (`CALENDAR_WRONG_SCOPE`, D5) reads the same way and links to the calendars library.
+ *   (`CALENDAR_OTHER_PROJECT`, D5) reads the same way and links to the calendars library.
  * - **A parent that has stopped being a group, or sits too deep**, which the server sends with the
  *   parent's name in `details` rather than in the sentence.
  */
@@ -65,11 +65,11 @@ export function describeRestoreFailure(error: Error, kind: DeletedItem['kind']):
       message:
         typeof calendar.name === 'string'
           ? `It uses the calendar “${calendar.name}”, which is deleted. Restore that calendar first, then restore this.`
-          : 'It uses a calendar that no longer exists.',
+          : 'It uses a calendar that has been deleted. Restore that calendar first, then restore this.',
       library: null,
     };
   }
-  if (reason === 'CALENDAR_WRONG_SCOPE') {
+  if (reason === 'CALENDAR_OTHER_PROJECT') {
     // The calendar was narrowed to another project while this sat in the bin (ADR-0200 D5). The cure
     // is made in the calendars library, so the alert links there.
     const calendar = isRecord(details.calendar) ? details.calendar : {};

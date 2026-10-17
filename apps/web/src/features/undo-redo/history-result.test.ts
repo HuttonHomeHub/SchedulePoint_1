@@ -12,8 +12,10 @@ describe('calendarDeletedDetail (ADR-0200 D4)', () => {
     },
   );
 
-  it('does not promise a cure for a calendar that no longer exists', () => {
-    expect(calendarDeletedDetail('undo', null)).toBe('It uses a calendar that no longer exists.');
+  it('still gives the cure for a calendar whose row can no longer be named', () => {
+    expect(calendarDeletedDetail('undo', null)).toBe(
+      'It uses a calendar that has been deleted. Restore that calendar from Recently deleted, then undo again.',
+    );
   });
 
   it('reads as the strip does: the step label, then the detail', () => {

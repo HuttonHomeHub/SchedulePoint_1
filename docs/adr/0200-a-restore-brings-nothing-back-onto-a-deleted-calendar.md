@@ -52,6 +52,17 @@ step aside would leave no way in the product to get that work back.
 **D5 — A restore also refuses a calendar now in another project's tier** (Q3), because narrowing a calendar while the
 holder sat in the bin is a second route to the same defect.
 
+**D6 — A project or client restore brings back a calendar the old delete stranded.** A PROJECT-tier calendar deleted on
+its own, before its project was deleted, is not swept with the project, and its own restore needs the project active
+while the project's restore needs the calendar: a dead end the product used to allow (security review, 2026-10-17). In
+`restoreBatch` for a project or client root, a deleted PROJECT calendar of the same organisation, used by a plan or
+activity in the batch, whose project is among the projects the batch restores, is not refused. It is locked in the same
+ascending order as the rest, its name is checked against the live calendars of its project (409 `NAME_TAKEN`, as the
+calendar's own restore answers), and it is restored in the same transaction with the exceptions of its own batch. A plan
+or activity restore does not do this, because its project is active and the planner can restore the calendar directly.
+The 409 for a calendar now in another project's tier is `CALENDAR_OTHER_PROJECT`, not the 422's `CALENDAR_WRONG_SCOPE`,
+so one string means one refusal.
+
 ## Alternatives considered
 
 - **Re-point the row to a default calendar.** There is no org default, only a calendar found by name; null means
@@ -81,6 +92,7 @@ holder sat in the bin is a second route to the same defect.
 | D1 refuse on a deleted calendar          | `HierarchyLifecycleService.restoreBatch` (`lockBatchCalendars`, `assertCalendarsActive`)                                              | `hierarchy-lifecycle.service.spec.ts`; `deleted-calendar-restore.e2e-spec.ts`; `library-restore.e2e-spec.ts`                         |
 | D2 the bin predicts it                   | `RecycleBinRepository.findDeletedPage` (the `hb` lateral)                                                                             | `deleted-calendar-restore.e2e-spec.ts`; `RecentlyDeletedTable.test.tsx`; `recently-deleted.spec.ts`                                  |
 | D4 undo keeps the step                   | `CalendarDeletedFailure` (`replay.ts`), `calendarDeletedDetail` (`history-result.ts`)                                                 | `commands.test.ts`, `use-plan-undo-redo.test.ts`, `history-result.test.ts`; `e2e-undo/undo.spec.ts`                                  |
+| D6 stranded calendar comes back          | `HierarchyLifecycleService.assertCalendarsActive`, `restoreStrandedCalendars`                                                         | `hierarchy-lifecycle.service.spec.ts`; `deleted-calendar-restore.e2e-spec.ts`                                                        |
 | D5 tier check                            | `HierarchyLifecycleService.assertProjectCalendarsFit`                                                                                 | `hierarchy-lifecycle.service.spec.ts`; `deleted-calendar-restore.e2e-spec.ts`; `restore-failure.test.ts`; `recently-deleted.spec.ts` |
 | D3 lock order                            | `common/db/hierarchy-row-lock.ts`; `HierarchyLifecycleService.assertParentActive` and `cascadeSoftDelete`; `CalendarsService.restore` | `hierarchy-parent-lock-race.e2e-spec.ts` (written without a database: its red-first run is the orchestrator's), the unit specs       |
 | Bin query cost, restore latency at 2,000 | **Not measured.** Needs a database; owed on the scale seed (ADR-0142).                                                                | The batch-keyed lookup uses the three partial `delete_batch_id` indexes by reading, not by EXPLAIN                                   |

@@ -324,6 +324,70 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------------------------
+  describe('a project calendar deleted on its own before its project (ADR-0200 D6)', () => {
+    /**
+     * The bad state the product used to allow: the calendar sits in its own batch, so the project's
+     * sweep skipped it, while the project's plan still points at it. Seeded directly because no
+     * route can make it any more.
+     */
+    async function strandedWorld(): Promise<{ w: World; calendarId: string }> {
+      const w = await world();
+      const own = await createCalendar(w.actor, 'Site hours', {
+        scope: 'PROJECT',
+        projectId: w.projectId,
+      });
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: w.planId } });
+      await w.actor.agent
+        .patch(`${API}/plans/${w.planId}`)
+        .send({ calendarId: own.id, version: plan.version })
+        .expect(200);
+      await w.actor.agent.delete(`${API}/projects/${w.projectId}`).expect(204);
+      await prisma.calendar.update({
+        where: { id: own.id },
+        data: { deleteBatchId: '00000000-0000-4000-8000-000000000001' },
+      });
+      return { w, calendarId: own.id };
+    }
+
+    it('restores the project together with that calendar instead of dead-ending', async () => {
+      const { w, calendarId } = await strandedWorld();
+
+      await w.actor.agent.post(`${API}/projects/${w.projectId}/restore`).expect(200);
+
+      const calendar = await prisma.calendar.findUniqueOrThrow({ where: { id: calendarId } });
+      expect(calendar.deletedAt).toBe(null);
+      expect(calendar.deleteBatchId).toBe(null);
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: w.planId } });
+      expect(plan.deletedAt).toBe(null);
+      expect(plan.calendarId).toBe(calendarId);
+    });
+
+    it('does the same for a client restore', async () => {
+      const w = await world();
+      const own = await createCalendar(w.actor, 'Site hours', {
+        scope: 'PROJECT',
+        projectId: w.projectId,
+      });
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: w.planId } });
+      await w.actor.agent
+        .patch(`${API}/plans/${w.planId}`)
+        .send({ calendarId: own.id, version: plan.version })
+        .expect(200);
+      await w.actor.agent.delete(`${API}/clients/${w.clientId}`).expect(204);
+      await prisma.calendar.update({
+        where: { id: own.id },
+        data: { deleteBatchId: '00000000-0000-4000-8000-000000000001' },
+      });
+
+      await w.actor.agent.post(`${API}/clients/${w.clientId}/restore`).expect(200);
+
+      expect((await prisma.calendar.findUniqueOrThrow({ where: { id: own.id } })).deletedAt).toBe(
+        null,
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------------
   describe('activity restore', () => {
     it('refuses a single-activity restore and the batch restore undo uses, and writes nothing (E6)', async () => {
       const w = await world();
@@ -377,7 +441,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
       return otherProjectId;
     }
 
-    it('refuses the plan with CALENDAR_WRONG_SCOPE, naming the calendar and its project', async () => {
+    it('refuses the plan with CALENDAR_OTHER_PROJECT, naming the calendar and its project', async () => {
       // Without D5 the restore succeeds and the plan holds a calendar from another project: #519 again
       // by a second route, and a later delete of that project would sweep a calendar the plan uses.
       const w = await world();
@@ -388,7 +452,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
 
       expect(res.status).toBe(409);
       expect(res.body.error.details).toMatchObject({
-        reason: 'CALENDAR_WRONG_SCOPE',
+        reason: 'CALENDAR_OTHER_PROJECT',
         calendar: { id: w.calendarId, name: 'Mon-Wed' },
         projectId: otherProjectId,
       });
@@ -419,7 +483,7 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
         `${API}/plans/${w.planId}/activities/restore-batch/${batchId}`,
       );
       expect(refused.status).toBe(409);
-      expect(refused.body.error.details.reason).toBe('CALENDAR_WRONG_SCOPE');
+      expect(refused.body.error.details.reason).toBe('CALENDAR_OTHER_PROJECT');
 
       // The cure the alert names: promote it back to the organisation tier (always allowed).
       const current = await prisma.calendar.findUniqueOrThrow({ where: { id: own.id } });

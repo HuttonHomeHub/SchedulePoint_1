@@ -35,7 +35,8 @@ describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0200)', () => {
       'plan',
     );
     expect(failure).toEqual({
-      message: 'It uses a calendar that no longer exists.',
+      message:
+        'It uses a calendar that has been deleted. Restore that calendar first, then restore this.',
       library: null,
     });
   });
@@ -56,11 +57,11 @@ describe('describeRestoreFailure — CALENDAR_DELETED (ADR-0200)', () => {
   });
 });
 
-describe('describeRestoreFailure — CALENDAR_WRONG_SCOPE (ADR-0200 D5)', () => {
+describe('describeRestoreFailure — CALENDAR_OTHER_PROJECT (ADR-0200 D5)', () => {
   it('names the calendar and links to the calendars library, whatever the row', () => {
     const failure = describeRestoreFailure(
       conflict({
-        reason: 'CALENDAR_WRONG_SCOPE',
+        reason: 'CALENDAR_OTHER_PROJECT',
         calendar: { id: 'c1', name: 'Site hours', deleteBatchId: null },
         projectId: 'p2',
       }),
@@ -74,7 +75,10 @@ describe('describeRestoreFailure — CALENDAR_WRONG_SCOPE (ADR-0200 D5)', () => 
   });
 
   it('still points at the library when the server sent no name', () => {
-    const failure = describeRestoreFailure(conflict({ reason: 'CALENDAR_WRONG_SCOPE' }), 'client');
+    const failure = describeRestoreFailure(
+      conflict({ reason: 'CALENDAR_OTHER_PROJECT' }),
+      'client',
+    );
     expect(failure.library).toBe('calendars');
     expect(failure.message).toContain('now belongs to another project');
   });

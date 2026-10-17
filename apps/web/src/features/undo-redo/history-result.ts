@@ -101,7 +101,9 @@ export function calendarDeletedDetail(
   direction: 'undo' | 'redo',
   calendarName: string | null,
 ): string {
-  if (calendarName === null) return 'It uses a calendar that no longer exists.';
+  if (calendarName === null) {
+    return `It uses a calendar that has been deleted. Restore that calendar from Recently deleted, then ${direction} again.`;
+  }
   return `It uses the calendar “${calendarName}”, which was deleted after your edit. Restore that calendar from Recently deleted, then ${direction} again.`;
 }
 

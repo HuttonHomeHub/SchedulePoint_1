@@ -967,7 +967,7 @@ describe('RecentlyDeletedTable', () => {
       it('links a calendar that moved to another project to the calendars library (ADR-0200 D5)', async () => {
         mockApiFetch.mockRejectedValueOnce(
           refuse(409, 'This calendar now belongs to another project.', {
-            reason: 'CALENDAR_WRONG_SCOPE',
+            reason: 'CALENDAR_OTHER_PROJECT',
             calendar: { id: CAL_ID, name: 'Site hours', deleteBatchId: null },
             projectId: 'p2',
           }),

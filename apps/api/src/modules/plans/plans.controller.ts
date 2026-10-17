@@ -97,7 +97,8 @@ export class PlansController {
   @ApiConflictResponse({
     description:
       'The parent project is still deleted (PARENT_DELETED), or the plan or one of its activities uses ' +
-      'a calendar that is deleted (CALENDAR_DELETED; restore that calendar first).',
+      'a calendar that is deleted (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
   })
   @ApiNotFoundResponse({
     description:

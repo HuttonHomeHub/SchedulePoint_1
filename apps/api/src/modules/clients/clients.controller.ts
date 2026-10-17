@@ -141,7 +141,8 @@ export class ClientsController {
   @ApiConflictResponse({
     description:
       'A restored name would collide with an active client (NAME_TAKEN), or a plan or activity under ' +
-      'the client uses a calendar that is deleted outside it (CALENDAR_DELETED; restore that calendar first).',
+      'the client uses a calendar that is deleted outside it (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
   })
   @ApiNotFoundResponse({
     description:

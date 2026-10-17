@@ -31,6 +31,11 @@ import { Prisma } from '@prisma/client';
  * project and plan ids as a snapshot and takes the project rows only when it stamps them, so a plan
  * restore that locked just its project would never meet the client's lock.
  *
+ * A restore must never take a plan advisory lock before its ancestor `FOR SHARE`. A project delete
+ * holds the project row `FOR NO KEY UPDATE` and then takes the plan locks its cascade needs; a plan
+ * restore that held a plan lock and then asked for the project row would wait on the delete while
+ * the delete waits on that plan lock, and the two deadlock. Ancestors first, plan locks after.
+ *
  * Every statement states `deleted_at IS NULL` (ADR-0172): "the ancestor is active" is the question,
  * and a deleted row must lock nothing and report nothing.
  */

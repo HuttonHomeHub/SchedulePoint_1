@@ -225,7 +225,8 @@ export class ActivitiesController {
   @ApiConflictResponse({
     description:
       'The parent plan is still deleted (PARENT_DELETED), or the activity uses a calendar that is ' +
-      'deleted (CALENDAR_DELETED; restore that calendar first).',
+      'deleted (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async restore(
