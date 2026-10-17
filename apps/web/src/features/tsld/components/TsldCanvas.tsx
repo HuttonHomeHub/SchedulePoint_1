@@ -95,6 +95,8 @@ import {
   DAY_LABEL_DEFAULT_WIDTH_PX,
   presetOf,
   pxPerDayForPreset,
+  rulerLabelBox,
+  rulerMonthBands,
   rulerTicks,
   stepZoom,
   zoomToPreset,
@@ -735,14 +737,18 @@ function bodyGrab(
 /**
  * Reconcile one ruler row's label pool against a tick list: reuse/create absolutely-positioned
  * spans, position each at its band start (year/month bands clamp their label to the left edge so
- * the current period stays visible — "sticky"), and hide the surplus. No per-frame allocation
- * after warm-up, and no React — the whole ruler updates imperatively from the rAF loop (ADR-0026 D3).
+ * the current period stays visible — "sticky"), and hide the surplus. A row given `centreWidth`
+ * instead centres each label over the visible part of its band (see {@link rulerLabelBox}). No
+ * per-frame allocation after warm-up, and no React — the whole ruler updates imperatively from the
+ * rAF loop (ADR-0026 D3).
  */
 function syncRulerRow(
   row: HTMLDivElement,
   pool: HTMLSpanElement[],
-  ticks: { x: number; label: string }[],
+  ticks: { x: number; label: string; end?: number }[],
   clampLeft: boolean,
+  centreWidth?: number,
+  labelWidth = 0,
 ): void {
   for (let i = 0; i < ticks.length; i += 1) {
     let node = pool[i];
@@ -752,15 +758,54 @@ function syncRulerRow(
       node.style.left = '0';
       node.style.whiteSpace = 'nowrap';
       node.style.paddingInline = '3px';
+      node.style.boxSizing = 'border-box';
       row.appendChild(node);
       pool[i] = node;
     }
-    const left = clampLeft ? Math.max(0, ticks[i]!.x) : ticks[i]!.x;
-    node.style.transform = `translateX(${left}px)`;
-    node.textContent = ticks[i]!.label;
+    const tick = ticks[i]!;
+    if (centreWidth !== undefined) {
+      const box = rulerLabelBox(tick, centreWidth, true, labelWidth);
+      node.style.transform = `translateX(${box.left}px)`;
+      node.style.width = box.width === null ? '' : `${box.width}px`;
+      node.style.textAlign = box.width === null ? '' : 'center';
+    } else {
+      const left = clampLeft ? Math.max(0, tick.x) : tick.x;
+      node.style.transform = `translateX(${left}px)`;
+    }
+    node.textContent = tick.label;
     node.style.display = '';
   }
   for (let i = ticks.length; i < pool.length; i += 1) pool[i]!.style.display = 'none';
+}
+
+/**
+ * Reconcile the ruler's month-tint layer: one absolutely-positioned span per odd-ordinal month in
+ * view, spanning the ruler's full height behind the label rows. Pooled like the label rows.
+ */
+function syncRulerTint(
+  layer: HTMLDivElement,
+  pool: HTMLSpanElement[],
+  bands: readonly { x: number; width: number }[],
+): void {
+  for (let i = 0; i < bands.length; i += 1) {
+    let node = pool[i];
+    if (!node) {
+      node = document.createElement('span');
+      node.style.position = 'absolute';
+      node.style.left = '0';
+      node.style.top = '0';
+      node.style.height = '100%';
+      // The token the canvas paints its month band with, so the ruler's stripes continue the
+      // diagram's rather than adding a second tint. A literal class so Tailwind's scanner sees it.
+      node.className = 'bg-canvas-band';
+      layer.appendChild(node);
+      pool[i] = node;
+    }
+    node.style.transform = `translateX(${bands[i]!.x}px)`;
+    node.style.width = `${bands[i]!.width}px`;
+    node.style.display = '';
+  }
+  for (let i = bands.length; i < pool.length; i += 1) pool[i]!.style.display = 'none';
 }
 
 /**
@@ -1154,6 +1199,8 @@ export function TsldCanvas({
   // The date-ruler overlay is updated imperatively from the rAF loop off `viewRef` (ADR-0026 D3 —
   // no per-frame setState). Row containers + reusable element pools live in refs; `rulerSyncRef`
   // snapshots the last synced view so the loop reconciles only when the viewport actually moved.
+  const rulerTintRef = useRef<HTMLDivElement>(null);
+  const rulerTintPoolRef = useRef<HTMLSpanElement[]>([]);
   const rulerYearsRef = useRef<HTMLDivElement>(null);
   const rulerMonthsRef = useRef<HTMLDivElement>(null);
   const rulerDaysRef = useRef<HTMLDivElement>(null);
@@ -1162,11 +1209,16 @@ export function TsldCanvas({
     months: HTMLSpanElement[];
     days: HTMLSpanElement[];
   }>({ years: [], months: [], days: [] });
-  const rulerSyncRef = useRef({ pxPerDay: 0, originX: 0, width: 0 });
+  const rulerSyncRef = useRef({ pxPerDay: 0, originX: 0, width: 0, tint: false });
   // The widest day number at the ruler's CURRENT type size (#478). Measured when the surface is
   // measured, never in the per-frame sync, and memoised per computed font so a pan costs nothing.
   const dayLabelWidthRef = useRef(DAY_LABEL_DEFAULT_WIDTH_PX);
   const dayLabelWidthCacheRef = useRef(new Map<string, number>());
+  // The widest year label, padding included, at the years row's CURRENT font — the floor under which
+  // a year's visible sliver cannot hold its centred label. 0 until measured, so an unmeasured row
+  // centres exactly as before rather than guessing a width.
+  const yearLabelWidthRef = useRef(0);
+  const yearLabelWidthCacheRef = useRef(new Map<string, number>());
   // The AXIS-MARKER band (#148): two rows inside the same 40 px ruler element, so the marks that
   // name the x axis stop being painted over the bars and cost the diagram nothing. Row B is
   // persistent (`Data date`, `Today`) and Row A transient (the cursor readout, M3).
@@ -1778,7 +1830,40 @@ export function TsldCanvas({
       }
       if (width !== dayLabelWidthRef.current) {
         dayLabelWidthRef.current = width;
-        rulerSyncRef.current = { pxPerDay: 0, originX: 0, width: 0 };
+        rulerSyncRef.current = { pxPerDay: 0, originX: 0, width: 0, tint: false };
+        dirtyRef.current = true;
+      }
+    };
+
+    // The same probe-in-the-real-row measurement for the year row, which carries its own weight and so
+    // its own width. The label's 3 px inline padding is added: the sliver must hold the box, not
+    // just the glyphs.
+    const measureYearLabel = (): void => {
+      const row = rulerYearsRef.current;
+      if (!row) return;
+      const cs = getComputedStyle(row);
+      const key = `${cs.font}|${cs.letterSpacing}|${cs.wordSpacing}`;
+      const cache = yearLabelWidthCacheRef.current;
+      let width = cache.get(key);
+      if (width === undefined) {
+        const probe = document.createElement('span');
+        probe.style.position = 'absolute';
+        probe.style.visibility = 'hidden';
+        probe.style.whiteSpace = 'nowrap';
+        probe.style.paddingInline = '3px';
+        row.appendChild(probe);
+        width = 0;
+        for (const sample of ['0000', '8888', '2026', '1999']) {
+          probe.textContent = sample;
+          width = Math.max(width, probe.getBoundingClientRect().width);
+        }
+        probe.remove();
+        if (width <= 0) return;
+        cache.set(key, width);
+      }
+      if (width !== yearLabelWidthRef.current) {
+        yearLabelWidthRef.current = width;
+        rulerSyncRef.current = { pxPerDay: 0, originX: 0, width: 0, tint: false };
         dirtyRef.current = true;
       }
     };
@@ -1791,6 +1876,7 @@ export function TsldCanvas({
       // return. The last real size, which the viewport math reads from `sizeRef`, stands instead.
       if (rect.width === 0 && rect.height === 0) return;
       measureDayLabel();
+      measureYearLabel();
       // The canvas sits below the ruler band, so its drawable height is the container minus the ruler —
       // and, when the resource strip is active (Stage E, ADR-0049), minus the strip band at the bottom,
       // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
@@ -1853,9 +1939,16 @@ export function TsldCanvas({
       const s = sizeRef.current;
       const last = rulerSyncRef.current;
       // Only re-tile when the viewport actually moved (pan changes originX every frame; idle skips).
-      if (v.pxPerDay === last.pxPerDay && v.originX === last.originX && s.width === last.width)
+      // The tint follows the `Month bands` preference, so a toggle must re-tile too.
+      const tint = sceneRef.current.monthBands === true;
+      if (
+        v.pxPerDay === last.pxPerDay &&
+        v.originX === last.originX &&
+        s.width === last.width &&
+        tint === last.tint
+      )
         return;
-      rulerSyncRef.current = { pxPerDay: v.pxPerDay, originX: v.originX, width: s.width };
+      rulerSyncRef.current = { pxPerDay: v.pxPerDay, originX: v.originX, width: s.width, tint };
       const model = rulerTicks(
         v,
         s,
@@ -1864,9 +1957,19 @@ export function TsldCanvas({
         dayLabelWidthRef.current,
       );
       const pools = rulerPoolRef.current;
-      syncRulerRow(years, pools.years, model.years, true);
+      // Years centre over their visible span; months stay pinned left, as a month's label is read
+      // against its own first column.
+      syncRulerRow(years, pools.years, model.years, true, s.width, yearLabelWidthRef.current);
       syncRulerRow(months, pools.months, model.months, true);
       syncRulerRow(days, pools.days, model.days, false);
+      const tintLayer = rulerTintRef.current;
+      if (tintLayer) {
+        syncRulerTint(
+          tintLayer,
+          rulerTintPoolRef.current,
+          tint ? rulerMonthBands(v, s, sceneRef.current.dataDate) : [],
+        );
+      }
     };
 
     const syncAxisMarkers = (): void => {
@@ -2238,9 +2341,17 @@ export function TsldCanvas({
     // a web-font swap does not resize anything, so `fonts.ready` covers it. The font-keyed cache
     // makes a spurious fire a no-op.
     const rulerRo =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measureDayLabel()) : null;
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            measureDayLabel();
+            measureYearLabel();
+          })
+        : null;
     if (rulerDaysRef.current) rulerRo?.observe(rulerDaysRef.current);
-    void document.fonts?.ready.then(measureDayLabel);
+    void document.fonts?.ready.then(() => {
+      measureDayLabel();
+      measureYearLabel();
+    });
 
     // Pause the render loop when the surface is off-screen (hidden row / scrolled away), and re-arm
     // a repaint the moment it returns (TECH_DEBT #30d). No-op where IntersectionObserver is absent.
@@ -2541,8 +2652,8 @@ export function TsldCanvas({
             fact the listbox already states.
 
             Their y is an M0-T3 output, not a spec constant. The band's three rows measure y 0–12
-            (years), 12–26 (months) and 26–40 (days); the year and month labels are pinned at x = 0
-            and are the one ruler content NOT inferable from a neighbour, while a day number is a
+            (years), 12–26 (months) and 26–40 (days); the month label is pinned at x = 0 and the year
+            label centres over its visible span, so both are the one ruler content NOT inferable from a neighbour, while a day number is a
             repeating scale either neighbour gives you. And a left-clamped marker is the common case
             rather than the edge case — `fitToContent` frames from the plan start, so the data date's
             mark sits at the left edge on arrival, on every plan. So the rows sit at 12–26 and 26–40:
@@ -2562,6 +2673,11 @@ export function TsldCanvas({
           data-testid="tsld-axis-markers"
           className="absolute inset-x-0 bottom-0 h-3.5"
         />
+        {/* The month tint. LAST child, so the label rows keep their child indices (`children[2]` is
+            the day row — the axis-marker journey reads it that way), and `-z-10` to paint beneath
+            them: negative z-index sits above this stacking context's own background and below
+            every in-flow row. */}
+        <div ref={rulerTintRef} className="absolute inset-0 -z-10" />
       </div>
       {/* Layer 4 — the pinned WBS band (ADR-0063): an aria-hidden sibling canvas between the ruler
           and the scene. Unlike the resource strip it DOES take pointer events, because it is

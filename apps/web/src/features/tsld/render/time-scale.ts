@@ -125,6 +125,12 @@ export interface RulerTick {
   /** Screen x of the band's left edge (may be < 0 when the band starts off-screen left). */
   x: number;
   label: string;
+  /**
+   * Screen x of the band's right edge (may be > the viewport width when the band runs off the right).
+   * Carried by **year** ticks only: it is what lets the label centre over the part of its span that
+   * is on screen, and the last visible band's end is not a neighbouring tick.
+   */
+  end?: number;
 }
 
 /**
@@ -220,6 +226,11 @@ export function rulerTicks(
   const years: RulerTick[] = [];
   const months: RulerTick[] = [];
   const days: RulerTick[] = [];
+  // A year band ends where the next one starts, so the previous tick is closed as each is opened.
+  const closeYear = (x: number): void => {
+    const open = years[years.length - 1];
+    if (open) open.end = x;
+  };
 
   // Parse the anchor date ONCE, then walk by integer date rollover — no per-day `Date`/ISO parsing
   // (that blew the ADR-0026 draw budget at coarse zoom, where thousands of days are visible). A
@@ -248,7 +259,9 @@ export function rulerTicks(
       months.push({ x: first ? 0 : screenXOfDay(off, view), label: MONTHS_SHORT[m - 1]! });
     }
     if (first || (d === 1 && m === 1)) {
-      years.push({ x: first ? 0 : screenXOfDay(off, view), label: String(y) });
+      const x = first ? 0 : screenXOfDay(off, view);
+      closeYear(x);
+      years.push({ x, label: String(y) });
     }
     d += 1;
     if (stride === 7) weekday = (weekday + 1) % 7;
@@ -261,6 +274,11 @@ export function rulerTicks(
       }
     }
   }
+  // The loop stops on the margin day past the viewport, so (y, m, d) is the first day NOT walked:
+  // the last year's right edge is the next 1 January from there, off screen but exactly placed.
+  let toNextYear = 1 - d;
+  for (let k = m; k <= 12; k += 1) toNextYear += daysInMonth(y, k);
+  closeYear(screenXOfDay(lastDay + 1 + (m === 1 && d === 1 ? 0 : toNextYear), view));
   // Drop a sticky label the next real boundary would overprint. Done here rather than in the
   // painter because it is a property of the model — two labels that cannot both be read is not a
   // drawing detail — and because the painter would have to re-derive which tick was the sticky one.
@@ -269,6 +287,59 @@ export function rulerTicks(
     months: dropOverprintedSticky(months, minLabelGapPx),
     days,
   };
+}
+
+/**
+ * Where a ruler label sits: the left edge of the part of its band that is on screen, and — when the
+ * band has a right edge and the label is to be centred — the width of that part. Pure and exported
+ * so the geometry is testable without a DOM. A band scrolled partly off either side centres over
+ * what remains, the way a month label stays readable while its start is off screen ("sticky"); a
+ * band with no visible part, or too little to hold the label, is left-pinned instead.
+ */
+export function rulerLabelBox(
+  tick: { x: number; end?: number },
+  viewportWidth: number,
+  centre: boolean,
+  /** The label's measured width, padding included; a sliver narrower than it cannot be centred in. */
+  labelWidth = 0,
+): { left: number; width: number | null } {
+  const left = Math.max(0, tick.x);
+  if (!centre || tick.end === undefined) return { left, width: null };
+  const width = Math.max(0, Math.min(viewportWidth, tick.end) - left);
+  // A box narrower than its label overflows to the right and would overprint the next band's label,
+  // so such a sliver falls back to the left pin — which is where it read before it was centred.
+  return { left, width: width <= 0 || width < labelWidth ? null : width };
+}
+
+/**
+ * The ruler's month tint: the screen span of every **odd-ordinal** month in view, clamped to the
+ * viewport. Parity and edges come from {@link calendarBoundaries} with the painter's own day range,
+ * so a tint is the continuation of the canvas month band beneath it — never a day off, and never
+ * inverted by a pan (the ordinal is absolute, ADR-0055 §4).
+ */
+export function rulerMonthBands(
+  view: Viewport,
+  size: Size,
+  dataDate: string,
+): { x: number; width: number }[] {
+  const firstDay = Math.floor((0 - view.originX) / view.pxPerDay);
+  const lastDay = Math.ceil((size.width - view.originX) / view.pxPerDay);
+  const bounds = calendarBoundaries(firstDay, lastDay, dataDate);
+  const edges = bounds.months.filter((day) => day > firstDay);
+  edges.push(lastDay + 1);
+  const bands: { x: number; width: number }[] = [];
+  let segStart = firstDay;
+  let monthIndex = bounds.startMonthIndex;
+  for (const edge of edges) {
+    if (monthIndex % 2 !== 0) {
+      const x = Math.max(0, screenXOfDay(segStart, view));
+      const right = Math.min(size.width, screenXOfDay(edge, view));
+      if (right > x) bands.push({ x, width: right - x });
+    }
+    segStart = edge;
+    monthIndex += 1;
+  }
+  return bands;
 }
 
 /**

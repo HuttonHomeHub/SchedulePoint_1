@@ -20,6 +20,8 @@ import {
   pxPerDayForPreset,
   DAY_LABEL_DEFAULT_WIDTH_PX,
   dayLabelStride,
+  rulerLabelBox,
+  rulerMonthBands,
   rulerTicks,
   stepZoom,
   todayDayFraction,
@@ -442,5 +444,88 @@ describe('rulerTicks — the sticky first label', () => {
     expect(narrow.months[0]?.label).toBe('Jun');
     const wide = rulerTicks(view, size, '2026-06-30', 60);
     expect(wide.months[0]?.label).toBe('Jul');
+  });
+});
+
+describe('year ruler spans (the label centres over its visible part)', () => {
+  it('gives every year tick its right edge, including the last one, which is off screen', () => {
+    // 2 px/day from 2026-03-16: 1 Jan 2027 is day 291 and 1 Jan 2028 day 656.
+    const view: Viewport = { pxPerDay: 2, originX: 0, originY: 0 };
+    const { years } = rulerTicks(view, { width: 800, height: 400 }, DATA_DATE);
+    expect(years.map((y) => [y.label, y.x, y.end])).toEqual([
+      ['2026', 0, 582],
+      ['2027', 582, 1312],
+    ]);
+  });
+
+  it('closes a single visible year at its true end rather than at the viewport edge', () => {
+    const view: Viewport = { pxPerDay: 2, originX: 0, originY: 0 };
+    const { years } = rulerTicks(view, { width: 400, height: 400 }, DATA_DATE);
+    expect(years.map((y) => [y.label, y.x, y.end])).toEqual([['2026', 0, 582]]);
+  });
+
+  it('ends a year exactly where the next one starts when the walk stops on 1 January', () => {
+    // The walk's last day is 31 Dec 2026 (day 290), so the first unwalked day IS 1 Jan 2027.
+    const view: Viewport = { pxPerDay: 1, originX: 0, originY: 0 };
+    const { years } = rulerTicks(view, { width: 289, height: 400 }, DATA_DATE);
+    expect(years.map((y) => [y.label, y.end])).toEqual([['2026', 291]]);
+  });
+});
+
+describe('rulerLabelBox', () => {
+  it('centres over the whole band when it is fully in view', () => {
+    expect(rulerLabelBox({ x: 100, end: 400 }, 800, true)).toEqual({ left: 100, width: 300 });
+  });
+
+  it('centres over what remains when the start is scrolled off the left', () => {
+    expect(rulerLabelBox({ x: -250, end: 400 }, 800, true)).toEqual({ left: 0, width: 400 });
+  });
+
+  it('centres over what remains when the end runs off the right', () => {
+    expect(rulerLabelBox({ x: 600, end: 5000 }, 800, true)).toEqual({ left: 600, width: 200 });
+  });
+
+  it('left-pins a band wholly off screen rather than reporting a negative width', () => {
+    expect(rulerLabelBox({ x: 900, end: 1200 }, 800, true)).toEqual({ left: 900, width: null });
+  });
+
+  it('left-pins a sliver narrower than the measured label instead of overflowing into the next band', () => {
+    // 20 px of the band is visible; the label needs 36.
+    expect(rulerLabelBox({ x: -380, end: 20 }, 800, true, 36)).toEqual({ left: 0, width: null });
+    expect(rulerLabelBox({ x: 780, end: 5000 }, 800, true, 36)).toEqual({ left: 780, width: null });
+  });
+
+  it('still centres a span exactly as wide as the label', () => {
+    expect(rulerLabelBox({ x: 100, end: 136 }, 800, true, 36)).toEqual({ left: 100, width: 36 });
+  });
+
+  it('keeps the plain left clamp for a tick with no right edge, or when not centring', () => {
+    expect(rulerLabelBox({ x: -40 }, 800, true)).toEqual({ left: 0, width: null });
+    expect(rulerLabelBox({ x: 50, end: 400 }, 800, false)).toEqual({ left: 50, width: null });
+  });
+});
+
+describe('rulerMonthBands', () => {
+  it('tints the odd-ordinal months only, clamped to the viewport', () => {
+    // From 2026-03-16 at 10 px/day: April (day 16–46) and June (day 77–) are the odd ordinals.
+    const view: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
+    expect(rulerMonthBands(view, { width: 800, height: 400 }, DATA_DATE)).toEqual([
+      { x: 160, width: 300 },
+      { x: 770, width: 30 },
+    ]);
+  });
+
+  it('is the painter band: parity does not invert when the view is panned', () => {
+    const view: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
+    const panned: Viewport = { ...view, originX: -300 };
+    const size = { width: 800, height: 400 };
+    // 30 days left: April now starts at x -140 → clamped to 0.
+    expect(rulerMonthBands(panned, size, DATA_DATE)[0]).toEqual({ x: 0, width: 160 });
+    expect(rulerMonthBands(panned, size, DATA_DATE).length).toBeGreaterThan(0);
+  });
+
+  it('draws nothing while a single even month fills the view', () => {
+    const view: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
+    expect(rulerMonthBands(view, { width: 100, height: 400 }, DATA_DATE)).toEqual([]);
   });
 });
