@@ -182,6 +182,11 @@ describe('accept-invite — the states that explain themselves', () => {
     renderScreen();
 
     expect(screen.getByText('Loading invitation…')).toBeInTheDocument();
+    // The status is not inside the shell's busy flag: it is never set while the status is present.
+    expect(screen.getByRole('status').closest('[aria-busy="true"]')).toBeNull();
+    expect(
+      document.querySelectorAll('[data-loading-shape] [data-skeleton]').length,
+    ).toBeGreaterThan(2);
   });
 
   it('row 32: signed out — offers both ways to become the invited person', async () => {

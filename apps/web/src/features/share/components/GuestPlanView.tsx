@@ -18,8 +18,7 @@ import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ContextStrip } from '@/components/ui/form-layout';
-import { EmptyState } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { EmptyState, LoadingShape, Skeleton } from '@/components/ui/page';
 import { TsldPanel } from '@/features/tsld';
 import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
 import { barDateSourceFor } from '@/lib/bar-dates';
@@ -53,17 +52,30 @@ const guestKeys = {
 };
 
 /**
- * The centred loading frame — a bare {@link Spinner} (its own `role="status"` + "Loading…" label),
- * mirroring the public invitation-accept precedent (`AcceptInvitationCard`). The one `main` landmark.
+ * The loading frame: the settled view's own shape — a header band over a canvas that fills the rest
+ * of the viewport (`h-dvh`) — as placeholder material, under one `main` landmark.
+ *
+ * **It is the same DOM for every token.** Until the plan read answers, nothing is known about the
+ * token, and the view must not become an existence oracle (ADR-0051 §5): a live token and a dead
+ * one render this identically, and only the answer tells them apart. The sentence is generic for the
+ * same reason — it names no plan. It carries no `aria-live` on the `main` and no `aria-busy`: this
+ * used to be a live `main` holding a `Spinner`'s own status, two live regions for one sentence, and
+ * `LoadingShape` is the one status. This view has no shell announcer to lean on.
  */
 function GuestLoading(): React.ReactElement {
   return (
-    <main
-      className="flex min-h-dvh items-center justify-center p-4"
-      aria-live="polite"
-      aria-busy="true"
-    >
-      <Spinner label="Loading…" />
+    <main className="flex h-dvh flex-col">
+      <LoadingShape label="Loading the shared plan…" className="grid min-h-0 flex-1">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="border-border bg-card flex shrink-0 items-center gap-x-4 border-b px-4 py-3">
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-5 w-16" />
+          </div>
+          <div className="grid min-h-0 flex-1 p-4">
+            <Skeleton className="h-full w-full" />
+          </div>
+        </div>
+      </LoadingShape>
     </main>
   );
 }

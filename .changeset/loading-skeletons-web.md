@@ -18,3 +18,5 @@ the plan opens in a workspace-shaped placeholder instead of a spinner, so nothin
 when the page arrives.
 Earned value, the schedule summary, notes, history, a calendar's exceptions and a summary's members tab
 show the shape of what they are loading, with one spoken sentence, instead of a spinner.
+The shared-plan view and the invitation card open in their own frame, the same for every link, with one
+spoken sentence instead of a spinner inside a live region.
