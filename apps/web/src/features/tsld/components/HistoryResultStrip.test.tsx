@@ -10,7 +10,10 @@ function renderStrip(overrides: Partial<React.ComponentProps<typeof HistoryResul
     message: 'Undid add “Foundations”.',
     action: { label: 'Redo', onClick: vi.fn(() => calls.push('action')) },
     onDismiss: vi.fn(() => calls.push('dismiss')),
-    restoreFocus: vi.fn(() => calls.push('focus')),
+    restoreTarget: vi.fn(() => {
+      calls.push('focus');
+      return null;
+    }),
     ...overrides,
   };
   render(<HistoryResultStrip {...props} />);
@@ -103,29 +106,46 @@ describe('HistoryResultStrip', () => {
       message: 'Undid add “Foundations”.',
       action: { label: 'Redo', onClick: vi.fn() },
       onDismiss: vi.fn(),
-      restoreFocus: vi.fn(),
+      restoreTarget: vi.fn(() => null),
     };
     const { rerender } = render(<HistoryResultStrip key={1} {...props} />);
     screen.getByRole('button', { name: 'Redo' }).focus();
     rerender(<HistoryResultStrip key={2} {...props} />);
-    expect(props.restoreFocus).toHaveBeenCalledOnce();
+    expect(props.restoreTarget).toHaveBeenCalledOnce();
+  });
+
+  it('focuses the element the target resolves to when it is replaced', () => {
+    const surface = document.createElement('button');
+    document.body.append(surface);
+    const props = {
+      kind: 'success' as const,
+      message: 'Undid add “Foundations”.',
+      action: { label: 'Redo', onClick: vi.fn() },
+      onDismiss: vi.fn(),
+      restoreTarget: () => surface,
+    };
+    const { rerender } = render(<HistoryResultStrip key={1} {...props} />);
+    screen.getByRole('button', { name: 'Redo' }).focus();
+    rerender(<HistoryResultStrip key={2} {...props} />);
+    expect(surface).toHaveFocus();
+    surface.remove();
   });
 
   it('does not touch focus when the strip goes with focus elsewhere', () => {
-    const { unmount, restoreFocus } = (() => {
-      const restoreFocus = vi.fn();
+    const { unmount, restoreTarget } = (() => {
+      const restoreTarget = vi.fn(() => null);
       const view = render(
         <HistoryResultStrip
           kind="success"
           message="Undid x."
           onDismiss={vi.fn()}
-          restoreFocus={restoreFocus}
+          restoreTarget={restoreTarget}
         />,
       );
-      return { unmount: view.unmount, restoreFocus };
+      return { unmount: view.unmount, restoreTarget };
     })();
     unmount();
-    expect(restoreFocus).not.toHaveBeenCalled();
+    expect(restoreTarget).not.toHaveBeenCalled();
   });
 
   it('hands focus on when the follow-up button vanishes under focus', () => {
@@ -133,22 +153,22 @@ describe('HistoryResultStrip', () => {
       kind: 'success' as const,
       message: 'Undid add “Foundations”.',
       onDismiss: vi.fn(),
-      restoreFocus: vi.fn(),
+      restoreTarget: vi.fn(() => null),
     };
     const { rerender } = render(
       <HistoryResultStrip {...props} action={{ label: 'Redo', onClick: vi.fn() }} />,
     );
     screen.getByRole('button', { name: 'Redo' }).focus();
     rerender(<HistoryResultStrip {...props} action={undefined} />);
-    expect(props.restoreFocus).toHaveBeenCalledOnce();
+    expect(props.restoreTarget).toHaveBeenCalledOnce();
   });
 
   // The host re-keys the strip per result, so a press made with focus on `Redo` REPLACES the strip.
   // When the replacement is a skipped step it has no button at all — nothing to land on — so the old
   // strip's unmount is the only moment focus can be handed to the plan surface instead of `<body>`.
   it('hands focus to the plan surface when a no-action set-aside strip replaces the focused one', () => {
-    const restoreFocus = vi.fn();
-    const base = { onDismiss: vi.fn(), restoreFocus };
+    const restoreTarget = vi.fn(() => null);
+    const base = { onDismiss: vi.fn(), restoreTarget };
     const { rerender } = render(
       <HistoryResultStrip
         key={1}
@@ -167,7 +187,7 @@ describe('HistoryResultStrip', () => {
         message="Couldn’t undo move “Excavate” — Excavate was changed after your edit, so that step was skipped."
       />,
     );
-    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(restoreTarget).toHaveBeenCalledOnce();
     expect(screen.queryByRole('button', { name: 'Redo' })).toBeNull();
   });
 

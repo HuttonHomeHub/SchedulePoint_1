@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 
 /**
  * How long a success stays up when nobody is looking at it. The sentence is also announced once
@@ -21,12 +22,14 @@ export interface HistoryResultStripProps {
   action?: { label: string; onClick: () => void } | undefined;
   onDismiss: () => void;
   /**
-   * Hand focus somewhere stable BEFORE the strip goes. Every button here removes the strip that
-   * holds it, so without a destination focus falls to `<body>` — WCAG 2.4.3, and on this workspace
-   * it also silently disables every accelerator, which are a React `onKeyDown` on the workspace
-   * root (ADR-0135, ADR-0149 D8).
+   * Where focus goes when the strip goes. Every button here removes the strip that holds it, so
+   * without a destination focus falls to `<body>` — WCAG 2.4.3, and on this workspace it also
+   * silently disables every accelerator, which are a React `onKeyDown` on the workspace root
+   * (ADR-0135, ADR-0149 D8). The strip's own buttons focus it BEFORE they act; the rest (the strip
+   * replaced by `Ctrl+Z`, the follow-up button withdrawn) is `useContainerUnmountHandoff`. Called
+   * only at those moments, so it may query the document.
    */
-  restoreFocus: () => void;
+  restoreTarget: () => HTMLElement | null;
 }
 
 /**
@@ -43,33 +46,34 @@ export function HistoryResultStrip({
   message,
   action,
   onDismiss,
-  restoreFocus,
+  restoreTarget,
 }: HistoryResultStripProps): React.ReactElement {
   const [hovered, setHovered] = useState(false);
+  // Whether focus is inside RIGHT NOW, which pauses the WCAG 2.2.1 timer. The hand-off's record asks
+  // a different question ("was focus here when the strip went"), so the two are kept apart.
   const [focused, setFocused] = useState(false);
-  // Whether keyboard focus is inside the strip, for the two ways it can be taken away without one of
-  // our own buttons being pressed (see below). A ref: it is read in cleanup, never rendered from.
-  const focusInside = useRef(false);
-  const restoreFocusRef = useRef(restoreFocus);
+  const restoreTargetRef = useRef(restoreTarget);
   const hasAction = action !== undefined;
-  useEffect(() => {
-    restoreFocusRef.current = restoreFocus;
-  }, [restoreFocus]);
+  // A layout effect, because the one below reads it in the same commit.
+  useLayoutEffect(() => {
+    restoreTargetRef.current = restoreTarget;
+  }, [restoreTarget]);
   // **Focus must not fall to `<body>` when the strip goes without its own buttons being pressed**
   // (WCAG 2.4.3, ADR-0135): the workspace's `Ctrl+Z` still fires with focus on `Redo`, and the press
-  // replaces or withdraws the strip (a new result re-keys it). Unmount while focus is inside, or the
-  // follow-up button vanishing under focus, hands focus to the plan surface.
-  useLayoutEffect(
-    () => () => {
-      if (focusInside.current) restoreFocusRef.current();
-    },
-    [],
-  );
+  // replaces or withdraws the strip (a new result re-keys it). That is the container rule, so it is
+  // the shared hook's, with no sentence: the workspace already said what happened (ADR-0132).
+  const { wrapperProps, focusWasInside } = useContainerUnmountHandoff({
+    target: restoreTarget,
+  });
+  // The other case is the follow-up button vanishing while the strip STAYS mounted — ADR-0135's
+  // per-item rule, which the hook's record answers too. The record can be stale-true for one frame
+  // after a click on blank space (see `focusWasInside`), so a button withdrawn in that window pulls
+  // focus to the plan surface once; narrow, and accepted.
   useLayoutEffect(() => {
-    if (!hasAction && focusInside.current && document.activeElement === document.body) {
-      restoreFocusRef.current();
+    if (!hasAction && focusWasInside() && document.activeElement === document.body) {
+      restoreTargetRef.current()?.focus();
     }
-  }, [hasAction]);
+  }, [hasAction, focusWasInside]);
   const expires = kind === 'success' && !hovered && !focused;
 
   useEffect(() => {
@@ -80,51 +84,48 @@ export function HistoryResultStrip({
 
   const failure = kind === 'failure';
   return (
-    <NoticeStrip
-      data-testid="canvas-history-result"
-      {...(failure ? { role: 'alert' as const } : {})}
-      tone={failure ? 'warning' : 'muted'}
-      density={failure ? 'comfortable' : 'compact'}
-      messageFit={failure ? 'grow' : 'truncate'}
-      message={message}
-      title={failure ? undefined : message}
-      onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
-      onFocus={() => {
-        focusInside.current = true;
-        setFocused(true);
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          focusInside.current = false;
-          setFocused(false);
-        }
-      }}
-    >
-      {action ? (
+    // `contents`: the wrapper the hook needs is not a box, so the strip lays out exactly as before.
+    <div className="contents" {...wrapperProps}>
+      <NoticeStrip
+        data-testid="canvas-history-result"
+        {...(failure ? { role: 'alert' as const } : {})}
+        tone={failure ? 'warning' : 'muted'}
+        density={failure ? 'comfortable' : 'compact'}
+        messageFit={failure ? 'grow' : 'truncate'}
+        message={message}
+        title={failure ? undefined : message}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+        }}
+      >
+        {action ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              restoreTarget()?.focus();
+              action.onClick();
+            }}
+          >
+            {action.label}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={() => {
-            restoreFocus();
-            action.onClick();
+            restoreTarget()?.focus();
+            onDismiss();
           }}
         >
-          {action.label}
+          Dismiss
         </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          restoreFocus();
-          onDismiss();
-        }}
-      >
-        Dismiss
-      </Button>
-    </NoticeStrip>
+      </NoticeStrip>
+    </div>
   );
 }

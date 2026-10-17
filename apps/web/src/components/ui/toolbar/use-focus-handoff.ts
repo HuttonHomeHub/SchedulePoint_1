@@ -33,11 +33,11 @@ import { useAnnounce } from '@/components/ui/announcer';
  *   anything derivable here. A reason computed at focus time would describe the world before the
  *   change; one computed after removal has no item left to compute against.
  * - **It does not fire when the CONTAINER unmounts.** An effect body cannot run in a commit where
- *   the component unmounted, so this and `SelectionActionsBar`'s whole-bar `restoreFocus` cleanup
- *   (`selection-actions.tsx:953-962`) are mutually exclusive by construction rather than by care.
- *   That cleanup stays exactly as it is: its container ref is already detached when it runs, which
- *   is why it tracks a boolean and hands focus to a caller-supplied destination; here the ref is
- *   live, which is what makes focusing the container possible at all.
+ *   the component unmounted, so this and a container's own hand-off (`useContainerUnmountHandoff`,
+ *   which `SelectionActionsBar`'s body uses for its whole-bar `restoreFocus`) are mutually exclusive
+ *   by construction rather than by care. That one acts in a layout-effect cleanup and hands focus
+ *   to a caller-supplied destination; here the ref is live, which is what makes focusing the
+ *   container possible at all.
  * - **It yields to anything else that moves focus.** One animation frame, then act only if focus
  *   was still dropped. This is what stops it becoming a fifth answer to a question the product
  *   already answers four times — a dialog, a menu's focus return, the listbox handoff after a bulk

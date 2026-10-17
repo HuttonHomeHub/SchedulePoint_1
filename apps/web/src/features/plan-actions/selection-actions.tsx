@@ -17,7 +17,7 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
-import { useId, useLayoutEffect, useMemo, useRef } from 'react';
+import { useId, useMemo, useRef } from 'react';
 
 import { CONFLICT_READOUT_ICON, CONFLICT_READOUT_TEXT } from './conflict-readout';
 import { CONFLICT_REMEDIES } from './conflict-remedy';
@@ -37,6 +37,7 @@ import {
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
 import { useTooltip } from '@/components/ui/tooltip';
+import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
@@ -1172,8 +1173,8 @@ function ClearSelectionButton({ onActivate }: { onActivate: () => void }): React
  * It stays a normal `role="toolbar"` (roving tabindex, pen-gated set) rendered inline, DOM-adjacent
  * to the listbox for a sane Tab order, and it still does **not** auto-focus, so the canvas's
  * parallel listbox keeps its `aria-activedescendant` — the planner Tabs to it when they want it.
- * `restoreFocus` still fires on unmount (deselect, or the last activity deleted) so focus is never
- * stranded on `<body>`; it no longer has a "hidden while still mounted" state to guard, because
+ * `restoreFocus` still fires when the bar goes (deselect, or the last activity deleted) while focus
+ * was inside it, so focus is never stranded on `<body>`; it no longer has a "hidden while still mounted" state to guard, because
  * there is no longer anything that can hide it. Pass `context = null` to render nothing at all.
  */
 export function SelectionActionsBar({
@@ -1188,40 +1189,47 @@ export function SelectionActionsBar({
    * listbox) so keyboard focus is never stranded on `<body>`. Should be referentially stable. */
   restoreFocus?: () => void;
 }): React.ReactElement | null {
+  // The bar's removal is a re-render with `context === null`, which does not unmount THIS component
+  // (the host renders it whenever `showDiagram && selectionActionsWired`). So the body is a child
+  // that mounts only while there is something to show: its going is then a true unmount, and
+  // `useContainerUnmountHandoff` — the one ADR-0135 container rule — applies as it does everywhere
+  // else. A change of `context` that keeps the bar is a re-render of the body and hands nothing on.
+  if (context === null) return null;
+  return (
+    <SelectionActionsBarBody context={context} restoreFocus={restoreFocus} onClear={onClear} />
+  );
+}
+
+function SelectionActionsBarBody({
+  context,
+  restoreFocus,
+  onClear,
+}: {
+  context: SelectionBarContext;
+  onClear: (() => void) | undefined;
+  restoreFocus: (() => void) | undefined;
+}): React.ReactElement {
   // Losing the bar — on deselect, or when the last activity is deleted — would blur whatever inside
   // it held focus onto `<body>`, which silently disables the workspace accelerators: the exact WCAG
   // 2.4.3 failure ADR-0080's journey found for the bulk delete. So hand focus back first.
   //
-  // **Three things about this are the regression test's doing rather than the author's.**
+  // The host's `restoreFocus` focuses its own destination, so the hook's target function runs it and
+  // answers `null`: there is then nothing for the hook to focus or announce, and the sentence the
+  // workspace already said stays the only one (ADR-0132).
   //
-  // First, `context` must be in the dependency array. Deselecting does not unmount this component —
-  // the host renders it whenever `showDiagram && selectionActionsWired`, which does not change — it
-  // passes `context: null`, and the `if (!context) return null` below removes the div on an ordinary
-  // re-render. A cleanup keyed only on the referentially-stable `restoreFocus` runs solely on a true
-  // unmount that ordinary interaction never causes. The rAF loop this replaced had `context` in its
-  // deps and was therefore correct by accident; the dependency went out with the loop.
-  //
-  // Second, that is necessary and NOT sufficient, which is what the test proved: by the time either
-  // a passive or a layout cleanup runs, React has already detached the ref, so the element handle is
-  // `null` and the DOM question "did this bar hold focus?" has no answer left. Both attempts stayed
-  // red against a fix that reads correct.
-  //
-  // So the answer is not a DOM read at all: focus-held is **tracked as it happens**, and the
-  // cleanup consults a boolean. `onBlur` clears it only for a real move to another element — when
-  // the bar is being removed the browser blurs it with no related target, which is exactly the case
-  // the cleanup must still see as "we had focus". The `activeElement` guard then makes the handoff
-  // conditional on focus having actually been dropped, so a planner who moved on themselves is
-  // never yanked back.
-  const heldFocusRef = useRef(false);
-  useLayoutEffect(
-    () => () => {
-      if (!heldFocusRef.current) return;
-      heldFocusRef.current = false;
-      const active = document.activeElement;
-      if (active === null || active === document.body) restoreFocus?.();
+  // **This replaces a hand-written copy whose record was cleared on every change of `context`**, so a
+  // refetch that rebuilt the context while focus stayed on a bar command, followed by the selection
+  // going, found the record false and dropped focus to `<body>`. `multi-select.spec.ts` ("focus on a
+  // selection-bar command survives a context rebuild…") was red against it. The bar's wrapper is
+  // still in the document when the hook's cleanup runs, so the hook reads `document.activeElement`
+  // and not its record: a click on blank space then a later deselect no longer pulls focus back to
+  // the canvas — the hook's rule, accepted when the copies were unified.
+  const { wrapperProps } = useContainerUnmountHandoff({
+    target: () => {
+      restoreFocus?.();
+      return null;
     },
-    [context, restoreFocus],
-  );
+  });
 
   /**
    * **Make milestone… hands focus to the bar's restore target BEFORE it opens its dialog** (spec D4,
@@ -1236,35 +1244,21 @@ export function SelectionActionsBar({
    * through runs during render.
    */
   const actionContext = useMemo(
-    () =>
-      context === null
-        ? null
-        : {
-            ...context,
-            onMakeMilestone: () => {
-              restoreFocus?.();
-              context.onMakeMilestone();
-            },
-          },
+    () => ({
+      ...context,
+      onMakeMilestone: () => {
+        restoreFocus?.();
+        context.onMakeMilestone();
+      },
+    }),
     [context, restoreFocus],
   );
-
-  if (!actionContext) return null;
 
   return (
     <div
       // Asks the dock outlet for a line of its own on a finger-sized window — see `CanvasDockOutlet`.
       data-dock-wide=""
-      onFocus={() => {
-        heldFocusRef.current = true;
-      }}
-      onBlur={(event) => {
-        // Only a real move to another element clears it. When the bar is being REMOVED the browser
-        // blurs it with no related target, and that is exactly the case the cleanup must still see
-        // as "we had focus".
-        const next = event.relatedTarget as Node | null;
-        if (next !== null && !event.currentTarget.contains(next)) heldFocusRef.current = false;
-      }}
+      {...wrapperProps}
       // **It has a card now, and the invariant this comment used to assert is not gone — it is a
       // variant.** It read: "No border, padding or radius: docked, the ROW is the container, and a
       // bar that brings its own box makes the row 6 px taller than the 36 px it already occupied —

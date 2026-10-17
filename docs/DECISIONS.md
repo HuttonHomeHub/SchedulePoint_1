@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-16 — A blur with no related target is one rule for every container that goes (tech debt #481)
+
+**What was decided.** ADR-0135's container rule lives in `useContainerUnmountHandoff` and nowhere else: focus
+inside is recorded as it happens, a blur with no related target keeps the record and is re-read a frame later,
+and the hand-off acts only if focus was dropped. `HistoryResultStrip` and `SelectionActionsBar` no longer keep
+their own copies. The bar's body now mounts only while it has a context, so its removal is an unmount.
+
+**Why.** The copies disagreed about that blur. Measured in Chromium on 2026-10-16: the strip's already worked,
+but the bar's record was cleared by every change of `context`, so a refetch that rebuilt the context while focus
+stayed on a bar command, followed by the selection going, left focus on `<body>`.
+
+**Consequences.** After a click on blank space a later deselect no longer pulls focus to the canvas. The bar's
+wrapper is still in the document when its cleanup runs, so the hook asks the document where focus is and ignores
+its record; focus on `<body>` is "somebody else's", and a reader who has moved on stays where they are. The record
+(and its one-frame staleness after a click on blank space) matters only for a wrapper already detached or for a
+`focusWasInside()` caller such as the strip's withdrawn follow-up button, where it is narrow and accepted.
+
+---
+
 ## 2026-10-16 — The default database password is made visible, not refused (tech debt #514)
 
 **What was decided.** The product owner chose the warning tier of the security review of #514. The API logs one

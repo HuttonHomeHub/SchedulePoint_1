@@ -179,6 +179,23 @@ describe('the bar hands focus back when the selection goes', () => {
     expect(restore).toHaveBeenCalledOnce();
   });
 
+  // The hand-written record this replaced was cleared by every change of `context`, so a refetch
+  // that rebuilt it while focus stayed on a command made the later deselect hand nothing on
+  // (`multi-select.spec.ts`, red in a real browser before the bar adopted the shared hook).
+  it('still hands focus back after a rebuilt context kept the bar and its focus', () => {
+    const restore = vi.fn();
+    const { rerender } = render(<SelectionActionsBar context={ctx()} restoreFocus={restore} />);
+    const button = screen.getByRole('button', { name: /Edit/ });
+    button.focus();
+
+    rerender(<SelectionActionsBar context={ctx()} restoreFocus={restore} />);
+    expect(restore).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Edit/ })).toHaveFocus();
+
+    rerender(<SelectionActionsBar context={null} restoreFocus={restore} />);
+    expect(restore).toHaveBeenCalledOnce();
+  });
+
   it('does not call restoreFocus when focus was elsewhere', () => {
     // The handoff is a repair for a focus that is about to be dropped. Firing it unconditionally
     // would yank a planner out of whatever they were actually using.

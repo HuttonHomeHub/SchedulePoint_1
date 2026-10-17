@@ -433,6 +433,104 @@ test('a planner sees what undo and redo did, in the diagram and the Gantt', asyn
 });
 
 /**
+ * **Focus on the history strip survives the strip being replaced** (`docs/TECH_DEBT.md` #481,
+ * ADR-0135). `Ctrl+Z` still fires with focus on the strip's `Redo`, and the press re-keys the strip,
+ * so the button that holds focus is removed by the very key that was pressed. Focus must land on the
+ * plan surface (the canvas listbox, or the Gantt's grid) and never on `<body>`, which would switch
+ * off every workspace accelerator.
+ *
+ * **Written before the hand-off was unified, to run against the strip as it was.** jsdom dispatches
+ * no blur when a focused node is removed, so the strip's unit cases pass whatever Chromium does; this
+ * is the only place the question "does a removal blur with `relatedTarget === null`, and before the
+ * layout cleanup" is asked of a real browser. The outcome is asserted, never the event order; the
+ * recorded `focusout` events are attached to the report for whoever reads the result.
+ */
+test('focus on the strip’s Redo lands on the plan surface when Ctrl+Z replaces the strip', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const strip = page.getByTestId('canvas-history-result');
+  const redo = strip.getByRole('button', { name: 'Redo' });
+
+  const points = [
+    { name: 'Excavate', x: 220, y: 120 },
+    { name: 'Foundations', x: 360, y: 180 },
+    { name: 'Slab', x: 500, y: 240 },
+    { name: 'Walls', x: 640, y: 300 },
+    // One more than the four undos below take, so the Gantt is never left with no rows to land on.
+    { name: 'Roof', x: 780, y: 360 },
+  ];
+  for (const [index, point] of points.entries()) {
+    await drawTask(page, point.name, { x: point.x, y: point.y });
+    await expect(diagram.getByRole('option')).toHaveCount(index + 1, { timeout: 15_000 });
+  }
+
+  // What the browser reported when the focused control went; attached below, never asserted on.
+  await page.evaluate(() => {
+    const log: string[] = [];
+    (window as unknown as { __focusouts: string[] }).__focusouts = log;
+    document.addEventListener(
+      'focusout',
+      (event) => {
+        const to = event.relatedTarget;
+        log.push(
+          `${(event.target as HTMLElement).textContent?.trim().slice(0, 12) ?? ''} -> ` +
+            `${to instanceof HTMLElement ? to.tagName : 'null'} ` +
+            `connected=${String((event.target as Node).isConnected)}`,
+        );
+      },
+      true,
+    );
+  });
+
+  // Attached even when an assertion below fails: the log is the reading this probe exists to take.
+  try {
+    await test.step('diagram: Ctrl+Z with focus on Redo', async () => {
+      await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
+      await expect(strip).toContainText('Undid add “Roof”.');
+      await redo.focus();
+      await expect(redo).toBeFocused();
+      await page.keyboard.press('Control+z');
+      await expect(strip).toContainText('Undid add “Walls”.', { timeout: 15_000 });
+      await expect(page.locator(':focus')).toHaveAttribute('role', 'listbox');
+    });
+
+    await test.step('Gantt: Ctrl+Z with focus on Redo', async () => {
+      await showGantt(page);
+      await ganttGrid(page).getByRole('row').nth(1).focus();
+      await page.keyboard.press('Control+z');
+      await expect(strip).toContainText('Undid add “Slab”.', { timeout: 15_000 });
+      await redo.focus();
+      await expect(redo).toBeFocused();
+      await page.keyboard.press('Control+z');
+      await expect(strip).toContainText('Undid add “Foundations”.', { timeout: 15_000 });
+      await expect
+        .poll(() => ganttGrid(page).evaluate((grid) => grid.contains(document.activeElement)))
+        .toBe(true);
+    });
+  } finally {
+    const reading = await page.evaluate(() => {
+      const active = document.activeElement;
+      const log = (window as unknown as { __focusouts: string[] }).__focusouts;
+      return [
+        ...log,
+        `active: ${active?.tagName ?? 'none'} role=${active?.getAttribute('role') ?? ''}`,
+      ];
+    });
+    // Also printed: an attachment is not in the terminal report, and this reading is the point.
+    console.warn(`focusout-log\n${reading.join('\n')}`);
+    await testInfo.attach('focusout-log', { body: reading.join('\n'), contentType: 'text/plain' });
+  }
+});
+
+/**
  * **Undo never jams** (undo-redo M2, ADR-0176) — a step that cannot apply is explained and set
  * aside, and the next press carries on with the one beneath it.
  *

@@ -330,3 +330,86 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
       .toBe(3);
   });
 });
+
+/**
+ * **The single selection bar hands focus on after a refetch rebuilt its context** (`docs/TECH_DEBT.md`
+ * #481, ADR-0135).
+ *
+ * The bar used to keep a "focus is held" record that its cleanup cleared on **every** change of
+ * `context`, not only on removal. Focus a bar command, let a refetch rebuild the context (the bar
+ * and focus both stay), then lose the selected activity: the record was already false, so focus fell
+ * to `<body>` and every accelerator went quiet. This test was red against that bar in Chromium and
+ * is the regression guard for the shared hook that replaced it.
+ *
+ * Both edits are made through the API, as another planner would, and the document is nudged with a
+ * `visibilitychange` so TanStack Query refetches without the test touching the bar.
+ */
+test('focus on a selection-bar command survives a context rebuild and then the bar going', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Bar focus ${stamp}`);
+  await ensurePen(page);
+  const [subject, bystander] = await seedActivities(page, orgSlug, [
+    { name: 'Bar subject', durationDays: 2 },
+    { name: 'Bar bystander', durationDays: 2 },
+  ]);
+  await ensurePen(page);
+
+  // The query client keeps data fresh for 30 s (`DEFAULT_STALE_TIME`) and a window-focus refetch
+  // skips fresh data, so the activities must be allowed to go stale before the nudge means anything.
+  const refetch = async (): Promise<void> => {
+    await page.waitForTimeout(31_000);
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+  };
+
+  const list = diagramList(page);
+  await list.focus();
+  await list.press('Home');
+  const bar = page.getByRole('toolbar', { name: 'Actions for Bar subject' });
+  await expect(bar).toBeVisible();
+
+  const command = bar.getByRole('button', { name: /^edit\b/i }).first();
+  await command.focus();
+  await expect(command).toBeFocused();
+
+  // (1) The context is rebuilt while the bar and its focus stay: rename the OTHER activity.
+  await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const url = `/api/v1/organizations/${org}/activities/${id}`;
+      const read = await fetch(url, { credentials: 'include' });
+      const version = ((await read.json()) as { data: { version: number } }).data.version;
+      const write = await fetch(url, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Bar bystander renamed', version }),
+      });
+      if (!write.ok) throw new Error(`rename failed: ${String(write.status)}`);
+    },
+    { org: orgSlug, id: bystander!.id },
+  );
+  await refetch();
+  await expect(page.getByRole('option', { name: /Bar bystander renamed/ })).toBeAttached({
+    timeout: 15_000,
+  });
+  await expect(command).toBeFocused();
+
+  // (2) The selected activity goes. The bar goes with it, and focus must not be on <body>.
+  await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/activities/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`delete failed: ${String(response.status)}`);
+    },
+    { org: orgSlug, id: subject!.id },
+  );
+  await refetch();
+  await expect(bar).toHaveCount(0, { timeout: 15_000 });
+  await expect(list).toBeFocused();
+});
