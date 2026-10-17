@@ -111,6 +111,19 @@ export function startFrozenPluralReason(count: number): string {
 }
 
 /**
+ * Why a plural move is withheld when a WBS summary is among the selected: its dates roll up from its
+ * children, and the placements endpoint refuses the whole batch for one (422
+ * `SUMMARY_NOT_BULK_ELIGIBLE`). Said before the write so the planner is told which part of the
+ * selection stopped it, rather than receiving the server's sentence for a move they cannot tell
+ * was never attempted.
+ */
+export function summaryNotMovablePluralReason(count: number): string {
+  return `${String(count)} of the selected activities ${
+    count === 1 ? 'is a WBS summary' : 'are WBS summaries'
+  }, whose dates roll up from ${count === 1 ? 'its' : 'their'} children, so the selection cannot be moved.`;
+}
+
+/**
  * True when an activity's start is frozen by its actuals (ADR-0170 D3): any `actualStart` or
  * `actualFinish`. Mirrors the engine's `isFrozenByActuals` — an activity with an actual is drawn
  * from it and ignores a hand-placed start, so a start-edge write would save an inert placement and

@@ -23,6 +23,27 @@ field starts empty. Spec and plan: `docs/specs/forgot-password-email/`.
 **Consequences.** Both route-search census gates drop to eight validators. Specify option (c) (navigation
 state, not the URL) against a measured drop-off if the want returns.
 
+## 2026-10-17 — A plural keyboard nudge is one undo step when its selection is one (tech debt #116)
+
+**What was decided.** `bulkPlacementCommand` takes an optional `coalesceKey`; `bulkMoveCoalesceKey(ids)` builds
+it from the **sorted id set**. Only the keyboard's plural nudge sets it (through `moveMany`'s `coalesce`
+option), so presses on the same selection within the history's 500 ms window collapse to one step spanning the
+first `before` and the last `after`. The drag and apply-levelling pass no key and are unchanged. The product
+owner chose this over one step per committed burst (CQ-1 (b)).
+
+**Why this reverses a "deliberately not".** The command's docblock refused coalescing because merging two bulk
+moves would restore a set nobody selected, the union of two selections. That objection is about
+_different_ sets. A key derived from the sorted ids makes two different sets unequal by construction, and the
+history only merges steps with equal keys (`use-plan-edit-history.ts`), so an overlap resolve or another
+selection's move between two bursts blocks the merge. The single-bar nudge already folds its bursts the same
+way, so a planner who taps `Alt+→` three times gets one step for twelve bars as they do for one.
+
+**No ADR.** It reuses ADR-0048's coalescing and ADR-0080's `moveMany` seam with no new mechanism; the reversal
+is one docblock, now rewritten. If the owner wants it recorded as an ADR the outline is in
+`docs/specs/nudge-plural-selection/spec.md` §4.8.
+
+---
+
 ## 2026-10-17 — A menu's opener and its focus-restore target are two refs (tech debt #229)
 
 **What was decided.** `Menu` takes a required `openerRef` beside `restoreFocusRef`. A primary press on the

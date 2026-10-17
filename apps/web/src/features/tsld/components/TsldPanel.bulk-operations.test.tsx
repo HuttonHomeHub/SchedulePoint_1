@@ -2,6 +2,8 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { pluralMoveHint } from '../model/reposition-announcement';
+
 import { TsldPanel, type TsldBulkOperations } from './TsldPanel';
 
 import { anActivity } from '@/test/activity-fixture';
@@ -24,11 +26,11 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }))
 
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true };
+  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true, TSLD_EDITING_ENABLED: true };
 });
 vi.mock('@/config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true };
+  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true, TSLD_EDITING_ENABLED: true };
 });
 
 const NO_DEPS: DependencySummary[] = [];
@@ -66,7 +68,7 @@ function renderPanel(bulk: Partial<TsldBulkOperations> = {}) {
     gate: { writable: true, reason: null },
     deleteMany: vi.fn(() => Promise.resolve()),
     linkChain: vi.fn(() => Promise.resolve()),
-    moveMany: vi.fn(() => Promise.resolve({ conflict: null })),
+    moveMany: vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
     ...bulk,
   };
   render(
@@ -155,7 +157,7 @@ describe('the panel drives the bulk bar', () => {
           gate: { writable: true, reason: null },
           deleteMany: vi.fn(() => Promise.resolve()),
           linkChain: vi.fn(() => Promise.resolve()),
-          moveMany: vi.fn(() => Promise.resolve({ conflict: null })),
+          moveMany: vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
         }}
         fill
       />,
@@ -242,8 +244,10 @@ describe('a plural drag that includes a started activity', () => {
   // 14 px a day from x 40: the bars span x 40..124, so x 80 is body on every lane.
   const laneY = (lane: number) => 40 + 27 + lane * 60;
 
-  function renderDrag(rows: ActivitySummary[]) {
-    const moveMany = vi.fn(() => Promise.resolve({ conflict: null }));
+  function renderDrag(
+    rows: ActivitySummary[],
+    moveMany = vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
+  ) {
     const { container } = render(
       <TsldPanel
         activities={rows}
@@ -338,9 +342,194 @@ describe('a plural drag that includes a started activity', () => {
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(
         expect.stringMatching(
-          /activities moved\. Starts of activities that have started were not changed\./,
+          /activities moved down 2 lanes\. Starts of activities that have started were not changed\./,
         ),
       ),
     );
+  });
+});
+
+describe('a plural drag announces only a move that happened', () => {
+  const wide = (id: string, name: string, lane: number) => ({
+    ...activity(id, name, lane, '2026-01-01'),
+    earlyFinish: '2026-01-06',
+  });
+  const laneY = (lane: number) => 40 + 27 + lane * 60;
+
+  function drag(
+    moveMany: TsldBulkOperations['moveMany'],
+    rows: ActivitySummary[] = [wide('a', 'Excavate', 0), wide('b', 'Pour', 1)],
+  ) {
+    const { container } = render(
+      <TsldPanel
+        activities={rows}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        bulk={{
+          gate: { writable: true, reason: null },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+          moveMany,
+        }}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    const canvas = container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    announceSpy.mockClear();
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(0), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 80, clientY: laneY(0) + 60, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 80, clientY: laneY(0) + 60, pointerId: 1 });
+  }
+
+  it('withholds the batch, naming the summary, when a WBS summary is selected', async () => {
+    const moveMany = vi.fn(() => Promise.resolve({ applied: true, conflict: null }));
+    drag(moveMany, [wide('a', 'Excavate', 0), { ...wide('b', 'Phase', 1), type: 'WBS_SUMMARY' }]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/WBS summary/);
+    expect(moveMany).not.toHaveBeenCalled();
+  });
+
+  it('says what moved, in the sentence the keyboard shares', async () => {
+    const moveMany = vi.fn(() => Promise.resolve({ applied: true, conflict: null }));
+    drag(moveMany);
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith('2 activities moved down 1 lane.'),
+    );
+  });
+
+  // Regression for the pen-rejected drag: `moveMany` resolved `{ conflict: null }` on a 423 exactly
+  // as on success, so the panel announced "2 activities moved." for a move that never happened.
+  // Red against the old contract: the old code announced whenever `conflict` was falsy.
+  it('announces nothing when the batch was not applied (the pen was lost)', async () => {
+    const moveMany = vi.fn(() => Promise.resolve({ applied: false, conflict: null }));
+    drag(moveMany);
+    await waitFor(() => expect(moveMany).toHaveBeenCalledTimes(1));
+    await act(() => Promise.resolve());
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/moved/));
+  });
+});
+
+describe('Alt+arrow moves the whole plural selection', () => {
+  function setup(opts: { writable?: boolean; moveMany?: TsldBulkOperations['moveMany'] } = {}) {
+    const moveMany =
+      opts.moveMany ?? vi.fn(() => Promise.resolve({ applied: true, conflict: null }));
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={onReposition}
+        bulk={{
+          gate: {
+            writable: opts.writable ?? true,
+            reason: opts.writable === false ? 'No pen.' : null,
+          },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+          moveMany,
+        }}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'ArrowDown' }); // the cursor lands on the first row
+    return { list, moveMany, onReposition };
+  }
+
+  it('writes ONE batch for a held key, through moveMany, asking for a coalescing step', async () => {
+    const { list, moveMany, onReposition } = setup();
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => expect(moveMany).toHaveBeenCalledTimes(1));
+    expect(moveMany).toHaveBeenCalledWith(
+      ACTIVITIES.map((a) => expect.objectContaining({ id: a.id })),
+      { dayDelta: 2, laneDelta: 0 },
+      { coalesce: true },
+    );
+    expect(onReposition).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(
+        '3 activities moved 2 days later; dates will update.',
+      ),
+    );
+  });
+
+  it('a single selection takes the unchanged single-bar path', async () => {
+    const { list, moveMany, onReposition } = setup();
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
+    expect(moveMany).not.toHaveBeenCalled();
+  });
+
+  it('a cursor outside the selection moves only that bar', async () => {
+    const { list, moveMany, onReposition } = setup();
+    fireEvent.keyDown(list, { key: ' ' }); // select the first row
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true }); // select the second too
+    fireEvent.keyDown(list, { key: 'ArrowDown' }); // a plain arrow moves the cursor to a third, which is not selected
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
+    expect(moveMany).not.toHaveBeenCalled();
+  });
+
+  it('announces nothing as moved when the batch was rejected', async () => {
+    const { list, moveMany } = setup({
+      moveMany: vi.fn(() => Promise.resolve({ applied: false, conflict: null })),
+    });
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => expect(moveMany).toHaveBeenCalledTimes(1));
+    await act(() => Promise.resolve());
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/moved/));
+  });
+
+  it('refuses Alt+Up aloud when a selected bar is already in the top lane, writing nothing', async () => {
+    const { list, moveMany } = setup();
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowUp', altKey: true });
+    expect(announceSpy).toHaveBeenCalledWith(
+      '1 of the selected activities is already in the top lane.',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(moveMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('the move hint is spoken once, on entering plural, and only to a writer', () => {
+  it('appends the hint at 1 → 2 and not at 2 → 3', () => {
+    const { list } = renderPanel();
+    // Focusing the listbox already selected the first row, so this is the 1 → 2 transition.
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true }); // 2 selected
+    expect(announceSpy).toHaveBeenCalledWith(`2 activities selected. ${pluralMoveHint(2)}`);
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true }); // 3 selected
+    expect(announceSpy).toHaveBeenCalledWith('3 activities selected.');
+  });
+
+  it('says nothing about moving, on the bar or aloud, without the write right', () => {
+    const { list } = renderPanel({ gate: { writable: false, reason: 'No pen.' } });
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(announceSpy).toHaveBeenCalledWith('2 activities selected.');
+    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(/Alt with an arrow/);
+  });
+
+  it('shows the same sentence on the bar for a writer', () => {
+    const { list } = renderPanel();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(screen.getByTestId('bulk-selection-bar')).toHaveTextContent(pluralMoveHint(2));
   });
 });

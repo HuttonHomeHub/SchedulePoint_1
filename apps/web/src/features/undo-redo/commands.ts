@@ -1623,11 +1623,14 @@ function placementExpectation(
  * reversible step, the `autoArrangeCommand` shape one field set wider. Also the shape of apply
  * levelling and of an overlap resolve that moves time.
  *
- * **Deliberately not coalescable**, and the reason is worth stating rather than leaving to the
- * absence of a descriptor: there are no intermediate writes to merge (the ghosts are client-side
+ * **Not coalescable unless the caller opts in with a set-scoped key.** The default stands for the
+ * drag and apply-levelling: there are no intermediate writes to merge (the ghosts are client-side
  * and one request goes out on release), and merging two bulk moves would produce an undo that
  * restores a set **nobody ever selected** — the union of two different selections, in a state
- * neither of them was in.
+ * neither of them was in. A keyboard nudge of a fixed selection IS a series of writes, and the
+ * single-bar nudge folds those into one step; `coalesceKey` (built by `bulkMoveCoalesceKey` from
+ * the sorted id set) gives the plural nudge the same, and answers the objection on its own terms:
+ * the history only merges steps with an equal key, so two different sets never combine.
  *
  * All-or-nothing: every row must still hold the placement the step left (compared against the
  * server's saved rows, which is where a snapped date shows), or the whole step is set aside.
@@ -1639,6 +1642,8 @@ export function bulkPlacementCommand(params: {
   /** The rows the forward batch returned — the placements an undo expects to find. */
   saved: readonly ActivitySummary[];
   label?: string;
+  /** Opt-in merge key — `bulkMoveCoalesceKey(ids)`. Absent for the drag and apply-levelling. */
+  coalesceKey?: string;
 }): Command {
   const { batchPlacements } = params;
   const savedById = new Map(params.saved.map((row) => [row.id, row]));
@@ -1668,7 +1673,7 @@ export function bulkPlacementCommand(params: {
         settle(expectations(target, new Map(result.map((row) => [row.id, row]))));
       },
     );
-  return {
+  const command: Command = {
     label: params.label ?? `Move ${params.after.length} activities`,
     subjects: params.after.map((p) => p.id),
     undo: (ctx) =>
@@ -1680,6 +1685,22 @@ export function bulkPlacementCommand(params: {
         atUndo = next;
       }),
   };
+  if (params.coalesceKey === undefined) return command;
+  const { coalesceKey } = params;
+  return coalescable(command, {
+    key: coalesceKey,
+    before: params.before,
+    after: params.after,
+    rebuild: (b, a) => bulkPlacementCommand({ ...params, before: b, after: a }),
+  });
+}
+
+/**
+ * The merge key of a plural keyboard nudge: the **sorted** id set, so the same selection in any
+ * order shares a step and a different selection never does. One helper so no caller hand-rolls it.
+ */
+export function bulkMoveCoalesceKey(ids: readonly string[]): string {
+  return `bulk-move:${[...ids].sort().join(',')}`;
 }
 
 /** `useBulkDeleteActivities().mutateAsync` — sweeps a set and resolves to the batch that ties it. */

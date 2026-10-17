@@ -329,6 +329,60 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
       )
       .toBe(3);
   });
+
+  await test.step('Alt+arrow moves the WHOLE plural selection: one write, one undo, and it is said (TECH_DEBT #116)', async () => {
+    // The keyboard twin of the drag above, on the same plan: the pointer route moved the set in
+    // one write and the keyboard route moved one bar. Counted at the network, because a DOM that
+    // shows three bars moved says nothing about whether it took one request or three.
+    const writes: number[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'PATCH' || !request.url().includes('/activities/placements')) return;
+      const body = request.postDataJSON() as { placements: unknown[] };
+      writes.push(body.placements.length);
+    });
+    const before = await placements(page, orgSlug);
+    const ids = [...before.keys()].slice(0, 3);
+
+    const list = diagramList(page);
+    await list.focus();
+    await list.press('Escape');
+    await list.press('Control+a');
+    // The hint is spoken on entering a plural selection, to a planner who holds the pen — it says
+    // the keyboard route exists, which is what item 2 of #116 withheld until the route did.
+    await announced(page, /3 activities selected\. .*pressing Alt with an arrow key/);
+
+    await list.press('Alt+ArrowRight');
+    await list.press('Alt+ArrowRight');
+    await announced(page, /3 activities moved 2 days later; dates will update\./);
+
+    expect(writes, 'two presses on one selection are one request carrying every row').toEqual([3]);
+    await expect
+      .poll(
+        async () => {
+          const after = await placements(page, orgSlug);
+          return ids.filter(
+            (id) => after.get(id)?.visualEffectiveStart !== before.get(id)?.visualEffectiveStart,
+          ).length;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(3);
+
+    // ONE undo puts all three back.
+    await list.focus();
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(
+        async () => {
+          const after = await placements(page, orgSlug);
+          return ids.filter(
+            (id) => after.get(id)?.visualEffectiveStart === before.get(id)?.visualEffectiveStart,
+          ).length;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(3);
+  });
 });
 
 /**

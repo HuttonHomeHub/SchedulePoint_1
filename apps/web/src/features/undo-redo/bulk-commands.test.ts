@@ -1,7 +1,9 @@
+import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { bulkDeleteCommand, bulkPlacementCommand } from './commands';
+import { bulkDeleteCommand, bulkMoveCoalesceKey, bulkPlacementCommand } from './commands';
 import { notApplicable } from './replay';
+import { usePlanEditHistory } from './use-plan-edit-history';
 
 import { anActivity } from '@/test/activity-fixture';
 import { fakePlanServer } from '@/test/fake-plan-server';
@@ -60,6 +62,112 @@ describe('bulkPlacementCommand — what the batch carries', () => {
     // produce an undo that restores the union of two different selections — a state nobody was
     // ever in, reached by pressing undo once.
     expect(command).not.toHaveProperty('coalescing');
+  });
+});
+
+describe('bulkPlacementCommand — the opt-in set-scoped merge key (CQ-1 (b))', () => {
+  const at = (id: string, visualStart: string, laneIndex = 0) => ({
+    id,
+    constraintType: null,
+    constraintDate: null,
+    visualStart,
+    laneIndex,
+  });
+  const IDS = ['a', 'b'];
+
+  /** One recorded nudge of {a, b}: from `from` to `to`, written through the fake server. */
+  async function nudge(
+    server: ReturnType<typeof fakePlanServer>,
+    from: string,
+    to: string,
+    key: string | undefined,
+  ) {
+    const versions = IDS.map((id) => ({ id, version: server.row(id).version }));
+    const saved = await server.mutations.batchPlacements({
+      placements: versions.map(({ id, version }) => ({ ...at(id, to), version })),
+    });
+    return bulkPlacementCommand({
+      batchPlacements: server.mutations.batchPlacements,
+      before: IDS.map((id) => at(id, from)),
+      after: IDS.map((id) => at(id, to)),
+      saved,
+      ...(key !== undefined ? { coalesceKey: key } : {}),
+    });
+  }
+
+  const seeded = () =>
+    fakePlanServer({
+      activities: IDS.map((id) => anActivity({ id, name: id, visualStart: '2026-03-02' })),
+    });
+
+  it('the key is the sorted id set, so order never matters and another set never matches', () => {
+    expect(bulkMoveCoalesceKey(['b', 'a'])).toBe(bulkMoveCoalesceKey(['a', 'b']));
+    expect(bulkMoveCoalesceKey(['a', 'b'])).not.toBe(bulkMoveCoalesceKey(['a', 'c']));
+  });
+
+  it('two same-set records inside the window are ONE step, and undo restores the FIRST before', async () => {
+    const server = seeded();
+    const key = bulkMoveCoalesceKey(IDS);
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    const first = await nudge(server, '2026-03-02', '2026-03-03', key);
+    const second = await nudge(server, '2026-03-03', '2026-03-04', key);
+    act(() => {
+      result.current.record(first);
+      result.current.record(second);
+    });
+    await act(async () => {
+      expect((await result.current.undo(server.ctx))?.kind).toBe('applied');
+    });
+    expect(server.row('a').visualStart).toBe('2026-03-02');
+    expect(server.row('b').visualStart).toBe('2026-03-02');
+    expect(result.current.canUndo).toBe(false); // one undo emptied the stack
+  });
+
+  it('different sets never merge', async () => {
+    const server = seeded();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    const first = await nudge(server, '2026-03-02', '2026-03-03', bulkMoveCoalesceKey(IDS));
+    const second = await nudge(server, '2026-03-03', '2026-03-04', bulkMoveCoalesceKey(['a', 'c']));
+    act(() => {
+      result.current.record(first);
+      result.current.record(second);
+    });
+    await act(async () => {
+      await result.current.undo(server.ctx);
+    });
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it('a keyless command never merges, whatever sits beneath it', async () => {
+    const server = seeded();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    const first = await nudge(server, '2026-03-02', '2026-03-03', bulkMoveCoalesceKey(IDS));
+    const second = await nudge(server, '2026-03-03', '2026-03-04', undefined);
+    act(() => {
+      result.current.record(first);
+      result.current.record(second);
+    });
+    await act(async () => {
+      await result.current.undo(server.ctx);
+    });
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it('a step with another key on top (an overlap resolve) blocks the merge', async () => {
+    const server = seeded();
+    const { result } = renderHook(() => usePlanEditHistory('pl1'));
+    const first = await nudge(server, '2026-03-02', '2026-03-03', bulkMoveCoalesceKey(IDS));
+    const resolve = await nudge(server, '2026-03-03', '2026-03-03', 'relane:a');
+    const second = await nudge(server, '2026-03-03', '2026-03-04', bulkMoveCoalesceKey(IDS));
+    act(() => {
+      result.current.record(first);
+      result.current.record(resolve);
+      result.current.record(second);
+    });
+    await act(async () => {
+      await result.current.undo(server.ctx);
+    });
+    expect(result.current.canUndo).toBe(true);
   });
 });
 

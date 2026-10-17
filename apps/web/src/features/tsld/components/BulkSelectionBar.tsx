@@ -1,6 +1,8 @@
 import { Link2, Trash2 } from 'lucide-react';
 import { useId } from 'react';
 
+import { pluralMoveHint } from '../model/reposition-announcement';
+
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 
@@ -52,6 +54,11 @@ export interface BulkSelectionBarProps {
   onClear: () => void;
   /** A bulk write is in flight. Both actions go inert; neither leaves the tab order. */
   busy?: boolean;
+  /**
+   * May the caller move the selection (role + pen). Defaults to `false`: the move hint is a claim
+   * about what the keys do, and a viewer or a planner without the pen must not be told it works.
+   */
+  canMove?: boolean;
 }
 
 function BulkAction({
@@ -114,6 +121,7 @@ export function BulkSelectionBar({
   onDelete,
   onClear,
   busy = false,
+  canMove = false,
 }: BulkSelectionBarProps): React.ReactElement | null {
   const statusId = useId();
   // Below two this is not a plural selection and the floating per-object bar is the right surface.
@@ -142,7 +150,9 @@ export function BulkSelectionBar({
   // into it made every action's description read "Dragging any of these moves all 3", which is
   // unrelated to why the button is off. 101 unit tests said so immediately. The caveat is a fact
   // about the selection, not about a control, so it gets its own element and no describedby.
-  const dragHint = `Dragging any of these moves all ${String(count)} activities.`;
+  // The panel speaks the same string from the same function when the selection becomes plural (a
+  // second live region here would say it again on every pen poll), so the two cannot drift.
+  const moveHint = pluralMoveHint(count);
   // One id, shared by whichever controls are shut — see `BulkAction`'s `reasonId` docblock.
   const describedBy = status === null ? undefined : statusId;
 
@@ -168,7 +178,7 @@ export function BulkSelectionBar({
             {status}
           </p>
         ) : null}
-        <p className="text-muted-foreground text-sm">{dragHint}</p>
+        {canMove ? <p className="text-muted-foreground text-sm">{moveHint}</p> : null}
         <BulkAction
           gate={link}
           busy={busy}

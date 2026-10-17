@@ -12,7 +12,7 @@ import type { BarDateSource } from '@/lib/bar-dates';
 /** Debounce (ms) that coalesces a held Alt+arrow key-repeat into one nudge write (M5 5.2 §4). */
 export const NUDGE_DEBOUNCE_MS = 150;
 /** Serialize retry interval (ms): re-attempt the commit while a prior write is still in flight. */
-const SERIALIZE_RETRY_MS = 40;
+export const SERIALIZE_RETRY_MS = 40;
 
 /** The accumulating optimistic target of an in-progress nudge (survives burst boundaries). */
 interface NudgeTarget {

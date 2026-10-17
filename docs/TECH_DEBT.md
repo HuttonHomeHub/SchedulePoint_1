@@ -2820,7 +2820,7 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 
 ### 116. Consolidation-pass findings that were not folded
 
-**Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+**Status:** open · **Verified:** 2026-10-17 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -2842,19 +2842,18 @@ Five specialists reviewed the combined #108/#113/#111 diff. Ten findings were fo
 tests; these are the ones deliberately left, each with the reason, so they are not rediscovered as
 though nobody had looked.
 
-**1. The plural move is pointer-only.** `useCoalescedNudge` commits through the single-activity
-`notedReposition` and has no plural awareness, so a planner with twelve bars selected still nudges
-them one at a time by keyboard while a mouse drag moves all twelve. Not a WCAG 2.1.1 failure — the
-function is available, just not in bulk — which is why no gate flagged it. It is the same defect #108
-fixed for the pointer, one input modality along, and it is the reason the accessibility review scored
-the next item's audience as small: the people who cannot hear the drag hint largely cannot perform
-the gesture either. Fixing it means teaching the nudge hook the selection, which is a slice.
+**1. ~~The plural move is pointer-only.~~ CLOSED 2026-10-17.** `Alt`+arrow now moves every selected
+activity when the selection holds more than one and includes the cursor row: `useCoalescedPluralNudge`
+(`features/tsld/interaction/`) accumulates a delta and writes it through `moveMany`, the seam the drag
+uses, so a held key is one `PATCH …/activities/placements` and quick presses on the same set are one
+undo step (`docs/specs/nudge-plural-selection/`, `docs/DECISIONS.md` 2026-10-17). It was a sibling hook
+rather than the plural mode this item proposed, because `useCoalescedNudge`'s absolute per-activity
+target could not take a delta without branching at every line its defects earned.
 
-**2. The drag hint is never announced.** `BulkSelectionBar`'s "Dragging any of these moves all N
-activities." is static text with no live region, and `announceSelectionCount` says only the count. A
-screen-reader user is never told the consequence a sighted user reads beside the buttons. Deliberately
-**not** fixed here, because announcing a pointer-only capability while (1) stands would be telling
-that reader about something they cannot do. It should land **with** (1), not before it.
+**2. ~~The drag hint is never announced.~~ CLOSED 2026-10-17, with (1) as this item required.**
+`announceSelectionCount` appends `pluralMoveHint(n)` — now "Dragging any of these, or pressing Alt with
+an arrow key, moves all N activities." — on the transition into a plural selection when the caller
+holds the write right, and the bar shows the same string from the same function (`canMove`).
 
 **3. A shaded row-menu item's reason is `sr-only`; the canvas bar's is visible.** ADR-0082's premise
 is that one operation should not teach two mental models, and for a sighted mouse-only user it still
@@ -2896,14 +2895,11 @@ product cannot produce. The type is tightened and `pasteActivitiesCommand`'s run
 > genuinely resolve `void`. Reverted and redone bound to the identifier. A blind find-and-replace on
 > a shape that two different types share is exactly how a cleanup becomes a defect.
 
-**Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
-taken as one slice. (3)–(5) are consistency and tidiness.
+**Risk:** what is left is (3), a consistency question. (1) and (2) shipped together on 2026-10-17,
+(4) was closed as correct by design and (5) was closed on 2026-09-11.
 
-**Walked item by item 2026-09-11, and this row stays `open` deliberately.** (4) was already closed
-and (5) is closed here, but (1) and (2) are **owed capability work with no trigger** — a keyboard
-planner still nudges twelve selected bars one at a time while a mouse drag moves all twelve — so
-`deferred` would be wrong in the way `#93`/`#97`/`#149`/`#155`/`#174`/`#184` were `open` wrongly.
-(3) is narrower than it reads and its blocker has lapsed: the Tooltip primitive now exists
+**Walked item by item 2026-10-17, and this row stays `open` for (3) alone.** (3) is narrower than it
+reads and its blocker has lapsed: the Tooltip primitive now exists
 (ADR-0117), so what survives is one product-wide question — should a shaded LABELLED control's
 reason become a visible tooltip? — which ADR-0082's rule turns on and which the fix-slice epic
 declined as its CQ-2. That needs a review, not a default.
@@ -10812,3 +10808,30 @@ A planner who turns on Flag over-allocated and exports gets a badge on each flag
 On a narrow **Diagram — current view** crop the title band's key loses its trailing entries (the link cues, then the markers) with no indication that anything is missing, so a reader takes a short key for a complete one. ADR-0127 D3's rule is to count what you do not draw; the resource strip's own caption legend follows it (`+N more`, ADR-0200 D3) and this one does not. Not measured: the width at which the first entry drops has not been taken from a rendered export.
 
 **Next:** count the dropped entries the way the strip caption does (`+N more`), and assert it at a narrow raster. **Trigger:** the next change to the export legend, or a report of a key that seems to be missing entries.
+
+### 521. A plural drag past the top lane collapses the selection's relative lanes
+
+**Status:** open · **Verified:** 2026-10-17, by reading only (`apps/web/src/features/tsld/model/bulk-move.ts:63-64` clamps each row's lane to `>= 0` on its own; the dragged bar's lane is clamped at `render/viewport.ts:54`). Not seen in a browser.
+**Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** S · **Owner:** web
+
+Drag a selection upward by more lanes than its topmost bar has above it, and `movedPlacement` clamps every row separately: the bar already in lane 0 stays, and the bars below it close up toward it, so the set's relative lanes are not kept. The keyboard nudge avoids this by refusing `Alt+↑` aloud when any selected bar is in the top lane, and the two inputs now disagree at the boundary. The lane-only path never reaches a browser check in any suite.
+
+**Next:** confirm in a browser first (a three-bar selection in lanes 0, 1 and 2 dragged up by two), then clamp the drag's lane delta at the set level the way the keyboard does. **Trigger:** a report of a dragged group changing shape at the top, or any change to `movedPlacement`.
+
+### 522. The lane-only routing comment and ADR-0080 §8 name an endpoint `moveMany` does not use
+
+**Status:** open · **Verified:** 2026-10-17, by reading (`bulk-move.ts:56-57` says a lane-only move routes "to the cheaper positions endpoint"; `use-plan-workspace-model.ts` `moveMany` sends every move, lane-only included, through `batchPlacements`, and skips only the recalculation)
+**Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** XS · **Owner:** web
+
+A comment and an accepted ADR describe two endpoints; the code uses one. The cost of the difference is small, because the client skips the recalculation for a lane-only move, but the comment is a claim about behaviour that is wrong (ADR-0076). ADR-0080 is never rewritten, so the correction belongs in the code comment and a dated note.
+
+**Next:** correct the comment in `bulk-move.ts` (and `isLaneOnly`'s docblock if it repeats it). **Trigger:** the next change to `bulk-move.ts`.
+
+### 523. A selection of more than 2,000 activities produces the server's raw validation message when moved
+
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-17, by reading (`plan-activities.controller.ts` caps the placements body at 2,000 rows; neither the drag nor the keyboard nudge checks the count before writing, and the thrown message is shown as the banner)
+**Raised:** 2026-10-17 (keyboard plural nudge, `docs/specs/nudge-plural-selection/` §4.9) · **Size:** XS · **Owner:** web
+
+Both ways of moving a plural selection inherit the cap, and a plan large enough to hit it shows the validation sentence as it came from the server. Plans of that size are the scale-test fixtures (`packages/seed`), not a planner's selection, so no one has reached it.
+
+**Next:** refuse before writing with a sentence that names the cap, in `moveMany` so the drag and the keyboard share it. **Trigger:** a report of the raw message, or raising the cap.

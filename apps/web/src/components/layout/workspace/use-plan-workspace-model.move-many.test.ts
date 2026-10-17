@@ -221,6 +221,7 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     h.batchPlacements.mockRejectedValue(apiError(409));
     const outcome = await moveMany()([ACTIVITY], { dayDelta: 2, laneDelta: 0 });
     expect(outcome.conflict).toMatch(/This plan changed since you opened it/);
+    expect(outcome.applied).toBe(false);
   });
 
   it('routes a pen loss through onWriteRejected and reports no conflict of its own', async () => {
@@ -230,6 +231,9 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     expect(h.onWriteRejected).toHaveBeenCalled();
     // The pen layer owns this message — a second sentence here would say it twice.
     expect(outcome.conflict).toBeNull();
+    // …and nothing was written, which the caller must be able to tell from a success: both used
+    // to resolve `{ conflict: null }`, so a rejected drag announced "N activities moved".
+    expect(outcome.applied).toBe(false);
   });
 
   it('rethrows anything it does not recognise rather than swallowing it', async () => {
@@ -257,6 +261,23 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     const outcome = await moveMany()([ACTIVITY], { dayDelta: 0, laneDelta: 0 });
     expect(h.batchPlacements).not.toHaveBeenCalled();
     expect(outcome.conflict).toBeNull();
+    expect(outcome.applied).toBe(false);
+  });
+
+  it('reports applied after a recorded write', async () => {
+    const outcome = await moveMany()([ACTIVITY], { dayDelta: 2, laneDelta: 0 });
+    expect(outcome).toEqual({ applied: true, conflict: null });
+  });
+
+  it('records a coalescable step only when the caller opts in, keyed by the set written', async () => {
+    await moveMany()([ACTIVITY, OTHER], { dayDelta: 2, laneDelta: 0 });
+    expect(h.record.mock.calls[0]?.[0]).not.toHaveProperty('coalescing');
+
+    h.record.mockClear();
+    await moveMany()([OTHER, ACTIVITY], { dayDelta: 2, laneDelta: 0 }, { coalesce: true });
+    expect(h.record.mock.calls[0]?.[0].coalescing?.key).toBe(
+      `bulk-move:${[ACTIVITY.id, OTHER.id].sort().join(',')}`,
+    );
   });
 
   it('records ONE undoable step, labelled by how many bars actually moved', async () => {

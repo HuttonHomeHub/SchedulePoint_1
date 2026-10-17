@@ -22,6 +22,7 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
+import { useCoalescedPluralNudge } from '../interaction/use-coalesced-plural-nudge';
 import { arrangeOfferMessage, computeLaneArrangement } from '../model/arrange-lanes';
 import {
   addAll,
@@ -36,7 +37,11 @@ import {
 import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
-import { repositionAnnouncement } from '../model/reposition-announcement';
+import {
+  pluralMoveAnnouncement,
+  pluralMoveHint,
+  repositionAnnouncement,
+} from '../model/reposition-announcement';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
@@ -58,6 +63,7 @@ import {
   START_EDGE_FROZEN_REASON,
   START_NOT_CHANGED_NOTE,
   startFrozenPluralReason,
+  summaryNotMovablePluralReason,
   STARTS_NOT_CHANGED_NOTE,
 } from '../render/hit-test';
 import {
@@ -271,7 +277,13 @@ export interface TsldBulkOperations {
   moveMany: (
     rows: readonly ActivitySummary[],
     delta: { dayDelta: number; laneDelta: number },
-  ) => Promise<{ conflict: string | null }>;
+    /** `coalesce` folds quick successive moves of the same set into one undo step (the keyboard). */
+    options?: { coalesce?: boolean },
+  ) => Promise<{
+    /** False when nothing was written (a pen rejection, a stale version, a no-op). */
+    applied: boolean;
+    conflict: string | null;
+  }>;
 }
 
 export interface TsldPanelProps {
@@ -1950,7 +1962,7 @@ export function TsldPanel({
               current.primaryId === null
               ? replace(id)
               : addAll(current, spanIds(current.primaryId, id));
-        announceSelectionCount(next);
+        announceSelectionCount(next, current.ids.length);
         return next;
       });
       return;
@@ -1975,7 +1987,7 @@ export function TsldPanel({
     if (!CANVAS_MULTI_SELECT_ENABLED) return;
     setSelection((current) => {
       const next = additive ? addAll(current, ids) : replaceAll(ids);
-      announceSelectionCount(next);
+      announceSelectionCount(next, current.ids.length);
       return next;
     });
   };
@@ -1996,8 +2008,16 @@ export function TsldPanel({
     return order.slice(lo, hi + 1);
   };
 
-  /** One utterance for a plural selection — the count, not a list nobody can hold in their head. */
-  const announceSelectionCount = (next: CanvasSelection): void => {
+  /**
+   * One utterance for a plural selection — the count, not a list nobody can hold in their head.
+   *
+   * On the transition INTO plural it adds the move hint, so a screen-reader user learns once that
+   * the arrow chord moves the whole set (WCAG 4.1.3); repeated on every Space toggle it would drown
+   * the count it follows. Only when the caller can write: otherwise the sentence would describe a
+   * capability they do not have, which is why the hint could not be spoken until the keyboard route
+   * existed (`docs/TECH_DEBT.md` #116 item 2).
+   */
+  const announceSelectionCount = (next: CanvasSelection, previousCount: number): void => {
     if (next.ids.length === 0) {
       announce('Selection cleared.');
       return;
@@ -2008,7 +2028,12 @@ export function TsldPanel({
       announce(rowText ?? '1 activity selected.');
       return;
     }
-    announce(`${next.ids.length} activities selected.`);
+    const count = `${String(next.ids.length)} activities selected.`;
+    announce(
+      previousCount < 2 && bulk?.gate.writable
+        ? `${count} ${pluralMoveHint(next.ids.length)}`
+        : count,
+    );
   };
 
   // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a
@@ -2090,6 +2115,7 @@ export function TsldPanel({
   // the live version, serialized, flushed on unmount, and race-free vs. an in-flight pointer drag.
   // The full state machine + its correctness reasoning live in the hook (unit-tested there).
   const pointerRepositionBusyRef = useRef(false);
+  const pluralNudgeBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
     barDateSource,
     onReposition: notedReposition,
@@ -2100,7 +2126,26 @@ export function TsldPanel({
     setConflict: (message, refreshable) =>
       message === null ? clearConflict() : showConflict(message, refreshable),
     announce,
-    isPointerBusy: () => pointerRepositionBusyRef.current,
+    // The plural nudge is a write too: a single-bar press must not race its burst.
+    isPointerBusy: () => pointerRepositionBusyRef.current || pluralNudgeBusyRef.current,
+  });
+  // Coalesced keyboard nudge of the plural selection (`docs/TECH_DEBT.md` #116 item 1) — one write
+  // per burst through the same `moveMany` seam the plural drag uses. A sibling of the hook above,
+  // not a mode of it; the two see each other through the busy predicates so they never write at once.
+  const pluralNudge = useCoalescedPluralNudge({
+    barDateSource,
+    moveMany: bulk?.moveMany,
+    activities,
+    dataDate,
+    setGhost: setPendingReposition,
+    setConflict: (message, refreshable) =>
+      message === null ? clearConflict() : showConflict(message, refreshable),
+    announce,
+    // A ghost that is not ours is a single-bar nudge or drag in flight.
+    isOtherWriteBusy: () =>
+      pointerRepositionBusyRef.current ||
+      (pendingReposition !== null && !pluralNudgeBusyRef.current),
+    busyRef: pluralNudgeBusyRef,
   });
   // Coalesced duration nudge (ADR-0052 M2, WCAG 2.5.7) — the `Shift+←/→` keyboard equivalent of
   // the finish-edge resize drag, sharing the pointer-busy gate + ghost + banner seams with the
@@ -2243,7 +2288,7 @@ export function TsldPanel({
           // a stale closure; a key handler is re-created every render and has no such problem.
           const next = toggle(selection, activeId);
           setSelection(next);
-          announceSelectionCount(next);
+          announceSelectionCount(next, selection.ids.length);
         }
         return;
       }
@@ -2273,7 +2318,7 @@ export function TsldPanel({
       event.preventDefault();
       const next = replaceAll(activities.map((a) => a.id));
       setSelection(next);
-      announceSelectionCount(next);
+      announceSelectionCount(next, selection.ids.length);
       return;
     }
     /**
@@ -2294,7 +2339,7 @@ export function TsldPanel({
     ) {
       event.preventDefault();
       setSelection(EMPTY_SELECTION);
-      announceSelectionCount(EMPTY_SELECTION);
+      announceSelectionCount(EMPTY_SELECTION, selection.ids.length);
       return;
     }
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
@@ -2316,9 +2361,10 @@ export function TsldPanel({
       durationNudge(current, event.key === 'ArrowRight' ? 1 : -1);
       return;
     }
-    // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
-    // (a hand-placed `visualStart`, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
-    // key is one net write (WCAG 2.1.1; no pointer-only capability). Behind the edit flag.
+    // Alt+arrows nudge the focused activity — or the whole plural selection, below — vertical = lane
+    // (no recalc), horizontal = start day (a hand-placed `visualStart`, recalcs). The keyboard
+    // equivalent of a free-2D drag, coalesced so a held key is one net write (WCAG 2.1.1; no
+    // pointer-only capability). Behind the edit flag.
     if (
       editingEnabled &&
       onReposition &&
@@ -2331,10 +2377,21 @@ export function TsldPanel({
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       if (!current) return;
-      if (event.key === 'ArrowUp') nudge(current, 'lane', -1);
-      else if (event.key === 'ArrowDown') nudge(current, 'lane', 1);
-      else if (event.key === 'ArrowLeft') nudge(current, 'time', -1);
-      else nudge(current, 'time', 1);
+      const axis = event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'lane' : 'time';
+      const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
+      // The cursor decides, as the grab does for the drag: the whole selection moves only when it
+      // holds more than one activity AND includes the cursor row. A cursor outside the set moves
+      // that one bar, as it always has.
+      if (
+        CANVAS_MULTI_SELECT_ENABLED &&
+        bulk?.moveMany &&
+        selection.ids.length > 1 &&
+        selection.ids.includes(current.id)
+      ) {
+        pluralNudge(selection.ids, current, axis, delta);
+      } else {
+        nudge(current, axis, delta);
+      }
       return;
     }
     // n opens the create-activity popover pre-filled from the focused activity's lane + start —
@@ -2379,7 +2436,7 @@ export function TsldPanel({
       setActiveIdRaw(target.id);
       const grown = addAll(selection, [target.id]);
       setSelection(grown);
-      announceSelectionCount(grown);
+      announceSelectionCount(grown, selection.ids.length);
       return;
     }
     select(target.id);
@@ -2585,6 +2642,13 @@ export function TsldPanel({
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
       if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
         const rows = activities.filter((a) => pluralIds.includes(a.id));
+        // A WBS summary can be in the selection (Ctrl+A takes every row), and the server refuses a
+        // batch that holds one — say which part of the selection stopped it before writing.
+        const summaryCount = rows.filter((a) => a.type === 'WBS_SUMMARY').length;
+        if (summaryCount > 0) {
+          showConflict(summaryNotMovablePluralReason(summaryCount), false);
+          return;
+        }
         // One started bar in the set would be slid sideways with the rest, writing a placement the
         // schedule ignores (#431): refuse the whole sideways batch rather than move some of it.
         const startedCount = rows.filter(isStartEdgeFrozen).length;
@@ -2627,9 +2691,11 @@ export function TsldPanel({
           .then((outcome) => {
             setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict);
-            else
+            // Only a write that landed is announced: a pen rejection resolves without a conflict
+            // and without having moved anything.
+            else if (outcome.applied)
               announce(
-                `${String(rows.length)} activities moved.${
+                `${pluralMoveAnnouncement({ count: rows.length, ...delta })}${
                   intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''
                 }`,
               );
@@ -3142,6 +3208,7 @@ export function TsldPanel({
               listboxRef.current?.focus();
             }}
             busy={bulkBusy}
+            canMove={bulk.gate.writable}
           />
         ) : null}
 
