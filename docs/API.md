@@ -1887,14 +1887,30 @@ controller's 30 / 60 s per handler.
   route has its own 100 / 60 s. The decision it describes is unchanged; only
   the mechanism was wrong.
   The response also carries **`advisories`** (ADR-0162 D1): an array **always
-  present**, one entry per `HealthAdvisoryId` (today only `ZERO_DURATION_TASKS`),
-  kept **outside** the fourteen metrics and **never counted in `summary`**, so the
-  DCMA contract above is unchanged. Each entry has the metric's own shape —
-  `id`, `name`, `measured`, `offenderCount`, `offendersTruncated`, `offenders` —
-  plus `detail.resourced`, the number of those activities that have live resource
-  assignments. It is found from stored durations whether or not the plan has been
-  calculated. A client must tolerate its absence: the web and API images are
-  recreated independently, so a new web bundle can meet an API that predates it.
+  present**, one entry per `HealthAdvisoryId` in tuple order (`ZERO_DURATION_TASKS`,
+  then `REDUNDANT_LINKS`), kept **outside** the fourteen metrics and **never counted
+  in `summary`**, so the DCMA contract above is unchanged. Each entry has the
+  metric's own shape — `id`, `name`, `measured`, `offenderCount`,
+  `offendersTruncated`, `offenders` — and is **discriminated on `id`** (OpenAPI
+  `oneOf`, ADR-0196 D3); the **denominator of `measured` is per advisory**
+  (activities for the first, `relationshipCount` for the second). Both are found
+  from stored rows whether or not the plan has been calculated.
+  `ZERO_DURATION_TASKS` adds `detail.resourced`, the number of those activities that
+  have live resource assignments. **`REDUNDANT_LINKS`** (ADR-0196) lists links whose
+  removal cannot change any activity's dates or float whatever the durations
+  (another chain of links already pushes the successor at least as far); each
+  offender is `kind: 'RELATIONSHIP'`, its `activityId` is the successor, and its
+  `note` names the type, the lag if any, and the witness ("already implied through
+  B"). Its `detail` is `{ rule, unjudged, searchCapped }`: `rule` is the token the
+  caveat sentence is keyed on (`DOMINATED_UNDER_ANY_DURATION`), `unjudged` counts the
+  links the rule did not check (a level of effort or summary endpoint, a started or
+  pinned successor, an endpoint not among the live activities, or links left when the
+  deterministic work limit was reached) and is never folded into `offenderCount`, and
+  `searchCapped` says the limit was reached. A client must tolerate its absence and
+  an `id` it does not know: the web and API images are recreated independently, so a
+  new web bundle can meet an API that predates a row, and an old one an API that has
+  added one (the web that reads each row by its own id shipped before the API emitted
+  `REDUNDANT_LINKS`).
 
 - `GET …/schedule/health-check/critical-path-test` runs **DCMA metric 12, the
   Critical Path Test, as a read-only what-if** (health M6, `schedule:read` —

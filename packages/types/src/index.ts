@@ -3041,7 +3041,7 @@ export interface HealthSummary {
  * total over this tuple exactly as it is over the metrics — every advisory row is always present,
  * reading a count of zero rather than disappearing (ADR-0116's "a report never omits a check").
  */
-export const HEALTH_ADVISORY_IDS = ['ZERO_DURATION_TASKS'] as const;
+export const HEALTH_ADVISORY_IDS = ['ZERO_DURATION_TASKS', 'REDUNDANT_LINKS'] as const;
 
 export type HealthAdvisoryId = (typeof HEALTH_ADVISORY_IDS)[number];
 
@@ -3082,9 +3082,10 @@ export interface RedundantLinksAdvisory extends HealthAdvisoryBase {
 }
 
 /**
- * One advisory row, discriminated on `id`. The union admits the redundant-link member before
- * {@link HEALTH_ADVISORY_IDS} emits it: the web that reads it per id is released first, so an
- * older tab never prints a row under a heading it was not written for (spec E6).
+ * One advisory row, discriminated on `id`. The web reads each member by its own id, and one it does
+ * not know by name and count only, and shipped that before {@link HEALTH_ADVISORY_IDS} began to emit
+ * `REDUNDANT_LINKS`, so an older tab never prints a row under a heading it was not written for
+ * (spec E6).
  */
 export type HealthAdvisoryResult = ZeroDurationTasksAdvisory | RedundantLinksAdvisory;
 

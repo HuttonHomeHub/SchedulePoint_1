@@ -1081,7 +1081,7 @@ describe('ScheduleService.getHealthCheck', () => {
     // would be undefined and throw: "each of these once" is the whole query budget, before the
     // advisory and after it.
     const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
-    expect(result.advisories.map((a) => a.id)).toEqual(['ZERO_DURATION_TASKS']);
+    expect(result.advisories.map((a) => a.id)).toEqual(['ZERO_DURATION_TASKS', 'REDUNDANT_LINKS']);
     expect(schedule.loadHealthActivities).toHaveBeenCalledTimes(1);
     expect(schedule.loadEdges).toHaveBeenCalledTimes(1);
     expect(schedule.loadActiveBaselineHealthSnapshot).toHaveBeenCalledTimes(1);
@@ -1116,6 +1116,61 @@ describe('ScheduleService.getHealthCheck', () => {
     // The same count read as presence: `work` holds one assignment, so metric 10 lists nobody.
     const resources = result.metrics.find((m) => m.id === 'RESOURCES')!;
     expect(resources.offenders).toEqual([]);
+  });
+
+  describe('the redundant-links advisory reads the lag calendar from the stored rows (M2-T2)', () => {
+    // A -> C (960 min) beside A -> B (960 min) and B -> C: redundant exactly when the two positive lags
+    // are measured on the same calendar, which the service must decide from `lag_calendar` and the
+    // endpoints' calendar ids rather than from anything the rule can see for itself.
+    const run = async (
+      ab: ScheduleEdgeRow['lagCalendar'],
+      ac: ScheduleEdgeRow['lagCalendar'],
+      calendars: { a?: string | null; c?: string | null } = {},
+    ) => {
+      const load = schedule.loadHealthActivities as unknown as () => Promise<
+        Record<string, unknown>[]
+      >;
+      const base = (await load())[0]!;
+      const row = (id: string, calendarId: string | null) => ({
+        ...base,
+        id,
+        code: id,
+        name: id,
+        calendarId,
+      });
+      schedule.loadHealthActivities.mockResolvedValue([
+        row('A', calendars.a ?? null),
+        row('B', null),
+        row('C', calendars.c ?? null),
+      ]);
+      schedule.loadEdges.mockResolvedValue([
+        { ...edgeRow('A', 'B'), lagMinutes: 960, lagCalendar: ab },
+        edgeRow('B', 'C'),
+        { ...edgeRow('A', 'C'), lagMinutes: 960, lagCalendar: ac },
+      ]);
+      const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
+      return result.advisories.find((a) => a.id === 'REDUNDANT_LINKS')!.offenders.map((o) => o.id);
+    };
+
+    it('two links on the plan calendar are the same key', async () => {
+      expect(await run('PROJECT_DEFAULT', 'PROJECT_DEFAULT')).toEqual(['A-C-FS']);
+    });
+
+    it('an elapsed lag beside a working lag is two keys', async () => {
+      expect(await run('TWENTY_FOUR_HOUR', 'PROJECT_DEFAULT')).toEqual([]);
+    });
+
+    it('predecessor lags both resolve to the predecessor’s own calendar', async () => {
+      expect(await run('PREDECESSOR', 'PREDECESSOR', { a: 'cal-a' })).toEqual(['A-C-FS']);
+    });
+
+    it('a predecessor lag and a successor lag are two keys when the endpoints differ in calendar', async () => {
+      expect(await run('PREDECESSOR', 'SUCCESSOR', { a: 'cal-a', c: 'cal-c' })).toEqual([]);
+    });
+
+    it('a predecessor lag on an endpoint that inherits the plan calendar is the plan default', async () => {
+      expect(await run('PREDECESSOR', 'PROJECT_DEFAULT')).toEqual(['A-C-FS']);
+    });
   });
 
   it('getCriticalPathTest: a plan with no start is 422 PLAN_START_REQUIRED before any load (M6)', async () => {
