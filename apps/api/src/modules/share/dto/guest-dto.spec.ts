@@ -90,6 +90,7 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
     levelingDelayMinutes: 480,
     levelingWindowExceeded: false,
     selfOverAllocated: false,
+    derivedDurationMinutes: null,
     version: 9,
     createdAt: DAY,
     updatedAt: DAY,

@@ -1502,6 +1502,33 @@ model Activity {
   levelingWindowExceeded Boolean   @default(false) @map("leveling_window_exceeded")
   selfOverAllocated      Boolean   @default(false) @map("self_over_allocated")
 
+  // DERIVED DURATION — the working time a WBS_SUMMARY's or LEVEL_OF_EFFORT's engine-derived span
+  // covers, in WORKING MINUTES on the activity's own calendar (falling back to the plan's — the
+  // calendar its span is rolled onto). Spec docs/specs/wbs-summary-duration/spec.md §4.5–§4.6;
+  // migration 20261017120000. `duration_minutes` stays the planner's INPUT for these two types and
+  // is never written back (ADR-0022); this is the engine's OUTPUT beside it.
+  //   * ENGINE-OWNED exactly like loe_no_span: written ONLY by the recalc's batched
+  //     `unnest` UPDATE (schedule.repository `writeResults`), NEVER accepted from a write DTO, NEVER
+  //     touching version/updated_at/updated_by (ADR-0022). `writeResults` writes EVERY active
+  //     activity of the plan, so it writes NULL for every other type — that is what clears the value
+  //     from an activity that stopped being a summary/LOE, and why nothing else may write it.
+  //   * NULL means "no figure": any other type, an empty summary, an LOE with loe_no_span, or not
+  //     calculated since this column landed. Not distinguished, by the same plan-grain argument as
+  //     visual_conflict_reason (plans.schedule_computed_at owns "calculated"). Between a type change
+  //     and the next recalculation the stored value is stale exactly as early_*/loe_no_span are, so a
+  //     reader gates on `type` rather than trusting non-null (the response DTOs must).
+  //   * MINUTES, not days — unlike the day-denominated floats. Minutes are exact, so the one
+  //     rounding happens at the API boundary on the row's day factor (minutesToDays), the
+  //     leveling_delay_minutes precedent; a stored day value would lose ADR-0070's sub-day spans.
+  //   * CHECKED ≥ 0 — ck_activities_derived_duration_minutes_nonneg, raw SQL in the migration
+  //     (Prisma cannot express CHECK, so nothing is declared here). A duration, so it follows
+  //     duration_minutes/remaining_duration_minutes rather than the unconstrained floats: both
+  //     derivation passes clamp finish ≥ start, so a negative is only ever an engine defect.
+  //   * NO type CHECK — it would fail a recalculation-free type change out of the two types unless a
+  //     user-edit path wrote this engine column, which ADR-0022 forbids. NO index — read only in the
+  //     plan-scoped activity load; no predicate or ORDER BY targets it.
+  derivedDurationMinutes Int? @map("derived_duration_minutes")
+
   // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
   // optimistic-lock version, soft delete + restore-batch correlation.
   version       Int       @default(1)

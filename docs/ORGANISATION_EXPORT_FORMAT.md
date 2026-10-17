@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `1.0`
+- **Version:** `1.1`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "1.0",
+  "formatVersion": "1.1",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -142,6 +142,15 @@ version.
 - Re-importing an export into SchedulePoint is not promised. The database backup
   ([ADR-0192](adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)) is the
   restore path.
+
+Changes since `1.0`:
+
+- **`1.1`** — `activities` gains `derivedDurationMinutes`, appended at the end: the working minutes a
+  WBS summary's or level-of-effort activity's calculated span covers, on that activity's calendar. Empty
+  for every other type, for a summary with no children, for a level-of-effort with no span, and for a
+  plan not calculated since the column was added. Like every computed column it is exported as stored,
+  so an activity whose type changed since its plan was last calculated can still carry its old value;
+  read it with `type`.
 
 ## What is never exported
 
@@ -416,6 +425,7 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `createdBy`                | text    |                                                       |
 | `updatedBy`                | text    |                                                       |
 | `deletedAt`                | instant |                                                       |
+| `derivedDurationMinutes`   | int     | minutes; summary and level-of-effort only (since 1.1) |
 
 Not exported: `version`, `deleteBatchId`.
 

@@ -1,0 +1,92 @@
+-- DERIVED DURATION — the working time a WBS summary's or a level-of-effort's engine-derived span
+-- covers, persisted as engine-owned output.
+-- Spec: docs/specs/wbs-summary-duration/spec.md §4.5–§4.6 (approved by the product owner 2026-10-17:
+-- LOE included; counted on the activity's own calendar, falling back to the plan's). Milestone
+-- M1-T2/T3. Closes the open half of docs/TECH_DEBT.md #375 once M2 reads it.
+--
+-- WHY A COLUMN AND NOT `duration_minutes`. For these two types `duration_minutes` is the planner's
+-- creation input (0 from the XER importer) and the engine never writes it back. Writing the derived
+-- figure there would make a recalculation touch an input the next recalculation reads, enter
+-- activity history, change the interchange round-trip and break the optimistic-lock invisibility of
+-- a recalculation (ADR-0022). The figure is OUTPUT, so it gets an output column.
+--
+-- WHY PERSISTED. The engine is the only place that holds the span as INSTANTS together with the
+-- calendar it was rolled onto (`compute.ts` LOE pass and WBS rollup pass). The persisted early/late
+-- columns are `DATE`, so anything downstream of `writeResults` has lost sub-day spans (ADR-0070)
+-- and would need every calendar's exceptions to count working time — the remaining_float argument
+-- (migration 20260920120100), one quantity over.
+--
+-- WORKING MINUTES, NOT DAYS, and unlike `total_float`/`remaining_float` that is the simpler choice
+-- rather than a compromise: minutes are exact, so the single rounding to days happens at the API
+-- boundary on the row's own day factor (`minutesToDays`), as `leveling_delay_minutes` already does.
+-- INTEGER: 2^31 working minutes is over four thousand years of 24-hour working time, and the
+-- `duration_minutes` input it stands beside is INTEGER too.
+--
+-- NULLABLE, NO DEFAULT. NULL means "no figure": every type other than WBS_SUMMARY and
+-- LEVEL_OF_EFFORT, an empty summary, an LOE flagged `loe_no_span`, or a plan not recalculated since
+-- this column landed. Those are deliberately not distinguished — "calculated" is a plan-grain fact
+-- owned by `plans.schedule_computed_at`, and `visual_drift_days`, `leveling_delay_minutes` and
+-- `visual_conflict_reason` carry the identical conflation.
+--
+-- ENGINE-OWNED (ADR-0022). Written ONLY by the batched `unnest` UPDATE in `schedule.repository.ts`
+-- `writeResults`, as its last argument; NEVER accepted from a write DTO; NEVER touching
+-- version/updated_at/updated_by. `writeResults` writes every active activity of the plan and
+-- refuses a short count, so every recalculation writes NULL to every row of another type — which is
+-- what clears the value from an activity that has stopped being a summary or an LOE. Nothing else
+-- may write this column, including the activity update path on a type change.
+--
+-- CHECK >= 0 (ck_activities_derived_duration_minutes_nonneg). It is a DURATION, so it follows
+-- `ck_activities_duration_minutes_nonneg` / `_remaining_duration_minutes_nonneg`, not the floats,
+-- which are signed by design. Both derivation passes clamp `finish = max(start, …)` before the
+-- maps are written, and `workingTimeBetween` is signed (`working-time-calendar.ts` — negative when
+-- `to` is earlier), so a negative value is only ever an engine defect such as reversed arguments or
+-- counting un-rolled instants. The constraint turns that into a failed recalculation (the
+-- statement is all-or-nothing) instead of a silently wrong figure on screen and in exports.
+--
+-- NO TYPE CHECK, deliberately — not the fail-closed `CASE … ELSE false` shape, because the type does
+-- not imply the column is SET (empty summary, no-span LOE, uncalculated), only that it MAY be. A
+-- `derived_duration_minutes IS NULL OR type IN ('WBS_SUMMARY', 'LEVEL_OF_EFFORT')` constraint would
+-- refuse an ordinary type change out of either type until the next recalculation, unless the user's
+-- edit wrote this engine column — the cross-ownership ADR-0022 forbids, and which no other
+-- engine-owned column has (`loe_no_span` stays true on an ex-LOE until recalculated, too). Between a
+-- type change and the next recalculation the value is stale exactly as the early dates are; the
+-- plan's `schedule_inputs_changed_at` already says so, and readers gate on `type`.
+--
+-- NO INDEX. Read only within the plan-scoped activity load (`findManyActiveByPlan`, ordered by a
+-- fixed `(created_at, id)` with no sort or filter parameter); the Gantt sorts in the browser. No
+-- predicate or ORDER BY targets it. An index would only cost each recalculation one entry per row.
+--
+-- NO BACKFILL, AND NONE IS POSSIBLE WITHOUT THE ENGINE. Existing rows read NULL, which the web
+-- renders as today's `—`, and fill in on the plan's next recalculation (spec SC-4).
+--
+-- NOT IN `baseline_activities`. A baseline freezes `baseline_start`/`baseline_finish` and the
+-- calendar; the revision compare reports a summary's change as REDATED, and REDURATIONED compares
+-- the INPUT minutes (`revision-changes.ts`). Spec §4.6 puts baselines out of scope.
+--
+-- BOOT SAFETY (ADR-0018 / ADR-0047 / ADR-0107). ADD COLUMN of a nullable column with no default is
+-- metadata-only: no row is rewritten. The CHECK is added NOT VALID then VALIDATEd, the repository's
+-- pattern; inside Prisma's single migration transaction the ACCESS EXCLUSIVE lock from ADD COLUMN
+-- is held to commit anyway, so the split buys no concurrency here, and VALIDATE's one scan reads a
+-- column that is NULL on every row, which the constraint admits — it cannot fail on any data.
+-- OBSERVED rather than asserted (ADR-0107: an empty table cannot exhibit a data-shaped failure), on
+-- a private scratch PostgreSQL 16.15 cluster migrated to 20261004120000 and populated with 5,000
+-- activities across all seven types (three soft-deleted), then migrated by `prisma migrate deploy`:
+-- `relfilenode` unchanged across the apply (no rewrite); `pg_attribute.atthasmissing = f`; the
+-- constraint reads `convalidated = t`; 0, 2147483647 and NULL are accepted and -1 is refused with
+-- 23514; an all-NULL `ARRAY[NULL, NULL]::int[]` through `unnest` writes (the `writeResults` parity
+-- path); and `prisma:check-drift` against the result reports "No difference detected".
+--
+-- ROLLBACK. Redeploying the previous image is safe: its Prisma client selects named columns and its
+-- `writeResults` does not name this one, so the column is ignored (left stale, unread).
+--
+-- PARITY. No engine code changes in this file; `computeSchedule` is untouched until M1-T1.
+
+ALTER TABLE "activities" ADD COLUMN "derived_duration_minutes" INTEGER;
+
+ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_derived_duration_minutes_nonneg" CHECK ("derived_duration_minutes" IS NULL OR "derived_duration_minutes" >= 0) NOT VALID;
+ALTER TABLE "activities" VALIDATE CONSTRAINT "ck_activities_derived_duration_minutes_nonneg";
+
+-- Down (forward-only in production, ADR-0018; documented for completeness). Destroys nothing a
+-- recalculation could not reproduce:
+--   ALTER TABLE "activities" DROP CONSTRAINT "ck_activities_derived_duration_minutes_nonneg";
+--   ALTER TABLE "activities" DROP COLUMN "derived_duration_minutes";

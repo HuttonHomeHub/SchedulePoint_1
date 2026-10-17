@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 35
-> models across 74 committed migrations — is the single source of truth for the data model.
+> models across 75 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -615,6 +615,40 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
     in one transaction; a third label later is one migration unless that same file also
     uses it (a DEFAULT, a CHECK, a backfill), and this column has no default while the
     CHECK tests nullness rather than membership.
+- **`derived_duration_minutes` — the working time a derived span covers**
+  (`docs/specs/wbs-summary-duration/spec.md` §4.5–§4.6; migration `20261017120000`). For a
+  `WBS_SUMMARY` and a `LEVEL_OF_EFFORT` the engine derives the span (ADR-0035 §21/§24) and
+  `duration_minutes` stays the planner's creation **input** — `0` from the XER importer —
+  never written back. This nullable `INTEGER` is the engine's **output** beside it: working
+  minutes between the activity's rolled early start and early finish, on its own calendar
+  falling back to the plan's. Engine-owned exactly like `loe_no_span` — the last argument of
+  the `unnest` batch in `schedule.repository.ts` `writeResults`, never accepted from a write
+  DTO, never touching `version`/`updated_at`/`updated_by` (ADR-0022).
+  - **NULL means "no figure"**: any other type, an empty summary, an LOE with `loe_no_span`,
+    or not calculated since the column landed — not distinguished, by the plan-grain argument
+    `visual_conflict_reason` records. `writeResults` writes **every** active activity, so each
+    recalculation writes NULL to every other type, which is what clears the value from an
+    activity that stopped being a summary or an LOE. Nothing else writes it.
+  - **Minutes, not days**, unlike `total_float`/`remaining_float`: minutes are exact, so the
+    one rounding to days happens at the API boundary on the row's day factor
+    (`leveling_delay_minutes` precedent), and sub-day spans (ADR-0070) survive.
+  - **`ck_activities_derived_duration_minutes_nonneg`** (`IS NULL OR >= 0`). A duration, so it
+    follows `ck_activities_duration_minutes_nonneg` rather than the signed floats: both
+    derivation passes clamp `finish = max(start, …)`, while `workingTimeBetween` is **signed**,
+    so a negative is only ever an engine defect (reversed arguments, un-rolled instants) and
+    the CHECK makes it a failed recalculation instead of a wrong figure.
+  - **No type CHECK, deliberately.** The type permits the column rather than requiring it
+    (empty summary, no-span LOE, uncalculated), and `IS NULL OR type IN (…)` would refuse an
+    ordinary type change out of either type until the next recalculation unless the user's
+    edit wrote this engine column — the cross-ownership ADR-0022 forbids. Between a type change
+    and the next recalculation the value is stale exactly as `early_*` and `loe_no_span` are,
+    so readers (the response DTOs, the export reader) gate on `type`.
+  - **No index** (read only in the plan-scoped activity load; no predicate or `ORDER BY`), **no
+    backfill** (none is possible without the engine; NULL renders as today's `—`), and **not
+    in `baseline_activities`**: a baseline freezes the dates and calendar, and the revision
+    compare reports a summary's change as `REDATED` while `REDURATIONED` compares input minutes.
+  - **Exported** in the organisation export as `activities.derivedDurationMinutes`, appended
+    last, which is format `1.1` (`docs/ORGANISATION_EXPORT_FORMAT.md` "Versioning").
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —
@@ -642,6 +676,8 @@ invariants in the DB, not only in code): `ck_activities_percent_complete`
 (0–100), `ck_activities_duration_minutes_nonneg` (≥ 0),
 `ck_activities_remaining_duration_minutes_nonneg` (≥ 0 — bounds a **supplied**
 remaining only; `NULL` is always legal, that is the derive path),
+`ck_activities_derived_duration_minutes_nonneg` (≥ 0 or `NULL` — an engine-owned
+duration, see above),
 `ck_activities_lane_index_nonneg`
 (≥ 0), `ck_activities_resume_after_suspend` (**nullable-safe**: `resume_date IS
 NULL OR suspend_date IS NULL OR resume_date >= suspend_date` — enforced only when

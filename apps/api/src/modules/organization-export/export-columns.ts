@@ -322,6 +322,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'createdBy:text',
       'updatedBy:text',
       'deletedAt:instant',
+      // 1.1 — appended, not placed beside the other computed columns: a reader taking columns by
+      // position keeps working within a major (docs/ORGANISATION_EXPORT_FORMAT.md "Versioning").
+      'derivedDurationMinutes:int',
     ),
     withheld: {
       version: VERSION,
@@ -892,7 +895,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '1.0';
+export const EXPORT_FORMAT_VERSION = '1.1';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';
