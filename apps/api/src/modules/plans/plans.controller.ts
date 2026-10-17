@@ -26,7 +26,7 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 
-import { PlanResponseDto } from './dto/plan-response.dto';
+import { PlanResponseDto, planResponse } from './dto/plan-response.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 import { PlansService } from './plans.service';
 
@@ -54,7 +54,7 @@ export class PlansController {
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(await this.service.get(principal, orgSlug, planId));
+    return planResponse(principal, await this.service.get(principal, orgSlug, planId));
   }
 
   @Patch(':planId')
@@ -69,7 +69,8 @@ export class PlansController {
     @Body() dto: UpdatePlanDto,
     @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(
+    return planResponse(
+      principal,
       await this.service.update(principal, orgSlug, planId, dto, context),
     );
   }
@@ -105,6 +106,6 @@ export class PlansController {
     @Param('planId', ParseUUIDPipe) planId: string,
     @RequestContext() context: RequestContext,
   ): Promise<PlanResponseDto> {
-    return PlanResponseDto.from(await this.service.restore(principal, orgSlug, planId, context));
+    return planResponse(principal, await this.service.restore(principal, orgSlug, planId, context));
   }
 }

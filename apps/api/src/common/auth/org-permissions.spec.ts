@@ -317,14 +317,13 @@ describe('permissionsForRole — baselines (read/variance vs write)', () => {
  * real permission. Only the client is wrong, in another workspace, and only for readers of one
  * role.
  *
- * **This is a gate, not a fix.** The architectural answer is for the API to say so rather than
- * making the client guess — a `meta.permissions` block on the activity read, or a distinguishable
- * "redacted" marker instead of `null`. Until that lands, this turns a silent client defect into a
- * failing build in the diff that causes it, which is the whole difference worth having.
+ * **The API now says so** (2026-10-17): every plan response carries `canReadCost`, and the web
+ * reads it. This test survives for the one case that still derives from the role — a web bundle
+ * talking to an API that predates the field — which turns a silent client defect into a failing
+ * build in the diff that causes it.
  *
- * If you are here because this went red: the divergence may well be right. Land it together with
- * the client change (`deriveActivityEditorGating`'s `canReadCost` input must stop being derived
- * from the role), then delete this test and #62 with it.
+ * If you are here because this went red: the divergence may well be right. Once no supported API
+ * omits `canReadCost`, delete the web fallback (`use-plan-workspace-model.ts`) and this test.
  *
  * **No pinned positive is added beside it**, and that is checked rather than assumed: an equality
  * assertion passes vacuously if no role holds either permission, so it needs one — and

@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import type { PlanSummary } from '@repo/types';
 
+import type { Principal } from '../../../common/auth/principal';
 import { isEditedSinceCalculated } from '../../../common/schedule-inputs/edited-since-calculated';
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 
@@ -127,6 +128,15 @@ export class PlanResponseDto implements PlanSummary {
   })
   editedSinceCalculated!: boolean;
 
+  @ApiProperty({
+    description:
+      "Whether the caller may read this plan's cost fields — the same `cost:read` check the " +
+      'activity and resource reads redact with. Those fields come back `null` both when unset and ' +
+      'when withheld, so this is the only way to tell a hidden cost from an empty one. Per caller, ' +
+      'not per plan (TECH_DEBT #62).',
+  })
+  canReadCost!: boolean;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -136,7 +146,7 @@ export class PlanResponseDto implements PlanSummary {
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: Plan): PlanResponseDto {
+  static from(entity: Plan, canReadCost: boolean): PlanResponseDto {
     return {
       id: entity.id,
       projectId: entity.projectId,
@@ -162,9 +172,19 @@ export class PlanResponseDto implements PlanSummary {
         entity.scheduleComputedAt,
         entity.scheduleInputsChangedAt,
       ),
+      canReadCost,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
     };
   }
+}
+
+/**
+ * A plan as one caller reads it. `canReadCost` is that caller's own `cost:read` in the plan's
+ * organisation — the check `ActivitiesService` redacts cost with — so the flag and the redaction
+ * cannot disagree about who sees money.
+ */
+export function planResponse(principal: Principal, entity: Plan): PlanResponseDto {
+  return PlanResponseDto.from(entity, principal.can('cost:read', entity.organizationId));
 }
