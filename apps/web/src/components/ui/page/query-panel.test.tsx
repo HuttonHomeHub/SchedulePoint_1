@@ -71,6 +71,16 @@ describe('QueryPanel', () => {
     expect(polite()).not.toBeNull();
   });
 
+  it('keeps the error alert outside the busy wrapper while a retry is in flight', () => {
+    const { container } = render(
+      panel({ isPending: false, isError: true, data: undefined, isFetching: true }),
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.querySelector('[role="alert"], [role="status"], [aria-live]')).toBeNull();
+  });
+
   // ADR-0178 D-6: the first settled sentence is a resting state. It is reachable as plain text and
   // is NOT spoken; only a later, different one is.
   it('renders the body and keeps the first settled sentence out of the live region', () => {

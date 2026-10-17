@@ -86,6 +86,12 @@ export interface StatusSectionProps {
   announce?: 'settle' | 'change';
   /** One sentence saying what the box holds, under its heading. */
   description?: React.ReactNode;
+  /**
+   * An announced failure (`role="alert"`) for this section. Rendered beside the busy wrapper and never
+   * inside it, for the reason the polite sentences are: a retry sets `busy` while the alert is on
+   * screen, and a busy subtree may defer what it announces.
+   */
+  alert?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -93,6 +99,7 @@ export function StatusSection({
   title,
   status,
   children,
+  alert,
   id,
   busy,
   announce = 'settle',
@@ -134,6 +141,7 @@ export function StatusSection({
         <p aria-live="polite" className="sr-only">
           {resting ? '' : status}
         </p>
+        {alert}
         <div aria-busy={busy === true ? true : undefined} className="space-y-4">
           {children}
         </div>

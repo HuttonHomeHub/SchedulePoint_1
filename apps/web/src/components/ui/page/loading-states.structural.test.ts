@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest';
  *   attributes), so five sites announced a generic "Loading…" beside the sentence they meant to be
  *   the announcement. `labelOnScreen` is the supported way to put a sentence on screen.
  *
- * - **G4** — no `<Spinner>`, `<LoadingShape>` (unless `announce="none"`), `role="status"` or
+ * - **G4** — no `<Spinner>`, `<LoadingShape>` (unless `announce="none"`), `role="status"`, `role="alert"` or
  *   `aria-live` element sits inside an element carrying `aria-busy`, at a call site. ARIA 1.2 lets
  *   assistive technology defer changes inside a busy element, and a loading sentence unmounts before
  *   it stops being busy, so a status in there may never be spoken. Two route fallbacks did exactly
@@ -190,6 +190,7 @@ function statusesInsideBusy(source: string): string[] {
     if (tag === 'LoadingShape' && literal(attr(node, 'announce')) !== 'none')
       return '<LoadingShape>';
     if (literal(attr(node, 'role')) === 'status') return 'role="status"';
+    if (literal(attr(node, 'role')) === 'alert') return 'role="alert"';
     if (attr(node, 'aria-live')) return 'aria-live';
     return undefined;
   };

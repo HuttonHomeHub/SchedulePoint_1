@@ -101,6 +101,9 @@ export function QueryPanel<T>({
       busy={query.isFetching === true}
       // A page read: its first sentence is a resting state, and the page announces it once.
       announce="change"
+      {...(query.isError
+        ? { alert: <QueryErrorState label={errorLabel} onRetry={() => void query.refetch()} /> }
+        : {})}
       {...(description === undefined ? {} : { description })}
     >
       {query.isPending && (
@@ -108,7 +111,6 @@ export function QueryPanel<T>({
           {skeleton}
         </LoadingShape>
       )}
-      {query.isError && <QueryErrorState label={errorLabel} onRetry={() => void query.refetch()} />}
       {answered && children(data)}
     </StatusSection>
   );
