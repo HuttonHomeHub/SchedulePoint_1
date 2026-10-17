@@ -1,6 +1,5 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
-import { canvasLabel } from './a11y';
 import { isStartEdgeFrozen } from './hit-test';
 import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
@@ -70,7 +69,9 @@ export function toRenderActivities(
     visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
     laneOverlap: overlapping.has(a.id),
     constraint: activeConstraintAnchor(a),
-    label: canvasLabel(a, false),
+    // The bare name. The painter composes `{code} {name}` once, at print, through `canvasLabel`;
+    // composing here as well would print the code twice the day a `true` reached this call.
+    label: a.name,
     code: a.code,
     durationDays: a.durationDays,
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,

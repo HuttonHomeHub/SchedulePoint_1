@@ -10670,6 +10670,17 @@ The product owner answered the gate pass's other two questions the same day (ADR
 owner's three answers"): the node stays 15 px, and a near-critical node now carries a centre dot, so
 the rim ladder's weak step no longer rests on weight alone. Neither leaves work here.
 
+**Items 2, 6, 7, 8, 9 and 11 landed 2026-10-17.** Item 2 is a pair in `token-contrast.test.ts` (the
+mark on the bar clears the 3:1 the other mark pairs use). Item 6 is
+`paint.node-style-budget.test.ts` (node style writes per rim, one fill for every dot; each case run
+against a per-node and a per-dot break). Item 7 walks the routed lines, which are the culled set in
+scene order. Item 8: the render model now carries the bare name, and `canvasLabel` is called once, at
+print. Item 9 adds the positive half to `lod-tier.structural.test.ts`. Item 11 clamps the waiting
+interval to the canvas before the label is placed (`paint.link-marks.test.ts`, red against the
+unclamped code: the chip ended at x 1305 on a 1,200 px canvas). **Left, and not work:** items 1 and 10
+are evidence and a residue, item 3 a convention, item 4 an accepted trade. The row stays open for
+them.
+
 ### 395. The links-and-labels gate pass's non-blocking findings
 
 **Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-25 (links-and-labels M4 reviews:
@@ -10696,6 +10707,13 @@ not block on.
 6. **`text-index.ts` repeats the glyph index's shape** (component): bucket by lane, sort by x, keep
    a maximum width, binary-search the first box that can reach x. Disclosed in its docblock; a shared
    generic index would remove the second copy.
+
+**Items 4 and 6 landed 2026-10-17.** Item 4: `verticalSpans` keys its map by the x in hundredths
+as an integer (no string per segment), and `attempt()` copies a moved line shallowly, since a moved
+point is replaced and never edited. Item 6: the glyph and text indexes now build and search through
+`lane-reach-index.ts`, each keeping its own shape. Output is unchanged (`link-tracks`, `link-score`,
+`text-index` and the paint suites). **Left:** items 1 and 3 (evidence and a pitch decision) and 5
+(a candidate if a paint reading comes back tight); none is work yet, and the row stays open.
 
 **Items 8–11 closed 2026-09-26.** Item 8 turned out to be a real defect, not just an untested
 case: enumerating every three-run group (each end above or below the gutter, 64 cases) found two
