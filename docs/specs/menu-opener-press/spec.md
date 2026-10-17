@@ -1,6 +1,6 @@
 # Feature Spec + Plan: A menu's own trigger closes it (#229, Menu half)
 
-- **Status:** Draft — awaiting product-owner approval before implementation
+- **Status:** Approved — by the product owner, 2026-10-17, with the recommended defaults (Q1: focus returns where Escape sends it; Q2: `openerRef` is a required prop, `null` allowed)
 - **Author(s):** feature-analyst (Claude), for the product owner
 - **Date:** 2026-10-17
 - **Tracking:** `docs/TECH_DEBT.md` #229 (Menu half; the combobox half closed 2026-10-16)
@@ -92,20 +92,20 @@ Gantt and Explorer, swallow a click on the **row** while its context menu is ope
 
 **Population, measured** (`<Menu\b` in `apps/web/src`, tests excluded — 15 render sites, 10 files):
 
-| #     | Site                                        | Opener (what was pressed)   | `restoreFocusRef` today      |
-| ----- | ------------------------------------------- | --------------------------- | ---------------------------- |
-| 1     | `components/ui/row-actions-menu.tsx`        | `triggerRef` (`⋯`)          | same                         |
-| 2     | `components/layout/workspace/plan-actions-menu.tsx` | `triggerRef`        | same                         |
-| 3     | `components/layout/account-chip.tsx`        | `triggerRef`                | same                         |
-| 4     | `features/plan-actions/selection-actions.tsx` (Isolate) | `triggerRef` (caret) | `mainButtonRef`          |
-| 5     | `features/gantt/components/GanttRowMenu.tsx` | `triggerRef` (`⋯`)         | `restoreRef` (`⋯` or row)    |
-| 6     | `features/navigator/components/HierarchyTree.tsx` | the row's `⋯` (per row) | `menuTriggerRef` (the row)  |
-| 7     | `features/activities/components/ActivitiesTable.tsx` | `menuTriggerRef` (`⋯`) | same                     |
-| 8     | `features/organizations/components/OrgSwitcher.tsx` | `triggerRef`         | same                         |
-| 9–10  | `features/calendars/components/WeeklyShiftEditor.tsx` ×2 | `triggerRef`    | same                         |
-| 11    | `tsld-toolbar-items.tsx` Add activity type  | `triggerRef` (caret)        | `mainButtonRef`              |
-| 12    | `tsld-toolbar-items.tsx` Link type          | `triggerRef` (caret)        | `mainButtonRef`              |
-| 13–15 | `tsld-toolbar-items.tsx` Analysis, Export, History | `triggerRef`         | same                         |
+| #     | Site                                                     | Opener (what was pressed) | `restoreFocusRef` today    |
+| ----- | -------------------------------------------------------- | ------------------------- | -------------------------- |
+| 1     | `components/ui/row-actions-menu.tsx`                     | `triggerRef` (`⋯`)        | same                       |
+| 2     | `components/layout/workspace/plan-actions-menu.tsx`      | `triggerRef`              | same                       |
+| 3     | `components/layout/account-chip.tsx`                     | `triggerRef`              | same                       |
+| 4     | `features/plan-actions/selection-actions.tsx` (Isolate)  | `triggerRef` (caret)      | `mainButtonRef`            |
+| 5     | `features/gantt/components/GanttRowMenu.tsx`             | `triggerRef` (`⋯`)        | `restoreRef` (`⋯` or row)  |
+| 6     | `features/navigator/components/HierarchyTree.tsx`        | the row's `⋯` (per row)   | `menuTriggerRef` (the row) |
+| 7     | `features/activities/components/ActivitiesTable.tsx`     | `menuTriggerRef` (`⋯`)    | same                       |
+| 8     | `features/organizations/components/OrgSwitcher.tsx`      | `triggerRef`              | same                       |
+| 9–10  | `features/calendars/components/WeeklyShiftEditor.tsx` ×2 | `triggerRef`              | same                       |
+| 11    | `tsld-toolbar-items.tsx` Add activity type               | `triggerRef` (caret)      | `mainButtonRef`            |
+| 12    | `tsld-toolbar-items.tsx` Link type                       | `triggerRef` (caret)      | `mainButtonRef`            |
+| 13–15 | `tsld-toolbar-items.tsx` Analysis, Export, History       | `triggerRef`              | same                       |
 
 Six more files consume through `RowActionsMenu`/`MenuItem` and need no change of their own. Three
 test files render `<Menu>` directly (`menu.test.tsx`, `menu.maxheight.test.tsx`,
@@ -323,12 +323,12 @@ Not dark: this changes shipped behaviour on every menu (ADR-0081).
 
 ## 6. Risks (roll-up)
 
-| Risk                                                  | Likelihood | Impact | Mitigation                                   |
-| ----------------------------------------------------- | ---------- | ------ | -------------------------------------------- |
-| §1's reopen reasoning is wrong for toggle sites       | Medium     | Low    | T1 measures before T2; the fix holds either way |
-| Click swallow hides a trigger side effect             | Low        | Medium | All 15 `onClick`s read; re-read in the PR     |
-| Focus restore differs on WebKit                       | Low        | Medium | Owned by `closeRestoring()`; one WebKit run   |
-| Drag-off-trigger now leaves the menu open             | Certain    | Low    | Stated as accepted (§2); native button parity |
-| A 16th menu forgets the opener                        | —          | —      | Removed by the required prop (question 2)     |
+| Risk                                            | Likelihood | Impact | Mitigation                                      |
+| ----------------------------------------------- | ---------- | ------ | ----------------------------------------------- |
+| §1's reopen reasoning is wrong for toggle sites | Medium     | Low    | T1 measures before T2; the fix holds either way |
+| Click swallow hides a trigger side effect       | Low        | Medium | All 15 `onClick`s read; re-read in the PR       |
+| Focus restore differs on WebKit                 | Low        | Medium | Owned by `closeRestoring()`; one WebKit run     |
+| Drag-off-trigger now leaves the menu open       | Certain    | Low    | Stated as accepted (§2); native button parity   |
+| A 16th menu forgets the opener                  | —          | —      | Removed by the required prop (question 2)       |
 
 **Awaiting approval before implementation.**

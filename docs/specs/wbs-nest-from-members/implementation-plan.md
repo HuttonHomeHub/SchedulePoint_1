@@ -152,10 +152,10 @@ test, M1-T1); api-reviewer (M1-T5 contract pin). No database-architect: no schem
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                       | Likelihood | Impact | Mitigation                                            |
-| ------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------- |
-| Planner moves more than intended by ticking a summary   | med        | med    | subtree note on the row and in the dirty sentence     |
-| `aria-disabled` checkbox behaves differently in a real browser than in jsdom | med | med | journey + accessibility-reviewer execute it |
-| Client and server cycle rules drift                     | low        | low    | property test with oracle; server authoritative       |
-| Two surfaces (panel, table bulk assign) treat summaries differently | high | low | stated as a choice (CQ-4); debt row if kept       |
-| Undo into a changed tree                                | low        | low    | existing ADR-0176 set-aside                           |
+| Risk / assumption                                                            | Likelihood | Impact | Mitigation                                        |
+| ---------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------- |
+| Planner moves more than intended by ticking a summary                        | med        | med    | subtree note on the row and in the dirty sentence |
+| `aria-disabled` checkbox behaves differently in a real browser than in jsdom | med        | med    | journey + accessibility-reviewer execute it       |
+| Client and server cycle rules drift                                          | low        | low    | property test with oracle; server authoritative   |
+| Two surfaces (panel, table bulk assign) treat summaries differently          | high       | low    | stated as a choice (CQ-4); debt row if kept       |
+| Undo into a changed tree                                                     | low        | low    | existing ADR-0176 set-aside                       |

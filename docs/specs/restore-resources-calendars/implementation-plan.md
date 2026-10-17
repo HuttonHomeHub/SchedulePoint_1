@@ -264,7 +264,7 @@ and assert the project row says "and 1 calendar". Lands in this milestone.
   if ORG. A PROJECT calendar needs its project active (409 `PARENT_DELETED`, blocker
   `{kind:'project'}`). The tier-aware clash pre-check runs with the P2002 backstop. The calendar and
   the exceptions stamped with its batch are reactivated, and `markScheduleInputsChanged(tx, org,
-  findActivePlanIdsUsing(calendarId))` is called. One `calendar.restored` row
+findActivePlanIdsUsing(calendarId))` is called. One `calendar.restored` row
   (`name, scope, deleteBatchId, exceptionCount`) goes into the four audit places plus web copy.
   The response is the same detail DTO that `GET :calendarId` returns.
 - **Complexity:** M
@@ -394,7 +394,7 @@ asserts the filter persisted.
 
 1. **M1-T0** (ADR, docs-only) → **M1-T1** (measurement; a database-architect detour only if the reading demands it).
 2. **M1-T2 + T3** (resource API, dark until T5: `Ships dark — the endpoint is reachable only by API
-   until M1-T4 lists resource rows`) can land before or alongside **M1-T4** (bin branch). Both are
+until M1-T4 lists resource rows`) can land before or alongside **M1-T4** (bin branch). Both are
    additive. The widened `kind` union cannot ship ahead of the web: `KIND_LABEL` is a
    `Record<DeletedHierarchyItem['kind'], string>` (`RecentlyDeletedTable.tsx:21-25`,
    `RestoreAncestorDialog.tsx:12-16`), so widening the type in `@repo/types` fails `pnpm typecheck`
@@ -421,13 +421,13 @@ to the screen or a journey. All of it runs in the container.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                   | Likelihood | Impact | Mitigation                                                                                                                         |
-| --------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| F5 ("a deleted resource has no active assignments") is false through a path not read               | low        | med    | The service stamps plans assigning restored ids anyway (expected empty), and an e2e asserts zero assignments come back.             |
-| F11 reproduction fails (the engine does not fall back as read)                                      | low        | low    | M2-T1 runs it first. The spec is corrected in place and Q4 becomes moot.                                                            |
-| The bin query regresses on large tenants                                                            | low        | med    | M1-T1 measures before and after. A conditional index goes through database-architect.                                               |
-| A project delete interleaves with a standalone project-calendar restore (orphan)                    | unknown    | med    | M2-T1 establishes it by reading. If real, it is a shared pre-existing class (plan restore too), so a debt row, not a silent fix here. |
-| Lock-order deadlock between restore, delete and reparent                                            | low        | high   | One documented order (tree → calendar locks ascending), stated beside `remove`'s, plus the e2e concurrency case.                    |
-| The bin grows without bound with library rows (no expiry)                                           | med        | low    | Stated in ADR-0195's consequences. The filter makes it navigable. Revisit if a tenant's library bin passes ~1,000 rows.              |
-| The widened `kind` union breaks a third-party API reader                                            | low        | low    | Pre-1.0 minor. Recorded in the changeset and docs/API.md. The only known consumer is this web client.                                |
-| A Q1/Q2 answer differs from the default                                                            | med        | med    | Q1 "auto-rename" adds a name-picking step to T2 (≈ +S) and drops `conflicts`. Q2 "clear calendar" drops `CALENDAR_DELETED` and the calendar blocker (≈ −S). Neither changes the milestone shape. |
+| Risk / assumption                                                                    | Likelihood | Impact | Mitigation                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F5 ("a deleted resource has no active assignments") is false through a path not read | low        | med    | The service stamps plans assigning restored ids anyway (expected empty), and an e2e asserts zero assignments come back.                                                                          |
+| F11 reproduction fails (the engine does not fall back as read)                       | low        | low    | M2-T1 runs it first. The spec is corrected in place and Q4 becomes moot.                                                                                                                         |
+| The bin query regresses on large tenants                                             | low        | med    | M1-T1 measures before and after. A conditional index goes through database-architect.                                                                                                            |
+| A project delete interleaves with a standalone project-calendar restore (orphan)     | unknown    | med    | M2-T1 establishes it by reading. If real, it is a shared pre-existing class (plan restore too), so a debt row, not a silent fix here.                                                            |
+| Lock-order deadlock between restore, delete and reparent                             | low        | high   | One documented order (tree → calendar locks ascending), stated beside `remove`'s, plus the e2e concurrency case.                                                                                 |
+| The bin grows without bound with library rows (no expiry)                            | med        | low    | Stated in ADR-0195's consequences. The filter makes it navigable. Revisit if a tenant's library bin passes ~1,000 rows.                                                                          |
+| The widened `kind` union breaks a third-party API reader                             | low        | low    | Pre-1.0 minor. Recorded in the changeset and docs/API.md. The only known consumer is this web client.                                                                                            |
+| A Q1/Q2 answer differs from the default                                              | med        | med    | Q1 "auto-rename" adds a name-picking step to T2 (≈ +S) and drops `conflicts`. Q2 "clear calendar" drops `CALENDAR_DELETED` and the calendar blocker (≈ −S). Neither changes the milestone shape. |

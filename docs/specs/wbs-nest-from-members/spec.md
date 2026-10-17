@@ -1,6 +1,6 @@
 # Feature Spec: Nest a WBS summary from the Members panel
 
-- **Status:** Draft — awaiting the product owner's approval before implementation
+- **Status:** Approved — by the product owner, 2026-10-17, with the recommended defaults (CQ-1: ancestors shaded with a visible reason; CQ-2: fix the Breakdown picker as M2)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-17
 - **Tracking issue / epic:** `docs/BACKLOG.md` "WBS follow-ons (ADR-0063)" — _Nest a summary from the
@@ -31,12 +31,12 @@ needs cycle feedback a checklist cannot express well"_, and asks for a design fo
 **The problem statement was re-verified, and it is narrower than the backlog row reads** (CLAUDE.md
 §19.11):
 
-| Claim                                                                                                         | Evidence                                                                                                                                                                                                                                        | Holds?                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Widening the list could corrupt the tree                                                                      | `ActivitiesService.updateParents` overlays the batch on the plan's current tree and walks the **result** under the plan advisory lock (`apps/api/src/modules/activities/activities.service.ts:1134-1166`, `assertNoParentCycles` `:1271-1286`) | **No.** The server already refuses any batch that would close a cycle: `409 PARENT_CYCLE`, "That would create a WBS cycle."        |
-| The panel's own docblock: offering summaries "would make it possible to build the hierarchy two ways with only one of them checked for cycles" (`ActivityMembersPanel.tsx:100-103`) | Both paths are checked server-side: the single-row path by `assertValidParent` (`activities.service.ts:232-266`), the batch by the resulting-tree walk                                                                                         | **No — stale.** Neither path is unchecked; what is missing is **client** feedback on both                                         |
-| The child-side picker gives cycle feedback                                                                    | `ActivityEditorSession.tsx:372-374` offers every summary except the one being edited — **including its own descendants**; `ActivityBreakdownField.tsx` has no cycle wording                                                                   | **No — new finding.** Editing summary S and choosing a summary inside S is offered, then refused by the server with the raw message |
-| The web maps `PARENT_CYCLE` to anything                                                                       | No `PARENT_CYCLE` reference in `apps/web/src`; the panel prints `err.message` (`ActivityMembersPanel.tsx:143`); undo replay reads it as `changed` (`features/undo-redo/replay.ts:198-208`)                                                    | Confirmed — the server's sentence reaches the reader unmapped                                                                       |
+| Claim                                                                                                                                                                               | Evidence                                                                                                                                                                                                                                       | Holds?                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Widening the list could corrupt the tree                                                                                                                                            | `ActivitiesService.updateParents` overlays the batch on the plan's current tree and walks the **result** under the plan advisory lock (`apps/api/src/modules/activities/activities.service.ts:1134-1166`, `assertNoParentCycles` `:1271-1286`) | **No.** The server already refuses any batch that would close a cycle: `409 PARENT_CYCLE`, "That would create a WBS cycle."         |
+| The panel's own docblock: offering summaries "would make it possible to build the hierarchy two ways with only one of them checked for cycles" (`ActivityMembersPanel.tsx:100-103`) | Both paths are checked server-side: the single-row path by `assertValidParent` (`activities.service.ts:232-266`), the batch by the resulting-tree walk                                                                                         | **No — stale.** Neither path is unchecked; what is missing is **client** feedback on both                                           |
+| The child-side picker gives cycle feedback                                                                                                                                          | `ActivityEditorSession.tsx:372-374` offers every summary except the one being edited — **including its own descendants**; `ActivityBreakdownField.tsx` has no cycle wording                                                                    | **No — new finding.** Editing summary S and choosing a summary inside S is offered, then refused by the server with the raw message |
+| The web maps `PARENT_CYCLE` to anything                                                                                                                                             | No `PARENT_CYCLE` reference in `apps/web/src`; the panel prints `err.message` (`ActivityMembersPanel.tsx:143`); undo replay reads it as `changed` (`features/undo-redo/replay.ts:198-208`)                                                     | Confirmed — the server's sentence reaches the reader unmapped                                                                       |
 
 So the real problem is a **feedback** problem, not an integrity one: the tree is safe today, and the
 risk of widening the list is a planner ticking a row that will be refused — failing every other row
@@ -44,11 +44,11 @@ in an all-or-nothing batch — with a one-line message that does not say which r
 
 ### Users
 
-| Role                     | Capability                                                                                    |
-| ------------------------ | --------------------------------------------------------------------------------------------- |
-| Planner, Org Admin       | Nest and un-nest summaries from the parent's Members panel (holds `activity:update` and the pen) |
-| Contributor, Viewer      | See the same list, every row shaded with the pen/role reason — reading membership is a read     |
-| External Guest           | No editor; unaffected                                                                          |
+| Role                | Capability                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| Planner, Org Admin  | Nest and un-nest summaries from the parent's Members panel (holds `activity:update` and the pen) |
+| Contributor, Viewer | See the same list, every row shaded with the pen/role reason — reading membership is a read      |
+| External Guest      | No editor; unaffected                                                                            |
 
 ### Primary use cases
 
@@ -157,17 +157,17 @@ See §6.
 
 ### Edge cases
 
-| Case                                                                 | Expected                                                                                                                                         |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tick a summary that sits deeper **inside** S                         | Allowed — it moves up to be a direct member; its old parent loses it (the "in {parent}" note warned)                                              |
-| Tick summary T and T's own child X                                   | Allowed — both become direct members; X leaves T                                                                                                  |
-| An ancestor's `parentId` names a row not loaded (orphan)             | The walk stops there (the `wbs-groups.ts:233-245` orphan rule); the server remains the backstop                                                  |
-| A malformed cycle already in the data                                | The walk carries a `seen` guard and terminates (render-path code must not hang, `wbs-groups.ts:219-221`)                                          |
-| Pen lost mid-edit                                                    | Existing behaviour: every row shades, Save shades with the pen reason; checked state is kept (ADR-0108 D5 posture)                                |
-| A peer re-parents while the list is open                             | Pen makes this a hand-off case only; server refuses with `PARENT_CYCLE` (US-4) or the version check (existing 409 sentence)                       |
-| Deep nesting past the band's render cap (depth 2, `tsld/render/wbs-band.ts:20`) | Allowed; deeper summaries stay in the scene as today (`isWithinBandDepth`). No new cap is introduced                                     |
-| Undo of a nesting save after the tree changed                        | Replay refuses server-side and sets the step aside as `changed` (`replay.ts:198-208`, ADR-0176) — unchanged                                         |
-| Plan with one summary only                                           | No summary candidates; list is today's                                                                                                            |
+| Case                                                                            | Expected                                                                                                                    |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Tick a summary that sits deeper **inside** S                                    | Allowed — it moves up to be a direct member; its old parent loses it (the "in {parent}" note warned)                        |
+| Tick summary T and T's own child X                                              | Allowed — both become direct members; X leaves T                                                                            |
+| An ancestor's `parentId` names a row not loaded (orphan)                        | The walk stops there (the `wbs-groups.ts:233-245` orphan rule); the server remains the backstop                             |
+| A malformed cycle already in the data                                           | The walk carries a `seen` guard and terminates (render-path code must not hang, `wbs-groups.ts:219-221`)                    |
+| Pen lost mid-edit                                                               | Existing behaviour: every row shades, Save shades with the pen reason; checked state is kept (ADR-0108 D5 posture)          |
+| A peer re-parents while the list is open                                        | Pen makes this a hand-off case only; server refuses with `PARENT_CYCLE` (US-4) or the version check (existing 409 sentence) |
+| Deep nesting past the band's render cap (depth 2, `tsld/render/wbs-band.ts:20`) | Allowed; deeper summaries stay in the scene as today (`isWithinBandDepth`). No new cap is introduced                        |
+| Undo of a nesting save after the tree changed                                   | Replay refuses server-side and sets the step aside as `changed` (`replay.ts:198-208`, ADR-0176) — unchanged                 |
+| Plan with one summary only                                                      | No summary candidates; list is today's                                                                                      |
 
 ### Permissions
 
@@ -184,12 +184,12 @@ S's ancestor set. Server-side, unchanged: `SELF_PARENT` 422, `PARENT_NOT_SUMMARY
 
 ### Error scenarios
 
-| Scenario                                          | Detection                              | User-facing result                          | Status |
-| ------------------------------------------------- | -------------------------------------- | ------------------------------------------- | ------ |
-| Ancestor ticked                                   | client predicate — impossible to tick  | shaded row + reason                         | —      |
-| Tree changed underneath; batch now cyclic         | server resulting-tree walk             | US-4 sentence + refetch                     | 409 `PARENT_CYCLE` |
-| A row's version moved                             | count shortfall (`:1178-1184`)         | existing "This plan changed…" sentence      | 409    |
-| No pen                                            | `assertHoldsPen`                       | existing pen gate                           | 423    |
+| Scenario                                  | Detection                             | User-facing result                     | Status             |
+| ----------------------------------------- | ------------------------------------- | -------------------------------------- | ------------------ |
+| Ancestor ticked                           | client predicate — impossible to tick | shaded row + reason                    | —                  |
+| Tree changed underneath; batch now cyclic | server resulting-tree walk            | US-4 sentence + refetch                | 409 `PARENT_CYCLE` |
+| A row's version moved                     | count shortfall (`:1178-1184`)        | existing "This plan changed…" sentence | 409                |
+| No pen                                    | `assertHoldsPen`                      | existing pen gate                      | 423                |
 
 ## 3. Technical analysis
 
@@ -197,12 +197,12 @@ S's ancestor set. Server-side, unchanged: `SELF_PARENT` 422, `PARENT_NOT_SUMMARY
 | -------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
 | Frontend       | med    | `ActivityMembersPanel`, a new pure module in `features/wbs/model/`, `ActivityEditorSession` parent options |
 | Backend        | none   | the server already validates the resulting tree                                                            |
-| Database       | none   | no schema change                                                                                            |
+| Database       | none   | no schema change                                                                                           |
 | API            | none   | contract unchanged; one new API e2e case pins the `PARENT_CYCLE` reason the client now branches on         |
 | Security       | low    | no new write; same pen + permission + org scope                                                            |
 | Performance    | low    | O(depth) ancestor walk + O(n) subtree sizes over ≤ ~2,000 loaded rows, memoised per `planActivities`       |
 | Infrastructure | none   |                                                                                                            |
-| Observability  | none   | the existing `activity.reparented` audit row covers summary moves (`:1229-1245`)                          |
+| Observability  | none   | the existing `activity.reparented` audit row covers summary moves (`:1229-1245`)                           |
 | Testing        | med    | pure unit (property), component, API e2e, one journey extension                                            |
 
 ### Dependencies
@@ -274,12 +274,12 @@ flowchart TD
 
 ### 4.4 The feedback design — shade, hide, or refuse late
 
-| Option                                                      | Verdict         | Why                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Show the ancestors, shaded, with a visible reason**    | **Recommended** | The panel is a searchable checklist. A planner looking for `Structure` from inside `Piling` who finds nothing reads it as a bug, and the search sentence "No activity matches your search" would be **false**. ADR-0082 §3 omits only what "does not apply to this object"; an ancestor applies — it is an activity in this plan the reader can name — and is shut by the current shape of the tree, which the reader can change elsewhere. The ancestor set is the depth of S (typically 1–3 rows), so shading costs almost nothing in list length. |
-| B. Hide the ancestors                                       | Rejected        | Cheapest, and it is what the resource picker does — but that is a `<select>`, where ADR-0083 D1 says an option cannot carry a reason. A checklist row can. Hiding also makes the search count lie (above).                                                                                                                                                 |
-| C. List everything, let the server refuse                   | Rejected        | One bad tick fails every other row in the all-or-nothing batch with a sentence that names no row — the exact failure the backlog row was afraid of.                                                                                                                                                                                                       |
-| D. Allow it, and re-parent S out of the way automatically   | Rejected        | A tick that silently restructures a different branch is a write the planner did not make.                                                                                                                                                                                                                                                                  |
+| Option                                                    | Verdict         | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Show the ancestors, shaded, with a visible reason**  | **Recommended** | The panel is a searchable checklist. A planner looking for `Structure` from inside `Piling` who finds nothing reads it as a bug, and the search sentence "No activity matches your search" would be **false**. ADR-0082 §3 omits only what "does not apply to this object"; an ancestor applies — it is an activity in this plan the reader can name — and is shut by the current shape of the tree, which the reader can change elsewhere. The ancestor set is the depth of S (typically 1–3 rows), so shading costs almost nothing in list length. |
+| B. Hide the ancestors                                     | Rejected        | Cheapest, and it is what the resource picker does — but that is a `<select>`, where ADR-0083 D1 says an option cannot carry a reason. A checklist row can. Hiding also makes the search count lie (above).                                                                                                                                                                                                                                                                                                                                           |
+| C. List everything, let the server refuse                 | Rejected        | One bad tick fails every other row in the all-or-nothing batch with a sentence that names no row — the exact failure the backlog row was afraid of.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| D. Allow it, and re-parent S out of the way automatically | Rejected        | A tick that silently restructures a different branch is a write the planner did not make.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 **Mechanism (ADR-0083 D1):** a checkbox's only operation is changing its value, so a shaded one is
 `aria-disabled="true"` with `preventDefault()` on `click` — which covers pointer **and** Space — and
@@ -318,27 +318,27 @@ is about to depend on it.
 
 ### 4.6 Component changes
 
-| Where                                                        | Change                                                                                                                                       |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `features/wbs/model/wbs-tree.ts` (**new**, pure)             | `ancestorIds(id, byId)`, `subtreeSizes(byId)`, `nestingRefusal(candidateId, targetId, ancestors)` → `null` or a reason key. `seen`-guarded walks |
-| `features/wbs/components/ActivityMembersPanel.tsx`           | Summaries listed; ancestor rows shaded with reason; "Moves with its N activities"; two-count status line; subtree-aware dirty sentence; pen gate via the ADR-0083 mechanism; `PARENT_CYCLE` mapping + refetch. Docblock at `:99-103` rewritten (it is stale, §1) |
-| `features/wbs/model/membership-diff.ts`                      | **No logic change.** `membershipDiff` already sends any changed row. The `bulkParentChanges` docblock's C-1b paragraph is updated to say the table's bulk assign still excludes summaries **by choice** (CQ-4), not because the server cannot cope |
-| `features/activities/components/ActivityEditorSession.tsx`   | `parentOptions` also excludes the edited summary's descendants, via `wbs-tree.ts` (CQ-2)                                                     |
-| `features/activities/components/fields/ActivityBreakdownField.tsx` | One hint clause when any summary was excluded for being inside this one                                                                |
+| Where                                                              | Change                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `features/wbs/model/wbs-tree.ts` (**new**, pure)                   | `ancestorIds(id, byId)`, `subtreeSizes(byId)`, `nestingRefusal(candidateId, targetId, ancestors)` → `null` or a reason key. `seen`-guarded walks                                                                                                                 |
+| `features/wbs/components/ActivityMembersPanel.tsx`                 | Summaries listed; ancestor rows shaded with reason; "Moves with its N activities"; two-count status line; subtree-aware dirty sentence; pen gate via the ADR-0083 mechanism; `PARENT_CYCLE` mapping + refetch. Docblock at `:99-103` rewritten (it is stale, §1) |
+| `features/wbs/model/membership-diff.ts`                            | **No logic change.** `membershipDiff` already sends any changed row. The `bulkParentChanges` docblock's C-1b paragraph is updated to say the table's bulk assign still excludes summaries **by choice** (CQ-4), not because the server cannot cope               |
+| `features/activities/components/ActivityEditorSession.tsx`         | `parentOptions` also excludes the edited summary's descendants, via `wbs-tree.ts` (CQ-2)                                                                                                                                                                         |
+| `features/activities/components/fields/ActivityBreakdownField.tsx` | One hint clause when any summary was excluded for being inside this one                                                                                                                                                                                          |
 
 No new primitive, no token, no one-off style: the shaded row uses `CheckboxField`'s existing
 treatment and lock glyph.
 
 ### 4.7 Copy
 
-| Where                         | Text                                                                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Shaded row reason             | Can't be filed here — “{S}” is inside it.                                                                                   |
-| Summary row note              | Moves with its {N} activities. (1: "Moves with its 1 activity." 0: no note)                                                  |
-| Status line, K > 0            | {n} activities · {K} can't be filed here · {m} in this summary (search: "{n} activities match your search · …")             |
-| Dirty sentence, subtrees > 0  | {c} will move, with {N} activities inside them. Saved together — the whole change lands or none of it does.                  |
-| `PARENT_CYCLE`                | Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “{S}”. The list has been refreshed; check it and save again. |
-| Breakdown hint clause         | Summaries inside this one aren't listed — a summary can't be filed under its own contents.                                  |
+| Where                        | Text                                                                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shaded row reason            | Can't be filed here — “{S}” is inside it.                                                                                                                                           |
+| Summary row note             | Moves with its {N} activities. (1: "Moves with its 1 activity." 0: no note)                                                                                                         |
+| Status line, K > 0           | {n} activities · {K} can't be filed here · {m} in this summary (search: "{n} activities match your search · …")                                                                     |
+| Dirty sentence, subtrees > 0 | {c} will move, with {N} activities inside them. Saved together — the whole change lands or none of it does.                                                                         |
+| `PARENT_CYCLE`               | Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “{S}”. The list has been refreshed; check it and save again. |
+| Breakdown hint clause        | Summaries inside this one aren't listed — a summary can't be filed under its own contents.                                                                                          |
 
 Copy goes to ux-reviewer before build; curly apostrophes per the existing strings.
 
@@ -371,13 +371,13 @@ alone (CQ-5).
 
 ## 5. Risks
 
-| #   | Risk                                                                                                         | Mitigation                                                                                                  |
-| --- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| R-1 | A planner ticks a big summary not realising its contents move                                                | "Moves with its N activities" on the row and in the dirty sentence, before save                              |
-| R-2 | Changing the pen gate from `disabled` to `aria-disabled` alters keyboard behaviour for every reader without the pen | It is ADR-0083 D1's rule; journey asserts focusability; accessibility-reviewer before release                |
-| R-3 | The client's ancestor walk and the server's walk drift                                                       | The SC-2 property test uses a resulting-tree oracle; the server remains authoritative                         |
-| R-4 | The undo record for a nesting save replays into a changed tree                                               | Server refuses, ADR-0176 sets aside as `changed` — existing behaviour, a component test pins it              |
-| R-5 | The table's bulk assign still excludes summaries — two surfaces, two rules                                   | CQ-4; the docblock states it is a choice, and a `docs/TECH_DEBT.md` row records it if the owner keeps it      |
+| #   | Risk                                                                                                                | Mitigation                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| R-1 | A planner ticks a big summary not realising its contents move                                                       | "Moves with its N activities" on the row and in the dirty sentence, before save                          |
+| R-2 | Changing the pen gate from `disabled` to `aria-disabled` alters keyboard behaviour for every reader without the pen | It is ADR-0083 D1's rule; journey asserts focusability; accessibility-reviewer before release            |
+| R-3 | The client's ancestor walk and the server's walk drift                                                              | The SC-2 property test uses a resulting-tree oracle; the server remains authoritative                    |
+| R-4 | The undo record for a nesting save replays into a changed tree                                                      | Server refuses, ADR-0176 sets aside as `changed` — existing behaviour, a component test pins it          |
+| R-5 | The table's bulk assign still excludes summaries — two surfaces, two rules                                          | CQ-4; the docblock states it is a choice, and a `docs/TECH_DEBT.md` row records it if the owner keeps it |
 
 ## 6. Open questions
 

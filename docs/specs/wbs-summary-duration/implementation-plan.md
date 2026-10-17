@@ -136,8 +136,7 @@ before code changes.
   API e2e `test/derived-duration.e2e-spec.ts`: recalc `plan:capability-types-and-wbs`-shaped data,
   read the column back for W1/G1/G2 and null elsewhere; a plan with no summary/LOE recalculates
   cleanly. Verify red by deleting the `SET` line.
-- **Development steps:** 1. migration; 2. Prisma model + comment; 3. `writeResults`; 4. tests;
-  5. `pnpm prepush` + `scripts/e2e-local.sh api`.
+- **Development steps:** 1. migration; 2. Prisma model + comment; 3. `writeResults`; 4. tests; 5. `pnpm prepush` + `scripts/e2e-local.sh api`.
 
 #### Feature: API contract
 
@@ -262,11 +261,11 @@ accessibility-reviewer (M2-T2, Tier-1 sentence); component-reviewer (M2-T1/T3); 
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                              | Likelihood | Impact | Mitigation                                         |
-| -------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------- |
-| Conformance harness deep-equals results                        | low        | med    | M0-T1 measures before M1                           |
-| `writeResults` argument renumbering                            | med        | med    | append last; position assertion                    |
-| A missing `SET` entry passes unit tests                        | med        | high   | real-Postgres read-back, verified red              |
-| Placed children draw outside their summary (R-3)               | med        | low here | measured in M0-T3, filed separately              |
-| Planners see `—` until they recalculate                        | high       | low    | today's behaviour; CQ-5 offers a boot recalc       |
-| Children on other calendars counted on the summary's calendar surprise a reader | low | low | stated in the ADR and the editor sentence says "working days" |
+| Risk / assumption                                                               | Likelihood | Impact   | Mitigation                                                    |
+| ------------------------------------------------------------------------------- | ---------- | -------- | ------------------------------------------------------------- |
+| Conformance harness deep-equals results                                         | low        | med      | M0-T1 measures before M1                                      |
+| `writeResults` argument renumbering                                             | med        | med      | append last; position assertion                               |
+| A missing `SET` entry passes unit tests                                         | med        | high     | real-Postgres read-back, verified red                         |
+| Placed children draw outside their summary (R-3)                                | med        | low here | measured in M0-T3, filed separately                           |
+| Planners see `—` until they recalculate                                         | high       | low      | today's behaviour; CQ-5 offers a boot recalc                  |
+| Children on other calendars counted on the summary's calendar surprise a reader | low        | low      | stated in the ADR and the editor sentence says "working days" |

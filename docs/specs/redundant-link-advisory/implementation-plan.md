@@ -332,13 +332,13 @@ point.
 
 ## Sequencing & slices
 
-| Order | Slice | Releasable alone?                                      | Rollback      |
-| ----- | ----- | ------------------------------------------------------ | ------------- |
-| 1     | M0    | yes (tests, script, gate declaration, register row)    | revert commit |
-| 2     | M1    | yes (copy, tolerance; no new data)                     | revert commit |
-| 3     | M2    | **only after M1 is released** (spec §4.5, FC-6)         | revert commit (stateless read; nothing stored) |
-| 4     | M3    | yes                                                    | revert commit |
-| 5     | M4    | —                                                      | —             |
+| Order | Slice | Releasable alone?                                   | Rollback                                       |
+| ----- | ----- | --------------------------------------------------- | ---------------------------------------------- |
+| 1     | M0    | yes (tests, script, gate declaration, register row) | revert commit                                  |
+| 2     | M1    | yes (copy, tolerance; no new data)                  | revert commit                                  |
+| 3     | M2    | **only after M1 is released** (spec §4.5, FC-6)     | revert commit (stateless read; nothing stored) |
+| 4     | M3    | yes                                                 | revert commit                                  |
+| 5     | M4    | —                                                   | —                                              |
 
 M0 and M1 are independent and may run in parallel. No feature flag. `main` stays releasable.
 
@@ -359,14 +359,14 @@ plus the standing rules above. CI is read per CLAUDE.md §19.9 before merge.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                       | Likelihood | Impact | Mitigation                                                                                           |
-| --------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------- |
-| R1: the rule flags a link that matters                                                  | low        | high   | The oracle is the gate (FC-2); every exclusion tested red (FC-3); conservative defaults (CQ-1/3/4).   |
-| R2: coverage is lower than planners expect (progress, mixed calendars, SS chains off a single calendar) | med | low | Stated in copy ("not checked") and ADR; M0's prevalence count over the catalogue says how much.      |
-| R3: an old tab misprints the new row                                                    | low        | low    | M1 released first (FC-6); residual tab window stated.                                                 |
-| R4: cost on a dense plan                                                                | med        | med    | Measured first; deterministic budget; existing throttle.                                              |
-| R5: the levelling preview changes after a deletion                                      | unknown    | low    | Measured in M0-T4 and stated either way; the claim names Pass 1 and Pass 2.                          |
-| R6: a per-link conflict reason names one fewer link after a deletion                    | med        | low    | The boolean cannot change (spec §2.6); stated.                                                        |
-| R7: "Driving" shown on a flagged link confuses a reader                                 | med        | low    | Copy never claims "never drives"; the caveat says what deleting it changes.                           |
-| A1: ADR number 0195                                                                     | —          | —      | Check `docs/adr/` at filing.                                                                          |
-| A2: `apps/api` has no property-testing dependency, and none is added                    | —          | —      | Seeded PRNG generator in the test helper.                                                             |
+| Risk / assumption                                                                                       | Likelihood | Impact | Mitigation                                                                                          |
+| ------------------------------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------- |
+| R1: the rule flags a link that matters                                                                  | low        | high   | The oracle is the gate (FC-2); every exclusion tested red (FC-3); conservative defaults (CQ-1/3/4). |
+| R2: coverage is lower than planners expect (progress, mixed calendars, SS chains off a single calendar) | med        | low    | Stated in copy ("not checked") and ADR; M0's prevalence count over the catalogue says how much.     |
+| R3: an old tab misprints the new row                                                                    | low        | low    | M1 released first (FC-6); residual tab window stated.                                               |
+| R4: cost on a dense plan                                                                                | med        | med    | Measured first; deterministic budget; existing throttle.                                            |
+| R5: the levelling preview changes after a deletion                                                      | unknown    | low    | Measured in M0-T4 and stated either way; the claim names Pass 1 and Pass 2.                         |
+| R6: a per-link conflict reason names one fewer link after a deletion                                    | med        | low    | The boolean cannot change (spec §2.6); stated.                                                      |
+| R7: "Driving" shown on a flagged link confuses a reader                                                 | med        | low    | Copy never claims "never drives"; the caveat says what deleting it changes.                         |
+| A1: ADR number 0195                                                                                     | —          | —      | Check `docs/adr/` at filing.                                                                        |
+| A2: `apps/api` has no property-testing dependency, and none is added                                    | —          | —      | Seeded PRNG generator in the test helper.                                                           |
