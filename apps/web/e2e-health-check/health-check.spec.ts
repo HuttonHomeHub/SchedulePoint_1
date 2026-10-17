@@ -26,7 +26,11 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   // Not named after the feature: a plan called "Health plan" would make every
   // `getByRole(… /health/i)` ambiguous with its own row menu (the float-paths lesson).
   const planId = await createAndOpenPlan(page, 'Riverside programme');
-  const { danglerName, zeroTaskName } = await seedDefects(page, orgSlug, planId);
+  const { danglerName, zeroTaskName, redundantTargetName } = await seedDefects(
+    page,
+    orgSlug,
+    planId,
+  );
   await page.reload();
 
   // ── 1 · The entry point, in the shipped layout ─────────────────────────────────────────────
@@ -116,6 +120,27 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   await advisoryToggle.click();
   await advisory.getByRole('button', { name: new RegExp(zeroTaskName) }).click();
   await expect(canvasListbox(page).locator('[aria-selected="true"]')).toContainText(zeroTaskName);
+
+  // ── 3c · Redundant links (ADR-0196): the second advisory, read by its own id ──────────────────
+  // Survey → Permit is implied through Design; 5 relationships were seeded (two chains and the
+  // triangle's three), so the row reads one of five and says what deleting it would and would not do.
+  const redundantToggle = advisory.getByRole('button', { name: /Redundant links/ });
+  await expect(redundantToggle).toHaveAccessibleDescription(
+    '1 redundant link out of 5 relationships',
+  );
+  await expect(advisory).toContainText('Deleting it would not change any activity');
+  await expect(advisory).not.toContainText('undefined');
+  await redundantToggle.click();
+  // The offender names both ends and the witness; pressing it selects its SUCCESSOR, the activity
+  // whose schedule the link shapes (the jump seam the metrics' relationship rows already use).
+  await expect(advisory).toContainText('already implied through Design');
+  // Axe over the open panel with the new row expanded (CLAUDE.md §13; whole page, as above).
+  const redundantAxe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(redundantAxe.violations).toEqual([]);
+  await advisory.getByRole('button', { name: /Survey → Permit/ }).click();
+  await expect(canvasListbox(page).locator('[aria-selected="true"]')).toContainText(
+    redundantTargetName,
+  );
 
   // ── 4 · Close restores focus to the trigger, never `<body>` (WCAG 2.4.3) ───────────────────
   await panel.getByRole('button', { name: 'Close health check' }).click();
