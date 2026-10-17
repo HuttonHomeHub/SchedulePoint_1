@@ -597,12 +597,12 @@ test.describe('The exported diagram', () => {
   });
 
   /**
-   * **The resource strip in the exported and printed picture** (TECH_DEBT #223, ADR-0199).
+   * **The resource strip in the exported and printed picture** (TECH_DEBT #223, ADR-0200).
    *
    * The strip is painted on its own canvas from its own ref, and the export composer never read
    * it — so a planner with Resource view open exported a diagram missing the one panel that
    * answers "can we resource this?", and nothing said so. The parity gate could not see it either
-   * (it compared the keys of the scene and nothing else; ADR-0199 widened it to every canvas).
+   * (it compared the keys of the scene and nothing else; ADR-0200 widened it to every canvas).
    *
    * **Only a browser can answer this.** The strip's fills are resolved `--chart-*` colours painted
    * with `fillStyle`, which silently discards a `var()` — so "are there two coloured bands in the

@@ -15,7 +15,7 @@ import {
 import { RESOURCE_LOAD_BASIS_NOTE } from '@/features/resources/components/ResourceHistogram';
 
 /**
- * The **resource strip in the exported picture** (ADR-0199, `docs/TECH_DEBT.md` #223).
+ * The **resource strip in the exported picture** (ADR-0200, `docs/TECH_DEBT.md` #223).
  *
  * The strip lives on its own canvas, so it is the part of the diagram an export can silently omit —
  * and the omission looks like a working export. jsdom has no 2D context, so the surface is a

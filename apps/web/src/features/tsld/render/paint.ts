@@ -3016,7 +3016,7 @@ export function paintResourceStrip(
   offsetY = 0,
 ): void {
   // `offsetY` places the band on a larger surface — the export paints it at the bottom of the
-  // picture (ADR-0199) — and is `0` on the live path, whose band owns its own canvas, so the
+  // picture (ADR-0200) — and is `0` on the live path, whose band owns its own canvas, so the
   // transform there is the one this function has always set.
   ctx.setTransform(dpr, 0, 0, dpr, 0, offsetY * dpr);
   ctx.clearRect(0, 0, band.width, band.height);

@@ -146,7 +146,7 @@ describe('the boundary rule is suppressed where a band is too thin to separate',
   });
 });
 
-describe('the painter takes an offset for the export without changing the live path (ADR-0199)', () => {
+describe('the painter takes an offset for the export without changing the live path (ADR-0200)', () => {
   const VIEW = { pxPerDay: 10, originX: 0, originY: 0 };
   const SIZE = { width: 300, height: 72 };
   const STACK: ResourceStripSnapshot = {

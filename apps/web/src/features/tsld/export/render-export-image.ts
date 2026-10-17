@@ -141,7 +141,7 @@ export interface RenderExportImageInput {
    */
   wbsBand?: { height: number; bars: readonly WbsBandBar[]; palette: WbsBandPalette };
   /**
-   * The **resource strip** (ADR-0049), when it is open on screen (ADR-0199 D1). Painted at the
+   * The **resource strip** (ADR-0049), when it is open on screen (ADR-0200 D1). Painted at the
    * bottom of the picture, in the `height` of band `buildExportViewport` reserved below the
    * diagram, with its caption row directly above it. `snapshot` is the one the live band paints
    * from — same stack, same scale — and `palette` is the paper's. Absent (the default) is the
@@ -411,7 +411,7 @@ export function stripCaptionHeadline(snapshot: ResourceStripSnapshot): string {
 }
 
 /**
- * Draw the **resource strip's caption row** (ADR-0199 D3) directly above the band: what the strip
+ * Draw the **resource strip's caption row** (ADR-0200 D3) directly above the band: what the strip
  * is (mode, bucket size, peak), what it counts, whether the histogram was truncated, and the legend
  * that names each colour. ADR-0106 again: a band's label is chrome, and on screen this is the DOM
  * panel the canvas cannot reach, so the export paints the facts into a reserved row.

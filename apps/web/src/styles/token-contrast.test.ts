@@ -889,7 +889,7 @@ const STACK_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   // The strip's own canvas is transparent, so what shows through is the diagram ground.
   ['the diagram ground', '--canvas'],
   ['a month band', '--canvas-band'],
-  // The exported and printed diagram lays the strip onto paper (ADR-0199 D4). `--chart-*` is outside
+  // The exported and printed diagram lays the strip onto paper (ADR-0200 D4). `--chart-*` is outside
   // the rebind closure, so the fills are the same values as on screen — asserted here rather than
   // argued, because paper is the one ground the strip is composited onto that no scope declares.
   ['the paper ground', '--print'],

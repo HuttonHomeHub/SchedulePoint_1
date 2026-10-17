@@ -68,7 +68,7 @@ export interface StripSegment {
 
 /**
  * What the strip **says about itself**, published beside the bars so the exported and printed
- * diagram can state it (ADR-0199 D3). On screen these facts live in the DOM panel — picker, bucket
+ * diagram can state it (ADR-0200 D3). On screen these facts live in the DOM panel — picker, bucket
  * select, legend, truncation notice — which a raster cannot reach; paper needs the facts, not the
  * controls. Pure data: **no painter reads it** (the live band is byte-identical), only the export's
  * caption row does.

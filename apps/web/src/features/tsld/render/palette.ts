@@ -371,7 +371,7 @@ export function resolveResourceStripPalette(root: Element): ResourceStripPalette
 }
 
 /**
- * The **paper** resource-strip palette for the image export and print (ADR-0199 D4).
+ * The **paper** resource-strip palette for the image export and print (ADR-0200 D4).
  *
  * Segment fills are not here: they ride the published snapshot, resolved by the panel, and
  * `--chart-*` is outside the surface rebind closure so paper would re-resolve the same values —

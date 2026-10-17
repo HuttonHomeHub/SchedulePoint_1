@@ -149,7 +149,7 @@ export function useDiagramImage(args: {
       // currently serves only cast-based test doubles; it is kept because a second host would
       // otherwise ship a silent throw in the one path nobody watches (2026-08-28 component review).
       const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
-      // **The resource strip, iff the planner has it open** (ADR-0199 D1), exactly as configured:
+      // **The resource strip, iff the planner has it open** (ADR-0200 D1), exactly as configured:
       // the handle returns the snapshot the live band paints from, or `null` when the strip is
       // closed. Read here at call time through the handle, so — like the lenses — it needs no
       // dependency-array entry and cannot go stale. Optional-called for the same reason as above.

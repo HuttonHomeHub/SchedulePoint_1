@@ -199,7 +199,7 @@ describe('useTsldToolbarContext — Diagram-PDF export (M3)', () => {
     expect(exportScene.flaggedIds).toEqual(new Set(['flag-1']));
   });
 
-  it('composes the resource strip when the canvas has it open, and not otherwise (ADR-0199)', async () => {
+  it('composes the resource strip when the canvas has it open, and not otherwise (ADR-0200)', async () => {
     const { renderExportImage } = await import('../export/render-export-image');
     const snapshot = {
       segments: [{ values: [1], fill: '#aa0000' }],

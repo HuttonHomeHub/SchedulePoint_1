@@ -200,7 +200,7 @@ export function ResourceStripPanel({
   }, [series, buckets.length, stripPalette, stackBy, resources.data, canvasSurface]);
 
   const snapshot = useMemo<ResourceStripSnapshot | null>(() => {
-    // **What the strip says about itself, for the export's caption row** (ADR-0199 D3). Built from
+    // **What the strip says about itself, for the export's caption row** (ADR-0200 D3). Built from
     // state this panel already holds — nothing is fetched or derived twice — and read by no painter,
     // so the live band cannot change because of it.
     const total = histogram.data?.total;

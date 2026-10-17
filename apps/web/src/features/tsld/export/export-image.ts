@@ -68,7 +68,7 @@ export const EXPORT_MARKER_ROW = 22;
 /**
  * Reserved caption row (CSS px) above the **resource strip** band, where the exported picture
  * states what the strip is: its mode, bucket size and peak on one line, the load basis and any
- * truncation on the next, and the legend on the third (ADR-0199 D3; ADR-0106: a band's label is
+ * truncation on the next, and the legend on the third (ADR-0200 D3; ADR-0106: a band's label is
  * chrome, and the export paints chrome into reserved rows, as it does the marker row above). The
  * screen puts the same facts in the DOM panel the canvas cannot reach. Three 11 px lines at an 18 px
  * pitch plus breathing space, so no line is the only carrier of a fact a narrow crop could clip.
@@ -106,7 +106,7 @@ export interface BuildExportViewportOptions {
   wbsBandHeight?: number;
   /**
    * Extra reserved height (CSS px) **below** the diagram for the resource strip's caption row and
-   * band (ADR-0199). The strip sits at the bottom, as it does on screen, so unlike the WBS band
+   * band (ADR-0200). The strip sits at the bottom, as it does on screen, so unlike the WBS band
    * this moves nothing: `viewport` is unchanged and only `size.height` grows. `0` (the default) is
    * the byte-for-byte prior geometry.
    */

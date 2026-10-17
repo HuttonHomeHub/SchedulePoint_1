@@ -376,7 +376,7 @@ describe('lag-handle core/halo contrast on the bar fills (WCAG 1.4.11-equivalent
   }
 });
 
-describe('resolvePrintResourceStripPalette (ADR-0199 D4)', () => {
+describe('resolvePrintResourceStripPalette (ADR-0200 D4)', () => {
   const root = document.documentElement;
   const paper = resolvePrintPalette(root);
   const strip = resolvePrintResourceStripPalette(root);

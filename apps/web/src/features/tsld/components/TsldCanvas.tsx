@@ -179,7 +179,7 @@ export interface TsldCanvasHandle {
   getViewport: () => { view: Viewport; size: Size };
   /**
    * Read (never mutate) the resource strip the canvas is painting, or `null` when the strip is not
-   * open. The export composes the strip iff it is open and **as configured** (ADR-0199 D1) — the
+   * open. The export composes the strip iff it is open and **as configured** (ADR-0200 D1) — the
    * stack-by mode, bucket size, isolated resource and scale the planner is looking at — so it reads
    * the snapshot the band paints from rather than re-deriving anything. Optional-called by the
    * composer, as {@link getSceneLenses} is.
@@ -1532,7 +1532,7 @@ export function TsldCanvas({
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
       // The strip the band is painting right now, or `null` when it is not open — the export
-      // composes the strip iff the planner can see it (ADR-0199 D1). A read of the ref the painter
+      // composes the strip iff the planner can see it (ADR-0200 D1). A read of the ref the painter
       // reads, so the file and the screen cannot disagree about what the band holds.
       getResourceStrip: () => (stripActiveRef.current ? stripRef.current : null),
       getSceneLenses: () => {

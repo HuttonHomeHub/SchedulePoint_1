@@ -933,7 +933,7 @@ discriminators. Each becomes a spec/plan before build:
   links are unchanged.
 - **The resource strip reaches the exported diagram** — **in progress** (approved 2026-10-17,
 - **The resource strip reaches the exported diagram** — **shipped** (approved 2026-10-17,
-  [ADR-0199](adr/0199-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md); spec and plan at
+  [ADR-0200](adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md); spec and plan at
   [`docs/specs/resource-strip-export/`](specs/resource-strip-export/)): the loading strip a planner has
   open is carried into the PNG, PDF and printed diagram, and the export parity gate accounts for every
   canvas layer rather than only the scene's keys.

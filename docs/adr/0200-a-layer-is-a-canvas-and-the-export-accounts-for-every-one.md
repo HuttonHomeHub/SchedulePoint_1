@@ -1,4 +1,4 @@
-# ADR-0199: A layer is a canvas, and the export accounts for every one
+# ADR-0200: A layer is a canvas, and the export accounts for every one
 
 - **Status:** Accepted — 2026-10-17. The spec was approved by the product owner on 2026-10-17 (CQ-1: the strip is
   included when it is open on screen, as configured; CQ-2: the full layer roster). Milestone 1 (the gate) and
@@ -11,7 +11,7 @@
   [ADR-0049](0049-canvas-axis-aligned-resource-strip.md) (the strip's deliverable).
 - **Builds on:** ADR-0063 §M5, ADR-0088 D1 (no flag), ADR-0093 (a roster has a floor), ADR-0106 (a label is chrome),
   ADR-0110 (a gate is verified red), ADR-0127 D3 (count what you do not draw).
-- **Closes:** `docs/TECH_DEBT.md` #223. **Opens:** #523, #524 (two export-legend findings met on the way).
+- **Closes:** `docs/TECH_DEBT.md` #223. **Opens:** #524, #525 (two export-legend findings met on the way).
 
 ## Context
 

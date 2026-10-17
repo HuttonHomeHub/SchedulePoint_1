@@ -221,7 +221,7 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     });
     const { onSnapshot } = renderPanel();
     expect(await screen.findByText(/No resource loading to show yet/)).toBeInTheDocument();
-    // Not `null`: the export has to say WHY an open strip is empty (ADR-0199 D1/D-1). The painter
+    // Not `null`: the export has to say WHY an open strip is empty (ADR-0200 D1/D-1). The painter
     // draws nothing for it, exactly as it drew nothing for `null`.
     await waitFor(() =>
       expect(onSnapshot).toHaveBeenLastCalledWith(
@@ -330,7 +330,7 @@ describe('the strip names its colours and admits what it is not showing', () => 
   });
 });
 
-describe('the snapshot states what the strip is, for the exported caption (ADR-0199 D3)', () => {
+describe('the snapshot states what the strip is, for the exported caption (ADR-0200 D3)', () => {
   beforeEach(() => {
     vi.mocked(apiFetchEnvelope).mockReset().mockResolvedValue(HISTOGRAM);
   });

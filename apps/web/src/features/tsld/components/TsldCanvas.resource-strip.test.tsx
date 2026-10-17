@@ -93,7 +93,7 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
     expect(strip.style.height).toBe(`${RESOURCE_STRIP_HEIGHT}px`);
   });
 
-  it('hands the export the snapshot it is painting, and only while the strip is open (ADR-0199 D1)', () => {
+  it('hands the export the snapshot it is painting, and only while the strip is open (ADR-0200 D1)', () => {
     const control = createRef<TsldCanvasHandle>();
     const { rerender } = render(
       <TsldCanvas
