@@ -35,3 +35,6 @@ scripts/lib/fixtures/
 
 # The captured re-layout corpus: one scene per line, a benchmark input rather than source to format.
 apps/web/scripts/fixtures/relayout-corpus.json
+
+# The M0 reading's raw record: every run's lanes and vector, written by the benchmark.
+docs/specs/relayout-quality/m0-report-*.json
