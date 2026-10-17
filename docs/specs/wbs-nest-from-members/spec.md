@@ -15,6 +15,22 @@
 
 ---
 
+> **Amendment 2026-10-17 (build review).** Three changes to the design as approved, none to behaviour:
+>
+> 1. **`CheckboxField`'s public contract widens.** `label` goes from `string` to `ReactNode` (additive:
+>    every existing caller passes a string and renders identically). §4.4 left "render each row through
+>    `CheckboxField` or adopt its two props" to the build; the build review chose the primitive, because
+>    a second copy of the gate mechanism is how two checklists come to shade differently. A row's name,
+>    code and notes are the label content, so the accessible name is unchanged. The hover-row chrome of
+>    the first build is dropped rather than added to the primitive as a one-off.
+> 2. **A refetch merges; it does not reset.** The mutation invalidates the plan's activities even when
+>    the server refuses, so resetting to the server's membership would wipe the planner's ticks at the
+>    moment US-4 tells them to "check it and save again". Their unsaved ticks and un-ticks are carried
+>    onto the new membership, minus a row that is now an ancestor or has left the plan.
+> 3. **Copy** (§4.7 and US-2/US-4): the reason reads "is already inside it", and the refusal is two
+>    sentences; both use one verb for the move. `nestingRefusal` became the boolean `wouldCloseLoop`,
+>    since nothing branched on its two reasons.
+
 ## 1. Business understanding
 
 ### Problem
@@ -56,7 +72,7 @@ in an all-or-nothing batch — with a one-line message that does not say which r
    summaries (with everything inside them) are now under `Structure`.
 2. Un-tick a nested summary to lift it, with its contents, to the top level.
 3. Open `Piling`'s Members panel and see `Structure` and `Substructure` listed but shaded with
-   "Can't be filed here — Piling is inside it", so the absence of a tick is explained rather than
+   "Can't be filed here — Piling is already inside it", so the absence of a tick is explained rather than
    mysterious.
 
 ### User journeys
@@ -106,7 +122,7 @@ See §6.
 > visible but refused, with a reason, so that I understand why I cannot tick them.
 >
 > - **Given** summary A contains S at any depth (A is an ancestor of S) **then** A's row is listed,
->   **shaded**, carries the visible reason "Can't be filed here — “{S}” is inside it", and the
+>   **shaded**, carries the visible reason "Can't be filed here — “{S}” is already inside it", and the
 >   checkbox is `aria-disabled` with the reason linked by `aria-describedby`.
 > - **Given** I click A's row, its label, or press Space on its checkbox **then** nothing changes
 >   (ADR-0083 D1: `aria-disabled` + `preventDefault()` on `click`).
@@ -125,8 +141,8 @@ See §6.
 > save as a cycle, I want to be told what happened and see the corrected list.
 >
 > - **Given** the server answers `409 PARENT_CYCLE` **then** nothing has moved, the panel shows
->   "Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries
->   you ticked now contains “{S}”. The list has been refreshed; check it and save again.", and the
+>   "Nothing was moved. The breakdown changed while you were working, and a summary you ticked now
+>   contains “{S}”. The list has been refreshed; check it and save again.", and the
 >   activities query is refetched so the shading is recomputed.
 > - **Given** any other error **then** the existing message path is unchanged.
 
@@ -219,7 +235,7 @@ S's ancestor set. Server-side, unchanged: `SELF_PARENT` 422, `PARENT_NOT_SUMMARY
 ```mermaid
 flowchart LR
   subgraph "features/wbs/model"
-    T["wbs-tree.ts (new, pure)<br/>ancestorIds(id) · subtreeSize(id) · nestingRefusal(candidate, target)"]
+    T["wbs-tree.ts (new, pure)<br/>ancestorIds(id) · subtreeSize(id) · wouldCloseLoop(candidate, target)"]
     D["membership-diff.ts<br/>membershipDiff (unchanged)"]
   end
   P[ActivityMembersPanel] --> T
@@ -264,7 +280,7 @@ flowchart TD
   B --> C{Row type}
   C -- task / LOE / milestone --> D[Tickable, as today]
   C -- summary, not containing S --> E["Tickable · 'Moves with its N activities'"]
-  C -- summary containing S --> F["Shaded · 'Can't be filed here — “S” is inside it'"]
+  C -- summary containing S --> F["Shaded · 'Can't be filed here — “S” is already inside it'"]
   D & E --> G[Save membership]
   G --> H{Server}
   H -- 200 --> I[Saved · recalc prompt]
@@ -320,7 +336,7 @@ is about to depend on it.
 
 | Where                                                              | Change                                                                                                                                                                                                                                                           |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `features/wbs/model/wbs-tree.ts` (**new**, pure)                   | `ancestorIds(id, byId)`, `subtreeSizes(byId)`, `nestingRefusal(candidateId, targetId, ancestors)` → `null` or a reason key. `seen`-guarded walks                                                                                                                 |
+| `features/wbs/model/wbs-tree.ts` (**new**, pure)                   | `ancestorIds(id, byId)`, `subtreeSizes(byId)`, `wouldCloseLoop(candidateId, targetId, ancestors)` → boolean. `seen`-guarded walks                                                                                                                                |
 | `features/wbs/components/ActivityMembersPanel.tsx`                 | Summaries listed; ancestor rows shaded with reason; "Moves with its N activities"; two-count status line; subtree-aware dirty sentence; pen gate via the ADR-0083 mechanism; `PARENT_CYCLE` mapping + refetch. Docblock at `:99-103` rewritten (it is stale, §1) |
 | `features/wbs/model/membership-diff.ts`                            | **No logic change.** `membershipDiff` already sends any changed row. The `bulkParentChanges` docblock's C-1b paragraph is updated to say the table's bulk assign still excludes summaries **by choice** (CQ-4), not because the server cannot cope               |
 | `features/activities/components/ActivityEditorSession.tsx`         | `parentOptions` also excludes the edited summary's descendants, via `wbs-tree.ts` (CQ-2)                                                                                                                                                                         |
@@ -331,14 +347,14 @@ treatment and lock glyph.
 
 ### 4.7 Copy
 
-| Where                        | Text                                                                                                                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shaded row reason            | Can't be filed here — “{S}” is inside it.                                                                                                                                           |
-| Summary row note             | Moves with its {N} activities. (1: "Moves with its 1 activity." 0: no note)                                                                                                         |
-| Status line, K > 0           | {n} activities · {K} can't be filed here · {m} in this summary (search: "{n} activities match your search · …")                                                                     |
-| Dirty sentence, subtrees > 0 | {c} will move, with {N} activities inside them. Saved together — the whole change lands or none of it does.                                                                         |
-| `PARENT_CYCLE`               | Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “{S}”. The list has been refreshed; check it and save again. |
-| Breakdown hint clause        | Summaries inside this one aren't listed — a summary can't be filed under its own contents.                                                                                          |
+| Where                        | Text                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shaded row reason            | Can't be filed here — “{S}” is already inside it.                                                                                                                   |
+| Summary row note             | Moves with its {N} activities. (1: "Moves with its 1 activity." 0: no note)                                                                                         |
+| Status line, K > 0           | {n} activities · {K} can't be filed here · {m} in this summary (search: "{n} activities match your search · …")                                                     |
+| Dirty sentence, subtrees > 0 | {c} will move, with {N} activities inside them. Saved together — the whole change lands or none of it does.                                                         |
+| `PARENT_CYCLE`               | Nothing was moved. The breakdown changed while you were working, and a summary you ticked now contains “{S}”. The list has been refreshed; check it and save again. |
+| Breakdown hint clause        | Summaries inside this one aren't listed — a summary can't be filed under its own contents.                                                                          |
 
 Copy goes to ux-reviewer before build; curly apostrophes per the existing strings.
 

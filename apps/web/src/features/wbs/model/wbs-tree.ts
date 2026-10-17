@@ -65,20 +65,14 @@ export function subtreeSizes(activities: readonly TreeRow[]): ReadonlyMap<string
   return sizes;
 }
 
-/** Why a candidate cannot be filed under a target — `null` when it can. */
-export type NestingRefusal = 'SELF' | 'CONTAINS_TARGET';
-
 /**
- * May `candidateId` be filed directly under `targetId`? Refused when it is the target itself, or
- * when it already contains the target (it is one of the target's `targetAncestors`) — either would
- * close a loop.
+ * Would filing `candidateId` directly under `targetId` close a loop? Yes when it is the target
+ * itself, or when it already contains the target (it is one of the target's `targetAncestors`).
  */
-export function nestingRefusal(
+export function wouldCloseLoop(
   candidateId: string,
   targetId: string,
   targetAncestors: ReadonlySet<string>,
-): NestingRefusal | null {
-  if (candidateId === targetId) return 'SELF';
-  if (targetAncestors.has(candidateId)) return 'CONTAINS_TARGET';
-  return null;
+): boolean {
+  return candidateId === targetId || targetAncestors.has(candidateId);
 }

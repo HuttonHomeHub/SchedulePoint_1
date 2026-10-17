@@ -3,15 +3,11 @@ import { useId, useMemo, useState } from 'react';
 
 import { membershipDiff } from '../model/membership-diff';
 import type { OnReparented } from '../model/reparented';
-import { ancestorIds, nestingRefusal, subtreeSizes } from '../model/wbs-tree';
+import { ancestorIds, subtreeSizes, wouldCloseLoop } from '../model/wbs-tree';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import {
-  FieldGateLock,
-  FieldGateProvider,
-  resolveFieldGate,
-  useFieldGate,
-} from '@/components/ui/field-gate';
+import { FieldGateProvider } from '@/components/ui/field-gate';
+import { CheckboxField } from '@/components/ui/form';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { SearchField } from '@/components/ui/search-field';
 import { Spinner } from '@/components/ui/spinner';
@@ -81,6 +77,10 @@ export function ActivityMembersPanel({
     [planActivities, summary.id],
   );
 
+  const byId = useMemo(() => new Map(planActivities.map((a) => [a.id, a])), [planActivities]);
+  /** Every summary above this one — filing any of them under it would close a loop. */
+  const ancestors = useMemo(() => ancestorIds(summary.id, byId), [summary.id, byId]);
+
   const [checked, setChecked] = useState<ReadonlySet<string>>(persisted);
   /**
    * What the diff is taken against. Normally the persisted set — but a **successful save** advances
@@ -93,12 +93,24 @@ export function ActivityMembersPanel({
   const [baseline, setBaseline] = useState<ReadonlySet<string>>(persisted);
   const [seededFrom, setSeededFrom] = useState(persisted);
   if (seededFrom !== persisted) {
+    // A refetch **merges**; it does not reset. Every write invalidates the plan's activities, a
+    // refused one included, so resetting to the server's membership would wipe the planner's
+    // unsaved ticks exactly when the refusal tells them to "check the list and save again". Their
+    // edits (ticks and un-ticks against the old baseline) are carried onto the new membership —
+    // minus a row that is now an ancestor (it would close a loop) or is gone from the plan.
+    const added = [...checked].filter((id) => !baseline.has(id));
+    const removed = new Set([...baseline].filter((id) => !checked.has(id)));
     setSeededFrom(persisted);
-    setChecked(persisted);
     setBaseline(persisted);
+    setChecked(
+      new Set(
+        [...persisted, ...added].filter(
+          (id) => !removed.has(id) && byId.has(id) && !ancestors.has(id),
+        ),
+      ),
+    );
   }
 
-  const byId = useMemo(() => new Map(planActivities.map((a) => [a.id, a])), [planActivities]);
   /**
    * The rows to send. Diffed against `baseline` so a just-saved change is not re-sent (and an
    * un-tick of one still is); each row's `version` comes from `byId` — the latest the server told
@@ -110,15 +122,7 @@ export function ActivityMembersPanel({
   );
   const dirty = changes.length > 0;
 
-  /** Every summary above this one — filing any of them under it would close a loop. */
-  const ancestors = useMemo(() => ancestorIds(summary.id, byId), [summary.id, byId]);
   const sizes = useMemo(() => subtreeSizes(planActivities), [planActivities]);
-
-  // A tick on a row that has since become an ancestor (a peer re-nested the tree and the refetch
-  // landed) is dropped, or the next Save would send the same refused move again.
-  if ([...checked].some((id) => ancestors.has(id))) {
-    setChecked((prev) => new Set([...prev].filter((id) => !ancestors.has(id))));
-  }
 
   /**
    * The rows this panel offers: every other activity, summaries included. Rows that would close a
@@ -138,18 +142,21 @@ export function ActivityMembersPanel({
 
   /**
    * How many activities ride along with the rows being moved: everything inside a moved summary that
-   * is not itself being moved (ticking a summary and one of its children moves the child once).
+   * is not itself being moved. Summed over the moved rows that sit under no other moved row (their
+   * subtrees already hold the rest), less the moved rows those subtrees contain.
    */
   const carried = useMemo(() => {
-    if (changes.length === 0) return 0;
     const moving = new Set(changes.map((change) => change.id));
-    return planActivities.filter(
-      (a) => !moving.has(a.id) && [...ancestorIds(a.id, byId)].some((id) => moving.has(id)),
-    ).length;
-  }, [changes, planActivities, byId]);
+    const roots = [...moving].filter(
+      (id) => ![...ancestorIds(id, byId)].some((ancestor) => moving.has(ancestor)),
+    );
+    const inside = roots.reduce((total, id) => total + (sizes.get(id) ?? 0), 0);
+    return inside - (moving.size - roots.length);
+  }, [changes, byId, sizes]);
 
   const toggle = (id: string): void => {
     setSaved(false);
+    setSaveError(null);
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -180,7 +187,7 @@ export function ActivityMembersPanel({
       (err: Error) =>
         setSaveError(
           isParentCycle(err)
-            ? `Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “${summary.name}”. The list has been refreshed; check it and save again.`
+            ? `Nothing was moved. The breakdown changed while you were working, and a summary you ticked now contains “${summary.name}”. The list has been refreshed; check it and save again.`
             : err.message,
         ),
     );
@@ -247,7 +254,8 @@ export function ActivityMembersPanel({
                 activity={activity}
                 summaryName={summary.name}
                 checked={checked.has(activity.id)}
-                refused={nestingRefusal(activity.id, summary.id, ancestors) !== null}
+                shut={!gate.writable || ancestors.has(activity.id)}
+                refused={wouldCloseLoop(activity.id, summary.id, ancestors)}
                 carries={sizes.get(activity.id) ?? 0}
                 parentName={
                   activity.parentId !== null && activity.parentId !== summary.id
@@ -301,15 +309,16 @@ function dirtyMessage(moving: number, carried: number): string {
 }
 
 /**
- * One checklist row. A row that would close a loop carries its OWN gate (nearest reason wins,
- * ADR-0083 D4); every other row inherits the panel's pen gate. Either way the box is `aria-disabled`
- * and its `click` is cancelled — which stops pointer and Space alike while keeping the row in the tab
- * order, the mechanism `CheckboxField` uses (ADR-0083 D1). Native `disabled` is for "not loaded yet".
+ * One checklist row, through `CheckboxField` so the shading is the primitive's own (ADR-0083 D1/D4):
+ * a row that would close a loop carries its OWN gate (nearest reason wins), every other row inherits
+ * the panel's pen gate, and either way the box is `aria-disabled` with its `click` cancelled — which
+ * stops pointer and Space alike while keeping the row in the tab order.
  */
 function MemberRow({
   activity,
   summaryName,
   checked,
+  shut,
   refused,
   carries,
   parentName,
@@ -318,6 +327,8 @@ function MemberRow({
   activity: ActivitySummary;
   summaryName: string;
   checked: boolean;
+  /** The row cannot be changed now — the panel's gate is shut, or the row would close a loop. */
+  shut: boolean;
   refused: boolean;
   /** Activities inside this one (a summary's contents travel with it). */
   carries: number;
@@ -325,66 +336,44 @@ function MemberRow({
   parentName: string | null;
   onToggle: () => void;
 }): React.ReactElement {
-  const reasonId = useId();
-  const { shut, ownReason, groupReasonId } = resolveFieldGate(
-    refused
-      ? { writable: false, reason: `Can’t be filed here — “${summaryName}” is inside it.` }
-      : undefined,
-    useFieldGate(),
-  );
-
   return (
-    <li className="border-border border-b last:border-b-0">
-      <label
-        className={
-          shut
-            ? 'flex items-center gap-3 px-3 py-2 text-sm'
-            : 'hover:bg-muted flex cursor-pointer items-center gap-3 px-3 py-2 text-sm'
-        }
-      >
-        <input
-          type="checkbox"
-          className="accent-primary size-4 shrink-0"
-          checked={checked}
-          onChange={() => {
-            if (!shut) onToggle();
-          }}
-          aria-describedby={ownReason ? reasonId : groupReasonId}
-          // Shaded, never hidden (ADR-0062 M6): a reader must still be able to see what is in the
-          // summary, and reach the row to read why it is shut (ADR-0083 D1).
-          {...(shut
+    <li className="border-border border-b px-3 last:border-b-0">
+      <CheckboxField
+        density="compact"
+        checked={checked}
+        onChange={() => {
+          if (!shut) onToggle();
+        }}
+        gate={
+          refused
             ? {
-                'aria-disabled': true,
-                onClick: (event: React.MouseEvent<HTMLInputElement>) => {
-                  event.preventDefault();
-                },
+                writable: false,
+                reason: `Can’t be filed here — “${summaryName}” is already inside it.`,
               }
-            : {})}
-        />
-        <span className="min-w-0 flex-1 truncate">
-          {activity.code ? `${activity.code} · ` : ''}
-          {activity.name}
-        </span>
-        {shut ? <FieldGateLock /> : null}
-        {/*
-          Ticking a summary moves everything inside it, and a planner most needs to know that before
-          they tick. An activity filed under ANOTHER summary is the same case: ticking moves it, it
-          does not copy it.
-        */}
-        {!refused && carries > 0 ? (
-          <span className="text-muted-foreground shrink-0 text-xs">
-            Moves with its {carries === 1 ? '1 activity' : `${carries} activities`}
-          </span>
-        ) : null}
-        {parentName !== null ? (
-          <span className="text-muted-foreground shrink-0 text-xs">in {parentName}</span>
-        ) : null}
-      </label>
-      {ownReason ? (
-        <p id={reasonId} className="text-muted-foreground px-3 pb-2 pl-10 text-sm">
-          {ownReason}
-        </p>
-      ) : null}
+            : undefined
+        }
+        label={
+          <>
+            <span className="min-w-0 flex-1 truncate">
+              {activity.code ? `${activity.code} · ` : ''}
+              {activity.name}
+            </span>{' '}
+            {/*
+              Ticking a summary moves everything inside it, and a planner most needs to know that
+              before they tick. An activity filed under ANOTHER summary is the same case: ticking
+              moves it, it does not copy it.
+            */}
+            {!refused && carries > 0 ? (
+              <span className="text-muted-foreground shrink-0 text-xs">
+                Moves with its {carries === 1 ? '1 activity' : `${carries} activities`}
+              </span>
+            ) : null}{' '}
+            {parentName !== null ? (
+              <span className="text-muted-foreground shrink-0 text-xs">in {parentName}</span>
+            ) : null}
+          </>
+        }
+      />
     </li>
   );
 }

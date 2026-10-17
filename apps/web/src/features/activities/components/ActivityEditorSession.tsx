@@ -81,7 +81,7 @@ import {
 } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
-import { ActivityMembersPanel, ancestorIds, nestingRefusal } from '@/features/wbs';
+import { ActivityMembersPanel, ancestorIds, wouldCloseLoop } from '@/features/wbs';
 import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
   buildReport,
@@ -378,8 +378,7 @@ export function ActivityEditorSession({
       (a) => a.type === 'WBS_SUMMARY' && a.id !== activity.id,
     );
     const offerable = summaries.filter(
-      (candidate) =>
-        nestingRefusal(activity.id, candidate.id, ancestorIds(candidate.id, byId)) === null,
+      (candidate) => !wouldCloseLoop(activity.id, candidate.id, ancestorIds(candidate.id, byId)),
     );
     return { parentOptions: offerable, parentContentsHidden: offerable.length < summaries.length };
   }, [planActivities, activity.id]);

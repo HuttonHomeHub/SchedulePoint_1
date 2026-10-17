@@ -244,7 +244,7 @@ was stale.
 
 1. The Members panel lists every plan activity except the summary itself, summaries included. A
    summary that already **contains** this one (an ancestor, at any depth) is shown **shaded** with a
-   visible reason — "Can't be filed here — “S” is inside it." — on `aria-disabled` plus a cancelled
+   visible reason — "Can't be filed here — “S” is already inside it." — on `aria-disabled` plus a cancelled
    `click`, ADR-0083 D1's checkbox mechanism, so the row stays in the tab order. The panel's pen gate
    moves from native `disabled` to the same mechanism, its reason rendered once (ADR-0083 D4).
 2. A ticked summary says "Moves with its N activities" before Save, and the save bar counts what

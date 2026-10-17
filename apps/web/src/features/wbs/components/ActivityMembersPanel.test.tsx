@@ -333,7 +333,9 @@ describe('ActivityMembersPanel', () => {
       const box = screen.getByRole('checkbox', { name: /^Structure/ });
       expect(box).toHaveAttribute('aria-disabled', 'true');
       const reason = document.getElementById(box.getAttribute('aria-describedby') ?? '');
-      expect(reason).toHaveTextContent('Can’t be filed here — “Substructure” is inside it.');
+      expect(reason).toHaveTextContent(
+        'Can’t be filed here — “Substructure” is already inside it.',
+      );
       fireEvent.click(box);
       expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
     });
@@ -368,7 +370,22 @@ describe('ActivityMembersPanel', () => {
       });
     });
 
-    it('explains a PARENT_CYCLE refusal and keeps the ticks', async () => {
+    /** The same panel with a freshly fetched list — a new array, as every refetch produces. */
+    const panelOf = (planActivities: ActivitySummary[], subject = NESTED) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <ActivityMembersPanel
+          orgSlug="acme"
+          planId="p1"
+          summary={subject}
+          planActivities={planActivities}
+          gate={WRITABLE}
+        />
+      </QueryClientProvider>
+    );
+    const EXTRA = activity({ id: 'e', name: 'Excavate' });
+    const PLAN = [STRUCTURE, NESTED, OTHER, PILING, EXTRA];
+
+    it('explains a PARENT_CYCLE refusal, and the refetch that follows keeps the other ticks', async () => {
       mutateSpy.mockRejectedValueOnce(
         new ApiFetchError(409, {
           code: 'CONFLICT',
@@ -376,13 +393,18 @@ describe('ActivityMembersPanel', () => {
           details: { reason: 'PARENT_CYCLE' },
         }),
       );
-      renderNested();
+      const { rerender } = render(panelOf(PLAN));
       fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
       await save();
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Nothing was moved — the breakdown changed since this list was loaded, and one of the summaries you ticked now contains “Substructure”.',
+        'Nothing was moved. The breakdown changed while you were working, and a summary you ticked now contains “Substructure”.',
       );
+      // The mutation settles by invalidating the list, so a new array arrives.
+      rerender(panelOf([...PLAN]));
       expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /^Excavate/ })).toBeChecked();
+      expect(screen.getByText(/2 will move, with 1 activity inside them/)).toBeInTheDocument();
     });
 
     it('leaves any other 409 to its own sentence', async () => {
@@ -395,24 +417,54 @@ describe('ActivityMembersPanel', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('This plan changed.');
     });
 
-    it('drops a tick on a row that has become an ancestor after a refetch', () => {
-      const s2 = activity({ id: 's2', name: 'Superstructure', type: 'WBS_SUMMARY' });
-      const panel = (subject: ActivitySummary) => (
-        <QueryClientProvider client={new QueryClient()}>
-          <ActivityMembersPanel
-            orgSlug="acme"
-            planId="p1"
-            summary={subject}
-            planActivities={[subject, s2]}
-            gate={WRITABLE}
-          />
-        </QueryClientProvider>
-      );
-      const { rerender } = render(panel(SUMMARY));
+    it('clears a stale save error as soon as the planner changes the ticks', async () => {
+      mutateSpy.mockRejectedValueOnce(new Error('Server said no'));
+      renderNested();
       fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
-      // A peer nested the subject inside Superstructure; the refetch lands.
-      rerender(panel({ ...SUMMARY, parentId: 's2' }));
-      expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).not.toBeChecked();
+      await save();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Superstructure/ }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('keeps an unsaved tick and an unsaved un-tick across a refetch with a new array', () => {
+      const member = activity({ id: 'm', name: 'Blind', parentId: 's1' });
+      const plan = [...PLAN, member];
+      const { rerender } = render(panelOf(plan));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Blind/ }));
+      rerender(panelOf([...plan]));
+      expect(screen.getByRole('checkbox', { name: /^Excavate/ })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /^Blind/ })).not.toBeChecked();
+    });
+
+    it('drops a tick on a row that has become an ancestor after a refetch', () => {
+      const { rerender } = render(panelOf(PLAN, OTHER));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Structure/ }));
+      // A peer nested Superstructure inside Structure; the refetch lands.
+      const moved = { ...OTHER, parentId: 'top' };
+      rerender(panelOf([STRUCTURE, NESTED, moved, PILING, EXTRA], moved));
+      expect(screen.getByRole('checkbox', { name: /^Structure/ })).not.toBeChecked();
+      expect(screen.getByRole('checkbox', { name: /^Excavate/ })).toBeChecked();
+    });
+
+    it('drops a tick on a row that has left the plan', () => {
+      const { rerender } = render(panelOf(PLAN));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
+      rerender(panelOf([STRUCTURE, NESTED, OTHER, PILING]));
+      expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
+    });
+
+    it('ignores the keys that would toggle a shaded row', () => {
+      renderNested();
+      const box = screen.getByRole('checkbox', { name: /^Structure/ });
+      box.focus();
+      // jsdom cannot show a cancelled activation (the journey does); what it can show is that no
+      // key or click path reaches the checked set.
+      fireEvent.keyDown(box, { key: ' ', code: 'Space' });
+      fireEvent.keyUp(box, { key: ' ', code: 'Space' });
+      fireEvent.click(box);
       expect(screen.queryByText(/will move/)).not.toBeInTheDocument();
     });
   });

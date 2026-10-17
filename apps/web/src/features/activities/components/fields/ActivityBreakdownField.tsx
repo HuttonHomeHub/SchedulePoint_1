@@ -39,7 +39,10 @@ export function ActivityBreakdownField({
   loading = false,
   errored = false,
 }: GroupProps<ActivityGeneralValues> & {
-  /** The plan's summaries, minus the activity being edited (no self-parent) and, for a summary, the summaries inside it (no loop); the API rejects both. */
+  /**
+   * The plan's summaries, minus the activity being edited (no self-parent) and, for a summary, the
+   * summaries inside it (no loop). The API rejects both.
+   */
   parentOptions: ActivitySummary[];
   /** Summaries inside this activity were left out of the list (they would close a loop). */
   parentContentsHidden?: boolean;

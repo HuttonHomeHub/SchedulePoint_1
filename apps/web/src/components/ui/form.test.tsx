@@ -51,6 +51,23 @@ describe('CheckboxField density', () => {
     expect(label).toHaveClass('min-h-6', 'py-1');
   });
 
+  it('names the control from rich label content, notes included', () => {
+    render(
+      <CheckboxField
+        label={
+          <>
+            <span>Superstructure</span> <span>Moves with its 3 activities</span>
+          </>
+        }
+      />,
+    );
+    const box = screen.getByRole('checkbox', {
+      name: 'Superstructure Moves with its 3 activities',
+    });
+    expect(box.closest('label')).toHaveTextContent('Superstructure Moves with its 3 activities');
+    expect(box).not.toHaveAttribute('aria-label');
+  });
+
   it('only lightens the label weight relative to the default', () => {
     const { rerender } = render(<CheckboxField label="Today" />);
     expect(screen.getByRole('checkbox').closest('label')).toHaveClass('font-medium');

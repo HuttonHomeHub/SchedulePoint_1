@@ -369,7 +369,9 @@ test('WBS: nest a summary from the Members panel, and the ancestor is shaded', a
   await page.getByRole('menuitem', { name: 'Members' }).click();
   const ancestor = editor.getByRole('checkbox', { name: /^Structure/ });
   await expect(ancestor).toHaveAttribute('aria-disabled', 'true');
-  await expect(editor.getByText('Can’t be filed here — “Piling” is inside it.')).toBeVisible();
+  await expect(
+    editor.getByText('Can’t be filed here — “Piling” is already inside it.'),
+  ).toBeVisible();
   await ancestor.focus();
   await expect(ancestor).toBeFocused();
   await page.keyboard.press('Space');

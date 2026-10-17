@@ -3,7 +3,7 @@ export { WbsBulkAssignBar } from './components/WbsBulkAssignBar';
 export type { OnReparented } from './model/reparented';
 export { bulkParentChanges, membershipDiff, type MembershipChange } from './model/membership-diff';
 export { deriveWbsBandSource, type WbsBandSource } from './model/wbs-band-source';
-export { ancestorIds, nestingRefusal } from './model/wbs-tree';
+export { ancestorIds, wouldCloseLoop } from './model/wbs-tree';
 export { wbsBandDescribedRows } from './model/wbs-band-described-rows';
 export { wbsGroupAccessibleName } from './model/wbs-group-name';
 export {

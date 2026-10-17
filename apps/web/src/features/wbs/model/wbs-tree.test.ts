@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ancestorIds, nestingRefusal, subtreeSizes } from './wbs-tree';
+import { ancestorIds, subtreeSizes, wouldCloseLoop } from './wbs-tree';
 
 type Row = { id: string; parentId: string | null };
 
@@ -69,22 +69,29 @@ describe('subtreeSizes', () => {
   });
 });
 
-describe('nestingRefusal', () => {
+describe('wouldCloseLoop', () => {
   const ancestors = ancestorIds('d', byIdOf(CHAIN));
 
   it('refuses the target itself', () => {
-    expect(nestingRefusal('d', 'd', ancestors)).toBe('SELF');
+    expect(wouldCloseLoop('d', 'd', ancestors)).toBe(true);
   });
 
   it('refuses a summary that already contains the target, at any depth', () => {
-    expect(nestingRefusal('c', 'd', ancestors)).toBe('CONTAINS_TARGET');
-    expect(nestingRefusal('a', 'd', ancestors)).toBe('CONTAINS_TARGET');
+    expect(wouldCloseLoop('c', 'd', ancestors)).toBe(true);
+    expect(wouldCloseLoop('a', 'd', ancestors)).toBe(true);
   });
 
   it('allows an unrelated row, and a row inside the target', () => {
-    expect(nestingRefusal('x', 'd', ancestors)).toBeNull();
-    expect(nestingRefusal('a', 'a', new Set())).toBe('SELF');
-    expect(nestingRefusal('d', 'a', new Set())).toBeNull();
+    expect(wouldCloseLoop('x', 'd', ancestors)).toBe(false);
+    expect(wouldCloseLoop('d', 'a', new Set())).toBe(false);
+  });
+
+  it('answers on a malformed tree without hanging', () => {
+    const loop = byIdOf([
+      { id: 'p', parentId: 'q' },
+      { id: 'q', parentId: 'p' },
+    ]);
+    expect(wouldCloseLoop('q', 'p', ancestorIds('p', loop))).toBe(true);
   });
 });
 
@@ -92,7 +99,7 @@ describe('nestingRefusal', () => {
  * SC-2: the client predicate never lets through a move the server's resulting-tree walk would
  * refuse. The oracle below is the server's rule (`assertNoParentCycles`) restated in the test only.
  */
-describe('nestingRefusal property', () => {
+describe('wouldCloseLoop property', () => {
   const closesCycle = (rows: Row[], move: { id: string; parentId: string }): boolean => {
     const next = new Map(rows.map((r) => [r.id, r.parentId]));
     next.set(move.id, move.parentId);
@@ -128,11 +135,9 @@ describe('nestingRefusal property', () => {
       for (const target of rows) {
         const ancestors = ancestorIds(target.id, byId);
         for (const candidate of rows) {
-          const refusal = nestingRefusal(candidate.id, target.id, ancestors);
+          const refused = wouldCloseLoop(candidate.id, target.id, ancestors);
           const cyclic = closesCycle(rows, { id: candidate.id, parentId: target.id });
-          expect(refusal === null, `seed ${seed}: ${candidate.id} under ${target.id}`).toBe(
-            !cyclic,
-          );
+          expect(refused, `seed ${seed}: ${candidate.id} under ${target.id}`).toBe(cyclic);
         }
       }
     }
