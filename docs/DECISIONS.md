@@ -40,6 +40,16 @@ for a reason and a search that hides the row makes "No activity matches" false; 
 **Consequences.** The table's bulk assign still excludes summaries, by choice. One pure module
 (`features/wbs/model/wbs-tree.ts`) answers the question for both pickers.
 
+## 2026-10-17 — Deleted resources and calendars are restorable from Recently deleted (ADR-0195)
+
+**What was decided.** Both libraries join the bin; the restore is per-entity, batch-keyed and all-or-nothing. A name or
+code clash is refused naming the holder, a deleted calendar blocks a resource's restore, and a dissolved group restores
+empty. Library rows never expire.
+
+**Why.** The batch stamp and the confirmations already promised a restore the product did not have.
+
+**Consequences.** See ADR-0195. A plan restored onto a since-deleted calendar is recorded as debt, not fixed here.
+
 ---
 
 ## 2026-10-16 — A blur with no related target is one rule for every container that goes (tech debt #481)

@@ -721,6 +721,10 @@ spec and plan at [`docs/specs/recycle-bin-clear-out/`](specs/recycle-bin-clear-o
 restore-race fix are built, the switch-on is the owner's). Collaborative
 editing is not in 1.0 (`DECISIONS.md`, 2026-10-12). Two owner tasks are parked and listed there without a position.
 
+Deleted resources and calendars gain a restore in Recently deleted (approved 2026-10-17,
+[ADR-0195](adr/0195-a-library-row-comes-back-as-it-was-or-not-at-all.md); spec and plan at
+[`docs/specs/restore-resources-calendars/`](specs/restore-resources-calendars/)).
+
 ## Next
 
 ### Committed engine milestones (conformance framework)

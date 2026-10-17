@@ -300,3 +300,7 @@ findings are `docs/TECH_DEBT.md` #140–#141.
 > at `HISTORY_ROWS_PER_ACTIVITY` per activity (measured at `5` by ADR-0174 M3-T1, 2026-10-04, interleaved and warm) and reports them as
 > `activityHistoryCount` on `hierarchy.expired`. `hierarchy-expiry.structural.spec.ts` is what made the
 > omission impossible to ship.
+
+> **Amended 2026-10-17 by [ADR-0195](0195-a-library-row-comes-back-as-it-was-or-not-at-all.md).** The bin also lists
+> resources and calendars, which have no expiry (`expiresAt` is served per row; D2's scope is unchanged), and a blocker
+> is a parent or a dependency (`blockedBy.relation`), parent first.

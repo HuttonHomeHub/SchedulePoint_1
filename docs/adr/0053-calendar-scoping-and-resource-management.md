@@ -227,9 +227,13 @@ where they go, and that it cannot be undone.
 does not exist: there is no resource restore route and the recycle bin lists clients, projects and
 plans only. `delete_batch_id` is recorded so a future restore could bring a branch back together;
 until then a deleted group's resources are not recoverable, and neither is a dissolved group —
-the name is free again, so the way back is to create the group and move the resources in. The
-group **Delete** confirmation now says it deletes everything inside, counted down the whole
-branch, and points at Dissolve (it read `Delete "<name>"?` for every kind before).
+the name is free again, so the way back is to create the group and move the resources in.
+
+> **Amended 2026-10-17 by [ADR-0195](0195-a-library-row-comes-back-as-it-was-or-not-at-all.md).** A resource
+> restore now exists: deleted resources and calendars are listed in Recently deleted and restore by `delete_batch_id`,
+> all-or-nothing. A dissolved group is restored **empty** (D6); the resources that moved up stay where they are. The
+> group **Delete** confirmation now says it deletes everything inside, counted down the whole
+> branch, and points at Dissolve (it read `Delete "<name>"?` for every kind before).
 
 **The name namespace stays org-wide and shared with leaf resources** (`uq_resources_org_name`):
 a group named "Excavators" collides with an equipment resource of the same name, and "Crew A"
