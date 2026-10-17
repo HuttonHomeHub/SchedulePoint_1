@@ -8,7 +8,6 @@ import { configureHttpApp } from '../src/app-setup';
 import { permissionsForRole } from '../src/common/auth/org-permissions';
 import { Principal } from '../src/common/auth/principal';
 import { HierarchyLifecycleService } from '../src/common/hierarchy/hierarchy-lifecycle.service';
-import { CalendarRepository } from '../src/modules/calendars/calendar.repository';
 import { CalendarsService } from '../src/modules/calendars/calendars.service';
 import { ClientsService } from '../src/modules/clients/clients.service';
 import { PlansService } from '../src/modules/plans/plans.service';
@@ -235,8 +234,7 @@ describe.skipIf(!hasDatabase)('Restore against a delete of its ancestor (below H
   function holdAfterProjectCheck(hold: () => Promise<void>): () => void {
     // The instance the service holds: several modules provide their own `CalendarRepository`, so
     // `app.get(CalendarRepository)` may hand back one the restore never calls.
-    const repository = (app.get(CalendarsService) as unknown as { calendars: CalendarRepository })
-      .calendars as unknown as Record<string, unknown>;
+    const repository = app.get<{ calendars: Record<string, unknown> }>(CalendarsService).calendars;
     const original = repository.findActiveHoldingNameInTier as (
       ...args: unknown[]
     ) => Promise<unknown>;
