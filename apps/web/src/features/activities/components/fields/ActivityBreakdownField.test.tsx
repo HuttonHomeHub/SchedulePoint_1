@@ -23,11 +23,13 @@ const SUMMARY = {
 function Harness({
   parentId = '',
   parentOptions = [SUMMARY],
+  parentContentsHidden = false,
   loading = false,
   errored = false,
 }: {
   parentId?: string;
   parentOptions?: ActivitySummary[];
+  parentContentsHidden?: boolean;
   loading?: boolean;
   errored?: boolean;
 }): JSX.Element {
@@ -49,6 +51,7 @@ function Harness({
       <ActivityBreakdownField
         form={form}
         parentOptions={parentOptions}
+        parentContentsHidden={parentContentsHidden}
         loading={loading}
         errored={errored}
       />
@@ -80,6 +83,20 @@ describe('ActivityBreakdownField', () => {
   it('shows a summary’s code beside its name', () => {
     render(<Harness />);
     expect(labels()).toEqual(['None (top-level)', 'W1 · Phase 1']);
+  });
+
+  describe('summaries inside the one being edited', () => {
+    it('says they are not listed, and why', () => {
+      render(<Harness parentContentsHidden />);
+      expect(hint()).toContain(
+        'Summaries inside this one aren’t listed — a summary can’t be filed under its own contents.',
+      );
+    });
+
+    it('stays silent when nothing was left out', () => {
+      render(<Harness />);
+      expect(hint()).not.toContain('aren’t listed');
+    });
   });
 
   describe('a stored parent the list cannot resolve', () => {

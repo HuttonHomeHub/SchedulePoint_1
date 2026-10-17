@@ -116,6 +116,34 @@ describe('ActivityEditorDialog — WBS self-parenting (ported from ActivityCreat
   });
 });
 
+describe('ActivityEditorDialog — WBS loops (wbs-nest-from-members)', () => {
+  it('does not offer a summary inside the one being edited as its parent', () => {
+    const outer = row({ id: 'sum-1', code: 'TT.4', name: 'Superstructure', type: 'WBS_SUMMARY' });
+    const inner = row({
+      id: 'sum-2',
+      code: 'TT.5',
+      name: 'Frame',
+      type: 'WBS_SUMMARY',
+      parentId: 'sum-1',
+    });
+    const deeper = row({
+      id: 'sum-3',
+      code: 'TT.6',
+      name: 'Level 1',
+      type: 'WBS_SUMMARY',
+      parentId: 'sum-2',
+    });
+    const unrelated = row({ id: 'sum-4', code: 'TT.7', name: 'Fit-out', type: 'WBS_SUMMARY' });
+    mount({ activity: outer, planActivities: [outer, inner, deeper, unrelated] });
+
+    const parent = screen.getByLabelText('Parent WBS summary');
+    expect(within(parent).queryByRole('option', { name: 'TT.5 · Frame' })).toBeNull();
+    expect(within(parent).queryByRole('option', { name: 'TT.6 · Level 1' })).toBeNull();
+    expect(within(parent).getByRole('option', { name: 'TT.7 · Fit-out' })).toBeInTheDocument();
+    expect(screen.getByText(/Summaries inside this one aren’t listed/)).toBeInTheDocument();
+  });
+});
+
 describe('ActivityEditorDialog — Cost accrual round-trip (ported from ActivityCreateDialog.cost-accrual.test.tsx)', () => {
   it('seeds accrualType from the row and round-trips it on a Cost save', async () => {
     mount({ activity: row({ accrualType: 'START', version: 3 }) });

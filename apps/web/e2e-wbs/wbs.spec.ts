@@ -329,11 +329,12 @@ test('every item in the tallest row menu is reachable by pointer, not just prese
  * **Nest a summary from the Members panel** (`docs/specs/wbs-nest-from-members/`, ADR-0063
  * Amendment). Its own plan, so the long journey above is undisturbed.
  *
- * Two claims only a real browser and server can make:
+ * Three claims only a real browser and server can make:
  *
  * - ticking a summary in the parent's panel really files it (read back from the API, not the tick);
  * - the summary that contains this one is listed, shaded, with its reason, and **Space on it does
- *   nothing** — jsdom cannot show a cancelled checkbox activation (ADR-0083 §3).
+ *   nothing** — jsdom cannot show a cancelled checkbox activation (ADR-0083 §3);
+ * - the parent's own "Parent WBS summary" picker no longer offers the summary inside it (CQ-2).
  *
  * **Verified red** against the shipped panel: the first assertion fails because `Piling` is not
  * listed at all.
@@ -377,4 +378,12 @@ test('WBS: nest a summary from the Members panel, and the ancestor is shaded', a
   expect(await parentOf(page, org, structure.id)).toBeNull();
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
+
+  // --- CQ-2: Structure's own parent picker no longer offers what is inside it.
+  await openRowMenu(page, 'Structure');
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const picker = editor.getByLabel('Parent WBS summary', { exact: true });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole('option', { name: 'Piling' })).toHaveCount(0);
+  await expect(editor.getByText(/Summaries inside this one aren’t listed/)).toBeVisible();
 });

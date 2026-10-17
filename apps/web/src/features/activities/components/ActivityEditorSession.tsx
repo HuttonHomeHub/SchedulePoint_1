@@ -81,7 +81,7 @@ import {
 } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
-import { ActivityMembersPanel } from '@/features/wbs';
+import { ActivityMembersPanel, ancestorIds, nestingRefusal } from '@/features/wbs';
 import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
   buildReport,
@@ -369,9 +369,20 @@ export function ActivityEditorSession({
 
   const type = useWatch({ control: general.form.control, name: 'type' });
 
-  const parentOptions = planActivities.filter(
-    (a) => a.type === 'WBS_SUMMARY' && a.id !== activity.id,
-  );
+  // The edited activity's own contents are not offered as its parent either: filing a summary under
+  // something inside it closes a loop, which the server refuses (`PARENT_CYCLE`). The same
+  // predicate the Members panel shades its rows with, so the two pickers cannot disagree.
+  const { parentOptions, parentContentsHidden } = useMemo(() => {
+    const byId = new Map(planActivities.map((a) => [a.id, a]));
+    const summaries = planActivities.filter(
+      (a) => a.type === 'WBS_SUMMARY' && a.id !== activity.id,
+    );
+    const offerable = summaries.filter(
+      (candidate) =>
+        nestingRefusal(activity.id, candidate.id, ancestorIds(candidate.id, byId)) === null,
+    );
+    return { parentOptions: offerable, parentContentsHidden: offerable.length < summaries.length };
+  }, [planActivities, activity.id]);
 
   /**
    * **Every scope this editor can hold work in, with whether it could still be saved.**
@@ -773,6 +784,7 @@ export function ActivityEditorSession({
                       <ActivityBreakdownField
                         form={general.form}
                         parentOptions={parentOptions}
+                        parentContentsHidden={parentContentsHidden}
                         loading={planActivitiesLoading}
                         errored={planActivitiesError}
                       />
