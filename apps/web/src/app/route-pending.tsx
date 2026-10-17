@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
-
 import { PageContainer, Skeleton } from '@/components/ui/page';
+import { useLateStatus } from '@/hooks/use-late-status';
 
 /**
  * What a reader sees while a route's chunk (or its `beforeLoad`) is still arriving — the router's
@@ -21,29 +20,30 @@ import { PageContainer, Skeleton } from '@/components/ui/page';
  * page, which is the one moment a landmark would help and the one place the cost of its absence is
  * a second or two.
  *
- * `aria-busy` plus a status line carry the announcement, because the skeleton blocks are
- * `aria-hidden` (a skeleton is not information).
+ * `aria-busy` marks the skeleton and a status line carries the announcement, because the skeleton
+ * blocks are `aria-hidden` (a skeleton is not information). **The status is a sibling of the busy
+ * container, not a child of it**: ARIA 1.2 lets assistive technology defer changes inside a busy
+ * element until it is no longer busy, and this status unmounts when the route arrives, so inside
+ * the container its sentence could be deferred past its own lifetime (loading-skeletons spec §1,
+ * defect 5; reasoned from the specification, not observed).
  *
- * **The status element mounts EMPTY and is filled after mount.** A live region that arrives already
- * containing its text is inserted, not changed, and assistive technology commonly announces nothing
- * for it. The shared `useAnnounce` region is no help here: this screen is shown while the shell that
- * hosts that region is itself still loading.
+ * **The status element mounts EMPTY and is filled after mount** (`useLateStatus`). A live region
+ * that arrives already containing its text is inserted, not changed, and assistive technology
+ * commonly announces nothing for it. The shared `useAnnounce` region is no help here: this screen is
+ * shown while the shell that hosts that region is itself still loading.
  */
 export function RoutePending(): React.JSX.Element {
-  const status = useRef<HTMLSpanElement>(null);
-  // Written to the DOM rather than through state: the element has no React children to reconcile,
-  // and the text must land after the empty element is already in the document.
-  useEffect(() => {
-    if (status.current) status.current.textContent = 'Loading…';
-  }, []);
+  const status = useLateStatus<HTMLSpanElement>('Loading…');
   return (
-    <PageContainer aria-busy="true" data-testid="route-pending">
+    <>
       <span ref={status} role="status" className="sr-only" />
-      <div className="flex flex-col gap-6">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-48 w-full" />
-      </div>
-    </PageContainer>
+      <PageContainer aria-busy="true" data-testid="route-pending">
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-8 w-1/3" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      </PageContainer>
+    </>
   );
 }

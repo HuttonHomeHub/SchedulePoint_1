@@ -15,6 +15,13 @@ describe('RoutePending', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
     expect(container.querySelector('main')).toBeNull();
   });
+
+  it('keeps its status outside the aria-busy subtree, where a screen reader may defer it', () => {
+    // ARIA 1.2 lets assistive technology hold back changes inside a busy element until it is no
+    // longer busy, and this status unmounts when the route arrives.
+    render(<RoutePending />);
+    expect(screen.getByRole('status').closest('[aria-busy="true"]')).toBeNull();
+  });
 });
 
 describe('RoutePending announcement', () => {

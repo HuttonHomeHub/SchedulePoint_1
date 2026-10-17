@@ -139,3 +139,21 @@ describe('the forced-colors shaded-control rule', () => {
     expect(rule?.[2]).not.toContain('box-shadow');
   });
 });
+
+/**
+ * The skeleton outline joins the same unlayered block (loading-skeletons spec §4.6).
+ *
+ * Forced colours replaces backgrounds, and a `Skeleton` is a `bg-muted` block, so without a native
+ * outline the placeholder is invisible in Windows High Contrast and the surface reads as blank.
+ * Because it sits in the first `forced-colors` block, the layer case above governs it too.
+ */
+describe('the forced-colors skeleton rule', () => {
+  const block =
+    /@media\s*\(\s*forced-colors:\s*active\s*\)\s*\{([\s\S]*?)\n\}/.exec(CODE)?.[1] ?? '';
+  const rule = /\[data-skeleton\]\s*\{([^}]*)\}/.exec(block);
+
+  it('is declared in the unlayered forced-colors block, as a GrayText outline', () => {
+    expect(rule, 'the skeleton rule is missing from the forced-colors block').not.toBeNull();
+    expect(rule?.[1]).toMatch(/outline:\s*1px solid GrayText/);
+  });
+});

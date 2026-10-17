@@ -14,13 +14,16 @@
  * filed. It is **nine** since 2026-09-17 (`ChildCounts`), **ten** since the staff console
  * redesign's M0 moved `StatusSection` here from `features/staff`, **eleven** with its
  * `QueryPanel`, and **fourteen** since that redesign's M2 added `SectionGroup`, `SubSection` and
- * `KeyValueList` (ADR-0178); adding a fifteenth means editing this line.
+ * `KeyValueList` (ADR-0178), and **fifteen** since the loading-skeletons epic's M1 added
+ * `LoadingShape` (the pending surface's accessibility contract, beside `Skeleton`'s material);
+ * adding a sixteenth means editing this line.
  */
 export { PageContainer, type PageContainerProps } from './page-container';
 export { PageHeader, type PageHeaderProps } from './page-header';
 export { SectionCard, type SectionCardProps } from './section-card';
 export { EmptyState, type EmptyStateProps } from './empty-state';
-export { Skeleton } from './skeleton';
+export { Skeleton, SkeletonText } from './skeleton';
+export { LoadingShape, type LoadingShapeProps } from './loading-shape';
 export {
   ListRow,
   ListRowSkeleton,
