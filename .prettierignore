@@ -32,3 +32,6 @@ packages/engine-conformance/fixtures/**
 # asserted the opposite of its name and would have passed against a broken parser. Nothing ran it
 # between the reformat and the next edit, which is how a fixture rots silently.
 scripts/lib/fixtures/
+
+# The captured re-layout corpus: one scene per line, a benchmark input rather than source to format.
+apps/web/scripts/fixtures/relayout-corpus.json
