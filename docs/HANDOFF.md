@@ -3,57 +3,57 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-17. The owner kept the three host steps parked and asked for tech-debt work they
-did not have to test. They picked **all eight** offered jobs. Twelve register rows were closed (nine) or
-narrowed (three) across eight PRs, released together as **`api` 0.94.2 and `web` 0.192.2**. **1.0 is not cut**;
-that stays the owner's call (ADR-0190).
+**Written:** 2026-10-17. The owner kept the three host steps parked and asked for register rows **and
+features** they did not have to test on their own machines. They picked **all twelve** offered jobs (eight
+fixes, four features) and the stale-note fold. Everything picked is merged and released as **`api`
+0.95.0 and `web` 0.193.0** (Version Packages PR #1032; tags confirmed with `git ls-remote --tags`), after a
+mid-batch **`web` 0.192.3** (#1026). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.94.2 and `web` 0.192.2 (Version Packages PR #1015; tags confirmed with
-  `git ls-remote --tags`).
-- **The spec this batch built from:** [`docs/specs/shared-primitive-tidy/spec.md`](specs/shared-primitive-tidy/spec.md),
-  four sections (A–D), approved by the owner on 2026-10-16 with the defaults (the shared look
-  everywhere, no boxed option; ship the combobox change now). All four sections are built.
+- **Latest releases:** `api` 0.95.0 and `web` 0.193.0.
+- **Specs approved by the owner on 2026-10-17** (all with the recommended defaults):
+  `docs/specs/menu-opener-press/`, `restore-resources-calendars/`, `redundant-link-advisory/`,
+  `wbs-summary-duration/`, `wbs-nest-from-members/`. All five are built.
 - **This session's PRs, in merge order:**
-  - **#1012** `docs(docs)`: closes #352 (`DATABASE.md` now describes the PascalCase enum convention the
-    schema uses: 27 enums, 4 mapped), #338 (already solved by the `Disclosure` primitive) and #336
-    (ADR-0053 amendment: the trigram index the `name ILIKE` query can use). Also adds `mkdir -p backups`
-    to the README quick-start and replaces two stale line citations with symbols.
-  - **#1014** `chore(web)`: closes #355 (the `measure-toolbar` harnesses find `Plan view` again; one
-    retired), and takes #395 item 6 (one label-measure closure in the painter) and #391 item 7 (`m0-lod.md`
-    P3 now describes the code). Both rows stay open for their other items.
-  - **#1013** `fix(api)`: closes #340. Every path id uses Nest's `ParseUUIDPipe`; ours is deleted. Only the
-    400 message wording changed. No e2e spec had asserted the old wording, contrary to the row.
-  - **#1016** `chore(deps)`: closes #289. **The API runs on NestJS 12** (common/core/platform-express/testing
-    12.1.3). #289's two Vitest bootstrap failures do not reproduce on 12.1.3. Nest 12's `ParseUUIDPipe` is
-    narrower (v1–8 RFC variant, nil, max), which is harmless because every id is `uuid(7)` or v4. Security
-    review passed. Two notes left out on purpose: `@nestjs/common` 12 is ESM-only and loads through
-    Node's `require(esm)` (needs Node ≥ 22.12), and `@nestjs/cli` 12 itself
-    accepts Node ≥ 20.11, but its schematics dependencies (`@nestjs/schematics`, `@angular-devkit/*`) want
-    `^22.22.3`, so the `engines.node` floor is now 22.22.3 (CI and the Docker image take the floating `22`,
-    which already resolves above it).
-  - **#1017** `fix(web)` (spec §B): closes #335. `DataTable`'s `headClassName`/`cellClassName` now **merge**
-    onto the default; actions columns say `pr-0`; five columns that had lost their padding by accident
-    get it back. Adds the spec and amends ADR-0145.
-  - **#1018** `fix(web)` (spec §D): the combobox half of #229. Arrows, Home and End reach disabled
-    options; `disabledReason` is the option's description; Enter or a click announces it. Nothing uses a
-    disabled option yet. ADR-0082 amended. #229 stays open for the **Menu** half only.
-  - **#1019** `fix(web)` (spec §A): closes #481. One `useContainerUnmountHandoff` hook (now returning
-    `{ wrapperProps, focusWasInside }`) for the cluster, the divider, the history strip and the selection
-    bar. **A real bug was found and fixed:** after the selection's data refetched and the selection was
-    then cleared, focus fell to `<body>` (red-first Playwright probe in `e2e-multi-select`, red before,
-    green after). The history strip's own copy was **not** buggy in Chromium (its probe was green on the
-    old code); moving it was de-duplication. New `docs/DECISIONS.md` entry, 2026-10-16.
-  - **#1020** `fix(web)` (spec §C): closes #325. Earned value and the import review use `StatGrid`; the
-    guest header and the Summary popover use an unframed `ContextStrip`. New props: `StatGrid.label`,
-    `ContextStrip.framed`, `ContextFact.note` and `describedBy`.
-- **Every UI change had its reviewers before release:** accessibility-reviewer (ADR-0111) for #1018 and
-  #1019 (twice), component-reviewer for all four, ux-reviewer for #1017 and #1020. Every finding was folded.
+  - **#1022** `docs`: the five specs, `engines.node` raised to `>=22.22.3`, stale hand-off notes folded.
+  - **#1023** closes #408 (the print test now sees a toolbar memo regression).
+  - **#1024** closes #397 (the selection bar words its role refusal one way).
+  - **#1025** closes #350 (the weekend constraint case is seeded on a working-week calendar).
+  - **#1027** closes #351 (test activities come from the shared factory; plus a CodeQL
+    "used before declaration" fix in eight test files).
+  - **#1028** painter tidies: the rest of #391/#395's small items that were offered (gap labels clamp to
+    the viewport; link painter tidied). #391 and #395 stay open for their remaining items.
+  - **#1029** closes #229's Menu half (`Menu` takes a required `openerRef`; pressing the menu's own button
+    keeps it closed). Accessibility review before release (ADR-0111).
+  - **#1030** redundant-link **M1 (web reader)**, released alone as **`web` 0.192.3** (#1026) — the owner's
+    **"two releases"** decision, so the web that reads the new row was live before the API emitted it.
+  - **#1031** nest a WBS summary from the Members panel (no loops: `wbs-tree.ts`).
+  - **#1033** redundant-link advisory, final (ADR-0196): the health check lists links no duration could
+    make matter; closes #518. The owner loosened W5 for a zero or negative direct lag. Route throttle
+    `HEALTH_CHECK_THROTTLE`, 71 per 60 s.
+  - **#1034** WBS summary and level-of-effort **derived duration** (ADR-0197; new nullable column
+    `activities.derived_duration_minutes`, designed by the database-architect). Closes #375's open half.
+    **The organisation export is now format 2.0**: its float columns were labelled minutes but held
+    working days, so `totalFloatDays`, `freeFloatDays`, `remainingFloatDays` and the **baseline's
+    `totalFloatDays`** replace the `…Minutes` names (owner: "rename now"; ADR-0194 D2 corrected).
+  - **#1035** restore deleted resources and calendars from Recently deleted (ADR-0195). New rows #519
+    (a plan can be live on a deleted calendar and then schedules round the clock — pre-existing,
+    reproduced on the database) and #520 (a project-calendar restore can race a project delete; low).
+  - **#1036** closes #372 (the render model's drawn span is `drawnStart`/`drawnFinish`; ~80 files,
+    no behaviour change).
+- **Order note.** WBS duration changes the engine, and `check:engine-parity` froze the engine for the
+  whole redundant-link epic, so the batch was reordered: redundant-link shipped first and its closing
+  commit lifted the freeze; WBS duration followed.
+- **An admission the owner should have on record:** redundant-link's **specialist reviews (security,
+  API, backend-performance, accessibility, component, UX) were not run before M1 merged and released.**
+  They were run afterwards, found no blockers, and every finding was folded into #1033 — including a real
+  defect (the health dock's jump moved focus into the diagram; fixed with `focusListbox: false`). The
+  rule stands: reviews before the first merge, not after.
 
 ## What the owner has to do (in this order)
 
-Unchanged. **The owner parked these again on 2026-10-16.** When they report a result, record it in
+Unchanged. **The owner parked these again on 2026-10-17 — do not raise them unless the owner does.** When they report a result, record it in
 `docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on
 the real server, fix the guide.
 
@@ -86,13 +86,16 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
 - The default database password is warned about, not refused (2026-10-16).
 - Metric tiles: the shared look everywhere, no boxed option (2026-10-16, spec §C question 1).
 - The combobox's disabled-option behaviour ships before any screen uses it (2026-10-16, spec §D question 2).
+- Redundant links: W5 is loosened for a zero or negative direct lag (2026-10-17).
+- The export's float columns are named `…Days`, format 2.0 (2026-10-17).
+- Redundant-link shipped in two releases, web first (2026-10-17).
 
 ## Parked by the owner — keep, do not raise
 
-The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15 and 2026-10-16). A session
+The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16 and 2026-10-17). A session
 does not bring them up until the owner does. When the owner returns to one, the steps are ready:
 
-- **The three host steps above** (backups, export, clear-out) — parked again on 2026-10-16; offer them
+- **The three host steps above** (backups, export, clear-out) — parked again on 2026-10-17; offer them
   when the owner is ready, do not press.
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
@@ -106,26 +109,23 @@ does not bring them up until the owner does. When the owner returns to one, the 
 
 ## Open rows worth knowing
 
+- **New this session:** #519 (a plan or activity live on a deleted calendar schedules round the clock;
+  worth fixing — it predates the restore work) and #520 (project-calendar restore vs project delete; low).
 - #509–#513 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
   call, default not for 1.0), #508 (by decision).
 - #321 is deferred on a trigger; #502 carries the 2026-10-16 shard-4 note.
-- #229 is now **only** the `Menu` half (its outside-press listener closes the menu when its own trigger is
-  pressed; needs a new opener prop on a primitive with ~10 consumers, and the obvious fix is wrong for
-  split buttons). #395 and #391 stay open for their remaining items.
+- #391 and #395 stay open for their remaining painter items.
 - **Not folded, by choice:** a leave-page guard during an export (the page says leaving cancels it).
 
 ## Suggested next
 
 Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering:
 
-1. **The owner's three host steps** above, when they are ready, recorded as they come.
-2. **More register rows that need nothing from the owner's machines**, checked against the code on
-   2026-10-16: #397 (the selection bar words one role refusal two ways; S, visible copy only), #408
-   (`exportMatch` hides the print regression a second way; S, test only), #351 (63 test files hand-build an
-   `ActivitySummary` instead of the shared factory; M, test only), the rest of #395 and #391 (small painter
-   tidies), the Menu half of #229 (M; a shared primitive's keyboard contract, so a spec first), and #372
-   (rename the render model's `earlyStart`/`earlyFinish`; about 68 files, M–L).
-3. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
+1. **The owner's three host steps**, only if the owner raises them.
+2. **#519** (calendar deleted under a live plan) — a defect fix that needs nothing from the owner's
+   machines; check whether it adds surface (ADR-0105) before treating the row as the spec.
+3. **The rest of #391 and #395** (painter tidies) and other register rows checked against the code.
+4. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
    to cut 1.0.
 
 ## Environment notes a new session would otherwise rediscover
@@ -311,3 +311,27 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     `window` and wait past the 30 s stale time.
   - **The container restarted once mid-session** (about 01:00); worktrees, pushed branches and the
     wake-up survived, and nothing was lost.
+
+- **2026-10-17 lessons:**
+  - **API e2e reads `@repo/types` and `@repo/interchange` from their built `dist`.** After checking out a
+    commit that changes a package, run `pnpm --filter "./packages/*" build` first, or a journey fails on
+    a stale type (it cost one false red on redundant-link M2).
+  - **Turbo stops `api` and `web` tests after the known interchange failure.** `pnpm prepush` then reads
+    "11 cached, 14 total"; re-run `npx turbo run test --continue` to see the rest actually pass.
+  - **A review fold that rewords copy must re-run the journeys that read it.** #1035's fold reworded the
+    retention sentence and left `e2e-recently-deleted` asserting the old one; it was caught by running the
+    suite on the exact head before merge, not by CI. Grep `apps/web/e2e*/` for the old string.
+  - **The replay helpers** (`resolve.py`, `replay.sh` in the session scratchpad) take ours for count
+    banners, union ADR lines keeping the **longer** line (an amendment), and keep both ledger rows. They
+    must **not** touch `docs/BACKLOG.md`/`ROADMAP.md` (it duplicated an entry) — resolve those by hand.
+    A cherry-pick paused on an empty commit is not "done"; check for `CHERRY_PICK_HEAD`.
+  - **Stack the whole batch in one worktree, validate it once, then cherry-pick slice by slice onto
+    `main`** after each squash. When `git diff <tested-sha> HEAD` is empty, the gate result carries over.
+  - **This machine (15 GB, 4 cores) cannot run two `pnpm prepush` at once** — they OOM or time out — and
+    some unit files flake under load (ActivityEditor progress drafts, promotion anchors/manifest, the
+    Gantt "Stop editing" step). Re-run a failing file alone before believing it.
+  - **A menu-probe click must hit the part of the button the open menu does not cover**, and the toolbar
+    suite runs with `VITE_CANVAS_AUTHORING=false` — put an authoring probe in `e2e-authoring`. Confirm
+    every probe red on the old code.
+  - **A test server started under `setsid` saves setsid's PID, not the server's.** Find it by its
+    `API_PORT` in `/proc/*/environ` and kill its process group.
