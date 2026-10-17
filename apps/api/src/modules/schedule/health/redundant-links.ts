@@ -38,7 +38,7 @@ export const REDUNDANT_LINKS_RULE = 'DOMINATED_UNDER_ANY_DURATION';
  * The relaxation budget the service passes. Set from the M2 measurement (`m0-measurement.md`): high
  * enough that no measured plan reaches it, low enough that a dense plan answers in bounded time.
  */
-export const DEFAULT_RELAXATION_LIMIT = 4_000_000;
+export const DEFAULT_RELAXATION_LIMIT = 1_000_000;
 
 /** The activity facts the rule reads. A structural subset of `HealthActivityInput`. */
 export interface RedundantLinksActivity {

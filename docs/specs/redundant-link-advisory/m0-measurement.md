@@ -71,10 +71,74 @@ same rule flags R1 and the oracle reports nothing; an empty candidate set never 
 plans; a structural rule diverges somewhere in 150 generated plans; and a completeness case fails when the
 engine gains a per-activity output the oracle neither compares nor excludes.
 
-| Item                                      | Result      |
-| ----------------------------------------- | ----------- |
-| `scale-500` compute, p50 / p95            | TBD (M2-T2) |
-| `scale-2000` compute, p50 / p95           | TBD (M2-T2) |
-| Dense (2,000 x 10) compute, p50 / p95     | TBD (M2-T2) |
-| Fixture compute, p50 / p95                | TBD (M2-T2) |
-| Levelling preview, with and without links | TBD (M2-T2) |
+## Cost and prevalence (M2-T2: the harness completed against `health/redundant-links.ts`)
+
+`RL_OUT=/tmp/rl.json pnpm --filter @repo/api exec vitest run -c scripts/vitest.measure.config.mts
+scripts/measure-redundant-links.mts`: pure and in-process (no database), 20 uncounted warm-up calls then
+50 timed. **Machine note:** a shared four-core container with other agents running, Node 22.22.0,
+2026-10-17. Timings on it are noisy (the same case's p95 ranged 8.9 to 34.5 ms across three runs); the
+relaxation counts are exact and are the figures to rely on. Re-take the times on a quiet machine before
+quoting them (ADR-0128: a measurement belongs on the machine that can take it).
+
+| Plan             | Links  | Flagged | Not checked | Relaxations needed | p50 ms   | p95 ms (range of 3 runs) |
+| ---------------- | ------ | ------- | ----------- | ------------------ | -------- | ------------------------ |
+| fixture (seeded) | 188    | 3       | 29          | 761                | 0.4      | 5.5 to 8.5               |
+| `scale-500`      | 800    | 202     | 88          | 6,207              | 2 to 6   | 21 to 26                 |
+| `scale-2000`     | 3,200  | 816     | 367         | 24,234             | 7 to 9   | **8.9 to 34.5**          |
+| dense 2,000 x 10 | 19,945 | 17,946  | 0           | 437,690            | 56 to 60 | 142 to 285               |
+| dense 2,000 x 40 | 79,180 | 11,856  | 67,020      | 6,427,160 (capped) | 111      | 224                      |
+
+- **FC-5a holds**: `scale-2000` p95 is at most 34.5 ms against the 50 ms line, in steady state. The
+  first calls after process start are 5 to 10 times slower (93, 65 and 34 ms for the first three calls
+  in one run, JIT warm-up), so the first health request after a restart can be a few tens of
+  milliseconds slower; it is the same cold cost every other first call pays.
+- **FC-5b holds, by setting the limit from the measurement.** About 127 ns per relaxation on this machine
+  (dense 2,000 x 10: 56 ms for 437,690). The default limit is **1,000,000** relaxations: 2.3 times what
+  the dense 2,000 x 10 plan needs and 41 times what `scale-2000` needs, and a ceiling of roughly 130 ms
+  on this machine for a plan too dense to finish. The 2,000 x 40 case hits it, answers in about 110 ms
+  and says so (`searchCapped`, 67,020 links counted as not checked).
+- **Prevalence on the catalogue's capability plans: 0 flagged of 89 links, 11 not checked.** The
+  catalogue was not built to contain redundancy (E16); M3-T1 adds the plan that does. `scale-500` flags
+  202 of 800 links (E17's skip links), the figure M3-T2 states in the playbook.
+- **The fixture, seeded, flags 3 links and not R0056** (spec E15, CQ-4); and **not even unprogressed**,
+  against the spec's SC-2 and E14 (see the next section).
+
+### Levelling preview (spec §2.6, R5)
+
+`capability-levelling` and `capability-levelling-placed` contain no flagged link, so the measurement
+there is vacuous and is reported as such. On `scale-500` with every resource capped at 2 units an hour
+(202 flagged links, real contention), the preview's full output is **identical** with and without the
+flagged links, byte for byte. That covers Pass 1 and Pass 2 and the levelling pass over them for this
+plan; it is one plan, so the ADR states it as measured, not as a guarantee.
+
+## Soundness (SC-1, FC-2)
+
+Zero divergences, alone and all at once: 500 generated plans each drawn five times (half dense), 3,000
+generated triangles, the whole capability and reference catalogue, the fixture progressed and
+unprogressed, and `scale-500`. **Eight deliberate mutations of the rule are each caught** (drop the
+general W2 form; ignore pins and progress; allow leads; drop the lag-key rule; drop W3's last end; ignore
+the lag sum; drop W3's first end; drop the successor-transparency candidate rule). The first population
+alone did not catch the first of them (only 3,000 random triangles did), which is why the triangle
+population exists.
+
+## Where the spec turned out to be wrong
+
+1. **CE3 mispredicted, then corrected.** Four hand constructions (MSO, MSO with a late secondary, a
+   started successor, a completed successor, all entered by start-bound links) showed no free-float
+   divergence, and the first reading was "not demonstrated". The mutation that drops the
+   successor-transparency rule was nonetheless caught, and the oracle's report named A's free float:
+   the demonstrating case is a started successor entered at its **finish** (FF direct, SF chain). It is in
+   the oracle spec as CE3, with the start-bound cases kept as a documented negative. The exclusion is
+   necessary; the spec's reasoning for it was right and its mechanism (a pin) was too narrow.
+2. **SC-2 and E14 are false on the fixture.** R0056 (A4110 to A4600) is not flagged on the unprogressed
+   fixture either. Every route from A4110 to A4600 leaves an activity at its start (`SS 2400`) or carries
+   a lead, and the first needs single-calendar mode, whose W5 wants every non-zero lag on the activities'
+   own calendar: the fixture's activities schedule on CAL-02 and its project-default lags are on the plan
+   calendar CAL-01. Relaxing W5's lag-key clause when D's lag is not positive flags R0056 and survives
+   the whole oracle (500 x 5, 3,000 triangles, the catalogue). The spec states the clause and no
+   counterexample breaks it, and §4.7 keeps such a clause as conservative, so the rule ships as written
+   and the test pins it. **This is the product owner's call**: it is one line, and it is the difference
+   between flagging the repository's canonical example and not.
+3. **`budget` is not a usable name.** G4 (`plan-health-check.g4.structural.spec.ts`) refuses any key
+   containing "budget" in the health module. The option is `relaxationLimit`; the spec's "relaxation
+   budget" is the same thing under a name the gate accepts.
