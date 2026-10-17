@@ -38,8 +38,8 @@ vi.mock('@/config/env', async (importOriginal) => ({
  *    validator, so a census keyed on `validateSearch` structurally cannot see them. Gate B, below,
  *    is what covers those.
  *
- * **Verified red three ways** before it was trusted (ADR-0110 D5): by deleting `/forgot-password`'s
- * case from the suite (A1 fails naming it — that route's validator was later removed, #242), by asserting a route count of 23 (A2 fails), and by
+ * **Verified red three ways** before it was trusted (ADR-0110 D5): by deleting a covered route's
+ * case from the suite (A1 fails naming it), by asserting a route count of 23 (A2 fails), and by
  * emptying the extraction regex so the covered set comes back empty (A3 fails rather than A1
  * passing vacuously — which is the ADR-0093 lesson, and the failure ADR-0108's own census hit on
  * its first run).
