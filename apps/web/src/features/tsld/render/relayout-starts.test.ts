@@ -104,9 +104,10 @@ describe('relayoutStartIds', () => {
     expect(RELAYOUT_MULTISTART_MAX_ACTIVITIES).toBeLessThanOrEqual(OPTIMISE_MAX_ACTIVITIES);
   });
 
-  it('keeps the gate at the measured size: a plan past it waits for the pack start only (CQ-2)', () => {
-    expect(RELAYOUT_MULTISTART_MAX_ACTIVITIES).toBe(10);
-    expect(relayoutStartIds(11)).toEqual([0]);
+  it('keeps the gate at the owner-decided size: a plan past it waits for the pack start only (CQ-2)', () => {
+    expect(RELAYOUT_MULTISTART_MAX_ACTIVITIES).toBe(150);
+    expect(relayoutStartIds(147)).toEqual([0, 1, 2, 3]);
+    expect(relayoutStartIds(151)).toEqual([0]);
     expect(relayoutStartIds(300)).toEqual([0]);
   });
 });

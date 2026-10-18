@@ -40,15 +40,17 @@ export const START_NAMES: Record<StartId, string> = {
 };
 
 /**
- * The largest plan that runs more than the pack start (CQ-2: only while Re-layout's wait at 300
- * activities stays within 1.5x today's, else only below a measured size). **Measured 2026-10-17**
- * by `measure-relayout.mjs` FC-R6 in the product's real module workers on deterministic subsamples
- * of `scale-275` (`docs/specs/relayout-quality/m2-verdict.md`): the wait is 1.4x or less only up to
- * about 10 drawn activities (1.06-1.43x at 6-11), and 1.5x-9x from 12 up (3.4x at 100, 4.3x at 250,
- * 3.3x at 300). Ten is the largest clean size under the line; above it Re-layout searches from the
- * pack start alone, as it did before the starts were added.
+ * The largest plan that runs more than the pack start. **Owner decision, 2026-10-18**, replacing
+ * CQ-2's "within 1.5x today's wait" (which only held up to 10 activities and so withheld the starts
+ * from every plan a planner presses Re-layout on): Re-layout searches from all four starts on plans
+ * up to about 150 drawn activities, a wait the planner can cancel, and from the pack start alone
+ * above it (M1's behaviour). The owner accepted knowingly that fixture-p6-torture-v1 (147 drawn,
+ * inside the limit) spreads from 24 to 35 rows (FC-R5). **Measured 2026-10-17** by `measure-relayout.mjs` in the
+ * product's real module workers (`docs/specs/relayout-quality/m2-verdict.md`): the reference plan
+ * (58 drawn) waits about 0.27 s today and about 4.1 s across the starts; the ratio is 3.4-4x at
+ * 100-150 activities (27 s at 150) and the wait is 90 s at 300, which stays outside.
  */
-export const RELAYOUT_MULTISTART_MAX_ACTIVITIES = 10;
+export const RELAYOUT_MULTISTART_MAX_ACTIVITIES = 150;
 
 const ALL_STARTS: readonly StartId[] = [0, 1, 2, 3];
 
