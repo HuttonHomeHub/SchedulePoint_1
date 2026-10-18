@@ -103,9 +103,11 @@ not-found state, and the table's own request may fail first for the same reason 
   sites rather than hidden.
 - **Reasoned, not observed.** The ARIA 1.2 deferral that motivates D3 is from the specification, and the contract's
   claim to be safe is by construction. No screen reader was run.
-- **Not yet re-measured.** The instrument (`apps/web/scripts/measure-loading-shapes.mjs`) needs a database and a browser;
-  the post-build SC-2 and SC-3 figures are owed to a run of it, and until they are recorded the withdrawal clause for
-  SC-3 (re-argue in writing if a sample cannot reach 8 px) has not been tested.
+- **Measured after the build, and not met.** The instrument was run on the finished code
+  (`docs/specs/loading-skeletons/m7-after-measurement.md`, record `m7-after.json`). SC-5 holds everywhere; SC-3 passes
+  on three of five graded `fit` columns and fails on calendars and plans (88 and 14 px), so the withdrawal clause is
+  engaged and written up there; no status sits inside `aria-busy`. SC-2 (nine of eleven sites) and SC-4's "exactly one"
+  count (three of eleven at 1646 px) are not met. The after run used a different tenant from the baseline's.
 - **Debt recorded, not hidden** (`docs/TECH_DEBT.md`): seven first-load states that are plain text "Loading…"; the schedule
   health panel as a skeleton candidate (ADR-0116's fixed check set); and the members tab's `loading` and `error`
   props, which its only host never passes.
