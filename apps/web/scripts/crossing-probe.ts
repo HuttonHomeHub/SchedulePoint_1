@@ -248,7 +248,7 @@ export const PALETTE: TsldPalette = {
   linkMark: NODE_SENTINELS.linkMark,
   attachDot: NODE_SENTINELS.attachDot,
   edge: LINK_SENTINELS.edge,
-  bar: '#459e5d',
+  bar: '#409a59',
   nodeRim: NODE_SENTINELS.nodeRim,
   nodeRimNear: NODE_SENTINELS.nodeRimNear,
   nodeRimCritical: NODE_SENTINELS.nodeRimCritical,

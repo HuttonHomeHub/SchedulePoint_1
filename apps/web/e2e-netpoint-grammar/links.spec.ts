@@ -14,6 +14,8 @@ import { pickZoomPreset } from '../e2e-search-nav/support';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
+import { paintedRgb } from './support';
+
 /**
  * **NetPoint grammar M3 — the link language on the real canvas** (spec §4.2 G5, G6, G12).
  *
@@ -33,27 +35,6 @@ import { unfoldViewSections } from '../e2e-support/toolbar';
  *   that crosses an empty lane runs up into the node's ring, not one gap east of it;
  * - a link runs round a name rather than through it where it can (links-and-labels M2, #393).
  */
-
-/** A token's colour as the browser paints it, read inside the canvas scope. */
-async function paintedRgb(page: Page, token: string): Promise<[number, number, number]> {
-  return page.evaluate((name) => {
-    const canvases = [...document.querySelectorAll('canvas')];
-    const scene = canvases.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
-    const probe = document.createElement('span');
-    probe.style.color = `var(${name})`;
-    scene.parentElement!.appendChild(probe);
-    const css = getComputedStyle(probe).color;
-    probe.remove();
-    const off = document.createElement('canvas');
-    off.width = 1;
-    off.height = 1;
-    const ctx = off.getContext('2d')!;
-    ctx.fillStyle = css;
-    ctx.fillRect(0, 0, 1, 1);
-    const [r = 0, g = 0, b = 0] = ctx.getImageData(0, 0, 1, 1).data;
-    return [r, g, b] as [number, number, number];
-  }, token);
-}
 
 interface Counts {
   /** Pixels within tolerance of each colour. */

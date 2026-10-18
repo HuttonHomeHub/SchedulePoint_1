@@ -1446,7 +1446,8 @@ Each diagram row is **60 px** and carries three things, each with one job:
   fits, or nothing; a critical activity prints its duration alone. Off by default (`View ▾ ▸ Markers
 ▸ Duration & float`) and drawn from 6 px a day, because the reference prints no duration or float.
 
-The bar is **6 px** in `--canvas-bar`; each task end has a **15 px node** filled with the ground and
+The bar is **6 px** in `--canvas-bar` (`oklch(0.616 0.13 150)`, 3.45:1 on the ground; solved as the darkest
+green the criticality ladder allows, ADR-0199); each task end has a **15 px node** filled with the ground and
 ringed at 1, 2 or 3 px by criticality, and a **near-critical node also carries a 4 px centre dot** in
 its rim's ink (the cue for the one weight step that is weak without colour); a **milestone is a downward triangle** filled in its rung's
 colour, outlined 2 px when critical, 1.5 px when near-critical, not at all on schedule.
@@ -1461,6 +1462,10 @@ it (FC-G5's text-on-text limb, 0 on every yardstick plan).
 A link carries five facts, and each has one channel:
 
 - **Drivingness is weight.** A driving link is 2 px, a non-driving link 1 px.
+- **A link is never louder than the work it joins** (ADR-0199). On the ground, the month band and
+  paper, `--canvas-bar` (3.45:1) is at least as strong as `--canvas-link` (3.40:1) and
+  `--canvas-link-minor` (3.37:1); `token-contrast.test.ts` and `mark-contrast.spec.ts` hold it. A
+  critical or near-critical link is drawn in the bar's own rung ink, so it holds there by construction.
 - **Criticality is the driving link's ink**: `--destructive` when both ends are critical,
   `--warning` when both are at least near-critical, otherwise the violet `--canvas-link`. A
   non-driving link is `--canvas-link-minor`. The endpoints' nodes say criticality too, so colour is

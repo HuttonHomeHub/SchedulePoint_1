@@ -1206,6 +1206,107 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
   });
 });
 
+/**
+ * **Diagram mark contrast (`docs/specs/diagram-mark-contrast/`, ADR-0199, TECH_DEBT #368): the work
+ * is not fainter than the relationship between work.**
+ *
+ * The rule: no ordinary link is stronger in contrast than the ordinary bar it joins, on any plot
+ * ground or on paper. It was inverted from NetPoint grammar M2/M3 until the values below shipped:
+ * the bar was solved as "the lightest green that clears 3:1" (3.27:1) while the driving link was
+ * given a 4.0 target no constraint stood behind (4.22:1). The critical and near-critical rungs
+ * satisfy the rule by construction, because a link on those rungs is drawn in the bar's own ink.
+ *
+ * Same overlay discipline as `NETPOINT_PROPOSED` above: the entries are the values
+ * `scripts/solve-mark-contrast.ts` solved, laid over today's canvas scope so the pairs can be seen
+ * red first; the last case fails if an entry survives after `globals.css` says the same thing.
+ */
+const MARK_CONTRAST_PROPOSED: Readonly<Record<string, string>> = {
+  // Empty since M1, which wrote `--canvas-bar` and `--canvas-link` into `globals.css`.
+};
+
+describe('diagram mark contrast — the work is not fainter than the relationship', () => {
+  const tokens = new Map(resolve(':root', 'canvas'));
+  for (const [name, value] of Object.entries(MARK_CONTRAST_PROPOSED)) tokens.set(name, value);
+
+  const ORDINARY_LINKS = ['--canvas-link', '--canvas-link-minor'] as const;
+  const GROUNDS = ['--canvas', '--canvas-band', '--print'] as const;
+  const LINK_ON_GROUND = ORDINARY_LINKS.flatMap((link) =>
+    GROUNDS.map((ground) => [link, ground] as const),
+  );
+
+  it.each(LINK_ON_GROUND)('the ordinary bar is at least as strong as %s on %s', (link, ground) => {
+    const bar = ratio(tokens, ground, '--canvas-bar');
+    const line = ratio(tokens, ground, link);
+    expect(
+      bar,
+      `--canvas-bar is ${fmtRatio(bar)} on ${ground} but ${link} is ${fmtRatio(line)}: the link out-shouts the work`,
+    ).toBeGreaterThanOrEqual(line);
+  });
+
+  // The ordering is a statement about luminance, so it must hold on every ground at once; and it
+  // must not have been bought by dropping a link under the 3:1 a graphic needs (1.4.11).
+  it.each(LINK_ON_GROUND)('%s stays perceivable on %s (≥ 3:1)', (link, ground) => {
+    const value = ratio(tokens, ground, link);
+    expect(value, `${link} on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(GROUNDS)('the ordinary bar stays perceivable on %s (≥ 3:1)', (ground) => {
+    const value = ratio(tokens, ground, '--canvas-bar');
+    expect(value, `--canvas-bar on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  // A stronger bar spends the ladder's headroom, so every pair the bar sits in is re-run.
+  it('the ladder keeps its 1.5:1 neighbour floors, untinted and through the viewport tint', () => {
+    const fill = parseColour(tokens.get('--canvas-minimap-frame-fill')!);
+    const through = (token: string): Srgb =>
+      compositeOver(fill, compositeOver(parseColour(tokens.get(token)!), fillOf(tokens)));
+    for (const rung of ['--warning', '--destructive'] as const) {
+      const value = ratio(tokens, '--canvas-bar', rung);
+      expect(value, `--canvas-bar vs ${rung} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(1.5);
+      const tinted = contrastRatio(through('--canvas-bar'), through(rung));
+      expect(
+        tinted,
+        `--canvas-bar vs ${rung} through the tint is ${fmtRatio(tinted)}`,
+      ).toBeGreaterThanOrEqual(1.5);
+    }
+  });
+
+  it('the label and the inset ring stay legible on the bar (≥ 4.5:1 and ≥ 3:1)', () => {
+    const label = ratio(tokens, '--canvas-bar', '--primary-foreground');
+    const ring = ratio(tokens, '--canvas-bar', '--foreground');
+    expect(label, `label on --canvas-bar is ${fmtRatio(label)}`).toBeGreaterThanOrEqual(4.5);
+    expect(ring, `ring on --canvas-bar is ${fmtRatio(ring)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the direction mark stays perceivable on the bar and on the lines it sits on (≥ 3:1)', () => {
+    for (const line of ['--canvas-bar', '--canvas-link', '--canvas-link-minor'] as const) {
+      const value = ratio(tokens, line, '--canvas-link-mark');
+      expect(value, `mark on ${line} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('the link hues stay apart from every bar rung (ΔE ≥ 5)', () => {
+    for (const ink of ORDINARY_LINKS) {
+      const inkRgb = parseColour(tokens.get(ink)!).srgb;
+      for (const rung of ['--canvas-bar', '--warning', '--destructive'] as const) {
+        const value = deltaE76(inkRgb, parseColour(tokens.get(rung)!).srgb);
+        expect(value, `${ink} vs ${rung} ΔE ${value.toFixed(1)}`).toBeGreaterThanOrEqual(5);
+      }
+    }
+  });
+
+  it('keeps no proposed value that has already shipped', () => {
+    const shipped = resolve(':root', 'canvas');
+    const stale = Object.entries(MARK_CONTRAST_PROPOSED).filter(
+      ([name, value]) => shipped.get(name) === value,
+    );
+    expect(
+      stale,
+      'delete these from MARK_CONTRAST_PROPOSED: the gate now reads them from CSS',
+    ).toEqual([]);
+  });
+});
+
 describe.each(THEME_SELECTORS)(
   "%s — the conflict reason line on the selection bar's card (ADR-0186)",
   (theme) => {

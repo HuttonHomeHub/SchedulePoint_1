@@ -1,7 +1,8 @@
 # ADR-0157: A mark's class is its hue and its shape, and the grid is the quietest mark
 
 - **Status:** Accepted (product owner, 2026-09-24: "Approved, build it all", with CQ-1 to CQ-11
-  answered; all five agents agreed the spec and plan)
+  answered; all five agents agreed the spec and plan); D2 and D4's bar and driving-link lightness
+  amended by [ADR-0199](0199-a-link-is-never-louder-than-the-work-it-joins.md)
 - **Date:** 2026-09-24
 - **Deciders:** James Ewbank (with Claude Code)
 - **Amends:** [ADR-0056](./0056-tsld-time-axis-legibility-and-preset-framing.md) §2 (the grid tiers' weights and the

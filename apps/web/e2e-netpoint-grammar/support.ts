@@ -18,6 +18,27 @@ export async function sceneCanvasToken(page: Page, name: string): Promise<string
   }, name);
 }
 
+/** A token's colour as the browser paints it, read inside the canvas scope. */
+export async function paintedRgb(page: Page, token: string): Promise<[number, number, number]> {
+  return page.evaluate((name) => {
+    const canvases = [...document.querySelectorAll('canvas')];
+    const scene = canvases.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    scene.parentElement!.appendChild(probe);
+    const css = getComputedStyle(probe).color;
+    probe.remove();
+    const off = document.createElement('canvas');
+    off.width = 1;
+    off.height = 1;
+    const ctx = off.getContext('2d')!;
+    ctx.fillStyle = css;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r = 0, g = 0, b = 0] = ctx.getImageData(0, 0, 1, 1).data;
+    return [r, g, b] as [number, number, number];
+  }, token);
+}
+
 export async function openReferencePlan(page: Page): Promise<void> {
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
