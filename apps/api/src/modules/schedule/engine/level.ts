@@ -183,6 +183,10 @@ export function levelSchedule(
 
   const calendarOf = (a: EngineActivity): WorkingTimeCalendar => a.calendar ?? planCalendar;
 
+  // Scoped to this call: calendars such as `allMinutesWorkCalendar` are process-wide singletons, so a
+  // memo hung off them would outlive the pass and grow for the life of the process.
+  const gapMemo: GapMemo = new Map();
+
   /**
    * Where THIS assignment's demand begins (ADR-0071 §1): `lagMinutes` working minutes into the
    * activity, on the activity's own calendar. Absent or `0` returns the activity's start unchanged —
@@ -378,6 +382,7 @@ export function levelSchedule(
       fromInst,
       d,
       perResource,
+      gapMemo,
     );
     let windowExceeded = false;
 
@@ -644,6 +649,32 @@ interface ResourceContention {
 }
 
 /**
+ * Working minutes in `[from, to)` on `cal`, remembered in `memo` (one levelling pass's, never shared). A gap between two blackouts is
+ * asked about again by every placement that searches past it, and it does not change until something is
+ * placed in it, so on a hot resource the same few thousand gaps are re-measured thousands of times. A
+ * calendar is immutable and the answer is a pure function of its arguments, so the memo cannot go stale.
+ */
+type GapMemo = Map<WorkingTimeCalendar, Map<number, Map<number, number>>>;
+function workingBetween(memo: GapMemo, cal: WorkingTimeCalendar, from: number, to: number): number {
+  let byFrom = memo.get(cal);
+  if (byFrom === undefined) {
+    byFrom = new Map();
+    memo.set(cal, byFrom);
+  }
+  let byTo = byFrom.get(from);
+  if (byTo === undefined) {
+    byTo = new Map();
+    byFrom.set(from, byTo);
+  }
+  let minutes = byTo.get(to);
+  if (minutes === undefined) {
+    minutes = cal.workingTimeBetween(absMinutesToInstant(from), absMinutesToInstant(to));
+    byTo.set(to, minutes);
+  }
+  return minutes;
+}
+
+/**
  * Whether `[from, to)` clears every blackout in `sorted`. Binary-searches the first blackout that could
  * still be running at `from`, so the check is `O(log b)` rather than a scan — the blackouts are disjoint
  * and ascending, so if that one clears, every later one starts even later.
@@ -697,6 +728,7 @@ function earliestFeasibleStart(
   esAbs: number,
   d: number,
   perResource: readonly ResourceContention[],
+  gapMemo: GapMemo,
 ): { start: number; finish: number } {
   const start0 = rollForwardToWorking(cal, esAbs);
   // A milestone (zero duration) occupies no span, so no resource can ever block it.
@@ -710,7 +742,9 @@ function earliestFeasibleStart(
   const lagFree = perResource.every((rc) => rc.lagMinutes === 0);
   let horizon = lagFree ? advanceWorking(cal, start0, d) : Number.POSITIVE_INFINITY;
   for (;;) {
-    const scans = perResource.map((rc) => rc.profile?.blackoutsOf(rc.need, esAbs, horizon));
+    const scans = perResource.map((rc) =>
+      rc.profile?.blackoutsOf(rc.need, esAbs, horizon, lagFree ? d : 0),
+    );
     let knownUntil = Number.POSITIVE_INFINITY;
     for (const scan of scans) if (scan) knownUntil = Math.min(knownUntil, scan.knownUntil);
     const found = searchCandidates(
@@ -720,6 +754,7 @@ function earliestFeasibleStart(
       perResource,
       scans.map((scan) => scan?.blackouts ?? []),
       knownUntil,
+      gapMemo,
     );
     if ('start' in found) return found;
     horizon = Math.max(found.needsKnownUntil, esAbs + 2 * (horizon - esAbs));
@@ -738,6 +773,7 @@ function searchCandidates(
   perResource: readonly ResourceContention[],
   blackouts: ReadonlyArray<readonly Blackout[]>,
   knownUntil: number,
+  gapMemo: GapMemo,
 ): { start: number; finish: number } | { needsKnownUntil: number } {
   const anyBlackout = blackouts.some((b) => b.length > 0);
   // No contention → the earliest working start fits immediately.
@@ -751,7 +787,24 @@ function searchCandidates(
   const candidates = new Set<number>([start0]);
   for (let j = 0; j < blackouts.length; j += 1) {
     const lag = perResource[j]!.lagMinutes;
-    for (const b of blackouts[j]!) {
+    const list = blackouts[j]!;
+    for (let k = 0; k < list.length; k += 1) {
+      const b = list[k]!;
+      // A zero-lag resource whose next blackout starts before `d` working minutes have passed after
+      // this one ends cannot host the run in between. Testing that candidate would cost three calendar
+      // walks to learn it, and a hot resource has thousands of such gaps (#84). Dropping it moves no
+      // answer. Either the next blackout still blocks the run once the start is rolled to working time,
+      // or it ends inside the non-working stretch the roll skips, in which case ITS end rolls to the
+      // very same start and is kept (or dropped by this same argument in turn). The outcome depends
+      // only on the rolled start, so which of them is tested is immaterial.
+      const next = list[k + 1];
+      if (
+        lag === 0 &&
+        next !== undefined &&
+        (next.start - b.finish < d || workingBetween(gapMemo, cal, b.finish, next.start) < d)
+      ) {
+        continue;
+      }
       const cand = lag > 0 ? advanceWorking(cal, b.finish, -lag) : b.finish;
       if (cand > start0) candidates.add(cand);
     }
