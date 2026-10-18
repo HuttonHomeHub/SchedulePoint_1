@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useCallback, useMemo, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buttonVariants } from './button';
 import { DataTable, DataTableSkeleton, type Column } from './data-table';
 
 interface Row {
@@ -824,5 +825,34 @@ describe('DataTableSkeleton', () => {
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
     expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /*
+   * A settled row is its tallest control plus `py-2` twice plus the 1 px rule — 49 px with a
+   * small button, the figure `globals.css` records for the estate. A placeholder row that held only
+   * a text line was ~38 px, so everything under the table moved ~60 px when three rows became one
+   * (loading-skeletons SC-2). The placeholder reserves the same control height by the same token,
+   * pinned to the class the row's own button carries. jsdom computes no layout, so the class is the
+   * only thing a unit test can compare.
+   */
+  it('reserves, in every placeholder cell, the height of the small control a settled row holds', () => {
+    const { container } = render(
+      <DataTableSkeleton
+        columns={[
+          { header: 'Name', cell: () => null },
+          { header: 'Date', sample: '12 Oct 2026', cell: () => null },
+        ]}
+        rows={2}
+      />,
+    );
+    const rowControlHeight = /(?:^|\s)h-\(--control-h-sm\)(?:\s|$)/.exec(
+      buttonVariants({ size: 'sm' }),
+    );
+    expect(rowControlHeight, 'the small button no longer sets the row height').not.toBeNull();
+    const cells = container.querySelectorAll('tbody td');
+    expect(cells).toHaveLength(4);
+    for (const cell of cells) {
+      expect(cell.firstElementChild).toHaveClass('min-h-(--control-h-sm)');
+    }
   });
 });

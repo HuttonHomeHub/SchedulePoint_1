@@ -218,6 +218,18 @@ function skeletonClassesOf<T>(column: Column<T>, kind: 'head' | 'cell'): string 
 }
 
 /**
+ * What a placeholder cell holds up: the height of a small control, `--control-h-sm`.
+ *
+ * A settled row is its tallest control plus `py-2` twice plus the 1 px rule — a small `Button` or a
+ * `RowActionsMenu` trigger gives 49 px, and `globals.css` records that as the estate's row. A
+ * placeholder holding only a text line was ~38 px, so the headings under a table moved ~60 px when
+ * the rows arrived (`docs/TECH_DEBT.md` #234, loading-skeletons SC-2). It is the token the control
+ * itself reads, so a coarse pointer (44 px) grows the placeholder with the row. A table whose row
+ * holds a taller control (the members roster's `Select`, `--control-h`) settles 4 px taller per row.
+ */
+const SKELETON_CELL = 'flex min-h-(--control-h-sm) items-center';
+
+/**
  * How many skeleton rows a loading table shows.
  *
  * Three, matching `ListRowSkeleton`'s default — enough to read as a list rather than a single
@@ -500,11 +512,13 @@ export function DataTableSkeleton<T>({
             <tr key={rowIndex} className="border-border border-b">
               {columns.map((column) => (
                 <td key={column.header} className={skeletonClassesOf(column, 'cell')}>
-                  {column.sample === undefined ? (
-                    <Skeleton className="h-3.5 w-full max-w-40" />
-                  ) : (
-                    <SkeletonText sample={column.sample} />
-                  )}
+                  <div aria-hidden="true" className={SKELETON_CELL}>
+                    {column.sample === undefined ? (
+                      <Skeleton className="h-3.5 w-full max-w-40" />
+                    ) : (
+                      <SkeletonText sample={column.sample} />
+                    )}
+                  </div>
                 </td>
               ))}
             </tr>
