@@ -38,10 +38,10 @@ export interface ActivityEditorGatingInput {
   /** Role: may report progress (Contributor and up) — never pen-gated. */
   canProgress: boolean;
   /**
-   * Role: may read cost and earned-value figures. Derived client-side from the role, because the
-   * activity DTO returns `null` for both "unset" and "not permitted" and the client cannot tell
-   * them apart. Sound today — `cost:read` and `activity:update` are granted to exactly the same
-   * roles — and recorded in TECH_DEBT #62 against the day those sets diverge.
+   * May read cost and earned-value figures. The host passes the server's `plan.canReadCost`
+   * (the activity DTO returns `null` for both "unset" and "not permitted", so the payload cannot
+   * say), and falls back to the role only against an API that predates the field — sound while
+   * `cost:read` and `activity:update` are granted to exactly the same roles (`org-permissions.spec.ts`).
    */
   canReadCost: boolean;
 }

@@ -376,6 +376,13 @@ export interface PlanSummary {
    * overview uses, so the plan workspace and the overview cannot disagree (TECH_DEBT #452).
    */
   editedSinceCalculated: boolean;
+  /**
+   * Whether the caller may read cost fields — the server's own `cost:read` answer, since the cost
+   * fields read `null` both when unset and when withheld (TECH_DEBT #62). Optional on the type
+   * only for version skew: an API that predates it omits the field, and the web then falls back to
+   * deriving the answer from the role.
+   */
+  canReadCost?: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;

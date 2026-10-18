@@ -1487,6 +1487,12 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   state — current — is `scheduleComputedAt` set and `editedSinceCalculated` false, and the screen
   renders **nothing** for it.
 
+  **Every plan response also carries `canReadCost`** — the caller's own `cost:read` in the plan's
+  organisation, the check the activity and resource reads redact cost with. Cost fields read `null`
+  both when unset and when withheld, so this boolean is the only way to tell them apart; it is per
+  caller, not per plan, and read-only (`docs/TECH_DEBT.md` #62). A client talking to an API that
+  predates it must treat it as absent and derive the answer from the role.
+
   **The plan resource carries the same flag.** Every response that returns a plan (`GET`, list,
   create, update, restore) includes a read-only `editedSinceCalculated`, computed by the same rule
   (`isEditedSinceCalculated`), so the plan workspace's status bar and this overview cannot disagree
