@@ -383,7 +383,6 @@ export class ResourceProfile {
 
       const s = ResourceProfile.clearances(block, need, load);
       let start = openedAt;
-      let from = closedAt;
       let emit: Blackout | null = null;
       if (openedAt === null) {
         // Clear on entry: nothing is in progress until the first instant over `need`.
@@ -399,7 +398,7 @@ export class ResourceProfile {
         }
       }
       if (!(s.innerMax < minGap)) return false;
-      from = null;
+      let from: number | null = null;
       if (s.exitClear) {
         if (!(last - s.tailStart! < minGap || last < horizon)) return false;
         from = s.tailStart;
