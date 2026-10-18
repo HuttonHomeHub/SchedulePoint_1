@@ -36,6 +36,11 @@ that is stated in `docs/specs/loading-skeletons/m7-after-measurement.md` (third 
 Members and Plans tables still fail: the shift is wholly inside the table body but is not shown to be row count
 alone, and they are reported as failing rather than waved through.
 
+**Update, later the same day (fourth reading).** Sizing placeholder rows to the small control a settled row holds made
+Plans pass. Members still fails, and the owner **accepted its residual SC-2 shift as a known gap**: its placeholder
+rows stay 4 to 8 px per row shorter than a real one because the roster's role `Select` is form-height. SC-4 is met
+at 11 of 11 sites. Tech debt #532 carries the follow-up.
+
 ---
 
 ## 2026-10-17 — `/forgot-password` takes no `?email=`; the unproduced prefill is deleted (tech debt #242)

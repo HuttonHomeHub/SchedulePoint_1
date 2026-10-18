@@ -241,6 +241,11 @@ synchronously; `isPending` is false).
   > anchors are such is `NOTHING_GRADED`; (c) a heading below a table counts as growth below the last
   > placeholder only where the judge shows the whole shift is the change in the table body and the placeholder
   > rows are row-sized. Where it cannot show that, the anchor fails.
+  > **Amended again 2026-10-18 (product owner), after the fourth reading.** The Members table's residual shift is
+  > **accepted as a known gap**. Its placeholder rows are 4 to 8 px per row shorter than a settled row, because
+  > the roster's role `Select` is form-height (`--control-h`, 36) and a placeholder reserves the small control
+  > (`--control-h-sm`, 32). Closing it needs a new `Column` prop or a smaller `Select`, neither of which is
+  > made. It stays reported as a FAIL in the record, not waved through; plans-table now passes.
 - **SC-3 (#341 columns).** For the eight highest-traffic `DataTable`s (Clients, Projects, Plans,
   Calendars, Resources, Members, Audit log, Recently deleted): every **`fit`** column's pending width is
   within **8 px** of settled on the seed catalogue's ordinary plans; **`auto`/`bounded`** columns are
