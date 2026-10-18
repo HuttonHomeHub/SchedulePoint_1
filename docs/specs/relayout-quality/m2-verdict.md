@@ -97,3 +97,37 @@ top, identical framing; only the lanes differ. Lanes are those recorded in the g
 
 - `pictures/fixture-p6-torture-v1-{hand,today,candidate}.png`: today 24 rows, candidate 35 rows.
 - `pictures/reference-netpoint-power-plant-{hand,today,candidate}.png`: today 11 rows, candidate 14 rows.
+
+## Owner decision 2026-10-18: a size limit of 150 replaces FC-R6's 1.5x bar
+
+The two bars above could not both hold, and the options were put to the owner with the reference-plan
+pictures (today 9 crossings, candidate 1, hand layout 1). The owner chose a variant of option 3 and, when
+re-asked, confirmed it: `RELAYOUT_MULTISTART_MAX_ACTIVITIES` is **150**. Plans of up to about 150 drawn
+activities search from all four starts (the wait is cancellable); bigger plans keep the single pack start
+(M1's behaviour). **FC-R6's 1.5x bar is superseded by that size limit** (spec, CQ-2, "Owner amendment
+2026-10-18"; `conditions.md` at `5f8e5cf9` is untouched). The owner accepted knowingly that
+`fixture-p6-torture-v1` (147 drawn, inside the limit) spreads from 24 to 35 rows, which is FC-R5 firing; its
+pictures are `pictures/fixture-p6-torture-v1-today.png` and `-candidate.png`, kept as the evidence decided on.
+
+Re-run with the gate at 150 (`--skip-capture`, product detected as `m2`, tree at `56a6d1e5` plus the gate
+change). Raw record: [`m2-report-gate150-56a6d1e5.md`](./m2-report-gate150-56a6d1e5.md) / `.json`.
+
+| ID    | Verdict    | Reading                                                                                                                                                                                               |
+| ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FC-R0 | NOT RUN    | Needs the servers; not taken in this sitting.                                                                                                                                                         |
+| FC-R1 | PASS       | Hand 1 crossing; today's Re-layout 9 crossings and 1 overlap on the reference plan.                                                                                                                   |
+| FC-R2 | PASS       | 0 violations over 30 plans.                                                                                                                                                                           |
+| FC-R3 | **PASS**   | Reference plan: candidate 0 overlaps, 1 crossing, 14 rows (start 2, depth-first pack); the hand layout has 1 crossing. It has 2 contacts to the hand layout's 0.                                      |
+| FC-R4 | **PASS**   | Strictly better than today on the fixture and the reference plan (of fixture, reference, scale). `scale-275` is outside the limit and identical to today's.                                           |
+| FC-R5 | **FAIL**   | `fixture-p6-torture-v1`: rows 24 to 35, max abs(dlane) 16 to 28. Accepted by the owner (above). Reference 10 to 11 and `scale-275` 13 to 13 do not rise by over 50 %.                                 |
+| FC-R6 | SUPERSEDED | Its 1.5x bar no longer governs. Measured for the record: `scale-275` (300, outside) 1.00x; reference plan 309 / 365 ms today against 3594 / 3554 ms; fixture 5184 / 4664 ms against 25652 / 30510 ms. |
+| FC-R7 | PASS       | Byte-identical lanes across repeats and reversed input.                                                                                                                                               |
+| FC-R8 | PASS       | Tidy's lanes match the baseline on 30 plans.                                                                                                                                                          |
+| FC-R9 | PASS       | Nothing under `apps/api/` or `packages/layout/src/` changed.                                                                                                                                          |
+
+The fixture's wait (about 5 s to about 28 s, five- to six-fold) is the largest cost inside the limit; the
+reference plan's (0.3 s to 3.6 s) is the one the owner saw. The bench's candidate times are its own
+measurement of the product's search, not the pool's wall clock on a planner's machine.
+
+**M3 (chain and row moves) is not built.** The plan builds it only if M2 still misses FC-R3. FC-R3 now
+passes on the reference plan with the starts alone, so there is nothing for it to close.

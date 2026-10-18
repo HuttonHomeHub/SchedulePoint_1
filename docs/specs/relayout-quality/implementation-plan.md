@@ -325,7 +325,7 @@ critical spine has a start built for it.
 - **Start 0 is the M1 run (budget: the taller of the diagram and the pack), not today's seed budget.**
   "Never worse than today" is therefore checked by FC-R2 on the corpus (`--candidate=product`), not true
   by construction: a larger budget changes which moves the search can make.
-- **`RELAYOUT_MULTISTART_MAX_ACTIVITIES` is provisional** (300, the search limit). The pool is
+- **`RELAYOUT_MULTISTART_MAX_ACTIVITIES` was provisional** (300, the search limit; set to 150 by the owner on 2026-10-18, see `m2-verdict.md`). The pool is
   `min(starts, max(1, cores - 1))`, so on a 4-core machine four starts wait two waves; FC-R6 with real
   workers (`measure-relayout.mjs`, default candidate) is what says whether 300 stands, and if not the
   constant is lowered to the largest size that passes.
@@ -349,6 +349,10 @@ critical spine has a start built for it.
 ---
 
 ### Milestone M3: Chain and row moves (conditional; ships only if M2 misses FC-R3)
+
+> **Not built (2026-10-18).** With the owner's size limit of 150 (spec CQ-2, "Owner amendment 2026-10-18"),
+> FC-R3 passes on the reference plan from the M2 starts alone (`m2-verdict.md`), so this milestone's condition
+> is not met.
 
 **Outcome:** Re-layout can move a whole linked run, or a whole row, in one step.
 **Entry point:** as M1.

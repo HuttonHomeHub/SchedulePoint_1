@@ -195,7 +195,7 @@ this plan as seeded (the picture's rows): the hand layout is **14 lanes, 1 link 
 crossings**. **Tidy** moves 21 activities to **0 hidden, 1 crossing**, still 14 lanes, keeping the
 critical spine intact. **Re-layout** from scratch reaches only **11 lanes, 3 hidden, 14 crossings**
 and breaks the spine across rows. Tidy scoring worse than the hand layout is a regression. Re-layout
-approaching the hand layout is the open target (`docs/TECH_DEBT.md` #382).
+since ADR-0203 reaches the hand layout's 1 crossing and 0 overlaps on 14 rows (it read 9 crossings, 1 overlap, 11 rows before; `docs/TECH_DEBT.md` #382, closed).
 
 Dates are the picture's shifted forward twelve years, so every month and day matches it (2016 and
 2028 are both leap years). Each bar is on the picture's own row.

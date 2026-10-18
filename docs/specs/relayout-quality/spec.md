@@ -159,6 +159,16 @@ algorithm, not a planner's laptop (`docs/TECH_DEBT.md` #75, ADR-0152 consequence
   close to today's on a machine with four or more cores. **Recommended: yes, bounded by FC-R6
   (≤ 1.5× today's wall time in the container at 300 activities).** If it fails, extra starts run
   only below a measured size, and the pack start always runs.
+  - **Owner amendment 2026-10-18.** The 1.5× bar is replaced by a size limit. The measured sizes
+    (`m2-verdict.md`) showed the starts cannot stay within 1.5× above 10 activities, which would
+    have withheld them from every plan worth pressing Re-layout on. The owner, having seen the
+    reference-plan pictures (today 9 crossings, candidate 1, hand layout 1), decided: the several
+    starts run on plans up to about 150 drawn activities (a wait the planner can cancel), and
+    bigger plans keep the single pack start (M1's behaviour). FC-R6's 1.5× bar is superseded by that
+    size limit. The owner, re-asked and confirming, accepted knowingly that `fixture-p6-torture-v1`
+    (147 drawn, inside the limit) spreads from 24 to 35 rows (FC-R5); its pictures
+    (`pictures/fixture-p6-torture-v1-today.png` / `-candidate.png`) are the evidence decided on.
+    The text above and `conditions.md` (committed at `5f8e5cf9`) are left as approved.
 - **CQ-3 — Should "the critical path on one row" become a ranked term?** **Recommended: no.** It is
   reported, and one of the extra starts (a chain-first seed) is built to find it. A ranked term would
   change Tidy, and the owner's ranking (`layout-objective.ts:20-32`) does not include it. Choose yes
