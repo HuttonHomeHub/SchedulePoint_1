@@ -14,7 +14,7 @@ import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { ImportScheduleButton } from '@/features/interchange';
-import { CreatePlanButton, PlansTable } from '@/features/plans';
+import { CreatePlanButton, PlansTable, usePlans } from '@/features/plans';
 import { useProject } from '@/features/projects';
 import {
   canImportSchedule,
@@ -30,7 +30,7 @@ import { EntityLoadFailure } from '@/routes/entity-not-found';
  * future TSLD canvas) lives at `/orgs/$orgSlug/plans/$planId`.
  *
  * **The frame renders at once and only the header waits for the project** (see `client-detail.tsx`
- * for the reasoning and its cost). The Calendars section needs the project's name, so it appears
+ * for the reasoning and its cost, and for who speaks while the header waits). The Calendars section needs the project's name, so it appears
  * when the project does; it is the last block on the page, so nothing above it moves for it.
  *
  * It also carries the project's **Calendars** section (ADR-0053
@@ -47,6 +47,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   const canImport = canImportSchedule(role);
   const canManageOrgCals = canManageOrgCalendars(role);
   const project = useProject(orgSlug, projectId);
+  const plans = usePlans(orgSlug, projectId);
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
 
@@ -71,7 +72,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   return (
     <PageContainer>
       {pending ? (
-        <LoadingShape label="Loading project…" announce="none">
+        <LoadingShape label="Loading project…" announce={plans.isPending ? 'none' : 'polite'}>
           <Skeleton className="h-5 w-64" />
           <PageHeaderSkeleton className="mt-2" aside actions={actionBlocks} />
         </LoadingShape>

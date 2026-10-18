@@ -20,3 +20,5 @@ Earned value, the schedule summary, notes, history, a calendar's exceptions and 
 show the shape of what they are loading, with one spoken sentence, instead of a spinner.
 The shared-plan view and the invitation card open in their own frame, the same for every link, with one
 spoken sentence instead of a spinner inside a live region.
+A client or project page that is still loading now always says one "Loading…" sentence to a screen
+reader: its table's while the table loads, and the heading's once the table has finished first.

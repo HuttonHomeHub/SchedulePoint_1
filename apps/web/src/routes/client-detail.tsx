@@ -11,7 +11,7 @@ import {
   Skeleton,
 } from '@/components/ui/page';
 import { useClient } from '@/features/clients';
-import { CreateProjectButton, ProjectsTable } from '@/features/projects';
+import { CreateProjectButton, ProjectsTable, useProjects } from '@/features/projects';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { EntityLoadFailure } from '@/routes/entity-not-found';
 
@@ -21,8 +21,11 @@ import { EntityLoadFailure } from '@/routes/entity-not-found';
  * **The frame renders at once and only the header waits for the client.** The Projects table reads
  * its own list (`ProjectsTable`), so mounting it while the client is pending starts both requests
  * together instead of one after the other, and its own skeleton draws the real column headings. The
- * header skeleton speaks no sentence of its own (`announce="none"`): the table's shape is the one
- * sentence the page says while it loads. A client that does not exist replaces the whole screen
+ * page says one sentence while anything on it is pending: the table's shape speaks while its list
+ * is outstanding, and the header skeleton takes over ("Loading client…") only once the table has
+ * settled, so the page never goes silent with the heading still grey and never says two at once.
+ * The list read is shared with `ProjectsTable` (same query key), so asking it here costs no
+ * request. A client that does not exist replaces the whole screen
  * with {@link EntityLoadFailure}, and the table's own request may fail first for the same reason — a
  * momentary failure state that gives way to the not-found screen (loading-skeletons CQ-2).
  */
@@ -32,6 +35,7 @@ export function ClientDetailScreen(): React.ReactElement {
   const clientId = 'clientId' in params ? params.clientId : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
   const client = useClient(orgSlug, clientId);
+  const projects = useProjects(orgSlug, clientId);
 
   if (client.isError) {
     return (
@@ -49,7 +53,7 @@ export function ClientDetailScreen(): React.ReactElement {
       {client.isPending ? (
         // The breadcrumb line is a block, not a live link: a skeleton holds nothing focusable. No
         // description line: most clients have none, and a skeleton cannot know.
-        <LoadingShape label="Loading client…" announce="none">
+        <LoadingShape label="Loading client…" announce={projects.isPending ? 'none' : 'polite'}>
           <Skeleton className="h-5 w-48" />
           <PageHeaderSkeleton className="mt-2" aside actions={canWrite ? 1 : 0} />
         </LoadingShape>
