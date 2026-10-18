@@ -133,6 +133,79 @@ test('Re-layout packs scattered rows, and one undo puts them back', async ({ pag
     .toEqual({ Mobilise: 0, Excavate: 4, Pour: 9 });
 });
 
+test('Re-layout says it may use the rows the diagram has, and does not spend them on a plan with no links', async ({
+  page,
+}) => {
+  /**
+   * `docs/specs/relayout-quality` M1. Re-layout's row budget is now the taller of the diagram as it
+   * stands and the pack, so on `SCATTERED` (ten rows drawn, three needed) the search is allowed seven
+   * rows it has no reason to use: with no link, nothing ranked above `rows` can improve, so the
+   * answer is still the three-row pack. Only the real worker, the real dialog and the real copy can
+   * say that the new request survives the round trip and that the sentence reaches a planner.
+   */
+  const stamp = Date.now() + 5;
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'Budgeted');
+  await ensurePen(page);
+  await seedActivities(page, orgSlug, SCATTERED);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+
+  await page.locator('[data-toolbar-item="auto-arrange"]').click();
+  const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });
+  await expect(dialog.getByRole('status')).toHaveText('Both options are ready.', {
+    timeout: 20_000,
+  });
+
+  const relayout = dialog.getByRole('radio', { name: 'Re-layout' });
+  await expect(relayout).toContainText('It may use as many lanes as the diagram has now.');
+  await expect(relayout.locator('dl > div').filter({ hasText: 'Lanes' }).locator('dd')).toHaveText(
+    '10 → 3',
+  );
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  expect(await lanesByName(page, orgSlug)).toEqual({ Mobilise: 0, Excavate: 4, Pour: 9 });
+});
+
+test('closing the dialog while Re-layout is searching leaves no worker running and writes nothing', async ({
+  page,
+}) => {
+  /**
+   * `docs/specs/relayout-quality` M2. Re-layout now searches from up to four starts in a pool of
+   * module workers, one each, under one abort signal. Only a real browser has workers to count:
+   * jsdom has none, and `optimise-pool.test.ts` can only say the signal reached the fakes. So the
+   * press is cancelled at once, before the answer can have arrived, and the page's worker list must
+   * empty. The plan has two chains in scattered rows so the starts differ and more than one worker
+   * is started.
+   */
+  const stamp = Date.now() + 7;
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'Pooled');
+  await ensurePen(page);
+  const [a, b, c, d] = await seedActivities(page, orgSlug, [
+    { name: 'Dig', laneIndex: 0, durationDays: 5 },
+    { name: 'Pour', laneIndex: 6, durationDays: 5 },
+    { name: 'Wire', laneIndex: 2, durationDays: 8 },
+    { name: 'Test', laneIndex: 9, durationDays: 3 },
+  ]);
+  await seedDependency(page, orgSlug, a!.id, b!.id);
+  await seedDependency(page, orgSlug, c!.id, d!.id);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  const before = await lanesByName(page, orgSlug);
+
+  await page.locator('[data-toolbar-item="auto-arrange"]').click();
+  const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  await expect.poll(() => page.workers().length, { timeout: 10_000 }).toBe(0);
+  expect(await lanesByName(page, orgSlug)).toEqual(before);
+});
+
 test('an already-arranged plan opens the dialog and says there is nothing to move', async ({
   page,
 }) => {

@@ -1,6 +1,7 @@
 import { optimiseLayout } from '../optimise-layout';
 import type { OptimiseLayoutResult } from '../optimise-layout';
 import { workingDayPredicate, type OptimiseRequest } from '../optimise-layout-protocol';
+import { runPool, type PoolHandlers } from '../optimise-pool';
 import { tableMeasure } from '../row-text-layout';
 
 /**
@@ -25,4 +26,15 @@ export function runOptimiseLayout(request: OptimiseRequest): Promise<OptimiseLay
       request.options,
     ),
   );
+}
+
+/** The pool without workers, running the starts one after another: the same answers, in order. */
+export function runOptimiseLayoutPool(
+  requests: readonly OptimiseRequest[],
+  handlers: Partial<PoolHandlers> = {},
+): Promise<OptimiseLayoutResult[]> {
+  return runPool((request) => runOptimiseLayout(request), requests, {
+    ...handlers,
+    concurrency: 1,
+  });
 }

@@ -351,6 +351,8 @@ keep `main` releasable.
   - **Tidy** improves the lanes you have: it removes overlaps first, then links hidden behind bars,
     then crossings, and it never adds lanes.
   - **Re-layout** starts again from lanes packed by time, then improves them the same way.
+    Since ADR-0203 it may use as many lanes as the diagram has and searches from up to four starts on
+    plans of up to 150 activities, so on the reference plan it reaches the hand layout's one crossing.
 
   Each option lists activities moved, lanes, overlaps, hidden links and crossings, before and after.
   Confirm writes exactly those moves, as one undo step. On the 144-activity Unit 300 plan, Tidy took

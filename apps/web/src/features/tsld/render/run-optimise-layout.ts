@@ -1,5 +1,6 @@
 import type { OptimiseLayoutResult } from './optimise-layout';
 import type { OptimiseMessage, OptimiseRequest } from './optimise-layout-protocol';
+import { runPool, type PoolHandlers } from './optimise-pool';
 
 /**
  * Run Tidy or Re-layout in a module worker and resolve with its result.
@@ -37,5 +38,26 @@ export function runOptimiseLayout(
       reject(new Error(event.message || 'The layout search stopped unexpectedly.'));
     };
     worker.postMessage(request);
+  });
+}
+
+/**
+ * How many searches to run at once: one core is left to the page, as the spec's D4 says, and never
+ * fewer than one. It decides how long Re-layout takes and nothing else, since the pick is made over
+ * results in request order (`runPool`).
+ */
+export function poolConcurrency(searches: number): number {
+  const cores = typeof navigator === 'undefined' ? 2 : navigator.hardwareConcurrency || 2;
+  return Math.min(searches, Math.max(1, cores - 1));
+}
+
+/** Run every request in a module worker each, `concurrency` at a time, and resolve in request order. */
+export function runOptimiseLayoutPool(
+  requests: readonly OptimiseRequest[],
+  handlers: Partial<PoolHandlers> = {},
+): Promise<OptimiseLayoutResult[]> {
+  return runPool(runOptimiseLayout, requests, {
+    ...handlers,
+    concurrency: handlers.concurrency ?? poolConcurrency(requests.length),
   });
 }

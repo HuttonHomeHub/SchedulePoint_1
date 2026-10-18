@@ -125,12 +125,15 @@ export function ArrangeDialog({
             as plain text, outside the region. */}
         {search.kind === 'computing' ? (
           <p className="text-muted-foreground text-sm" aria-hidden="true">
-            {count(search.evaluations, 'layout', 'layouts')} tried.
+            {count(search.evaluations, 'layout', 'layouts')} tried
+            {search.starts > 1 ? ` across ${String(search.starts)} starting layouts` : ''}.
           </p>
         ) : null}
         <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
           {search.kind === 'computing'
-            ? 'Working out the layouts…'
+            ? search.starts > 1
+              ? 'Trying several starting layouts. On a large plan this can take up to about half a minute. You can cancel.'
+              : 'Working out the layouts…'
             : search.kind === 'ready'
               ? nothingToDo
                 ? bounded
@@ -163,7 +166,7 @@ export function ArrangeDialog({
               title: 'Re-layout',
               description: bounded
                 ? 'Pack the lanes again by time, so no two activities overlap in a lane.'
-                : 'Start again from lanes packed by time, then improve them the same way.',
+                : 'Tries several fresh starting layouts and keeps the best, improving each in the same order as Tidy. It may use as many lanes as the diagram has now. On a large plan it can take noticeably longer than Tidy.',
               figures: ready ? arrangeFigures(ready.relayout) : null,
             },
           ]}

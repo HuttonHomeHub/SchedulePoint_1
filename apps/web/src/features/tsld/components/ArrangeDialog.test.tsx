@@ -55,7 +55,7 @@ const confirmButton = (): HTMLElement =>
 
 describe('ArrangeDialog', () => {
   it('while computing, says so politely and shades Confirm with the reason linked', () => {
-    const onConfirm = renderDialog({ kind: 'computing', evaluations: 50 });
+    const onConfirm = renderDialog({ kind: 'computing', evaluations: 50, starts: 1 });
     // The live region carries the phase only, so a run's hundreds of progress updates are not
     // queued as announcements; the count is shown outside it.
     expect(screen.getByRole('status')).toHaveTextContent(/^Working out the layouts…$/);
@@ -68,12 +68,43 @@ describe('ArrangeDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('on a plan searched from several starts, says the wait is long and can be cancelled', () => {
+    const { rerender } = render(
+      <ArrangeDialog
+        open
+        onClose={() => undefined}
+        search={{ kind: 'computing', evaluations: 25, starts: 4 }}
+        onConfirm={vi.fn()}
+        pending={false}
+        error={null}
+      />,
+    );
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(
+      'Trying several starting layouts. On a large plan this can take up to about half a minute. You can cancel.',
+    );
+    expect(screen.getByText('25 layouts tried across 4 starting layouts.')).toBeInTheDocument();
+    const before = status.textContent;
+    rerender(
+      <ArrangeDialog
+        open
+        onClose={() => undefined}
+        search={{ kind: 'computing', evaluations: 900, starts: 4 }}
+        onConfirm={vi.fn()}
+        pending={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toBe(before);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
   it('does not change the live region as the search makes progress', () => {
     const { rerender } = render(
       <ArrangeDialog
         open
         onClose={() => undefined}
-        search={{ kind: 'computing', evaluations: 25 }}
+        search={{ kind: 'computing', evaluations: 25, starts: 1 }}
         onConfirm={vi.fn()}
         pending={false}
         error={null}
@@ -84,7 +115,7 @@ describe('ArrangeDialog', () => {
       <ArrangeDialog
         open
         onClose={() => undefined}
-        search={{ kind: 'computing', evaluations: 900 }}
+        search={{ kind: 'computing', evaluations: 900, starts: 1 }}
         onConfirm={vi.fn()}
         pending={false}
         error={null}
@@ -190,6 +221,20 @@ describe('ArrangeDialog', () => {
     const tidy = screen.getByRole('radio', { name: 'Tidy' });
     expect(tidy).toHaveAccessibleDescription(/remove overlaps, then links hidden behind bars/);
     expect(tidy).not.toHaveAccessibleDescription(/fewer crossings/);
+  });
+
+  it('says Re-layout may use as many lanes as the diagram has now', () => {
+    renderDialog(READY);
+    expect(screen.getByRole('radio', { name: 'Re-layout' })).toHaveAccessibleDescription(
+      /may use as many lanes as the diagram has now/,
+    );
+  });
+
+  it('keeps the plain-pack sentence for Re-layout when the plan is over the search limit', () => {
+    renderDialog({ ...READY, bounded: { drawn: 301, limit: 300 } });
+    const relayout = screen.getByRole('radio', { name: 'Re-layout' });
+    expect(relayout).toHaveAccessibleDescription(/^Pack the lanes again by time/);
+    expect(relayout).not.toHaveAccessibleDescription(/as many lanes/);
   });
 
   it('reports a failed search as an alert, with Confirm shaded', () => {

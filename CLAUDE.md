@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 26 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1689 web
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1694 web
 > source files with 47 Playwright suites beside the base journey, and
-> 202 ADRs.
+> 203 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -605,6 +605,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0200** _(Accepted; amends ADR-0103 D7 and ADR-0049)_ — A layer is a canvas, and the export accounts for every one → [`0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md`](docs/adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)
 - **ADR-0201** _(Accepted; amends ADR-0176 D3)_ — A restore brings nothing back onto a deleted calendar → [`0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md`](docs/adr/0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)
 - **ADR-0202** _(Accepted; amends ADR-0146 D3)_ — A loading state is the settled shape, and says one sentence → [`0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md`](docs/adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)
+- **ADR-0203** _(Accepted; amends ADR-0152 D1, D3 and D4 for Re-layout)_ — Re-layout starts from several places and may use the rows the diagram already has → [`0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md`](docs/adr/0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -3,8 +3,14 @@ import { useEffect, useState } from 'react';
 import type { LayoutObjective } from '../render/layout-objective';
 import { OPTIMISE_MAX_ACTIVITIES } from '../render/optimise-layout';
 import { workingDaySpanOf, type OptimiseRequest } from '../render/optimise-layout-protocol';
+import {
+  relayoutSeeds,
+  relayoutStartIds,
+  pickBestStart,
+  type StartSeed,
+} from '../render/relayout-starts';
 import { axisDayOf, type RenderActivity, type RenderEdge } from '../render/render-model';
-import { runOptimiseLayout } from '../render/run-optimise-layout';
+import { runOptimiseLayout, runOptimiseLayoutPool } from '../render/run-optimise-layout';
 import { textWidthTable } from '../render/text-width-table';
 import type { TsldViewToggles } from '../render/view-toggles';
 
@@ -15,6 +21,18 @@ import type { TsldViewToggles } from '../render/view-toggles';
  * which is what `Arrange` did before this epic. Both run in a module worker, one after the other,
  * because a whole Tidy is measured at 4.2 s on a 144-activity plan (M4, FC-N2 (b)). Closing the dialog
  * aborts the run, so nothing keeps computing behind a dismissed dialog.
+ *
+ * **Re-layout may use as many rows as the diagram has now** ({@link relayoutBudget}, CQ-1 of
+ * `docs/specs/relayout-quality`, answered 2026-10-17). It starts from the fewest rows time allows, so a
+ * budget of its seed's rows held it below the height of a layout a planner had already drawn and
+ * accepted, and it could never spend a row on readability (`docs/TECH_DEBT.md` #382). Tidy keeps the
+ * budget it has always had: its seed IS the diagram.
+ *
+ * **Re-layout searches from up to four starts and keeps the best** ({@link relayoutRuns},
+ * `render/relayout-starts.ts`): today's pack is start 0 and always runs, the others are different
+ * places for the same strict-improvement search to begin. They run at once in a small worker pool; the
+ * pick is by `compareObjectives` over the results in start order, so it does not depend on which
+ * search finishes first or how many cores there are. The dialog shows nothing until all have finished.
  *
  * **Above {@link OPTIMISE_MAX_ACTIVITIES} drawn activities the search is not offered**, because a
  * whole Tidy there is measured past 10 s. Re-layout is then evaluated but not searched, so its
@@ -30,7 +48,12 @@ export interface ArrangeOutcome {
 }
 
 export type ArrangeSearchState =
-  | { kind: 'computing'; evaluations: number }
+  | {
+      kind: 'computing';
+      evaluations: number;
+      /** How many starting layouts Re-layout searches from; above one, the wait is long enough to say so. */
+      starts: number;
+    }
   | {
       kind: 'ready';
       tidy: ArrangeOutcome | null;
@@ -97,6 +120,55 @@ export function changesBetween(
     .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
 }
 
+/**
+ * Re-layout's row cap: the taller of the diagram as it stands and the pack it starts from. Never a
+ * formula over the pack — the 2026-09-23 decision refused one after seeing links climb about 25 rows
+ * at +50 % — but a height the planner is already looking at. Rows stay the last tie-break
+ * (`compareObjectives`), so a row is added only when it buys a better term ranked above it.
+ */
+export function relayoutBudget(
+  current: ReadonlyMap<string, number>,
+  packed: ReadonlyMap<string, number>,
+): number {
+  let rows = 0;
+  for (const lanes of [current, packed]) {
+    for (const lane of lanes.values()) rows = Math.max(rows, lane + 1);
+  }
+  return rows;
+}
+
+/**
+ * Re-layout's searches: one request per start, each with the budget of the taller of the diagram and
+ * that start's own rows. A plan over the search limit gets start 0 alone, scored and not searched.
+ */
+export function relayoutRuns(
+  input: ArrangeSearchInput,
+  current: ReadonlyMap<string, number>,
+  packed: ReadonlyMap<string, number>,
+  textWidths: [string, number][],
+): { starts: StartSeed[]; requests: OptimiseRequest[] } {
+  const drawn = drawnCount(input.activities);
+  if (drawn > OPTIMISE_MAX_ACTIVITIES) {
+    const starts: StartSeed[] = [{ id: 0, lanes: new Map(packed) }];
+    return { starts, requests: [arrangeRequest(input, packed, { passes: 0 }, textWidths)] };
+  }
+  const starts = relayoutSeeds(
+    { activities: input.activities, edges: input.edges, dataDate: input.dataDate, packed },
+    relayoutStartIds(drawn),
+  );
+  return {
+    starts,
+    requests: starts.map((start) =>
+      arrangeRequest(
+        input,
+        start.lanes,
+        { budget: relayoutBudget(current, start.lanes) },
+        textWidths,
+      ),
+    ),
+  };
+}
+
 export function drawnCount(activities: readonly RenderActivity[]): number {
   return activities.filter((a) => a.drawnStart !== null).length;
 }
@@ -124,9 +196,10 @@ export function useArrangeSearch(
     const drawn = drawnCount(input.activities);
     const bounded = drawn > OPTIMISE_MAX_ACTIVITIES;
 
+    const starts = searchStartsOf(input);
     let tidyEvaluations = 0;
     const progress = (base: number) => (n: number) => {
-      if (!signal.aborted) setState({ kind: 'computing', evaluations: base + n });
+      if (!signal.aborted) setState({ kind: 'computing', evaluations: base + n, starts });
     };
 
     void (async () => {
@@ -151,10 +224,12 @@ export function useArrangeSearch(
           before = r.seed;
           tidy = { changes: changesBetween(input.activities, r.lanes), before, after: r.final };
         }
-        const r = await runOptimiseLayout(
-          arrangeRequest(input, packed, bounded ? { passes: 0 } : {}, widths),
-          { signal, onProgress: progress(tidyEvaluations) },
-        );
+        const { requests } = relayoutRuns(input, current, packed, widths);
+        const results = await runOptimiseLayoutPool(requests, {
+          signal,
+          onProgress: progress(tidyEvaluations),
+        });
+        const r = results[pickBestStart(results)]!;
         // Re-layout's own seed is the pack, so its "before" is the diagram's, never the pack's.
         const relayout: ArrangeOutcome = {
           changes: changesBetween(input.activities, r.lanes),
@@ -181,7 +256,13 @@ export function useArrangeSearch(
     return () => controller.abort();
   }, [open, input]);
 
-  return result !== null && result.input === input ? result.state : COMPUTING;
+  return result !== null && result.input === input
+    ? result.state
+    : { kind: 'computing', evaluations: 0, starts: input === null ? 1 : searchStartsOf(input) };
 }
 
-const COMPUTING: ArrangeSearchState = { kind: 'computing', evaluations: 0 };
+/** The starts Re-layout will run for this plan: one outside the search limit, else the multi-start set. */
+function searchStartsOf(input: ArrangeSearchInput): number {
+  const drawn = drawnCount(input.activities);
+  return drawn > OPTIMISE_MAX_ACTIVITIES ? 1 : relayoutStartIds(drawn).length;
+}
