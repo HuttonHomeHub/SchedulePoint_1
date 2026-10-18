@@ -3,59 +3,55 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-17. The owner kept the three host steps parked and asked for register rows **and
-features** they did not have to test on their own machines. They picked **all twelve** offered jobs (eight
-fixes, four features) and the stale-note fold. Everything picked is merged and released as **`api`
-0.95.0 and `web` 0.193.0** (Version Packages PR #1032; tags confirmed with `git ls-remote --tags`), after a
-mid-batch **`web` 0.192.3** (#1026). **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-18. The owner again kept the three host steps parked and set a **hard rule**:
+nothing that needs them to test, measure or check anything on their server or devices (a decision
+question is fine; a test is not). They picked **eight fixes and seven features**. Everything picked is
+merged and released as **`api` 0.96.0 and `web` 0.194.0** (Version Packages PR #1041; tags confirmed
+with `git ls-remote --tags`). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.95.0 and `web` 0.193.0.
-- **Specs approved by the owner on 2026-10-17** (all with the recommended defaults):
-  `docs/specs/menu-opener-press/`, `restore-resources-calendars/`, `redundant-link-advisory/`,
-  `wbs-summary-duration/`, `wbs-nest-from-members/`. All five are built.
+- **Latest releases:** `api` 0.96.0 and `web` 0.194.0.
+- **Specs approved by the owner on 2026-10-17** (merged in #1038): `forgot-password-email`,
+  `nudge-plural-selection`, `guest-critical-cues`, `resource-strip-export`, `relayout-quality`,
+  `deleted-calendar-restore`, `diagram-mark-contrast`, `loading-skeletons`. All eight are built.
 - **This session's PRs, in merge order:**
-  - **#1022** `docs`: the five specs, `engines.node` raised to `>=22.22.3`, stale hand-off notes folded.
-  - **#1023** closes #408 (the print test now sees a toolbar memo regression).
-  - **#1024** closes #397 (the selection bar words its role refusal one way).
-  - **#1025** closes #350 (the weekend constraint case is seeded on a working-week calendar).
-  - **#1027** closes #351 (test activities come from the shared factory; plus a CodeQL
-    "used before declaration" fix in eight test files).
-  - **#1028** painter tidies: the rest of #391/#395's small items that were offered (gap labels clamp to
-    the viewport; link painter tidied). #391 and #395 stay open for their remaining items.
-  - **#1029** closes #229's Menu half (`Menu` takes a required `openerRef`; pressing the menu's own button
-    keeps it closed). Accessibility review before release (ADR-0111).
-  - **#1030** redundant-link **M1 (web reader)**, released alone as **`web` 0.192.3** (#1026) — the owner's
-    **"two releases"** decision, so the web that reads the new row was live before the API emitted it.
-  - **#1031** nest a WBS summary from the Members panel (no loops: `wbs-tree.ts`).
-  - **#1033** redundant-link advisory, final (ADR-0196): the health check lists links no duration could
-    make matter; closes #518. The owner loosened W5 for a zero or negative direct lag. Route throttle
-    `HEALTH_CHECK_THROTTLE`, 71 per 60 s.
-  - **#1034** WBS summary and level-of-effort **derived duration** (ADR-0197; new nullable column
-    `activities.derived_duration_minutes`, designed by the database-architect). Closes #375's open half.
-    **The organisation export is now format 2.0**: its float columns were labelled minutes but held
-    working days, so `totalFloatDays`, `freeFloatDays`, `remainingFloatDays` and the **baseline's
-    `totalFloatDays`** replace the `…Minutes` names (owner: "rename now"; ADR-0194 D2 corrected).
-  - **#1035** restore deleted resources and calendars from Recently deleted (ADR-0195). New rows #519
-    (a plan can be live on a deleted calendar and then schedules round the clock — pre-existing,
-    reproduced on the database) and #520 (a project-calendar restore can race a project delete; low).
-  - **#1036** closes #372 (the render model's drawn span is `drawnStart`/`drawnFinish`; ~80 files,
-    no behaviour change).
-- **Order note.** WBS duration changes the engine, and `check:engine-parity` froze the engine for the
-  whole redundant-link epic, so the batch was reordered: redundant-link shipped first and its closing
-  commit lifted the freeze; WBS duration followed.
-- **An admission the owner should have on record:** redundant-link's **specialist reviews (security,
-  API, backend-performance, accessibility, component, UX) were not run before M1 merged and released.**
-  They were run afterwards, found no blockers, and every finding was folded into #1033 — including a real
-  defect (the health dock's jump moved focus into the diagram; fixed with `focusListbox: false`). The
-  rule stands: reviews before the first merge, not after.
+  - **#1039** closes #242 (the unused `/forgot-password?email=` prefill is removed; owner chose (b)).
+  - **#1040** closes #310 (the retention panel's table labels total over the sweep's tables).
+  - **#1042** closes #58 (the ruler's year label is centred; the month tint follows the Month bands switch).
+  - **#1043** closes #273 (the probe history read returns a total). #271 stays open: the owner said
+    cursor paging "not now".
+  - **#1044** closes #62 (plans state `canReadCost` instead of the web deriving it from the role).
+  - **#1045** closes #84 (levelling one crew carrying thousands of activities is no longer quadratic:
+    16,000 activities 146 s → 2.7 s). Includes a CodeQL "used before declaration" fix.
+  - **#1046** closes #403 (a share link shows the near-critical rung and the driving links; ADR-0198).
+  - **#1047** closes #368 (an ordinary link is never louder than the bar it joins; two colours; ADR-0199).
+  - **#1048** closes #223 (the resource strip is in the PNG, PDF and print when it is showing; a gate
+    checks every canvas layer against the export; ADR-0200).
+  - **#1049** closes #116 (Alt+arrow moves the whole selection; quick taps on one selection are one undo).
+  - **#1050** closes #519 (a restore onto a deleted calendar is refused with 409 `CALENDAR_DELETED` or
+    `CALENDAR_OTHER_PROJECT`, naming the calendar; the project's own stranded calendar comes back with it;
+    restores lock ancestors top-down; ADR-0201).
+  - **#1051** closes #234 and #341 (loading placeholders shaped like the content instead of spinners;
+    exactly one spoken "Loading…" sentence per surface; ADR-0202). Owner decisions of 2026-10-18 are
+    dated amendments in the spec: `auto` column headings reported not graded; Calendars "Working days"
+    and Plans "Status" keep the widest sample; detail pages keep one sentence; **the Members table's
+    4–8 px/row SC-2 gap is accepted** (follow-up in #532).
+  - **#1052** closes #382 (Re-layout searches from up to four starts and may use the diagram's rows,
+    on plans up to ~150 activities; the owner accepted the stress fixture's ~5 s → ~28 s wait and
+    24 → 35 rows; the dialog says it can take up to half a minute and can be cancelled; ADR-0203).
+  - **#1053** `docs` + `test`: the four remaining owner answers in `docs/DECISIONS.md`, #76 re-verified, a
+    duplicate ADR-0200 index row removed.
+  - **#1041** the Version Packages release.
+- **Reviews ran before each first merge this time** (security/API/performance/component/UX/
+  accessibility as each change needed, plus ADR-0111 accessibility reviews before release for #116 and
+  #234's live-region change, and a database-architect check of #519's locks).
 
 ## What the owner has to do (in this order)
 
-Unchanged. **The owner parked these again on 2026-10-17 — do not raise them unless the owner does.** When they report a result, record it in
-`docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on
-the real server, fix the guide.
+Unchanged. **The owner parked these again on 2026-10-17 and 2026-10-18 — do not raise them unless the
+owner does.** When they report a result, record it in `docs/RELEASE_1_0.md` (rows 5, 6, 7) and
+`docs/DECISIONS.md`, and if a guide is wrong or unclear on the real server, fix the guide.
 
 1. **Backups — host steps and one practice check** (row 5). Guide:
    [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). About 25 minutes of set-up, a
@@ -74,29 +70,36 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
 
 ## Decided — do not re-ask
 
+- **Hard rule (2026-10-18):** offer nothing that needs the owner to test, measure or check anything on
+  their server or devices. Decision questions are fine.
 - Do not cut 1.0 until the owner says.
 - The clear-out is switched on only by the owner, on a day a backup `check` has passed.
 - Export size: accept the current design; do nothing about the 100-plan estimate unless the owner raises
   it (`docs/specs/organisation-export/m2-measurements.md`, #515, #516).
 - Collaborative editing is not in 1.0.
 - Four web e2e shards; the fifth-shard trigger is the slowest shard above 1,250 s (median of three runs)
-  or a 30-minute timeout. The one timeout on 2026-10-16 was a setup stall, not suite time; no fifth shard.
+  or a 30-minute timeout. No fifth shard.
 - The diagram keeps its own colours under a Windows contrast theme (#508).
 - `Start editing` stays plain while the pen is not held.
 - The default database password is warned about, not refused (2026-10-16).
-- Metric tiles: the shared look everywhere, no boxed option (2026-10-16, spec §C question 1).
-- The combobox's disabled-option behaviour ships before any screen uses it (2026-10-16, spec §D question 2).
-- Redundant links: W5 is loosened for a zero or negative direct lag (2026-10-17).
+- Metric tiles: the shared look everywhere, no boxed option (2026-10-16).
+- The combobox's disabled-option behaviour ships before any screen uses it (2026-10-16).
+- Redundant links: zero or negative direct lag still counts (W5 loosened, 2026-10-17).
 - The export's float columns are named `…Days`, format 2.0 (2026-10-17).
-- Redundant-link shipped in two releases, web first (2026-10-17).
+- 2026-10-18 batch answers (all in `docs/DECISIONS.md`): #242 remove the prefill; #116 quick taps are one
+  undo; #403 show both cues; #223 included when showing, every layer; #519 refuse with defaults and bring
+  the project calendar back; #368 Route A; #234 defer the text-only states, load early, cautious contract,
+  and the four SC amendments above; #382 gate ~150 activities; #58 the tint follows the switch; #271
+  paging not now.
 
 ## Parked by the owner — keep, do not raise
 
-The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16 and 2026-10-17). A session
-does not bring them up until the owner does. When the owner returns to one, the steps are ready:
+The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16, 2026-10-17
+and 2026-10-18). A session does not bring them up until the owner does. When the owner returns to one,
+the steps are ready:
 
-- **The three host steps above** (backups, export, clear-out) — parked again on 2026-10-17; offer them
-  when the owner is ready, do not press.
+- **The three host steps above** (backups, export, clear-out) — offer them when the owner is ready, do
+  not press.
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
 - **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
@@ -109,23 +112,34 @@ does not bring them up until the owner does. When the owner returns to one, the 
 
 ## Open rows worth knowing
 
-- **New this session:** #519 (a plan or activity live on a deleted calendar schedules round the clock;
-  worth fixing — it predates the restore work) and #520 (project-calendar restore vs project delete; low).
-- #509–#513 (backup follow-ups), #515–#517 (export follow-ups), #507 (no exported OpenAPI file; owner's
-  call, default not for 1.0), #508 (by decision).
-- #321 is deferred on a trigger; #502 carries the 2026-10-16 shard-4 note.
-- #391 and #395 stay open for their remaining painter items.
-- **Not folded, by choice:** a leave-page guard during an export (the page says leaving cancels it).
+- **New this session:** #521–#522 (#403 follow-ups), #523 (#368), #524–#525 (#223), #526–#529 (#116),
+  #530–#531 (#519), #532–#534 (#234; #532 carries the accepted Members gap and the seven deferred
+  text-only "Loading…" states).
+- **#64** needs one product answer, not code: what a Viewer sees on an assignment row (eight shaded
+  fields, or today's one-line summary). Ask it as a decision question.
+- **#76** is down to one item: a flag-off Playwright run for the pointer two-click link pick.
+- **#333** (landing two-column rows at 1280) needs its M2 after-reading taken in the container before it
+  can close; that is a container measurement, not an owner one.
+- **#271** stays open for cursor paging (owner: not now).
+- #520 (project-calendar restore vs project delete; low), #509–#513 (backup follow-ups), #515–#517
+  (export follow-ups), #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred
+  on a trigger), #391 and #395 (remaining painter items).
+- **Not done, optional:** `apps/web/e2e-org-export/org-export.spec.ts:101` can flake on an axe contrast
+  read mid-transition (#1044's shard 3, green on one re-run); waiting for the button's transition before
+  the scan would make it robust.
 
 ## Suggested next
 
-Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next, offering:
+Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next (as clickable
+questions, respecting the hard rule), offering:
 
 1. **The owner's three host steps**, only if the owner raises them.
-2. **#519** (calendar deleted under a live plan) — a defect fix that needs nothing from the owner's
-   machines; check whether it adds surface (ADR-0105) before treating the row as the spec.
-3. **The rest of #391 and #395** (painter tidies) and other register rows checked against the code.
-4. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
+2. **The #64 Viewer question** (a decision only), then its afternoon of code.
+3. **#333's after-reading** and close; **#76's flag-off journey** (a Playwright config — ADR-0105 says it
+   needs a spec first).
+4. Follow-ups #521–#534, the org-export journey hardening, and other register rows checked against the
+   code.
+5. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
    to cut 1.0.
 
 ## Environment notes a new session would otherwise rediscover
@@ -335,3 +349,22 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     every probe red on the old code.
   - **A test server started under `setsid` saves setsid's PID, not the server's.** Find it by its
     `API_PORT` in `/proc/*/environ` and kill its process group.
+
+- **2026-10-18 lessons:**
+  - **Check a gate's exit status directly, never through a pipe.** `node scripts/check-counts.mjs | tail -2 && …`
+    reports `tail`'s success, so a failing count looked green once; the next slice caught it.
+  - **`e2e-audit/org-export.spec.ts`'s axe scans now wait for animations to end** (`scanWhenSettled`): the
+    Download button changes variant and sits under the pointer, so an immediate scan read half-way colours
+    (4.17:1, 2.22:1) and failed 3/3 on a docs-only PR. Settled colours pass (15.3:1 / 17.4:1). If that scan
+    flakes again, look past the transition. A repeated local run of it trips the export endpoint's
+    100-per-60 s rate limit; space runs a minute apart.
+  - **A restack must include every commit the feature branch grew since the stack was built**, not only the
+    newest ones; a builder found two missing predecessors (modify/delete conflict on a test file) and picked
+    them first.
+  - **The main checkout shares the designated branch with the `pr` worktree.** After `checkout -B` in the
+    worktree, the main checkout's files lag its ref and the Stop hook reports hundreds of staged changes.
+    Confirm the index matches an older `main` (`git write-tree` against `rev-parse <sha>^{tree}`), then
+    `git reset --hard HEAD` there; nothing is lost.
+  - **A PR title must stay at or under ~92 characters** before GitHub's ` (#NNNN)` suffix; #1052 failed at 94.
+  - **The Version Packages branch is rebuilt about a minute after each merge**; wait for its SHA to change
+    (`git ls-remote origin refs/heads/changeset-release/main`) before merging it, then pin that SHA.
