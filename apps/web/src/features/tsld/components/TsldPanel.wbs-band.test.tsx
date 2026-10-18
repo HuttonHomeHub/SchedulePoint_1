@@ -101,6 +101,7 @@ describe('TsldPanel — the pinned WBS band (flag on)', () => {
   it('moves every canvas layer down by the band, together', () => {
     render(<Harness band />);
     const band = screen.getByTestId('tsld-wbs-band');
+    expect(band).toHaveAttribute('data-layer', 'wbs-band');
     const bandHeight = Number.parseFloat(band.style.height);
     expect(bandHeight).toBeGreaterThan(0);
 

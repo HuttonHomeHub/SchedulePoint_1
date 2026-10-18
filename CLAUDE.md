@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 26 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1669 web
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1670 web
 > source files with 47 Playwright suites beside the base journey, and
-> 199 ADRs.
+> 200 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -451,7 +451,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0046** _(Accepted)_ — Polymorphic entity notes → [`0046-polymorphic-entity-notes.md`](docs/adr/0046-polymorphic-entity-notes.md)
 - **ADR-0047** _(Accepted)_ — Automatic redeploy of released images (host-side pull trigger) → [`0047-automatic-redeploy-on-release.md`](docs/adr/0047-automatic-redeploy-on-release.md)
 - **ADR-0048** _(Accepted; amended by ADR-0176)_ — Client-side command-stack undo/redo for plan authoring → [`0048-undo-redo-command-stack.md`](docs/adr/0048-undo-redo-command-stack.md)
-- **ADR-0049** _(Proposed)_ — Canvas-axis-aligned resource strip — a shared-viewport sibling canvas layer → [`0049-canvas-axis-aligned-resource-strip.md`](docs/adr/0049-canvas-axis-aligned-resource-strip.md)
+- **ADR-0049** _(Proposed; amended by ADR-0200)_ — Canvas-axis-aligned resource strip — a shared-viewport sibling canvas layer → [`0049-canvas-axis-aligned-resource-strip.md`](docs/adr/0049-canvas-axis-aligned-resource-strip.md)
 - **ADR-0050** _(Accepted)_ — Schedule interchange — canonical model + import pipeline → [`0050-schedule-interchange-canonical-model.md`](docs/adr/0050-schedule-interchange-canonical-model.md)
 - **ADR-0051** _(Accepted; amended by ADR-0163 and ADR-0198)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
 - **ADR-0052** _(Accepted)_ — TSLD direct manipulation & canvas visual refresh → [`0052-canvas-direct-manipulation-and-visual-refresh.md`](docs/adr/0052-canvas-direct-manipulation-and-visual-refresh.md)
@@ -501,7 +501,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0100** _(Accepted; the minimap toggle's location amended by ADR-0185)_ — The canvas minimap — an invariant picture and a DOM rectangle → [`0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md`](docs/adr/0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md)
 - **ADR-0101** _(Accepted)_ — An editor is a dialog, not a drawer → [`0101-an-editor-is-a-dialog-not-a-drawer.md`](docs/adr/0101-an-editor-is-a-dialog-not-a-drawer.md)
 - **ADR-0102** _(Accepted)_ — The light corporate theme, and the scope that never reached the painter → [`0102-the-light-corporate-theme.md`](docs/adr/0102-the-light-corporate-theme.md)
-- **ADR-0103** _(Accepted)_ — Paper is a surface, and the exported diagram is the diagram → [`0103-paper-is-a-surface.md`](docs/adr/0103-paper-is-a-surface.md)
+- **ADR-0103** _(Accepted; D7 amended by ADR-0200)_ — Paper is a surface, and the exported diagram is the diagram → [`0103-paper-is-a-surface.md`](docs/adr/0103-paper-is-a-surface.md)
 - **ADR-0086** _(Accepted)_ — A staff identity that cannot reach a customer → [`0086-staff-principal.md`](docs/adr/0086-staff-principal.md)
 - **ADR-0087** _(Accepted)_ — This application runs scheduled work, and its first job is a retention sweep → [`0087-scheduled-retention-sweep.md`](docs/adr/0087-scheduled-retention-sweep.md)
 - **ADR-0085** _(Accepted)_ — Erasure collides with the audit log, and that collision is the decision → [`0085-privacy-operations.md`](docs/adr/0085-privacy-operations.md)
@@ -602,6 +602,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
 - **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
 - **ADR-0199** _(Accepted; amends ADR-0157 D2 and D4)_ — A link is never louder than the work it joins → [`0199-a-link-is-never-louder-than-the-work-it-joins.md`](docs/adr/0199-a-link-is-never-louder-than-the-work-it-joins.md)
+- **ADR-0200** _(Accepted; amends ADR-0103 D7 and ADR-0049)_ — A layer is a canvas, and the export accounts for every one → [`0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md`](docs/adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

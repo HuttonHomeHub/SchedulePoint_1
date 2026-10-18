@@ -250,6 +250,27 @@ describe('buildExportViewport — WBS band reservation', () => {
     expect(with_.size.width).toBe(without.size.width);
   });
 
+  it('bottomBand grows the surface in both extents and leaves the framing alone', () => {
+    const activities = [
+      { id: 'a', name: 'A', laneIndex: 0, drawnStart: '2026-01-01', drawnFinish: '2026-01-10' },
+    ] as unknown as Parameters<typeof buildExportViewport>[0];
+    for (const extent of ['view', 'whole'] as const) {
+      const without = buildExportViewport(activities, '2026-01-01', {
+        extent,
+        liveViewport: LIVE,
+      });
+      const with_ = buildExportViewport(activities, '2026-01-01', {
+        extent,
+        liveViewport: LIVE,
+        bottomBand: 130,
+      });
+      // The strip is BELOW the diagram, so nothing above it moves: only the surface gets taller.
+      expect(with_.size.height).toBe(without.size.height + 130);
+      expect(with_.size.width).toBe(without.size.width);
+      expect(with_.viewport).toEqual(without.viewport);
+    }
+  });
+
   it('pushes the WHOLE framing down by the band too', () => {
     const activities = [
       {

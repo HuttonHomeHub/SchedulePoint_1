@@ -65,6 +65,16 @@ export const EXPORT_PRINT_TOP_BAND = 48;
  */
 export const EXPORT_MARKER_ROW = 22;
 
+/**
+ * Reserved caption row (CSS px) above the **resource strip** band, where the exported picture
+ * states what the strip is: its mode, bucket size and peak on one line, the load basis and any
+ * truncation on the next, and the legend on the third (ADR-0200 D3; ADR-0106: a band's label is
+ * chrome, and the export paints chrome into reserved rows, as it does the marker row above). The
+ * screen puts the same facts in the DOM panel the canvas cannot reach. Three 11 px lines at an 18 px
+ * pitch plus breathing space, so no line is the only carrier of a fact a narrow crop could clip.
+ */
+export const EXPORT_STRIP_CAPTION_ROW = 58;
+
 /** The live canvas viewport transform + measured surface size, read (never mutated) from the canvas
  * control handle. The `whole` extent reuses only its `pxPerDay`; the `view` extent reuses all of it. */
 export interface LiveViewport {
@@ -94,6 +104,13 @@ export interface BuildExportViewportOptions {
    * byte prior geometry.
    */
   wbsBandHeight?: number;
+  /**
+   * Extra reserved height (CSS px) **below** the diagram for the resource strip's caption row and
+   * band (ADR-0200). The strip sits at the bottom, as it does on screen, so unlike the WBS band
+   * this moves nothing: `viewport` is unchanged and only `size.height` grows. `0` (the default) is
+   * the byte-for-byte prior geometry.
+   */
+  bottomBand?: number;
 }
 
 export interface ExportViewport {
@@ -132,6 +149,7 @@ export function buildExportViewport(
   // above the scene, ADR-0063/ADR-0106).
   const reserved =
     topBand + (options.markerRow ?? EXPORT_MARKER_ROW) + (options.wbsBandHeight ?? 0);
+  const bottomBand = options.bottomBand ?? 0;
   const { view: liveView, size: liveSize } = options.liveViewport;
 
   let viewport: Viewport;
@@ -144,7 +162,10 @@ export function buildExportViewport(
     const pxPerDay = liveView.pxPerDay;
     const contentW = (extent.maxDay - extent.minDay) * pxPerDay;
     const contentH = (extent.maxLane + 1) * LANE_HEIGHT;
-    size = { width: contentW + padding * 2, height: reserved + contentH + padding * 2 };
+    size = {
+      width: contentW + padding * 2,
+      height: reserved + contentH + padding * 2 + bottomBand,
+    };
     viewport = {
       pxPerDay,
       originX: padding - extent.minDay * pxPerDay,
@@ -155,7 +176,7 @@ export function buildExportViewport(
     // everything reserved above it (the diagram shifts down by `reserved`, preserving the framing).
     size = {
       width: Math.max(1, liveSize.width),
-      height: reserved + Math.max(1, liveSize.height),
+      height: reserved + Math.max(1, liveSize.height) + bottomBand,
     };
     viewport = {
       pxPerDay: liveView.pxPerDay,

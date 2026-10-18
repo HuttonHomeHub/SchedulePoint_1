@@ -1,9 +1,10 @@
 import { fireEvent, render, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as PaintModule from '../render/paint';
 
-import { RESOURCE_STRIP_HEIGHT, TsldCanvas } from './TsldCanvas';
+import { RESOURCE_STRIP_HEIGHT, TsldCanvas, type TsldCanvasHandle } from './TsldCanvas';
 
 import type { RenderActivity } from '@/features/tsld/render/render-model';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
@@ -85,9 +86,33 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
     const strip = getByTestId('tsld-resource-strip');
     expect(strip.tagName).toBe('CANVAS');
     expect(strip).toHaveAttribute('aria-hidden', 'true');
+    // The layer gate (`scene-parity.structural`) reads this name; the export must account for it.
+    expect(strip).toHaveAttribute('data-layer', 'resource-strip');
     expect(strip.className).toContain('pointer-events-none');
     expect(strip.className).toContain('bottom-0');
     expect(strip.style.height).toBe(`${RESOURCE_STRIP_HEIGHT}px`);
+  });
+
+  it('hands the export the snapshot it is painting, and only while the strip is open (ADR-0200 D1)', () => {
+    const control = createRef<TsldCanvasHandle>();
+    const { rerender } = render(
+      <TsldCanvas
+        {...baseProps()}
+        controlRef={control}
+        resourceStripActive
+        resourceStrip={SNAPSHOT}
+      />,
+    );
+    expect(control.current!.getResourceStrip()).toBe(SNAPSHOT);
+
+    // Closed: the panel unmounts and publishes `null`, and the flag drops — either alone must read
+    // as "no strip", so a stale snapshot can never leak into a file exported afterwards (AC-2.2).
+    rerender(<TsldCanvas {...baseProps()} controlRef={control} resourceStrip={SNAPSHOT} />);
+    expect(control.current!.getResourceStrip()).toBeNull();
+    rerender(
+      <TsldCanvas {...baseProps()} controlRef={control} resourceStripActive resourceStrip={null} />,
+    );
+    expect(control.current!.getResourceStrip()).toBeNull();
   });
 
   it('sizes the strip backing store at the same DPR as the scene canvas', async () => {

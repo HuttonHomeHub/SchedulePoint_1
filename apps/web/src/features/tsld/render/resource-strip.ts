@@ -56,13 +56,40 @@ export interface StripBandGeom {
 /** The immutable snapshot the DOM `ResourceStripPanel` publishes into `TsldCanvas` (ADR-0049 §4): the
  * selected resource's series, its bucket axis **pre-projected to day offsets**, the data date (day 0),
  * and the whole-series max. The strip palette is re-resolved on the canvas side (on the shared theme
- * bump), not carried here, so this stays pure data. `null` ⇒ the strip draws nothing (empty/loading). */
+ * bump), not carried here, so this stays pure data. A snapshot with no segments draws nothing
+ * (loading/error/empty), and carries a caption saying why. */
 /** One band of the stacked strip — the painter's view of a `StackSegment`, geometry only. */
 export interface StripSegment {
   /** Per-bucket values, index-aligned to `dayOffsets`. */
   values: readonly number[];
   /** The resolved fill for this band (Canvas 2D cannot take a `var()`). */
   fill: string;
+}
+
+/**
+ * What the strip **says about itself**, published beside the bars so the exported and printed
+ * diagram can state it (ADR-0200 D3). On screen these facts live in the DOM panel — picker, bucket
+ * select, legend, truncation notice — which a raster cannot reach; paper needs the facts, not the
+ * controls. Pure data: **no painter reads it** (the live band is byte-identical), only the export's
+ * caption row does.
+ */
+export interface StripCaption {
+  /** `ready` has bars; the other three publish a segment-less snapshot so the export can say why. */
+  status: 'ready' | 'loading' | 'error' | 'empty';
+  /** How the bands are formed (`isolated` is one resource, named by `resourceName`). */
+  mode: 'resource' | 'group' | 'kind' | 'isolated';
+  /** The bucket size, as the histogram query's value. */
+  granularity: 'DAY' | 'WEEK' | 'MONTH';
+  /** The isolated resource's name, when `mode` is `isolated`. */
+  resourceName?: string;
+  /** Every drawn segment in stack order (baseline first), as the screen's legend names them. Empty
+   * when isolated — the screen draws no legend there either. */
+  legend: readonly { label: string; fill: string }[];
+  /** `Showing {shown} of {total} resources`, when the histogram is truncated. */
+  shown?: number;
+  total?: number;
+  /** The screen's own empty message, for `status: 'empty'`. */
+  emptyMessage?: string;
 }
 
 export interface ResourceStripSnapshot {
@@ -90,6 +117,8 @@ export interface ResourceStripSnapshot {
   max: number;
   /** The selected resource's display name (used for the max-tick label / a11y), when resolvable. */
   resourceName?: string;
+  /** What the strip states about itself; read by the export's caption row and by no painter. */
+  caption?: StripCaption;
 }
 
 /**

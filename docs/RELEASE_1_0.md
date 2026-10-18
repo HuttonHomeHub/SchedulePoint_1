@@ -82,7 +82,8 @@ rows below are the ones a person could meet, one line each, as read from each ro
   on 2026-10-16: the preset now frames the room beside the pane as it stands.
 - **#477** — on a very short, narrow window the command bar scrolls away and nothing hints how to get it back.
 - **#490** — at 320 pixels wide the app header takes four lines.
-- **#223** — the resource strip under the diagram is not in the exports or the printout.
+- **#223** — the resource strip under the diagram is not in the exports or the printout. Closed on 2026-10-17:
+  a strip that is open now exports and prints as shown, with a caption and legend.
 - **#229** and **#307** — two small keyboard and screen-reader details (a menu that closes and reopens when its
   own button is pressed, and a focusable "loading" row in the project tree). The combo-box half of #229 closed
   on 2026-10-16.

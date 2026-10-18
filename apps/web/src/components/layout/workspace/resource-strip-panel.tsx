@@ -74,7 +74,7 @@ export function ResourceStripPanel({
   /** The plan's data date (`plannedStart`) — day 0 for the strip's shared time axis. Non-null (the
    * workspace mounts this only once the plan has a computed diagram). */
   dataDate: string;
-  /** Publish the strip snapshot (or `null` when there's nothing to draw) into `TsldCanvas`. Stable. */
+  /** Publish the strip snapshot (`null` only when the panel unmounts) into `TsldCanvas`. Stable. */
   onSnapshot: (snapshot: ResourceStripSnapshot | null) => void;
   /** After a user *reveal*, move focus into the panel so a keyboard/AT user isn't dropped to `<body>`
    * (mirrors `ActivityBottomPanel`'s focus-on-expand). */
@@ -157,7 +157,7 @@ export function ResourceStripPanel({
 
   // Build + publish the immutable snapshot (ADR-0049 §4): the selected series, its bucket axis
   // pre-projected to day offsets (the same `daysBetween` the scene uses), the data date, and the
-  // whole-series (viewport-independent) max. `null` when there's nothing to draw (loading / empty).
+  // whole-series (viewport-independent) max. Loading, error and empty publish a bar-less snapshot.
   /**
    * The stack the canvas paints, and the scale it is measured against.
    *
@@ -200,11 +200,43 @@ export function ResourceStripPanel({
   }, [series, buckets.length, stripPalette, stackBy, resources.data, canvasSurface]);
 
   const snapshot = useMemo<ResourceStripSnapshot | null>(() => {
-    if (buckets.length === 0) return null;
+    // **What the strip says about itself, for the export's caption row** (ADR-0200 D3). Built from
+    // state this panel already holds — nothing is fetched or derived twice — and read by no painter,
+    // so the live band cannot change because of it.
+    const total = histogram.data?.total;
+    const truncated =
+      histogram.data?.hasMore === true && total !== undefined
+        ? { shown: series.length, total }
+        : {};
+    const mode = stackedAll ? stackBy : 'isolated';
+    // A strip that is open but has nothing to draw publishes a segment-less snapshot rather than
+    // `null`, so a file exported at that moment says WHY the band is empty instead of carrying an
+    // unexplained one. The painter's early return treats it exactly as it treated `null`.
+    const withoutBars = (
+      status: 'loading' | 'error' | 'empty',
+      emptyMessage?: string,
+    ): ResourceStripSnapshot => ({
+      segments: [],
+      bucketTotals: [],
+      dayOffsets: [],
+      dataDate,
+      max: 0,
+      caption: {
+        status,
+        mode,
+        granularity,
+        legend: [],
+        ...truncated,
+        ...(emptyMessage === undefined ? {} : { emptyMessage }),
+      },
+    });
+    if (histogram.isPending) return withoutBars('loading');
+    if (histogram.isError) return withoutBars('error');
+    if (buckets.length === 0) return withoutBars('empty', NO_RESOURCE_LOADING_MESSAGE);
     const dayOffsets = projectBucketDays(buckets, dataDate);
 
     if (!stackedAll) {
-      if (!selectedSeries) return null;
+      if (!selectedSeries) return withoutBars('empty', NO_RESOURCE_LOADING_MESSAGE);
       const name = nameById.get(selectedSeries.resourceId);
       return {
         segments: [{ values: selectedSeries.values, fill: stripPalette.bar }],
@@ -215,19 +247,49 @@ export function ResourceStripPanel({
         dataDate,
         max: seriesMax(selectedSeries),
         ...(name ? { resourceName: name } : {}),
+        caption: {
+          status: 'ready',
+          mode,
+          granularity,
+          ...(name ? { resourceName: name } : {}),
+          legend: [],
+          ...truncated,
+        },
       };
     }
 
-    if (stacked.segments.length === 0 || stacked.peak <= 0) return null;
+    if (stacked.segments.length === 0 || stacked.peak <= 0) {
+      return withoutBars('empty', NO_RESOURCE_LOADING_MESSAGE);
+    }
     return {
       segments: stacked.segments.map((seg) => ({ values: seg.values, fill: seg.fill })),
       bucketTotals: stacked.bucketTotals,
       dayOffsets,
       dataDate,
       max: stacked.peak,
+      caption: {
+        status: 'ready',
+        mode,
+        granularity,
+        // The same labels and fills the screen's legend names, taken from the same segments.
+        legend: stacked.segments.map((seg) => ({ label: seg.label, fill: seg.fill })),
+        ...truncated,
+      },
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `buckets` derives from histogram.data
-  }, [stackedAll, selectedSeries, stacked, histogram.data, dataDate, nameById, stripPalette]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `buckets` and `series` derive from histogram.data
+  }, [
+    stackedAll,
+    stackBy,
+    granularity,
+    selectedSeries,
+    stacked,
+    histogram.data,
+    histogram.isPending,
+    histogram.isError,
+    dataDate,
+    nameById,
+    stripPalette,
+  ]);
 
   useEffect(() => {
     onSnapshot(snapshot);

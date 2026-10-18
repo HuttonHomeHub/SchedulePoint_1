@@ -438,6 +438,7 @@ export function TsldMinimap({
           <canvas
             ref={bitmapCanvasRef}
             aria-hidden="true"
+            data-layer="minimap"
             data-testid="tsld-minimap-picture"
             className="block"
             style={{ width: MINIMAP_BOX.width, height: MINIMAP_BOX.height }}

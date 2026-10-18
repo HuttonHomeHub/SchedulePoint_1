@@ -145,3 +145,67 @@ describe('the boundary rule is suppressed where a band is too thin to separate',
     expect(ruleCount(snapshot([SEGMENT_RULE_MIN_PX - 1, rest], ['#aa0000', '#00aa00']))).toBe(0);
   });
 });
+
+describe('the painter takes an offset for the export without changing the live path (ADR-0200)', () => {
+  const VIEW = { pxPerDay: 10, originX: 0, originY: 0 };
+  const SIZE = { width: 300, height: 72 };
+  const STACK: ResourceStripSnapshot = {
+    segments: [
+      { values: [4, 2], fill: '#aa0000' },
+      { values: [2, 2], fill: '#00aa00' },
+    ],
+    bucketTotals: [6, 4],
+    dayOffsets: [
+      { start: 0, end: 7 },
+      { start: 7, end: 14 },
+    ],
+    dataDate: '2026-01-01',
+    max: 6,
+  };
+
+  function transforms(snapshot: ResourceStripSnapshot | null, offsetY?: number): unknown[][] {
+    const calls: unknown[][] = [];
+    const { ctx } = recordingCtx();
+    (ctx as unknown as { setTransform: (...a: unknown[]) => void }).setTransform = (...a) => {
+      calls.push(a);
+    };
+    if (offsetY === undefined) paintResourceStrip(ctx, snapshot, VIEW, SIZE, PALETTE, 2);
+    else paintResourceStrip(ctx, snapshot, VIEW, SIZE, PALETTE, 2, offsetY);
+    return calls;
+  }
+
+  it('omitting the offset is the transform the painter has always set', () => {
+    expect(transforms(STACK)).toEqual([[2, 0, 0, 2, 0, 0]]);
+    expect(transforms(STACK, 0)).toEqual(transforms(STACK));
+  });
+
+  it('shifts the band down a shared surface by the offset, in device pixels', () => {
+    expect(transforms(STACK, 100)).toEqual([[2, 0, 0, 2, 0, 200]]);
+  });
+
+  it('draws the same rectangles at any offset — only the transform moves', () => {
+    const at0 = recordingCtx();
+    const at100 = recordingCtx();
+    paintResourceStrip(at0.ctx, STACK, VIEW, SIZE, PALETTE, 1);
+    paintResourceStrip(at100.ctx, STACK, VIEW, SIZE, PALETTE, 1, 100);
+    expect(at100.rects).toEqual(at0.rects);
+  });
+
+  it('an open strip with nothing to draw paints exactly what a missing snapshot did', () => {
+    // The panel now publishes a bar-less, captioned snapshot for loading/error/empty instead of
+    // `null`. The live band must not change because of it.
+    const empty: ResourceStripSnapshot = {
+      segments: [],
+      bucketTotals: [],
+      dayOffsets: [],
+      dataDate: '2026-01-01',
+      max: 0,
+      caption: { status: 'loading', mode: 'resource', granularity: 'WEEK', legend: [] },
+    };
+    const none = recordingCtx();
+    const bare = recordingCtx();
+    paintResourceStrip(none.ctx, null, VIEW, SIZE, PALETTE, 1);
+    paintResourceStrip(bare.ctx, empty, VIEW, SIZE, PALETTE, 1);
+    expect(bare.rects).toEqual(none.rects);
+  });
+});

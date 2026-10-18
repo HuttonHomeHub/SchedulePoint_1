@@ -2,6 +2,8 @@ import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EXPORT_STRIP_CAPTION_ROW } from '../export/export-image';
+
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -9,6 +11,7 @@ import type {
   LoadedPlan,
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
+import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
 import { DEFAULT_VIEW_TOGGLES, type TsldScene } from '@/features/tsld/render/paint';
 
 /**
@@ -95,7 +98,7 @@ function makeModel(): PlanWorkspaceModel {
   } as unknown as PlanWorkspaceModel;
 }
 
-function makeCanvasUi(): TsldCanvasUiState {
+function makeCanvasUi(handle: Record<string, unknown> = {}): TsldCanvasUiState {
   return {
     zoomPreset: 'week',
     // A live viewport the export reads (never mutates) via the control handle.
@@ -110,6 +113,7 @@ function makeCanvasUi(): TsldCanvasUiState {
         // this method still passes every other case, so without a positive pin "lenses flow"
         // and "lenses silently dropped" would be the same green (the ADR-0093 shape).
         getSceneLenses: () => ({ dimmedIds: new Set(['dim-1']), flaggedIds: new Set(['flag-1']) }),
+        ...handle,
       },
     } as unknown as TsldCanvasUiState['canvasControlRef'],
     requestFit: vi.fn(),
@@ -153,12 +157,12 @@ const PLAN = {
   version: 1,
 } as unknown as LoadedPlan;
 
-function build() {
+function build(handle: Record<string, unknown> = {}) {
   return renderHook(() =>
     useTsldToolbarContext({
       model: makeModel(),
       plan: PLAN,
-      canvasUi: makeCanvasUi(),
+      canvasUi: makeCanvasUi(handle),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
       minimap: { open: false, toggle: vi.fn() },
@@ -193,6 +197,43 @@ describe('useTsldToolbarContext — Diagram-PDF export (M3)', () => {
       .scene;
     expect(exportScene.dimmedIds).toEqual(new Set(['dim-1']));
     expect(exportScene.flaggedIds).toEqual(new Set(['flag-1']));
+  });
+
+  it('composes the resource strip when the canvas has it open, and not otherwise (ADR-0200)', async () => {
+    const { renderExportImage } = await import('../export/render-export-image');
+    const snapshot = {
+      segments: [{ values: [1], fill: '#aa0000' }],
+      bucketTotals: [1],
+      dayOffsets: [{ start: 0, end: 7 }],
+      dataDate: '2026-01-01',
+      max: 1,
+    };
+    type Input = {
+      size: { height: number };
+      resourceStrip?: { snapshot: unknown; height: number };
+    };
+    const exportOnce = async (handle: Record<string, unknown>): Promise<Input> => {
+      vi.mocked(renderExportImage).mockClear();
+      const { result } = build(handle);
+      await act(async () => {
+        result.current.exportDiagramPdf('whole');
+        await Promise.resolve();
+      });
+      return vi.mocked(renderExportImage).mock.calls[0]![0];
+    };
+
+    const closed = await exportOnce({ getResourceStrip: () => null });
+    const open = await exportOnce({ getResourceStrip: () => snapshot });
+    // A handle that predates the method degrades to today's picture rather than throwing.
+    const legacy = await exportOnce({});
+
+    expect(closed.resourceStrip).toBeUndefined();
+    expect(legacy.resourceStrip).toBeUndefined();
+    expect(open.resourceStrip).toMatchObject({ snapshot, height: RESOURCE_STRIP_HEIGHT });
+    // The surface grew by exactly the caption row and the band, below the diagram.
+    expect(open.size.height).toBe(
+      closed.size.height + EXPORT_STRIP_CAPTION_ROW + RESOURCE_STRIP_HEIGHT,
+    );
   });
 
   it('names the "view" extent distinctly from the "whole" extent (B1 — no collision)', async () => {
