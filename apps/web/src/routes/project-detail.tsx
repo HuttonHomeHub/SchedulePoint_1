@@ -30,8 +30,9 @@ import { EntityLoadFailure } from '@/routes/entity-not-found';
  * future TSLD canvas) lives at `/orgs/$orgSlug/plans/$planId`.
  *
  * **The frame renders at once and only the header waits for the project** (see `client-detail.tsx`
- * for the reasoning and its cost, and for who speaks while the header waits). The Calendars section needs the project's name, so it appears
- * when the project does; it is the last block on the page, so nothing above it moves for it.
+ * for the reasoning and its cost, and for who speaks while the header waits). The Calendars section
+ * needs the project's name, so it appears when the project does; it is the last block on the page,
+ * so nothing above it moves for it.
  *
  * It also carries the project's **Calendars** section (ADR-0053
  * §1). This screen is the project's only detail surface — there is no separate project-settings
@@ -72,6 +73,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   return (
     <PageContainer>
       {pending ? (
+        // An errored list is settled (`isPending` is false), so the header speaks for itself.
         <LoadingShape label="Loading project…" announce={plans.isPending ? 'none' : 'polite'}>
           <Skeleton className="h-5 w-64" />
           <PageHeaderSkeleton className="mt-2" aside actions={actionBlocks} />

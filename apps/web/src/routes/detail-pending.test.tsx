@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -108,6 +108,20 @@ describe('ClientDetailScreen while the client read is pending', () => {
     expect(statuses()).toEqual(['Loading client…']);
   });
 
+  it('treats an errored list as settled: the header speaks, and only the header', () => {
+    h.projects = { isPending: false, isError: true };
+    render(<ClientDetailScreen />);
+    expect(statuses()).toEqual(['Loading client…']);
+  });
+
+  it('keeps exactly one status across the swap from list-pending to list-settled, and fills it', async () => {
+    const { rerender } = render(<ClientDetailScreen />);
+    h.projects = { isPending: false, isError: false };
+    rerender(<ClientDetailScreen />);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Loading client…'));
+  });
+
   it('says nothing once both reads have settled', () => {
     h.projects = { isPending: false, isError: false };
     h.client = {
@@ -151,6 +165,20 @@ describe('ProjectDetailScreen while the project read is pending', () => {
     h.plans = { isPending: false, isError: false };
     render(<ProjectDetailScreen />);
     expect(statuses()).toEqual(['Loading project…']);
+  });
+
+  it('treats an errored list as settled: the header speaks, and only the header', () => {
+    h.plans = { isPending: false, isError: true };
+    render(<ProjectDetailScreen />);
+    expect(statuses()).toEqual(['Loading project…']);
+  });
+
+  it('keeps exactly one status across the swap from list-pending to list-settled, and fills it', async () => {
+    const { rerender } = render(<ProjectDetailScreen />);
+    h.plans = { isPending: false, isError: false };
+    rerender(<ProjectDetailScreen />);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Loading project…'));
   });
 
   it('says nothing once both reads have settled', () => {

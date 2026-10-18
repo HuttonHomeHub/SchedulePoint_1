@@ -53,6 +53,7 @@ export function ClientDetailScreen(): React.ReactElement {
       {client.isPending ? (
         // The breadcrumb line is a block, not a live link: a skeleton holds nothing focusable. No
         // description line: most clients have none, and a skeleton cannot know.
+        // An errored list is settled (`isPending` is false), so the header speaks for itself.
         <LoadingShape label="Loading client…" announce={projects.isPending ? 'none' : 'polite'}>
           <Skeleton className="h-5 w-48" />
           <PageHeaderSkeleton className="mt-2" aside actions={canWrite ? 1 : 0} />
