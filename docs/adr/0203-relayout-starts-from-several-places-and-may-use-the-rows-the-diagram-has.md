@@ -60,6 +60,8 @@ reported only.
 ## Consequences
 
 Re-layout on a plan of about 100 to 150 activities waits tens of seconds, cancellable. A planner on fewer cores waits
-longer (the pool is `min(starts, max(1, cores - 1))`); the diagram is the same. A freshly imported plan gains nothing
+longer (the pool is `min(starts, max(1, cores - 1))`); the diagram is the same. On a 2-core device the pool
+runs the starts one after another (concurrency is cores - 1, at least 1), so the wait can be about four times
+longer; that is unmeasured. A freshly imported plan gains nothing
 from D1, because its rows already are a pack. `docs/TECH_DEBT.md` #382 is closed with the hand layout reached on the
 reference plan.

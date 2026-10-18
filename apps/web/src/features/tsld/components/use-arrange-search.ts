@@ -48,7 +48,12 @@ export interface ArrangeOutcome {
 }
 
 export type ArrangeSearchState =
-  | { kind: 'computing'; evaluations: number }
+  | {
+      kind: 'computing';
+      evaluations: number;
+      /** How many starting layouts Re-layout searches from; above one, the wait is long enough to say so. */
+      starts: number;
+    }
   | {
       kind: 'ready';
       tidy: ArrangeOutcome | null;
@@ -191,9 +196,10 @@ export function useArrangeSearch(
     const drawn = drawnCount(input.activities);
     const bounded = drawn > OPTIMISE_MAX_ACTIVITIES;
 
+    const starts = searchStartsOf(input);
     let tidyEvaluations = 0;
     const progress = (base: number) => (n: number) => {
-      if (!signal.aborted) setState({ kind: 'computing', evaluations: base + n });
+      if (!signal.aborted) setState({ kind: 'computing', evaluations: base + n, starts });
     };
 
     void (async () => {
@@ -250,7 +256,13 @@ export function useArrangeSearch(
     return () => controller.abort();
   }, [open, input]);
 
-  return result !== null && result.input === input ? result.state : COMPUTING;
+  return result !== null && result.input === input
+    ? result.state
+    : { kind: 'computing', evaluations: 0, starts: input === null ? 1 : searchStartsOf(input) };
 }
 
-const COMPUTING: ArrangeSearchState = { kind: 'computing', evaluations: 0 };
+/** The starts Re-layout will run for this plan: one outside the search limit, else the multi-start set. */
+function searchStartsOf(input: ArrangeSearchInput): number {
+  const drawn = drawnCount(input.activities);
+  return drawn > OPTIMISE_MAX_ACTIVITIES ? 1 : relayoutStartIds(drawn).length;
+}

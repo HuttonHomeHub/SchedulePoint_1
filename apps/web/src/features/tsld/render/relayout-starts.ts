@@ -47,8 +47,8 @@ export const START_NAMES: Record<StartId, string> = {
  * above it (M1's behaviour). The owner accepted knowingly that fixture-p6-torture-v1 (147 drawn,
  * inside the limit) spreads from 24 to 35 rows (FC-R5). **Measured 2026-10-17** by `measure-relayout.mjs` in the
  * product's real module workers (`docs/specs/relayout-quality/m2-verdict.md`): the reference plan
- * (58 drawn) waits about 0.27 s today and about 4.1 s across the starts; the ratio is 3.4-4x at
- * 100-150 activities (27 s at 150) and the wait is 90 s at 300, which stays outside.
+ * (58 drawn) waits about 0.27 s today and about 3.6 s across the starts; the ratio is 3.4-4x at
+ * 100-150 activities (about 28 s at 147) and the wait is 90 s at 300, which stays outside.
  */
 export const RELAYOUT_MULTISTART_MAX_ACTIVITIES = 150;
 

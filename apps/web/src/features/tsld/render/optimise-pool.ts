@@ -47,8 +47,10 @@ export function runPool(
       fail(new DOMException('The layout search was cancelled.', 'AbortError'));
       return;
     }
-    signal?.addEventListener('abort', () =>
-      fail(new DOMException('The layout search was cancelled.', 'AbortError')),
+    signal?.addEventListener(
+      'abort',
+      () => fail(new DOMException('The layout search was cancelled.', 'AbortError')),
+      { once: true },
     );
 
     const launch = (): void => {

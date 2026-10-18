@@ -78,7 +78,7 @@ from start 0 only (today's M1 behaviour).
 The starts are what close the reference-plan gap: with start 2 the reference plan matches the hand layout
 (1 crossing, 0 overlaps, 14 rows; FC-R3 and FC-R4 pass), and the fixture and `scale-275` improve (fixture
 171 to 119 crossings, scale 343 to 226). They cost 3x to 15x today's wait at 58 drawn activities and
-above (the reference plan alone: 272 ms today, about 4.1 s of search across the starts). A gate at 10
+above (the reference plan alone: 272 ms today, about 3.6 s of search across the starts). A gate at 10
 satisfies CQ-2 literally and takes that gain away from every plan a planner would actually press
 Re-layout on. FC-R3 and FC-R4 then fail, and the epic's headline claim is not met.
 
