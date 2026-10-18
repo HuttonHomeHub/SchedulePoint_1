@@ -2,13 +2,24 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
-import { DataTable, type Column } from '@/components/ui/data-table';
-import { QueryPanel } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { DataTable, DataTableSkeleton, type Column } from '@/components/ui/data-table';
+import { QueryPanel, Skeleton } from '@/components/ui/page';
 import { useStaffAccounts, type UnverifiedAccount } from '@/features/staff/api/staff-panels';
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
 import { ACCOUNTS } from '@/features/staff/model/panel-copy';
-import { formatTimestamp } from '@/lib/format-date';
+import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
+
+// Module-level so the loading skeleton and the settled table share ONE definition: the skeleton's
+// headings and column widths are these, and cannot drift from the table they stand in for.
+const COLUMNS: Column<UnverifiedAccount>[] = [
+  { header: 'Email', cell: (row) => row.email, width: 'bounded', wrap: 'anywhere' },
+  {
+    header: 'Signed up',
+    cell: (row) => formatTimestamp(row.createdAt),
+    width: 'fit',
+    sample: formatTimestamp(SAMPLE_INSTANT),
+  },
+];
 
 /**
  * Unconfirmed accounts: who has signed up but cannot sign in yet.
@@ -33,11 +44,6 @@ import { formatTimestamp } from '@/lib/format-date';
 export function AccountsPanel(): React.ReactElement {
   const accounts = useStaffAccounts();
   const announce = useAnnounce();
-  const columns: Column<UnverifiedAccount>[] = [
-    { header: 'Email', cell: (row) => row.email, width: 'bounded', wrap: 'anywhere' },
-    { header: 'Signed up', cell: (row) => formatTimestamp(row.createdAt), width: 'fit' },
-  ];
-
   // De-duplicated by id: a cursor page is a position in a list that other people are changing, so a
   // row can land at the end of one page and the start of the next.
   const rows = useMemo(() => {
@@ -109,7 +115,13 @@ export function AccountsPanel(): React.ReactElement {
         isFetching: accounts.isFetching && !accounts.isFetchingNextPage,
         refetch: () => accounts.refetch(),
       }}
-      skeleton={<Spinner label="Loading accounts…" />}
+      skeleton={
+        <div className="space-y-4">
+          <Skeleton className="h-5 w-2/3" />
+          <DataTableSkeleton columns={COLUMNS} />
+        </div>
+      }
+      loadingLabel="Loading accounts…"
       errorLabel="Couldn't load accounts."
       errorStatus="Accounts couldn't be loaded."
       settledStatus={() =>
@@ -126,7 +138,7 @@ export function AccountsPanel(): React.ReactElement {
           {total === 0 ? null : (
             <DataTable
               caption={ACCOUNTS.caption}
-              columns={columns}
+              columns={COLUMNS}
               query={{
                 isPending: false,
                 isError: false,

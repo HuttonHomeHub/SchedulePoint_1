@@ -65,7 +65,7 @@ export function RecentlyChangedSection({
       }
     >
       {pending ? (
-        <ListRowSkeleton rows={4} />
+        <ListRowSkeleton rows={4} label="Loading recently changed plans…" />
       ) : error ? (
         <EmptyState
           size="section"

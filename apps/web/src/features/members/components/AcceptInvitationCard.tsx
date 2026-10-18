@@ -10,8 +10,8 @@ import { InviteShell } from './InviteShell';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ServerError } from '@/components/ui/server-error';
-import { Spinner } from '@/components/ui/spinner';
 import {
   ResendVerificationButton,
   isRateLimited,
@@ -70,10 +70,23 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
 
   if (preview.isPending || session.isPending) {
     return (
-      <InviteShell busy>
-        <CardContent className="flex justify-center p-10">
-          <Spinner label="Loading invitation…" />
-        </CardContent>
+      // Not `busy`: the shell's `aria-busy` would put the status below inside a busy subtree, where
+      // assistive technology may defer it past the moment it unmounts. The shape is the card's own
+      // header and the two actions the most common outcome (signed out) offers, so the card does not
+      // change size when it resolves; it is the same for every token, which keeps this screen from
+      // saying anything about whether an invitation exists.
+      <InviteShell>
+        <LoadingShape label="Loading invitation…">
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-3/4" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <Skeleton className="h-(--control-h) w-full" />
+            <Skeleton className="h-(--control-h) w-full" />
+          </CardContent>
+        </LoadingShape>
       </InviteShell>
     );
   }

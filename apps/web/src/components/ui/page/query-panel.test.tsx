@@ -24,6 +24,7 @@ function panel(
       {...(id === null ? {} : { id })}
       query={{ ...query, refetch }}
       skeleton={<p>skeleton slot</p>}
+      loadingLabel="Loading counts…"
       errorLabel="Could not read counts."
       errorStatus="Counts could not be read."
       settledStatus={(row) => `${String(row.n)} counted.`}
@@ -41,6 +42,43 @@ describe('QueryPanel', () => {
     expect(screen.getByText('skeleton slot')).toBeInTheDocument();
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
     expect(polite()).toHaveTextContent('');
+  });
+
+  it('wraps the skeleton in a LoadingShape that adds no live region of its own', () => {
+    // The section already owns a polite region; a second status per panel was six announcements.
+    const { container } = render(panel({ isPending: true, isError: false, data: undefined }));
+    const shape = container.querySelector('[data-loading-shape]');
+    expect(shape).toHaveTextContent('Loading counts…');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(shape?.querySelector('[aria-hidden="true"]')).toContainElement(
+      screen.getByText('skeleton slot'),
+    );
+    // The label is plain text, and the section's busy flag is not set by the placeholder.
+    expect(shape?.querySelector('[aria-live]')).toBeNull();
+  });
+
+  it('keeps the section’s polite sentence outside the busy wrapper while a refetch is in flight', () => {
+    // ARIA 1.2 lets a busy subtree defer changes, and the refetch's new sentence is written while
+    // the read is still settling. The busy flag marks a wrapper around the content only.
+    const { container } = render(
+      panel({ isPending: false, isError: false, data: { n: 7 }, isFetching: true }),
+    );
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.querySelector('[aria-live], [role="status"]')).toBeNull();
+    expect(busy).toHaveTextContent('value 7');
+    expect(container.querySelector('section[aria-busy]')).toBeNull();
+    expect(polite()).not.toBeNull();
+  });
+
+  it('keeps the error alert outside the busy wrapper while a retry is in flight', () => {
+    const { container } = render(
+      panel({ isPending: false, isError: true, data: undefined, isFetching: true }),
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    const busy = container.querySelector('[aria-busy="true"]');
+    expect(busy).not.toBeNull();
+    expect(busy?.querySelector('[role="alert"], [role="status"], [aria-live]')).toBeNull();
   });
 
   // ADR-0178 D-6: the first settled sentence is a resting state. It is reachable as plain text and
@@ -101,18 +139,20 @@ describe('QueryPanel', () => {
     expect(section).not.toHaveAttribute('tabindex');
   });
 
-  it('keeps earlier data visible and marks the section busy while a refetch is in flight', () => {
+  it('keeps earlier data visible and marks its content busy while a refetch is in flight', () => {
     render(panel({ isPending: false, isError: false, data: { n: 4 }, isFetching: true }));
     expect(screen.getByText('value 4')).toBeInTheDocument();
     expect(screen.queryByText('skeleton slot')).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
+    expect(document.querySelector('[aria-busy="true"]')).toContainElement(
+      screen.getByText('value 4'),
+    );
   });
 
   it('is not busy when idle, and does not say busy when no isFetching is passed', () => {
     const { rerender } = render(panel({ isPending: false, isError: false, data: { n: 4 } }));
-    expect(screen.getByRole('region', { name: 'Counts' })).not.toHaveAttribute('aria-busy');
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
     rerender(panel({ isPending: false, isError: false, data: { n: 4 }, isFetching: false }));
-    expect(screen.getByRole('region', { name: 'Counts' })).not.toHaveAttribute('aria-busy');
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
   });
 
   it('withholds placeholder data the moment the read fails, while still saying a retry is in flight', () => {
@@ -120,7 +160,7 @@ describe('QueryPanel', () => {
     render(panel({ isPending: false, isError: true, data: { n: 4 }, isFetching: true }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText(/value/)).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Counts' })).toHaveAttribute('aria-busy', 'true');
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
   });
 
   // A failure on first load is the section's baseline sentence, so the polite region stays quiet;

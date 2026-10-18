@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
 
 export interface StatItem {
@@ -36,6 +37,14 @@ const TONE_CLASS: Record<StatTone, string> = {
   plain: '',
   alarm: 'text-destructive-text',
 };
+
+/**
+ * The grid's layout classes, shared with {@link StatGridSkeleton} so the placeholder and the
+ * settled grid cannot drift apart (a skeleton that is 4 px off reflows the page when it settles).
+ */
+const GRID_BASE = 'grid grid-cols-2 gap-4';
+const GRID_COLUMNS = { 3: '@md:grid-cols-3', 4: '@md:grid-cols-4' } as const;
+const LABEL_CLASS = 'text-muted-foreground text-sm';
 
 export interface StatGridProps {
   /** The metrics, in reading order. */
@@ -103,19 +112,13 @@ export function StatGrid({
      * a wide card reads as a spacing choice rather than as a rule that never fired.
      */
     <div className={cn('@container', className)}>
-      <dl
-        aria-label={label}
-        className={cn(
-          'grid grid-cols-2 gap-4',
-          columns === 4 ? '@md:grid-cols-4' : '@md:grid-cols-3',
-        )}
-      >
+      <dl aria-label={label} className={cn(GRID_BASE, GRID_COLUMNS[columns])}>
         {items.map((item) => (
           // `min-w-0` and `wrap-anywhere`: a grid item will not shrink below its content, so a long
           // unbroken value (a mail host, a version string) pushed the page wider than a 320 px
           // viewport (WCAG 1.4.10) instead of wrapping.
           <div key={item.label} className="min-w-0">
-            <dt className="text-muted-foreground text-sm">{item.label}</dt>
+            <dt className={LABEL_CLASS}>{item.label}</dt>
             <dd
               className={cn(
                 'text-xl font-semibold wrap-anywhere tabular-nums',
@@ -127,6 +130,47 @@ export function StatGrid({
             {item.sub === undefined ? null : (
               <dd className="text-muted-foreground mt-0.5 text-xs">{item.sub}</dd>
             )}
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/**
+ * `StatGrid`'s loading shape: the REAL labels (static copy the caller already owns) over value
+ * blocks of the figure's own line height, in the same grid.
+ *
+ * A value is `text-xl` (1.75rem line), so its block is `h-7`; a `sub` line is `text-xs` (1rem), so
+ * `h-4`. Those are the line heights of the settled `<dd>`s, which is what keeps the labels and
+ * everything beneath them where they will be. Hidden from assistive technology on its own root as
+ * well as by `LoadingShape`, so misuse outside one is still silent.
+ */
+export interface StatGridSkeletonProps {
+  items: { label: string; sub?: boolean }[];
+  columns?: StatGridProps['columns'];
+  className?: string;
+}
+
+export function StatGridSkeleton({
+  items,
+  columns = 4,
+  className,
+}: StatGridSkeletonProps): React.ReactElement {
+  return (
+    <div className={cn('@container', className)} aria-hidden="true">
+      <dl className={cn(GRID_BASE, GRID_COLUMNS[columns])}>
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0">
+            <dt className={LABEL_CLASS}>{item.label}</dt>
+            <dd>
+              <Skeleton className="h-7 w-16" />
+            </dd>
+            {item.sub === true ? (
+              <dd className="mt-0.5">
+                <Skeleton className="h-4 w-24" />
+              </dd>
+            ) : null}
           </div>
         ))}
       </dl>

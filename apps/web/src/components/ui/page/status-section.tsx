@@ -48,9 +48,12 @@ export interface StatusSectionProps {
    */
   status: string;
   /**
-   * A read is in flight and the figures shown may be about to change — `aria-busy` on the section,
-   * so assistive technology waits for the answer rather than reading a half-updated one. It is a
-   * statement about the content, not a loading indicator: the caller still shows whatever it shows.
+   * A read is in flight and the figures shown may be about to change — `aria-busy` on the wrapper
+   * around the CONTENT, so assistive technology waits for the answer rather than reading a
+   * half-updated one. It is a statement about the content, not a loading indicator: the caller
+   * still shows whatever it shows. **The section's own polite sentence is a sibling of that
+   * wrapper, never inside it:** ARIA 1.2 lets a busy subtree defer changes, and the new sentence is
+   * written while the read that caused it is still settling.
    */
   busy?: boolean;
   /**
@@ -83,6 +86,12 @@ export interface StatusSectionProps {
   announce?: 'settle' | 'change';
   /** One sentence saying what the box holds, under its heading. */
   description?: React.ReactNode;
+  /**
+   * An announced failure (`role="alert"`) for this section. Rendered beside the busy wrapper and never
+   * inside it, for the reason the polite sentences are: a retry sets `busy` while the alert is on
+   * screen, and a busy subtree may defer what it announces.
+   */
+  alert?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -90,6 +99,7 @@ export function StatusSection({
   title,
   status,
   children,
+  alert,
   id,
   busy,
   announce = 'settle',
@@ -122,7 +132,6 @@ export function StatusSection({
     <SectionCard
       title={title}
       {...(id === undefined ? {} : { id })}
-      {...(busy === true ? { busy } : {})}
       {...(description === undefined ? {} : { description })}
     >
       {/* `-mt-2` takes the header's 24 px bottom padding to 16: every panel's first line sits one
@@ -132,7 +141,10 @@ export function StatusSection({
         <p aria-live="polite" className="sr-only">
           {resting ? '' : status}
         </p>
-        {children}
+        {alert}
+        <div aria-busy={busy === true ? true : undefined} className="space-y-4">
+          {children}
+        </div>
       </div>
     </SectionCard>
   );

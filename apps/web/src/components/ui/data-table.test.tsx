@@ -2,7 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useCallback, useMemo, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { DataTable, type Column } from './data-table';
+import { buttonVariants } from './button';
+import { DataTable, DataTableSkeleton, type Column } from './data-table';
 
 interface Row {
   id: string;
@@ -152,11 +153,103 @@ describe('DataTable', () => {
         const { container } = render(
           <DataTable {...common} columns={two} query={query({ isPending: true })} />,
         );
+        expect(screen.getAllByRole('status')).toHaveLength(1);
         expect(screen.getByRole('status')).toHaveTextContent('Loading rows…');
-        expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+        // The status is never inside an `aria-busy` subtree, where a screen reader may defer it.
+        expect(screen.getByRole('status').closest('[aria-busy="true"]')).toBeNull();
+        expect(container.querySelector('table')?.closest('[aria-hidden="true"]')).not.toBeNull();
         for (const cell of container.querySelectorAll('tbody td > *')) {
           expect(cell).toHaveAttribute('aria-hidden', 'true');
         }
+      });
+
+      it('shows the real headings, yet exposes no columnheader to assistive technology', () => {
+        const { container } = render(
+          <DataTable {...common} columns={two} query={query({ isPending: true })} />,
+        );
+        expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+          'Name',
+          'Id',
+        ]);
+        // The skeleton table is `aria-hidden`, so a `getByRole('columnheader')` locator cannot match
+        // a loading heading and pass before the table has settled.
+        expect(screen.queryAllByRole('columnheader')).toHaveLength(0);
+      });
+
+      it('draws a hidden-header or control-header column blank', () => {
+        const { container } = render(
+          <DataTable
+            {...common}
+            columns={[
+              { header: 'Name', cell: (row: Row) => row.name },
+              { header: 'Actions', srHeader: true, cell: () => null },
+              {
+                header: 'Select all',
+                headerCell: () => <input type="checkbox" />,
+                cell: () => null,
+              },
+            ]}
+            query={query({ isPending: true })}
+          />,
+        );
+        expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+          'Name',
+          '',
+          '',
+        ]);
+        // A skeleton holds nothing focusable.
+        expect(container.querySelector('input, button, a')).toBeNull();
+      });
+
+      describe('Column.sample (docs/TECH_DEBT.md #341)', () => {
+        const sampled: Column<Row>[] = [
+          { header: 'Name', cell: (row) => row.name },
+          {
+            header: 'Working days',
+            width: 'fit',
+            sample: 'Mon, Tue, Wed, Thu, Fri',
+            cell: () => null,
+          },
+          { header: 'Code', width: 'fit', cell: () => null },
+        ];
+
+        it('sizes a sampled cell by its sample, hidden from view', () => {
+          const { container } = render(
+            <DataTable {...common} columns={sampled} query={query({ isPending: true })} />,
+          );
+          const cell = container.querySelectorAll('tbody tr')[0]!.querySelectorAll('td')[1]!;
+          expect(cell).toHaveTextContent('Mon, Tue, Wed, Thu, Fri');
+          expect(cell.querySelector('.invisible')).not.toBeNull();
+        });
+
+        it('gives a sampled column its declared width, and an unsampled one still none', () => {
+          const { container } = render(
+            <DataTable {...common} columns={sampled} query={query({ isPending: true })} />,
+          );
+          const heads = [...container.querySelectorAll('thead th')];
+          const cells = [...container.querySelectorAll('tbody tr:first-child td')];
+          // `fit` is `md:w-px md:whitespace-nowrap`: it only fits content that exists.
+          expect(heads[1]?.className).toContain('md:w-px');
+          expect(cells[1]?.className).toContain('md:w-px');
+          expect(heads[2]?.className).not.toContain('md:w-px');
+          expect(cells[2]?.className).not.toContain('md:w-px');
+        });
+
+        it('leaves a column without a sample exactly as it was: the generic block', () => {
+          const { container } = render(
+            <DataTable {...common} columns={sampled} query={query({ isPending: true })} />,
+          );
+          const cell = container.querySelectorAll('tbody tr')[0]!.querySelectorAll('td')[0]!;
+          expect(cell.querySelector('.invisible')).toBeNull();
+          expect(cell.querySelector('[data-skeleton]')).not.toBeNull();
+        });
+
+        it('still emits no data-col-width on a sampled skeleton', () => {
+          const { container } = render(
+            <DataTable {...common} columns={sampled} query={query({ isPending: true })} />,
+          );
+          expect(container.querySelectorAll('[data-col-width]')).toHaveLength(0);
+        });
       });
     });
 
@@ -721,5 +814,45 @@ describe('DataTable — class overrides merge with the default', () => {
     expect(loading.head.split(' ')).not.toContain('pr-4');
     expect(loading.head.split(' ')).toContain('pr-0');
     expect(withPresets.cell).not.toBe(loading.cell);
+  });
+});
+
+describe('DataTableSkeleton', () => {
+  it('is usable outside a DataTable, hidden from assistive technology, with the rows asked for', () => {
+    const { container } = render(
+      <DataTableSkeleton columns={[{ header: 'Name', cell: () => null }]} rows={2} />,
+    );
+    expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /*
+   * A settled row is its tallest control plus `py-2` twice plus the 1 px rule — 49 px with a
+   * small button, the figure `globals.css` records for the estate. A placeholder row that held only
+   * a text line was ~38 px, so everything under the table moved ~60 px when three rows became one
+   * (loading-skeletons SC-2). The placeholder reserves the same control height by the same token,
+   * pinned to the class the row's own button carries. jsdom computes no layout, so the class is the
+   * only thing a unit test can compare.
+   */
+  it('reserves, in every placeholder cell, the height of the small control a settled row holds', () => {
+    const { container } = render(
+      <DataTableSkeleton
+        columns={[
+          { header: 'Name', cell: () => null },
+          { header: 'Date', sample: '12 Oct 2026', cell: () => null },
+        ]}
+        rows={2}
+      />,
+    );
+    const rowControlHeight = /(?:^|\s)h-\(--control-h-sm\)(?:\s|$)/.exec(
+      buttonVariants({ size: 'sm' }),
+    );
+    expect(rowControlHeight, 'the small button no longer sets the row height').not.toBeNull();
+    const cells = container.querySelectorAll('tbody td');
+    expect(cells).toHaveLength(4);
+    for (const cell of cells) {
+      expect(cell.firstElementChild).toHaveClass('min-h-(--control-h-sm)');
+    }
   });
 });

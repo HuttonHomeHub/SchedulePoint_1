@@ -2020,3 +2020,55 @@ test('a staff member reads the console by group and acts on a condition', async 
 
   await staffContext.close();
 });
+
+/**
+ * **The console's panels draw their settled shape while their reads are held**
+ * (`docs/specs/loading-skeletons/` M3, TECH_DEBT #234).
+ *
+ * The reads are held by a route the test releases — no timer — so the pending picture is observed,
+ * not raced. What only a browser can say: the Mail figures' labels and the Accounts table's column
+ * headings are on screen at once, the table's headings are not exposed as column headers (the
+ * skeleton is `aria-hidden`), and no panel adds a `role="status"` of its own, so the page does not
+ * announce six times on load.
+ */
+test('the console shows each panel’s shape while its read is held (loading-skeletons M3)', async ({
+  browser,
+}) => {
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  for (const read of ['**/staff/health', '**/staff/installation', '**/staff/accounts*']) {
+    await staff.route(read, async (route) => {
+      await released;
+      await route.continue();
+    });
+  }
+
+  await staff.goto('/staff');
+  const mail = staff.getByRole('region', { name: 'Mail' });
+  await expect(mail.getByText('Failed in the last 24 hours')).toBeVisible({ timeout: 30_000 });
+  await expect(mail.getByText('Last failure')).toBeVisible();
+  const accounts = staff.locator('#staff-section-accounts');
+  await expect(accounts.getByText('Signed up')).toBeVisible();
+  await expect(accounts.getByRole('columnheader'), 'the skeleton table is not exposed').toHaveCount(
+    0,
+  );
+
+  for (const panel of ['Mail', 'Unconfirmed accounts', 'Version and settings']) {
+    await expect(
+      staff.getByRole('region', { name: panel }).getByRole('status'),
+      `${panel} adds no status of its own`,
+    ).toHaveCount(0);
+  }
+
+  release();
+  await expect(mail.getByText('Failed in the last 24 hours')).toBeVisible();
+  await expect(accounts.getByRole('columnheader', { name: 'Signed up' })).toBeVisible();
+
+  await staffContext.close();
+});

@@ -205,8 +205,16 @@ describe('ActivityMembersPanel', () => {
 
   it('renders a loading state instead of an empty checklist', () => {
     renderPanel([], WRITABLE, { loading: true });
-    expect(screen.getByText(/Loading the plan/)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/Loading the plan/).length).toBeGreaterThan(0);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    // A checklist-shaped placeholder, not an icon beside a sentence.
+    expect(document.querySelectorAll('[data-loading-shape] li')).toHaveLength(5);
+  });
+
+  it('announces the loading sentence it shows, not a generic "Loading…"', () => {
+    renderPanel([], WRITABLE, { loading: true });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the plan’s activities…');
   });
 
   it('renders an error state rather than pretending the plan is empty', () => {

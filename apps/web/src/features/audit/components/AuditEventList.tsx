@@ -5,6 +5,7 @@ import { auditActorName, auditEventCopy, auditSubject } from '../model/audit-cop
 
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { SAMPLE_INSTANT } from '@/lib/format-date';
 
 interface AuditPage {
   events: AuditEvent[];
@@ -67,6 +68,7 @@ export function AuditEventList({
       // dates. `fit` takes it out of the contest and the prose columns below absorb the shortfall,
       // which is what they are for.
       width: 'fit',
+      sample: formatWhen(SAMPLE_INSTANT),
       cell: (event) => (
         <time dateTime={event.occurredAt} className="text-muted-foreground tabular-nums">
           {formatWhen(event.occurredAt)}

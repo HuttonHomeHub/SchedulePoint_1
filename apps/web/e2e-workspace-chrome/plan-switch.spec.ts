@@ -127,3 +127,43 @@ test.describe('Switching plans', () => {
     expect(recalcs).toEqual([]);
   });
 });
+
+/**
+ * **The plan route draws the workspace's frame while the plan read is held**
+ * (`docs/specs/loading-skeletons/` M4, TECH_DEBT #234).
+ *
+ * The read is held by a route the test releases — no timer. What only a browser can say: the page
+ * is the full-bleed workspace skeleton and not a small centred box, it speaks exactly one sentence,
+ * it shows no spinner, and the workspace replaces it once the plan arrives.
+ */
+test('opening a plan shows the workspace frame, not a spinner, while its read is held', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, STAMP + 2);
+  await createHierarchy(page);
+  await calculatedPlan(page, orgSlug, 'Echo');
+  const url = page.url();
+  const planId = /\/plans\/([^/?#]+)/.exec(url)?.[1];
+  expect(planId, 'the plan route carries its id').toBeDefined();
+
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(new RegExp(`/organizations/[^/]+/plans/${String(planId)}$`), async (route) => {
+    await released;
+    await route.continue();
+  });
+
+  await page.goto(url);
+  const loading = page.getByRole('status').filter({ hasText: 'Loading plan…' });
+  await expect(loading).toHaveCount(1);
+  expect(await page.locator('svg.animate-spin').count(), 'no spinner while the plan loads').toBe(0);
+  const skeleton = page.locator('[data-loading-shape]').first();
+  const box = await skeleton.boundingBox();
+  expect(box?.height ?? 0, 'the skeleton fills the workspace column').toBeGreaterThan(300);
+
+  release();
+  await expect(page.getByRole('heading', { name: 'Echo', exact: true })).toBeVisible();
+  await expect(loading).toHaveCount(0);
+});

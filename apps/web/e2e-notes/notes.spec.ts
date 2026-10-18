@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 
 import { addActivity, createAndOpenPlan, onboard, openProject } from './support';
@@ -102,4 +103,34 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await page.keyboard.press('Escape');
   await expect(logic).toBeHidden();
   await expect(page.getByRole('row', { name: /Erect frame/ }).getByText('1 note')).toBeHidden();
+});
+
+/**
+ * **Notes draws its thread shape while its read is held** (`docs/specs/loading-skeletons/` M5).
+ *
+ * The placeholders sit inside the thread's stable focus region (which is the same element once the
+ * notes arrive), speak one sentence, and draw no spinner.
+ */
+test('Notes shows note-shaped placeholders and one sentence while its read is held', async ({
+  page,
+}) => {
+  const stamp = Date.now() + 1;
+  await onboard(page, stamp);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Tower');
+  await addActivity(page, 'Erect frame');
+
+  const held = await holdRead(page, /\/organizations\/[^/]+\/activities\/[^/]+\/notes(\?|$)/);
+  await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
+  const editor = activityEditor(page);
+
+  const loading = editor.getByRole('status').filter({ hasText: 'Loading notes…' });
+  await expect(loading).toHaveCount(1);
+  await expect(editor.locator('[data-loading-shape] li')).toHaveCount(3);
+  expect(await editor.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+
+  held.release();
+  await expect(editor.getByText('No notes yet.')).toBeVisible();
+  await expect(loading).toHaveCount(0);
 });

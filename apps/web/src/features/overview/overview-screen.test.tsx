@@ -170,7 +170,7 @@ describe('OverviewScreen — states', () => {
   it('shows skeletons while loading, and no rows', () => {
     renderScreen({ pending: true });
 
-    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(document.querySelector('[data-loading-shape]')).not.toBeNull();
     expect(screen.queryByRole('link', { name: /Northgate/ })).toBeNull();
   });
 

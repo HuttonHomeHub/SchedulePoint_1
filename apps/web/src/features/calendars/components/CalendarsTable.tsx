@@ -18,6 +18,7 @@ import {
   CALENDAR_SCOPE_FILTER_LABELS,
   DEFAULT_CALENDAR_LIBRARY_FILTERS,
   formatWorkingWeekdays,
+  WEEKDAY_SHORT_LABELS,
   type CalendarLibraryFilters,
   type CalendarScopeFilter,
 } from '../schemas/calendar-schemas';
@@ -237,6 +238,9 @@ export function CalendarsTable({
       // spare. `fit` keeps the intent (take no slack) and drops the number (which was chosen against
       // a measure this epic has since widened).
       width: 'fit',
+      // A six-day week is the widest ordinary value (the 190px #341 measured), built from the same
+      // labels `formatWorkingWeekdays` joins.
+      sample: WEEKDAY_SHORT_LABELS.slice(0, 6).join(', '),
       // The mask alone made a two-shift calendar and a plain Mon–Fri one read identically in this
       // list — the exact loss ADR-0067 exists to stop, left in the one screen a planner uses to
       // tell their calendars apart. `maxWindowsPerDay` had been written for this and had no

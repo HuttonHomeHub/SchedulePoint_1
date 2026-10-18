@@ -349,6 +349,9 @@ export function ResourcesTable({
     {
       header: 'Kind',
       width: 'fit',
+      // The widest label, since a `fit` column is as wide as its widest settled cell. `Code` is
+      // left unsampled: its cell is `font-mono text-xs`, which a sample cannot carry.
+      sample: RESOURCE_KIND_LABELS.EQUIPMENT,
       cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind],
     },
     {

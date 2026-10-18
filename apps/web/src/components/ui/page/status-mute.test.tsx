@@ -37,6 +37,7 @@ function panel(n: number, muted: boolean, strict = false): React.ReactElement {
           refetch: () => undefined,
         }}
         skeleton={<p>skeleton</p>}
+        loadingLabel="Loading counts…"
         errorLabel="Could not read counts."
         errorStatus="Counts could not be read."
         settledStatus={(row: { n: number }) => `${String(row.n)} counted.`}
@@ -100,6 +101,7 @@ describe('a StatusSection under a muted provider (ADR-0178 D8)', () => {
           title="Counts"
           query={{ isPending: true, isError: false, data: undefined, refetch: () => undefined }}
           skeleton={<p>skeleton</p>}
+          loadingLabel="Loading counts…"
           errorLabel="e"
           errorStatus="e."
           settledStatus={(row: { n: number }) => `${String(row.n)} counted.`}

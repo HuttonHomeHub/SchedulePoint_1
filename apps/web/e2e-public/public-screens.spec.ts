@@ -1,3 +1,4 @@
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -394,3 +395,31 @@ test('a signed-out visitor at an unmatched organisation address is sent to sign-
  *   same card, the same panel. The distinction matters because "33 states verified in a browser"
  *   would be false, and this file is the only place the reader can find out.
  */
+
+/**
+ * **The invitation card draws its header while the preview read is held** (`docs/specs/loading-skeletons/`
+ * M6): the card's own shape rather than a centred spinner, one spoken sentence, no `aria-busy` on the
+ * landmark (the status would be inside it), and the same DOM for any token — a pending screen says
+ * nothing about whether an invitation exists.
+ */
+test('the invitation card shows its shape and one sentence while the preview is held', async ({
+  page,
+}) => {
+  const held = await holdRead(page, /\/invitations\/preview$/);
+  const pending = async (token: string): Promise<string> => {
+    await page.goto(`/accept-invite?token=${token}`);
+    await expect(page.getByRole('status').filter({ hasText: 'Loading invitation…' })).toHaveCount(
+      1,
+    );
+    await expect(page.locator('[data-loading-shape] [data-skeleton]').first()).toBeVisible();
+    await expect(page.getByRole('main')).not.toHaveAttribute('aria-busy', 'true');
+    expect(await page.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+    return page.locator('main').evaluate((el) => el.outerHTML);
+  };
+  const first = await pending('e2e-held-one');
+  const second = await pending('e2e-held-two');
+  expect(second, 'loading is the same for any token').toBe(first);
+
+  held.release();
+  await expect(page.getByRole('heading', { name: 'Invitation not found' })).toBeVisible();
+});

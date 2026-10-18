@@ -38,6 +38,7 @@ import {
 import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { useShortBodySwap } from './use-short-body-swap';
+import { CanvasLoading } from './workspace-skeleton';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
@@ -1338,11 +1339,7 @@ export function ToolbarPlanWorkspace({
   };
 
   const canvas = canvasLoading ? (
-    <div
-      role="status"
-      aria-label="Loading the plan…"
-      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse"
-    />
+    <CanvasLoading />
   ) : (
     <TsldPanel
       key={model.planId}

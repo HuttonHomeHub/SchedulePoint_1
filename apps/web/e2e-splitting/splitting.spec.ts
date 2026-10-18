@@ -177,7 +177,10 @@ test.describe('the pending state', () => {
     const pending = page.getByTestId('route-pending');
     // Not before the router's `defaultPendingMs` of 1000, which is the point of leaving it unset.
     await expect(pending).toBeVisible({ timeout: 2_000 });
-    await expect(pending).toHaveAttribute('aria-busy', 'true');
+    // Not busy: the container unmounts when the route arrives, so it is not the element that
+    // receives the content; the one sentence is the status beside it.
+    await expect(pending).not.toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading…' })).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })
       .options({

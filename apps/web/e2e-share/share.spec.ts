@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 import { openShare } from '../e2e-support/toolbar';
 
@@ -525,4 +526,48 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
   ).toEqual([]);
 
   await guestContext.close();
+});
+
+/**
+ * **The guest view draws its frame while the plan read is held, and says nothing about the token**
+ * (`docs/specs/loading-skeletons/` M6, ADR-0051 §5).
+ *
+ * A live link and a dead one are held at the same read and compared: until the API answers, the two
+ * pending pages must be byte-identical, or loading itself would be an existence oracle. Each carries
+ * one landmark and one spoken sentence, no `aria-live` on the `main`, and no spinner.
+ */
+test('the guest loading frame is the same for a live and a dead token, with one sentence', async ({
+  page,
+  browser,
+}) => {
+  const stamp = Date.now() + 1;
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await openShare(page);
+  const dialog = page.getByRole('dialog', { name: 'Share links' });
+  await dialog.getByLabel('Label').fill('Pending check');
+  await dialog.getByRole('button', { name: 'Create link' }).click();
+  const liveUrl = await dialog.getByLabel('Guest link').inputValue();
+  const deadUrl = liveUrl.replace(/#.*$/, '#sp_share_definitely_not_a_token');
+
+  const pendingDom = async (url: string): Promise<string> => {
+    const context = await browser.newContext();
+    const guest = await context.newPage();
+    const held = await holdRead(guest, /\/share\/plan(\?|$)/);
+    await guest.goto(url);
+    await expect(
+      guest.getByRole('status').filter({ hasText: 'Loading the shared plan…' }),
+    ).toHaveCount(1);
+    await expect(guest.getByRole('main')).toHaveCount(1);
+    expect(await guest.locator('main[aria-live], [aria-busy="true"]').count()).toBe(0);
+    expect(await guest.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+    const html = await guest.locator('main').evaluate((el) => el.outerHTML);
+    held.release();
+    await context.close();
+    return html;
+  };
+
+  const live = await pendingDom(liveUrl);
+  const dead = await pendingDom(deadUrl);
+  expect(dead, 'a dead token must not look different while loading').toBe(live);
 });

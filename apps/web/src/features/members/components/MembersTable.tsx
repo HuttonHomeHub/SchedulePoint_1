@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { SectionCard } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
-import { formatTimestamp } from '@/lib/format-date';
+import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
 
 /**
  * Roster with inline role changes and remove-with-confirm.
@@ -54,6 +54,7 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
        * browser's locale next to one formatted in en-GB.
        */
       width: 'fit',
+      sample: formatTimestamp(SAMPLE_INSTANT),
       cell: (member) => (
         <span className="text-muted-foreground">{formatTimestamp(member.joinedAt)}</span>
       ),

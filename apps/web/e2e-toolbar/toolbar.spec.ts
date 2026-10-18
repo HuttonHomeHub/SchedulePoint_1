@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -321,4 +322,31 @@ test("a menu's own trigger closes it, and focus lands where Escape would put it"
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(exportButton).toHaveAttribute('aria-expanded', 'false');
   await expect(exportButton).toBeFocused();
+});
+
+/**
+ * **The Summary popover draws its five facts while the summary read is held**
+ * (`docs/specs/loading-skeletons/` M5). The read is held across a reload, because the toolbar's
+ * always-mounted finish chip would otherwise have warmed the cache before the popover opens.
+ */
+test('the Plan summary shows its facts as placeholders and one sentence while its read is held', async ({
+  page,
+}) => {
+  const stamp = Date.now() + 1;
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+
+  const held = await holdRead(page, /\/organizations\/[^/]+\/plans\/[^/]+\/schedule\/summary/);
+  await page.reload();
+  await page.getByRole('button', { name: 'Plan summary' }).click();
+  const summary = page.getByRole('dialog', { name: 'Plan summary' });
+
+  const loading = summary.getByRole('status').filter({ hasText: 'Loading schedule summary…' });
+  await expect(loading).toHaveCount(1);
+  await expect(summary.getByText('Near-critical')).toBeVisible();
+  expect(await summary.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+
+  held.release();
+  await expect(loading).toHaveCount(0);
 });

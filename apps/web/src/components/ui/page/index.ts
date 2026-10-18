@@ -14,13 +14,16 @@
  * filed. It is **nine** since 2026-09-17 (`ChildCounts`), **ten** since the staff console
  * redesign's M0 moved `StatusSection` here from `features/staff`, **eleven** with its
  * `QueryPanel`, and **fourteen** since that redesign's M2 added `SectionGroup`, `SubSection` and
- * `KeyValueList` (ADR-0178); adding a fifteenth means editing this line.
+ * `KeyValueList` (ADR-0178), and **fifteen** since the loading-skeletons epic's M1 added
+ * `LoadingShape` (the pending surface's accessibility contract, beside `Skeleton`'s material);
+ * adding a sixteenth means editing this line.
  */
 export { PageContainer, type PageContainerProps } from './page-container';
-export { PageHeader, type PageHeaderProps } from './page-header';
+export { PageHeader, PageHeaderSkeleton, type PageHeaderProps } from './page-header';
 export { SectionCard, type SectionCardProps } from './section-card';
 export { EmptyState, type EmptyStateProps } from './empty-state';
-export { Skeleton } from './skeleton';
+export { Skeleton, SkeletonText } from './skeleton';
+export { LoadingShape, type LoadingShapeProps } from './loading-shape';
 export {
   ListRow,
   ListRowSkeleton,
@@ -30,12 +33,25 @@ export {
   type RowSubjectProps,
 } from './list-row';
 export { PageGrid, PageGridItem, type PageGridProps, type PageGridItemProps } from './page-grid';
-export { StatGrid, type StatGridProps, type StatItem, type StatTone } from './stat-grid';
+export {
+  StatGrid,
+  StatGridSkeleton,
+  type StatGridProps,
+  type StatGridSkeletonProps,
+  type StatItem,
+  type StatTone,
+} from './stat-grid';
 export { StatusSection, type StatusSectionProps } from './status-section';
 export { StatusMuteProvider, useStatusMuted } from './status-mute';
 export type { StatusMuteProviderProps } from './status-mute';
 export { QueryPanel, type QueryPanelProps } from './query-panel';
 export { SectionGroup, type SectionGroupProps } from './section-group';
 export { SubSection, type SubSectionProps } from './sub-section';
-export { KeyValueList, type KeyValueItem, type KeyValueListProps } from './key-value-list';
+export {
+  KeyValueList,
+  KeyValueListSkeleton,
+  type KeyValueItem,
+  type KeyValueListProps,
+  type KeyValueListSkeletonProps,
+} from './key-value-list';
 export { ChildCounts, type ChildCount, type ChildCountsProps } from './child-counts';

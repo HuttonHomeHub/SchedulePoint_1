@@ -1,5 +1,6 @@
 import { createContext, useContext, useId } from 'react';
 
+import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
 
 /**
@@ -229,6 +230,12 @@ export function FieldGridFull({
 /* ContextStrip                                                               */
 /* ------------------------------------------------------------------------- */
 
+/** Shared with {@link ContextStripSkeleton}, so the placeholder and the strip cannot drift apart. */
+const STRIP_CLASS = 'flex flex-wrap gap-x-6 gap-y-3';
+const STRIP_FRAME_CLASS = 'bg-muted border-border rounded-md border px-4 py-3';
+const FACT_CLASS = 'flex flex-col gap-0.5';
+const FACT_LABEL_CLASS = 'text-muted-foreground text-micro font-semibold tracking-wider uppercase';
+
 export interface ContextFact {
   /** What the value is. Kept short — this is a column heading, not a sentence. */
   label: string;
@@ -280,23 +287,52 @@ export function ContextStrip({
   return (
     <dl
       aria-label={label}
-      className={cn(
-        'flex flex-wrap gap-x-6 gap-y-3',
-        framed && 'bg-muted border-border rounded-md border px-4 py-3',
-        className,
-      )}
+      className={cn(STRIP_CLASS, framed && STRIP_FRAME_CLASS, className)}
       {...rest}
     >
       {facts.map((fact) => (
-        <div key={fact.label} className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground text-micro font-semibold tracking-wider uppercase">
-            {fact.label}
-          </dt>
+        <div key={fact.label} className={FACT_CLASS}>
+          <dt className={FACT_LABEL_CLASS}>{fact.label}</dt>
           <dd className="text-sm font-semibold tabular-nums" aria-describedby={fact.describedBy}>
             {fact.value}
             {fact.note ? (
               <span className="text-muted-foreground ml-1.5 text-xs font-normal">{fact.note}</span>
             ) : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * `ContextStrip`'s loading shape: the REAL labels (static copy) over value blocks of a `text-sm`
+ * line (1.25rem, `h-5`), in the strip's own classes. A framed strip sits on a `bg-muted` ground, so
+ * its blocks take `on="muted"` or they would be invisible.
+ *
+ * Facts that exist only for some data (a constraint conflict count, a levelled finish) are not
+ * drawn: a skeleton draws what is always there, and a strip that turns out longer wraps further on
+ * settling. Hidden from assistive technology on its own root as well as by `LoadingShape`.
+ */
+export interface ContextStripSkeletonProps {
+  /** The always-present facts, by their real labels — one flag naming across the skeletons. */
+  items: ReadonlyArray<{ label: string }>;
+  framed?: boolean;
+  className?: string;
+}
+
+export function ContextStripSkeleton({
+  items,
+  framed = true,
+  className,
+}: ContextStripSkeletonProps): React.ReactElement {
+  return (
+    <dl aria-hidden="true" className={cn(STRIP_CLASS, framed && STRIP_FRAME_CLASS, className)}>
+      {items.map(({ label }) => (
+        <div key={label} className={FACT_CLASS}>
+          <dt className={FACT_LABEL_CLASS}>{label}</dt>
+          <dd>
+            <Skeleton on={framed ? 'muted' : 'page'} className="h-5 w-16" />
           </dd>
         </div>
       ))}

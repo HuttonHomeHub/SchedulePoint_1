@@ -64,6 +64,14 @@ a bug:
 | **Partial** | Show what's available; indicate what's still loading                |
 | **Success** | Clear confirmation (toast/inline); update the view optimistically   |
 
+### Loading: the dominant outcome decides (ADR-0202)
+
+A first load draws the shape the **ordinary** outcome will have. Where two or more outcomes are ordinary — an
+access check, a route guard — the shape is not known and a spinner is right; so is it for an action or a computation
+the reader asked for. Whatever it draws says **one sentence** to assistive technology, never from inside an
+`aria-busy` region, and says nothing about whether the thing being loaded exists. See
+[`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) "Loading states".
+
 ### Not everything that renders nothing is an empty state
 
 The Empty row above said "Icon + one-line explanation + primary action" until

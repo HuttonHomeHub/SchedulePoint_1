@@ -41,6 +41,14 @@ export function formatTimestamp(value: string | null): string {
 }
 
 /**
+ * One ordinary instant for a loading table's `Column.sample` (TECH_DEBT #341): a skeleton sizes a
+ * date column by rendering a date through the SAME formatter its cells use, so the placeholder is
+ * the width of a real value and not of a hand-typed string. A two-digit day and a short month are
+ * the shape every instant takes; it is never shown (`SkeletonText` hides it).
+ */
+export const SAMPLE_INSTANT = '2026-09-28T09:41:00Z';
+
+/**
  * **The inverse of {@link formatCalendarDate}, and deliberately in the same file as it.**
  *
  * ADR-0134 D5: the date a cell prints and the date a cell accepts are one implementation, not two.

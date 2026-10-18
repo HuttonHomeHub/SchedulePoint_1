@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdRead } from '../e2e-support/hold-read';
 
 import { expect, test } from './fixtures';
 import {
@@ -165,4 +166,37 @@ test('a group move and a deleted neighbour show in History', async ({ account, p
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).analyze())
       .violations,
   ).toEqual([]);
+});
+
+/**
+ * **History draws its entry shape while its read is held** (`docs/specs/loading-skeletons/` M5).
+ *
+ * The read is held by a route the test releases, so the pending picture is observed rather than
+ * raced: three entry-shaped placeholders, exactly one spoken sentence, no spinner — and the
+ * sentence is gone once the entries arrive.
+ */
+test('History shows entry-shaped placeholders and one sentence while its read is held', async ({
+  account,
+  page,
+}) => {
+  const stamp = Date.now();
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+
+  const held = await holdRead(page, /\/organizations\/[^/]+\/activities\/[^/]+\/history/);
+  await openEditor(page, 'Excavate', 'Edit');
+  const editor = activityEditor(page);
+  await editor.getByRole('tab', { name: 'History' }).click();
+
+  const loading = editor.getByRole('status').filter({ hasText: 'Loading history…' });
+  await expect(loading).toHaveCount(1);
+  await expect(editor.locator('[data-loading-shape] li')).toHaveCount(3);
+  expect(await editor.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+
+  held.release();
+  await expect(editor.getByText(/No changes have been recorded|edit/).first()).toBeVisible();
+  await expect(loading).toHaveCount(0);
 });

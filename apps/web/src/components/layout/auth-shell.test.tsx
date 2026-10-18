@@ -59,13 +59,9 @@ describe('AuthShell', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
-  it('reflects `busy` on the landmark so a resolving outcome is not read as settled', () => {
-    render(
-      <AuthShell title="Sign in" busy>
-        body
-      </AuthShell>,
-    );
-    expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+  it('sets no aria-busy anywhere: a status below it would sit inside a busy subtree', () => {
+    const { container } = render(<AuthShell title="Sign in">body</AuthShell>);
+    expect(container.querySelector('[aria-busy]')).toBeNull();
   });
 
   it('routes a child announcement into the polite region', async () => {

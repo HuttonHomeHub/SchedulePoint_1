@@ -541,7 +541,7 @@ const staffConsoleRoute = createRoute({
   component: () => (
     <Suspense
       fallback={
-        <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+        <main className="flex min-h-dvh items-center justify-center p-4">
           <Spinner label="Loading…" />
         </main>
       }
@@ -558,7 +558,7 @@ const shareGuestRoute = createRoute({
     <Suspense
       // Match the guest view's own loading chrome (a centred spinner) while the chunk loads.
       fallback={
-        <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+        <main className="flex min-h-dvh items-center justify-center p-4">
           <Spinner label="Loading…" />
         </main>
       }

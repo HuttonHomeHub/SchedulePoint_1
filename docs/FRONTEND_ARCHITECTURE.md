@@ -268,7 +268,9 @@ flowchart TD
 
 Consistency in perceived performance:
 
-- **Skeletons** for initial content loads (match final layout to avoid shift).
+- **Skeletons** for initial content loads whose settled shape is known (match final layout to avoid
+  shift): `Skeleton` material inside a `LoadingShape` that speaks one sentence, with the shape owned by
+  the archetype or panel that knows it (ADR-0202). A gate or an action keeps a `Spinner`.
 - **Inline spinners / disabled + busy** for in-context actions (buttons show a
   pending state and are disabled while submitting).
 - **Route pending components** for navigation; suspense boundaries for lazy

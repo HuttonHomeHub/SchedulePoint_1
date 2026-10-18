@@ -12,6 +12,8 @@ import {
   type NoteTarget,
 } from '../schemas/note-schemas';
 
+import { NOTE_CARD_CLASS, NOTE_HEADER_CLASS } from './note-layout';
+
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -136,8 +138,8 @@ export function NoteItem({
   };
 
   return (
-    <li className="border-border flex flex-col gap-1.5 rounded-lg border p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+    <li className={NOTE_CARD_CLASS}>
+      <div className={NOTE_HEADER_CLASS}>
         <span className="text-sm font-medium">{note.authorName ?? UNKNOWN_AUTHOR}</span>
         <span className="text-muted-foreground text-xs">
           <time dateTime={note.createdAt}>{formatTimestamp(note.createdAt)}</time>

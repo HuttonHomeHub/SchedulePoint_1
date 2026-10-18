@@ -88,10 +88,25 @@ describe('GuestPlanView', () => {
     vi.mocked(fetchGuestDependencies).mockReset();
   });
 
-  it('shows a loading state while the plan resolves', () => {
+  it('shows its frame and one sentence while the plan resolves', () => {
     vi.mocked(fetchGuestPlan).mockReturnValue(new Promise(() => {})); // never resolves
-    renderView();
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    const { container } = renderView();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the shared plan…');
+    // One landmark, neither live nor busy: the old frame was an `aria-live` main around a spinner's
+    // own status, two live regions for one sentence.
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(container.querySelector('[aria-live], [aria-busy]')).toBeNull();
+    expect(container.querySelector('svg.animate-spin')).toBeNull();
+  });
+
+  it('draws the same pending DOM for every token, so loading says nothing about the token', () => {
+    // ADR-0051 §5: until the plan read answers, a live token and a dead one are indistinguishable.
+    vi.mocked(fetchGuestPlan).mockReturnValue(new Promise(() => {}));
+    const live = renderView('sp_share_LIVE_TOKEN_1').container.innerHTML;
+    const dead = renderView('sp_share_DEAD_TOKEN_2').container.innerHTML;
+    expect(dead).toBe(live);
+    expect(live).not.toContain('LIVE_TOKEN');
   });
 
   it('shows the uniform "no longer available" message on any 404', async () => {

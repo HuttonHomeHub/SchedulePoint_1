@@ -942,6 +942,13 @@ discriminators. Each becomes a spec/plan before build:
   [`docs/specs/resource-strip-export/`](specs/resource-strip-export/)): the loading strip a planner has
   open is carried into the PNG, PDF and printed diagram, and the export parity gate accounts for every
   canvas layer rather than only the scene's keys.
+- **Loading states take the settled shape** — **shipped** (approved 2026-10-17,
+  [ADR-0202](adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md); spec and plan at
+  [`docs/specs/loading-skeletons/`](specs/loading-skeletons/), closing TECH_DEBT #234 and #341): a first
+  load whose shape is known draws that shape — the page frame, the staff panels, the editor tabs,
+  the shared-plan view — under one spoken sentence that is never inside a busy region, and a table's
+  columns start at their settled width. Deliberately not done: seven text-only "Loading…" states
+  and the schedule health panel are recorded as follow-ups, and the post-build re-measurement is owed.
 - **Canvas authoring flow & link routing** — **shipped** (ADR-0064
   `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
   one arm/disarm contract across all four tool modes with a mode statement band above the scene,

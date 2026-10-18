@@ -41,6 +41,22 @@ describe('ScheduleSummaryStrip', () => {
     vi.mocked(apiFetch).mockReset();
   });
 
+  it('draws the five always-present labels as blocks while the read is pending, with one status', () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    const { container } = renderStrip();
+    for (const label of [
+      'Data date',
+      'Project finish',
+      'Activities',
+      'Critical',
+      'Near-critical',
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('status')).toHaveTextContent('Loading schedule summary…');
+    expect(container.querySelectorAll('[data-skeleton]')).toHaveLength(5);
+  });
+
   it('shows the computed figures once loaded', async () => {
     vi.mocked(apiFetch).mockResolvedValue(summary());
     renderStrip();

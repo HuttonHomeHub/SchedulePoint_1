@@ -14,12 +14,6 @@ import { AuthShell } from '@/components/layout/auth-shell';
  * It no longer passes a width. ADR-0077 M2-T4 gave every public screen one (448px), which is what
  * this one already had — the sign-in card was the narrow one.
  */
-export function InviteShell({
-  children,
-  busy = false,
-}: {
-  children: React.ReactNode;
-  busy?: boolean;
-}): React.ReactElement {
-  return <AuthShell busy={busy}>{children}</AuthShell>;
+export function InviteShell({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <AuthShell>{children}</AuthShell>;
 }

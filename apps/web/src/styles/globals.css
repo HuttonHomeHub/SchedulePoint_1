@@ -1848,6 +1848,17 @@
   }
 
   /*
+   * A loading placeholder stays visible (loading-skeletons spec §4.6). Forced colours replaces
+   * backgrounds, so a bare `Skeleton` — a `bg-muted` block — is invisible in Windows High Contrast
+   * and the surface reads as blank. `outline` survives the mode, in the reader's own "secondary
+   * text" colour. It joins this block for the ring's reason: unlayered, so it beats nothing it
+   * needs to and cannot be tidied into a layer that a component utility would then override.
+   */
+  [data-skeleton] {
+    outline: 1px solid GrayText;
+  }
+
+  /*
    * A shaded control reads shaded: `GrayText`, the reader's own colour for "unavailable"
    * (`docs/TECH_DEBT.md` #505, ADR-0191). Shaded here is `aria-disabled`, never the `disabled`
    * attribute (ADR-0082, ADR-0083), and forced colours only greys the latter; the former kept

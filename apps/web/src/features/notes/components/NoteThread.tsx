@@ -4,11 +4,12 @@ import { useNoteThread } from '../api/use-notes';
 import type { NoteTarget } from '../schemas/note-schemas';
 
 import { NoteItem } from './NoteItem';
+import { NoteItemSkeleton } from './NoteItemSkeleton';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { Spinner } from '@/components/ui/spinner';
+import { LoadingShape } from '@/components/ui/page';
 import { cn } from '@/lib/utils';
 
 /**
@@ -82,9 +83,16 @@ export function NoteThread({
       )}
     >
       {thread.isPending ? (
-        <div className="py-6">
-          <Spinner label="Loading notes…" />
-        </div>
+        // Inside the stable region and not in place of it: the region is the focus sink, and its
+        // node identity must not depend on what the thread holds (see above). It is not marked
+        // `aria-busy` — the status is, by contract, never inside a busy subtree.
+        <LoadingShape label="Loading notes…">
+          <ul className="flex flex-col gap-2">
+            {[0, 1, 2].map((n) => (
+              <NoteItemSkeleton key={n} />
+            ))}
+          </ul>
+        </LoadingShape>
       ) : thread.isError ? (
         <div
           role="alert"

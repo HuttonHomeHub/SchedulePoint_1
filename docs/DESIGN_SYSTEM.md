@@ -799,14 +799,17 @@ Before them the frame was hand-written **fourteen** times and the page heading
 **sixteen** — fourteen and sixteen chances for one screen to be padded or ranked
 differently from its neighbour, and no way to change the measure once.
 
-| Archetype                     | Owns                                                                                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>` |
-| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                               |
-| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to   |
-| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                               |
-| `Skeleton`                    | the loading **material** only; each archetype owns its own loading **shape**                                                    |
-| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)            |
+| Archetype                     | Owns                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>`                                                                                                       |
+| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                                                                                                                                     |
+| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to                                                                                                         |
+| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                                                                                                                                     |
+| `Skeleton`                    | the loading **material** only (`on: 'page' \| 'muted'` names the ground it is drawn on (renamed from `surface: default \| muted`, via `on: canvas`; `canvas` collides with the TSLD's vocabulary)); each archetype owns its **shape** |
+| `SkeletonText`                | a placeholder sized by a caller-supplied `sample` string (`visibility: hidden` text), so a `fit` column has something to fit                                                                                                          |
+| `LoadingShape`                | a pending surface's accessibility contract: one status sentence outside any `aria-busy` subtree, the shape `aria-hidden`                                                                                                              |
+| `DataTableSkeleton`           | `DataTable`'s pending render (exported from `data-table.tsx`): the real headings, `Column.sample` cells, under one `LoadingShape`                                                                                                     |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly; its subject wraps and never clips (ADR-0184)                                                                                                                  |
 
 **A list row's subject wraps; it never clips** (ADR-0184, extending ADR-0146 D3/D4). `RowSubject`'s name, Draft
 badge and `project · client` are never `truncate`d, ellipsised, clamped or reordered: one line when they fit,
@@ -843,6 +846,41 @@ not a degenerate case: a Viewer who cannot act is told who can, and a required
 `action` prop would force that into a lie. And a settled one-liner like "Nothing
 needs you right now" is a **fact**, not an absence to be resolved — giving it an
 icon and a frame dresses a good outcome as a problem.
+
+## Loading states (TECH_DEBT #234 + #341, `docs/specs/loading-skeletons/`)
+
+A pending surface does one of two things, and which one is decided by what the reader is waiting for.
+
+- **A gate or an action gets a `Spinner`.** A gate is an answer that decides which layout renders at all (an
+  access check, a route guard); an action or computation is a result the reader asked for ("Calculating float
+  paths…"). The `label` is required, names what is happening, and is the single announcement.
+- **A first load whose settled shape is known gets a skeleton.** Built from `Skeleton` (material) inside a
+  `LoadingShape` (contract), with the shape owned by the archetype or panel that knows it, so content arriving
+  moves nothing already on screen above or beside it.
+
+The contract, in four rules:
+
+1. **One sentence, or none.** `LoadingShape` speaks its `label` once from a `role="status"` that mounts empty and is
+   filled after mount (a live region inserted already holding its text is commonly not announced).
+   `announce="none"` renders the sentence as plain screen-reader text where an enclosing region already speaks
+   (`QueryPanel`'s `StatusSection`, `RoutePending`, a list under a section whose page speaks).
+2. **A status is never inside an `aria-busy` subtree.** ARIA 1.2 lets assistive technology defer changes inside a busy
+   element, and a loading sentence is unmounted before the element stops being busy. `aria-busy` goes on the element
+   that persists into the settled state and receives the content, not on the placeholder.
+   `loading-states.structural.test.ts` G4 refuses a `Spinner`, a speaking `LoadingShape`, `role="status"` or
+   `aria-live` below an `aria-busy` element. This was reasoned from the specification and is not observed with a
+   screen reader.
+3. **The material is `aria-hidden` and holds nothing focusable**, and uses `Skeleton` only (G2): the reduced-motion
+   rule in `globals.css` stills its pulse, and a forced-colours rule outlines `[data-skeleton]` since that mode
+   replaces backgrounds. `SkeletonText` hides its sample with `visibility`, never a transparent colour, which forced
+   colours would print.
+4. **A table sizes its columns by content.** `Column.sample` is one plausible value, formatted with the formatter the
+   settled cell uses; `DataTableSkeleton` renders it invisibly at the column's declared width, so a `fit` column
+   starts at its settled width (#341). `data-table.sample.structural.test.ts` walks the tree and requires every `fit`
+   column to carry a sample or its file to be declared unsampled with a reason.
+
+The gates: G1 declares every `<Spinner>` as a gate, an action or still `pending`; G2 refuses a hand-rolled pulse; G3
+refuses an `aria-hidden` on a `<Spinner>` (the prop is silently dropped); G4 refuses a status inside a busy element.
 
 ## Component standards
 
@@ -960,7 +998,7 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   failing: a correct pattern applied to one control and not its neighbour.
 
 - **Tables (DataTable)** — one table component owning the four **states** every resource list
-  needs: loading (a labelled spinner), error with retry, empty (the caller supplies the icon, copy
+  needs: loading (a skeleton showing the real column headings, under one status sentence), error with retry, empty (the caller supplies the icon, copy
   and optional action), and populated. Semantic `<table>` markup with scoped headers, an optional
   per-row detail `<tr>` (`renderDetail`), and a focusable scroll region that can be
   `aria-describedby`-linked to prose qualifying what the rows mean. Responsive: horizontal scroll in
@@ -1006,7 +1044,9 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
   > themselves today. That is not a to-do list: a shared primitive earns each of those when a second
   > consumer needs it, and writing them down as though they exist is how a reader plans around a
-  > capability that isn't there. Loading is a **spinner**, not skeleton rows.
+  > capability that isn't there. Loading is a skeleton (`DataTableSkeleton`): the real headings, and for a
+  > column that declares `sample` a placeholder as wide as that string, so a `fit` column starts at its
+  > settled width (see "Loading states" above).
   >
   > **A sticky header is no longer on that list — one consumer earned it** (`scroll="contained"`,
   > above), and the note is left rather than deleted because the other four claims are still true
@@ -1204,14 +1244,17 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   is suppressed). Debounce, loading/empty/error states and the query's home in URL
   search params belong to the consuming screen — see
   [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
-- **Loading indicators** — Spinner (in-context) and progress (determinate work);
-  buttons own their pending state. Prefer skeletons for content.
+- **Loading indicators** — `Spinner` for a gate or an action (its `label` is required and it
+  carries no default copy; `labelOnScreen` puts the sentence beside the icon) and progress
+  (determinate work); buttons own their pending state. A first load whose settled shape is known
+  gets a skeleton, not a spinner — see "Loading states".
 - **Empty states** — every list/table/dashboard has a designed empty state:
   icon, one-line explanation, and a primary action to move forward.
-- **Skeletons** — **_(no shared primitive)_**. The standard stands — mirror the
-  final layout to prevent layout shift, first loads only, not quick refetches —
-  but each screen currently hand-writes its own. Extract a primitive the third
-  time it is written, not the first.
+- **Skeletons** — `Skeleton` (the material), `SkeletonText` (sized by a sample) and `LoadingShape`
+  (the accessibility contract), with each archetype owning its shape (`ListRowSkeleton`,
+  `DataTableSkeleton`). The standard: mirror the final layout to prevent layout shift, first
+  loads only, not quick refetches. A hand-rolled `animate-pulse` is refused by
+  `loading-states.structural.test.ts` (G2).
 - **Charts** — **_(not built; no chart library is a dependency)_**. The two
   graphical surfaces in the app — the TSLD canvas and the resource demand strip
   — are hand-drawn Canvas 2D, which is why no charting dependency exists. If a

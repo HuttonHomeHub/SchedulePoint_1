@@ -1,6 +1,6 @@
 # Feature Spec: Loading states take the settled shape (TECH_DEBT #234 + #341)
 
-- **Status:** Approved — by the product owner, 2026-10-17, with the recommended defaults (CQ-1: the seven text-only states become a new register row; CQ-2: yes, the table loads at once) and the conservative live-region contract (no real-screen-reader observation owed)
+- **Status:** Accepted — shipped ([ADR-0202](../../adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)). Approved by the product owner, 2026-10-17, with the recommended defaults (CQ-1: the seven text-only states become a new register row; CQ-2: yes, the table loads at once) and the conservative live-region contract (no real-screen-reader observation owed)
 - **Author(s):** feature-analyst (Claude), for the product owner
 - **Date:** 2026-10-17
 - **Tracking:** `docs/TECH_DEBT.md` #234 (first-load spinners where the shape is known), #341 (a table
@@ -13,7 +13,7 @@
   [ADR-0178](../../adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md),
   [ADR-0086](../../adr/0086-staff-principal.md), [ADR-0088](../../adr/0088-flag-classification.md) D1,
   [ADR-0081](../../adr/0081-milestone-entry-point-and-journey.md), [ADR-0142](../../adr/0142-a-remedy-is-measured-before-it-is-built.md).
-  **New: ADR-0198 (number provisional) — outline in §4.9.**
+  **New: [ADR-0202](../../adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md) (this spec called it ADR-0198 provisionally; 0198–0201 were taken on other branches) — outline in §4.9.**
 
 ## 0. How to read this
 
@@ -231,6 +231,21 @@ synchronously; `isPending` is false).
   column headings — sits at the same position pending and settled: **|Δ| ≤ 1 px** at 1646 × 1000 and
   1024 × 600. Growth **below** the last placeholder (more notes than three, more rows than three) is
   expected and not measured as a defect — a skeleton cannot know a count (`data-table.tsx:199-207`).
+  > **Amended 2026-10-18 (product owner).** The wording above stands. Three things are reported and
+  > not graded: (a) a column heading's _sideways_ position on an `auto`, `bounded` or undeclared column
+  > (its width is data the skeleton cannot have, exactly as SC-3 treats it; its vertical position is still
+  > graded), and a heading on a `fit` column to the right of such columns only where the summed width change
+  > of the columns on its left accounts for its whole move (the judge shows the sum); (b) an anchor a skeleton
+  > cannot know by construction — the subject's `h1` on a detail page and the zero-width Actions heading — is
+  > recorded as _absent by construction_ in the verdict, never as a silent pass, and a page whose only
+  > anchors are such is `NOTHING_GRADED`; (c) a heading below a table counts as growth below the last
+  > placeholder only where the judge shows the whole shift is the change in the table body and the placeholder
+  > rows are row-sized. Where it cannot show that, the anchor fails.
+  > **Amended again 2026-10-18 (product owner), after the fourth reading.** The Members table's residual shift is
+  > **accepted as a known gap**. Its placeholder rows are 4 to 8 px per row shorter than a settled row, because
+  > the roster's role `Select` is form-height (`--control-h`, 36) and a placeholder reserves the small control
+  > (`--control-h-sm`, 32). Closing it needs a new `Column` prop or a smaller `Select`, neither of which is
+  > made. It stays reported as a FAIL in the record, not waved through; plans-table now passes.
 - **SC-3 (#341 columns).** For the eight highest-traffic `DataTable`s (Clients, Projects, Plans,
   Calendars, Resources, Members, Audit log, Recently deleted): every **`fit`** column's pending width is
   within **8 px** of settled on the seed catalogue's ordinary plans; **`auto`/`bounded`** columns are
@@ -238,9 +253,20 @@ synchronously; `isPending` is false).
   Baseline from #341: `fit` 16 → 190 px, `auto` 628 → 738 px. **Withdrawal clause:** if M0 shows the
   sample-text remedy cannot reach 8 px on a `fit` column, the target is re-argued in writing in
   `m0-measurement.md`, not quietly relaxed.
+  > **Amended 2026-10-18 (product owner), withdrawal clause applied.** The sample-text remedy was measured
+  > (`m7-after-measurement.md`) and did not reach 8 px on two columns: Calendars "Working days", 190 px
+  > pending against 102 settled (88 px over), and Plans "Status", 71 px against 57 (14 px over). Both
+  > samples are the widest possible value, deliberately; a median-width sample would under-reserve for the
+  > wide case instead, so no single sample can reach 8 px on ordinary data. The owner kept the widest-value
+  > sample. These two columns are **accepted, documented exceptions** and are still reported as FAIL by the
+  > judge; the 8 px bound stands for every other `fit` column.
 - **SC-4 (one sentence).** While each group-A surface is pending: exactly one live region carries a
   sentence naming the subject ("Loading notes…"), or zero where an enclosing `StatusSection` /
   `RoutePending` speaks; axe reports no `aria-hidden-focus` and no new violations.
+  > **Clarified 2026-10-18 (product owner).** "Exactly one" holds for the whole page, not only while the
+  > heading and the table are pending together: on the client and project screens the table's sentence speaks
+  > while its list is outstanding, and the heading's sentence once the table has settled first. One sentence
+  > while anything on the page is pending; none when all has settled.
 - **SC-5 (reduced motion).** Under `reducedMotion: 'reduce'`, no skeleton or spinner animation is
   running 100 ms after mount (`element.getAnimations()` all `finished`), on one journey per suite
   touched.
@@ -411,7 +437,7 @@ None (no input). Type-level: `Spinner`'s `label` becomes **required**; `Column.s
   `measure-column-fit.mjs:356-368` and the ADR-0146 M6 journey assertion (ADR-0146 lines 161-165).
 - `shoot.mjs:649-652` photographs `clients-loading` by `expectText: /Loading clients/` — the label
   stays, so it keeps working; its photograph changes and is re-taken.
-- `pnpm check:counts`: new source files move the CLAUDE.md banner's web-file count, and ADR-0198
+- `pnpm check:counts`: new source files move the CLAUDE.md banner's web-file count, and ADR-0202
   moves the ADR count — each PR updates the banner (§19.8 `pnpm prepush` will refuse otherwise).
 
 ## 4. Solution design
@@ -664,7 +690,7 @@ component that knows them, content-shaped material — applied in thin site grou
 - **Delay threshold before showing any skeleton** — reasonable, but a separate decision with its own
   cost (a blank frame for N ms); not needed to meet SC-1–SC-6.
 
-**ADR-0198 (draft outline, number provisional) — "A loading state is the settled shape, and says one
+**ADR-0202 (filed as the outline below; provisionally ADR-0198) — "A loading state is the settled shape, and says one
 sentence."**
 
 - _Context:_ #234/#341; five a11y mechanisms; the gate-vs-shape question; defects 1–6.
@@ -687,4 +713,4 @@ sentence."**
   1211), `docs/COMPONENT_LIBRARY.md` (new "Loading" section), `docs/UX_STANDARDS.md` (Loading row:
   the dominant-outcome rule), `docs/FRONTEND_ARCHITECTURE.md:271-278`, `docs/TECH_DEBT.md` #234 and
   #341 (closed, with the re-verified enumeration), `apps/web/src/components/ui/page/index.ts` (the
-  archetype count line), CLAUDE.md §16 (one line for ADR-0198) and the stage banner counts.
+  archetype count line), CLAUDE.md §16 (one line for ADR-0202) and the stage banner counts.

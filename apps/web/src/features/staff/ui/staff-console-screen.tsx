@@ -70,7 +70,7 @@ export function StaffConsoleScreen(): React.ReactElement {
 
   if (identity.isPending) {
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4" aria-busy="true">
+      <main className="flex min-h-dvh items-center justify-center p-4">
         <Spinner label="Loading…" />
       </main>
     );

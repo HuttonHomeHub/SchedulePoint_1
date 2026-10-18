@@ -6,8 +6,7 @@ import { isCostReadForbidden, useEarnedValue } from '../api/use-earned-value';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { StatGrid } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { LoadingShape, Skeleton, StatGrid, StatGridSkeleton } from '@/components/ui/page';
 import { formatMoney } from '@/lib/format-money';
 
 /**
@@ -66,6 +65,174 @@ function IndexValue({
   );
 }
 
+const numericHead = 'py-2 pr-4 text-right font-medium';
+const numericCell = 'py-2 pr-4 text-right tabular-nums';
+
+/** What a cell needs from the panel's data: the plan's currency formatter and the name lookup. */
+interface CellContext {
+  money: (minor: number | null) => string;
+  rowName: (row: EarnedValueActivity) => string;
+}
+
+// One declarative column spec drives both the header row and each body row, so the 11 columns stay in
+// step (a header and its cells can't drift apart) instead of two hand-maintained parallel lists. The
+// acronym headers carry an `<abbr>` so the EVM terms are defined in place (WCAG — labelled clearly).
+const COLUMNS: {
+  key: string;
+  header: React.ReactNode;
+  headClassName: string;
+  cellClassName: string;
+  cell: (row: EarnedValueActivity, ctx: CellContext) => React.ReactNode;
+}[] = [
+  {
+    key: 'name',
+    header: 'Activity',
+    headClassName: 'py-2 pr-4 font-medium',
+    cellClassName: 'py-2 pr-4',
+    cell: (row, ctx) => ctx.rowName(row),
+  },
+  {
+    key: 'percent',
+    header: '% complete',
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row) => formatPercent(row.performancePercent),
+  },
+  {
+    key: 'bac',
+    header: <Abbr short="BAC" full="Budget at Completion" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.bac),
+  },
+  {
+    key: 'pv',
+    header: <Abbr short="PV" full="Planned Value" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.pv),
+  },
+  {
+    key: 'ev',
+    header: <Abbr short="EV" full="Earned Value" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.ev),
+  },
+  {
+    key: 'ac',
+    header: <Abbr short="AC" full="Actual Cost" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.ac),
+  },
+  {
+    key: 'sv',
+    header: <Abbr short="SV" full="Schedule Variance" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.sv),
+  },
+  {
+    key: 'cv',
+    header: <Abbr short="CV" full="Cost Variance" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.cv),
+  },
+  {
+    key: 'spi',
+    header: <Abbr short="SPI" full="Schedule Performance Index" />,
+    headClassName: numericHead,
+    cellClassName: 'py-2 pr-4 text-right',
+    cell: (row) => (
+      <span className="inline-flex justify-end">
+        <IndexValue ratio={row.spi} behindLabel="Behind" />
+      </span>
+    ),
+  },
+  {
+    key: 'cpi',
+    header: <Abbr short="CPI" full="Cost Performance Index" />,
+    headClassName: numericHead,
+    cellClassName: 'py-2 pr-4 text-right',
+    cell: (row) => (
+      <span className="inline-flex justify-end">
+        <IndexValue ratio={row.cpi} behindLabel="Over" />
+      </span>
+    ),
+  },
+  {
+    key: 'eac',
+    header: <Abbr short="EAC" full="Estimate at Completion" />,
+    headClassName: numericHead,
+    cellClassName: numericCell,
+    cell: (row, ctx) => ctx.money(row.eac),
+  },
+];
+
+/**
+ * The six headline figures' labels, shared by the grid and its skeleton so the placeholder draws the
+ * real words. The first three carry a quieter line beneath the figure.
+ */
+const STAT_LABELS = {
+  spi: 'Schedule Performance Index',
+  cpi: 'Cost Performance Index',
+  eac: 'Estimate at Completion',
+  bac: 'Budget at Completion',
+  ev: 'Earned Value',
+  ac: 'Actual Cost',
+} as const;
+
+/**
+ * The panel's loading shape: the headline grid over the table's real headings and three rows. Which
+ * rows (and whether there are any) is data the skeleton cannot know, so it draws the three it would
+ * need to read as a table; a plan with more rows grows below.
+ */
+function EarnedValueSkeleton(): React.ReactElement {
+  return (
+    <LoadingShape label="Loading earned value…">
+      <div className="flex flex-col gap-4">
+        <StatGridSkeleton
+          columns={3}
+          items={[
+            { label: STAT_LABELS.spi, sub: true },
+            { label: STAT_LABELS.cpi, sub: true },
+            { label: STAT_LABELS.eac, sub: true },
+            { label: STAT_LABELS.bac },
+            { label: STAT_LABELS.ev },
+            { label: STAT_LABELS.ac },
+          ]}
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-border text-muted-foreground border-b text-left">
+                {COLUMNS.map((column) => (
+                  <th key={column.key} scope="col" className={column.headClassName}>
+                    {column.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[0, 1, 2].map((row) => (
+                <tr key={row} className="border-border border-b">
+                  {COLUMNS.map((column) => (
+                    <td key={column.key} className={column.cellClassName}>
+                      <Skeleton className="ml-auto h-5 w-16" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </LoadingShape>
+  );
+}
+
 /**
  * The plan **Earned-Value** analysis (EV4b, ADR-0042): headline KPI tiles for the plan total (SPI,
  * CPI, EAC, and the BAC/EV/AC/VAC money figures) and a per-activity + WBS table (BAC, PV, EV, AC, SV,
@@ -98,7 +265,7 @@ export function EarnedValuePanel({
     </section>
   );
 
-  if (query.isPending) return shell(<Spinner label="Loading earned value…" />);
+  if (query.isPending) return shell(<EarnedValueSkeleton />);
 
   if (query.isError) {
     if (isCostReadForbidden(query.error)) {
@@ -158,104 +325,7 @@ export function EarnedValuePanel({
     return activity.code ? `${activity.code} · ${activity.name}` : activity.name;
   };
 
-  // One declarative column spec drives both the header row and each body row, so the 11 columns stay in
-  // step (a header and its cells can't drift apart) instead of two hand-maintained parallel lists. The
-  // acronym headers carry an `<abbr>` so the EVM terms are defined in place (WCAG — labelled clearly).
-  const numericHead = 'py-2 pr-4 text-right font-medium';
-  const numericCell = 'py-2 pr-4 text-right tabular-nums';
-  const columns: {
-    key: string;
-    header: React.ReactNode;
-    headClassName: string;
-    cellClassName: string;
-    cell: (row: EarnedValueActivity) => React.ReactNode;
-  }[] = [
-    {
-      key: 'name',
-      header: 'Activity',
-      headClassName: 'py-2 pr-4 font-medium',
-      cellClassName: 'py-2 pr-4',
-      cell: (row) => rowName(row),
-    },
-    {
-      key: 'percent',
-      header: '% complete',
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => formatPercent(row.performancePercent),
-    },
-    {
-      key: 'bac',
-      header: <Abbr short="BAC" full="Budget at Completion" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.bac),
-    },
-    {
-      key: 'pv',
-      header: <Abbr short="PV" full="Planned Value" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.pv),
-    },
-    {
-      key: 'ev',
-      header: <Abbr short="EV" full="Earned Value" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.ev),
-    },
-    {
-      key: 'ac',
-      header: <Abbr short="AC" full="Actual Cost" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.ac),
-    },
-    {
-      key: 'sv',
-      header: <Abbr short="SV" full="Schedule Variance" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.sv),
-    },
-    {
-      key: 'cv',
-      header: <Abbr short="CV" full="Cost Variance" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.cv),
-    },
-    {
-      key: 'spi',
-      header: <Abbr short="SPI" full="Schedule Performance Index" />,
-      headClassName: numericHead,
-      cellClassName: 'py-2 pr-4 text-right',
-      cell: (row) => (
-        <span className="inline-flex justify-end">
-          <IndexValue ratio={row.spi} behindLabel="Behind" />
-        </span>
-      ),
-    },
-    {
-      key: 'cpi',
-      header: <Abbr short="CPI" full="Cost Performance Index" />,
-      headClassName: numericHead,
-      cellClassName: 'py-2 pr-4 text-right',
-      cell: (row) => (
-        <span className="inline-flex justify-end">
-          <IndexValue ratio={row.cpi} behindLabel="Over" />
-        </span>
-      ),
-    },
-    {
-      key: 'eac',
-      header: <Abbr short="EAC" full="Estimate at Completion" />,
-      headClassName: numericHead,
-      cellClassName: numericCell,
-      cell: (row) => money(row.eac),
-    },
-  ];
+  const ctx: CellContext = { money, rowName };
 
   return shell(
     <>
@@ -281,7 +351,7 @@ export function EarnedValuePanel({
         columns={3}
         items={[
           {
-            label: 'Schedule Performance Index',
+            label: STAT_LABELS.spi,
             value: <IndexValue ratio={total.spi} behindLabel="Behind" />,
             sub: (
               <>
@@ -290,7 +360,7 @@ export function EarnedValuePanel({
             ),
           },
           {
-            label: 'Cost Performance Index',
+            label: STAT_LABELS.cpi,
             value: <IndexValue ratio={total.cpi} behindLabel="Over" />,
             sub: (
               <>
@@ -299,7 +369,7 @@ export function EarnedValuePanel({
             ),
           },
           {
-            label: 'Estimate at Completion',
+            label: STAT_LABELS.eac,
             value: money(total.eac),
             sub: (
               <>
@@ -307,9 +377,9 @@ export function EarnedValuePanel({
               </>
             ),
           },
-          { label: 'Budget at Completion', value: money(total.bac) },
-          { label: 'Earned Value', value: money(total.ev) },
-          { label: 'Actual Cost', value: money(total.ac) },
+          { label: STAT_LABELS.bac, value: money(total.bac) },
+          { label: STAT_LABELS.ev, value: money(total.ev) },
+          { label: STAT_LABELS.ac, value: money(total.ac) },
         ]}
       />
 
@@ -338,7 +408,7 @@ export function EarnedValuePanel({
             <caption className="sr-only">Earned value by activity</caption>
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left">
-                {columns.map((column) => (
+                {COLUMNS.map((column) => (
                   <th key={column.key} scope="col" className={column.headClassName}>
                     {column.header}
                   </th>
@@ -348,9 +418,9 @@ export function EarnedValuePanel({
             <tbody>
               {ev.activities.map((row) => (
                 <tr key={row.activityId} className="border-border border-b">
-                  {columns.map((column) => (
+                  {COLUMNS.map((column) => (
                     <td key={column.key} className={column.cellClassName}>
-                      {column.cell(row)}
+                      {column.cell(row, ctx)}
                     </td>
                   ))}
                 </tr>

@@ -129,7 +129,8 @@ function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
 describe('RevisionComparePanel', () => {
   it('is loading before the revisions arrive', () => {
     renderPanel({ baselines: null, baselinesPending: true });
-    expect(screen.getByText(/loading revisions/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/loading revisions/i).length).toBeGreaterThan(0);
   });
 
   /**
@@ -449,7 +450,8 @@ describe('RevisionComparePanel', () => {
 
   it('shows a comparing state once a pair is chosen', () => {
     renderPanel({ from: 'b1', isPending: true });
-    expect(screen.getByText(/comparing…/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/comparing…/i).length).toBeGreaterThan(0);
   });
 
   /**
@@ -724,7 +726,16 @@ describe('the cross-plan surface — the M4 ux review\u2019s findings, pinned', 
      * did.
      */
     renderPanel({ comparePlanId: 'other-plan', from: null, isPending: true, compare: null });
-    expect(screen.getByText(/comparing/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/comparing/i).length).toBeGreaterThan(0);
+  });
+
+  it('announces "Comparing…" as the one status, not a generic "Loading…"', () => {
+    renderPanel({ comparePlanId: 'other-plan', from: null, isPending: true, compare: null });
+    const statuses = screen
+      .getAllByRole('status')
+      .filter((s) => /comparing|loading/i.test(s.textContent ?? ''));
+    expect(statuses.map((s) => s.textContent)).toEqual(['Comparing…']);
   });
 
   it('still shows it for a SAME-PLAN request, which is what always worked', () => {
@@ -732,7 +743,8 @@ describe('the cross-plan surface — the M4 ux review\u2019s findings, pinned', 
     // `from` limb entirely would satisfy the case above and start showing a spinner on a panel
     // where nobody has chosen anything.
     renderPanel({ comparePlanId: null, from: 'b1', isPending: true, compare: null });
-    expect(screen.getByText(/comparing/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/comparing/i).length).toBeGreaterThan(0);
   });
 
   it('shows NO spinner when nothing is chosen, however pending the query claims to be', () => {

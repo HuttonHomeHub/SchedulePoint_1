@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 
 import { Button } from '@/components/ui/button';
-import { ContextStrip, type ContextFact } from '@/components/ui/form-layout';
-import { Spinner } from '@/components/ui/spinner';
+import { ContextStrip, ContextStripSkeleton, type ContextFact } from '@/components/ui/form-layout';
+import { LoadingShape } from '@/components/ui/page';
 import {
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
@@ -13,6 +13,18 @@ import {
 import { activitiesQueryOptions } from '@/features/activities';
 import { countLevelledWithoutGhost } from '@/features/tsld/render/lenses';
 import { formatCalendarDate } from '@/lib/format-date';
+
+/**
+ * The five facts a calculated plan always shows, in the order it shows them. Shared by the strip and
+ * its skeleton so the placeholder draws the real labels.
+ */
+const ALWAYS_FACTS = {
+  dataDate: 'Data date',
+  projectFinish: 'Project finish',
+  activities: 'Activities',
+  critical: 'Critical',
+  nearCritical: 'Near-critical',
+} as const;
 
 /**
  * The plan's computed schedule at a glance: data date, project finish, and the
@@ -42,7 +54,16 @@ export function ScheduleSummaryStrip({
     </section>
   );
 
-  if (summary.isPending) return shell(<Spinner label="Loading schedule summary…" />);
+  if (summary.isPending) {
+    return shell(
+      <LoadingShape label="Loading schedule summary…">
+        <ContextStripSkeleton
+          framed={false}
+          items={Object.values(ALWAYS_FACTS).map((label) => ({ label }))}
+        />
+      </LoadingShape>,
+    );
+  }
 
   if (summary.isError) {
     return shell(
@@ -102,11 +123,11 @@ export function ScheduleSummaryStrip({
   // Each count that has a footnote below links to it with `describedBy`; the levelled-activities
   // qualifier rides inside the same `<dd>` (`note`) so a screen reader hears it with the figure.
   const facts: ContextFact[] = [
-    { label: 'Data date', value: formatCalendarDate(dataDate) },
-    { label: 'Project finish', value: formatCalendarDate(projectFinish) },
-    { label: 'Activities', value: activityCount },
-    { label: 'Critical', value: criticalCount },
-    { label: 'Near-critical', value: nearCriticalCount },
+    { label: ALWAYS_FACTS.dataDate, value: formatCalendarDate(dataDate) },
+    { label: ALWAYS_FACTS.projectFinish, value: formatCalendarDate(projectFinish) },
+    { label: ALWAYS_FACTS.activities, value: activityCount },
+    { label: ALWAYS_FACTS.critical, value: criticalCount },
+    { label: ALWAYS_FACTS.nearCritical, value: nearCriticalCount },
   ];
   if (constraintViolationCount > 0) {
     facts.push({

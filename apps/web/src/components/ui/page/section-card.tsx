@@ -99,12 +99,6 @@ export interface SectionCardProps {
    * any other, and `Card` already spreads its rest props onto the element.
    */
   ref?: React.Ref<HTMLElement> | undefined;
-  /**
-   * The content is being refreshed — `aria-busy` on the section. Added for `StatusSection`, whose
-   * panels keep earlier figures on screen while a refetch is in flight; nothing else passes it, so
-   * every other consumer's DOM is unchanged.
-   */
-  busy?: boolean;
 }
 
 /**
@@ -183,7 +177,6 @@ export function SectionCard({
   fill,
   id,
   ref,
-  busy,
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
   const level = useHeadingLevel();
@@ -196,7 +189,6 @@ export function SectionCard({
       as="section"
       ref={ref}
       aria-labelledby={titleId}
-      {...(busy === true ? { 'aria-busy': true } : {})}
       /**
        * **The focus treatment is conditional on `id`, and it is a RING rather than nothing.**
        *

@@ -135,7 +135,16 @@ describe('FloatPathsPanel', () => {
 
   it('shows a busy state while the analysis runs — this request is a CPM computation', () => {
     renderPanel({ isPending: true, model: null });
-    expect(screen.getByText(/calculating float paths/i)).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText(/calculating float paths/i).length).toBeGreaterThan(0);
+  });
+
+  it('announces the sentence it shows as its one busy status — not a generic "Loading…"', () => {
+    renderPanel({ isPending: true, model: null });
+    const busy = screen
+      .getAllByRole('status')
+      .filter((s) => /calculating|loading/i.test(s.textContent ?? ''));
+    expect(busy.map((s) => s.textContent)).toEqual(['Calculating float paths…']);
   });
 
   it('explains a never-calculated plan rather than reporting an error', () => {

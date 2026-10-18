@@ -9,11 +9,18 @@ import { RoutePending } from './route-pending';
 import { router } from './router';
 
 describe('RoutePending', () => {
-  it('is a busy region announced as loading, with no landmark of its own', () => {
+  it('is announced as loading, with no landmark of its own', () => {
     const { container } = render(<RoutePending />);
-    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
     expect(container.querySelector('main')).toBeNull();
+  });
+
+  it('sets no aria-busy, so no status can sit inside a busy subtree', () => {
+    // ARIA 1.2 lets assistive technology hold back changes inside a busy element until it is no
+    // longer busy, and this status unmounts when the route arrives. The container is not the element
+    // that persists into the settled page, so it is not marked busy either.
+    const { container } = render(<RoutePending />);
+    expect(container.querySelector('[aria-busy]')).toBeNull();
   });
 });
 

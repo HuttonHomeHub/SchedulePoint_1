@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
+import { holdRead } from '../e2e-support/hold-read';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -307,4 +308,38 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
+});
+
+/**
+ * **Earned value draws its headline grid and table headings while its read is held**
+ * (`docs/specs/loading-skeletons/` M5): the real labels are on screen at once, one sentence is
+ * spoken, no spinner is drawn, and the sentence is gone once the figures arrive.
+ */
+test('Earned value shows its shape and one sentence while its read is held', async ({ page }) => {
+  const stamp = Date.now() + 1;
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await addActivity(page, 'Dig');
+
+  const held = await holdRead(page, /\/organizations\/[^/]+\/plans\/[^/]+\/schedule\/earned-value/);
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: /Earned value/ }).click();
+  const earnedValue = page.getByRole('dialog', { name: /Earned value/ });
+
+  await expect(earnedValue.getByText('Schedule Performance Index')).toBeVisible();
+  await expect(earnedValue.getByText('% complete')).toBeVisible();
+  await expect(
+    earnedValue.getByRole('status').filter({ hasText: 'Loading earned value…' }),
+  ).toHaveCount(1);
+  await expect(
+    earnedValue.getByRole('columnheader'),
+    'the skeleton table is not exposed',
+  ).toHaveCount(0);
+  expect(await earnedValue.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+
+  held.release();
+  await expect(earnedValue.getByRole('table', { name: 'Earned value by activity' })).toBeVisible();
+  await expect(
+    earnedValue.getByRole('status').filter({ hasText: 'Loading earned value…' }),
+  ).toHaveCount(0);
 });

@@ -398,6 +398,19 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
           `${where}: settled marker "${screen.settled}" never appeared`,
         ).toBeVisible();
       }
+      // The settled marker is not enough: a page that frames itself before its read returns (the
+      // heading, the client name) satisfies it while DataTable still shows its skeleton. A skeleton
+      // cell carries no `data-col-width`, so wait until none does — the assertion below stays.
+      await page
+        .waitForFunction(
+          () =>
+            [...document.querySelectorAll('table tbody td')]
+              .filter((td) => (td.getAttribute('colspan') ?? '1') === '1')
+              .every((td) => td.hasAttribute('data-col-width')),
+          undefined,
+          { timeout: 10_000 },
+        )
+        .catch(() => undefined);
 
       const seen = await page.evaluate(() => {
         const out: { header: string; colWidth: string; text: string }[] = [];
@@ -488,7 +501,7 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
       /**
        * **The positive case, per screen and before any verdict** (ADR-0093). A screen that renders
        * no cells reports no wraps, which is indistinguishable from a screen with none — and
-       * `DataTable`'s loading skeleton is three visible `<tr>`s printing no header text, so a sweep
+       * `DataTable`'s loading skeleton is three visible `<tr>`s of placeholder cells, so a sweep
        * that arrives early examines nothing and calls it clean.
        */
       expect(
@@ -677,10 +690,10 @@ test('no column header stands over an empty column', async ({ page }) => {
   const table = page.getByRole('table').first();
 
   /**
-   * **Wait for a real row, not for a row.** `DataTable`'s LOADING `<thead>` prints no header text
-   * at all (`data-table.tsx:236-239` renders the header only for an `srHeader` column), and its
-   * skeleton rows are three visible `<tr>`s — so `row.nth(1)` is visible the instant the route
-   * mounts, and a scan taken there finds nothing to examine and passes. It did: this assertion
+   * **Wait for a real row, not for a row.** `DataTable`'s skeleton rows are three visible `<tr>`s
+   * (and, since loading-skeletons M2, its headings are printed but `aria-hidden`, so they are not
+   * `columnheader`s to a locator) — so `row.nth(1)` is visible the instant the route mounts, and a
+   * scan taken there finds nothing to examine and passes. It did: this assertion
    * went green against the very column it was written to catch, twice, before the debug dump that
    * exposed it. The control below is what stops that recurring; this wait is what makes it rare.
    */
@@ -811,4 +824,49 @@ test('every list screen shows its first row above the fold at 1646', async ({ pa
       `${path}'s first row starts at y=${String(Math.round(box.y))}, below the fold`,
     ).toBeLessThan(1000);
   }
+});
+
+/**
+ * **A client's page opens in its own frame while its read is held**
+ * (`docs/specs/loading-skeletons/` M4, CQ-2, TECH_DEBT #234).
+ *
+ * Both the client read and its projects list are held by routes the test releases (no timer), so
+ * the pending picture is observed rather than raced. What only a browser can say: the Projects
+ * heading and the table's real column headings are on screen at once, exactly one status speaks
+ * ("Loading projects…"), no spinner is drawn, and when the client arrives the Projects heading
+ * does not move (SC-2, |delta| <= 1 px).
+ */
+test('a client page shows its frame while the client read is held', async ({ page }) => {
+  const gates = new Map<string, () => void>();
+  const hold = async (name: string, pattern: RegExp): Promise<void> => {
+    const released = new Promise<void>((resolve) => gates.set(name, resolve));
+    await page.route(pattern, async (route) => {
+      await released;
+      await route.continue();
+    });
+  };
+  await hold('client', new RegExp(`/organizations/[^/]+/clients/${seededIds.clientId}$`));
+  await hold('projects', /\/organizations\/[^/]+\/clients\/[^/]+\/projects(\?|$)/);
+
+  await page.goto(`/orgs/${orgSlug}/clients/${seededIds.clientId}`);
+  const heading = page.getByRole('heading', { name: 'Projects', level: 2 });
+  await expect(heading).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Projects' }).getByText('Name', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Loading projects…' })).toHaveCount(1);
+  await expect(page.getByRole('columnheader'), 'the skeleton table is not exposed').toHaveCount(0);
+  expect(await page.locator('svg.animate-spin').count(), 'no spinner').toBe(0);
+  const pendingTop = (await heading.boundingBox())?.y ?? Number.NaN;
+
+  gates.get('client')?.();
+  await expect(page.getByRole('heading', { name: 'Harbourside Estates', level: 1 })).toBeVisible();
+  const settledTop = (await heading.boundingBox())?.y ?? Number.NaN;
+  expect(
+    Math.abs(settledTop - pendingTop),
+    'the Projects heading did not move when the client arrived',
+  ).toBeLessThanOrEqual(1);
+
+  gates.get('projects')?.();
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 });

@@ -206,7 +206,13 @@ const probe = () => {
     return w;
   };
 
-  return [...document.querySelectorAll('table')].map((t, tableIndex) => {
+  // A loading skeleton is not a table to measure. Since loading-skeletons M2 it prints the REAL
+  // header text, so its headings have a positive `natural` width and would satisfy the control below
+  // exactly as a settled table does — `[data-loading-shape]` is the hook that tells them apart.
+  const tables = [...document.querySelectorAll('table')].filter(
+    (t) => t.closest('[data-loading-shape]') === null,
+  );
+  return tables.map((t, tableIndex) => {
     const heads = [...t.querySelectorAll('thead th')];
     const bodyRows = [...t.querySelectorAll('tbody tr')];
     const tableBox = t.getBoundingClientRect();
@@ -356,9 +362,9 @@ if (EXPECT_KNOWN_WRAPS) {
   // ── Assertion 1: something was measured, on every named screen, at every width ───────────────
   // This is the assertion that survives the defect being fixed, which the previous control did
   // not. A screen that yields no table, or a table whose every column reports `natural: 0`, means
-  // the probe navigated somewhere unexpected, or read a loading skeleton — `DataTable`'s loading
-  // `<thead>` prints no header text and its skeleton is three visible `<tr>`s, so a scan taken
-  // while the query is in flight examines nothing and reports it as nothing wrong.
+  // the probe navigated somewhere unexpected, or read a loading skeleton. A skeleton's headings were
+  // blank until loading-skeletons M2 made them real, which is why the probe now skips every table
+  // inside `[data-loading-shape]` rather than relying on a blank `thead` to fail this check.
   for (const [name] of SELECTED) {
     const tables = out[name] ?? [];
     const measured = tables.some((t) => t.columns.some((c) => c.natural > 0));

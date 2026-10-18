@@ -129,7 +129,16 @@ describe('ScheduleHealthPanel', () => {
 
   it('loading state shows the spinner sentence', () => {
     renderPanel({ report: null, isPending: true });
-    expect(screen.getByText('Checking the plan…')).toBeInTheDocument();
+    // The sentence is drawn on screen and announced by the status: two elements, one `label`.
+    expect(screen.getAllByText('Checking the plan…').length).toBeGreaterThan(0);
+  });
+
+  it('announces the sentence it shows, as its one status — not a generic "Loading…"', () => {
+    // The spinner's `aria-hidden` was dropped (hyphenated JSX attributes are unchecked), so a
+    // status saying "Loading…" sat beside visible text that was in no live region.
+    renderPanel({ report: null, isPending: true });
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Checking the plan…');
   });
 
   it('error state is the shared NoticeStrip with role="alert", matching the Float-paths dock', () => {

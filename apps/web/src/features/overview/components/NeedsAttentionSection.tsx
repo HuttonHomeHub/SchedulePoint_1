@@ -164,7 +164,7 @@ export function NeedsAttentionSection({
       }
     >
       {pending ? (
-        <ListRowSkeleton rows={2} />
+        <ListRowSkeleton rows={2} label="Loading items that need your attention…" />
       ) : items.length === 0 ? (
         <p className="text-muted-foreground text-sm">Nothing needs you right now.</p>
       ) : (

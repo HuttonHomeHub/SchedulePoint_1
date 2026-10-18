@@ -253,8 +253,7 @@ export function RevisionComparePanel({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {baselinesPending ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Spinner className="size-4" aria-hidden="true" />
-            Loading revisions…
+            <Spinner className="size-4" label="Loading revisions…" labelOnScreen />
           </p>
         ) : null}
 
@@ -291,8 +290,7 @@ export function RevisionComparePanel({
         */}
         {otherPlansPending ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Spinner className="size-4" aria-hidden="true" />
-            Loading plans…
+            <Spinner className="size-4" label="Loading plans…" labelOnScreen />
           </p>
         ) : otherPlans !== null && otherPlans.length > 0 ? (
           <div className="space-y-1">
@@ -422,8 +420,7 @@ export function RevisionComparePanel({
         */}
         {isPending && (comparePlanId !== null || from !== null) ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Spinner className="size-4" aria-hidden="true" />
-            Comparing…
+            <Spinner className="size-4" label="Comparing…" labelOnScreen />
           </p>
         ) : null}
 

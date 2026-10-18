@@ -98,6 +98,20 @@ describe('EarnedValuePanel', () => {
     vi.mocked(apiFetch).mockReset();
   });
 
+  it('draws the headline labels and the table headings while the read is pending, with one status', () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    const { container } = renderPanel();
+    // The real words are on screen at once; the figures are blocks.
+    expect(screen.getByText('Schedule Performance Index')).toBeInTheDocument();
+    expect(screen.getByText('Actual Cost')).toBeInTheDocument();
+    expect(screen.getByText('% complete')).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading earned value…');
+    // The skeleton is hidden from assistive technology: no column heading is exposed.
+    expect(screen.queryByRole('columnheader')).toBeNull();
+    expect(container.querySelector('svg.animate-spin')).toBeNull();
+  });
+
   it('renders the KPI tiles and the per-activity table from the read', async () => {
     vi.mocked(apiFetch).mockResolvedValue(EV);
     renderPanel();

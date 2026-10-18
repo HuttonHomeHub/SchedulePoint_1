@@ -57,8 +57,13 @@ describe('ActivityHistoryPanel', () => {
         settle = resolve;
       }),
     );
-    renderPanel();
+    const { container } = renderPanel();
     expect(screen.getByText('Loading history…')).toBeInTheDocument();
+    // One sentence from one status, and entry-shaped placeholders hidden from assistive technology.
+    const spoken = screen.getAllByRole('status').filter((el) => (el.textContent ?? '') !== '');
+    expect(spoken).toHaveLength(1);
+    expect(container.querySelectorAll('[data-loading-shape] li')).toHaveLength(3);
+    expect(container.querySelector('[aria-busy="true"] [role="status"]')).toBeNull();
     settle({ data: [], meta: META });
     expect(await screen.findByText(/No changes have been recorded/)).toBeInTheDocument();
   });

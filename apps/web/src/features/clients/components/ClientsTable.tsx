@@ -20,7 +20,7 @@ import { useDeleteRetention } from '@/features/organizations';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
-import { formatTimestamp } from '@/lib/format-date';
+import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
 
 /**
  * The organisation's clients as a table. Each name links to the client's
@@ -146,6 +146,7 @@ export function ClientsTable({
        * date wrapping over two lines reads as two dates, which is worse than not showing it.
        */
       width: 'fit',
+      sample: formatTimestamp(SAMPLE_INSTANT),
       cell: (client) => (
         <span className="text-muted-foreground">{formatTimestamp(client.createdAt)}</span>
       ),

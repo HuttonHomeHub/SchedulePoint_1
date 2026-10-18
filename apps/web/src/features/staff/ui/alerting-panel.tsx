@@ -1,9 +1,10 @@
 import { ConditionStrip } from '@/components/ui/condition-strip';
-import { KeyValueList, QueryPanel } from '@/components/ui/page';
-import { Spinner } from '@/components/ui/spinner';
+import { KeyValueList, KeyValueListSkeleton, QueryPanel } from '@/components/ui/page';
 import { useStaffInstallation } from '@/features/staff/api/staff-panels';
 import { CHECK_SECTION_ID } from '@/features/staff/model/console-status';
 import { ALERTING } from '@/features/staff/model/panel-copy';
+
+const LABELS = { mail: 'Email failure alerts', uptime: 'Uptime check' } as const;
 
 /**
  * Alerts and monitoring: would anybody outside this page hear about a problem?
@@ -24,7 +25,8 @@ export function AlertingPanel(): React.ReactElement {
       id={CHECK_SECTION_ID.alerting}
       description={ALERTING.intro}
       query={installation}
-      skeleton={<Spinner label="Loading alerts and monitoring…" />}
+      skeleton={<KeyValueListSkeleton items={[{ label: LABELS.mail }, { label: LABELS.uptime }]} />}
+      loadingLabel="Loading alerts and monitoring…"
       errorLabel="Couldn't load alerts and monitoring."
       errorStatus="Alerts and monitoring couldn't be loaded."
       settledStatus={(data) =>
@@ -38,11 +40,11 @@ export function AlertingPanel(): React.ReactElement {
           <KeyValueList
             items={[
               {
-                label: 'Email failure alerts',
+                label: LABELS.mail,
                 value: data.mailAlertingConfigured ? 'On' : ALERTING.mailOff,
               },
               {
-                label: 'Uptime check',
+                label: LABELS.uptime,
                 value: data.heartbeatConfigured ? 'On' : ALERTING.uptimeOff,
               },
             ]}
