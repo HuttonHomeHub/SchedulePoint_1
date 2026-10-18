@@ -368,3 +368,29 @@ real row on these two tables, or whether this is also accepted.
 SC-2 after the amendment: 8 of 11 sites graded PASS, 1 `NOTHING_GRADED` (plan-detail), 2 FAIL (members,
 plans-table), at both widths. Note that the 8 PASS include only anchors the amendment makes reportable; the
 comparable anchors that remain (headings above the table, first body row) all hold at 0 px.
+
+# Fourth reading, placeholder rows sized to a settled row (2026-10-18)
+
+- **Record:** [./m7-after-fourth.json](./m7-after-fourth.json), the instrument's stdout unedited. Application, instrument and
+  judge from `66ef9f30` (`run.sha`), tenant `shoot-co-1792313548118-1646`, taken 2026-10-18T08:52Z, same seeding
+  command and widths. A fresh tenant: not a same-tenant comparison. Judge self-test passed first.
+- **Cause, read from the code and the records (not guessed):** a settled row is its tallest control plus `py-2`
+  twice plus the 1 px rule. Plans: a small `Button` (`--control-h-sm`, 32) gives 49, the figure `globals.css`
+  records. Members: the role `Select` (`--control-h`, 36) gives 53. A placeholder cell held a 14 px bar or a
+  20 px text line, so a row was about 38 px. The fix gives each placeholder cell `min-h-(--control-h-sm)`, the token the
+  small button reads, so a placeholder row is 49 px and grows with a coarse pointer as the real row does.
+
+| Site (both widths) | Third reading | Fourth reading                                         |
+| ------------------ | ------------- | ------------------------------------------------------ |
+| plans-table        | FAIL          | **PASS** (7 compared)                                  |
+| members            | FAIL          | **FAIL**, shift -94 (1646) and -90 (1024)              |
+| the other nine     | as before     | as before (8 PASS, plan-detail still `NOTHING_GRADED`) |
+
+**Members still fails, and by more in absolute terms.** The placeholder body is now 147 px (3 x 49) against 1 row
+of 53 px at 1646 (57 at 1024): the shift is -94 and -90, where it was -62 and -58. That is row-count growth the
+spec accepts, but the judge explains it only when each placeholder row is within 1 px of a settled row, and
+here it is 4 px short at 1646 (residual 12 over three rows) and 8 short at 1024 (residual 24). The 4 px is
+the `Select` (36) against the small control (32) the shared placeholder reserves. Why the settled row is
+57 px at 1024 (4 px more again) was not established. Closing members needs the skeleton to know a column holds
+a form-height control, which is a new `Column` prop (an additive change to a shared component's public
+contract, ADR-0105), or the roster's `Select` to be a small control (a UI change). Neither is made here.
