@@ -174,6 +174,18 @@ const NOT_REACHED = {
 /* eslint-disable no-undef */
 /** Installed before any page script: records every live-region text change and when it happened. */
 const installLiveObserver = () => {
+  const pathOf = (el) => {
+    const parts = [];
+    for (let e = el; e && e !== document.body; e = e.parentElement) {
+      const id = e.getAttribute('data-testid');
+      parts.unshift(
+        e.tagName.toLowerCase() +
+          (id ? `[data-testid=${id}]` : '') +
+          (e.hasAttribute('data-loading-shape') ? '[data-loading-shape]' : ''),
+      );
+    }
+    return parts.slice(-6).join(' > ');
+  };
   const seen = new Map();
   window.__loadingLive = seen;
   new MutationObserver((records) => {
@@ -189,6 +201,7 @@ const installLiveObserver = () => {
           : `role=${region.getAttribute('role')}`,
         text: text.slice(0, 80),
         insideBusy: region.closest('[aria-busy="true"]') !== null,
+        path: pathOf(region),
       });
     }
   }).observe(document, { subtree: true, childList: true, characterData: true });
@@ -257,7 +270,12 @@ const readColumns = () => {
   }));
 };
 
-const readLive = () => [...window.__loadingLive.values()];
+const readLive = () =>
+  [...window.__loadingLive.entries()].map(([region, entry]) => ({
+    ...entry,
+    // A region unmounted before the reading cannot be speaking now; one that is still mounted is.
+    connected: region.isConnected,
+  }));
 
 const readAnimations = () => {
   const running = document

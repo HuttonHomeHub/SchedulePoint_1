@@ -115,3 +115,45 @@ it('one sentence outside any busy subtree passes SC-4', () => {
   const r = judgeSentences([{ kind: 'role=status', text: 'Loading…', insideBusy: false }], 1);
   assert.equal(r.verdict, 'PASS');
 });
+// Mutation: count regions that had unmounted before the reading.
+it('a region unmounted before the reading was not speaking and is not counted', () => {
+  const r = judgeSentences(
+    [
+      { kind: 'role=status', text: 'Loading…', insideBusy: false, connected: false },
+      { kind: 'role=status', text: 'Loading clients…', insideBusy: false, connected: true },
+    ],
+    1,
+  );
+  assert.equal(r.verdict, 'PASS');
+  assert.deepEqual(r.unmounted, ['Loading…']);
+});
+
+// Mutation: drop the connected check entirely, or apply it to the busy test only.
+it('two regions mounted together still fail SC-4', () => {
+  const region = { kind: 'role=status', text: 'Loading…', insideBusy: false, connected: true };
+  assert.equal(judgeSentences([region, region], 1).verdict, 'FAIL');
+});
+
+// Mutation: treat every announcer sentence as shell, hiding a loading sentence spoken there.
+it('the shell announcer is set aside for a result sentence and not for a loading one', () => {
+  const announcer = {
+    kind: 'role=status',
+    insideBusy: false,
+    connected: true,
+    path: 'div > div[data-testid=announcer]',
+  };
+  const surface = {
+    kind: 'role=status',
+    text: 'Loading plans…',
+    insideBusy: false,
+    connected: true,
+  };
+  assert.equal(
+    judgeSentences([surface, { ...announcer, text: '1 project loaded.' }], 1).verdict,
+    'PASS',
+  );
+  assert.equal(
+    judgeSentences([surface, { ...announcer, text: 'Loading calendars…' }], 1).verdict,
+    'FAIL',
+  );
+});

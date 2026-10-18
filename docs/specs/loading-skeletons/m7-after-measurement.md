@@ -171,3 +171,87 @@ SC-4 verdict: **not met** (3 of 11 at 1646, none at 1024), with the structural h
 - **Not measured:** the six groups under `notReached`; SC-3 on resources and recently-deleted; SC-1 (a grep, not this
   instrument); SC-6 (forced colours, `e2e-forced-colors`, not this instrument).
 - **Not a same-tenant comparison** (see Conditions).
+
+---
+
+# Second reading, after the one-sentence work
+
+- **Record:** [./m7-after-second.json](./m7-after-second.json), the instrument's stdout unedited. Application and
+  instrument both from this branch (`run.sha` `7d0cfb67`, plus the instrument change below, uncommitted when taken),
+  tenant `shoot-co-1792307844246-1646`, taken 2026-10-18T07:25Z, same seeding command and same two widths. A fresh
+  tenant again, so still not a same-tenant comparison with the first reading.
+- The first reading is kept above, unedited.
+
+## What the extra regions were (established, not suspected)
+
+The first reading's suspicion, that `RoutePending`'s status was speaking beside the page's own, is **half right and
+the other half matters**. The instrument now records each region's DOM path and whether it was still mounted at the
+reading (`connected`). Run against clients, members, client-detail, plan-detail and plans-table at 1646 (the first
+probe, before the judge changed), every extra region was one of three things, and **none was speaking at the same
+time as the surface's sentence**:
+
+| Extra region                                                                        | Path (last segments)                                                       | Mounted at the reading | What it is                                                                                                                          |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| "Loading…"                                                                          | `div > span` (`RoutePending`'s `role="status"`, a sibling of its skeleton) | no, on every site      | The route-pending screen, shown while the dev server compiled the chunk, unmounted before the page did.                             |
+| "Loading invitations…", "Loading calendars…", "Loading projects…", "Loading plans…" | `section > div > div > div[data-loading-shape] > span`                     | no                     | A **different read** on the same page that the instrument does not hold, so it settled before the reading.                          |
+| "1 project loaded."                                                                 | `div > div[data-testid=announcer]`                                         | yes                    | The navigator announcing a deep link's tree expansion on the shell's announcer. Another feature's result, not this surface's state. |
+
+So the first reading counted every region that had **ever** held text. A region that has unmounted is not speaking, and
+SC-4's wording is "while each group-A surface is pending: exactly one live region carries a sentence". The product
+was not doubling up on any held surface. What it does do, on a cold navigation, is say "Loading…" (the route chunk)
+and then, once the page has mounted, "Loading clients…" (the data): two sentences in **sequence** for one wait,
+from two different pending surfaces. That is real, it is not what SC-4 grades, and it is left as built: `RoutePending`
+is rendered instead of the route, so it cannot know the page it is waiting for will speak.
+
+**Nothing in the product changed for this reading.** What changed is the instrument:
+
+- `measure-loading-shapes.mjs` records `path` and `connected` for every region.
+- `judgeSentences` counts the regions **mounted at the reading** and sets aside two classes it still lists
+  (`unmounted`, and `shell`: a non-loading sentence on the shell announcer, which a loading sentence there would not be).
+  Three self-test cases pin it; the first was verified red by making the judge ignore `connected`.
+  This is a **change to the grader after seeing the result**, and it is stated as one. The argument for it is the spec's
+  own wording and the DOM paths above, not the outcome; the first reading's records are untouched and are what the
+  table above reports.
+
+Unit tests pin the product side: `src/routes/pending-sentences.test.tsx` renders the clients table and the real members
+page with reads that never resolve, and asserts exactly the sentences that surface owns and none inside `aria-busy`
+(red-first: making `DataTable`'s shape `announce="none"` leaves zero regions and fails both).
+
+## SC-4, per site (live regions mounted at the reading)
+
+| Site             | First reading 1646 / 1024 (count, ever-held) | Second reading 1646 / 1024 | Speaking at the reading     | Set aside                                                   |
+| ---------------- | -------------------------------------------- | -------------------------- | --------------------------- | ----------------------------------------------------------- |
+| clients          | PASS 1 / FAIL 2                              | PASS 1 / PASS 1            | "Loading clients…"          | 1024: "Loading…" unmounted                                  |
+| calendars        | FAIL 2 / FAIL 2                              | PASS 1 / PASS 1            | "Loading calendars…"        | 1024: "Loading…" unmounted                                  |
+| resources        | PASS 1 / FAIL 2                              | PASS 1 / PASS 1            | "Loading resources…"        | "Loading…" unmounted                                        |
+| members          | FAIL 3 / FAIL 3                              | PASS 1 / PASS 1            | "Loading members…"          | "Loading invitations…" (settled), "Loading…"                |
+| audit-log        | FAIL 2 / FAIL 2                              | PASS 1 / PASS 1            | "Loading events…"           | 1024: "Loading…" unmounted                                  |
+| recently-deleted | FAIL 2 / FAIL 2                              | PASS 1 / PASS 1            | "Loading recently deleted…" | 1024: "Loading…" unmounted                                  |
+| client-detail    | PASS 1 / FAIL 2                              | **FAIL 0 / FAIL 0**        | nothing                     | "Loading projects…" (settled), "Loading…"                   |
+| project-detail   | FAIL 2 / FAIL 2                              | **FAIL 0 / FAIL 0**        | nothing                     | "Loading plans…" (settled), "Loading…"                      |
+| plan-detail      | FAIL 2 / FAIL 2                              | PASS 1 / PASS 1            | "Loading plan…"             | "Loading…" unmounted                                        |
+| projects-table   | FAIL 2 / FAIL 2                              | PASS 1 / PASS 1            | "Loading projects…"         | "Loading…" unmounted                                        |
+| plans-table      | FAIL 4 / FAIL 3                              | PASS 1 / PASS 1            | "Loading plans…"            | "Loading calendars…", "Loading…"; shell "1 project loaded." |
+
+Nine of eleven sites pass at both widths, and the two widths now agree. **No live region is inside an `aria-busy`
+subtree at any site.**
+
+**client-detail and project-detail fail the other way: zero.** The instrument holds the client (or project) record, the
+table below reads its own list and settles, and the page's header shape is `announce="none"` by design (the table's
+sentence is "the one the page says while it loads", `client-detail.tsx:24`; `detail-pending.test.tsx:70,93` pin it). So
+while only the record is outstanding, the page has the visible skeleton and an `sr-only` sentence that is not live, and
+no one speaking. In the product's own ordering both reads start together and the record usually arrives first, so the
+gap is narrow; it is nonetheless a pending surface with no spoken sentence, and the spec's "or zero where an enclosing
+region speaks" does not cover it because the enclosing region has already gone. **Not changed, because it is a design
+choice with two readings** (the header's sentence becomes polite, giving two simultaneous sentences when both reads are
+in flight; or the table's sentence is withheld until the header settles, which couples two components). That is the
+product owner's call.
+
+## SC-2 and SC-3, second reading (reported, nothing changed)
+
+Identical to the first reading at every site and width: the same verdicts, the same compared-anchor counts and the same
+failing-anchor counts (SC-2 PASS only at resources and recently-deleted; FAIL at the other nine). SC-3: clients
+Created 147/140 PASS, members Joined 147/140 PASS, audit-log When 161/159 PASS, project-detail Status 57/57 PASS;
+calendars Working days 190/102 FAIL and plans Status 71/57 FAIL, as before; projects-table and client-detail
+NOTHING_GRADED. SC-5: 11/11 PASS at both widths. The second reading therefore corroborates the first on every
+criterion except SC-4, where the difference is in the grader and is explained above.

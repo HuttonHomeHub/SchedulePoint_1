@@ -132,21 +132,43 @@ export function judgeColumns(columns) {
 }
 
 /**
- * SC-4. The regions that held a non-empty sentence while the surface was pending. `expected` is how
- * many the site should have — 1, or 0 where an enclosing StatusSection / RoutePending speaks and
- * the enclosing region is counted by the census itself.
+ * SC-4. The loading sentences speaking AT THE READING. The spec's wording is "while each surface is
+ * pending: exactly one live region carries a sentence", which is a statement about regions that
+ * exist together. The first reading counted every region that had ever held text, so a
+ * `RoutePending` status that had unmounted before the page mounted (a different pending surface,
+ * earlier, never at the same time) and a sibling section that had already settled were both counted
+ * against the surface (m7-after-measurement.md, second reading). Two classes are therefore set
+ * aside, and both are still listed in `regions` so nothing is hidden:
  *
- * @param {{ kind: string, text: string, insideBusy: boolean }[]} regions
+ *  - `unmounted`: the region was gone by the reading (`connected === false`), so it was not speaking.
+ *  - `shell`: a sentence on the shell's own announcer channel that is not a loading sentence (the
+ *    navigator's "1 project loaded." on a deep link). It is another feature's result, not this
+ *    surface's state; a loading sentence on that channel still counts.
+ *
+ * `expected` is how many the site should have: 1, or 0 where an enclosing StatusSection /
+ * RoutePending speaks and the enclosing region is counted by the census itself.
+ *
+ * @param {{ kind: string, text: string, insideBusy: boolean, connected?: boolean, path?: string }[]} regions
  * @param {number} expected
  */
 export function judgeSentences(regions, expected) {
-  const insideBusy = regions.filter((r) => r.insideBusy);
+  const isShell = (r) =>
+    (r.path ?? '').includes('data-testid=announcer') && !/^Loading/.test(r.text);
+  const unmounted = regions.filter((r) => r.connected === false);
+  const shell = regions.filter((r) => r.connected !== false && isShell(r));
+  const speaking = regions.filter((r) => r.connected !== false && !isShell(r));
+  const insideBusy = speaking.filter((r) => r.insideBusy);
   return {
-    count: regions.length,
-    texts: regions.map((r) => r.text),
+    count: speaking.length,
+    texts: speaking.map((r) => r.text),
     insideBusy: insideBusy.map((r) => r.text),
+    unmounted: unmounted.map((r) => r.text),
+    shell: shell.map((r) => r.text),
+    // Where each region sat and whether it was still mounted at the reading: a count says that
+    // two regions held text, only this says whether they could have spoken together.
+    regions: regions.map((r) => ({ text: r.text, connected: r.connected, path: r.path })),
     // Both halves of the contract: the right number of sentences, none of them inside an aria-busy
     // subtree (spec §4.7 rule 2).
-    verdict: regions.length === expected && insideBusy.length === 0 ? 'PASS' : 'FAIL',
+    verdict: speaking.length === expected && insideBusy.length === 0 ? 'PASS' : 'FAIL',
   };
 }
