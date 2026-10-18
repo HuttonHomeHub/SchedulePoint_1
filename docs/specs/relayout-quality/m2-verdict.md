@@ -131,3 +131,28 @@ measurement of the product's search, not the pool's wall clock on a planner's ma
 
 **M3 (chain and row moves) is not built.** The plan builds it only if M2 still misses FC-R3. FC-R3 now
 passes on the reference plan with the starts alone, so there is nothing for it to close.
+
+## FC-R0, taken (2026-10-18, tree `bad55f54`)
+
+The "NOT RUN" rows above are superseded for FC-R0 only; no bar was moved and nothing else in this file is
+rewritten.
+
+- **Command:** `scripts/e2e-local.sh measure:relayout` (a fresh capture: it starts the API and the Vite dev
+  server, seeds the catalogue through the REST API, and drives the real Arrange dialog in headless Chromium in
+  the same container). Raw record: [`m2-report-fcr0-bad55f54.md`](./m2-report-fcr0-bad55f54.md).
+- **Result: FC-R0 PASS.** On both plans (`reference-netpoint-power-plant`, `fixture-p6-torture-v1`) all 20 of the
+  dialog's figures (five per option, Tidy and Re-layout) equal the benchmark's: **20 AGREE, 0 DISAGREE**. The
+  reference plan's Re-layout reads 56 moved, 14 rows, 0 overlaps, 0 links behind bars, 1 crossing in both; the
+  fixture's reads 137 moved, 1 to 35 rows, 0 overlaps, 0 behind, 689 to 119 crossings in both. The earlier
+  disagreement (`m0-report-1f2ad183.md`: Re-layout 55 vs 53 moved, 14 to 11 vs 14 rows, 9 vs 3 crossings) was
+  the benchmark scoring today's search while the dialog ran the shipped one; with the product detected as `m2`
+  they agree.
+- **The same run's other verdicts:** FC-R1 to R4, R6, R7 and R9 PASS; FC-R5 FAIL (the fixture, 24 to 35 rows,
+  which the owner accepted above); **FC-R8 FAIL on every plan, and that is an artefact of a fresh capture, not a
+  Tidy change.** The baseline digests lane assignments keyed by activity id, and a fresh seeding mints new
+  UUIDs, so FC-R8 can only be judged against the committed corpus.
+- **FC-R8 re-taken against the committed corpus:** `pnpm --filter @repo/web measure:relayout -- --skip-capture`
+  (no servers, so FC-R0 is NOT RUN there): FC-R1 to R4, R6 to R9 PASS, FC-R5 FAIL (accepted). FC-R6 there reads
+  1.03x and 0.96x against today on `scale-275` (300 drawn, outside the limit of 150, so single-start); it is
+  not a measurement of a multi-start wait. The recaptured corpus was not committed: the committed one is what
+  the baseline binds to.
