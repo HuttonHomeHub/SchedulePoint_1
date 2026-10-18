@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { pluralMoveHint } from '../model/reposition-announcement';
+
 import { BulkSelectionBar, type BulkActionGate } from './BulkSelectionBar';
 
 /**
@@ -163,12 +165,26 @@ describe('the status line', () => {
    * restoring it verbatim would re-introduce a false statement for half the plans in the product.
    * What is asserted present is a sentence true in both modes.
    */
-  it('tells a planner the drag is plural, without claiming a mode-specific consequence', () => {
-    renderBar({});
+  it('tells a planner the move is plural, without claiming a mode-specific consequence', () => {
+    renderBar({ canMove: true });
     const bar = screen.getByTestId('bulk-selection-bar');
-    expect(bar).toHaveTextContent(/dragging any of these moves all/i);
+    expect(bar).toHaveTextContent(pluralMoveHint(5));
+    expect(bar).toHaveTextContent(/pressing alt with an arrow key/i);
     // Still absent, and deliberately: true in EARLY, false in VISUAL.
     expect(bar).not.toHaveTextContent(/start-no-earlier-than/i);
+  });
+
+  // The hint is a claim about what the keys do, so a viewer — or a planner without the pen — is
+  // not told it works. `canMove` defaults to false for exactly that reason.
+  it('says nothing about moving unless the caller can move', () => {
+    renderBar({});
+    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(/moves all/i);
+  });
+
+  it('keeps the hint out of every control’s description', () => {
+    renderBar({ canMove: true, link: shut('No pen.') });
+    const id = linkButton().getAttribute('aria-describedby');
+    expect(document.getElementById(id!)).not.toHaveTextContent(/moves all/i);
   });
 });
 

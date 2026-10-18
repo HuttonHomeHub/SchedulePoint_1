@@ -134,6 +134,7 @@ import {
   assignmentRemoveCommand,
   autoArrangeCommand,
   bulkDeleteCommand,
+  bulkMoveCoalesceKey,
   bulkPlacementCommand,
   createActivityCommand,
   createLoeSpanCommand,
@@ -956,8 +957,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       moveMany: async (
         rows: readonly ActivitySummary[],
         delta: { dayDelta: number; laneDelta: number },
-      ): Promise<{ conflict: string | null }> => {
-        if (rows.length === 0 || isNoOp(delta)) return { conflict: null };
+        options?: { coalesce?: boolean; pressedAt?: number },
+      ): Promise<{ applied: boolean; conflict: string | null }> => {
+        if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
           delta,
@@ -985,7 +987,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                 rows.length === 1 && rows[0] !== undefined
                   ? `Move \u201c${rows[0].name}\u201d`
                   : `Move ${String(rows.length)} activities`,
+              // Opt-in, and keyed by the set actually written: the keyboard nudge folds a burst of
+              // presses on one selection into one step, the drag never does.
+              ...(options?.coalesce
+                ? { coalesceKey: bulkMoveCoalesceKey(rows.map((a) => a.id)) }
+                : {}),
             }),
+            // The window is measured between keypresses: this write lands after a debounce and a
+            // wait for the previous write's refetch, so by completion time two taps 200 ms apart
+            // would look seconds apart and never fold.
+            options?.coalesce && options.pressedAt !== undefined
+              ? { at: options.pressedAt }
+              : undefined,
           );
         } catch (err) {
           // **The same refusals the single-bar drag already handles**, and for the same reasons.
@@ -996,9 +1009,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           // meant a peer taking the pen mid-drag left the client's pen state stale until the next
           // 15-second poll, on the one gesture that moves a dozen bars at once. Checked, not
           // reasoned about (ADR-0076): the declaration order is the first thing this file shows.
-          if (onWriteRejected(err).kind === 'lock') return { conflict: null };
+          // Nothing was written, so `applied` is false — a caller that announced "moved" on a
+          // pen rejection told a listener about a move that never happened.
+          if (onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
           if (err instanceof ApiFetchError && err.status === 409)
-            return { conflict: MOVE_CONFLICT };
+            return { applied: false, conflict: MOVE_CONFLICT };
           throw err;
         } finally {
           // Released on every path including a throw — a leaked hold stalls every later
@@ -1011,7 +1026,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // coming (ADR-0153).
         if (!isLaneOnly(delta)) autoRecalc.notify();
         else resolveLayoutNow();
-        return { conflict: null };
+        return { applied: true, conflict: null };
       },
       linkChain: async (
         edges: readonly { predecessorId: string; successorId: string }[],

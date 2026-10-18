@@ -41,3 +41,45 @@ export function repositionAnnouncement(f: RepositionOutcomeFacts): string {
   if (f.timeChanged && !f.snappedDate) sentence += '; dates will update';
   return `${sentence}.`;
 }
+
+const plural = (n: number, unit: string): string => `${String(n)} ${unit}${n === 1 ? '' : 's'}`;
+
+/**
+ * What a **plural** move says — the pointer drag and the keyboard nudge of a selection announce the
+ * same sentence, built here once for the reason this file exists. Deltas are signed: a positive
+ * `dayDelta` is later, a positive `laneDelta` is down (lane 0 is the top). Dates only "will update"
+ * when a day moved; a lane-only move triggers no recalculation and says nothing about dates.
+ *
+ * A zero/zero delta writes nothing and so is never announced; it returns `''` rather than throwing,
+ * because this runs inside a promise handler where a throw would surface as a failed move.
+ */
+export function pluralMoveAnnouncement(f: {
+  readonly count: number;
+  readonly dayDelta: number;
+  readonly laneDelta: number;
+}): string {
+  const parts: string[] = [];
+  if (f.dayDelta !== 0) {
+    parts.push(`${plural(Math.abs(f.dayDelta), 'day')} ${f.dayDelta > 0 ? 'later' : 'earlier'}`);
+  }
+  if (f.laneDelta !== 0) {
+    parts.push(`${f.laneDelta > 0 ? 'down' : 'up'} ${plural(Math.abs(f.laneDelta), 'lane')}`);
+  }
+  if (parts.length === 0) return '';
+  const subject = f.count === 1 ? '1 activity' : `${String(f.count)} activities`;
+  return `${subject} moved ${parts.join(' and ')}${f.dayDelta !== 0 ? '; dates will update' : ''}.`;
+}
+
+/**
+ * The one sentence that says a plural selection moves together, by pointer or by keyboard. Shown on
+ * the bulk bar and spoken by the panel from this same function, so the two cannot drift.
+ */
+export function pluralMoveHint(count: number): string {
+  return `Dragging any of these, or pressing Alt with an arrow key, moves all ${String(count)} activities.`;
+}
+
+/** Said when a keyboard move is refused because an earlier write has not finished. */
+export const STILL_SAVING_NOTE = 'Still saving the previous move.';
+
+/** Said when a plural move was attempted and nothing was written, and no other message says why. */
+export const MOVE_FAILED_NOTE = 'Couldn’t move the selection.';

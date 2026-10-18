@@ -18,6 +18,7 @@ export {
   visualStartCommand,
   autoArrangeCommand,
   bulkPlacementCommand,
+  bulkMoveCoalesceKey,
   bulkDeleteCommand,
   linkChainCommand,
   pasteActivitiesCommand,

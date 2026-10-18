@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { repositionAnnouncement, type RepositionOutcomeFacts } from './reposition-announcement';
+import {
+  pluralMoveAnnouncement,
+  pluralMoveHint,
+  repositionAnnouncement,
+  type RepositionOutcomeFacts,
+} from './reposition-announcement';
 
 const facts = (over: Partial<RepositionOutcomeFacts>): RepositionOutcomeFacts => ({
   name: 'Clad',
@@ -54,5 +59,30 @@ describe('repositionAnnouncement', () => {
         facts({ timeChanged: true, laneChanged: true, requested: 1, landed: 3, original: 3 }),
       ),
     ).toBe('Moved “Clad”; no free lane above, so it stays in lane 4; dates will update.');
+  });
+});
+
+describe('pluralMoveAnnouncement', () => {
+  it.each([
+    [3, 2, 0, '3 activities moved 2 days later; dates will update.'],
+    [3, -1, 0, '3 activities moved 1 day earlier; dates will update.'],
+    [3, 0, -1, '3 activities moved up 1 lane.'],
+    [3, 0, 2, '3 activities moved down 2 lanes.'],
+    [3, -1, 1, '3 activities moved 1 day earlier and down 1 lane; dates will update.'],
+    [1, 1, 0, '1 activity moved 1 day later; dates will update.'],
+  ])('%i activities, day %i, lane %i', (count, dayDelta, laneDelta, expected) => {
+    expect(pluralMoveAnnouncement({ count, dayDelta, laneDelta })).toBe(expected);
+  });
+
+  it('says nothing for a zero move, which writes nothing', () => {
+    expect(pluralMoveAnnouncement({ count: 3, dayDelta: 0, laneDelta: 0 })).toBe('');
+  });
+});
+
+describe('pluralMoveHint', () => {
+  it('names both the pointer and the keyboard route and the count', () => {
+    expect(pluralMoveHint(4)).toBe(
+      'Dragging any of these, or pressing Alt with an arrow key, moves all 4 activities.',
+    );
   });
 });
