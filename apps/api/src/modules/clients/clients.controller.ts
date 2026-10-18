@@ -138,7 +138,12 @@ export class ClientsController {
   @ApiOperation({ summary: 'Restore a soft-deleted client and everything deleted with it.' })
   @ApiOkResponse({ type: ClientResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiConflictResponse({ description: 'A restored name would collide with an active client.' })
+  @ApiConflictResponse({
+    description:
+      'A restored name would collide with an active client (NAME_TAKEN), or a plan or activity under ' +
+      'the client uses a calendar that is deleted outside it (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
+  })
   @ApiNotFoundResponse({
     description:
       'Organisation or client not found (or the caller is not a member), including when the retention ' +

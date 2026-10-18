@@ -10,7 +10,7 @@ import {
   historyResultMessage,
   type PostedHistoryResult,
 } from './history-result';
-import { ReplayFailure } from './replay';
+import { CalendarDeletedFailure, ReplayFailure } from './replay';
 import type { PlanEditHistory, StepOutcome } from './use-plan-edit-history';
 import { usePlanUndoRedo } from './use-plan-undo-redo';
 
@@ -658,6 +658,30 @@ describe('usePlanUndoRedo — results for the dock strip', () => {
     });
     expect(historyResultMessage({ ...onResult.mock.calls[0]![0], id: 1 })).toContain(detail);
   });
+
+  it.each(['undo', 'redo'] as const)(
+    'a calendar-deleted refusal on %s is a failed result worded for that press (ADR-0201 D4)',
+    async (direction) => {
+      const onResult = vi.fn();
+      const refused = vi.fn().mockRejectedValue(new CalendarDeletedFailure('Mon-Wed', err(409)));
+      const { result } = setup(
+        fakeHistory({
+          peekUndo: vi.fn().mockReturnValue(step),
+          peekRedo: vi.fn().mockReturnValue(step),
+          undo: refused,
+          redo: refused,
+        }),
+        onResult,
+      );
+      act(() => result.current[direction]());
+      await waitFor(() => expect(onResult).toHaveBeenCalledTimes(1));
+      expect(onResult.mock.calls[0]![0]).toMatchObject({
+        direction,
+        outcome: 'failed',
+        detail: `It uses the calendar “Mon-Wed”, which was deleted after your edit. Restore that calendar from Recently deleted, then ${direction} again.`,
+      });
+    },
+  );
 
   it('a lost pen under such a failure still runs the pen contract, AND the planner is told', async () => {
     const onResult = vi.fn();

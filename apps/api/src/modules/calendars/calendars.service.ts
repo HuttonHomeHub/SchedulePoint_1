@@ -5,6 +5,7 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
+import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
@@ -534,8 +535,21 @@ export class CalendarsService {
         if (root.deletedAt === null) return;
 
         if (root.scope === 'PROJECT' && root.projectId !== null) {
-          const project = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);
-          if (!project || project.deletedAt !== null) {
+          // Read the project in any state, then take its client and the project itself `FOR SHARE`,
+          // top-down: a project delete takes its row `FOR NO KEY UPDATE` before it sweeps its
+          // calendars, so this restore either lands first (and the delete sweeps the calendar it
+          // brought back) or finds the project deleted, instead of leaving an active calendar under
+          // a deleted project (`docs/TECH_DEBT.md` #520, ADR-0201 D3).
+          const seen = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);
+          const active =
+            seen !== null &&
+            (await lockActiveProjectChainForShare(tx, {
+              clientId: seen.clientId,
+              projectId: seen.id,
+            }));
+          if (!active) {
+            // Re-read for the answer: the first read may precede the delete the lock then waited for.
+            const project = await this.projects.findByIdInOrg(root.projectId, organization.id, tx);
             throw new ConflictError('Restore the project first.', {
               reason: LIBRARY_RESTORE_REASON.PARENT_DELETED,
               blockedBy: project

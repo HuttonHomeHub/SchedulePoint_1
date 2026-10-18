@@ -94,7 +94,12 @@ export class PlansController {
   @ApiOperation({ summary: 'Restore a soft-deleted plan.' })
   @ApiOkResponse({ type: PlanResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
-  @ApiConflictResponse({ description: 'The parent project is still deleted (restore it first).' })
+  @ApiConflictResponse({
+    description:
+      'The parent project is still deleted (PARENT_DELETED), or the plan or one of its activities uses ' +
+      'a calendar that is deleted (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
+  })
   @ApiNotFoundResponse({
     description:
       'Organisation or plan not found (or the caller is not a member), including when the retention ' +

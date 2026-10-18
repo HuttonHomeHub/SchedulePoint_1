@@ -229,8 +229,10 @@ export function RecentlyDeletedTable({
               <span className="text-muted-foreground text-xs">
                 {group.root.blockedBy.relation === 'calendar'
                   ? // A dependency, not a parent: "blocked by a deleted calendar" would read as though
-                    // the calendar contained this, and it is the other way round (ADR-0195 D3).
-                    `Uses deleted calendar “${group.root.blockedBy.name}”`
+                    // the calendar contained this, and it is the other way round (ADR-0195 D3). A
+                    // client or project holds the work that uses it rather than using it itself
+                    // (ADR-0201 D2), and the sentence says so.
+                    `${group.root.kind === 'client' || group.root.kind === 'project' ? 'Work in it uses' : 'Uses'} deleted calendar “${group.root.blockedBy.name}”`
                   : `Blocked by a deleted ${blockerNoun(group.root.blockedBy.kind)}, “${group.root.blockedBy.name}”`}
               </span>
             )}

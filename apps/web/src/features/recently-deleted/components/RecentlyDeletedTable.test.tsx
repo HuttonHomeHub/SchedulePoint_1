@@ -753,6 +753,62 @@ describe('RecentlyDeletedTable', () => {
       expect(dialog).not.toHaveTextContent('sits inside');
     });
 
+    it.each([
+      {
+        kind: 'plan',
+        name: 'Tower A',
+        subLine: 'Uses deleted calendar “Mon-Wed”',
+        dialog: 'Plan “Tower A” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+      {
+        kind: 'project',
+        name: 'Tower',
+        subLine: 'Work in it uses deleted calendar “Mon-Wed”',
+        dialog: 'Work in project “Tower” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+      {
+        kind: 'client',
+        name: 'Northgate',
+        subLine: 'Work in it uses deleted calendar “Mon-Wed”',
+        dialog: 'Work in client “Northgate” uses the calendar “Mon-Wed”, which is also deleted.',
+      },
+    ] as const)(
+      'says a $kind row’s work uses a deleted calendar, in words true of that row (ADR-0201)',
+      ({ kind, name, subLine, dialog }) => {
+        renderTable(true, [
+          {
+            kind,
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000044',
+            name,
+            deletedAt: T,
+            canRestore: false,
+            deleteBatchId: 'b-root',
+            blockedBy: {
+              kind: 'calendar',
+              relation: 'calendar',
+              id: CAL_ID,
+              name: 'Mon-Wed',
+              deleteBatchId: 'b-cal',
+            },
+          },
+          {
+            kind: 'calendar',
+            subtype: 'ORG',
+            id: CAL_ID,
+            name: 'Mon-Wed',
+            deletedAt: '2026-07-11T09:00:00.000Z',
+            canRestore: true,
+            deleteBatchId: 'b-cal',
+            blockedBy: null,
+          },
+        ]);
+        expect(screen.getByText(subLine)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Restore calendar first…: Mon-Wed' }));
+        expect(screen.getByRole('dialog')).toHaveTextContent(dialog);
+      },
+    );
+
     it('offers “Restore resource group first…” for a child blocked by a later-deleted group', () => {
       renderTable(true, [
         {
@@ -875,6 +931,63 @@ describe('RecentlyDeletedTable', () => {
         ]);
         fireEvent.click(screen.getByRole('button', { name: 'Restore calendar Hours' }));
         const alert = await screen.findByRole('alert');
+        expect(
+          within(alert).getByRole('link', { name: 'Open the calendars library' }),
+        ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');
+      });
+
+      it('names a calendar deleted since the list loaded, on a plan row that showed no blocker (ADR-0201)', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(409, 'Restore the calendar first.', {
+            reason: 'CALENDAR_DELETED',
+            calendar: { id: CAL_ID, name: 'Mon-Wed', deleteBatchId: 'b-cal' },
+          }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          {
+            kind: 'plan',
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000055',
+            name: 'Tower A',
+            deletedAt: T,
+            canRestore: true,
+            deleteBatchId: 'b-plan',
+            blockedBy: null,
+          },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore plan Tower A' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(
+          'It uses the calendar “Mon-Wed”, which is deleted. Restore that calendar first, then restore this.',
+        );
+        expect(within(alert).queryByRole('link')).not.toBeInTheDocument();
+      });
+
+      it('links a calendar that moved to another project to the calendars library (ADR-0201 D5)', async () => {
+        mockApiFetch.mockRejectedValueOnce(
+          refuse(409, 'This calendar now belongs to another project.', {
+            reason: 'CALENDAR_OTHER_PROJECT',
+            calendar: { id: CAL_ID, name: 'Site hours', deleteBatchId: null },
+            projectId: 'p2',
+          }),
+        );
+        mockApiFetch.mockResolvedValue([]);
+        renderTable(true, [
+          {
+            kind: 'plan',
+            subtype: null,
+            id: '00000000-0000-4000-8000-000000000056',
+            name: 'Tower B',
+            deletedAt: T,
+            canRestore: true,
+            deleteBatchId: 'b-plan',
+            blockedBy: null,
+          },
+        ]);
+        fireEvent.click(screen.getByRole('button', { name: 'Restore plan Tower B' }));
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('which now belongs to another project');
         expect(
           within(alert).getByRole('link', { name: 'Open the calendars library' }),
         ).toHaveAttribute('href', '/orgs/$orgSlug/calendars');

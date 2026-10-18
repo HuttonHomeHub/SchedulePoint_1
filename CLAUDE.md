@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 26 API modules
-> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1672 web
+> (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1674 web
 > source files with 47 Playwright suites beside the base journey, and
-> 200 ADRs.
+> 201 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -578,7 +578,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
 - **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped → [`0105-a-register-row-is-not-a-spec.md`](docs/adr/0105-a-register-row-is-not-a-spec.md)
-- **ADR-0176** _(Accepted)_ — Undo checks before it writes, and sets aside what it cannot apply → [`0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md`](docs/adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)
+- **ADR-0176** _(Accepted; D3 amended by ADR-0201)_ — Undo checks before it writes, and sets aside what it cannot apply → [`0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md`](docs/adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)
 - **ADR-0177** _(Accepted)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
 - **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
@@ -603,6 +603,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
 - **ADR-0199** _(Accepted; amends ADR-0157 D2 and D4)_ — A link is never louder than the work it joins → [`0199-a-link-is-never-louder-than-the-work-it-joins.md`](docs/adr/0199-a-link-is-never-louder-than-the-work-it-joins.md)
 - **ADR-0200** _(Accepted; amends ADR-0103 D7 and ADR-0049)_ — A layer is a canvas, and the export accounts for every one → [`0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md`](docs/adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md)
+- **ADR-0201** _(Accepted; amends ADR-0176 D3)_ — A restore brings nothing back onto a deleted calendar → [`0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md`](docs/adr/0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

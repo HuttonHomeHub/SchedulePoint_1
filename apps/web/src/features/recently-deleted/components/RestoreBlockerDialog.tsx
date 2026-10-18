@@ -1,13 +1,24 @@
+import type { DeletedItem } from '@repo/types';
 import { useState } from 'react';
 
 import type { DeletionGroup } from '../model/group-deletions';
-import { sentenceNounOf, typeLabel } from '../model/kind-label';
+import { nounOf, sentenceNounOf, typeLabel } from '../model/kind-label';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 
 /** How many members are named before the rest are summarised. */
 export const BLOCKER_PREVIEW_LIMIT = 8;
+
+/**
+ * Who uses the calendar: a plan or resource does itself, while a client or project holds the work that
+ * does (ADR-0201 D2), and saying "Project “Tower” uses the calendar" would be false of the project.
+ */
+function calendarSubject(root: DeletedItem): string {
+  return root.kind === 'client' || root.kind === 'project'
+    ? `Work in ${nounOf(root)} “${root.name}”`
+    : `${sentenceNounOf(root)} “${root.name}”`;
+}
 
 /**
  * **The one case grouping cannot dissolve**, and the confirmation it needs.
@@ -60,7 +71,7 @@ export function RestoreBlockerDialog({
       title={`Restore ${blockerGroup.root.name} first?`}
       description={
         blocked.root.blockedBy?.relation === 'calendar'
-          ? `${sentenceNounOf(blocked.root)} “${blocked.root.name}” uses the calendar ` +
+          ? `${calendarSubject(blocked.root)} uses the calendar ` +
             `“${blockerGroup.root.name}”, which is also deleted. Restoring ${blockerGroup.root.name} brings ` +
             `back everything deleted with it — then you can restore ${blocked.root.name} separately.`
           : `${sentenceNounOf(blocked.root)} “${blocked.root.name}” sits inside ` +

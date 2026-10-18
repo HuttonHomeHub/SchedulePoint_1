@@ -4,6 +4,8 @@ import {
   apiActivities,
   apiDependencies as apiDependenciesShared,
   diagramList,
+  ensurePen,
+  openPlanId,
   seedActivities,
   seedLink,
   selectByName,
@@ -1064,5 +1066,82 @@ test('a planner undoes back several steps at once from the Recent edits menu', a
     await page.keyboard.press('Enter');
     await expect(diagram.getByRole('option')).toHaveCount(3, { timeout: 15_000 });
     await expect(strip).toContainText('Redid 3 steps.');
+  });
+});
+
+/**
+ * **An undo refused because the activity's calendar has since been deleted keeps its step**
+ * (ADR-0201 D4, `docs/TECH_DEBT.md` #519).
+ *
+ * A deleted activity is not listed in Recently deleted, so setting this step aside, as every other
+ * refusal is (ADR-0176 D3), would leave the planner no way in the product to get the work back. The
+ * server refuses the restore with `CALENDAR_DELETED`; the strip names the calendar and offers Try
+ * again; and once the calendar is restored the same step applies, with the activity's own id.
+ *
+ * The calendar is deleted through the API, behind the planner's back, because that is what a colleague
+ * does: nothing on the client recorded it. Assertions about what was stored go through the REST API.
+ */
+test('an undo refused for a deleted calendar keeps its step, and retries once the calendar is back', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const base = `/api/v1/organizations/${orgSlug}`;
+  const calendar = await page.request.post(`${base}/calendars`, {
+    data: { name: 'Mon-Wed', workingWeekdays: 7 },
+  });
+  expect(calendar.ok(), `POST calendars: ${calendar.status()}`).toBe(true);
+  const calendarId = ((await calendar.json()) as { data: { id: string } }).data.id;
+  const created = await page.request.post(`${base}/plans/${openPlanId(page)}/activities`, {
+    data: { name: 'Pour slab', durationDays: 5, calendarId },
+  });
+  expect(created.ok(), `POST activities: ${created.status()}`).toBe(true);
+  const activityId = ((await created.json()) as { data: { id: string } }).data.id;
+  // The panel reads the list on load, and a reload drops the pen client-side.
+  await page.reload();
+  await ensurePen(page);
+
+  const strip = page.getByTestId('canvas-history-result');
+
+  await test.step('the planner deletes the activity, then a colleague deletes its calendar', async () => {
+    await showActivities(page);
+    await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Delete activity' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(0);
+    const removed = await page.request.delete(`${base}/calendars/${calendarId}`);
+    expect(removed.ok(), `DELETE calendar: ${removed.status()}`).toBe(true);
+  });
+
+  await test.step('undo is refused in words that name the calendar, and nothing came back', async () => {
+    await page.getByRole('button', { name: /^Undo\b/ }).focus();
+    await page.keyboard.press('Control+z');
+    await expect(strip).toBeVisible({ timeout: 15_000 });
+    await expect(strip).toHaveAttribute('role', 'alert');
+    await expect(strip).toContainText(
+      'It uses the calendar “Mon-Wed”, which was deleted after your edit. Restore that calendar from Recently deleted, then undo again.',
+    );
+    // Kept, not skipped: the wording of a set-aside step would say so, and this one offers a retry.
+    await expect(strip).not.toContainText('was skipped');
+    await expect(strip.getByRole('button', { name: 'Try again' })).toBeVisible();
+    expect((await apiActivities(page, orgSlug)).some((a) => a.id === activityId)).toBe(false);
+  });
+
+  await test.step('with the calendar back, Try again restores the same activity', async () => {
+    const restored = await page.request.post(`${base}/calendars/${calendarId}/restore`);
+    expect(restored.ok(), `POST calendar restore: ${restored.status()}`).toBe(true);
+    await strip.getByRole('button', { name: 'Try again' }).click();
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).map((a) => a.id), { timeout: 20_000 })
+      .toContain(activityId);
+    await expect(strip).toContainText('Undid delete');
   });
 });

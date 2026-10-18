@@ -92,6 +92,21 @@ function setAsideClause(setAside: SetAside): string {
   }
 }
 
+/**
+ * The sentence for a step refused because it uses a calendar deleted after the edit (ADR-0201 D4).
+ * It tells the planner where the cure is and that pressing the same key again is how to retry —
+ * the step stayed on its stack, unlike a set-aside one.
+ */
+export function calendarDeletedDetail(
+  direction: 'undo' | 'redo',
+  calendarName: string | null,
+): string {
+  if (calendarName === null) {
+    return `It uses a calendar that has been deleted. Restore that calendar from Recently deleted, then ${direction} again.`;
+  }
+  return `It uses the calendar “${calendarName}”, which was deleted after your edit. Restore that calendar from Recently deleted, then ${direction} again.`;
+}
+
 /** Whether the result is a refusal or a failure — the strip's `role="alert"` half. */
 export function isHistoryFailure(result: HistoryResult): boolean {
   return result.outcome !== 'done';

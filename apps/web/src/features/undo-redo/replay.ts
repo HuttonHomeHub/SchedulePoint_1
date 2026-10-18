@@ -6,6 +6,8 @@ import type {
   ResourceAssignmentSummary,
 } from '@repo/types';
 
+import { calendarDeletedDetail } from './history-result';
+
 import { ApiFetchError } from '@/lib/api/client';
 
 /**
@@ -199,6 +201,10 @@ export async function writeOrSetAside(
       if (err.status === 404) return notApplicable('gone', subjectName);
       const reason = reasonOf(err);
       if (reason === 'PARENT_DELETED') return notApplicable('parent-deleted', subjectName);
+      // The one 409 that is NOT set aside (ADR-0201 D4): the cure — restoring the calendar — is in the
+      // planner's hands, and a deleted activity is not listed in Recently deleted, so dropping the
+      // step would leave no way in the product to get that work back. A throw leaves both stacks intact.
+      if (reason === 'CALENDAR_DELETED') throw new CalendarDeletedFailure(calendarNameOf(err), err);
       // A cross-plan link the plan already has, or one that would close a programme cycle because
       // somebody else has since linked the other way: both read as "that link cannot be made now".
       if (reason === 'CROSS_PLAN_CYCLE_DETECTED') return notApplicable('cycle', subjectName);
@@ -304,6 +310,30 @@ export class ReplayFailure extends Error {
     super(detail, { cause });
     this.name = 'ReplayFailure';
   }
+}
+
+/**
+ * A restore refused because the row uses a calendar that has since been deleted. A {@link ReplayFailure}
+ * (the step stays on its stack and the strip offers Try again) that carries the calendar's name rather
+ * than a sentence, because the sentence says "undo again" or "redo again" and only the host knows which
+ * press it was (`calendarDeletedDetail` in `history-result.ts`). `detail` is the undo wording, for any
+ * caller that reads it without knowing the direction.
+ */
+export class CalendarDeletedFailure extends ReplayFailure {
+  constructor(
+    /** Null when the calendar row no longer exists to be named. */
+    readonly calendarName: string | null,
+    cause: unknown,
+  ) {
+    super(calendarDeletedDetail('undo', calendarName), cause);
+    this.name = 'CalendarDeletedFailure';
+  }
+}
+
+/** The calendar's name from a `CALENDAR_DELETED` envelope, when it carries one. */
+function calendarNameOf(err: ApiFetchError): string | null {
+  const calendar = (err.error.details as { calendar?: { name?: unknown } } | undefined)?.calendar;
+  return typeof calendar?.name === 'string' ? calendar.name : null;
 }
 
 /** Whether an error is the server saying the thing is already gone. */

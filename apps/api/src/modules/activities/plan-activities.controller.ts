@@ -236,7 +236,9 @@ export class PlanActivitiesController {
   @ApiConflictResponse({
     description:
       'The batch cannot be restored as it stands — a still-deleted ancestor (PARENT_DELETED) or a ' +
-      'name/code now taken by an active sibling (NAME_TAKEN / CODE_TAKEN).',
+      'name/code now taken by an active sibling (NAME_TAKEN / CODE_TAKEN), or a calendar an activity in ' +
+      'the batch uses is deleted (CALENDAR_DELETED; restore that calendar first)' +
+      ' or one now belongs to another project (CALENDAR_OTHER_PROJECT; make it organisation-wide). PARENT_DELETED takes precedence.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async restoreBatch(

@@ -1379,16 +1379,18 @@ Each item carries:
 | `kind` / `id` / `name` / `deletedAt` | The deleted thing. `kind` is `client`, `project`, `plan`, `resource` or `calendar`.                                                                                                                                                                                                                                             |
 | `subtype`                            | **(ADR-0195)** The `ResourceKind` of a resource (`GROUP` is a resource group) or the `CalendarScope` of a calendar; `null` for the hierarchy. Display only, never authorisation.                                                                                                                                                |
 | `expiresAt`                          | **(ADR-0195)** When the retention timer WOULD permanently remove the row, or `null` when none ever does. A resource and an ORG calendar: `null`. A PROJECT calendar: its project's `deletedAt + retentionDays` while the project is deleted. Hierarchy rows: `deletedAt + retentionDays`. Served whatever `retentionActive` is. |
-| `canRestore`                         | Whether restoring this row alone is legal — false when a live parent is required, or (a resource) a calendar in its deletion is deleted.                                                                                                                                                                                        |
+| `canRestore`                         | Whether restoring this row alone is legal — false when a live parent is required, or (a resource, plan, project or client) a calendar its deletion uses is deleted.                                                                                                                                                             |
 | `deleteBatchId`                      | **The cascade's identity.** Deleting a client stamps ONE id across its projects and plans, and the restore is keyed on it, so those rows return together whatever the caller presses. Null only for a row deleted before batching existed.                                                                                      |
 | `blockedBy`                          | What must come back first: `{ kind, relation, id, name, deleteBatchId }`, or `null`. Drawn from the same organisation-scoped query as the row itself, so it can never name anything in another organisation.                                                                                                                    |
 
 `blockedBy.relation` (ADR-0195 D3) is `parent` — the row's immediate parent is deleted (a client, a
 project, a resource group, or a PROJECT calendar's project), computed whatever batch the parent is in —
-or `calendar`, only ever served for a resource row with **no** deleted parent (a group's root): the
-first deleted calendar used by any resource in that row's deletion. Parent first is what keeps a
-group's members as members, since the web picks a group's root as the row whose blocker lies outside
-its batch.
+or `calendar`, only ever served for a row with **no** deleted parent: for a resource (a group's root),
+the first deleted calendar used by any resource in that row's deletion; for a **plan, project or
+client** (ADR-0201 D2), the lowest-id deleted calendar used by any plan or activity in that row's
+deletion, **unless that calendar was deleted in the same batch** (it comes back with the row, so it
+blocks nothing). Parent first is what keeps a group's members as members, since the web picks a
+group's root as the row whose blocker lies outside its batch.
 
 `blockedBy.deleteBatchId` is the field that matters: **equal to the row's own** means the blocker is
 part of the same cascade and a single restore of the batch root takes both — the caller should
@@ -1438,7 +1440,7 @@ needs `calendar:manage_org`. Audited as one `resource.restored` / `calendar.rest
 | Status | `details.reason`                                       | When                                                                                                                                                                                                                     |
 | ------ | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 409    | `PARENT_DELETED`                                       | The parent group (or a calendar's project) is still deleted, or the id is a **member** of a group's deletion. `details.blockedBy` is as in the bin.                                                                      |
-| 409    | `CALENDAR_DELETED`                                     | A resource in the deletion uses a calendar that is deleted. `details.calendar` is `{ id, name, deleteBatchId }`. Restore the calendar first.                                                                             |
+| 409    | `CALENDAR_DELETED`                                     | A resource in the deletion uses a calendar that is deleted. `details.calendar` is `{ id, name, deleteBatchId }`. Restore the calendar first. The hierarchy restores refuse the same way (below).                         |
 | 409    | `NAME_TAKEN` / `CODE_TAKEN`                            | A live row, **archived or not**, holds a name (or a resource's code) the deletion needs. `details.conflicts[]` is `{ field, value, id, archived }`, capped at 5, with `details.total`. Nothing is renamed automatically. |
 | 422    | `RESOURCE_PARENT_NOT_GROUP` / `RESOURCE_TREE_TOO_DEEP` | The parent has stopped being a group, or the branch no longer fits under it. `details.parentName` names the parent to fix.                                                                                               |
 
@@ -1448,6 +1450,64 @@ to `NAME_TAKEN` or `CODE_TAKEN` but **no** `conflicts[]` or `total`: read `reaso
 
 A calendar restore also marks every active plan that uses the calendar "edited since calculated", so
 its next recalculation uses it again; the scheduling engine itself is untouched.
+
+#### Restoring a client, project, plan or activity onto a deleted calendar (ADR-0201)
+
+| Status | `details.reason`         | When                                                                                                                    |
+| ------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| 409    | `PARENT_DELETED`         | The parent is still deleted. Reported before either calendar reason.                                                    |
+| 409    | `CALENDAR_DELETED`       | The batch uses a calendar deleted outside it.                                                                           |
+| 409    | `CALENDAR_OTHER_PROJECT` | The batch uses a project calendar that now belongs to another project. `details.calendar.deleteBatchId` is `null` here. |
+
+`POST …/clients/:clientId/restore`, `…/projects/:projectId/restore`, `…/plans/:planId/restore`,
+`…/activities/:activityId/restore` and `…/plans/:planId/activities/restore-batch/:batchId` refuse with
+**409 `CALENDAR_DELETED`** when the batch they would bring back contains a plan or activity that uses a
+calendar which is deleted and was **not** deleted in the same batch. The engine schedules a deleted
+calendar as round-the-clock time, so a restore that allowed it would finish the programme early with
+nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one above:
+
+```jsonc
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Restore the calendar first.",
+    "details": {
+      "reason": "CALENDAR_DELETED",
+      "calendar": { "id": "…", "name": "Mon-Wed", "deleteBatchId": "…" },
+    },
+  },
+}
+```
+
+- **One calendar is named**, the lowest id; restoring it may reveal the next. `name` is `null` only for a
+  calendar row that no longer exists.
+- The check runs before the first write, so a refusal changes nothing and records no audit event.
+- A project's **own** calendars, swept with it, come back with it and are not a blocker; an
+  **archived** calendar is live (ADR-0053 §4) and is not one either.
+- `PARENT_DELETED` is reported first when both apply.
+- **409 `CALENDAR_OTHER_PROJECT`** (ADR-0201 D5) is the second refusal on the same routes: a plan or
+  activity in the batch uses an active **PROJECT**-tier calendar that now belongs to a different project
+  (an ORG calendar can be narrowed while the plan sits in the bin, because the narrowing guard counts only
+  active users, `docs/TECH_DEBT.md` #530). `details` carries `calendar` `{ id, name, deleteBatchId }` and
+  `projectId`, the project the calendar now belongs to; `calendar.deleteBatchId` is **`null`**, because the
+  calendar is live. It is checked after `CALENDAR_DELETED`, and `PARENT_DELETED` outranks both. It is a
+  different string from the **422** `CALENDAR_WRONG_SCOPE` a binding write answers with. The cure is to make the
+  calendar organisation-wide again (promote, always allowed). Rows restored with no batch id are not checked.
+- **A calendar stranded by an older delete is restored with its project (ADR-0201 D6).** A PROJECT-tier
+  calendar that was deleted on its own before its project was deleted is not swept with the project,
+  and neither restore could go first. A project or client restore therefore brings it back in the same
+  transaction, with its exceptions, when a plan or activity in the batch uses it and its project is among
+  those restored; a `NAME_TAKEN` `409` is returned first if the project already holds a live calendar of
+  that name. A plan or activity restore does not do this: its project is active, so the calendar's own
+  restore is open.
+- Plans and activities that were **already** live on a deleted calendar before this check are not
+  repaired; restoring the calendar still marks their plans "edited since calculated".
+- Every restore (including `POST …/calendars/:calendarId/restore` for a PROJECT calendar) takes its
+  ancestors `FOR SHARE`, top-down (client, then project), and a client or project delete takes its own
+  row `FOR NO KEY UPDATE` before it reads its subtree (ADR-0201 D3, `docs/TECH_DEBT.md` #520). A restore
+  and a delete of its ancestor therefore end consistently: either the delete sweeps the restored rows, or
+  the restore answers `PARENT_DELETED`. Nothing is left active under a deleted ancestor, and the loser
+  waits rather than failing.
 
 ### The organisation overview (ADR-0098)
 

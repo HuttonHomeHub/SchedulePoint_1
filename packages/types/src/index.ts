@@ -944,8 +944,8 @@ export interface CrossPlanDependencySummary {
 
 /**
  * A soft-deleted row surfaced in the "recently deleted" list. `kind`
- * discriminates which entity it is; `canRestore` is false when a parent (or, for a resource, its
- * calendar) is still deleted — restore that first. Clients, projects and plans are the hierarchy;
+ * discriminates which entity it is; `canRestore` is false when a parent (or, for a resource, plan,
+ * project or client, a calendar it uses) is still deleted — restore that first. Clients, projects and plans are the hierarchy;
  * resources and calendars are the two libraries (ADR-0195).
  */
 export interface DeletedItem {
@@ -2283,8 +2283,15 @@ export interface ReplaceActivityStepsRequest {
 export const LIBRARY_RESTORE_REASON = {
   /** The row's parent group, or a calendar's project, is still deleted (409). */
   PARENT_DELETED: 'PARENT_DELETED',
-  /** A resource in the batch uses a calendar that is deleted (409). */
+  /** A row in the batch (a resource, plan or activity) uses a calendar that is deleted (409). */
   CALENDAR_DELETED: 'CALENDAR_DELETED',
+  /**
+   * A plan or activity in the batch uses a calendar that now belongs to a different project (409,
+   * ADR-0201 D5). `details.calendar` names it and `details.projectId` is the project it belongs to.
+   * Deliberately NOT `CALENDAR_WRONG_SCOPE`, the 422 reason a binding write answers with
+   * (`CALENDAR_ERROR`): one string per refusal, so no handler has to read the status to tell them.
+   */
+  CALENDAR_OTHER_PROJECT: 'CALENDAR_OTHER_PROJECT',
   /** A live row already holds a restored row's name (409). */
   NAME_TAKEN: 'NAME_TAKEN',
   /** A live row already holds a restored resource's code (409). */

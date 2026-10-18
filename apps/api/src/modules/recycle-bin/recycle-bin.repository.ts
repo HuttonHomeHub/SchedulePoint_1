@@ -73,6 +73,9 @@ interface DeletedUnionRow {
  * resource batch's first deleted calendar — needs a lookup over the whole batch, so it runs AFTER
  * the page is cut, for the page's own resources only, and only for a row with no deleted parent
  * (the group's root). A member of a group never pays for it, and it cannot grow with the bin.
+ * A plan, project or client gets the same lookup over the plans and activities of its batch
+ * (ADR-0201 D2), so the row says what its restore would refuse; a calendar deleted in the SAME
+ * batch is not a blocker, because the restore brings it back.
  *
  * Deliberately NO new indexes: a supporting `(organization_id, deleted_at DESC, id) WHERE
  * deleted_at IS NOT NULL` index stays the measure-first escalation (ADR-0096 D6, ADR-0195), and it
@@ -191,13 +194,13 @@ export class RecycleBinRepository {
         LIMIT ${take}
       )
       SELECT pg.kind, pg.id, pg.name, pg.deleted_at,
-             (pg.parent_active AND cb.id IS NULL) AS parent_active,
+             (pg.parent_active AND cb.id IS NULL AND hb.id IS NULL) AS parent_active,
              pg.delete_batch_id,
-             COALESCE(pg.blocker_kind, CASE WHEN cb.id IS NULL THEN NULL ELSE 'calendar' END) AS blocker_kind,
-             COALESCE(pg.blocker_relation, CASE WHEN cb.id IS NULL THEN NULL ELSE 'calendar' END) AS blocker_relation,
-             COALESCE(pg.blocker_id, cb.id) AS blocker_id,
-             COALESCE(pg.blocker_name, cb.name) AS blocker_name,
-             COALESCE(pg.blocker_batch_id, cb.delete_batch_id) AS blocker_batch_id,
+             COALESCE(pg.blocker_kind, CASE WHEN COALESCE(cb.id, hb.id) IS NULL THEN NULL ELSE 'calendar' END) AS blocker_kind,
+             COALESCE(pg.blocker_relation, CASE WHEN COALESCE(cb.id, hb.id) IS NULL THEN NULL ELSE 'calendar' END) AS blocker_relation,
+             COALESCE(pg.blocker_id, cb.id, hb.id) AS blocker_id,
+             COALESCE(pg.blocker_name, cb.name, hb.name) AS blocker_name,
+             COALESCE(pg.blocker_batch_id, cb.delete_batch_id, hb.delete_batch_id) AS blocker_batch_id,
              pg.subtype, pg.expiry_basis
         FROM page pg
         LEFT JOIN LATERAL (
@@ -211,6 +214,30 @@ export class RecycleBinRepository {
            ORDER BY rc.id
            LIMIT 1
         ) cb ON pg.kind = 'resource' AND pg.blocker_kind IS NULL AND pg.delete_batch_id IS NOT NULL
+        LEFT JOIN LATERAL (
+          SELECT hc.id, hc.name, hc.delete_batch_id
+            FROM (
+              SELECT hp.calendar_id
+                FROM plans hp
+               WHERE hp.delete_batch_id = pg.delete_batch_id
+                 AND hp.organization_id = ${organizationId}::uuid
+                 AND hp.deleted_at IS NOT NULL
+                 AND hp.calendar_id IS NOT NULL
+              UNION
+              SELECT ha.calendar_id
+                FROM activities ha
+               WHERE ha.delete_batch_id = pg.delete_batch_id
+                 AND ha.organization_id = ${organizationId}::uuid
+                 AND ha.deleted_at IS NOT NULL
+                 AND ha.calendar_id IS NOT NULL
+            ) refs
+            JOIN calendars hc ON hc.id = refs.calendar_id AND hc.organization_id = ${organizationId}::uuid
+           WHERE hc.deleted_at IS NOT NULL
+             AND hc.delete_batch_id IS DISTINCT FROM pg.delete_batch_id
+           ORDER BY hc.id
+           LIMIT 1
+        ) hb ON pg.kind IN ('plan', 'project', 'client') AND pg.blocker_kind IS NULL
+            AND pg.delete_batch_id IS NOT NULL
        ORDER BY pg.deleted_at DESC, pg.id ASC
     `;
 

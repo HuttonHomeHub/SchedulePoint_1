@@ -156,9 +156,12 @@ describe('CalendarsService', () => {
     resources = { countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0) };
     projects = {
       findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }),
-      findByIdInOrg: vi
-        .fn()
-        .mockResolvedValue({ id: PROJECT_ID, name: 'Riverside', deletedAt: null }),
+      findByIdInOrg: vi.fn().mockResolvedValue({
+        id: PROJECT_ID,
+        clientId: 'client-1',
+        name: 'Riverside',
+        deletedAt: null,
+      }),
     };
     // The tx handle exposes $executeRaw (the calendar advisory lock used by remove).
     prisma = {
@@ -326,11 +329,14 @@ describe('CalendarsService', () => {
         ...overrides,
       });
     let executeRaw: ReturnType<typeof vi.fn>;
+    /** The `FOR SHARE` ancestor locks: a row back means the ancestor is active. */
+    let queryRaw: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
       executeRaw = vi.fn().mockResolvedValue(1);
+      queryRaw = vi.fn().mockResolvedValue([{ id: 'x' }]);
       prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
-        cb({ $executeRaw: executeRaw }),
+        cb({ $executeRaw: executeRaw, $queryRaw: queryRaw }),
       );
       calendars.findAnyStateByIdInOrg.mockResolvedValue(deleted());
       calendars.findActiveDetailByIdInOrg.mockResolvedValue({
@@ -384,10 +390,13 @@ describe('CalendarsService', () => {
       );
       projects.findByIdInOrg.mockResolvedValue({
         id: PROJECT_ID,
+        clientId: 'client-1',
         name: 'Riverside',
         deletedAt: new Date(),
         deleteBatchId: 'proj-batch',
       });
+      // The locking read matches nothing for a deleted project.
+      queryRaw.mockResolvedValue([]);
       const error = await service
         .restore(principalWith(ALL), 'acme', 'cal-1')
         .catch((e: unknown) => e);
@@ -397,6 +406,68 @@ describe('CalendarsService', () => {
         blockedBy: { kind: 'project', relation: 'parent', id: PROJECT_ID, name: 'Riverside' },
       });
       expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('locks the project’s client, then the project, FOR SHARE, after the calendar lock (#520)', async () => {
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(
+        deleted({ scope: 'PROJECT', projectId: PROJECT_ID }),
+      );
+
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+
+      const reads = queryRaw.mock.calls.map((call) => {
+        const [strings, ...values] = call as unknown as [string[], ...unknown[]];
+        return { sql: strings.join('?'), values };
+      });
+      expect(reads).toHaveLength(2);
+      expect(reads[0]).toMatchObject({ values: ['client-1'] });
+      expect(reads[0]?.sql).toContain('FROM clients');
+      expect(reads[1]).toMatchObject({ values: [PROJECT_ID] });
+      expect(reads[1]?.sql).toContain('FROM projects');
+      expect(reads.every((r) => r.sql.includes('FOR SHARE'))).toBe(true);
+      // The calendar advisory lock came first: the order every restore path takes.
+      expect(executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        queryRaw.mock.invocationCallOrder[0] ?? Infinity,
+      );
+      expect(calendars.restoreWithExceptions).toHaveBeenCalled();
+    });
+
+    it('names the project as it is NOW when the lock finds it deleted since the first read', async () => {
+      // The race #520 closes: the project was active at the unlocked read and a delete committed
+      // before the lock was granted. The answer must come from a fresh read, not the stale one.
+      calendars.findAnyStateByIdInOrg.mockResolvedValue(
+        deleted({ scope: 'PROJECT', projectId: PROJECT_ID }),
+      );
+      projects.findByIdInOrg
+        .mockResolvedValueOnce({
+          id: PROJECT_ID,
+          clientId: 'client-1',
+          name: 'Riverside',
+          deletedAt: null,
+        })
+        .mockResolvedValueOnce({
+          id: PROJECT_ID,
+          clientId: 'client-1',
+          name: 'Riverside',
+          deletedAt: new Date(),
+          deleteBatchId: 'proj-batch',
+        });
+      queryRaw.mockResolvedValue([]);
+
+      const error = await service
+        .restore(principalWith(ALL), 'acme', 'cal-1')
+        .catch((e: unknown) => e);
+
+      expect((error as ConflictError).details).toMatchObject({
+        reason: 'PARENT_DELETED',
+        blockedBy: { id: PROJECT_ID, deleteBatchId: 'proj-batch' },
+      });
+      expect(calendars.restoreWithExceptions).not.toHaveBeenCalled();
+    });
+
+    it('takes no ancestor lock for an ORG calendar', async () => {
+      await service.restore(principalWith(ALL), 'acme', 'cal-1');
+      expect(queryRaw).not.toHaveBeenCalled();
     });
 
     it('refuses when a live calendar holds the name, saying whether it is archived', async () => {

@@ -317,3 +317,87 @@ test('the Show filter narrows the bin by the keyboard and survives a reload', as
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(results.violations).toEqual([]);
 });
+
+/**
+ * A plan restore never brings work back onto a deleted calendar (ADR-0201, `docs/TECH_DEBT.md` #519).
+ * The row says what its restore would refuse before anything is pressed, and the cure is the two-press
+ * flow ADR-0195 shipped for resources: restore the calendar, then the plan.
+ */
+test('a plan whose calendar was deleted after it is restored in two presses (accessible)', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, 'bincalplan');
+  const api = libraryApi(page, orgSlug);
+  const client = await api.post('/clients', { name: 'Northgate' });
+  const project = await api.post(`/clients/${client.id}/projects`, { name: 'Tower' });
+  const calendar = await api.post('/calendars', { name: 'Mon-Wed', workingWeekdays: 7 });
+  const plan = await api.post(`/projects/${project.id}/plans`, {
+    name: 'Tower A',
+    plannedStart: '2026-01-05',
+  });
+  const read = await page.request.get(`/api/v1/organizations/${orgSlug}/plans/${plan.id}`);
+  const version = ((await read.json()) as { data: { version: number } }).data.version;
+  const bound = await page.request.patch(`/api/v1/organizations/${orgSlug}/plans/${plan.id}`, {
+    data: { calendarId: calendar.id, version },
+  });
+  expect(bound.ok(), `PATCH plan: ${bound.status()}`).toBe(true);
+  await api.remove(`/plans/${plan.id}`);
+  await api.remove(`/calendars/${calendar.id}`);
+
+  await navLink(page, 'Recently deleted').click();
+  // The blocker is named under the row it blocks, before any press.
+  await expect(page.getByText('Uses deleted calendar “Mon-Wed”')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore plan Tower A' })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.getByRole('button', { name: 'Restore calendar first…: Mon-Wed' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Plan “Tower A” uses the calendar “Mon-Wed”');
+  await dialog.getByRole('button', { name: 'Restore Mon-Wed' }).click();
+
+  await page.getByRole('button', { name: 'Restore plan Tower A' }).click();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+});
+
+/**
+ * A plan cannot come back onto a calendar that now belongs to another project (ADR-0201 D5). The
+ * server refuses, the alert says why in the planner's words, and its link goes to the library where
+ * the cure (making the calendar organisation-wide again) is made.
+ */
+test('a plan whose calendar moved to another project is refused, with a way to the library', async ({
+  page,
+}) => {
+  const orgSlug = await onboard(page, 'bincalmove');
+  const api = libraryApi(page, orgSlug);
+  const base = `/api/v1/organizations/${orgSlug}`;
+  const client = await api.post('/clients', { name: 'Northgate' });
+  const project = await api.post(`/clients/${client.id}/projects`, { name: 'Tower' });
+  const elsewhere = await api.post(`/clients/${client.id}/projects`, { name: 'Elsewhere' });
+  const calendar = await api.post('/calendars', { name: 'Site hours', workingWeekdays: 31 });
+  const plan = await api.post(`/projects/${project.id}/plans`, {
+    name: 'Tower A',
+    plannedStart: '2026-01-05',
+  });
+  const planRead = await page.request.get(`${base}/plans/${plan.id}`);
+  const planVersion = ((await planRead.json()) as { data: { version: number } }).data.version;
+  const bound = await page.request.patch(`${base}/plans/${plan.id}`, {
+    data: { calendarId: calendar.id, version: planVersion },
+  });
+  expect(bound.ok(), `PATCH plan: ${bound.status()}`).toBe(true);
+  await api.remove(`/plans/${plan.id}`);
+  const calRead = await page.request.get(`${base}/calendars/${calendar.id}`);
+  const calVersion = ((await calRead.json()) as { data: { version: number } }).data.version;
+  const narrowed = await page.request.patch(`${base}/calendars/${calendar.id}`, {
+    data: { scope: 'PROJECT', projectId: elsewhere.id, version: calVersion },
+  });
+  expect(narrowed.ok(), `PATCH calendar: ${narrowed.status()}`).toBe(true);
+
+  await navLink(page, 'Recently deleted').click();
+  // Not a deleted calendar, so the row predicts nothing and the press is what finds out.
+  await page.getByRole('button', { name: 'Restore plan Tower A' }).click();
+  const alert = page.getByRole('alert').filter({ hasText: 'now belongs to another project' });
+  await expect(alert).toContainText('It uses the calendar “Site hours”');
+  await expect(alert.getByRole('link', { name: 'Open the calendars library' })).toBeVisible();
+});

@@ -2,11 +2,20 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Prisma, type DependencyType, type LagCalendarSource } from '@prisma/client';
+import { LIBRARY_RESTORE_REASON } from '@repo/types';
 
 import { lockActivityIdsInIdOrder, lockPlanActivityRowsInIdOrder } from '../db/activity-row-lock';
+import { acquireCalendarWriteLock } from '../db/calendar-advisory-lock';
+import {
+  lockActiveClientForShare,
+  lockActiveProjectChainForShare,
+  lockClientRowForDelete,
+  lockProjectRowForDelete,
+} from '../db/hierarchy-row-lock';
 import { assertVersionMatches } from '../db/locked-version';
 import { acquirePlanWriteLocks } from '../db/plan-advisory-lock';
 import { ConflictError, NotFoundError } from '../errors/domain-errors';
+import { markScheduleInputsChanged } from '../schedule-inputs/mark-schedule-inputs-changed';
 
 /**
  * The four levels of the Client → Project → Plan → Activity hierarchy, plus
@@ -84,6 +93,24 @@ export interface KnockOn {
 /** `push(...items)` throws a RangeError past ~100,000 arguments; a subtree can be that large. */
 function appendAll<T>(into: T[], items: readonly T[]): void {
   for (const item of items) into.push(item);
+}
+
+/** The deleted row a restore starts from, as `loadDeletedRoot` reads it. */
+interface DeletedRoot {
+  deleteBatchId: string | null;
+  organizationId: string;
+  parentId: string | null;
+  wbsParentId?: string | null;
+  /** The root's own calendar: only used when the root carries no batch id to key a read on. */
+  calendarId: string | null;
+}
+
+/** A deleted PROJECT calendar a project or client restore brings back with it (ADR-0201 D6). */
+interface StrandedCalendar {
+  id: string;
+  name: string;
+  projectId: string;
+  deleteBatchId: string | null;
 }
 
 const stampedLinkSelect = {
@@ -381,6 +408,10 @@ export class HierarchyLifecycleService {
     // Children are stamped before parents (activities → plans → projects → client),
     // all with the same batch id, so a restore of the root reactivates the subtree.
     if (entity === 'client') {
+      // The root row first, BEFORE the subtree is read: a restore that holds this client `FOR SHARE`
+      // makes the delete wait, and its reads below then see what the restore brought back
+      // (ADR-0201 D3, `docs/TECH_DEBT.md` #520).
+      await lockClientRowForDelete(tx, id);
       // Resolve the active subtree top-down BEFORE deleting it: the client's active
       // projects, then the active plans under them, then those plans' activities —
       // active-only so separately-deleted subtrees (their own batch) are untouched.
@@ -422,6 +453,7 @@ export class HierarchyLifecycleService {
         await tx.client.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
     } else if (entity === 'project') {
+      await lockProjectRowForDelete(tx, id);
       const planIds = (
         await tx.plan.findMany({ where: { projectId: id, deletedAt: null }, select: { id: true } })
       ).map((p) => p.id);
@@ -586,7 +618,8 @@ export class HierarchyLifecycleService {
   /**
    * Restore `entity` #id and everything soft-deleted with it (same batch).
    * Throws {@link NotFoundError} if the row is missing or not deleted,
-   * `PARENT_DELETED` if its parent is still deleted, or `NAME_TAKEN` if
+   * `PARENT_DELETED` if its parent is still deleted, `CALENDAR_DELETED` if a plan or activity in
+   * the batch uses a calendar that is deleted outside it (ADR-0201), or `NAME_TAKEN` if
    * reactivating would collide with an active sibling.
    *
    * soft-delete: deleted-only — every write here reactivates rows selected by the batch id the
@@ -606,7 +639,11 @@ export class HierarchyLifecycleService {
     knockOn?: KnockOn,
   ): Promise<CascadeCounts> {
     const root = await this.loadDeletedRoot(tx, entity, id);
+    // The calendar locks come BEFORE the parent check: the lock order is calendar, then ancestors
+    // (`docs/specs/deleted-calendar-restore/spec.md` §4.6), the order `CalendarsService.restore` takes.
+    const calendarIds = await this.lockBatchCalendars(tx, entity, root);
     await this.assertParentActive(tx, entity, root);
+    const strandedCalendars = await this.assertCalendarsActive(tx, entity, id, root, calendarIds);
 
     // Every soft-deleted row carries a batch id; fall back to the row itself for
     // defensiveness. Restore across all four tables so a client's batch (which
@@ -733,6 +770,12 @@ export class HierarchyLifecycleService {
           where: { deleteBatchId: batchId },
           data: restore,
         });
+        counts.calendars += await this.restoreStrandedCalendars(
+          tx,
+          root.organizationId,
+          strandedCalendars,
+          actorId,
+        );
         // Restore the batch's links AFTER their activities, and only where BOTH
         // endpoints are now active — a link whose other end was deleted separately
         // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).
@@ -771,6 +814,321 @@ export class HierarchyLifecycleService {
     }
 
     return counts;
+  }
+
+  /**
+   * Take the calendar advisory lock — the one the delete-in-use guard and every binding seam take —
+   * on each calendar the batch's plans and activities point at, in ascending id order, and return
+   * the ids. A calendar then cannot be deleted between {@link assertCalendarsActive} and the
+   * commit. Calendars deleted in the same batch are locked too (one extra lock each; they are told
+   * apart only by the state read), which keeps this a single pass before the first write.
+   *
+   * soft-delete: deleted-only — the plans and activities read here are the ones stamped with the
+   * batch id, which are soft-deleted by construction; a `deletedAt` filter would only restate it.
+   */
+  private async lockBatchCalendars(
+    tx: Prisma.TransactionClient,
+    entity: HierarchyEntity,
+    root: DeletedRoot,
+  ): Promise<string[]> {
+    const ids = new Set<string>();
+    if (root.deleteBatchId) {
+      const where = {
+        deleteBatchId: root.deleteBatchId,
+        organizationId: root.organizationId,
+        calendarId: { not: null },
+      };
+      // An activity or link batch holds no plan, so that read would match nothing (and costs a
+      // statement on the activity restore, whose budget `activity-history-statements` pins).
+      const plans =
+        entity === 'activity' || entity === 'dependency'
+          ? []
+          : await tx.plan.findMany({
+              where,
+              select: { calendarId: true },
+              distinct: ['calendarId'],
+            });
+      const activities = await tx.activity.findMany({
+        where,
+        select: { calendarId: true },
+        distinct: ['calendarId'],
+      });
+      for (const row of [...plans, ...activities]) if (row.calendarId) ids.add(row.calendarId);
+    } else if (root.calendarId) {
+      // The legacy no-batch path restores the root alone, so its own calendar is the only reference.
+      ids.add(root.calendarId);
+    }
+    const sorted = [...ids].sort();
+    for (const calendarId of sorted) await acquireCalendarWriteLock(tx, calendarId);
+    return sorted;
+  }
+
+  /**
+   * Every calendar the batch points at must be active, or be restored by this very batch (a
+   * project's own calendars are swept with it and come back with it). An archived calendar is
+   * live (ADR-0053 §4). Refused with the lowest deleted id, naming it, so the bin and the 409 agree.
+   * Runs under the locks {@link lockBatchCalendars} took.
+   *
+   * **One exit for a state the product used to allow (ADR-0201 D6).** A PROJECT-tier calendar deleted
+   * on its own, in its own batch, before its project was deleted is not swept with the project, and
+   * the calendar's own restore needs the project active while the project's restore needs the
+   * calendar: neither could ever come back. For a project or client restore, such a calendar of a
+   * project THIS batch restores is not a blocker. It is returned, to be restored in the same
+   * transaction, so nothing is left orphaned under the project and nothing comes back onto it deleted.
+   * Its name is checked here, before the first write, as the calendar's own restore checks it.
+   *
+   * A calendar that is active but now belongs to ANOTHER project is refused too
+   * ({@link assertProjectCalendarsFit}, ADR-0201 D5): it is the second route to the same defect, and
+   * checked second so the deleted-calendar answer, which the bin predicts, keeps its precedence.
+   *
+   * soft-delete: any-state — the whole question is whether each calendar is deleted.
+   */
+  private async assertCalendarsActive(
+    tx: Prisma.TransactionClient,
+    entity: HierarchyEntity,
+    rootId: string,
+    root: DeletedRoot,
+    calendarIds: readonly string[],
+  ): Promise<StrandedCalendar[]> {
+    if (calendarIds.length === 0) return [];
+    const states = await tx.calendar.findMany({
+      where: { id: { in: [...calendarIds] }, organizationId: root.organizationId },
+      select: {
+        id: true,
+        name: true,
+        deletedAt: true,
+        deleteBatchId: true,
+        scope: true,
+        projectId: true,
+      },
+    });
+    const byId = new Map(states.map((state) => [state.id, state]));
+    const restoredProjects = await this.projectsRestoredBy(tx, entity, rootId, root);
+    const projectCalendars: { id: string; name: string; projectId: string }[] = [];
+    const stranded: StrandedCalendar[] = [];
+    for (const calendarId of calendarIds) {
+      const state = byId.get(calendarId);
+      if (state && state.deletedAt === null) {
+        if (state.scope === 'PROJECT' && state.projectId !== null) {
+          projectCalendars.push({ id: state.id, name: state.name, projectId: state.projectId });
+        }
+        continue;
+      }
+      if (state && root.deleteBatchId !== null && state.deleteBatchId === root.deleteBatchId) {
+        continue;
+      }
+      if (
+        state &&
+        state.scope === 'PROJECT' &&
+        state.projectId !== null &&
+        restoredProjects.has(state.projectId)
+      ) {
+        await this.assertNameFreeInProject(tx, root.organizationId, state);
+        stranded.push({
+          id: state.id,
+          name: state.name,
+          projectId: state.projectId,
+          deleteBatchId: state.deleteBatchId,
+        });
+        projectCalendars.push({ id: state.id, name: state.name, projectId: state.projectId });
+        continue;
+      }
+      throw new ConflictError('Restore the calendar first.', {
+        reason: LIBRARY_RESTORE_REASON.CALENDAR_DELETED,
+        calendar: {
+          id: calendarId,
+          name: state?.name ?? null,
+          deleteBatchId: state?.deleteBatchId ?? null,
+        },
+      });
+    }
+    await this.assertProjectCalendarsFit(tx, root, projectCalendars);
+    return stranded;
+  }
+
+  /**
+   * The ids of the projects this restore brings back: the root itself for a project, the projects
+   * stamped with the client's batch for a client, and none for a plan or activity (their project is
+   * already active, so the calendar's own restore is open to the planner).
+   *
+   * soft-delete: deleted-only — the projects read are stamped with the batch being restored.
+   */
+  private async projectsRestoredBy(
+    tx: Prisma.TransactionClient,
+    entity: HierarchyEntity,
+    rootId: string,
+    root: DeletedRoot,
+  ): Promise<Set<string>> {
+    if (entity !== 'project' && entity !== 'client') return new Set();
+    if (root.deleteBatchId === null) return entity === 'project' ? new Set([rootId]) : new Set();
+    const projects = await tx.project.findMany({
+      where: { deleteBatchId: root.deleteBatchId, organizationId: root.organizationId },
+      select: { id: true },
+    });
+    return new Set(projects.map((project) => project.id));
+  }
+
+  /**
+   * The restored project must not already hold an active calendar of the stranded one's name: the
+   * per-project partial unique would otherwise fail the whole restore as an anonymous 409. The same
+   * answer the calendar's own restore gives, so the planner sees which calendar to rename.
+   * Archived calendars count: they still hold their name (ADR-0053 §4).
+   */
+  private async assertNameFreeInProject(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    calendar: { name: string; projectId: string | null },
+  ): Promise<void> {
+    const holder = await tx.calendar.findFirst({
+      where: {
+        organizationId,
+        name: calendar.name,
+        scope: 'PROJECT',
+        projectId: calendar.projectId,
+        deletedAt: null,
+      },
+      select: { id: true, archivedAt: true },
+    });
+    if (!holder) return;
+    const archived = holder.archivedAt !== null;
+    throw new ConflictError(
+      `${archived ? 'An archived calendar' : 'A calendar'} named “${calendar.name}” already ` +
+        'exists. Rename or delete that one, then restore this.',
+      {
+        reason: LIBRARY_RESTORE_REASON.NAME_TAKEN,
+        conflicts: [{ field: 'name', value: calendar.name, id: holder.id, archived }],
+        total: 1,
+      },
+    );
+  }
+
+  /**
+   * Bring back the calendars {@link assertCalendarsActive} let through, with the exceptions that went
+   * with each one (the calendar's own batch), under the advisory locks already held, and stamp the
+   * plans that use them as edited. Returns how many calendars came back.
+   *
+   * soft-delete: deleted-only — each calendar was read deleted under its lock a moment ago; the
+   * plan and activity reads below state `deletedAt: null` themselves.
+   */
+  private async restoreStrandedCalendars(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    calendars: readonly StrandedCalendar[],
+    actorId: string,
+  ): Promise<number> {
+    const restore = { deletedAt: null, deleteBatchId: null, updatedBy: actorId };
+    let restored = 0;
+    for (const calendar of calendars) {
+      restored += (
+        await tx.calendar.updateMany({
+          where: {
+            id: calendar.id,
+            organizationId,
+            deleteBatchId: calendar.deleteBatchId,
+            deletedAt: { not: null },
+          },
+          data: { ...restore, version: { increment: 1 } },
+        })
+      ).count;
+      // A calendar with no batch id has no deletion to name its exceptions by.
+      if (calendar.deleteBatchId !== null) {
+        await tx.calendarException.updateMany({
+          where: { calendarId: calendar.id, organizationId, deleteBatchId: calendar.deleteBatchId },
+          data: restore,
+        });
+      }
+    }
+    if (restored > 0) {
+      // As a standalone calendar restore does (ADR-0195 D7): the plans that use it were last
+      // calculated while it was absent, round the clock, so they are stamped "edited since
+      // calculated" and the next run uses the calendar again. Read after the batch's plans and
+      // activities are reactivated, so the restored project's own plans are among them.
+      const ids = calendars.map((calendar) => calendar.id);
+      const plans = await tx.plan.findMany({
+        where: { organizationId, deletedAt: null, calendarId: { in: ids } },
+        select: { id: true },
+      });
+      const activities = await tx.activity.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          calendarId: { in: ids },
+          plan: { deletedAt: null },
+        },
+        select: { planId: true },
+        distinct: ['planId'],
+      });
+      await markScheduleInputsChanged(tx, organizationId, [
+        ...plans.map((plan) => plan.id),
+        ...activities.map((activity) => activity.planId),
+      ]);
+    }
+    return restored;
+  }
+
+  /**
+   * A PROJECT-tier calendar may be used only inside its own project (ADR-0053). An ORG calendar
+   * narrowed to project Y while a plan of project X sat in the bin passes the narrowing guard, which
+   * counts only ACTIVE users (`docs/TECH_DEBT.md` #530), so the restore would put X's plan on Y's
+   * calendar and a later delete of Y would sweep a calendar something still uses. Refused instead,
+   * naming the calendar and the project it now belongs to.
+   *
+   * Keyed on the batch, so a row restored with no batch id (older than batch ids) is not checked
+   * here. Only plans and activities in the batch are looked at, and an activity is placed by its
+   * plan: the plan is read in any state because a batch restore may bring the plan back with it.
+   * Three grouped reads however many calendars there are; the lowest calendar id is still reported.
+   *
+   * soft-delete: any-state — the activities and plans read here are those of a deleted batch, and
+   * the plan's state is irrelevant to which project it belongs to.
+   */
+  private async assertProjectCalendarsFit(
+    tx: Prisma.TransactionClient,
+    root: DeletedRoot,
+    calendars: readonly { id: string; name: string; projectId: string }[],
+  ): Promise<void> {
+    const batchId = root.deleteBatchId;
+    if (batchId === null || calendars.length === 0) return;
+    const where = {
+      deleteBatchId: batchId,
+      organizationId: root.organizationId,
+      calendarId: { in: calendars.map((calendar) => calendar.id) },
+    };
+    const plans = await tx.plan.findMany({ where, select: { calendarId: true, projectId: true } });
+    const activities = await tx.activity.findMany({
+      where,
+      select: { calendarId: true, planId: true },
+      distinct: ['calendarId', 'planId'],
+    });
+    const planIds = [...new Set(activities.map((row) => row.planId))];
+    const projectOfPlan = new Map(
+      planIds.length === 0
+        ? []
+        : (
+            await tx.plan.findMany({
+              where: { id: { in: planIds }, organizationId: root.organizationId },
+              select: { id: true, projectId: true },
+            })
+          ).map((plan) => [plan.id, plan.projectId]),
+    );
+    for (const calendar of calendars) {
+      const stray =
+        plans.some((p) => p.calendarId === calendar.id && p.projectId !== calendar.projectId) ||
+        activities.some((a) => {
+          const projectId = projectOfPlan.get(a.planId);
+          return (
+            a.calendarId === calendar.id &&
+            projectId !== undefined &&
+            projectId !== calendar.projectId
+          );
+        });
+      if (stray) {
+        throw new ConflictError('This calendar now belongs to another project.', {
+          reason: LIBRARY_RESTORE_REASON.CALENDAR_OTHER_PROJECT,
+          calendar: { id: calendar.id, name: calendar.name, deleteBatchId: null },
+          projectId: calendar.projectId,
+        });
+      }
+    }
   }
 
   /**
@@ -822,53 +1180,100 @@ export class HierarchyLifecycleService {
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
     id: string,
-  ): Promise<{
-    deleteBatchId: string | null;
-    parentId: string | null;
-    wbsParentId?: string | null;
-  }> {
+  ): Promise<DeletedRoot> {
     if (entity === 'client') {
       const row = await tx.client.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true },
+        select: { deleteBatchId: true, organizationId: true },
       });
       if (!row) throw new NotFoundError('Client not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: null };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: null,
+        calendarId: null,
+      };
     }
     if (entity === 'project') {
       const row = await tx.project.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, clientId: true },
+        select: { deleteBatchId: true, organizationId: true, clientId: true },
       });
       if (!row) throw new NotFoundError('Project not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: row.clientId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.clientId,
+        calendarId: null,
+      };
     }
     if (entity === 'plan') {
       const row = await tx.plan.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, projectId: true },
+        select: { deleteBatchId: true, organizationId: true, projectId: true, calendarId: true },
       });
       if (!row) throw new NotFoundError('Plan not found.');
-      return { deleteBatchId: row.deleteBatchId, parentId: row.projectId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.projectId,
+        calendarId: row.calendarId,
+      };
     }
     if (entity === 'activity') {
       const row = await tx.activity.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, planId: true, parentId: true },
+        select: {
+          deleteBatchId: true,
+          organizationId: true,
+          planId: true,
+          parentId: true,
+          calendarId: true,
+        },
       });
       if (!row) throw new NotFoundError('Activity not found.');
       // An activity restores under its plan AND (if grouped) its WBS-summary parent
       // (ADR-0038): both must be active so no active row lands under a deleted ancestor.
-      return { deleteBatchId: row.deleteBatchId, parentId: row.planId, wbsParentId: row.parentId };
+      return {
+        deleteBatchId: row.deleteBatchId,
+        organizationId: row.organizationId,
+        parentId: row.planId,
+        wbsParentId: row.parentId,
+        calendarId: row.calendarId,
+      };
     }
     // Dependency — its parent for the restore guard is its plan (this slice has no
     // standalone dependency-restore endpoint; links come back with their batch).
     const row = await tx.activityDependency.findFirst({
       where: { id, deletedAt: { not: null } },
-      select: { deleteBatchId: true, planId: true },
+      select: { deleteBatchId: true, organizationId: true, planId: true },
     });
     if (!row) throw new NotFoundError('Dependency not found.');
-    return { deleteBatchId: row.deleteBatchId, parentId: row.planId };
+    return {
+      deleteBatchId: row.deleteBatchId,
+      organizationId: row.organizationId,
+      parentId: row.planId,
+      calendarId: null,
+    };
+  }
+
+  /**
+   * The client a project belongs to, whatever state the project is in, so a plan restore can lock the
+   * ancestors top-down. A project never moves between clients, so reading it before the locks is safe.
+   *
+   * soft-delete: any-state — the project is the plan's parent and may itself be deleted; whether it
+   * is active is decided by the locking read that follows, not by this one.
+   */
+  private async clientIdOfProject(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    organizationId: string,
+  ): Promise<string | null> {
+    const project = await tx.project.findFirst({
+      where: { id: projectId, organizationId },
+      select: { clientId: true },
+    });
+    return project?.clientId ?? null;
   }
 
   /** A client's parent is its org (always active here); a project/plan/activity/
@@ -877,19 +1282,24 @@ export class HierarchyLifecycleService {
   private async assertParentActive(
     tx: Prisma.TransactionClient,
     entity: HierarchyEntity,
-    root: { parentId: string | null; wbsParentId?: string | null },
+    root: Pick<DeletedRoot, 'parentId' | 'wbsParentId' | 'organizationId'>,
   ): Promise<void> {
     if (entity !== 'client' && root.parentId !== null) {
-      let parentActive: unknown;
+      let parentActive: boolean;
       if (entity === 'project') {
-        parentActive = await tx.client.findFirst({ where: { id: root.parentId, deletedAt: null } });
+        parentActive = await lockActiveClientForShare(tx, root.parentId);
       } else if (entity === 'plan') {
-        parentActive = await tx.project.findFirst({
-          where: { id: root.parentId, deletedAt: null },
-        });
+        // Every ancestor, top-down: a client delete does not take its project rows until it stamps
+        // them, so a plan restore that locked only its project would never meet the client's lock.
+        const clientId = await this.clientIdOfProject(tx, root.parentId, root.organizationId);
+        parentActive =
+          clientId !== null &&
+          (await lockActiveProjectChainForShare(tx, { clientId, projectId: root.parentId }));
       } else {
-        // activity or dependency — the parent is the plan.
-        parentActive = await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } });
+        // activity or dependency — the parent is the plan. Its own delete/restore race is already
+        // serialised by the plan advisory lock every activity restore and plan delete takes.
+        parentActive =
+          (await tx.plan.findFirst({ where: { id: root.parentId, deletedAt: null } })) !== null;
       }
       if (!parentActive) {
         throw new ConflictError('Restore the parent first.', {
