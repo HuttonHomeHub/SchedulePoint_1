@@ -1,5 +1,11 @@
 # @repo/types
 
+## 0.43.1
+
+### Patch Changes
+
+- [#1044](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1044) [`6c53933`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c53933edd5ba7836ed375d8a4d4f8de7edeaa1a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Plan responses now carry `canReadCost`, the caller's own cost permission, and the activity editor's Cost tab follows it instead of deriving it from the role. Who can see cost is unchanged.
+
 ## 0.43.0
 
 ### Minor Changes

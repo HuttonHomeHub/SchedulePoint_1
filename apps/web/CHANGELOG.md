@@ -1,5 +1,74 @@
 # @repo/web
 
+## 0.194.0
+
+### Minor Changes
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undo and Recently deleted now say what to do when something cannot come back because the
+  calendar it uses has been deleted. An undo or redo refused for that reason keeps its step and reads
+  "It uses the calendar “Mon-Wed”, which was deleted after your edit. Restore that calendar from
+  Recently deleted, then undo again.", and a restore that is refused names the calendar.
+
+- [#1046](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1046) [`9c2faa5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9c2faa576b7619d6817da95d6ee5166a615c8a44) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shared plan link now shows the near-critical rung and the driving links, as a signed-in member sees them, and a screen reader hears "near-critical" on those activities. Every live share link gains both cues on release (ADR-0198).
+
+- [#1051](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1051) [`9e5a8b9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9e5a8b999f2eabcf62801bd42f11df039871628c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Loading states now say what they are loading, once. The inline "Calculating float paths…", "Loading
+  revisions…", "Loading plans…", "Comparing…", "Checking the plan…" and "Loading the plan's
+  activities…" indicators announce their own sentence to a screen reader instead of a generic
+  "Loading…" beside text nobody heard, and the page-loading screen's announcement now sits outside the
+  busy region so it cannot be held back. Loading placeholders keep an outline in Windows High Contrast
+  instead of disappearing. A table that is still loading now shows its real column headings, and its
+  fixed-width columns start at the width they will have, so the columns no longer slide sideways when
+  the rows arrive.
+  The staff console's panels show the shape of what is loading — the Mail figures, the settings list and
+  the account and activity tables — instead of a spinner each, and the page no longer announces once
+  per panel.
+  A client or project page now opens in its own frame, with the real column headings of its table, and
+  the plan opens in a workspace-shaped placeholder instead of a spinner, so nothing slides into place
+  when the page arrives.
+  Earned value, the schedule summary, notes, history, a calendar's exceptions and a summary's members tab
+  show the shape of what they are loading, with one spoken sentence, instead of a spinner.
+  The shared-plan view and the invitation card open in their own frame, the same for every link, with one
+  spoken sentence instead of a spinner inside a live region.
+  A client or project page that is still loading now always says one "Loading…" sentence to a screen
+  reader: its table's while the table loads, and the heading's once the table has finished first.
+
+- [#1049](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1049) [`ffc5491`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ffc54918587542dd7c4ee71e4970a117bb890fef) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Alt with an arrow key now moves every selected activity on the diagram, not just the one under the
+  cursor. A held key is one save, and one Ctrl+Z puts the whole selection back (quick presses on the
+  same selection within half a second are a single undo step). A screen reader announces what moved,
+  for example "3 activities moved 2 days later; dates will update.", and is told when a selection
+  becomes plural that the arrow chord moves all of it. Moving the selection up is refused aloud when
+  any selected activity is already in the top lane, and a selection that includes a WBS summary says
+  so rather than failing at the server. A plural drag that lost the pen no longer announces a move
+  that did not happen, and its announcement now says how far the selection moved. The keyboard
+  shortcuts list describes the new behaviour.
+
+- [#1052](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1052) [`ff12d8b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ff12d8b722835df05292fa091442746c77866d04) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Arrange → Re-layout may now use as many lanes as the diagram already has, instead of being held to the fewest lanes time allows, so it can spend a lane to clear touching glyphs, hidden links and crossings ([#382](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/382)). The option's description says so. Tidy is unchanged.
+
+- [#1052](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1052) [`ff12d8b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ff12d8b722835df05292fa091442746c77866d04) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Arrange → Re-layout now searches from up to four different starting layouts at once and keeps the best, so it can find a tidier diagram than the single pack it started from ([#382](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/382)). The result is the same on every machine and every press; only the wait depends on how many cores there are. Plans of more than 150 activities, and Tidy, are unchanged.
+
+- [#1048](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1048) [`30e4e5a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/30e4e5a4d718bdf1a89ae969d3d8ec1262b588c5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Exports and prints now include the resource loading strip when Resource view is open: the PNG, the PDF and the printed diagram carry the strip as it is shown, with a caption naming its mode, bucket size and peak, and a legend for every colour.
+
+### Patch Changes
+
+- [#1044](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1044) [`6c53933`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c53933edd5ba7836ed375d8a4d4f8de7edeaa1a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Plan responses now carry `canReadCost`, the caller's own cost permission, and the activity editor's Cost tab follows it instead of deriving it from the role. Who can see cost is unchanged.
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Recently deleted explains a restore refused because the plan's calendar now belongs to another
+  project, and links to the calendars library where it can be made organisation-wide again.
+
+- [#1047](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1047) [`93e7eeb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/93e7eeb01f86281797c4288b22221c19ee67687a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ordinary links no longer out-shout ordinary bars on the diagram: the bar is slightly stronger and an ordinary driving link slightly quieter, so the work is never the faintest meaningful mark. Critical and near-critical links are unchanged.
+
+- [#1039](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1039) [`c15ad7b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c15ad7bf4c1f5152b49d32292913b0b6f853878b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The password-reset request screen no longer reads an `?email=` parameter that nothing in the app produced.
+
+- [#1043](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1043) [`8831d36`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8831d3642ae5ad5c8cc639dce518dbc050dc0211) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance history now says how many readings exist ("Showing the most recent 50 of 312 readings") instead of silently listing a capped page. The history read returns `meta.total`, and the oldest sitting only hedges its missing-readings note when rows were really withheld.
+
+- [#1040](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1040) [`c1c1006`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c1c10069ba15ddedd9732f06bb0dd6d5425699ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the staff Retention panel's table labels total over the retention sweep's tables, so a table added to the sweep cannot reach the panel as a raw identifier.
+
+- [#1042](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1042) [`1b09ae1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1b09ae1222dd90a17fc6aa1061d2912ce7c5e04a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram's date ruler now centres the year label over the part of its span that is on screen,
+  instead of pinning it to the left edge, and tints alternate months in the ruler to continue the
+  canvas's month bands when Month bands is on.
+- Updated dependencies [[`6c53933`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c53933edd5ba7836ed375d8a4d4f8de7edeaa1a)]:
+  - @repo/types@0.43.1
+
 ## 0.193.0
 
 ### Minor Changes

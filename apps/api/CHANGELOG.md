@@ -1,5 +1,41 @@
 # @repo/api
 
+## 0.96.0
+
+### Minor Changes
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Restoring a client, project, plan or activity (and the batch restore that undo uses) is now refused
+  with 409 `CALENDAR_DELETED` when a plan or activity it brings back uses a calendar that has been
+  deleted, instead of silently scheduling that work round the clock. `details.calendar` names the
+  calendar to restore first. A project's own calendars, deleted with it, still come back with it. Recently
+  deleted now reports the same blocker on plan, project and client rows (`blockedBy.relation: "calendar"`).
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Restoring a plan or activity is now refused with 409 `CALENDAR_OTHER_PROJECT` when the calendar it uses
+  has been narrowed to a different project while it sat in the bin. `details` names the calendar and
+  the project it now belongs to.
+
+- [#1046](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1046) [`9c2faa5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9c2faa576b7619d6817da95d6ee5166a615c8a44) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A share link now also returns whether each activity is near-critical (`isNearCritical`) and whether each dependency drives its successor (`isDriving`), the same values a member reads (ADR-0198). Every live share link gains both fields on release. Resource-assignment driving flags stay excluded.
+
+### Patch Changes
+
+- [#1044](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1044) [`6c53933`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c53933edd5ba7836ed375d8a4d4f8de7edeaa1a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Plan responses now carry `canReadCost`, the caller's own cost permission, and the activity editor's Cost tab follows it instead of deriving it from the role. Who can see cost is unchanged.
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A restore and a delete of its client or project no longer interleave into an active plan, project or
+  project calendar under a deleted ancestor: restores lock their ancestors top-down and a client or
+  project delete locks its own row before it reads its contents, so whichever goes second waits and sees
+  the first one's result.
+
+- [#1050](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1050) [`a28cd8e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a28cd8ea592379d2faccdc1b27e18fb475ed700e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Restoring a project or client now also brings back a project calendar that was deleted on its own
+  before the project was, when a plan in the restore uses it. Previously neither could be restored first.
+
+- [#1045](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1045) [`2af0c62`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2af0c62f23e72ca0904d7f1a376aad4d1c693604) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Levelling a plan where one crew or machine carries thousands of activities is much faster. A 16,000-activity single-crew plan that took about two and a half minutes to level now takes about three seconds, and the levelled dates are exactly the same as before.
+
+- [#1043](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1043) [`8831d36`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8831d3642ae5ad5c8cc639dce518dbc050dc0211) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance history now says how many readings exist ("Showing the most recent 50 of 312 readings") instead of silently listing a capped page. The history read returns `meta.total`, and the oldest sitting only hedges its missing-readings note when rows were really withheld.
+
+- [#1040](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1040) [`c1c1006`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c1c10069ba15ddedd9732f06bb0dd6d5425699ff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the staff Retention panel's table labels total over the retention sweep's tables, so a table added to the sweep cannot reach the panel as a raw identifier.
+- Updated dependencies [[`6c53933`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6c53933edd5ba7836ed375d8a4d4f8de7edeaa1a)]:
+  - @repo/types@0.43.1
+
 ## 0.95.0
 
 ### Minor Changes
