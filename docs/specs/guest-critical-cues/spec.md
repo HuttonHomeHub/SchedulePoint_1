@@ -1,6 +1,6 @@
 # Feature Spec: A share link shows the near-critical rung and the driving links
 
-- **Status:** Approved — by the product owner, 2026-10-17, Q1 accepted (guests see both near-critical and driving links); Q2–Q4 as the stated defaults.
+- **Status:** Accepted — shipped (ADR-0198). Approved by the product owner, 2026-10-17, Q1 accepted (guests see both near-critical and driving links); Q2–Q4 as the stated defaults.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-17
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #403

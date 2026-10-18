@@ -22,7 +22,8 @@ import {
  * field-stripped, READ-ONLY projection for the session-less External-Guest surface. It exposes
  * ONLY the schedule + progress fields the guest scope allows: identity (id/code/name/type), the
  * computed CPM dates, the PLACED span (where the bar is drawn — ADR-0163), duration/float/
- * critical, the engine-derived duration of a summary or level-of-effort
+ * critical/near-critical (ADR-0198: "which activities make up `nearCriticalCount`", a function of
+ * fields already exposed and a product constant), the engine-derived duration of a summary or level-of-effort
  * (`derivedDurationMinutes`/`derivedDurationDays`, ADR-0197 — schedule, not analysis), lane
  * position, and the progress trio.
  *
@@ -114,6 +115,13 @@ export class GuestActivityDto {
   @ApiProperty({ description: 'CPM critical flag.' })
   isCritical!: boolean;
 
+  @ApiProperty({
+    description:
+      'CPM near-critical flag (engine-owned): not critical, with total float above zero and ' +
+      'inside the near-critical band. The same value the member read returns.',
+  })
+  isNearCritical!: boolean;
+
   @ApiProperty({ enum: ActivityStatus })
   status!: ActivityStatus;
 
@@ -168,6 +176,7 @@ export class GuestActivityDto {
       lateFinish: day(entity.lateFinish),
       totalFloat: entity.totalFloat,
       isCritical: entity.isCritical,
+      isNearCritical: entity.isNearCritical,
       status: entity.status,
       percentComplete: entity.percentComplete,
       actualStart: day(entity.actualStart),

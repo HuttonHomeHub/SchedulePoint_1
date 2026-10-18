@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 26 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1669 web
 > source files with 47 Playwright suites beside the base journey, and
-> 197 ADRs.
+> 198 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -453,7 +453,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0048** _(Accepted; amended by ADR-0176)_ — Client-side command-stack undo/redo for plan authoring → [`0048-undo-redo-command-stack.md`](docs/adr/0048-undo-redo-command-stack.md)
 - **ADR-0049** _(Proposed)_ — Canvas-axis-aligned resource strip — a shared-viewport sibling canvas layer → [`0049-canvas-axis-aligned-resource-strip.md`](docs/adr/0049-canvas-axis-aligned-resource-strip.md)
 - **ADR-0050** _(Accepted)_ — Schedule interchange — canonical model + import pipeline → [`0050-schedule-interchange-canonical-model.md`](docs/adr/0050-schedule-interchange-canonical-model.md)
-- **ADR-0051** _(Accepted; amended by ADR-0163)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
+- **ADR-0051** _(Accepted; amended by ADR-0163 and ADR-0198)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
 - **ADR-0052** _(Accepted)_ — TSLD direct manipulation & canvas visual refresh → [`0052-canvas-direct-manipulation-and-visual-refresh.md`](docs/adr/0052-canvas-direct-manipulation-and-visual-refresh.md)
 - **ADR-0053** _(Accepted)_ — Calendar scoping tiers & the resource management layer → [`0053-calendar-scoping-and-resource-management.md`](docs/adr/0053-calendar-scoping-and-resource-management.md)
 - **ADR-0054** _(Accepted)_ — Canvas live feedback & GPM float/drift visualisation → [`0054-canvas-live-feedback-and-float-visualisation.md`](docs/adr/0054-canvas-live-feedback-and-float-visualisation.md)
@@ -600,6 +600,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0195** _(Accepted; amends ADR-0053 §3 and ADR-0096's bin contract)_ — A library row comes back as it was, or not at all → [`0195-a-library-row-comes-back-as-it-was-or-not-at-all.md`](docs/adr/0195-a-library-row-comes-back-as-it-was-or-not-at-all.md)
 - **ADR-0196** _(Accepted; amends ADR-0162 D2)_ — A redundant link is one no duration could make matter → [`0196-a-redundant-link-is-one-no-duration-could-make-matter.md`](docs/adr/0196-a-redundant-link-is-one-no-duration-could-make-matter.md)
 - **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
+- **ADR-0198** _(Accepted; amends ADR-0051 §4)_ — A guest sees what is near critical and what drives → [`0198-a-guest-sees-what-is-near-critical-and-what-drives.md`](docs/adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

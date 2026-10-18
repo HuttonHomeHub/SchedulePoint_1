@@ -9,11 +9,14 @@ import {
   canvas,
   drawActivity,
   memberActivities,
+  memberDependencies,
+  nearCriticalInk,
   onboard,
   openNewPlan,
   placeActivity,
   recalculatePlan,
   seedActivities,
+  seedDependencies,
   startEditing,
 } from './support';
 
@@ -390,6 +393,132 @@ test('a guest reads the SAME placed span the member does — the picture and the
 
   // FC-3 (spec §4.5/ADR-0163): no forbidden field leaked on the guest surface either — the fix
   // widens the scope by exactly two fields, not by relaxing the boundary generally.
+  expect(
+    (await new AxeBuilder({ page: guestPage }).withTags(['wcag2a', 'wcag2aa']).analyze())
+      .violations,
+  ).toEqual([]);
+
+  await guestContext.close();
+});
+
+/**
+ * **ADR-0198 (spec §2, FC-7/FC-8; `docs/TECH_DEBT.md` #403).** A guest sees the near-critical rung
+ * and the driving links a member sees — in the spoken sentence AND in the paint, which are separate
+ * code paths over the same array (spec §2, "Why FC-8 exists as well as FC-7").
+ *
+ * The fixture is seeded through the real API so the facts are exact. From the plan's data date
+ * (Monday 2026-01-05): Foundation (5 d) → Frame (5 d) drives and is critical; Foundation →
+ * Landscaping (3 d) leaves Landscaping two days of float, inside the near-critical band on any
+ * calendar; Survey (1 d) → Frame is NON-driving, because Foundation holds Frame. Survey → Frame is
+ * created FIRST, so the first-listed-edge fallback in chain navigation cannot pass for the driving
+ * one. The member read is checked before anything is compared, so a fixture that came out
+ * all-critical fails here rather than passing every limb below for the wrong reason.
+ *
+ * Red against the previous web build: the guest adapter hard-coded both flags to `false`, so
+ * Landscaping's option carried no "near-critical", `i` on Frame named no driver, `[` announced no
+ * "driving", and the near-critical ink count was 0.
+ */
+test('a guest sees the near-critical rung and hears what drives, as a member does (ADR-0198)', async ({
+  page,
+  browser,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Foundation', laneIndex: 0, durationDays: 5 },
+    { name: 'Frame', laneIndex: 1, durationDays: 5 },
+    { name: 'Landscaping', laneIndex: 2, durationDays: 3 },
+    { name: 'Survey', laneIndex: 3, durationDays: 1 },
+  ]);
+  const [foundation, frame, landscaping, survey] = seeded;
+  if (!foundation || !frame || !landscaping || !survey) {
+    throw new Error('seeding did not return all four activities');
+  }
+  await seedDependencies(page, orgSlug, [
+    { predecessorId: survey.id, successorId: frame.id },
+    { predecessorId: foundation.id, successorId: frame.id },
+    { predecessorId: foundation.id, successorId: landscaping.id },
+  ]);
+  await recalculatePlan(page, orgSlug);
+  await expect(canvas(page)).toBeAttached({ timeout: 15_000 });
+
+  // The fixture's preconditions, read off the MEMBER API (never the UI).
+  const members = await memberActivities(page, orgSlug);
+  expect(members.find((r) => r.id === landscaping.id)?.isNearCritical).toBe(true);
+  const links = await memberDependencies(page, orgSlug);
+  expect(
+    links.find((l) => l.predecessorId === foundation.id && l.successorId === frame.id)?.isDriving,
+  ).toBe(true);
+  expect(
+    links.find((l) => l.predecessorId === survey.id && l.successorId === frame.id)?.isDriving,
+  ).toBe(false);
+
+  await openShare(page);
+  const dialog = page.getByRole('dialog', { name: 'Share links' });
+  await dialog.getByLabel('Label').fill('Critical-cues check');
+  await dialog.getByRole('button', { name: 'Create link' }).click();
+  const urlField = dialog.getByLabel('Guest link');
+  await expect(urlField).toBeVisible();
+  const shareUrl = await urlField.inputValue();
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(dialog).toBeHidden();
+
+  const guestContext = await browser.newContext();
+  const guestPage: Page = await guestContext.newPage();
+  await guestPage.goto(shareUrl);
+  await expect(guestPage.getByRole('heading', { name: 'Guest Plan', level: 1 })).toBeVisible();
+  const guestDiagram = guestPage.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await expect(guestDiagram.getByRole('option')).toHaveCount(4, { timeout: 15_000 });
+
+  // FC-7, text limb 1: the near-critical activity's option says so; a critical one says "critical".
+  await expect(guestDiagram.getByRole('option', { name: /Landscaping/ })).toContainText(
+    'near-critical',
+  );
+  await expect(guestDiagram.getByRole('option', { name: /Frame/ })).not.toContainText(
+    'near-critical',
+  );
+
+  // Walk the keyboard cursor onto Frame (`activities` order is not asserted here, only reached).
+  const listbox = guestPage.getByRole('listbox', { name: 'Activities in the diagram' });
+  await listbox.focus();
+  const announcer = guestPage.getByTestId('announcer');
+  const activeOption = async (): Promise<string> => {
+    await expect(listbox).toHaveAttribute('aria-activedescendant', /.+/);
+    const activeId = await listbox.getAttribute('aria-activedescendant');
+    if (activeId === null) throw new Error('the listbox published no active option');
+    return (await guestPage.locator(`[id="${activeId}"]`).textContent()) ?? '';
+  };
+  for (let step = 0; step < 6 && !(await activeOption()).includes('Frame'); step += 1) {
+    await guestPage.keyboard.press('ArrowDown');
+    // The cursor moves on the next render; wait for it rather than re-reading immediately.
+    await expect.poll(activeOption).not.toBe('');
+  }
+  expect(await activeOption()).toContain('Frame');
+
+  // FC-7, text limb 2: `i` names the driver — Foundation, not the first-listed Survey.
+  await guestPage.keyboard.press('i');
+  await expect(announcer).toContainText('start driven by Foundation');
+
+  // `[` walks to the DRIVING predecessor first, and says so.
+  await guestPage.keyboard.press('[');
+  await expect(announcer).toHaveText(/Predecessor: Foundation, driving\./);
+
+  // FC-8, pixel limb: after Fit the guest canvas holds near-critical ink. Red: 0 before the fix.
+  await guestPage.getByRole('button', { name: 'Fit to plan' }).click();
+  await expect
+    .poll(() => nearCriticalInk(guestPage), {
+      message: 'waiting for near-critical ink on the guest canvas after Fit to plan',
+    })
+    .toBeGreaterThan(500);
+
+  // The legend rows match what is now drawn: the near-critical rung is keyed on the guest too.
+  await expect(
+    guestPage.getByRole('list', { name: 'Legend' }).getByText('Near-critical', { exact: true }),
+  ).toBeVisible();
+
   expect(
     (await new AxeBuilder({ page: guestPage }).withTags(['wcag2a', 'wcag2aa']).analyze())
       .violations,

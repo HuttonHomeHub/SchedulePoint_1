@@ -921,6 +921,11 @@ discriminators. Each becomes a spec/plan before build:
   [`docs/specs/wbs-summary-duration/`](specs/wbs-summary-duration/)): the engine writes the working
   time a WBS summary's or Level-of-Effort's span covers, replacing `—` and a false `0 d` in every
   place a duration is shown. The engine, API, web surfaces and the MSPDI export are built.
+- **A share link shows the near-critical rung and the driving links** — **shipped** (approved
+  2026-10-17, [ADR-0198](adr/0198-a-guest-sees-what-is-near-critical-and-what-drives.md); spec and
+  plan at [`docs/specs/guest-critical-cues/`](specs/guest-critical-cues/), `docs/TECH_DEBT.md`
+  #403): the guest read gains the engine's `isNearCritical` and `isDriving` flags so the guest
+  canvas draws and speaks what a member sees.
 - **Canvas authoring flow & link routing** — **shipped** (ADR-0064
   `VITE_CANVAS_AUTHORING_FLOW` + ADR-0065 `VITE_CANVAS_LINK_ROUTING`, both default-on 2026-07-31):
   one arm/disarm contract across all four tool modes with a mode statement band above the scene,

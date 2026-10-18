@@ -300,6 +300,9 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     'levelingWindowExceeded',
     'visualStart',
     'visualConflict',
+    // ADR-0198: `isNearCritical` (activity) and `isDriving` (link) are exposed — deliberately NOT
+    // in this list — and `resourceAssignments` above is what keeps `ResourceAssignment.isDriving`
+    // out. The wire-level contract for the two new fields is the parity cases below.
     // ADR-0163: the placed span (`visualEffectiveStart`/`Finish`) is now exposed — deliberately
     // NOT in this list — but its three neighbouring analysis fields stay out, pinned here at the
     // wire level as well as in `guest-dto.spec.ts`'s exact-key/forbidden-key contract.
@@ -315,6 +318,40 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     'calendarId',
     'parentId',
     'userId',
+  ];
+
+  const GUEST_ACTIVITY_KEYS = [
+    'actualFinish',
+    'actualStart',
+    'code',
+    'derivedDurationDays',
+    'derivedDurationMinutes',
+    'durationDays',
+    'durationMinutes',
+    'earlyFinish',
+    'earlyStart',
+    'id',
+    'isCritical',
+    'isNearCritical',
+    'laneIndex',
+    'lateFinish',
+    'lateStart',
+    'name',
+    'percentComplete',
+    'status',
+    'totalFloat',
+    'type',
+    'visualEffectiveFinish',
+    'visualEffectiveStart',
+  ];
+  const GUEST_DEPENDENCY_KEYS = [
+    'id',
+    'isDriving',
+    'lagDays',
+    'lagMinutes',
+    'predecessorId',
+    'successorId',
+    'type',
   ];
 
   /** The uniform 404 the guard/service return for every dead-token reason (ADR-0051 §5). */
@@ -661,5 +698,70 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     expect((plan.body.data as { summary: { projectFinish: string } }).summary.projectFinish).toBe(
       '2026-03-02',
     );
+  });
+
+  /**
+   * **#403 (ADR-0198).** The guest reads the SAME `isNearCritical` and `isDriving` the member
+   * reads. A (5d) → B (5d) is driving and critical; A → C (3d) leaves C two days of float, inside
+   * the near-critical band on any calendar; D (1d) → B is non-driving because A holds B. The
+   * preconditions inside each case are what stop an all-`false` pair of reads from passing.
+   */
+  it('the guest reads the same isNearCritical and isDriving as the member (#403)', async () => {
+    const { actor } = await adminWithOrg('Acme', 'admin@example.com');
+    const planId = await makePlan(actor, 'acme', 'Riverside Plan');
+    const base = `/api/v1/organizations/acme/plans/${planId}`;
+    const create = async (name: string, durationDays: number, laneIndex: number) => {
+      const res = await actor.agent
+        .post(`${base}/activities`)
+        .send({ name, durationDays, laneIndex })
+        .expect(201);
+      return res.body.data.id as string;
+    };
+    const a = await create('A', 5, 0);
+    const b = await create('B', 5, 1);
+    const c = await create('C', 3, 2);
+    const d = await create('D', 1, 3);
+    await makeDependency(actor, 'acme', planId, a, b);
+    await makeDependency(actor, 'acme', planId, a, c);
+    await makeDependency(actor, 'acme', planId, d, b);
+    await actor.agent.post(`${base}/schedule/recalculate`).send({}).expect(200);
+
+    const { token } = await mintShareToken(actor, 'acme', planId);
+
+    interface ActivityFlags {
+      id: string;
+      isNearCritical: boolean;
+    }
+    const memberActivities = (await actor.agent.get(`${base}/activities?limit=100`).expect(200))
+      .body.data as ActivityFlags[];
+    const guestActivities = (await guestGet('/api/v1/share/activities', token).expect(200)).body
+      .data as ActivityFlags[];
+    // The exact wire key sets (ADR-0198): the two new fields are the only growth.
+    expect(Object.keys(guestActivities[0] ?? {}).sort()).toEqual(GUEST_ACTIVITY_KEYS);
+    // Precondition: the member read has a near-critical row, or equality below is vacuous.
+    expect(memberActivities.some((row) => row.isNearCritical)).toBe(true);
+    expect(guestActivities).toHaveLength(memberActivities.length);
+    for (const member of memberActivities) {
+      const guest = guestActivities.find((row) => row.id === member.id);
+      expect(guest?.isNearCritical).toBe(member.isNearCritical);
+    }
+
+    interface DependencyFlags {
+      id: string;
+      isDriving: boolean;
+    }
+    const memberDependencies = (await actor.agent.get(`${base}/dependencies?limit=100`).expect(200))
+      .body.data as DependencyFlags[];
+    const guestDependencies = (await guestGet('/api/v1/share/dependencies', token).expect(200)).body
+      .data as DependencyFlags[];
+    expect(Object.keys(guestDependencies[0] ?? {}).sort()).toEqual(GUEST_DEPENDENCY_KEYS);
+    // Precondition: at least one driving and one non-driving link on the member read.
+    expect(memberDependencies.some((row) => row.isDriving)).toBe(true);
+    expect(memberDependencies.some((row) => !row.isDriving)).toBe(true);
+    expect(guestDependencies).toHaveLength(memberDependencies.length);
+    for (const member of memberDependencies) {
+      const guest = guestDependencies.find((row) => row.id === member.id);
+      expect(guest?.isDriving).toBe(member.isDriving);
+    }
   });
 });
