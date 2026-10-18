@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-18 — Four product-owner answers from the 2026-10-17 batch (tech debt #58, #519, #271, #382)
+
+**#58 — the ruler's month tint follows the `Month bands` switch.** The tint the ruler now carries is drawn
+only when the planner has Month bands on, so the default look of the diagram is unchanged and the ruler
+and the canvas bands are always switched together. Shipped in #1042 (the #58 close note in
+`docs/TECH_DEBT.md` gives the contrast figures).
+
+**#519 — a restore brings back the project's own calendars too.** Restoring work onto a deleted calendar is
+refused with a reason that names the calendar (ADR-0201), and the undo step is kept so it can be retried.
+The owner added one exception to the refusal: a project calendar that was deleted on its own before its
+project was, and that a restored plan uses, now comes back with the project or client, because otherwise
+neither could ever be restored first. Shipped in #1050.
+
+**#271 — probe-history paging: not now.** The panel's history read returns a true total (shipped with #273
+in #1043), so it no longer guesses whether the list was cut. Cursor paging to reach older sittings is not
+being built now; #271 stays open for it.
+
+**#382 — Re-layout's multi-start search runs on plans of up to about 150 activities.** The owner first chose
+about 60 and then replaced that with about 150, superseding the spec's "at most 1.5× today's rows" rule.
+Accepted knowingly: on the 147-activity stress fixture the wait grows from about 5 s to about 28 s
+(cancellable, and the dialog now says so) and its rows from 24 to 35 (FC-R5, recorded as accepted). Larger
+plans and Tidy are unchanged. ADR-0203; shipped in #1052.
+
+---
+
 ## 2026-10-18 — Loading skeletons: three open questions answered by the product owner (tech debt #234, #341)
 
 **1. A column heading may slide sideways when the rows arrive, on a column whose width the data decides.**

@@ -1320,7 +1320,15 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-18
+
+> **Re-verified 2026-10-18 — one item is left.** The `crossedLanes` hoist below no longer has a
+> subject: the function is gone from the product code (`grep -rn crossedLanes apps/web/src` finds
+> nothing; routing now lives in `render/route-frame.ts`, and the name survives only in the comments of
+> `scripts/crossing-probe.ts` and `scripts/small-plan-fixture.ts`). With the rect hoist already done,
+> both halves of the first bullet are discharged. **What remains is the last bullet only**: no flag-off
+> Playwright run for the pointer two-click link pick. `VITE_CANVAS_AUTHORING` / `VITE_CANVAS_AUTHORING_FLOW`
+> still exist (`config/env.test.ts:172-183`), so that regression is still owed.
 
 > **Re-verified 2026-08-08 — half of this is done.** The triple `activityRect` computation was fixed
 > by the per-frame `RectCache` (`render/geometry.ts:481`, declared on `rectCache` at
