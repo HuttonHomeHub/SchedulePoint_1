@@ -255,3 +255,116 @@ Created 147/140 PASS, members Joined 147/140 PASS, audit-log When 161/159 PASS, 
 calendars Working days 190/102 FAIL and plans Status 71/57 FAIL, as before; projects-table and client-detail
 NOTHING_GRADED. SC-5: 11/11 PASS at both widths. The second reading therefore corroborates the first on every
 criterion except SC-4, where the difference is in the grader and is explained above.
+
+---
+
+# Third reading, after the product owner's three answers (2026-10-18)
+
+- **Record:** [./m7-after-third.json](./m7-after-third.json), the instrument's stdout unedited. Instrument and
+  judge from the working tree on top of `13dcdcb2` (`run.sha`; the judge, the instrument and the two detail
+  pages were uncommitted when taken), tenant `shoot-co-1792311493080-1646`, taken 2026-10-18T08:21Z, same
+  seeding command and widths. A fresh tenant again: not a same-tenant comparison. The earlier readings stay
+  above, unedited.
+- **What changed since the second reading:** (1) the product owner's three decisions
+  (`docs/DECISIONS.md`, 2026-10-18; spec SC-2, SC-3 and SC-4 carry dated notes), (2) the judge was changed to
+  match the amended SC-2 text, and (3) client and project detail now speak (below). **The grader changed after
+  seeing the result, again, and by the owner's instruction**; the judge's fixtures pin each new class and one
+  was verified red by making the judge ignore a column's declared mode. The instrument now also records each
+  table's row count and body height, so a shift under a table can be tested rather than argued.
+
+## SC-4: what a screen reader hears on the client and project screens
+
+One live sentence while anything is pending, none when all is settled. Verified by the real screens in
+`pending-sentences.test.tsx` and by the instrument below.
+
+| State                          | Client screen       | Project screen     |
+| ------------------------------ | ------------------- | ------------------ |
+| Heading read and list both out | "Loading projects…" | "Loading plans…"   |
+| Heading read out, list settled | "Loading client…"   | "Loading project…" |
+| Both settled                   | nothing             | nothing            |
+
+The table's sentence is the existing `DataTable` status (polite, mounted empty and filled after mount, outside
+any `aria-busy`). The heading's sentence is the same `LoadingShape`, now `polite` instead of `none` once the
+page sees the list has settled. When the list settles first, the table's status unmounts and a new status
+mounts empty and is filled straight after mount, so the sentence changes from "Loading projects…" to "Loading
+client…" as two announcements in sequence, never together. A list that errors counts as settled, so the heading
+sentence is then the page's one live sentence beside the table's error alert. The page asks for the list with
+the same query as the table (same key), so no request is added.
+
+## SC-4, third reading (live regions mounted at the reading)
+
+All 11 sites PASS at both widths with exactly one sentence, including client-detail ("Loading client…") and
+project-detail ("Loading project…"), which the second reading found speaking nothing. Two things worth knowing:
+plan-detail at 1024 recorded "Loading…" (the route-level status, still mounted when the read was taken) where
+1646 recorded "Loading plan…"; both are one sentence, and the difference is timing. No region is inside an
+`aria-busy` subtree anywhere.
+
+## SC-5
+
+11/11 PASS at both widths.
+
+## SC-3 (unchanged by this work)
+
+Passing: clients Created 147/140, members Joined 147/140, audit-log When 161/159, project-detail Status 57/57.
+`NOTHING_GRADED`: projects-table, client-detail. Unbaselined: resources, recently-deleted.
+**Accepted, documented exceptions (owner, 2026-10-18; still FAIL in the record):** calendars Working days
+190 pending / 102 settled (88 px over), plans Status 71 / 57 (14 px over), at both widths, applying the
+spec's withdrawal clause. The re-argument: a worst-case sample over-reserves for ordinary data by an amount the
+data decides; a median sample would under-reserve for the wide case; the owner kept the widest-value sample.
+
+## SC-2, third reading (amended judge)
+
+Verdict per site, the same at both widths. `reported` = graded as reported only, with the class.
+
+| Site             | Verdict        | Compared | Reported (1646)                                                     | Absent by construction / appears below   |
+| ---------------- | -------------- | -------- | ------------------------------------------------------------------- | ---------------------------------------- |
+| clients          | PASS           | 5        | th Created dx -350 (follows upstream)                               | th Actions                               |
+| calendars        | PASS           | 6        | th Working days dx -182 (follows upstream), th Scope dx -270 (auto) | th Actions                               |
+| resources        | PASS           | 2        | none                                                                | none                                     |
+| members          | **FAIL**       | 13       | th Email -219, th Role -56 (auto), th Joined -48 (follows upstream) | th Actions                               |
+| audit-log        | PASS           | 7        | th Event -2, th By -33, th Subject +99 (auto)                       | none                                     |
+| recently-deleted | PASS           | 2        | none                                                                | none                                     |
+| client-detail    | PASS           | 4        | none                                                                | h1 (subject)                             |
+| project-detail   | PASS           | 6        | none                                                                | h1 (subject); h2 Calendars appears below |
+| plan-detail      | NOTHING_GRADED | 0        | none                                                                | h1 (subject)                             |
+| projects-table   | PASS           | 4        | none                                                                | th Actions                               |
+| plans-table      | **FAIL**       | 7        | th Status +263 (follows upstream), th Planned start +249 (auto)     | th Actions                               |
+
+"Follows upstream" is the judge's own arithmetic, not a reading of the owner's words, and is flagged for
+review: a `fit` column's heading moves by exactly the summed width change of the columns on its left (clients
+Created -350 is exactly Name's 1124 to 774), all of which are `auto` / `bounded` / undeclared; where that sum
+does not account for the move the heading fails. If the owner meant only a column's own declared mode, four
+headings (clients Created, calendars Working days, members Joined, plans Status) go back to FAIL, and clients
+and calendars with them.
+
+**plan-detail is `NOTHING_GRADED`, not a pass:** the settled page's only anchor is the subject's h1, absent
+by construction, so nothing about its stability is demonstrated. **Absent by construction is a reported
+class, not a pass:** `th Actions` on five tables and the subject h1 on three pages are listed under
+`absentByConstruction` in the record.
+
+### What still fails after the amendment
+
+Two sites, at both widths: the headings below the table on **members** (`h2 Pending invitations`,
+`h2 What each role can do` and four `dt`, dy -62 at 1646 and -58 at 1024) and **plans-table** (`h2 Calendars`,
+dy -66 at both). This is not shown to be row-count growth, and is not waved through. What the record
+establishes (per-table rows and heights are now in it):
+
+| Table (1646) | Placeholder    | Settled      | Body change | Shift of the heading below |
+| ------------ | -------------- | ------------ | ----------- | -------------------------- |
+| members      | 3 rows, 115 px | 1 row, 53 px | -62         | -62                        |
+| plans-table  | 3 rows, 115 px | 1 row, 49 px | -66         | -66                        |
+
+(1024: members 57 px settled, shift -58; plans the same as 1646.) The whole shift is the table body changing
+height, and nothing above the table moved. But the placeholder rows are about 38 px each against 49 to 57 px
+for a real row on this seed, so even the two-row reduction is not the whole of it: the placeholder block is 44
+px (members) and 32 px (plans) shorter than three real rows. Whether the real rows are taller because they
+carry a second line a skeleton cannot know about is **not established** here; it was not measured. So these
+two are a placeholder-row-height question on top of the row count the spec accepts, and the spec's growth rule
+does not cover the height half. The decision to take is whether a placeholder row should be as tall as a typical
+real row on these two tables, or whether this is also accepted.
+
+### Net
+
+SC-2 after the amendment: 8 of 11 sites graded PASS, 1 `NOTHING_GRADED` (plan-detail), 2 FAIL (members,
+plans-table), at both widths. Note that the 8 PASS include only anchors the amendment makes reportable; the
+comparable anchors that remain (headings above the table, first body row) all hold at 0 px.

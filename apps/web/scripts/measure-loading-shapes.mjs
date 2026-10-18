@@ -123,18 +123,21 @@ const SITES = [
   },
   {
     name: 'client-detail',
+    subjectHeading: true,
     path: (ids) => `/orgs/${SLUG}/clients/${ids.clientId}`,
     hold: (ids) => new RegExp(`/organizations/[^/]+/clients/${ids.clientId}$`),
     table: true,
   },
   {
     name: 'project-detail',
+    subjectHeading: true,
     path: (ids) => `/orgs/${SLUG}/projects/${ids.projectId}`,
     hold: (ids) => new RegExp(`/organizations/[^/]+/projects/${ids.projectId}$`),
     table: true,
   },
   {
     name: 'plan-detail',
+    subjectHeading: true,
     path: (ids) => `/orgs/${SLUG}/plans/${ids.planId}`,
     hold: (ids) => new RegExp(`/organizations/[^/]+/plans/${ids.planId}$`),
     table: false,
@@ -216,6 +219,17 @@ const readSnapshot = () => {
   const textOf = (e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
   const anchors = [];
   const seenKey = new Set();
+  const tables = [...document.querySelectorAll('main table')];
+  // The last table that PRECEDES the element in document order, or -1: what the judge needs to tell
+  // growth below a placeholder (rows arriving) from a shift above it.
+  const lastTableBefore = (e) => {
+    let found = -1;
+    tables.forEach((t, i) => {
+      const follows = (t.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+      if (follows && !t.contains(e)) found = i;
+    });
+    return found;
+  };
   for (const e of document.querySelectorAll('main h1, main h2, main h3, main th, main dt')) {
     if (!visible(e)) continue;
     const text = textOf(e);
@@ -224,12 +238,21 @@ const readSnapshot = () => {
     if (seenKey.has(key)) continue; // a repeated heading text cannot be paired by key
     seenKey.add(key);
     const r = e.getBoundingClientRect();
-    anchors.push({
+    const anchor = {
       key,
       top: Math.round(r.top + window.scrollY),
       left: Math.round(r.left + window.scrollX),
       width: Math.round(r.width),
-    });
+      afterTable: lastTableBefore(e),
+    };
+    if (e.tagName === 'TH') {
+      // A column heading's own x is a function of its column's declared width mode and of the
+      // columns to its left, so the judge needs both (spec SC-2, amended 2026-10-18).
+      anchor.mode = e.getAttribute('data-col-width') ?? 'undeclared';
+      anchor.table = tables.indexOf(e.closest('table'));
+      anchor.col = e.cellIndex;
+    }
+    anchors.push(anchor);
   }
   const firstRow = document.querySelector('main tbody tr');
   if (firstRow && visible(firstRow)) {
@@ -242,6 +265,15 @@ const readSnapshot = () => {
   }
   return {
     anchors,
+    // Per table: how many body rows and how tall the body is, so the judge can show that a shift
+    // below a table is the rows arriving and nothing else.
+    tables: tables.map((t) => {
+      const body = t.querySelector('tbody');
+      return {
+        rows: body ? body.querySelectorAll(':scope > tr').length : 0,
+        bodyHeight: body ? Math.round(body.getBoundingClientRect().height) : 0,
+      };
+    }),
     // The skeleton material and the loading-shape hook M1 adds; counted so the control can tell a
     // skeleton picture from a settled one.
     skeletons: document.querySelectorAll('.animate-pulse, [data-skeleton], [data-loading-shape]')
@@ -424,7 +456,14 @@ for (const vp of WIDTHS) {
             ? 'spinner'
             : 'blank';
       assertExamined(site.name, pending.snapshot, settled.snapshot);
-      record.sc2 = judgeAnchors(pending.snapshot, settled.snapshot);
+      record.sc2 = judgeAnchors(pending.snapshot, settled.snapshot, {
+        // The subject's name is data a skeleton cannot hold (spec SC-2, amended 2026-10-18).
+        subjectHeading: site.subjectHeading === true,
+        columns:
+          pending.columns && settled.columns
+            ? { pending: pending.columns, settled: settled.columns }
+            : undefined,
+      });
       record.sc4 = judgeSentences(pending.live, 1);
       record.tableHeadingsExposedWhilePending = pending.snapshot.tableHeadingsExposed;
       if (pending.columns && settled.columns) {

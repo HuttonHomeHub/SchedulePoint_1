@@ -231,6 +231,16 @@ synchronously; `isPending` is false).
   column headings — sits at the same position pending and settled: **|Δ| ≤ 1 px** at 1646 × 1000 and
   1024 × 600. Growth **below** the last placeholder (more notes than three, more rows than three) is
   expected and not measured as a defect — a skeleton cannot know a count (`data-table.tsx:199-207`).
+  > **Amended 2026-10-18 (product owner).** The wording above stands. Three things are reported and
+  > not graded: (a) a column heading's _sideways_ position on an `auto`, `bounded` or undeclared column
+  > (its width is data the skeleton cannot have, exactly as SC-3 treats it; its vertical position is still
+  > graded), and a heading on a `fit` column to the right of such columns only where the summed width change
+  > of the columns on its left accounts for its whole move (the judge shows the sum); (b) an anchor a skeleton
+  > cannot know by construction — the subject's `h1` on a detail page and the zero-width Actions heading — is
+  > recorded as _absent by construction_ in the verdict, never as a silent pass, and a page whose only
+  > anchors are such is `NOTHING_GRADED`; (c) a heading below a table counts as growth below the last
+  > placeholder only where the judge shows the whole shift is the change in the table body and the placeholder
+  > rows are row-sized. Where it cannot show that, the anchor fails.
 - **SC-3 (#341 columns).** For the eight highest-traffic `DataTable`s (Clients, Projects, Plans,
   Calendars, Resources, Members, Audit log, Recently deleted): every **`fit`** column's pending width is
   within **8 px** of settled on the seed catalogue's ordinary plans; **`auto`/`bounded`** columns are
@@ -238,9 +248,20 @@ synchronously; `isPending` is false).
   Baseline from #341: `fit` 16 → 190 px, `auto` 628 → 738 px. **Withdrawal clause:** if M0 shows the
   sample-text remedy cannot reach 8 px on a `fit` column, the target is re-argued in writing in
   `m0-measurement.md`, not quietly relaxed.
+  > **Amended 2026-10-18 (product owner), withdrawal clause applied.** The sample-text remedy was measured
+  > (`m7-after-measurement.md`) and did not reach 8 px on two columns: Calendars "Working days", 190 px
+  > pending against 102 settled (88 px over), and Plans "Status", 71 px against 57 (14 px over). Both
+  > samples are the widest possible value, deliberately; a median-width sample would under-reserve for the
+  > wide case instead, so no single sample can reach 8 px on ordinary data. The owner kept the widest-value
+  > sample. These two columns are **accepted, documented exceptions** and are still reported as FAIL by the
+  > judge; the 8 px bound stands for every other `fit` column.
 - **SC-4 (one sentence).** While each group-A surface is pending: exactly one live region carries a
   sentence naming the subject ("Loading notes…"), or zero where an enclosing `StatusSection` /
   `RoutePending` speaks; axe reports no `aria-hidden-focus` and no new violations.
+  > **Clarified 2026-10-18 (product owner).** "Exactly one" holds for the whole page, not only while the
+  > heading and the table are pending together: on the client and project screens the table's sentence speaks
+  > while its list is outstanding, and the heading's sentence once the table has settled first. One sentence
+  > while anything on the page is pending; none when all has settled.
 - **SC-5 (reduced motion).** Under `reducedMotion: 'reduce'`, no skeleton or spinner animation is
   running 100 ms after mount (`element.getAnimations()` all `finished`), on one journey per suite
   touched.

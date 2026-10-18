@@ -10,6 +10,34 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-18 — Loading skeletons: three open questions answered by the product owner (tech debt #234, #341)
+
+**1. A column heading may slide sideways when the rows arrive, on a column whose width the data decides.**
+Accepted. The loading skeleton cannot know how wide a name or an email will be, so on a column that is not
+fixed-width (`auto`, `bounded`, or undeclared) the heading's sideways position is reported and not graded, the
+same way SC-3 already treats those columns' widths. The vertical position is still graded. Two further things
+are recorded as "absent by construction, reported", never as a silent pass: the page subject's heading on a
+detail page (a skeleton cannot know the name) and the empty Actions heading. Growth below the last placeholder
+row stays accepted, as the spec already said. The spec's SC-2 keeps its original wording with a dated note.
+
+**2. Two columns keep the widest-value sample and are accepted as documented exceptions.** Calendars "Working
+days" reserves 190 px against 102 px settled (88 px over) and Plans "Status" 71 px against 57 px (14 px over).
+A sample the width of the widest possible value always over-reserves for ordinary data, and a narrower sample
+would clip the wide case instead, so no single sample reaches 8 px. The 8 px rule is unchanged for every other
+`fit` column; these two are recorded as exceptions with the measured numbers, not as passes.
+
+**3. A page that is still loading always says exactly one "Loading…" sentence.** On the client and project
+pages the table below the heading can finish before the heading's own read does, and the page used to fall
+silent in that window. Now the table's own sentence speaks while its list is outstanding, and the heading's
+sentence ("Loading client…" / "Loading project…") speaks only once the table has settled. Both settled: nothing.
+
+**Consequences.** The instrument's judge was changed to match decision 1 after the second reading was seen;
+that is stated in `docs/specs/loading-skeletons/m7-after-measurement.md` (third reading). The headings below the
+Members and Plans tables still fail: the shift is wholly inside the table body but is not shown to be row count
+alone, and they are reported as failing rather than waved through.
+
+---
+
 ## 2026-10-17 — `/forgot-password` takes no `?email=`; the unproduced prefill is deleted (tech debt #242)
 
 **What was decided.** Option (b) of the row: the route's validator, the screen's `useSearch` and
