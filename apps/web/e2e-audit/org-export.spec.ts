@@ -25,6 +25,23 @@ import { expect, test } from '../e2e-support/test';
  * Runs in the audit suite because it reads the audit log and needs no other flag.
  */
 
+/**
+ * Scans the page only once nothing on it is moving. `Button` carries `transition-colors`, and the
+ * Download control changes variant (outline while working, filled at rest) and sits under the
+ * pointer that just pressed it, so a scan taken the instant the status line appears can read a
+ * colour half-way between two settled ones, which is no state a reader ever sees: CI measured
+ * #a7adb8 on #404656 (4.17:1) and #949baa on #5d616b (2.22:1) for the same button on two attempts.
+ * The settled colours pass (15.3:1 at rest, 17.4:1 hovered, 9.8:1 and 14.0:1 while working), so
+ * the fix is to wait for the movement to end, not to relax the scan's rules or tags.
+ */
+async function scanWhenSettled(page: Page) {
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => animation.playState !== 'running'),
+  );
+  return new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+}
+
 /** The organisation nav in the rail, scoped so its links do not clash with the breadcrumbs. */
 function navLink(page: Page, name: string): Locator {
   return page
@@ -68,7 +85,7 @@ test('an Org Admin downloads the whole organisation as a ZIP, and the audit log 
   await expect(page.getByRole('heading', { name: 'What is not included' })).toBeVisible();
 
   // The screen is accessible (WCAG 2.2 AA, the rules axe can decide) before and after the download.
-  const before = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const before = await scanWhenSettled(page);
   expect(before.violations).toEqual([]);
 
   // ------------------------------------------------------------------ The download itself
@@ -97,7 +114,7 @@ test('an Org Admin downloads the whole organisation as a ZIP, and the audit log 
   await expect(main.getByRole('button', { name: 'Download export' })).toBeVisible();
   await expect(main.getByRole('alert')).toHaveCount(0);
 
-  const after = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  const after = await scanWhenSettled(page);
   expect(after.violations).toEqual([]);
 
   // ------------------------------------------------------------ The audit log records the export
