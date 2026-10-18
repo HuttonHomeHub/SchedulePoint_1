@@ -398,6 +398,19 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
           `${where}: settled marker "${screen.settled}" never appeared`,
         ).toBeVisible();
       }
+      // The settled marker is not enough: a page that frames itself before its read returns (the
+      // heading, the client name) satisfies it while DataTable still shows its skeleton. A skeleton
+      // cell carries no `data-col-width`, so wait until none does — the assertion below stays.
+      await page
+        .waitForFunction(
+          () =>
+            [...document.querySelectorAll('table tbody td')]
+              .filter((td) => (td.getAttribute('colspan') ?? '1') === '1')
+              .every((td) => td.hasAttribute('data-col-width')),
+          undefined,
+          { timeout: 10_000 },
+        )
+        .catch(() => undefined);
 
       const seen = await page.evaluate(() => {
         const out: { header: string; colWidth: string; text: string }[] = [];
