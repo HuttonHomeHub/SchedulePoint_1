@@ -136,4 +136,20 @@ describe('ActivityEditorDialog — the Members tab', () => {
     const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
     expect(calls.some((c) => String(c[0]).includes('/activities'))).toBe(false);
   });
+
+  // The editor's own `planActivitiesLoading`/`planActivitiesError` reach the tab (#534): before they
+  // were wired the panel's skeleton and error branches could not be reached from the product.
+  it('shows the loading outline while the plan’s activities load', () => {
+    mount({ planActivitiesLoading: true });
+    expect(screen.getByText('Loading the plan’s activities…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Find an activity')).not.toBeInTheDocument();
+  });
+
+  it('says so when the plan’s activities could not be loaded', () => {
+    mount({ planActivitiesError: true });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The plan’s activities could not be loaded, so membership cannot be edited.',
+    );
+    expect(screen.queryByRole('button', { name: 'Save membership' })).not.toBeInTheDocument();
+  });
 });

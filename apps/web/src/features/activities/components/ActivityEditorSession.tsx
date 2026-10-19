@@ -913,6 +913,8 @@ export function ActivityEditorSession({
                   planId={planId}
                   summary={activity}
                   planActivities={planActivities}
+                  loading={planActivitiesLoading}
+                  error={planActivitiesError}
                   gate={gating.members}
                   {...(onReparented ? { onReparented } : {})}
                 />
