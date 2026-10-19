@@ -76,6 +76,11 @@ the same pair, for the same reason, that `ActivityResponseDto` already exposes `
 
 ### 3. The engine is untouched; two things adjacent to it are not
 
+_Amended 2026-10-19 (`docs/TECH_DEBT.md` #522): the engine now receives the factor, as the optional
+`EngineActivity.dayFactorMinutes`, for one purpose — the near-critical band is five working days of the
+activity's own calendar. It never moves a date (an absent factor means 1,440, the pre-#522 band), the
+calendar-id map still never reaches the engine, and `MINUTES_PER_DAY` below is still not this factor._
+
 `WorkingTimeCalendar` is two methods over shift and exception rows (`addWorkingTime`,
 `workingTimeBetween`), and `PlanCalendarInput` carries shifts and exceptions and nothing else. This
 column **cannot reach `computeSchedule`**, so the ADR-0034 recalc parity gate is structurally

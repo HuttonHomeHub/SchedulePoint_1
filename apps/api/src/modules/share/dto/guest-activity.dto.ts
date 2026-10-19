@@ -118,7 +118,8 @@ export class GuestActivityDto {
   @ApiProperty({
     description:
       'CPM near-critical flag (engine-owned): not critical, with total float above zero and ' +
-      'inside the near-critical band. The same value the member read returns.',
+      'at most 5 working days of the activity’s own calendar, as of the last recalculation. The ' +
+      'same value the member read returns.',
   })
   isNearCritical!: boolean;
 

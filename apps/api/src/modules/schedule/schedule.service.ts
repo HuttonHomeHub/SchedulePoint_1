@@ -591,11 +591,13 @@ export class ScheduleService {
         // Float and drift are persisted IN DAYS by this write, so they take the same factor the
         // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
         // float" for one span — not a smaller change than converting them, an incoherent one.
-        const dayFactorByActivity = await this.resolveDayFactors(
-          graph.dayFactorCalIdByActivity,
+        await this.schedule.writeResults(
+          organizationId,
+          planId,
+          results,
+          graph.dayFactorByActivity,
           tx,
         );
-        await this.schedule.writeResults(organizationId, planId, results, dayFactorByActivity, tx);
         await this.schedule.writeDrivingFlags(organizationId, planId, output.edges, tx);
         // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
         // §5 / ADR-0035 §30.7): a raw UPDATE that touches ONLY `schedule_computed_at`, never
@@ -1621,6 +1623,13 @@ export class ScheduleService {
      * second spelling of its fallback rung here.
      */
     dayFactorCalIdByActivity: ReadonlyMap<string, string | null>;
+    /**
+     * The factor itself — minutes in one working day — for each activity, resolved from
+     * {@link dayFactorCalIdByActivity}. Resolved here, once, because it is both an engine INPUT (the
+     * near-critical band is five of these, #522) and the unit the recalculation's write converts
+     * float into (ADR-0068 §3a); one lookup keeps the band and the persisted "d" on one number.
+     */
+    dayFactorByActivity: ReadonlyMap<string, number>;
     meta: {
       lagCalendarOverrideCount: number;
       activityCalendarCount: number;
@@ -1711,6 +1720,8 @@ export class ScheduleService {
           ] as const,
       ),
     );
+
+    const dayFactorByActivity = await this.resolveDayFactors(dayFactorCalIdByActivity, tx);
 
     // Progressed activities this recalc consumes (M2, ADR-0035): 0 = an unprogressed plan.
     const progressedActivityCount = activityRows.filter(
@@ -1889,6 +1900,7 @@ export class ScheduleService {
         portFor(calId),
         driverMissing,
         derivedExternalByActivity.get(r.id),
+        dayFactorByActivity.get(r.id),
       );
     });
     const edges = edgeRows.map((r) =>
@@ -1989,6 +2001,7 @@ export class ScheduleService {
       // its own calendar, so the unit and the measurement finally agree.
       calIdByActivity,
       dayFactorCalIdByActivity,
+      dayFactorByActivity,
       meta: {
         lagCalendarOverrideCount,
         activityCalendarCount: distinctActivityCalIds.length,
@@ -3021,6 +3034,7 @@ function toEngineActivity(
   calendar?: WorkingTimeCalendar,
   resourceDriverMissing = false,
   derivedExternal?: DerivedExternalInstant,
+  dayFactorMinutes?: number,
 ): EngineActivity {
   const remainingMinutes = resolveRemainingMinutes(row);
   return {
@@ -3061,6 +3075,8 @@ function toEngineActivity(
     expectedFinish: row.expectedFinish ? formatCalendarDate(row.expectedFinish) : null,
     ...(remainingMinutes !== undefined ? { remainingMinutes } : {}),
     ...(calendar ? { calendar } : {}),
+    // The working-day length the near-critical band is counted in (#522). Never moves a date.
+    ...(dayFactorMinutes !== undefined ? { dayFactorMinutes } : {}),
     // Resource-dependent driver-missing (M7.2, ADR-0035 §23): the service sets this for a
     // RESOURCE_DEPENDENT activity with no active driver; the engine carries it to its result.
     ...(resourceDriverMissing ? { resourceDriverMissing: true } : {}),

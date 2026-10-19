@@ -68,7 +68,8 @@ inclusive-display** convention, and compute in the former, persist in the latter
    (surfaced as negative float + `is_critical`, never an error).
    `is_critical = TF_a ≤ 0`; `is_near_critical = 0 < TF_a ≤
 NEAR_CRITICAL_THRESHOLD_WORKING_DAYS` (a fixed engine constant, **5** in this
-   slice; a per-plan setting is a trivial additive follow-up).
+   slice; a per-plan setting is a trivial additive follow-up). _Amended 2026-10-19 (#522): the five days
+   are the activity's own calendar's days (its hours-per-day, ADR-0068), not a fixed 7,200 minutes._
 
 4. **Inclusive display dates.** Only when persisting do we convert offsets to
    calendar days via the `WorkingDayCalendar` port:
