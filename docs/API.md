@@ -503,6 +503,13 @@ single-plan recalculation whenever the plan has any active cross-plan edge, so
 `…/recalculate-programme`. A plan with no cross-plan edges is unaffected in
 either route, and no request or response shape changes.
 
+**Near-critical is five working days of the activity's own calendar** (#522, 2026-10-19).
+`isNearCritical` is `0 <` total float `≤ 5` working days, where a working day is the hours-per-day
+(ADR-0068) of the calendar the activity is scheduled on, the same factor its float is shown in. It
+was a fixed 7,200 working minutes before, which made the band 15 working days on an eight-hour
+calendar. The flag and `nearCriticalCount` are **persisted by recalculation**, so a plan keeps its
+old flags until it is next recalculated; the member and guest reads return the same value.
+
 **The lag is working minutes on its lag calendar, and the dates match one plan** (#385,
 2026-09-26). A cross-plan link's lag is stored and applied exactly as an in-plan lag is: `lagDays`
 is converted on write to working minutes on the **lag calendar**, and every read divides by the
@@ -773,7 +780,8 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   **Exposed as of ADR-0198:** `isNearCritical` on an activity and `isDriving` on a dependency, the
   engine's own flags, equal to the member read. `isNearCritical` means `0 <` total float `≤ 5` working days
   of the activity's own calendar (its hours-per-day, ADR-0068), so `nearCriticalCount` is smaller on
-  shorter-day calendars than it was before 2026-10-19 (`docs/TECH_DEBT.md` #522). `ResourceAssignment.isDriving` (which resource
+  shorter-day calendars than it was before 2026-10-19, from each plan's next recalculation
+  (`docs/TECH_DEBT.md` #522). `ResourceAssignment.isDriving` (which resource
   drives) is a different field and is **never** exposed.
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per

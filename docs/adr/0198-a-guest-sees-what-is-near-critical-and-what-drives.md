@@ -25,8 +25,11 @@ days of the activity's own calendar` (`engine/compute.ts`, `engine/constants.ts`
 _Amended 2026-10-19 (`docs/TECH_DEBT.md` #522, product-owner decision): this paragraph said "7,200 working
 minutes", which is five days only on a 24-hour calendar and fifteen on an eight-hour one. The band is five of the
 activity's own working days, so the day factor stated above is now an input to the flag as well as a way to read it
-back; the guest and member flags stay equal because both read the one persisted column._ Its count is already public as `nearCriticalCount`. What
-is new is only _which_ activities make up that count. No cost, resource, constraint, note or person is an input.
+back; the guest and member flags stay equal because both read the one persisted column. The privacy argument
+above still holds: every input is still exposed or recoverable, and nothing new about cost, resources or people is._
+
+Its count is already public as `nearCriticalCount`. What is new is only _which_ activities make up that count. No
+cost, resource, constraint, note or person is an input.
 
 **D2 — `SCHEDULE_READ` gains `ActivityDependency.isDriving`.** The engine-owned link flag: true when the link
 sets its successor's early start. It is one bit per link, computed over two inputs the guest cannot see (the lag

@@ -311,7 +311,11 @@ export class ActivityResponseDto implements ActivitySummary {
   @ApiProperty({ description: 'CPM critical flag (engine-owned).' })
   isCritical!: boolean;
 
-  @ApiProperty({ description: 'CPM near-critical flag (engine-owned).' })
+  @ApiProperty({
+    description:
+      'CPM near-critical flag (engine-owned): not critical, with total float above zero and at most ' +
+      '5 working days of the activity’s own calendar. As of the last recalculation.',
+  })
   isNearCritical!: boolean;
 
   @ApiProperty({
