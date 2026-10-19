@@ -18,6 +18,12 @@ the list/manage archetype: a row is edited **in place** when its fields fit on t
 assignments), and opens a **dialog** when the edit needs a picker or more than one step
 (dependencies, in the Logic tab). Nothing moves. #69 is closed.
 
+**#64 — a Viewer keeps the summary; a Planner whose pen is taken keeps shaded editors.** Built as
+the 2026-10-19 answer below describes. Role is told from pen by `ScopeGate.roleDenied`, set only by
+the definition gate's role refusal, which `ActivityEditorSession` passes to the panel as
+`roleCanWrite`. ADR-0083 D5's "delete the summary branch" is narrowed to that decision (see the
+dated note on ADR-0083's step 5). #64 is closed.
+
 ---
 
 ## 2026-10-19 — Reconciliation pass: the agents again, and a bin that now holds rows the clear-out never touches

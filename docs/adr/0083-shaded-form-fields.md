@@ -603,6 +603,15 @@ Per CLAUDE.md §19.9 / ADR-0076, the decision-bearing ones:
 4. M2: collapse the two create forms; reuse `AddLinkSection.tsx:163-167`'s existing box shape.
 5. M3: `AssignmentRow` — delete the summary branch, move the six hand-rolled controls onto the
    treatment, fix the three native-`disabled` Saves at `:534`, `:576`, `:684`.
+   **M3 done 2026-10-19 (`docs/TECH_DEBT.md` #64), with one change to D5 as written.** The owner
+   decided that a **Viewer keeps the one-line summary** and only a Planner whose pen is taken keeps
+   the editors, shaded — so the summary branch is not deleted but narrowed to a role that can never
+   edit (`rowsEditable`, from `ScopeGate.roleDenied`). The "considered and rejected: split by whether
+   the refusal is changeable" paragraph in D5 is therefore overruled for this surface: the second
+   rendering it feared is the existing one-line summary, not a read-only copy of three tabs. The
+   editors sit under one `FieldGateProvider` for the list, the inputs go `readonly`, the Saves and
+   Unassign take `aria-disabled` with a click guard, and the loading curve (`SelectField`) keeps
+   native `disabled` as D1's named exception.
 6. M4: `DESIGN_SYSTEM.md`, `COMPONENT_LIBRARY.md`, and the `pen-handoff.spec.ts` step.
 7. Run the pre-push gate **including** `scripts/e2e-local.sh web:edit`. A unit test cannot tell you
    the browser kept focus.

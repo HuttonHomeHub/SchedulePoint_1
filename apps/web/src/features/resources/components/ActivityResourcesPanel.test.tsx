@@ -74,11 +74,18 @@ function renderPanel({
     });
     queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [ASSIGNMENT]);
   }
-  return render(
+  const tree = (next: Partial<React.ComponentProps<typeof ActivityResourcesPanel>>) => (
     <QueryClientProvider client={queryClient}>
-      <ActivityResourcesPanel orgSlug="acme" activityId="a1" canWrite {...props} />
-    </QueryClientProvider>,
+      <ActivityResourcesPanel orgSlug="acme" activityId="a1" canWrite {...props} {...next} />
+    </QueryClientProvider>
   );
+  const result = render(tree({}));
+  // Re-render the SAME mounted tree with new props — what the pen changing hands does to a row.
+  return {
+    ...result,
+    update: (next: Partial<React.ComponentProps<typeof ActivityResourcesPanel>>) =>
+      result.rerender(tree(next)),
+  };
 }
 
 /** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
@@ -139,6 +146,81 @@ describe('ActivityResourcesPanel', () => {
    * points at: the provider renders it once and both reference it, which is what stops the sentence
    * appearing twice on one screen.
    */
+  /**
+   * `docs/TECH_DEBT.md` #64 (ADR-0083 D5). `AssignmentRow` used to be `canWrite ? editors : summary`, so
+   * another planner taking the pen UNMOUNTED the focused field and dropped focus to `<body>`
+   * (WCAG 2.4.3), along with whatever the planner had typed. Verified red against that branch: the
+   * units input was gone after the re-render, so `toBe(units)` and `activeElement` both failed.
+   */
+  it('keeps a row’s fields mounted, shaded with the reason, when the pen is taken mid-edit (#64)', () => {
+    const { update } = renderPanel();
+    const units = within(screen.getByText('Crew A').closest('li')!).getByLabelText(
+      'Budgeted units',
+    );
+    units.focus();
+    fireEvent.change(units, { target: { value: '9' } });
+    expect(units).toHaveFocus();
+
+    update({
+      canWrite: false,
+      roleCanWrite: true,
+      writeReason: 'Start editing to change this activity.',
+    });
+
+    const row = screen.getByText('Crew A').closest('li')!;
+    const same = within(row).getByLabelText('Budgeted units');
+    expect(same).toBe(units);
+    expect(same).toHaveFocus();
+    expect(same).toHaveAttribute('readonly');
+    expect(same).not.toBeDisabled();
+    // What was typed survives the flip; it is only the write that is refused.
+    expect(same).toHaveValue(9);
+    // Described by the reason, which is rendered once for the list.
+    const reasonIds = same.getAttribute('aria-describedby')?.split(' ') ?? [];
+    const reasons = reasonIds.map((id) => document.getElementById(id)?.textContent);
+    expect(reasons).toContain('Start editing to change this activity.');
+    // The buttons shade (stay, aria-disabled) rather than vanish.
+    expect(within(row).getByRole('button', { name: 'Unassign Crew A' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(
+      within(row).getByRole('button', { name: 'Save budgeted units for Crew A' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).getByRole('checkbox', { name: /Driving resource/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(within(row).getByRole('combobox', { name: /Loading curve/ })).toBeDisabled();
+  });
+
+  it('refuses a click on a shaded row’s Unassign and Save (#64)', () => {
+    const { update } = renderPanel();
+    update({
+      canWrite: false,
+      roleCanWrite: true,
+      writeReason: 'Start editing to change this activity.',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Unassign Crew A' }));
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+  });
+
+  it('gives a Viewer the one-line summary, not shaded editors (#64)', () => {
+    // The host supplies a reason for the assign section, and says the role can never edit.
+    renderPanel({
+      canWrite: false,
+      roleCanWrite: false,
+      writeReason: 'Your role cannot edit activity details.',
+    });
+    const row = screen.getByText('Crew A').closest('li')!;
+    expect(within(row).getByText(/5 units/)).toBeInTheDocument();
+    expect(within(row).queryByLabelText('Budgeted units')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Unassign Crew A' })).not.toBeInTheDocument();
+    expect(
+      within(row).queryByText('Your role cannot edit activity details.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('shades the assign form’s fields read-only too, pointing at the same reason (#66)', () => {
     renderPanel({ canWrite: false, writeReason: 'Start editing to change this activity.' });
     const assign = screen.getByRole('group', { name: 'Assign a resource' });
@@ -151,7 +233,7 @@ describe('ActivityResourcesPanel', () => {
     const save = within(assign).getByRole('button', { name: 'Assign resource' });
     const fieldReason = units.getAttribute('aria-describedby')?.split(' ') ?? [];
     expect(fieldReason).toContain(save.getAttribute('aria-describedby'));
-    expect(screen.getAllByText('Start editing to change this activity.')).toHaveLength(1);
+    expect(within(assign).getAllByText('Start editing to change this activity.')).toHaveLength(1);
   });
 
   it('shows the assignments empty state', () => {

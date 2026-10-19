@@ -123,8 +123,9 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   expect((await readAssignments(page, orgSlug, activityId))[0]?.lagMinutes).toBe(0);
 
   // ------------------------------------------------------------- 5. Not authorable without the pen
-  // ADR-0028: an assignment write is a structural edit. Releasing the pen must take the control
-  // away entirely — not leave it lit and let the save 423.
+  // ADR-0028: an assignment write is a structural edit. Releasing the pen must shut the control —
+  // shaded with its reason, not removed (ADR-0083 D5, TECH_DEBT #64: removing it dropped a focused
+  // field's focus to `<body>`) — and must not leave it lit to let the save 423.
   //
   // Released deliberately from this page rather than by navigating away. Leaving the plan flushes a
   // release on unmount, so a `goto` would also arrive pen-less — but then the assertion below would
@@ -135,9 +136,15 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 
   await openResources(page, 'Steel erection');
-  const readOnly = activityEditor(page);
-  await expect(readOnly.getByLabel('Joins after')).toHaveCount(0);
-  await expect(
-    readOnly.getByRole('button', { name: 'Save join delay for Tower crane' }),
-  ).toHaveCount(0);
+  const shut = activityEditor(page);
+  const shutLag = shut
+    .getByRole('listitem')
+    .filter({ hasText: 'Tower crane' })
+    .getByLabel('Joins after');
+  await expect(shutLag).toHaveAttribute('readonly', '');
+  const shutSave = shut.getByRole('button', { name: 'Save join delay for Tower crane' });
+  await expect(shutSave).toHaveAttribute('aria-disabled', 'true');
+  // The click guard is real here too: a forced press writes nothing.
+  await shutSave.click({ force: true });
+  expect((await readAssignments(page, orgSlug, activityId))[0]?.lagMinutes).toBe(0);
 });
