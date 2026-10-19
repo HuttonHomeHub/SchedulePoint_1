@@ -11,9 +11,9 @@
     "lucide-react": "1.54.0",
     "axe-core": "4.14.0",
     "@axe-core/playwright": "4.14.0",
-    "@tanstack/react-router": "1.170.41",
-    "@tanstack/history": "1.162.4",
-    "@tanstack/router-core": "1.171.34",
+    "@tanstack/react-router": "1.170.44",
+    "@tanstack/history": "1.162.5",
+    "@tanstack/router-core": "1.171.37",
     "playwright-core": "1.64.0",
     "tailwindcss": "4.3.3",
     "@tanstack/query-core": "5.104.1",
@@ -82,7 +82,7 @@
       "ref": "index.js:116-124",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "137-145",
+      "lines": "132-140",
       "anchor": "opts.setBlockers([...blockers, blocker]);",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -90,15 +90,15 @@
       "ref": "index.js:19-26",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "43-50",
-      "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
+      "lines": "38-49",
+      "anchor": "(args.type === \"PUSH\" || args.type === \"REPLACE\")",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
       "ref": "index.js:221-238",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "240-257",
+      "lines": "235-252",
       "anchor": "if (skipBlockerNextPop) skipBlockerNextPop = false;",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -109,7 +109,7 @@
       "ref": "index.js:224-236",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "250-262",
+      "lines": "245-257",
       "anchor": "win.history.go(-delta);",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -117,7 +117,7 @@
       "ref": "index.js:230-233",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "249-252",
+      "lines": "244-247",
       "anchor": "ignoreNextPop = true;",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -128,8 +128,8 @@
       "ref": "index.js:24-34",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "42-52",
-      "anchor": "\t\tconst blockers = opts.getBlockers?.() ?? [];\n\t\tconst isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
+      "lines": "38-50",
+      "anchor": "\t\tconst blockers = args.navigateOpts?.ignoreBlocker ? void 0 : opts.getBlockers?.();\n\t\tif (typeof document !== \"undefined\" && blockers?.length && (args.type === \"PUSH\" || args.type === \"REPLACE\"))",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -139,7 +139,7 @@
       "ref": "index.js:240-262",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "267-289",
+      "lines": "262-284",
       "anchor": "const shouldHaveBeforeUnload = blocker.enableBeforeUnload ?? true;",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -147,7 +147,7 @@
       "ref": "index.js:247-257",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "266-276",
+      "lines": "261-271",
       "anchor": "if (typeof document !== \"undefined\" && blockers.length) for (const blocker of blockers) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -158,7 +158,7 @@
       "ref": "index.js:258-261",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "277-280",
+      "lines": "272-275",
       "anchor": "if (shouldBlock) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -169,7 +169,7 @@
       "ref": "index.js:299-301",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "317-319",
+      "lines": "312-314",
       "anchor": "onBlocked: () => {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -180,7 +180,7 @@
       "ref": "index.js:306",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "331",
+      "lines": "326",
       "anchor": "win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true });",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -188,7 +188,7 @@
       "ref": "index.js:344-351",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "369-376",
+      "lines": "363-370",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -196,7 +196,7 @@
       "ref": "index.js:344-352",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "369-377",
+      "lines": "363-371",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -218,8 +218,8 @@
       "ref": "link.js:290-297",
       "package": "@tanstack/react-router",
       "path": "dist/esm/link.js",
-      "lines": "53-60",
-      "anchor": "\tconst { activeOptions, to, preload: userPreload, preloadDelay: userPreloadDelay, hashScrollIntoView, replace, startTransition, resetScroll, viewTransition, ignoreBlocker, disabled, target, onClick, onBlur, onFocus, onMouseEnter, onMouseLeave, onTouchStart } = options;\n\tconst isHydrated = useHydrated(!!activeOptions?.includeHash);",
+      "lines": "162-166",
+      "anchor": "\t\t\trouter.navigate({\n\t\t\t\t...options,",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -347,7 +347,7 @@
       "ref": "load-client.js:141-145",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "141-145",
+      "lines": "156-160",
       "anchor": "const validationError = match.paramsError ?? match.searchError;",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
@@ -388,7 +388,7 @@
       "ref": "router.js:183-194",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "178-189",
+      "lines": "190-201",
       "anchor": "\t\t\t\t\tconst parsedSearch = this.options.parseSearch(search);\n\t\t\t\t\tconst searchStr = this.options.stringifySearch(parsedSearch);",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -410,7 +410,7 @@
       "ref": "router.js:678-689",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "683-694",
+      "lines": "686-697",
       "anchor": "const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch }) ?? void 0;",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -421,7 +421,7 @@
       "ref": "router.js:690-697",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "694-701",
+      "lines": "697-704",
       "anchor": "if (!(err instanceof SearchParamError)) searchParamError = new SearchParamError(err.message, { cause: err });",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
@@ -429,7 +429,7 @@
       "ref": "router.js:788-791",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "788-791",
+      "lines": "791-794",
       "anchor": "Object.assign(accumulatedSearch, validateSearch(route.options.validateSearch, accumulatedSearch));",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -1095,7 +1095,7 @@
       "ref": "lazyRouteComponent.js:51",
       "package": "@tanstack/react-router",
       "path": "dist/esm/lazyRouteComponent.js",
-      "lines": "51",
+      "lines": "53",
       "anchor": "lazyComp.preload = load;",
       "citedBy": [
         "docs/specs/route-code-splitting/feature-spec.md",
@@ -1125,7 +1125,7 @@
       "ref": "load-client.js:671-672",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "685-686",
+      "lines": "702-703",
       "anchor": "route.options.pendingComponent ?? router.options.defaultPendingComponent",
       "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
     },
@@ -1376,7 +1376,7 @@
       "ref": "router.js:635",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "635",
+      "lines": "636",
       "anchor": "notFoundMode: options.notFoundMode ?? \"fuzzy\"",
       "citedBy": ["docs/specs/estate-polish-oct/feature-spec.md"]
     },
@@ -1384,7 +1384,7 @@
       "ref": "router.js:659-665",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "659-665",
+      "lines": "661-668",
       "anchor": "findGlobalNotFoundRouteId(this.options.notFoundMode, matchedRoutes)",
       "citedBy": [
         "docs/specs/estate-polish-oct/feature-spec.md",
@@ -1395,7 +1395,7 @@
       "ref": "router.js:958-968",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "958-968",
+      "lines": "961-971",
       "anchor": "function findGlobalNotFoundRouteId(notFoundMode, routes) {",
       "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
     },
@@ -1403,7 +1403,7 @@
       "ref": "load-client.js:611-618",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "611-618",
+      "lines": "629-636",
       "anchor": "if (router.options.notFoundMode !== \"root\" && plannedBoundary >= 0) {",
       "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
     },
@@ -1411,7 +1411,7 @@
       "ref": "load-client.js:40-42",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "40-42",
+      "lines": "42-44",
       "anchor": "const end = matches.findIndex((match) => match.status !== \"success\" || match._notFound) + 1;",
       "citedBy": ["docs/specs/in-shell-not-found/feature-spec.md"]
     },
