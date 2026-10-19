@@ -225,6 +225,17 @@ const OVER_ALLOCATION_ENTRY: LegendEntry = {
 
 /** The three ascending mini-bars' heights, as the DOM legend draws them. */
 const OVER_ALLOCATION_SWATCH_HEIGHTS = [3, 6, 9] as const;
+/** Where the first mini-bar starts inside the swatch, each bar's width and the step between bars. */
+const OVER_ALLOCATION_BAR_INSET = 3;
+const OVER_ALLOCATION_BAR_W = 4;
+const OVER_ALLOCATION_BAR_PITCH = 5;
+
+/** A text's width on this context, with a per-character estimate where the context cannot measure
+ * (a stubbed 2D context returns no metrics). */
+function measuredWidth(ctx: CanvasRenderingContext2D, text: string): number {
+  const measured = ctx.measureText(text) as TextMetrics | undefined;
+  return (measured && measured.width) || text.length * 6.5;
+}
 
 /** The legend rows this picture's scene calls for. */
 function legendFor(scene: TsldScene): readonly LegendEntry[] {
@@ -556,11 +567,7 @@ function drawAxisMarkerRow(
   ctx.font = MARKER_FONT;
   // The mark's box is the CHIP, not the bare text — clamping and the collision test must run on
   // what is actually painted, or two chips could kiss while their texts were judged apart.
-  const measure = (label: string): number => {
-    const measured = ctx.measureText(label) as TextMetrics | undefined;
-    const textWidth = (measured && measured.width) || label.length * 6.5;
-    return textWidth + MARKER_CHIP_PAD_X * 2;
-  };
+  const measure = (label: string): number => measuredWidth(ctx, label) + MARKER_CHIP_PAD_X * 2;
 
   // The same facts the painter derived its lines from (`paint.ts` layer 3.5) — the model is the
   // single answer to "where are the rules and which labels survive".
@@ -605,10 +612,7 @@ function drawLegend(
   const swatchTop = y + 3;
   ctx.font = LEGEND_FONT;
   ctx.textBaseline = 'alphabetic';
-  const measure = (text: string): number => {
-    const measured = ctx.measureText(text) as TextMetrics | undefined;
-    return (measured && measured.width) || text.length * 6.5;
-  };
+  const measure = (text: string): number => measuredWidth(ctx, text);
   const limit = maxWidth - BAND_PAD;
   let x = BAND_PAD;
   for (let i = 0; i < legend.length; i += 1) {
@@ -652,11 +656,11 @@ function drawLegend(
       ctx.strokeStyle = palette.outline;
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
-      OVER_ALLOCATION_SWATCH_HEIGHTS.forEach((h, i) => {
-        const barX = x + 3 + i * 5;
-        const barY = swatchTop + SWATCH_H - h;
-        ctx.fillRect(barX, barY, 4, h);
-        ctx.strokeRect(barX + 0.5, barY + 0.5, 3, h - 1);
+      OVER_ALLOCATION_SWATCH_HEIGHTS.forEach((barHeight, step) => {
+        const barX = x + OVER_ALLOCATION_BAR_INSET + step * OVER_ALLOCATION_BAR_PITCH;
+        const barY = swatchTop + SWATCH_H - barHeight;
+        ctx.fillRect(barX, barY, OVER_ALLOCATION_BAR_W, barHeight);
+        ctx.strokeRect(barX + 0.5, barY + 0.5, OVER_ALLOCATION_BAR_W - 1, barHeight - 1);
       });
     } else if (entry.kind === 'dataDate') {
       // dataDate: a SOLID 2px vertical, matching the canvas data-date rule — shape and weight

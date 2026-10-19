@@ -153,7 +153,7 @@ export function useCoalescedPluralNudge(
       }
       if (!mountedRef.current) return;
       const { setConflict, announce, setGhost } = depsRef.current;
-      if (outcome.conflict) setConflict(outcome.conflict);
+      if (outcome.conflict) setConflict(outcome.conflict, outcome.refreshable ?? true);
       else if (outcome.applied) {
         announce(
           pluralMoveAnnouncement({
@@ -286,7 +286,7 @@ export function useCoalescedPluralNudge(
       const { laneOffset, laneDelta } = burst;
       const blocked = rows.filter((r) => r.laneIndex + laneOffset + laneDelta + delta < 0).length;
       if (blocked > 0) {
-        setConflict(topLanePluralReason(blocked), false);
+        setConflict(topLanePluralReason(blocked, rows.length), false);
         return;
       }
       burst = { ...burst, laneDelta: laneDelta + delta };

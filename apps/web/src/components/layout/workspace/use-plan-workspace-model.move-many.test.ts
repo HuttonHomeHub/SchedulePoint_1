@@ -141,6 +141,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
 // Imported AFTER the mocks.
 import { usePlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { tooManyToMoveReason } from '@/features/tsld/model/bulk-move';
 import { ApiFetchError } from '@/lib/api/client';
 
 const wrapper = ({ children }: { children: ReactNode }) =>
@@ -213,12 +214,27 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     expect(h.batchPlacements).not.toHaveBeenCalled();
   });
 
+  /**
+   * The clamp's one authoritative home: `bulkMoveSnapshots` takes a pre-clamped delta, so this is
+   * where lanes 1 and 3 dragged five up must come out as 0 and 2 (the set's shape kept), not 0, 0.
+   */
+  it('keeps a partly clamped set\u2019s relative lanes (TECH_DEBT #526)', async () => {
+    h.batchPlacements.mockResolvedValue([]);
+    const upper: ActivitySummary = { ...ACTIVITY, laneIndex: 1 };
+    await moveMany()([upper, OTHER], { dayDelta: 0, laneDelta: -5 });
+    const sent = h.batchPlacements.mock.calls[0]?.[0] as {
+      placements: { id: string; laneIndex: number }[];
+    };
+    expect(sent.placements.map((p) => p.laneIndex)).toEqual([0, 2]);
+  });
+
   /** Verified red against the unguarded method: 2,001 rows reached `batchPlacements`. */
   it('refuses more rows than one batch takes, naming the cap, before writing (TECH_DEBT #528)', async () => {
     const rows = Array.from({ length: 2001 }, (_, i) => ({ ...ACTIVITY, id: `r${String(i)}` }));
     const outcome = await moveMany()(rows, { dayDelta: 1, laneDelta: 0 });
     expect(outcome.applied).toBe(false);
-    expect(outcome.conflict).toMatch(/2,001 activities are selected.*at most 2,000 at once/);
+    expect(outcome.conflict).toBe(tooManyToMoveReason(2001));
+    expect(outcome.refreshable).toBe(false);
     expect(h.batchPlacements).not.toHaveBeenCalled();
     expect(h.hold).not.toHaveBeenCalled();
   });

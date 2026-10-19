@@ -269,7 +269,7 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
                 dataDate={plan.dataDate}
                 calendar={calendar}
                 canEdit={false}
-                guestView
+                showConstraintKey={false}
                 fill
                 // The guest surface has no Late overlay (`TsldViewControls.tsx` offers grid, data
                 // date, today, non-working and labels only) — `barDateSourceFor(false)` therefore

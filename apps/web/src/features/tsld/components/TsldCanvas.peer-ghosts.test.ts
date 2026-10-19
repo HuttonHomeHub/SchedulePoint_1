@@ -74,6 +74,23 @@ describe('livePeerGhostRects', () => {
     expect(rects![1]).toEqual({ x: c.x + 30, y: c.y + LANE_HEIGHT, w: c.w, h: c.h });
   });
 
+  // Verified red against the unclamped preview: `a` (lane 0) was previewed two lanes ABOVE the top
+  // while the drop, clamped as `moveMany` clamps, writes it nowhere.
+  it('holds the lane shift to what the topmost selected bar can take, as the drop does', () => {
+    const rects = livePeerGhostRects(
+      dragging({ activityId: 'b', laneIndex: 2, currentLaneIndex: 0, currentStartDay: 0 }),
+      ['a', 'b', 'c'],
+      lookup,
+      VIEW,
+      DATA_DATE,
+    );
+    const [a, c] = [activityRect(A, VIEW, DATA_DATE)!, activityRect(C, VIEW, DATA_DATE)!];
+    expect(rects).toEqual([
+      { x: a.x, y: a.y, w: a.w, h: a.h },
+      { x: c.x, y: c.y, w: c.w, h: c.h },
+    ]);
+  });
+
   it('skips a selected id with no drawn activity rather than inventing a rect', () => {
     const rects = livePeerGhostRects(dragging({}), ['a', 'b', 'gone'], lookup, VIEW, DATA_DATE);
     expect(rects).toHaveLength(1);

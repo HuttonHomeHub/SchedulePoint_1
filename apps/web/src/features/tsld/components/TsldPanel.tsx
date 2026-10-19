@@ -290,6 +290,9 @@ export interface TsldBulkOperations {
     /** False when nothing was written (a pen rejection, a stale version, a no-op). */
     applied: boolean;
     conflict: string | null;
+    /** False when the conflict is a rule (the batch cap) rather than stale data, so the banner
+     * offers no Refresh. Absent means refreshable, like every other conflict. */
+    refreshable?: boolean;
   }>;
 }
 
@@ -335,9 +338,13 @@ export interface TsldPanelProps {
    */
   compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
-  /** The share view: the legend omits the constraint pin a guest's activities can never carry
-   * (ADR-0051 §4, TECH_DEBT #521). Not `!canEdit` — a member without the pen can see constraints. */
-  guestView?: boolean;
+  /**
+   * Whether the legend lists the constraint pin. Default `true`; the share view passes `false`
+   * because a guest's activities can never carry a constraint (ADR-0051 §4, TECH_DEBT #521).
+   * `!canEdit` cannot stand in for it: a member without the pen is read-only yet still sees
+   * constraints, so the key must keep naming the pin for them.
+   */
+  showConstraintKey?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
@@ -708,7 +715,7 @@ export function TsldPanel({
   todayFraction = null,
   fill = false,
   chromeless = false,
-  guestView = false,
+  showConstraintKey = true,
   canvasUi,
   barDateSource = 'early',
   clearPlacement,
@@ -2058,7 +2065,10 @@ export function TsldPanel({
   // INTO plural; so a screen-reader user who then takes the pen would learn that the arrow chord
   // moves the set only by reading the bar. This fires on `canMovePlural` turning true while the
   // selection is already plural, and on nothing else: entering plural with the capability already
-  // held is `announceSelectionCount`'s, so the hint is never said twice for one selection.
+  // held is `announceSelectionCount`'s, so the hint is never said twice for one selection. The ref
+  // is seeded with the capability the panel mounted with, so the first run is never a transition.
+  // A true -> false -> true toggle (the pen lost and retaken) re-speaks the hint by design: the
+  // capability really did arrive again.
   const selectedCount = selection.ids.length;
   const couldMovePluralRef = useRef(canMovePlural);
   useEffect(() => {
@@ -2716,7 +2726,12 @@ export function TsldPanel({
         // failed write that never happened.
         const delta = clampLaneDelta(rows, requested);
         if (isNoOp(delta) && !isNoOp(requested)) {
-          showConflict(topLanePluralReason(rows.filter((a) => a.laneIndex === 0).length), false);
+          // The count is of rows at lane 0 — the only rows that can have stopped an upward clamp,
+          // since the set-level clamp is bounded by the topmost row alone.
+          showConflict(
+            topLanePluralReason(rows.filter((a) => a.laneIndex === 0).length, rows.length),
+            false,
+          );
           return;
         }
         // **Hold the dragged bar at the drop position while the batch is in flight**, exactly as
@@ -2744,7 +2759,7 @@ export function TsldPanel({
           .moveMany(rows, delta)
           .then((outcome) => {
             setPendingReposition(null);
-            if (outcome.conflict) showConflict(outcome.conflict);
+            if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
             // Only a write that landed is announced: a pen rejection resolves without a conflict
             // and without having moved anything.
             else if (outcome.applied)
@@ -3126,7 +3141,7 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend withoutConstraint={guestView} />
+          <TsldLegend withoutConstraint={!showConstraintKey} />
         </Surface>
       ) : null}
 

@@ -965,15 +965,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         rows: readonly ActivitySummary[],
         requested: { dayDelta: number; laneDelta: number },
         options?: { coalesce?: boolean; pressedAt?: number },
-      ): Promise<{ applied: boolean; conflict: string | null }> => {
-        // The set-level lane clamp, applied here as well as in the snapshots so a move that clamps
-        // down to nothing sends nothing, and the routing below reads the delta that is written.
+      ): Promise<{ applied: boolean; conflict: string | null; refreshable?: boolean }> => {
+        // The ONE authoritative set-level lane clamp on the write path (the drag and the keyboard
+        // both arrive here): a move that clamps down to nothing sends nothing, and the routing
+        // below reads the delta that is written. `bulkMoveSnapshots` takes it pre-clamped.
         const delta = clampLaneDelta(rows, requested);
         if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
         // Refused before anything is written or held, here rather than in either gesture so the
         // drag and the keyboard share it (TECH_DEBT #528).
         if (rows.length > PLACEMENTS_BATCH_MAX)
-          return { applied: false, conflict: tooManyToMoveReason(rows.length) };
+          // A rule, not stale data: Refresh cannot change the size of the selection.
+          return { applied: false, conflict: tooManyToMoveReason(rows.length), refreshable: false };
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
           delta,

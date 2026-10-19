@@ -2,6 +2,7 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { tooManyToMoveReason } from '../model/bulk-move';
 import { pluralMoveHint } from '../model/reposition-announcement';
 
 import { TsldPanel, type TsldBulkOperations } from './TsldPanel';
@@ -355,6 +356,78 @@ describe('a plural drag that includes a started activity', () => {
   });
 });
 
+describe('a plural drag refuses with a sentence the planner can act on', () => {
+  const wide = (id: string, name: string, lane: number) => ({
+    ...activity(id, name, lane, '2026-01-01'),
+    earlyFinish: '2026-01-06',
+  });
+  const laneY = (lane: number) => 40 + 27 + lane * 60;
+
+  function dragLanes(moveMany: TsldBulkOperations['moveMany'], dy: number) {
+    const { container } = render(
+      <TsldPanel
+        activities={[wide('a', 'Excavate', 0), wide('b', 'Pour', 1)]}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        onRefresh={vi.fn()}
+        bulk={{
+          gate: { writable: true, reason: null },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+          moveMany,
+        }}
+        fill
+      />,
+    );
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+    const canvas = container.querySelector('canvas');
+    if (!canvas) throw new Error('canvas not rendered');
+    fireEvent.pointerDown(canvas, { clientX: 80, clientY: laneY(1), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 80, clientY: laneY(1) + dy, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 80, clientY: laneY(1) + dy, pointerId: 1 });
+  }
+
+  // Lanes 0 and 1 dragged up one: the clamp holds the set at lane 0, which is no move at all.
+  // Red against the drop without the panel's check: `moveMany` was called with a zero delta.
+  it('says why a drop the top lane clamps to nothing moved nothing, and writes nothing', async () => {
+    const moveMany = vi.fn(() => Promise.resolve({ applied: true, conflict: null }));
+    dragLanes(moveMany, -60);
+    // One of the two selected rows sits in lane 0 — the only row that can have stopped the clamp,
+    // because the set-level clamp is bounded by the topmost row alone.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /^1 of the selected activities is already in the top lane, so none moved: moving the rest/,
+    );
+    expect(moveMany).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
+  });
+
+  it('offers no Refresh for the batch-cap refusal, which is a rule and not stale data', async () => {
+    const reason = tooManyToMoveReason(2001);
+    const moveMany = vi.fn(() =>
+      Promise.resolve({ applied: false, conflict: reason, refreshable: false }),
+    );
+    dragLanes(moveMany, 60);
+    expect(await screen.findByRole('alert')).toHaveTextContent(reason);
+    expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
+  });
+
+  // The control for the test above: stale data does offer Refresh, so its absence there is the
+  // flag's doing and not a banner that never shows one.
+  it('still offers Refresh for a stale-version conflict', async () => {
+    const moveMany = vi.fn(() =>
+      Promise.resolve({ applied: false, conflict: 'Someone else changed this.' }),
+    );
+    dragLanes(moveMany, 60);
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
+  });
+});
+
 describe('a plural drag announces only a move that happened', () => {
   const wide = (id: string, name: string, lane: number) => ({
     ...activity(id, name, lane, '2026-01-01'),
@@ -505,7 +578,7 @@ describe('Alt+arrow moves the whole plural selection', () => {
     fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
     fireEvent.keyDown(list, { key: 'ArrowUp', altKey: true });
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '1 of the selected activities is already in the top lane, so none moved.',
+      '1 of the selected activities is already in the top lane, so none moved: moving the rest would change the selection’s shape.',
     );
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(moveMany).not.toHaveBeenCalled();
@@ -583,6 +656,17 @@ describe('the move hint is spoken once, on entering plural, and only to a writer
     announceSpy.mockClear();
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
     expect(announceSpy).toHaveBeenCalledWith('3 activities selected.');
+  });
+
+  // The first effect run must not count as a capability transition: the ref is seeded with the
+  // capability the panel mounted with, so a writer's plural selection is announced once, by
+  // `announceSelectionCount`, and never a second time by the effect.
+  it('does not speak it a second time for a writer who selects plural', () => {
+    const { list } = renderPanel({}, true);
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(announceSpy).toHaveBeenCalledTimes(1);
+    expect(announceSpy).toHaveBeenCalledWith(`2 activities selected. ${pluralMoveHint(2)}`);
   });
 
   it('does not speak it on taking the pen with one activity selected', () => {

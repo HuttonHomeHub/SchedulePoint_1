@@ -27,7 +27,7 @@ export const PLACEMENTS_BATCH_MAX = 2000;
 
 /** Why a selection that is too large to move in one batch is not moved, naming the cap. */
 export function tooManyToMoveReason(count: number): string {
-  return `${count.toLocaleString('en-GB')} activities are selected, and a move takes at most ${PLACEMENTS_BATCH_MAX.toLocaleString('en-GB')} at once. Select fewer and move them again.`;
+  return `${count.toLocaleString()} activities are selected, and a move takes at most ${PLACEMENTS_BATCH_MAX.toLocaleString()} at once. Select fewer and move them again.`;
 }
 
 /** A day + lane delta, as the drag produced it. */
@@ -57,9 +57,13 @@ function shiftIso(iso: string, days: number): string {
  * selection changes shape; the set-level clamp moves them all by the same, smaller amount. The
  * keyboard nudge reaches the same answer by refusing `Alt+↑` at the top, and the drag shares this
  * so the two inputs agree at the boundary.
+ *
+ * Applied once on the write path, in `moveMany` (which the drag and the keyboard both go through),
+ * plus by the panel to detect a clamp-to-nothing and by the drag preview so what is seen is what
+ * is written. {@link bulkMoveSnapshots} does NOT clamp again.
  */
 export function clampLaneDelta(
-  activities: readonly ActivitySummary[],
+  activities: readonly Pick<ActivitySummary, 'laneIndex'>[],
   delta: BulkMoveDelta,
 ): BulkMoveDelta {
   if (delta.laneDelta >= 0 || activities.length === 0) return delta;
@@ -139,7 +143,12 @@ export function isNoOp(delta: BulkMoveDelta): boolean {
   return delta.dayDelta === 0 && delta.laneDelta === 0;
 }
 
-/** Build the before/after snapshots and the version map one bulk move needs. */
+/**
+ * Build the before/after snapshots and the version map one bulk move needs.
+ *
+ * The delta must be **pre-clamped** by {@link clampLaneDelta}: `moveMany` is its only caller and
+ * clamps once before routing, so a second clamp here would only hide a caller that forgot to.
+ */
 export function bulkMoveSnapshots(params: {
   activities: readonly ActivitySummary[];
   delta: BulkMoveDelta;
@@ -148,9 +157,8 @@ export function bulkMoveSnapshots(params: {
   after: ActivityPlacement[];
   versions: Map<string, number>;
 } {
-  const delta = clampLaneDelta(params.activities, params.delta);
   const before = params.activities.map(currentPlacement);
-  const after = params.activities.map((a) => movedPlacement(a, delta));
+  const after = params.activities.map((a) => movedPlacement(a, params.delta));
   const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
   return { before, after, versions };
 }
