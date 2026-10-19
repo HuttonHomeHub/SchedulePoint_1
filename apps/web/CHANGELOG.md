@@ -1,5 +1,18 @@
 # @repo/web
 
+## 0.194.2
+
+### Patch Changes
+
+- [#1077](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1077) [`6f34d60`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6f34d60d2ef784e83e1a6ea041f940163576104b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the Resources tab, if another planner takes the pen while you are editing, your assignment fields now stay on screen, shaded with the reason, instead of disappearing.
+
+- [#1075](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1075) [`75733a9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/75733a967a83fc585f57a52b189a8d928c67817f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The shared plan view's legend no longer lists a constraint pin that a guest can never see. The exported diagram's key now explains the over-allocation badge when it is printed, and says "+N more" when a narrow crop cannot fit every entry instead of dropping them silently. Dragging a selection upward past its top bar keeps the activities in their relative rows instead of squashing them together. Trying to move more than 2,000 activities at once now says so, and the move hint for a multi-selection is read out when you take the pen after selecting.
+
+- [#1071](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1071) [`ad9e537`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ad9e537435d64b74d482599f15c4531714ea5778) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Loading outlines are steadier: the account page, the resource histogram and the resource and
+  progress panels in the activity editor now show the shape of what is coming instead of a line of
+  "Loading…". The Members tab says when the plan's activity list is loading or could not be loaded.
+  The near-critical amber is now a colour screens can show exactly.
+
 ## 0.194.1
 
 ### Patch Changes
