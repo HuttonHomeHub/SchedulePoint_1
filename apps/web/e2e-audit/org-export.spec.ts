@@ -26,18 +26,33 @@ import { expect, test } from '../e2e-support/test';
  */
 
 /**
- * Scans the page only once nothing on it is moving. `Button` carries `transition-colors`, and the
- * Download control changes variant (outline while working, filled at rest) and sits under the
- * pointer that just pressed it, so a scan taken the instant the status line appears can read a
- * colour half-way between two settled ones, which is no state a reader ever sees: CI measured
- * #a7adb8 on #404656 (4.17:1) and #949baa on #5d616b (2.22:1) for the same button on two attempts.
- * The settled colours pass (15.3:1 at rest, 17.4:1 hovered, 9.8:1 and 14.0:1 while working), so
- * the fix is to wait for the movement to end, not to relax the scan's rules or tags.
+ * Buttons carry `transition-colors`, so a colour read mid-transition is a point between two states,
+ * not a state a reader ever sees.
+ */
+const NO_TRANSITIONS = '*,*::before,*::after{transition:none!important;animation:none!important}';
+
+/**
+ * Scans the page with every colour at its settled value. The Download control changes variant
+ * (outline while working, filled at rest) and sits under the pointer that just pressed it, so a scan
+ * taken mid-transition read colours half-way between two settled ones: CI measured #a7adb8 on
+ * #404656 (4.17:1) and #949baa on #5d616b (2.22:1) for the same button on two attempts. The settled
+ * colours pass (15.3:1 at rest, 17.4:1 hovered, 9.8:1 and 14.0:1 while working).
+ *
+ * Waiting for `document.getAnimations()` to empty was the first fix (#1053) and still left a race:
+ * Chromium updates hover on a later frame than the pointer move, so the check could pass in the gap
+ * before the hover-out transition had started. Switching transitions off (the forced-colours
+ * journey's pattern) removes the in-between colours altogether, so there is nothing left to time.
+ * The two frames let the hover update land before axe reads the page. Neither relaxes a rule or a
+ * tag: what is scanned is exactly what a reader sees once the page is still.
  */
 async function scanWhenSettled(page: Page) {
+  await page.addStyleTag({ content: NO_TRANSITIONS });
   await page.mouse.move(0, 0);
-  await page.waitForFunction(() =>
-    document.getAnimations().every((animation) => animation.playState !== 'running'),
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
   );
   return new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
 }
