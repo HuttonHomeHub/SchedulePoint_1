@@ -1,5 +1,23 @@
 # @repo/web
 
+## 0.194.1
+
+### Patch Changes
+
+- [#1063](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1063) [`84b1aae`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/84b1aae457166e271c16419d9893b994ba69cd48) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the sign-in library to 1.7.10. A password reset now signs you out everywhere before saving the new password.
+
+- [#1057](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1057) [`95d0fff`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/95d0fffcef954e950bae93e65923eab6cdd2b386) Thanks [@dependabot](https://github.com/apps/dependabot)! - The account button in the header is now announced with the initials it shows first ("AL, Account: ada@example.com"), so someone using voice control can say what they see. The logo's small "S" tile looks the same but is no longer read as text.
+
+- [#1064](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1064) [`dd82c49`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dd82c49c65e678369227ff55f14e187c91bc3aef) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the icon library to 1.58.0. It only adds new icons; every icon the app uses looks the same.
+
+- [#1055](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1055) [`f4da854`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f4da85479b8a79e60fc3fcc0fdd6f21895a8979c) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the React library to 19.3.1. Nothing in the app looks or behaves differently.
+
+- [#1060](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1060) [`fc10b20`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fc10b2045cd920de9ef9e055b7eeaeb9ed751a84) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the forms library to 7.90.0, which makes forms a little faster. Nothing in the app looks or behaves differently.
+
+- [#1062](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1062) [`f4b9e41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f4b9e4161a25de7d41903112bc39ce2d01500004) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the page-routing library to 1.170.44. Nothing in the app looks or behaves differently.
+
+- [#1059](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1059) [`efdd573`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/efdd5732b98c5b5e405c6affe260c31cb40fb6dc) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the data-checking library to 4.6.7. A list that is too long is now rejected with one clear message instead of one per item; nothing else changes.
+
 ## 0.194.0
 
 ### Minor Changes

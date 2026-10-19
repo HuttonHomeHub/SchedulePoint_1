@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.96.1
+
+### Patch Changes
+
+- [#1063](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1063) [`84b1aae`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/84b1aae457166e271c16419d9893b994ba69cd48) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the sign-in library to 1.7.10. A password reset now signs you out everywhere before saving the new password.
+
+- [#1058](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1058) [`8e04f49`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8e04f499ebf65a7afd3f2a53ab5a00d62b116163) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the email-sending library to 10.1.1. It is stricter about time limits while connecting to the mail server and gives clearer error codes; how mail is sent does not change.
+
+- [#1059](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1059) [`efdd573`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/efdd5732b98c5b5e405c6affe260c31cb40fb6dc) Thanks [@dependabot](https://github.com/apps/dependabot)! - Routine update of the data-checking library to 4.6.7. A list that is too long is now rejected with one clear message instead of one per item; nothing else changes.
+
 ## 0.96.0
 
 ### Minor Changes
