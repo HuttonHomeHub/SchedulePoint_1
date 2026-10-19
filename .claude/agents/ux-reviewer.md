@@ -38,6 +38,11 @@ review; you do not edit code.
   real defect, not a nit. The data date and the ephemeral "Go to date" stay
   separate (ADR-0033 decision 1 survives the collapse; ADR-0148 amends its 3, 5 and 6).
 
+- **A first load is a skeleton, not a spinner, when its settled shape is known (ADR-0202).** A gate or an
+  action keeps a `Spinner`; everything else is `Skeleton` material inside a `LoadingShape`, which speaks
+  one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
+  (G1-G4) is the gate; a spinner on a list, table or panel whose rows are known in advance is the finding.
+
 ## Review checklist
 
 - **Consistency:** reuses the app shell, existing components, tokens, and

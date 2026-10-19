@@ -56,6 +56,12 @@ You review; you do not edit code.
   flag**, never strand it (the ADR-0084 batch-1 lesson, which cost six timing-out
   specs).
 
+- **A first load is a skeleton, not a spinner, when its settled shape is known (ADR-0202).** A gate or an
+  action keeps a `Spinner`; everything else is `Skeleton` material inside a `LoadingShape`, which speaks
+  one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
+  (G1-G4) is the gate; a new `<Spinner>` or hand-rolled `animate-pulse` is a finding unless it is declared there. A table's
+  `fit` column needs a `Column.sample` (`data-table.sample.structural.test.ts`).
+
 ## Review checklist
 
 - **Reuse first:** does this duplicate an existing primitive/pattern? Prefer

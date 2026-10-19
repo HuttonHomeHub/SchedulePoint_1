@@ -60,6 +60,10 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
   credential or personal data), and keep `docs/ORGANISATION_EXPORT_FORMAT.md` in step.
   Backups (ADR-0192) are whole-database `pg_dump` copies, so a migration needs no backup change,
   but a restore of an older copy applies newer migrations as any update does.
+- **A restore refuses a batch that binds a deleted calendar (ADR-0201 D1) and takes locks in one order:**
+  calendar advisory locks (ascending id), then ancestor rows `FOR SHARE` top-down. A new FK from a
+  restorable row to a soft-deletable parent must join `restoreBatch`'s checks; library rows do not expire
+  (ADR-0195 D4), so a count guarding a calendar must say which states it counts (ADR-0172, #530).
 - **Two migrations** when adding an enum label and using it: Postgres forbids both
   in one transaction.
 - **Measure before adding an index**, and record the measurement in the migration

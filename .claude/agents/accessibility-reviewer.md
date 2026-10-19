@@ -59,6 +59,12 @@ code. Be specific and cite the offending file/line.
   ground, or on paper. `canvas` and `print` are the two most often forgotten, because
   neither is DOM: the painter and the exported/printed document resolve tokens too.
 
+- **A first load is a skeleton, not a spinner, when its settled shape is known (ADR-0202).** A gate or an
+  action keeps a `Spinner`; everything else is `Skeleton` material inside a `LoadingShape`, which speaks
+  one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
+  (G1-G4) is the gate; the status-in-busy-subtree rule was reasoned from ARIA 1.2 and never observed
+  with a screen reader, so a reviewer who can run one should.
+
 ## Review checklist
 
 - **Semantics:** correct native elements; ARIA only to fill genuine gaps and
