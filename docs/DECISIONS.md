@@ -10,6 +10,27 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-19 — Three product-owner answers after the Dependabot batch (tech debt #64)
+
+**#64 — a Viewer keeps the one-line summary on an assignment row.** This answers the one question the
+row was blocked on (its 2026-09-11 assessment). A Viewer, who can never write, keeps today's read-only
+summary line, so nothing changes for them. A Planner whose pen is taken mid-edit (ADR-0028), the
+transient state where the eight editors currently unmount and drop focus to `<body>` (WCAG 2.4.3), gets
+the editors kept and shaded through the existing `FieldGateProvider`, with `writeReason` passed down so
+every shaded control states why (ADR-0082). So `AssignmentRow` must tell "cannot write by role" from
+"cannot write right now". The work is ADR-0083 D5's M3, about an afternoon. Sequence it with #69 as
+the row says.
+
+**Password reset stays sequential.** better-auth 1.7.10 makes a reset all-or-nothing only when the
+adapter runs transactions. Ours does not (`prismaAdapter` without `transaction: true`). A crash part-way
+through a reset therefore spends the link but leaves the old password in place and nobody signed in:
+it fails closed. The owner chose to leave it. No row is filed.
+
+**The reconciliation pass runs first thing next session.** `check:reconcile-due` warns that 9 ADRs
+have been filed since the 2026-10-15 pass, against a threshold of 8 (`docs/RECONCILE.md`).
+
+---
+
 ## 2026-10-18 — Four product-owner answers from the 2026-10-17 batch (tech debt #58, #519, #271, #382)
 
 **#58 — the ruler's month tint follows the `Month bands` switch.** The tint the ruler now carries is drawn

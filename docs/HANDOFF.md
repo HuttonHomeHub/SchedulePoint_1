@@ -92,6 +92,8 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
   not now.
 - **2026-10-19:** WCAG 2.5.3 header fix — "both fixes" (initials lead the account chip's name; the brand
   tile's letter is painted, not typed). Do not switch `label-content-name-mismatch` off.
+- **2026-10-19:** #64 — a Viewer keeps the one-line summary. Password reset stays sequential (no
+  adapter transactions). The reconciliation pass runs first next session.
 
 ## Parked by the owner — keep, do not raise
 
@@ -116,8 +118,8 @@ returns to one, the steps are ready:
 - **From 2026-10-18:** #521–#522 (#403 follow-ups), #523 (#368), #524–#525 (#223), #526–#529 (#116),
   #530–#531 (#519), #532–#534 (#234; #532 carries the accepted Members gap and the seven deferred
   text-only "Loading…" states).
-- **#64** needs one product answer, not code: what a Viewer sees on an assignment row (eight shaded
-  fields, or today's one-line summary). Ask it as a decision question.
+- **#64** is answered (2026-10-19): a Viewer keeps the one-line summary; a Planner whose pen is taken
+  keeps the editors, shaded with the reason. About an afternoon of code; sequence it with #69.
 - **#76** is down to one item: a flag-off Playwright run for the pointer two-click link pick.
 - **#333** (landing two-column rows at 1280) needs its M2 after-reading taken in the container before it
   can close; that is a container measurement, not an owner one.
@@ -125,7 +127,7 @@ returns to one, the steps are ready:
 - #520 (project-calendar restore vs project delete; low), #509–#513 (backup follow-ups), #515–#517
   (export follow-ups), #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred
   on a trigger), #391 and #395 (remaining painter items).
-- **Not filed, worth a decision if it ever matters:** better-auth 1.7.10 makes a reset atomic only when
+- **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when
   the adapter runs transactions. Ours (`prismaAdapter` without `transaction: true`) runs the steps in
   order — fail-closed, but a crash mid-reset spends the link. Turning transactions on is a design
   change, not a bump; the security review suggested e2e assertions (both sessions 401 after a reset,
@@ -133,17 +135,20 @@ returns to one, the steps are ready:
 
 ## Suggested next
 
-Nothing is in flight: no open PRs, no wake-ups armed. Ask the owner what to take next (as clickable
-questions, respecting the hard rule), offering:
+Nothing is in flight: no open PRs, no wake-ups armed. **The owner has already chosen the next session's
+work (2026-10-19), in this order:**
 
-1. **The owner's three host steps**, only if the owner raises them.
-2. **The #64 Viewer question** (a decision only), then its afternoon of code.
-3. **#333's after-reading** and close; **#76's flag-off journey** (a Playwright config — ADR-0105 says it
-   needs a spec first).
-4. Follow-ups #521–#534, the org-export journey hardening, and other register rows checked against the
-   code.
-5. **Row 9 at the cut** (remove the four deprecated revision-comparison fields) when the owner chooses
-   to cut 1.0.
+1. **The reconciliation pass first** (`docs/RECONCILE.md`; `check:reconcile-due` warns at 9 ADRs
+   against a threshold of 8).
+2. **Follow-ups #521–#534** (the 2026-10-18 batch's follow-up rows), each checked against the code
+   first.
+3. **#333's after-reading** (a container measurement) and close it; **#76's flag-off journey**, which
+   is a new Playwright config, so it needs a short spec first (ADR-0105).
+4. **Harden the org-export axe scan** that can flake mid-transition (see "Open rows worth knowing").
+5. **#64** if time allows: its question is answered (a Viewer keeps the summary; a pen-lost Planner gets
+   shaded editors). Sequence it with #69.
+
+Still offer only if the owner raises them: the three host steps, and row 9 at the 1.0 cut.
 
 ## Environment notes a new session would otherwise rediscover
 
