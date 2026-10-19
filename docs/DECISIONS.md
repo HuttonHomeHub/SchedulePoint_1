@@ -10,6 +10,16 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-19 — Row editing: two idioms kept, and #64's split built (tech debt #64, #69)
+
+**#69 — keep both row-edit idioms, and write the rule.** The assignment row edits in place and the
+dependency row opens a dialog; the owner kept both. The rule, now in `docs/DESIGN_SYSTEM.md` beside
+the list/manage archetype: a row is edited **in place** when its fields fit on the row (resource
+assignments), and opens a **dialog** when the edit needs a picker or more than one step
+(dependencies, in the Logic tab). Nothing moves. #69 is closed.
+
+---
+
 ## 2026-10-19 — Reconciliation pass: the agents again, and a bin that now holds rows the clear-out never touches
 
 **What was done.** The pass in `docs/RECONCILE.md` over the 64 commits since 2026-10-15 and ADR-0195 to ADR-0203
