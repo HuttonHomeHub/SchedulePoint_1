@@ -1,6 +1,6 @@
 # Feature Spec: A flag-off journey for the pointer two-click link pick
 
-- **Status:** Accepted — product owner, 2026-10-19: Option A, build it.
+- **Status:** Accepted — shipped (ADR-0064). Product owner, 2026-10-19: Option A, build it.
 - **Author(s):** Claude, for the product owner
 - **Date:** 2026-10-19
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #76, its last open bullet.
