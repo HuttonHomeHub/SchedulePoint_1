@@ -135,3 +135,16 @@ describe('FC-G8 — the legend keys the link family the painter draws (M3)', () 
     expect(glyph!.style.fill).toBe(`var(${tokenOf('bar')})`);
   });
 });
+
+describe('the guest legend keys no constraint pin (TECH_DEBT #521)', () => {
+  it('a member legend keys the pin', () => {
+    render(<TsldLegend />);
+    expect(screen.getByText('Constraint')).toBeInTheDocument();
+  });
+
+  it('the guest variant omits it and keeps the rest of the shared cues', () => {
+    render(<TsldLegend withoutConstraint />);
+    expect(screen.queryByText('Constraint')).not.toBeInTheDocument();
+    expect(screen.getByText('Lane overlap')).toBeInTheDocument();
+  });
+});

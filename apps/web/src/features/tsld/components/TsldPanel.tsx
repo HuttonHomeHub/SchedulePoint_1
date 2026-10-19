@@ -333,6 +333,9 @@ export interface TsldPanelProps {
    */
   compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
+  /** The share view: the legend omits the constraint pin a guest's activities can never carry
+   * (ADR-0051 §4, TECH_DEBT #521). Not `!canEdit` — a member without the pen can see constraints. */
+  guestView?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
@@ -703,6 +706,7 @@ export function TsldPanel({
   todayFraction = null,
   fill = false,
   chromeless = false,
+  guestView = false,
   canvasUi,
   barDateSource = 'early',
   clearPlacement,
@@ -3095,7 +3099,7 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend />
+          <TsldLegend withoutConstraint={guestView} />
         </Surface>
       ) : null}
 
