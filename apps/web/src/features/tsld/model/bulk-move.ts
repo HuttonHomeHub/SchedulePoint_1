@@ -73,7 +73,9 @@ export function currentPlacement(activity: ActivitySummary): ActivityPlacement {
  * "leave it alone", which is what stops a bulk lane drag from quietly unpinning twelve constraints.
  *
  * A **lane-only** move (`dayDelta === 0`) leaves every date field exactly as it was, which is what
- * makes {@link isLaneOnly} able to route it to the cheaper positions endpoint.
+ * lets {@link isLaneOnly} tell the host it needs no recalculation. It still goes through the one
+ * placements endpoint: `moveMany` has no positions-endpoint route for a lane-only plural move
+ * (TECH_DEBT #527).
  */
 export function movedPlacement(activity: ActivitySummary, delta: BulkMoveDelta): ActivityPlacement {
   const current = currentPlacement(activity);
@@ -111,8 +113,9 @@ export function movedPlacement(activity: ActivitySummary, delta: BulkMoveDelta):
  * Is this move lane-only?
  *
  * The distinction is not cosmetic: a lane move writes layout and needs **no recalculation**, so
- * routing it through the placements endpoint would recompute the whole plan for a vertical nudge.
- * The single-bar path has always made this distinction; this keeps the plural path honest about it.
+ * the host skips the recalculation after the write rather than recompute the whole plan for a
+ * vertical nudge. The write itself is the same `PATCH …/activities/placements` either way. The
+ * single-bar path has always made this distinction; this keeps the plural path honest about it.
  */
 export function isLaneOnly(delta: BulkMoveDelta): boolean {
   return delta.dayDelta === 0 && delta.laneDelta !== 0;

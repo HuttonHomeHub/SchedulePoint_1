@@ -222,6 +222,13 @@ A spot-check of five decision-bearing citations in the plan found two stale. Tha
 ADR-0076 Class 2/3 failure inside a document written for this epic, and it is why the remaining
 milestones were built by verifying each citation before relying on it.
 
+**2026-10-19 note on §8 (TECH_DEBT #527); the decision above is unchanged.** §8 separates the
+layout endpoint from the placements endpoint, and the code comments read it as routing a lane-only
+plural move to `PATCH …/positions`. It does not: `moveMany` sends every plural move, lane-only
+included, through `PATCH …/activities/placements` (`use-plan-workspace-model.ts`) and only skips
+the recalculation afterwards (`isLaneOnly`). The two endpoints stay separate for the single-bar
+drag; the plural path never used the cheaper one.
+
 ## Alternatives rejected
 
 - **A `Set` for the selection.** Free iteration order, and it loses "most recently added" — which is
