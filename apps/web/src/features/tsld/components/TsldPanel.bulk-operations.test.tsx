@@ -545,6 +545,71 @@ describe('the move hint is spoken once, on entering plural, and only to a writer
     expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(/Alt with an arrow/);
   });
 
+  /**
+   * TECH_DEBT #529. Verified red against the one-shot alone: taking the pen with a plural selection
+   * already made spoke nothing, so the hint reached only a reader of the bar.
+   */
+  it('speaks it once when the right to write arrives with the selection already plural', () => {
+    const operations = (writable: boolean): TsldBulkOperations => ({
+      gate: { writable, reason: writable ? null : 'No pen.' },
+      deleteMany: vi.fn(() => Promise.resolve()),
+      linkChain: vi.fn(() => Promise.resolve()),
+      moveMany: vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
+    });
+    const panel = (writable: boolean) => (
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        bulk={operations(writable)}
+        fill
+      />
+    );
+    const { rerender } = render(panel(false));
+    const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(announceSpy).toHaveBeenLastCalledWith('2 activities selected.');
+
+    announceSpy.mockClear();
+    rerender(panel(true));
+    expect(announceSpy).toHaveBeenCalledTimes(1);
+    expect(announceSpy).toHaveBeenCalledWith(pluralMoveHint(2));
+
+    // A further selection change is the count's again, and the hint is not repeated with it.
+    announceSpy.mockClear();
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(announceSpy).toHaveBeenCalledWith('3 activities selected.');
+  });
+
+  it('does not speak it on taking the pen with one activity selected', () => {
+    const panel = (writable: boolean) => (
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={NO_DEPS}
+        dataDate="2026-01-01"
+        canEdit
+        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
+        onReposition={vi.fn().mockResolvedValue({ applied: true, conflict: null })}
+        bulk={{
+          gate: { writable, reason: writable ? null : 'No pen.' },
+          deleteMany: vi.fn(() => Promise.resolve()),
+          linkChain: vi.fn(() => Promise.resolve()),
+          moveMany: vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
+        }}
+        fill
+      />
+    );
+    const { rerender } = render(panel(false));
+    act(() => screen.getByRole('listbox', { name: /activities in the diagram/i }).focus());
+    announceSpy.mockClear();
+    rerender(panel(true));
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Alt'));
+  });
+
   it('shows the same sentence on the bar for a writer', () => {
     const { list } = renderPanel({}, true);
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });

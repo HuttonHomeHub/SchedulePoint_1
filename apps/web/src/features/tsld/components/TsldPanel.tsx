@@ -24,6 +24,7 @@ import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import { useCoalescedPluralNudge } from '../interaction/use-coalesced-plural-nudge';
 import { arrangeOfferMessage, computeLaneArrangement } from '../model/arrange-lanes';
+import { clampLaneDelta, isNoOp } from '../model/bulk-move';
 import {
   addAll,
   type CanvasSelection,
@@ -36,7 +37,6 @@ import {
 } from '../model/canvas-selection';
 import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
-import { clampLaneDelta, isNoOp } from '../model/bulk-move';
 import { drawnDaySpan } from '../model/drawn-span';
 import {
   pluralMoveAnnouncement,
@@ -2052,6 +2052,22 @@ export function TsldPanel({
       previousCount < 2 && canMovePlural ? `${count} ${pluralMoveHint(next.ids.length)}` : count,
     );
   };
+
+  // **The hint, spoken when the capability arrives** (TECH_DEBT #529). A selection made without the
+  // pen is announced as a bare count, and the move hint is only ever appended on the transition
+  // INTO plural; so a screen-reader user who then takes the pen would learn that the arrow chord
+  // moves the set only by reading the bar. This fires on `canMovePlural` turning true while the
+  // selection is already plural, and on nothing else: entering plural with the capability already
+  // held is `announceSelectionCount`'s, so the hint is never said twice for one selection.
+  const selectedCount = selection.ids.length;
+  const couldMovePluralRef = useRef(canMovePlural);
+  useEffect(() => {
+    const couldBefore = couldMovePluralRef.current;
+    couldMovePluralRef.current = canMovePlural;
+    if (canMovePlural && !couldBefore && selectedCount > 1) {
+      announce(pluralMoveHint(selectedCount));
+    }
+  }, [canMovePlural, selectedCount, announce]);
 
   // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a
   // refetch) we can move the ring to the nearest survivor rather than stranding keyboard focus.
