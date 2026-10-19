@@ -192,8 +192,10 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
        * and nothing else, so an after-hook fires with no user on the context and would record
        * nothing while looking correct. Verified against a running instance, not assumed.
        *
-       * It fires **before** the session revocation below, which is the right order: the row
-       * describes the reset, and the revocation is its consequence.
+       * Since better-auth 1.7.10 it fires **after** the token is consumed, the sessions revoked and
+       * the password written (`better-auth/dist/api/routes/password.mjs:163`), so the row means the
+       * reset is complete. A failure inside this callback therefore no longer prevents the
+       * revocation.
        */
       onPasswordReset: async ({ user }, request) => {
         await options.recordAuthEvent(
@@ -205,7 +207,9 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
        * **A completed reset ends every other session** (ADR-0074 B2).
        *
        * `resetPassword` deletes the user's sessions only when this is truthy
-       * (`better-auth/dist/api/routes/password.mjs:173`); unset, a reset leaves them all alive.
+       * (`better-auth/dist/utils/password.mjs:34`); unset, a reset leaves them all alive. Since
+       * 1.7.10 it consumes the token, revokes the sessions, then writes the password; our Prisma
+       * adapter sets no `transaction` option, so those steps are sequential rather than atomic.
        * That is the wrong default for the commonest reason someone resets a password: a forgotten
        * password is sometimes *caused by* a compromise, and a reset that leaves the compromise
        * signed in has closed nothing.

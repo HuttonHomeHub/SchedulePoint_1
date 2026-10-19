@@ -1,7 +1,7 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.7.7",
-    "better-call": "1.4.0",
+    "better-auth": "1.7.10",
+    "better-call": "1.4.2",
     "@better-fetch/fetch": "1.3.2",
     "nodemailer": "10.1.1",
     "zod": "4.6.7",
@@ -624,7 +624,7 @@
       "ref": "internal-adapter.mjs:773-783",
       "package": "better-auth",
       "path": "dist/db/internal-adapter.mjs",
-      "lines": "770-780",
+      "lines": "785-795",
       "anchor": "* return it. The first concurrent caller receives the latest row for the",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
@@ -632,7 +632,7 @@
       "ref": "password.mjs:127-163",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "126-162",
+      "lines": "126-127",
       "anchor": "if (!verification || verification.expiresAt < /* @__PURE__ */ new Date()) throw ctx.redire",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
@@ -640,7 +640,7 @@
       "ref": "password.mjs:172",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "168",
+      "lines": "163",
       "anchor": "if (ctx.context.options.emailAndPassword?.onPasswordReset) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request);",
       "citedBy": [
         "docs/specs/account-security/feature-spec.md",
@@ -650,8 +650,8 @@
     {
       "ref": "password.mjs:173",
       "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "169",
+      "path": "dist/utils/password.mjs",
+      "lines": "34",
       "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
@@ -665,8 +665,8 @@
       "ref": "password.mjs:174",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "169-170",
-      "anchor": "\tif (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context.internalAdapter.deleteUserSessions(userId);\n\treturn ctx.json({ status: true });",
+      "lines": "164",
+      "anchor": "\treturn ctx.json({ status: true });",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
@@ -739,7 +739,7 @@
       "ref": "sign-in.mjs:264",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "264",
+      "lines": "263",
       "anchor": "rememberMe: z.boolean()",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -750,7 +750,7 @@
       "ref": "sign-in.mjs:339-351",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "342-354",
+      "lines": "341-353",
       "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.email, void 0, ctx.context.options.emailVerification?.expiresIn);",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
@@ -761,7 +761,7 @@
       "ref": "sign-in.mjs:353",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
-      "lines": "353",
+      "lines": "352",
       "anchor": "const session = await ctx.context.internalAdapter.createSession(",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
@@ -881,7 +881,7 @@
       "ref": "to-response.mjs:125-129",
       "package": "better-call",
       "path": "dist/to-response.mjs",
-      "lines": "125-129",
+      "lines": "127-131",
       "anchor": "if (isAPIError(data)) return toResponse(data.body, {",
       "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
     },
@@ -1486,6 +1486,22 @@
       "lines": "491-498",
       "anchor": "(this.relativeOffsetOfLocalHeader != null && this.relativeOffsetOfLocalHeader > 0xfffffffe)",
       "citedBy": ["apps/api/src/modules/organization-export/export-writer.ts"]
+    },
+    {
+      "ref": "password.mjs:34",
+      "package": "better-auth",
+      "path": "dist/utils/password.mjs",
+      "lines": "34",
+      "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
+      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
+    },
+    {
+      "ref": "password.mjs:163",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "163",
+      "anchor": "if (ctx.context.options.emailAndPassword?.onPasswordReset) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request);",
+      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
     }
   ]
 }
