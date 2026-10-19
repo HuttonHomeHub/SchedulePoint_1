@@ -194,7 +194,7 @@ export function ActivityResourcesPanel({
   // Rows keep their editors for anyone whose refusal can lift — a writer, or a role that may write
   // but has no pen right now. A reason is required for the second: shaded fields with no sentence
   // are the dead end the house rule forbids.
-  const rowsEditable = canWrite || (writeReason !== undefined && roleCanWrite !== false);
+  const rowsEditable = canWrite || (writeReason !== undefined && roleCanWrite === true);
   // The rows' gate: same object as the assign form's while they are editable, and reasonless
   // otherwise so the provider prints nothing above a Viewer's summaries.
   const rowGate = { writable: canWrite, reason: rowsEditable ? assignGate.reason : null };

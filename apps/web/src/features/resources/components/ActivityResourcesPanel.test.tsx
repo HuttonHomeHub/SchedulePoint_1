@@ -56,8 +56,12 @@ const ASSIGNMENT: ResourceAssignmentSummary = {
 /** Mounted bare — no `Dialog`, which is the point: the tab hosts the same panel directly. */
 function renderPanel({
   seed = true,
+  assignment = ASSIGNMENT,
   ...props
-}: Partial<React.ComponentProps<typeof ActivityResourcesPanel>> & { seed?: boolean } = {}) {
+}: Partial<React.ComponentProps<typeof ActivityResourcesPanel>> & {
+  seed?: boolean;
+  assignment?: ResourceAssignmentSummary;
+} = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -72,7 +76,7 @@ function renderPanel({
       pages: [{ resources: [CREW, CONCRETE], nextCursor: null, hasMore: false }],
       pageParams: [null],
     });
-    queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [ASSIGNMENT]);
+    queryClient.setQueryData(assignmentKeys.listByActivity('acme', 'a1'), [assignment]);
   }
   const tree = (next: Partial<React.ComponentProps<typeof ActivityResourcesPanel>>) => (
     <QueryClientProvider client={queryClient}>
@@ -205,6 +209,54 @@ describe('ActivityResourcesPanel', () => {
     expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
   });
 
+  it('refuses a click on every shaded Save, writing nothing (#64)', () => {
+    // Driving, so the rate row exists; the lag, rate and cost Saves are each their own button.
+    const { update } = renderPanel({ assignment: { ...ASSIGNMENT, isDriving: true } });
+    update({
+      canWrite: false,
+      roleCanWrite: true,
+      writeReason: 'Start editing to change this activity.',
+    });
+    const row = screen.getByText('Crew A').closest('li')!;
+    for (const name of [
+      'Save budgeted units for Crew A',
+      'Save rate for Crew A',
+      'Save join delay for Crew A',
+      'Save cost for Crew A',
+    ]) {
+      const save = within(row).getByRole('button', { name });
+      expect(save).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(save);
+    }
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+  });
+
+  it('prints the pen sentence once for a list of several rows (#64)', () => {
+    renderPanel({
+      canWrite: false,
+      roleCanWrite: true,
+      writeReason: 'Start editing to change this activity.',
+    });
+    // The assign form has its own provider; the list's is the one the rows share.
+    const assigned = screen.getByRole('group', { name: 'Assigned' });
+    expect(within(assigned).getAllByText('Start editing to change this activity.')).toHaveLength(1);
+  });
+
+  it('hands focus to the reason when the pen goes under the loading-curve select (#64, ADR-0083 D8)', () => {
+    const { update } = renderPanel();
+    const row = screen.getByText('Crew A').closest('li')!;
+    within(row)
+      .getByRole('combobox', { name: /Loading curve/ })
+      .focus();
+    update({
+      canWrite: false,
+      roleCanWrite: true,
+      writeReason: 'Start editing to change this activity.',
+    });
+    const assigned = screen.getByRole('group', { name: 'Assigned' });
+    expect(within(assigned).getByText('Start editing to change this activity.')).toHaveFocus();
+  });
+
   it('gives a Viewer the one-line summary, not shaded editors (#64)', () => {
     // The host supplies a reason for the assign section, and says the role can never edit.
     renderPanel({
@@ -219,6 +271,15 @@ describe('ActivityResourcesPanel', () => {
     expect(
       within(row).queryByText('Your role cannot edit activity details.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('gives the summary when the host does not say whether the role could ever write (#64)', () => {
+    // `roleCanWrite` absent with a reason: the host cannot tell a Viewer from a Planner without the
+    // pen, and shading editors for a Viewer would promise a write that never comes.
+    renderPanel({ canWrite: false, writeReason: 'Start editing to change this activity.' });
+    const row = screen.getByText('Crew A').closest('li')!;
+    expect(within(row).getByText(/5 units/)).toBeInTheDocument();
+    expect(within(row).queryByLabelText('Budgeted units')).not.toBeInTheDocument();
   });
 
   it('shades the assign form’s fields read-only too, pointing at the same reason (#66)', () => {

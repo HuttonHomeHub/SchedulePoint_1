@@ -127,6 +127,7 @@ describe('deriveActivityEditorGating — definition scopes', () => {
       writable: false,
       reason: 'Your role cannot add notes.',
       readable: true,
+      roleDenied: true,
     });
   });
 });
@@ -153,6 +154,7 @@ describe('deriveActivityEditorGating — progress is never pen-gated', () => {
     const g = gate('viewer', 'held');
     expect(g.progress.writable).toBe(false);
     expect(g.progress.reason).toMatch(/role/i);
+    expect(g.progress.roleDenied).toBe(true);
   });
 });
 

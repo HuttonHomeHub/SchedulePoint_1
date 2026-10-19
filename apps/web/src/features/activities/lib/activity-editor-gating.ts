@@ -119,7 +119,7 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // Never pen-gated (ADR-0028 Q-C) — this is the capability a merged Save would have destroyed.
     progress: canProgress
       ? { writable: true, reason: null, readable: true }
-      : { writable: false, reason: NO_PROGRESS_ROLE, readable: true },
+      : { writable: false, reason: NO_PROGRESS_ROLE, readable: true, roleDenied: true },
     steps: definition,
     // Logic and Resources join the definition side unchanged — **the same object**, not a second
     // expression of the same rule. Adding a link or an assignment has always needed the role and
@@ -137,6 +137,6 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // reuses that gate object rather than restating it.
     notes: canProgress
       ? { writable: true, reason: null, readable: true }
-      : { writable: false, reason: NO_NOTES_ROLE, readable: true },
+      : { writable: false, reason: NO_NOTES_ROLE, readable: true, roleDenied: true },
   };
 }

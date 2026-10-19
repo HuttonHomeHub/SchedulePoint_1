@@ -5,7 +5,7 @@ import {
   type ResourceCurveType,
   type ResourceSummary,
 } from '@repo/types';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import {
   useDeleteAssignment,
@@ -93,11 +93,6 @@ function DerivedDurationNote({
 }
 
 /**
- * Seed a MAJOR-unit money text field from a stored minor-units value: blank when unset, else the major
- * amount as a string. Reuses {@link minorToMajorInput} (the shared minor→major conversion) so this
- * inline editor and the RHF dialogs divide by the same minor-units factor.
- */
-/**
  * What the enclosing `FieldGateProvider` says about this row's fields. The row's controls are
  * hand-assembled — an input and its Save share one flex line, which `TextField`'s stacked layout
  * cannot express — so they apply ADR-0083's treatment themselves, from the same context the
@@ -132,6 +127,11 @@ function RowLabel({
   );
 }
 
+/**
+ * Seed a MAJOR-unit money text field from a stored minor-units value: blank when unset, else the major
+ * amount as a string. Reuses {@link minorToMajorInput} (the shared minor→major conversion) so this
+ * inline editor and the RHF dialogs divide by the same minor-units factor.
+ */
 function seedMoney(minorUnits: number | null): string {
   const major = minorToMajorInput(minorUnits);
   return major === undefined ? '' : String(major);
@@ -387,6 +387,16 @@ export function AssignmentRow({
   const lagId = useId();
   const lagErrorId = useId();
   const lagHelpId = useId();
+  // The loading-curve select is the one control here that a shut gate natively disables (ADR-0083
+  // D1's named exception), and a disabled control drops focus to `<body>` — the exact failure the
+  // read-only inputs beside it avoid. So when the gate shuts under a focused select, focus is handed
+  // to the list's reason sentence (ADR-0083 D8: the primitive provides the target, the host moves).
+  const curveFocused = useRef(false);
+  useEffect(() => {
+    if (!shut || !curveFocused.current || reasonId === undefined) return;
+    curveFocused.current = false;
+    document.getElementById(reasonId)?.focus();
+  }, [shut, reasonId]);
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -738,6 +748,9 @@ export function AssignmentRow({
                     }
               }
               hint={isMaterial ? undefined : DRIVING_HINT}
+              // A material resource's own gate wins the reason (above), which would leave the group's
+              // pen sentence unlinked while the row is shut — so name both.
+              aria-describedby={isMaterial && shut ? reasonId : undefined}
               onChange={(event) => toggleDriving(event.target.checked)}
             />
             {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.
@@ -748,6 +761,14 @@ export function AssignmentRow({
                 <SelectField
                   label="Loading curve"
                   id={curveId}
+                  onFocus={() => {
+                    curveFocused.current = true;
+                  }}
+                  // A blur that arrives because the select was just disabled is the gate shutting,
+                  // not the reader leaving — keep the flag so the effect above can act on it.
+                  onBlur={(event) => {
+                    if (!event.currentTarget.disabled) curveFocused.current = false;
+                  }}
                   value={assignment.curveType}
                   // An in-flight save is a gate (ADR-0083 D2). Absent otherwise, so the row's own gate
                   // still reaches the field — an always-present own gate would override it.
