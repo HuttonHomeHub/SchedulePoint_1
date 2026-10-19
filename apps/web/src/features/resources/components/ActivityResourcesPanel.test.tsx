@@ -83,6 +83,15 @@ function renderPanel({
 
 /** Open the popup exactly as a keyboard user does (APG: ↓ opens at the first option). */
 describe('ActivityResourcesPanel', () => {
+  it('shows outlines, each with one spoken label, while assignments and resources load', () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    vi.mocked(apiFetchAllPages).mockReturnValue(new Promise(() => {}));
+    const { container } = renderPanel({ seed: false });
+    const labels = screen.getAllByRole('status').map((node) => node.textContent);
+    expect(labels).toEqual(expect.arrayContaining(['Loading assignments…', 'Loading resources…']));
+    expect(container.querySelectorAll('[data-loading-shape]')).toHaveLength(2);
+  });
+
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue([]);
     vi.mocked(apiFetchAllPages).mockReset().mockResolvedValue([]);

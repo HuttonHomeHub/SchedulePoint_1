@@ -25,8 +25,10 @@ import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FormProblemCount, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
+import { cn } from '@/lib/utils';
 
 /**
  * The Progress tab's panels (ADR-0060 §4, M4) — the co-location this epic exists for.
@@ -498,7 +500,17 @@ export function WeightedStepsPanel({
           </Button>
         </div>
       ) : query.isPending ? (
-        <p className="text-muted-foreground text-sm">Loading steps…</p>
+        // One step card in the settled card's own classes (a name field and two `w-28` fields), so the
+        // checklist that replaces it grows downward rather than reshaping what was there.
+        <LoadingShape label="Loading steps…">
+          <ul className="flex flex-col gap-3">
+            <li className="border-border flex flex-wrap items-end gap-3 rounded-md border p-3">
+              <StepFieldSkeleton className="min-w-48 flex-1" />
+              <StepFieldSkeleton className="w-28" />
+              <StepFieldSkeleton className="w-28" />
+            </li>
+          </ul>
+        </LoadingShape>
       ) : (
         <form
           noValidate
@@ -664,6 +676,16 @@ function PanelHeading({
       {/* The effect line is the whole point of the co-location: two measures that look alike do
           different things, and the heading says which. */}
       <p className="text-muted-foreground text-sm">{effect}</p>
+    </div>
+  );
+}
+
+/** A labelled form control's outline: a `text-sm` label over a control-height block. */
+function StepFieldSkeleton({ className }: { className: string }): React.ReactElement {
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <Skeleton className="h-5 w-24 max-w-full" />
+      <Skeleton className="h-(--control-h) w-full" />
     </div>
   );
 }

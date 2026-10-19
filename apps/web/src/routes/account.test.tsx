@@ -77,7 +77,8 @@ describe('AccountScreen — email section', () => {
   it('withholds the address while the session is loading rather than printing a placeholder', () => {
     renderScreen('pending');
     // An em dash where an address belongs reads as "you have no email", which is never true.
-    expect(screen.getByText('Loading your details…')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading your details…');
+    expect(document.querySelector('[data-loading-shape] [data-skeleton]')).not.toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { FormSection } from '@/components/ui/form-layout';
-import { PageHeader } from '@/components/ui/page';
+import { LoadingShape, PageHeader, Skeleton } from '@/components/ui/page';
 import { ChangePasswordForm, ResendVerificationButton, useSession } from '@/features/auth';
 
 /**
@@ -45,7 +45,11 @@ export function AccountScreen(): React.ReactElement {
           {user === undefined ? (
             // Withheld rather than rendered as a placeholder: an em dash where an address belongs
             // reads as "you have no email", which is never true of a signed-in reader.
-            <p className="text-muted-foreground text-sm">Loading your details…</p>
+            // The settled line is one `text-sm` row (an address and "— verified"), so the outline is
+            // one row high and the form below does not move when it arrives.
+            <LoadingShape label="Loading your details…">
+              <Skeleton className="h-5 w-72 max-w-full" />
+            </LoadingShape>
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-sm">

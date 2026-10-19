@@ -51,9 +51,11 @@ const STEP: ActivityStep = {
 function Host({
   gate,
   onSave,
+  loading = false,
 }: {
   gate: ScopeGate;
   onSave: (steps: StepsFormValues['steps']) => void;
+  loading?: boolean;
 }): React.ReactElement {
   const [saved, setSaved] = useState(false);
   const form = useForm<StepsFormValues>({
@@ -66,7 +68,7 @@ function Host({
       form={form}
       array={array}
       isDirty={form.formState.isDirty}
-      query={{ isError: false, isPending: false, refetch: vi.fn() }}
+      query={{ isError: false, isPending: loading, refetch: vi.fn() }}
       activity={ACTIVITY}
       gate={gate}
       onSave={(steps) => {
@@ -83,6 +85,20 @@ function Host({
 }
 
 const OPEN_GATE: ScopeGate = { writable: true, reason: null, readable: true };
+
+describe('WeightedStepsPanel — first load', () => {
+  // The settled shape (ADR-0202): one spoken sentence beside an outline of a step card, and no form
+  // until the steps arrive.
+  it('shows an outline of a step with one spoken label while the steps load', () => {
+    const { container } = render(<Host gate={OPEN_GATE} onSave={vi.fn()} loading />);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading steps…');
+    expect(
+      container.querySelectorAll('[data-loading-shape] [data-skeleton]').length,
+    ).toBeGreaterThan(0);
+    expect(container.querySelector('[aria-busy="true"] [role="status"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+  });
+});
 
 function renderPanel() {
   const onSave = vi.fn();

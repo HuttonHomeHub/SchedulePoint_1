@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
 import {
   BucketSizeSelect,
@@ -383,7 +384,10 @@ export function ResourceStripPanel({
 
       <div className="mt-3">
         {histogram.isPending ? (
-          <p className="text-muted-foreground text-sm">Loading histogram…</p>
+          // The settled state is the collapsed data-table disclosure: one `text-sm` row.
+          <LoadingShape label="Loading histogram…">
+            <Skeleton className="h-5 w-40" />
+          </LoadingShape>
         ) : histogram.isError ? (
           <div className="flex flex-col items-start gap-3">
             <p role="alert" className="text-destructive-text text-sm">

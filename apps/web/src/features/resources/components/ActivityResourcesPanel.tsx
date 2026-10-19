@@ -35,6 +35,7 @@ import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
 import {
@@ -303,7 +304,15 @@ export function ActivityResourcesPanel({
       >
         <div ref={listRef} tabIndex={-1} className="outline-none">
           {assignments.isPending ? (
-            <p className="text-muted-foreground text-sm">Loading assignments…</p>
+            // One assignment card in the settled row's own frame; the real rows are taller (they
+            // carry their editors), so the list grows downward and nothing above it moves.
+            <LoadingShape label="Loading assignments…">
+              <ul className="flex flex-col gap-2">
+                <li className="border-border flex flex-col gap-2 rounded-md border p-3">
+                  <Skeleton className="h-5 w-2/3" />
+                </li>
+              </ul>
+            </LoadingShape>
           ) : assignments.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               Couldn’t load assignments. Please try again.
@@ -350,7 +359,13 @@ export function ActivityResourcesPanel({
               Couldn’t load the resource library. Please try again.
             </p>
           ) : resources.isPending ? (
-            <p className="text-muted-foreground text-sm">Loading resources…</p>
+            // The form's first field: its label over the resource picker.
+            <LoadingShape label="Loading resources…">
+              <div className="flex flex-col gap-1.5">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-(--control-h) w-full" />
+              </div>
+            </LoadingShape>
           ) : assignable.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {(resources.data ?? []).length === 0
