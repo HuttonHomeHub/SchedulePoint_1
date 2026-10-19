@@ -7,7 +7,7 @@
     "zod": "4.6.5",
     "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.89.0",
-    "react-dom": "19.3.0",
+    "react-dom": "19.3.1",
     "lucide-react": "1.54.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
