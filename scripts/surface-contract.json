@@ -377,6 +377,9 @@
   "engine/EngineActivity.constraintType": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
   },
+  "engine/EngineActivity.dayFactorMinutes": {
+    "exempt": "derived by the service from the activity's scheduling calendar's hours-per-day, which is authored on the calendar; never planner input"
+  },
   "engine/EngineActivity.durationMinutes": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
   },
