@@ -100,6 +100,11 @@ describe('SmtpMailService', () => {
     // cites and ADRs are not rewritten. That a `ref` cannot express a path change is the cost
     // `docs/TECH_DEBT.md` #181 is about.
     //
+    // Re-read at 10.1.1 (2026-10-19), now `dist/cjs/smtp-connection` lines 931-958. It attaches two
+    // more fields, neither from the message: `originalCode` (the socket's own code, such as
+    // `ECONNREFUSED`, kept when `code` is overwritten) and, on timeouts, `timeoutType` (a constant
+    // such as `GREETING_TIMEOUT`). The conclusion stands.
+    //
     // No redaction path was added for a field that does not exist. This test pins the property the
     // question was really about: whatever a transport hangs off its error, the token must not be
     // in it. It fails the day a transport starts echoing the payload back.
