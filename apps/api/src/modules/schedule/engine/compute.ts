@@ -1,4 +1,4 @@
-import { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
+import { DEFAULT_DAY_FACTOR_MINUTES, NEAR_CRITICAL_THRESHOLD_DAYS } from './constants';
 import {
   clampBackwardFinish,
   clampExternalBackwardFinish,
@@ -727,8 +727,12 @@ export function computeSchedule(
       !activityIsLoe && !activityIsSummary && (byDefinition || (makeOpenEndsCritical && isOpenEnd));
     // Near-critical stays total-float-based and never overlaps critical: a positive-but-small float that
     // is not already flagged critical. On the default path (threshold 0) this equals the old predicate.
+    // The band is five working days of the activity's OWN calendar (#522): the float above is working
+    // minutes on that calendar, so the day it is counted in is that calendar's, not a fixed 1,440.
+    const nearCriticalThresholdMinutes =
+      NEAR_CRITICAL_THRESHOLD_DAYS * (activity.dayFactorMinutes ?? DEFAULT_DAY_FACTOR_MINUTES);
     const isNearCritical =
-      !isCritical && totalFloat > 0 && totalFloat <= NEAR_CRITICAL_THRESHOLD_MINUTES;
+      !isCritical && totalFloat > 0 && totalFloat <= nearCriticalThresholdMinutes;
     if (isCritical) criticalCount += 1;
     if (isNearCritical) nearCriticalCount += 1;
 

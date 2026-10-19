@@ -733,6 +733,46 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(branch).not.toHaveProperty('relativeFloat');
   });
 
+  it('counts near-critical as five working days of the activity’s own calendar (#522)', async () => {
+    // On an eight-hour calendar the old fixed 7,200-minute band was fifteen working days, so the
+    // six-day and the ten-day branches below were flagged as well. Only the five-day one is inside
+    // the band the label states.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({
+        name: 'Eight hour week',
+        shifts: [0, 1, 2, 3, 4].map((weekday) => ({
+          weekday,
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+        })),
+      })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: cal.body.data.id as string, version: 2 })
+      .expect(200);
+
+    const spine = await makeActivity(actor, planId, 'Spine', 12);
+    const five = await makeActivity(actor, planId, 'Five days spare', 7);
+    const six = await makeActivity(actor, planId, 'Six days spare', 6);
+    const ten = await makeActivity(actor, planId, 'Ten days spare', 2);
+    const end = await makeActivity(actor, planId, 'End', 1);
+    for (const pred of [spine, five, six, ten]) await link(actor, planId, pred, end);
+
+    const res = await actor.agent.post(recalcUrl(planId)).expect(200);
+    const byName = await activitiesByName(actor, planId);
+    expect(byName.get('Spine')!.isNearCritical).toBe(false);
+    expect(byName.get('Five days spare')!.totalFloat).toBe(5);
+    expect(byName.get('Five days spare')!.isNearCritical).toBe(true);
+    expect(byName.get('Six days spare')!.totalFloat).toBe(6);
+    expect(byName.get('Six days spare')!.isNearCritical).toBe(false);
+    expect(byName.get('Ten days spare')!.isNearCritical).toBe(false);
+    expect(res.body.data.nearCriticalCount).toBe(1);
+  });
+
   it('says when it truncated the list, and does not say so when it did not', async () => {
     // A hub with four non-driving branch predecessors: into E there is the driving chain plus one
     // path per branch. The off-by-one that matters is the EXACTLY-maxPaths case — a naive

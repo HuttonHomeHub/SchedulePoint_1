@@ -771,7 +771,9 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   a guest is shown where the work sits, never the planner's working notes about why it sits
   there, and a float is analysis rather than the schedule a share link exists to show.
   **Exposed as of ADR-0198:** `isNearCritical` on an activity and `isDriving` on a dependency, the
-  engine's own flags, equal to the member read. `ResourceAssignment.isDriving` (which resource
+  engine's own flags, equal to the member read. `isNearCritical` means `0 <` total float `≤ 5` working days
+  of the activity's own calendar (its hours-per-day, ADR-0068), so `nearCriticalCount` is smaller on
+  shorter-day calendars than it was before 2026-10-19 (`docs/TECH_DEBT.md` #522). `ResourceAssignment.isDriving` (which resource
   drives) is a different field and is **never** exposed.
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per

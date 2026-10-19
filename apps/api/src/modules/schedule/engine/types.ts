@@ -60,6 +60,13 @@ export interface EngineActivity {
    */
   calendar?: WorkingTimeCalendar;
   /**
+   * The length, in minutes, of one working day on the calendar this activity's float is measured on
+   * (its hours-per-day, ADR-0068). The engine uses it for one thing: the near-critical band is five
+   * of these (`docs/TECH_DEBT.md` #522). It never moves a date. **Absent = 1,440**, the 24-hour day,
+   * so a caller that passes none keeps the pre-#522 band.
+   */
+  dayFactorMinutes?: number;
+  /**
    * External / inter-project **early-start** bound (ADR-0043, ADR-0035 §30.1). An imported commitment
    * from another project (a vendor delivery, an IFC release), a calendar day (`YYYY-MM-DD`). It acts as
    * an **SNET-shaped** forward lower bound, floored at the data date — the *later* of logic and this

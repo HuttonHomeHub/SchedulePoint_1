@@ -17,10 +17,15 @@ only on a non-driving link.
 
 ## Decision
 
-**D1 — `SCHEDULE_READ` gains `Activity.isNearCritical`.** The flag is `!isCritical && 0 < totalFloat ≤ 7,200
-working minutes` (`engine/compute.ts`, `engine/constants.ts`). Its inputs are `isCritical` and `totalFloat`, both
-already exposed, the activity's day factor (recoverable from the exposed `durationMinutes` and `durationDays`)
-and a product constant that is the same for every plan. Its count is already public as `nearCriticalCount`. What
+**D1 — `SCHEDULE_READ` gains `Activity.isNearCritical`.** The flag is `!isCritical && 0 < totalFloat ≤ 5 working
+days of the activity's own calendar` (`engine/compute.ts`, `engine/constants.ts`). Its inputs are `isCritical` and
+`totalFloat`, both already exposed, the activity's day factor (recoverable from the exposed `durationMinutes` and
+`durationDays`) and a product constant that is the same for every plan.
+
+_Amended 2026-10-19 (`docs/TECH_DEBT.md` #522, product-owner decision): this paragraph said "7,200 working
+minutes", which is five days only on a 24-hour calendar and fifteen on an eight-hour one. The band is five of the
+activity's own working days, so the day factor stated above is now an input to the flag as well as a way to read it
+back; the guest and member flags stay equal because both read the one persisted column._ Its count is already public as `nearCriticalCount`. What
 is new is only _which_ activities make up that count. No cost, resource, constraint, note or person is an input.
 
 **D2 — `SCHEDULE_READ` gains `ActivityDependency.isDriving`.** The engine-owned link flag: true when the link

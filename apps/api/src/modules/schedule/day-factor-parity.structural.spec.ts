@@ -12,6 +12,11 @@ import { describe, expect, it } from 'vitest';
  * structural: **the arguments handed to `computeSchedule` are byte-identical, and the change lives
  * entirely in the conversion applied to what it returns.**
  *
+ * **Amended 2026-10-19 (#522):** the engine's input DID move, by one optional field. The resolved
+ * factor now reaches each `EngineActivity` as `dayFactorMinutes`, because the near-critical band is
+ * five working days of the activity's own calendar. What this still pins is that the engine is
+ * handed the factor, never the calendar-id map.
+ *
  * That is true because the fix ADDS a map rather than editing the one the engine reads.
  * `calIdByActivity` is still built from `effectiveByActivity` and still carries `null` as the
  * inherit sentinel `portFor` collapses; `dayFactorCalIdByActivity` is a sibling built by
@@ -32,8 +37,9 @@ describe('day-factor parity: the engine reads the port map, never the day-factor
   it('passes the RESOLVED map to resolveDayFactors, never the engine’s port map', () => {
     // The whole defect was `resolveDayFactors(graph.calIdByActivity)`. Passing the port map back is
     // a one-token edit that restores it silently, so it is asserted rather than trusted to review.
-    expect(SOURCE).toContain('graph.dayFactorCalIdByActivity');
+    expect(SOURCE).toContain('this.resolveDayFactors(dayFactorCalIdByActivity, tx)');
     expect(SOURCE).not.toContain('resolveDayFactors(graph.calIdByActivity');
+    expect(SOURCE).not.toContain('resolveDayFactors(calIdByActivity');
   });
 
   it('never hands the day-factor map to the engine', () => {

@@ -96,7 +96,10 @@ export class GuestScheduleSummaryDto {
   @ApiProperty({ description: 'Activities on the critical path (total float ≤ 0).' })
   criticalCount!: number;
 
-  @ApiProperty({ description: 'Near-critical activities (0 < total float ≤ 5 working days).' })
+  @ApiProperty({
+    description:
+      'Near-critical activities (0 < total float ≤ 5 working days of the activity’s own calendar).',
+  })
   nearCriticalCount!: number;
 
   /** Build from the persisted-column aggregate plus the plan's data date. */

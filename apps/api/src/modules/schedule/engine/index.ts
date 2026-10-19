@@ -4,7 +4,7 @@
  * and persists the results. Works in continuous working-**minute** offsets over an
  * intraday-shift calendar (ADR-0036); see ADR-0023 for the date convention.
  */
-export { NEAR_CRITICAL_THRESHOLD_MINUTES } from './constants';
+export { NEAR_CRITICAL_THRESHOLD_DAYS } from './constants';
 export {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
