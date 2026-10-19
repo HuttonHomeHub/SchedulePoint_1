@@ -6,7 +6,7 @@
     "nodemailer": "10.1.1",
     "zod": "4.6.7",
     "@nestjs/throttler": "6.7.1",
-    "react-hook-form": "7.89.0",
+    "react-hook-form": "7.90.0",
     "react-dom": "19.3.1",
     "lucide-react": "1.54.0",
     "axe-core": "4.14.0",
@@ -971,7 +971,7 @@
       "ref": "index.esm.mjs:2739",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2800",
+      "lines": "2898",
       "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
@@ -982,7 +982,7 @@
       "ref": "index.esm.mjs:2882-2884",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2963-2965",
+      "lines": "3063-3065",
       "anchor": "        });\n        options.shouldFocus &&",
       "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
     },
@@ -990,7 +990,7 @@
       "ref": "index.esm.mjs:3148-3150",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3248-3250",
+      "lines": "3347-3349",
       "anchor": "const _focusError = () => _options.shouldFocusError &&",
       "citedBy": [
         "docs/specs/activity-dialog-unification/feature-spec.md",
@@ -1002,7 +1002,7 @@
       "ref": "index.esm.mjs:3216",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3325",
+      "lines": "3425",
       "anchor": "isSubmitted: true,",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
@@ -1328,7 +1328,7 @@
       "ref": "index.esm.mjs:3320-3327",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3413-3420",
+      "lines": "3514-3521",
       "anchor": "_fields = {};",
       "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
     },
@@ -1336,7 +1336,7 @@
       "ref": "index.esm.mjs:2710-2717",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2780-2787",
+      "lines": "2878-2885",
       "anchor": "const field = get(_fields, name);",
       "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
     },
@@ -1344,8 +1344,8 @@
       "ref": "index.esm.mjs:2285-2297",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2325-2337",
-      "anchor": ": setFieldValue(name, defaultValue);",
+      "lines": "2385-2404",
+      "anchor": "setFieldValue(name, defaultValue);",
       "citedBy": ["docs/specs/activity-editor-seeding/feature-spec.md"]
     },
     {
