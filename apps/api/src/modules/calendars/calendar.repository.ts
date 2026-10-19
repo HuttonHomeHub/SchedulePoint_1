@@ -737,35 +737,43 @@ export class CalendarRepository {
   }
 
   /**
-   * Count the ACTIVE plans using `calendarId` that live OUTSIDE `projectId` — the narrowing
-   * guard (ADR-0053 §2, W2). Narrowing an ORG calendar to one project is only safe when no
-   * referencer sits outside it; plans inside the target project keep working, so they are
-   * deliberately excluded from the count. Backed by the partial `idx_plans_calendar_id`
+   * Count the plans using `calendarId` that live OUTSIDE `projectId`, active OR deleted — the
+   * narrowing guard (ADR-0053 §2, W2). Narrowing an ORG calendar to one project is only safe when
+   * no referencer sits outside it; plans inside the target project keep working, so they are
+   * deliberately excluded from the count. A binned plan counts: `plans.calendar_id` is
+   * `ON DELETE RESTRICT`, so it would still pin the calendar when the target project's expiry
+   * deletes it (`docs/TECH_DEBT.md` #530). Backed by the partial `idx_plans_calendar_id`
    * (the `project_id` filter is a cheap re-check on the few matching rows).
+   *
+   * soft-delete: any-state — a deleted plan still holds the foreign key the expiry would trip on.
    */
-  countActivePlansUsingOutsideProject(
+  countPlansUsingOutsideProject(
     calendarId: string,
     projectId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
     return db.plan.count({
-      where: { calendarId, deletedAt: null, projectId: { not: projectId } },
+      where: { calendarId, projectId: { not: projectId } },
     });
   }
 
   /**
-   * Count the ACTIVE activities using `calendarId` whose PLAN lives outside `projectId` — the
-   * other half of the narrowing guard (ADR-0053 §2). An activity has no `project_id` of its
-   * own, so the scope is expressed through its plan (the same relation filter the step/note
-   * cascades use). Backed by the partial `idx_activities_calendar_id`.
+   * Count the activities using `calendarId`, active OR deleted, whose PLAN lives outside
+   * `projectId` — the other half of the narrowing guard (ADR-0053 §2). An activity has no
+   * `project_id` of its own, so the scope is expressed through its plan (the same relation filter
+   * the step/note cascades use). A deleted activity in a live plan never expires, so for it the
+   * foreign-key failure at the target project's expiry would be permanent (#530). Backed by the
+   * partial `idx_activities_calendar_id`.
+   *
+   * soft-delete: any-state — a deleted activity still holds the foreign key the expiry would trip on.
    */
-  countActiveActivitiesUsingOutsideProject(
+  countActivitiesUsingOutsideProject(
     calendarId: string,
     projectId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<number> {
     return db.activity.count({
-      where: { calendarId, deletedAt: null, plan: { projectId: { not: projectId } } },
+      where: { calendarId, plan: { projectId: { not: projectId } } },
     });
   }
 

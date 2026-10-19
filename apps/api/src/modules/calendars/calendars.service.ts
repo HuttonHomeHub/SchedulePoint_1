@@ -1033,10 +1033,13 @@ export class CalendarsService {
 
   /**
    * The narrowing guard (ADR-0053 §2, W2): a calendar may only be pinned to `projectId` while
-   * NOTHING outside that project still uses it. Counts active plans and activities in OTHER
-   * projects plus **every** active resource (the resource pool is org-global, so any resource
+   * NOTHING outside that project still uses it. Counts plans and activities in OTHER
+   * projects plus **every** resource (the resource pool is org-global, so any resource
    * reference is by definition outside a single project — an archived resource still counts,
-   * because archived is not deleted and the reference is live). Non-zero ⇒ 409 with per-class
+   * because archived is not deleted and the reference is live). **Deleted rows count too**: the
+   * calendar foreign keys are RESTRICT, so a row in Recently deleted still pins the calendar, and
+   * the target project's retention expiry could then never delete it (`docs/TECH_DEBT.md` #530).
+   * Non-zero ⇒ 409 with per-class
    * counts so the UI can say precisely what is in the way. Must be called under the calendar
    * advisory lock inside the write transaction.
    */
@@ -1046,9 +1049,9 @@ export class CalendarsService {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     const [plans, activities, resources] = await Promise.all([
-      this.calendars.countActivePlansUsingOutsideProject(calendarId, projectId, tx),
-      this.calendars.countActiveActivitiesUsingOutsideProject(calendarId, projectId, tx),
-      this.resources.countActiveResourcesUsingCalendar(calendarId, tx),
+      this.calendars.countPlansUsingOutsideProject(calendarId, projectId, tx),
+      this.calendars.countActivitiesUsingOutsideProject(calendarId, projectId, tx),
+      this.resources.countResourcesUsingCalendarAnyState(calendarId, tx),
     ]);
     const blocking = plans + activities + resources;
     if (blocking > 0) {

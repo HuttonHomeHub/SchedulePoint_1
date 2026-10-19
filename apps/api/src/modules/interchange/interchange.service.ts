@@ -17,6 +17,7 @@ import { drawnSpanDays, packAroundCarried, packLanes } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
@@ -229,9 +230,18 @@ export class InterchangeService {
       unarchivedResources,
       calendarFindings,
       resourceFindings,
-    } = await this.prisma.$transaction((tx) =>
-      this.persistGraph(tx, principal, project, graph, options),
-    );
+    } = await this.prisma.$transaction(async (tx) => {
+      // The read in `resolveTarget` is the 404 and the organisation check; this lock is the
+      // guarantee. The calendars and plan inserted below take only `FOR KEY SHARE` on the project,
+      // which a delete does not conflict with, so without it the import can land under a project
+      // being deleted (`docs/TECH_DEBT.md` #531, the same race as `PlansService.create`).
+      const active = await lockActiveProjectChainForShare(tx, {
+        clientId: project.clientId,
+        projectId: project.id,
+      });
+      if (!active) throw new NotFoundError('Project not found.');
+      return this.persistGraph(tx, principal, project, graph, options);
+    });
 
     // Calendar names the target tier already held, disambiguated rather than reused (ADR-0053 §5).
     report.repairs.push(...calendarFindings);
@@ -1320,7 +1330,10 @@ export class InterchangeService {
     principal: Principal,
     orgSlug: string,
     projectId: string,
-  ): Promise<{ organization: { id: string }; project: { id: string; organizationId: string } }> {
+  ): Promise<{
+    organization: { id: string };
+    project: { id: string; organizationId: string; clientId: string };
+  }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, INTERCHANGE_IMPORT, organization.id);
 

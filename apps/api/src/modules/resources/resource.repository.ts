@@ -552,6 +552,22 @@ export class ResourceRepository {
   }
 
   /**
+   * Resources using `calendarId` in ANY state — the narrowing guard's resource half. A binned
+   * resource keeps `resources.calendar_id` (`ON DELETE RESTRICT`), so narrowing the calendar to
+   * one project would strand it and the target project's expiry could never delete the calendar
+   * (`docs/TECH_DEBT.md` #530). Deleting a calendar uses the active count above instead: a
+   * soft delete trips no foreign key.
+   *
+   * soft-delete: any-state — a deleted resource still holds the foreign key the expiry would trip on.
+   */
+  countResourcesUsingCalendarAnyState(
+    calendarId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<number> {
+    return db.resource.count({ where: { calendarId } });
+  }
+
+  /**
    * The ACTIVE plans with an active assignment of ANY of `resourceIds` — the set a restore stamps
    * "edited since calculated". Expected to be empty (a delete is refused while any assignment
    * references the resource), which is why this is defence in depth and not a branch anyone

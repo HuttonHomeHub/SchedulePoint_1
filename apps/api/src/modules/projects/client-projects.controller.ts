@@ -68,6 +68,11 @@ export class ClientProjectsController {
   @ApiCreatedResponse({ type: ProjectResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'A project with this name already exists for this client.' })
+  @ApiNotFoundResponse({
+    description:
+      'Organisation or client not found (or the caller is not a member), including' +
+      ' a client that was deleted while this request was in flight.',
+  })
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

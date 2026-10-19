@@ -104,8 +104,8 @@ describe('CalendarsService', () => {
     softDeleteWithExceptions: ReturnType<typeof vi.fn>;
     countActivePlansUsing: ReturnType<typeof vi.fn>;
     countActiveActivitiesUsing: ReturnType<typeof vi.fn>;
-    countActivePlansUsingOutsideProject: ReturnType<typeof vi.fn>;
-    countActiveActivitiesUsingOutsideProject: ReturnType<typeof vi.fn>;
+    countPlansUsingOutsideProject: ReturnType<typeof vi.fn>;
+    countActivitiesUsingOutsideProject: ReturnType<typeof vi.fn>;
     findManyActiveForProject: ReturnType<typeof vi.fn>;
     createException: ReturnType<typeof vi.fn>;
     findActiveExceptionByIdInCalendar: ReturnType<typeof vi.fn>;
@@ -117,7 +117,10 @@ describe('CalendarsService', () => {
     restoreWithExceptions: ReturnType<typeof vi.fn>;
   };
   let audit: { record: ReturnType<typeof vi.fn> };
-  let resources: { countActiveResourcesUsingCalendar: ReturnType<typeof vi.fn> };
+  let resources: {
+    countActiveResourcesUsingCalendar: ReturnType<typeof vi.fn>;
+    countResourcesUsingCalendarAnyState: ReturnType<typeof vi.fn>;
+  };
   let projects: {
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
     findByIdInOrg: ReturnType<typeof vi.fn>;
@@ -140,8 +143,8 @@ describe('CalendarsService', () => {
       softDeleteWithExceptions: vi.fn(),
       countActivePlansUsing: vi.fn().mockResolvedValue(0),
       countActiveActivitiesUsing: vi.fn().mockResolvedValue(0),
-      countActivePlansUsingOutsideProject: vi.fn().mockResolvedValue(0),
-      countActiveActivitiesUsingOutsideProject: vi.fn().mockResolvedValue(0),
+      countPlansUsingOutsideProject: vi.fn().mockResolvedValue(0),
+      countActivitiesUsingOutsideProject: vi.fn().mockResolvedValue(0),
       findManyActiveForProject: vi.fn(),
       createException: vi.fn(),
       findActiveExceptionByIdInCalendar: vi.fn(),
@@ -153,7 +156,10 @@ describe('CalendarsService', () => {
       findActiveHoldingNameInTier: vi.fn().mockResolvedValue(null),
       restoreWithExceptions: vi.fn().mockResolvedValue({ calendars: 1, exceptions: 2 }),
     };
-    resources = { countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0) };
+    resources = {
+      countActiveResourcesUsingCalendar: vi.fn().mockResolvedValue(0),
+      countResourcesUsingCalendarAnyState: vi.fn().mockResolvedValue(0),
+    };
     projects = {
       findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }),
       findByIdInOrg: vi.fn().mockResolvedValue({
@@ -717,8 +723,8 @@ describe('CalendarsService', () => {
         USER_ID,
         expect.anything(),
       );
-      expect(calendars.countActivePlansUsingOutsideProject).not.toHaveBeenCalled();
-      expect(resources.countActiveResourcesUsingCalendar).not.toHaveBeenCalled();
+      expect(calendars.countPlansUsingOutsideProject).not.toHaveBeenCalled();
+      expect(resources.countResourcesUsingCalendarAnyState).not.toHaveBeenCalled();
     });
 
     it('narrows ORG → PROJECT when nothing outside the target project uses it', async () => {
@@ -743,8 +749,8 @@ describe('CalendarsService', () => {
     });
 
     it.each([
-      ['a plan outside the target project', 'countActivePlansUsingOutsideProject'],
-      ['an activity outside the target project', 'countActiveActivitiesUsingOutsideProject'],
+      ['a plan outside the target project', 'countPlansUsingOutsideProject'],
+      ['an activity outside the target project', 'countActivitiesUsingOutsideProject'],
     ])('409s the narrow when %s still uses the calendar', async (_label, method) => {
       calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
       (calendars as Record<string, ReturnType<typeof vi.fn>>)[method]?.mockResolvedValue(2);
@@ -761,9 +767,9 @@ describe('CalendarsService', () => {
       expect(calendars.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 
-    it('409s the narrow when ANY active resource uses it (the pool is org-global)', async () => {
+    it('409s the narrow when ANY resource, deleted or not, uses it (the pool is org-global)', async () => {
       calendars.findActiveByIdInOrg.mockResolvedValue(calendar());
-      resources.countActiveResourcesUsingCalendar.mockResolvedValue(1);
+      resources.countResourcesUsingCalendarAnyState.mockResolvedValue(1);
 
       await expect(
         service.update(principalWith(ALL), 'acme', 'cal-1', {
@@ -809,7 +815,7 @@ describe('CalendarsService', () => {
         }),
       ).resolves.toBeDefined();
       // An ordinary rename must NEVER take the narrowing path.
-      expect(calendars.countActivePlansUsingOutsideProject).not.toHaveBeenCalled();
+      expect(calendars.countPlansUsingOutsideProject).not.toHaveBeenCalled();
     });
 
     it('forbids deleting an ORG-tier calendar without calendar:manage_org', async () => {

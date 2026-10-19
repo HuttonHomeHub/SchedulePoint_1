@@ -527,6 +527,49 @@ describe.skipIf(!hasDatabase)('Calendar scope tiers (e2e)', () => {
     expect(row).toMatchObject({ scope: 'ORG', projectId: null, version: 1 });
   });
 
+  it.each([
+    ['a deleted activity in a live plan', 'activity'],
+    ['a deleted plan', 'plan'],
+    ['a deleted resource', 'resource'],
+  ] as const)(
+    'blocks a narrow while %s outside the target project still holds the calendar (409)',
+    async (_label, kind) => {
+      // docs/TECH_DEBT.md #530: the foreign keys are RESTRICT, so a binned row still pins the
+      // calendar, and the retention expiry of the target project could never delete it.
+      const { actor, orgId, projectA, planB } = await fixture();
+      const shared = await createCalendar(actor, 'Nights');
+      const deletedAt = new Date();
+      if (kind === 'activity') {
+        const id = await seedActivity(orgId, planB, actor.userId);
+        await prisma.activity.update({ where: { id }, data: { calendarId: shared, deletedAt } });
+      } else if (kind === 'plan') {
+        await prisma.plan.update({ where: { id: planB }, data: { calendarId: shared, deletedAt } });
+      } else {
+        await prisma.resource.create({
+          data: {
+            organizationId: orgId,
+            name: 'Crane',
+            kind: 'EQUIPMENT',
+            calendarId: shared,
+            deletedAt,
+            createdBy: actor.userId,
+          },
+        });
+      }
+
+      const blocked = await actor.agent
+        .patch(`${orgCalendars}/${shared}`)
+        .send({ scope: 'PROJECT', projectId: projectA, version: 1 })
+        .expect(409);
+      expect(blocked.body.error?.details).toMatchObject({
+        reason: 'CALENDAR_SCOPE_NARROWING_BLOCKED',
+        count: 1,
+      });
+      const row = await prisma.calendar.findUniqueOrThrow({ where: { id: shared } });
+      expect(row).toMatchObject({ scope: 'ORG', projectId: null, version: 1 });
+    },
+  );
+
   it('allows a narrow once only the target project uses it', async () => {
     const { actor, projectA, planA } = await fixture();
     const shared = await createCalendar(actor, 'Nights');

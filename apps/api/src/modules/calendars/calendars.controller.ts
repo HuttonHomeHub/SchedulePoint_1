@@ -144,7 +144,8 @@ export class CalendarsController {
   @ApiConflictResponse({
     description:
       'Stale version, a per-tier name collision (DUPLICATE_CALENDAR), or the calendar is still ' +
-      'used outside the target project (CALENDAR_SCOPE_NARROWING_BLOCKED).',
+      'used outside the target project (CALENDAR_SCOPE_NARROWING_BLOCKED) — plans, activities and ' +
+      'resources in Recently deleted count.',
   })
   async update(
     @CurrentUser() principal: Principal,

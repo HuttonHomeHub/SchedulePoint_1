@@ -362,11 +362,14 @@ test('a plan whose calendar was deleted after it is restored in two presses (acc
 });
 
 /**
- * A plan cannot come back onto a calendar that now belongs to another project (ADR-0201 D5). The
- * server refuses, the alert says why in the planner's words, and its link goes to the library where
- * the cure (making the calendar organisation-wide again) is made.
+ * A calendar cannot be narrowed away from a plan that sits in the bin (`docs/TECH_DEBT.md` #530), so
+ * the plan always comes back on the calendar it left with. This journey used to narrow the calendar
+ * here and then assert ADR-0201 D5's restore refusal; since #530 the product refuses that narrowing,
+ * so the refusal is now reachable only from data narrowed before the fix. Its alert copy and library
+ * link stay covered by `restore-failure.test.ts` and `RecentlyDeletedTable.test.tsx`, and the server
+ * guard by `deleted-calendar-restore.e2e-spec.ts`, which sets that older state up directly.
  */
-test('a plan whose calendar moved to another project is refused, with a way to the library', async ({
+test('a calendar a binned plan uses cannot be narrowed away, and the plan comes back on it', async ({
   page,
 }) => {
   const orgSlug = await onboard(page, 'bincalmove');
@@ -392,12 +395,15 @@ test('a plan whose calendar moved to another project is refused, with a way to t
   const narrowed = await page.request.patch(`${base}/calendars/${calendar.id}`, {
     data: { scope: 'PROJECT', projectId: elsewhere.id, version: calVersion },
   });
-  expect(narrowed.ok(), `PATCH calendar: ${narrowed.status()}`).toBe(true);
+  expect(narrowed.status()).toBe(409);
+  const refusal = (await narrowed.json()) as { error?: { details?: { reason?: string } } };
+  expect(refusal.error?.details?.reason).toBe('CALENDAR_SCOPE_NARROWING_BLOCKED');
 
   await navLink(page, 'Recently deleted').click();
-  // Not a deleted calendar, so the row predicts nothing and the press is what finds out.
   await page.getByRole('button', { name: 'Restore plan Tower A' }).click();
-  const alert = page.getByRole('alert').filter({ hasText: 'now belongs to another project' });
-  await expect(alert).toContainText('It uses the calendar “Site hours”');
-  await expect(alert.getByRole('link', { name: 'Open the calendars library' })).toBeVisible();
+  await expect(page.getByText(/Nothing has been deleted/)).toBeVisible();
+  const restored = await page.request.get(`${base}/plans/${plan.id}`);
+  expect(((await restored.json()) as { data: { calendarId: string } }).data.calendarId).toBe(
+    calendar.id,
+  );
 });

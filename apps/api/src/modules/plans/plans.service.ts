@@ -4,6 +4,7 @@ import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
@@ -102,18 +103,32 @@ export class PlansService {
     );
 
     try {
-      const plan = await this.plans.create({
-        // Copy the organisation id from the parent project, never from input.
-        organizationId: project.organizationId,
-        projectId: project.id,
-        name: dto.name,
-        description: dto.description ?? null,
-        ...(dto.status ? { status: dto.status } : {}),
-        // Required (ADR-0033 M1): the DTO guarantees a valid calendar date.
-        plannedStart: parseCalendarDate(dto.plannedStart),
-        ...(standard ? { calendarId: standard.id } : {}),
-        createdBy: principal.userId,
-        updatedBy: principal.userId,
+      // The read above is the 404 and the organisation check; the lock below is the guarantee. The
+      // insert's own foreign-key check takes `FOR KEY SHARE`, which a delete's `FOR NO KEY UPDATE`
+      // does not conflict with, so without this a plan can land in a project being deleted
+      // (`docs/TECH_DEBT.md` #531). Ancestors top-down, the order every restore uses (ADR-0201 D3).
+      const plan = await this.prisma.$transaction(async (tx) => {
+        const active = await lockActiveProjectChainForShare(tx, {
+          clientId: project.clientId,
+          projectId: project.id,
+        });
+        if (!active) throw new NotFoundError('Project not found.');
+        return this.plans.create(
+          {
+            // Copy the organisation id from the parent project, never from input.
+            organizationId: project.organizationId,
+            projectId: project.id,
+            name: dto.name,
+            description: dto.description ?? null,
+            ...(dto.status ? { status: dto.status } : {}),
+            // Required (ADR-0033 M1): the DTO guarantees a valid calendar date.
+            plannedStart: parseCalendarDate(dto.plannedStart),
+            ...(standard ? { calendarId: standard.id } : {}),
+            createdBy: principal.userId,
+            updatedBy: principal.userId,
+          },
+          tx,
+        );
       });
       this.logger.info(
         {

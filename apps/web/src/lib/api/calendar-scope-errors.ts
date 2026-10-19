@@ -75,7 +75,7 @@ function narrowingBlockedMessage(details: NarrowingBlockedDetails): string {
       ? `${base} ${total} reference${total === 1 ? '' : 's'} must move to another calendar first.`
       : `${base} Reassign what still uses it, then try again.`;
   }
-  return `${base} Still used by ${joinCounts(parts)} outside it — reassign them to another calendar first.`;
+  return `${base} Still used by ${joinCounts(parts)} outside it — reassign them to another calendar first; anything in Recently deleted counts too, so restore it and move it, or leave it there until it is cleared.`;
 }
 
 /**

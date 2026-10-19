@@ -1543,9 +1543,9 @@ export const CALENDAR_ERROR = {
    */
   RESOURCE_REQUIRES_ORG_CALENDAR: 'A resource can only use an organisation-wide calendar.',
   /**
-   * Narrowing an ORG calendar to one project while active plans/activities outside that project
-   * — or any active resource — still reference it (→ 409). Widening is always safe and never
-   * blocked; the per-class counts ride in `details`.
+   * Narrowing an ORG calendar to one project while plans/activities outside that project
+   * — or any resource — still reference it, **including ones in Recently deleted** (→ 409).
+   * Widening is always safe and never blocked; the per-class counts ride in `details`.
    */
   CALENDAR_SCOPE_NARROWING_BLOCKED:
     'This calendar is still used outside the project you are narrowing it to.',

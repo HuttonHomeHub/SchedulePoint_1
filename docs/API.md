@@ -206,6 +206,13 @@ the edit-lock endpoints and the gated-write note below. (Separately, a **409** o
 control" — not a lock/version conflict; it reads the same "conflicting state" 409
 as e.g. restoring a child whose parent is still deleted.)
 
+**A create under a parent answers 404 if the parent was deleted while it ran.**
+`POST …/clients/:clientId/projects`, `POST …/projects/:projectId/plans` and the XER import commit
+(`POST …/projects/:projectId/interchange/commit`) read the parent, then lock it in the transaction that inserts
+(`docs/TECH_DEBT.md` #531). A parent deleted between the two is `404` ("Project not found." /
+"Client not found.") and nothing is created; a parent deleted after the lock waits for the create
+and then sweeps the new row with its siblings. The OpenAPI 404 on each create says so.
+
 ### Plan edit-lock (ADR-0028)
 
 The single-editor "pen" lives under a plan as an `edit-lock` sub-resource. Reads
@@ -926,13 +933,13 @@ so **no existing call changes shape or meaning**.
 
 **New rejections** (every other calendar status code is unchanged):
 
-| Status | `details.reason`                   | When                                                                                                                                                                                           |
-| ------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                              |
-| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar. `details` carries the offending `projectId`. |
-| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                              |
-| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while active plans/activities outside the target project — or **any** active resource — still use it. `details` carries `{ plans, activities, resources }`.          |
-| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                                        |
+| Status | `details.reason`                   | When                                                                                                                                                                                                                                                                                                                                             |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 422    | `CALENDAR_WRONG_SCOPE`             | A PROJECT-scoped calendar was assigned to a plan or activity **outside** its owning project. `details.projectId` names the owner.                                                                                                                                                                                                                |
+| 422    | `RESOURCE_REQUIRES_ORG_CALENDAR`   | A PROJECT-scoped calendar was assigned to a **resource** — the pool is org-global (ADR-0039), so a resource may only hold an org-global calendar. `details` carries the offending `projectId`.                                                                                                                                                   |
+| 422    | `CALENDAR_SCOPE_PROJECT_MISMATCH`  | `scope: PROJECT` without a `projectId`, or `scope: ORG` with one.                                                                                                                                                                                                                                                                                |
+| 409    | `CALENDAR_SCOPE_NARROWING_BLOCKED` | Narrowing an ORG calendar while plans/activities outside the target project — or **any** resource — still use it. **A row in Recently deleted counts** (the foreign keys are `RESTRICT`, so it would block the project's expiry from deleting the calendar): restore it and move it first. `details` carries `{ plans, activities, resources }`. |
+| 409    | `DUPLICATE_CALENDAR`               | A name collision **within a tier**. The same name in two different projects, or in a project and the org library, is allowed by design.                                                                                                                                                                                                          |
 
 A calendar id from **another organisation**, soft-deleted, or unknown remains an indistinguishable **404**
 at every seam — the tier is never a cross-tenant existence oracle. Scope-filtered listing is a **usability**
@@ -1497,8 +1504,9 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
 - `PARENT_DELETED` is reported first when both apply.
 - **409 `CALENDAR_OTHER_PROJECT`** (ADR-0201 D5) is the second refusal on the same routes: a plan or
   activity in the batch uses an active **PROJECT**-tier calendar that now belongs to a different project
-  (an ORG calendar can be narrowed while the plan sits in the bin, because the narrowing guard counts only
-  active users, `docs/TECH_DEBT.md` #530). `details` carries `calendar` `{ id, name, deleteBatchId }` and
+  (the narrowing guard now counts rows in Recently deleted and refuses that narrowing, so the state
+  arises only from a narrowing made before `docs/TECH_DEBT.md` #530 was fixed, or by another route).
+  `details` carries `calendar` `{ id, name, deleteBatchId }` and
   `projectId`, the project the calendar now belongs to; `calendar.deleteBatchId` is **`null`**, because the
   calendar is live. It is checked after `CALENDAR_DELETED`, and `PARENT_DELETED` outranks both. It is a
   different string from the **422** `CALENDAR_WRONG_SCOPE` a binding write answers with. The cure is to make the
