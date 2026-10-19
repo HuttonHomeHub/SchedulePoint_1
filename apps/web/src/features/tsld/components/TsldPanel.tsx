@@ -24,6 +24,7 @@ import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import { useCoalescedPluralNudge } from '../interaction/use-coalesced-plural-nudge';
 import { arrangeOfferMessage, computeLaneArrangement } from '../model/arrange-lanes';
+import { clampLaneDelta, isNoOp } from '../model/bulk-move';
 import {
   addAll,
   type CanvasSelection,
@@ -67,6 +68,7 @@ import {
   startFrozenPluralReason,
   summaryNotMovablePluralReason,
   STARTS_NOT_CHANGED_NOTE,
+  topLanePluralReason,
 } from '../render/hit-test';
 import {
   buildBaselineGhosts,
@@ -288,6 +290,9 @@ export interface TsldBulkOperations {
     /** False when nothing was written (a pen rejection, a stale version, a no-op). */
     applied: boolean;
     conflict: string | null;
+    /** False when the conflict is a rule (the batch cap) rather than stale data, so the banner
+     * offers no Refresh. Absent means refreshable, like every other conflict. */
+    refreshable?: boolean;
   }>;
 }
 
@@ -333,6 +338,13 @@ export interface TsldPanelProps {
    */
   compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
+  /**
+   * Whether the legend lists the constraint pin. Default `true`; the share view passes `false`
+   * because a guest's activities can never carry a constraint (ADR-0051 §4, TECH_DEBT #521).
+   * `!canEdit` cannot stand in for it: a member without the pen is read-only yet still sees
+   * constraints, so the key must keep naming the pin for them.
+   */
+  showConstraintKey?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
@@ -703,6 +715,7 @@ export function TsldPanel({
   todayFraction = null,
   fill = false,
   chromeless = false,
+  showConstraintKey = true,
   canvasUi,
   barDateSource = 'early',
   clearPlacement,
@@ -2047,6 +2060,25 @@ export function TsldPanel({
     );
   };
 
+  // **The hint, spoken when the capability arrives** (TECH_DEBT #529). A selection made without the
+  // pen is announced as a bare count, and the move hint is only ever appended on the transition
+  // INTO plural; so a screen-reader user who then takes the pen would learn that the arrow chord
+  // moves the set only by reading the bar. This fires on `canMovePlural` turning true while the
+  // selection is already plural, and on nothing else: entering plural with the capability already
+  // held is `announceSelectionCount`'s, so the hint is never said twice for one selection. The ref
+  // is seeded with the capability the panel mounted with, so the first run is never a transition.
+  // A true -> false -> true toggle (the pen lost and retaken) re-speaks the hint by design: the
+  // capability really did arrive again.
+  const selectedCount = selection.ids.length;
+  const couldMovePluralRef = useRef(canMovePlural);
+  useEffect(() => {
+    const couldBefore = couldMovePluralRef.current;
+    couldMovePluralRef.current = canMovePlural;
+    if (canMovePlural && !couldBefore && selectedCount > 1) {
+      announce(pluralMoveHint(selectedCount));
+    }
+  }, [canMovePlural, selectedCount, announce]);
+
   // Keep the focused activity's list position, so if it's deleted elsewhere (arriving via a
   // refetch) we can move the ring to the nearest survivor rather than stranding keyboard focus.
   const selectedIndexRef = useRef(0);
@@ -2684,10 +2716,24 @@ export function TsldPanel({
         // as by the drag (reported 2026-09-23).
         const originSpan = dataDate ? drawnDaySpan(activity, barDateSource, dataDate) : null;
         const originStart = originSpan?.startDay ?? 0;
-        const delta = {
+        const requested = {
           dayDelta: intent.startDay === undefined ? 0 : intent.startDay - originStart,
           laneDelta: intent.laneIndex === undefined ? 0 : intent.laneIndex - activity.laneIndex,
         };
+        // The set keeps its shape at the top (TECH_DEBT #526): the lane part is held to what the
+        // topmost selected bar can take, the same answer the keyboard's Alt+Up gives by refusing.
+        // A drag that was ONLY upward and is clamped to nothing says why, rather than reporting a
+        // failed write that never happened.
+        const delta = clampLaneDelta(rows, requested);
+        if (isNoOp(delta) && !isNoOp(requested)) {
+          // The count is of rows at lane 0 — the only rows that can have stopped an upward clamp,
+          // since the set-level clamp is bounded by the topmost row alone.
+          showConflict(
+            topLanePluralReason(rows.filter((a) => a.laneIndex === 0).length, rows.length),
+            false,
+          );
+          return;
+        }
         // **Hold the dragged bar at the drop position while the batch is in flight**, exactly as
         // the single-bar path below does. Without this the gesture machine clears its own ghost
         // synchronously at pointer-up, so the bar the planner just dragged snapped *back* to its
@@ -2713,7 +2759,7 @@ export function TsldPanel({
           .moveMany(rows, delta)
           .then((outcome) => {
             setPendingReposition(null);
-            if (outcome.conflict) showConflict(outcome.conflict);
+            if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
             // Only a write that landed is announced: a pen rejection resolves without a conflict
             // and without having moved anything.
             else if (outcome.applied)
@@ -3095,7 +3141,7 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend />
+          <TsldLegend withoutConstraint={!showConstraintKey} />
         </Surface>
       ) : null}
 

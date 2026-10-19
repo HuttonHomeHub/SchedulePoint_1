@@ -20,7 +20,7 @@ import type { WbsBandBar } from '../render/wbs-band';
 
 import { EXPORT_MARKER_ROW, EXPORT_STRIP_CAPTION_ROW } from './export-image';
 
-import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
+import { CANVAS_DATA_DATE_ENABLED, CANVAS_RESOURCE_VIEW_ENABLED } from '@/config/env';
 
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
@@ -177,7 +177,14 @@ export interface RenderExportImageDeps {
 type LegendEntry = {
   label: string;
   kind:
-    'fill' | 'outlineSolid' | 'outlineDashed' | 'lineSolid' | 'lineDashed' | 'today' | 'dataDate';
+    | 'fill'
+    | 'outlineSolid'
+    | 'outlineDashed'
+    | 'lineSolid'
+    | 'lineDashed'
+    | 'today'
+    | 'dataDate'
+    | 'overAllocation';
   colour: (palette: PrintPalette) => string;
 };
 
@@ -206,6 +213,35 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
 ];
+
+/** The entry for the over-allocation badge, last as on the screen's key (`TsldLegend.tsx`). It is
+ * appended only when the picture draws a badge, so a key never names a mark the page lacks
+ * (TECH_DEBT #524) — the same both-ways rule the DOM legend's census holds. */
+const OVER_ALLOCATION_ENTRY: LegendEntry = {
+  label: 'Over-allocated',
+  kind: 'overAllocation',
+  colour: (p) => p.conflict,
+};
+
+/** The three ascending mini-bars' heights, as the DOM legend draws them. */
+const OVER_ALLOCATION_SWATCH_HEIGHTS = [3, 6, 9] as const;
+/** Where the first mini-bar starts inside the swatch, each bar's width and the step between bars. */
+const OVER_ALLOCATION_BAR_INSET = 3;
+const OVER_ALLOCATION_BAR_W = 4;
+const OVER_ALLOCATION_BAR_PITCH = 5;
+
+/** A text's width on this context, with a per-character estimate where the context cannot measure
+ * (a stubbed 2D context returns no metrics). */
+function measuredWidth(ctx: CanvasRenderingContext2D, text: string): number {
+  const measured = ctx.measureText(text) as TextMetrics | undefined;
+  return (measured && measured.width) || text.length * 6.5;
+}
+
+/** The legend rows this picture's scene calls for. */
+function legendFor(scene: TsldScene): readonly LegendEntry[] {
+  const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
+  return drawsBadge ? [...EXPORT_LEGEND, OVER_ALLOCATION_ENTRY] : EXPORT_LEGEND;
+}
 
 /**
  * Render the diagram to an off-screen PNG and resolve its {@link Blob}. Paints OFF-SCREEN ONLY.
@@ -298,7 +334,7 @@ export async function renderExportImage(
   ctx.fillRect(0, 0, size.width, size.height);
   ctx.globalCompositeOperation = 'source-over';
 
-  drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta, bandContent);
+  drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta, bandContent, legendFor(scene));
   drawAxisMarkerRow(ctx, viewport, size, topBand, markerRow, palette, scene);
   if (resourceStrip && resourceStrip.height > 0) {
     drawStripCaption(ctx, resourceStrip.snapshot, size, resourceStrip.height, palette);
@@ -318,6 +354,7 @@ function drawTitleBand(
   scaledToFit: boolean,
   meta: ExportImageMeta,
   bandContent: 'full' | 'legend-only',
+  legend: readonly LegendEntry[],
 ): void {
   // Opaque band ground over the reserved region (covers any diagram drawn beneath it).
   ctx.fillStyle = palette.ground;
@@ -365,6 +402,7 @@ function drawTitleBand(
     palette,
     size.width,
     bandContent === 'full' ? LEGEND_BASELINE : PRINT_LEGEND_BASELINE,
+    legend,
   );
 }
 
@@ -529,11 +567,7 @@ function drawAxisMarkerRow(
   ctx.font = MARKER_FONT;
   // The mark's box is the CHIP, not the bare text — clamping and the collision test must run on
   // what is actually painted, or two chips could kiss while their texts were judged apart.
-  const measure = (label: string): number => {
-    const measured = ctx.measureText(label) as TextMetrics | undefined;
-    const textWidth = (measured && measured.width) || label.length * 6.5;
-    return textWidth + MARKER_CHIP_PAD_X * 2;
-  };
+  const measure = (label: string): number => measuredWidth(ctx, label) + MARKER_CHIP_PAD_X * 2;
 
   // The same facts the painter derived its lines from (`paint.ts` layer 3.5) — the model is the
   // single answer to "where are the rules and which labels survive".
@@ -573,12 +607,28 @@ function drawLegend(
   palette: PrintPalette,
   maxWidth: number,
   y: number,
+  legend: readonly LegendEntry[],
 ): void {
   const swatchTop = y + 3;
   ctx.font = LEGEND_FONT;
   ctx.textBaseline = 'alphabetic';
+  const measure = (text: string): number => measuredWidth(ctx, text);
+  const limit = maxWidth - BAND_PAD;
   let x = BAND_PAD;
-  for (const entry of EXPORT_LEGEND) {
+  for (let i = 0; i < legend.length; i += 1) {
+    const entry = legend[i]!;
+    const entryWidth = SWATCH_W + LEGEND_LABEL_GAP + measure(entry.label);
+    const left = legend.length - i - 1;
+    // Reserve room for the "+N more" the NEXT entry would need if this one is the last that fits, so
+    // the count itself can never be the thing that overflows. A narrow crop used to drop the
+    // trailing entries without a word (TECH_DEBT #525); ADR-0127 D3 counts what it does not draw,
+    // and the strip caption below already does (ADR-0200 D3).
+    const reserve = left > 0 ? LEGEND_ENTRY_GAP + measure(`+${String(left)} more`) : 0;
+    if (x + entryWidth + reserve > limit) {
+      ctx.fillStyle = palette.mutedInk;
+      ctx.fillText(`+${String(legend.length - i)} more`, x, y + SWATCH_H);
+      return;
+    }
     const colour = entry.colour(palette);
     if (entry.kind === 'fill') {
       ctx.fillStyle = colour;
@@ -600,6 +650,18 @@ function drawLegend(
       ctx.lineTo(x + SWATCH_W, swatchTop + SWATCH_H / 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    } else if (entry.kind === 'overAllocation') {
+      // Rising bars on the swatch's baseline, each outlined — the painter's badge in miniature.
+      ctx.fillStyle = colour;
+      ctx.strokeStyle = palette.outline;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      OVER_ALLOCATION_SWATCH_HEIGHTS.forEach((barHeight, step) => {
+        const barX = x + OVER_ALLOCATION_BAR_INSET + step * OVER_ALLOCATION_BAR_PITCH;
+        const barY = swatchTop + SWATCH_H - barHeight;
+        ctx.fillRect(barX, barY, OVER_ALLOCATION_BAR_W, barHeight);
+        ctx.strokeRect(barX + 0.5, barY + 0.5, OVER_ALLOCATION_BAR_W - 1, barHeight - 1);
+      });
     } else if (entry.kind === 'dataDate') {
       // dataDate: a SOLID 2px vertical, matching the canvas data-date rule — shape and weight
       // distinguish it from Today's dashed 1.5px, never hue alone (WCAG 1.4.1).
@@ -621,15 +683,9 @@ function drawLegend(
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    const labelX = x + SWATCH_W + LEGEND_LABEL_GAP;
     ctx.fillStyle = palette.mutedInk;
-    ctx.fillText(entry.label, labelX, y + SWATCH_H);
-    const measured = ctx.measureText(entry.label) as TextMetrics | undefined;
-    const labelWidth = (measured && measured.width) || entry.label.length * 6.5;
-    const nextX = labelX + labelWidth + LEGEND_ENTRY_GAP;
-    // Stop cleanly if the row would overflow the raster (rare — a very narrow view crop).
-    if (nextX > maxWidth) break;
-    x = nextX;
+    ctx.fillText(entry.label, x + SWATCH_W + LEGEND_LABEL_GAP, y + SWATCH_H);
+    x += entryWidth + LEGEND_ENTRY_GAP;
   }
 }
 

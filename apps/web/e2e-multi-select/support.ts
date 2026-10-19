@@ -360,6 +360,26 @@ export async function mapBars(page: Page): Promise<Map<string, { x: number; y: n
 }
 
 /**
+ * {@link mapBars} for bars that do NOT share a column: a coarse grid, for a plan whose activities
+ * start on different days and so cannot all be reached from one x. Coarser in y than the column
+ * probe (a bar is far taller than the step), because every extra click is a round trip.
+ */
+export async function mapBarsAcross(
+  page: Page,
+  xs: readonly number[],
+): Promise<Map<string, { x: number; y: number }>> {
+  const found = new Map<string, { x: number; y: number }>();
+  for (const x of xs) {
+    for (let y = 16; y <= PROBE_MAX_Y; y += 12) {
+      await canvas(page).click({ position: { x, y } });
+      const hit = await selectedActivityId(page);
+      if (hit !== null && !found.has(hit)) found.set(hit, { x, y });
+    }
+  }
+  return found;
+}
+
+/**
  * Drag a bar from `from` to `to` in canvas coordinates, past the reposition pixel threshold.
  *
  * Three moves rather than one: the gesture machine arms `repositioning` on pointer-down and only

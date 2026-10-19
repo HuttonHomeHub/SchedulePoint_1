@@ -1,7 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { bulkMoveSnapshots, isLaneOnly, isNoOp, movedPlacement } from './bulk-move';
+import {
+  bulkMoveSnapshots,
+  clampLaneDelta,
+  isLaneOnly,
+  isNoOp,
+  movedPlacement,
+  PLACEMENTS_BATCH_MAX,
+} from './bulk-move';
 
 /**
  * The bulk row builder (`docs/specs/canvas-multi-select/` M4-T2), collapsed to one behaviour by
@@ -108,6 +118,47 @@ describe('movedPlacement', () => {
   });
 });
 
+describe('a plural move past the top lane (TECH_DEBT #526)', () => {
+  const trio = [
+    activity({ id: 'a', laneIndex: 0 }),
+    activity({ id: 'b', laneIndex: 1 }),
+    activity({ id: 'c', laneIndex: 2 }),
+  ];
+
+  it('holds the lane delta to what the topmost selected row can take', () => {
+    expect(clampLaneDelta(trio, { dayDelta: 3, laneDelta: -2 })).toEqual({
+      dayDelta: 3,
+      laneDelta: 0,
+    });
+    expect(clampLaneDelta(trio.slice(1), { dayDelta: 0, laneDelta: -5 }).laneDelta).toBe(-1);
+  });
+
+  it('leaves a delta the set can take, and every downward one, as it was', () => {
+    const delta = { dayDelta: 1, laneDelta: 0 };
+    expect(clampLaneDelta(trio, delta)).toBe(delta);
+    const down = { dayDelta: 0, laneDelta: 4 };
+    expect(clampLaneDelta(trio, down)).toBe(down);
+    expect(clampLaneDelta(trio.slice(1), { dayDelta: 0, laneDelta: -1 }).laneDelta).toBe(-1);
+  });
+
+  /**
+   * Verified red against the per-row clamp alone: lanes 0, 1, 2 dragged up two came back 0, 0, 0 —
+   * the browser journey in `e2e-multi-select` read the same three zeros from the API.
+   */
+  it('keeps the set\u2019s relative lanes in the snapshots built from the clamped delta', () => {
+    const { after } = bulkMoveSnapshots({
+      activities: trio,
+      delta: clampLaneDelta(trio, { dayDelta: 0, laneDelta: -2 }),
+    });
+    expect(after.map((p) => p.laneIndex)).toEqual([0, 1, 2]);
+    const partial = bulkMoveSnapshots({
+      activities: trio.slice(1),
+      delta: clampLaneDelta(trio.slice(1), { dayDelta: 0, laneDelta: -5 }),
+    });
+    expect(partial.after.map((p) => p.laneIndex)).toEqual([0, 1]);
+  });
+});
+
 describe('routing', () => {
   it('recognises a lane-only move', () => {
     expect(isLaneOnly({ dayDelta: 0, laneDelta: 2 })).toBe(true);
@@ -132,5 +183,18 @@ describe('bulkMoveSnapshots', () => {
     expect(after.map((p) => p.visualStart)).toEqual(['2026-01-06', '2026-01-06']);
     expect(versions.get('a')).toBe(1);
     expect(versions.get('b')).toBe(7);
+  });
+});
+
+describe('the batch cap', () => {
+  // The web restates the API's `@ArrayMaxSize` so it can refuse before writing. Two numbers that
+  // must agree and share no import drift silently, so the API source text is the oracle here.
+  it('equals the placements endpoint’s @ArrayMaxSize', () => {
+    const dto = readFileSync(
+      join(__dirname, '../../../../../api/src/modules/activities/dto/update-placements.dto.ts'),
+      'utf8',
+    );
+    const caps = [...dto.matchAll(/@ArrayMaxSize\((\d+)\)/g)].map((m) => Number(m[1]));
+    expect(caps).toEqual([PLACEMENTS_BATCH_MAX]);
   });
 });

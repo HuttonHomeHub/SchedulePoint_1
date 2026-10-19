@@ -161,8 +161,13 @@ describe('useCoalescedPluralNudge', () => {
     const { result } = renderHook(() => useCoalescedPluralNudge(deps));
     act(() => result.current(IDS, rows[0]!, 'lane', -1));
     await settle();
-    expect(deps.setConflict).toHaveBeenCalledWith(topLanePluralReason(2), false);
-    expect(topLanePluralReason(2)).toMatch(/already in the top lane, so none moved\.$/);
+    expect(deps.setConflict).toHaveBeenCalledWith(topLanePluralReason(2, 3), false);
+    expect(topLanePluralReason(2, 3)).toMatch(
+      /already in the top lane, so none moved: moving the rest/,
+    );
+    expect(topLanePluralReason(3, 3)).toBe(
+      'The selected activities are already in the top lane, so none moved.',
+    );
     expect(deps.moveMany).not.toHaveBeenCalled();
   });
 
@@ -230,7 +235,7 @@ describe('useCoalescedPluralNudge', () => {
     const { result } = renderHook(() => useCoalescedPluralNudge(deps));
     act(() => result.current(IDS, A, 'time', 1));
     await settle();
-    expect(deps.setConflict).toHaveBeenCalledWith('stale');
+    expect(deps.setConflict).toHaveBeenCalledWith('stale', true);
     expect(deps.announce).not.toHaveBeenCalled();
   });
 

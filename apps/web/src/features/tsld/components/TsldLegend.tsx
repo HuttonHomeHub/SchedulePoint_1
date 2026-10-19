@@ -199,9 +199,17 @@ const baselineGhostItem = (lateOverlay: boolean): LegendItem => ({
   swatch: { border: '1px dashed var(--muted-foreground)' },
 });
 
-/** Build the legend item list for the active lenses (or today's default when no lens is provided). */
-function legendItems(lens: LensLegendInfo | undefined): ReadonlyArray<LegendItem> {
-  if (!lens) return LEGEND;
+/** Build the legend item list for the active lenses (or today's default when no lens is provided).
+ * `withoutConstraint` drops the pin row for a surface that can never draw one (TECH_DEBT #521). */
+function legendItems(
+  lens: LensLegendInfo | undefined,
+  withoutConstraint: boolean,
+): ReadonlyArray<LegendItem> {
+  const all = lens ? lensItems(lens) : LEGEND;
+  return withoutConstraint ? all.filter((item) => !('pin' in item)) : all;
+}
+
+function lensItems(lens: LensLegendInfo): ReadonlyArray<LegendItem> {
   const items: LegendItem[] = [];
   if (lens.colourMode === 'criticality') {
     items.push(...CRITICALITY_SWATCHES);
@@ -227,11 +235,15 @@ function legendItems(lens: LensLegendInfo | undefined): ReadonlyArray<LegendItem
 export function TsldLegend({
   orientation = 'horizontal',
   lens,
+  withoutConstraint = false,
 }: {
   orientation?: 'horizontal' | 'vertical';
   lens?: LensLegendInfo;
+  /** The share view: constraints are outside a guest's scope (ADR-0051 §4), so no guest bar can
+   * wear the pin and the key must not promise one (TECH_DEBT #521). */
+  withoutConstraint?: boolean;
 } = {}): React.ReactElement {
-  const items = legendItems(lens);
+  const items = legendItems(lens, withoutConstraint);
   return (
     // `role="list"`/`role="listitem"` are explicit: Tailwind v4's Preflight sets `list-style: none`,
     // which is a documented cause of WebKit/VoiceOver dropping the implicit roles (ADR-0122, the same

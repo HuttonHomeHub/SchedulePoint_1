@@ -23,8 +23,12 @@ vi.mock('../guest-api', async (importOriginal) => ({
 // CAPTURES its `barDateSource` prop (ADR-0163 M2-T2), so a regression that stops passing it, or
 // passes the wrong value, is visible from a component test rather than only from a pixel journey.
 vi.mock('@/features/tsld', () => ({
-  TsldPanel: (props: { barDateSource?: string }) => (
-    <div data-testid="tsld-panel" data-bar-date-source={String(props.barDateSource)}>
+  TsldPanel: (props: { barDateSource?: string; showConstraintKey?: boolean }) => (
+    <div
+      data-testid="tsld-panel"
+      data-bar-date-source={String(props.barDateSource)}
+      data-show-constraint-key={String(props.showConstraintKey)}
+    >
       canvas
     </div>
   ),
@@ -148,6 +152,15 @@ describe('GuestPlanView', () => {
 
     const panel = await screen.findByTestId('tsld-panel');
     expect(panel.dataset.barDateSource).toBe('visual');
+  });
+
+  it('tells the panel it is the guest view, so the legend keys no constraint pin', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
+    vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    expect((await screen.findByTestId('tsld-panel')).dataset.showConstraintKey).toBe('false');
   });
 
   it('names the header dates "Plan dates" and lists the data date and project finish', async () => {

@@ -21,6 +21,7 @@ import {
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import { clampLaneDelta } from '../model/bulk-move';
 import { axisMarkers, clampMarkLeft } from '../render/axis-markers';
 import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
@@ -529,7 +530,8 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
  * The OTHER selected bars' destinations during a plural drag (`docs/TECH_DEBT.md` #108's preview
  * half), or null in every other state. Each peer's own drawn rect, shifted by the grabbed bar's
  * live day/lane delta in PIXELS — the same per-activity delta the release writes through
- * `bulkMoveSnapshots`, so the preview cannot disagree with the write about where a bar lands.
+ * `bulkMoveSnapshots`, lane part clamped as `moveMany` clamps it, so the preview cannot disagree
+ * with the write about where a bar lands.
  * Null unless the drag's subject is one of a PLURAL selection: a single-bar drag adds not one
  * call to the overlay, which is the parity/draw-budget contract. Exported for unit tests (pure).
  */
@@ -543,7 +545,17 @@ export function livePeerGhostRects(
   if (state.kind !== 'repositioning' || !selectedIds || selectedIds.length < 2) return null;
   if (!selectedIds.includes(state.activityId)) return null;
   const dx = (state.currentStartDay - state.originStartDay) * view.pxPerDay;
-  const dy = (state.currentLaneIndex - state.laneIndex) * LANE_HEIGHT;
+  // The lane part goes through the same set-level clamp the release writes, so a peer is never
+  // previewed above lane 0 while the drop would hold the set at the top.
+  const selected = selectedIds.flatMap((id) => {
+    const found = lookup(id);
+    return found ? [found] : [];
+  });
+  const { laneDelta } = clampLaneDelta(selected, {
+    dayDelta: 0,
+    laneDelta: state.currentLaneIndex - state.laneIndex,
+  });
+  const dy = laneDelta * LANE_HEIGHT;
   const rects: Rect[] = [];
   for (const id of selectedIds) {
     if (id === state.activityId) continue;

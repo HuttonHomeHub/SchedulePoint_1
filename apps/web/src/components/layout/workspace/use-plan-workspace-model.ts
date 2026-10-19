@@ -124,7 +124,14 @@ import {
   type TsldEditOutcome,
 } from '@/features/tsld';
 import { dayOf, laneSnapshotOf, resolveLaneDrop } from '@/features/tsld/model/auto-resolve';
-import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bulk-move';
+import {
+  bulkMoveSnapshots,
+  clampLaneDelta,
+  isLaneOnly,
+  isNoOp,
+  PLACEMENTS_BATCH_MAX,
+  tooManyToMoveReason,
+} from '@/features/tsld/model/bulk-move';
 import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
   activityDefinitionInput,
@@ -956,10 +963,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
        */
       moveMany: async (
         rows: readonly ActivitySummary[],
-        delta: { dayDelta: number; laneDelta: number },
+        requested: { dayDelta: number; laneDelta: number },
         options?: { coalesce?: boolean; pressedAt?: number },
-      ): Promise<{ applied: boolean; conflict: string | null }> => {
+      ): Promise<{ applied: boolean; conflict: string | null; refreshable?: boolean }> => {
+        // The ONE authoritative set-level lane clamp on the write path (the drag and the keyboard
+        // both arrive here): a move that clamps down to nothing sends nothing, and the routing
+        // below reads the delta that is written. `bulkMoveSnapshots` takes it pre-clamped.
+        const delta = clampLaneDelta(rows, requested);
         if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
+        // Refused before anything is written or held, here rather than in either gesture so the
+        // drag and the keyboard share it (TECH_DEBT #528).
+        if (rows.length > PLACEMENTS_BATCH_MAX)
+          // A rule, not stale data: Refresh cannot change the size of the selection.
+          return { applied: false, conflict: tooManyToMoveReason(rows.length), refreshable: false };
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
           delta,

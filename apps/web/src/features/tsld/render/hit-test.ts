@@ -110,11 +110,16 @@ export function startFrozenPluralReason(count: number): string {
   } and cannot be moved sideways.`;
 }
 
-/** Why `Alt+↑` on a plural selection writes nothing: the set would lose its shape at lane 0. */
-export function topLanePluralReason(count: number): string {
+/**
+ * Why an upward move of a plural selection writes nothing: the set would lose its shape at lane 0.
+ * `count` of the `total` selected activities cannot go up; when that is all of them there is
+ * nothing to say about shape, and when it is only some the sentence says why the rest stayed too.
+ */
+export function topLanePluralReason(count: number, total: number): string {
+  if (count >= total) return 'The selected activities are already in the top lane, so none moved.';
   return `${String(count)} of the selected activities ${
     count === 1 ? 'is' : 'are'
-  } already in the top lane, so none moved.`;
+  } already in the top lane, so none moved: moving the rest would change the selection\u2019s shape.`;
 }
 
 /**
