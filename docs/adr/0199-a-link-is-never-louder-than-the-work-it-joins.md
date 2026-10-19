@@ -51,4 +51,5 @@ separation do not move. Drivingness stays weight.
   keep their floors. The next lightness step for the bar is bounded by those, so a future re-tune has a stated ceiling.
 - `docs/DESIGN_SYSTEM.md` ("The link on the diagram") states the rule. The Gantt bar, the Colour-by lens, the WBS band
   summary, the legend, the minimap and paper read the same two tokens and follow.
-- Found on the way and filed, not fixed: `--plot-warning` is outside the sRGB gamut (`docs/TECH_DEBT.md` #523).
+- Found on the way and filed, not fixed: `--plot-warning` is outside the sRGB gamut (`docs/TECH_DEBT.md` #523). Fixed
+  2026-10-19 by the owner's decision: chroma 0.13 to 0.12 at the same lightness and hue, so the ladder keeps its floors.

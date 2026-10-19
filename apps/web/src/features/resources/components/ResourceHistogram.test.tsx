@@ -123,8 +123,8 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
       },
     });
     renderHistogram();
-    const notice = await screen.findByRole('status');
-    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+    // Named by its text: the loading outline's own status is the first one on screen.
+    const notice = await screen.findByText(/Showing 2 of 247 resources/);
     // …and it says what that costs the numbers, not merely that something is missing.
     expect(notice.textContent).toContain('rather than of the whole plan');
   });
@@ -145,6 +145,8 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
       .mockReturnValue(new Promise(() => {}));
     renderHistogram();
     expect(screen.getByText('Loading histogram…')).toBeInTheDocument();
+    // The settled shape (ADR-0202), not a bare sentence: one spoken label, one outline.
+    expect(document.querySelector('[data-loading-shape] [data-skeleton]')).not.toBeNull();
   });
 
   it('shows a retryable error state and recovers on Try again', async () => {

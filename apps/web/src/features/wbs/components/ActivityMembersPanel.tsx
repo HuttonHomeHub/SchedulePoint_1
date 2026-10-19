@@ -211,7 +211,7 @@ export function ActivityMembersPanel({
   if (error) {
     return (
       <p role="alert" className="text-destructive-text py-8 text-sm">
-        The plan’s activities could not be loaded, so membership cannot be edited. Try again.
+        The plan’s activities could not be loaded, so membership cannot be edited right now.
       </p>
     );
   }

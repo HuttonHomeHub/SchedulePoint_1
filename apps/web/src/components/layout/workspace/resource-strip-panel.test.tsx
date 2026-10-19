@@ -243,6 +243,8 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
       .mockReturnValue(new Promise(() => {}));
     renderPanel();
     expect(screen.getByText('Loading histogram…')).toBeInTheDocument();
+    // The settled shape (ADR-0202), not a bare sentence: one spoken label, one outline.
+    expect(document.querySelector('[data-loading-shape] [data-skeleton]')).not.toBeNull();
   });
 
   it('shows the shipped retryable error copy on failure', async () => {
@@ -300,8 +302,8 @@ describe('the strip names its colours and admits what it is not showing', () => 
     renderPanel();
     // The dialog said "Showing N of M" and the strip drew the same incomplete set in silence, so
     // two views of one plan disagreed about whether the reader was seeing everything.
-    const notice = await screen.findByRole('status');
-    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+    // Named by its text: the loading outline's own status is the first one on screen.
+    expect(await screen.findByText(/Showing 2 of 247 resources/)).toBeInTheDocument();
   });
 
   it('says nothing when the histogram is complete', async () => {
@@ -384,7 +386,7 @@ describe('the snapshot states what the strip is, for the exported caption (ADR-0
       .mockReset()
       .mockResolvedValue({ ...HISTOGRAM, meta: { ...HISTOGRAM.meta, hasMore: true, total: 247 } });
     const { onSnapshot } = renderPanel();
-    await screen.findByRole('status');
+    await screen.findByText(/Showing 2 of 247 resources/);
     expect(lastCaption(onSnapshot)).toEqual(
       expect.objectContaining({ status: 'ready', shown: 2, total: 247 }),
     );

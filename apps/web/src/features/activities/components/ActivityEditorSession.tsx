@@ -913,6 +913,11 @@ export function ActivityEditorSession({
                   planId={planId}
                   summary={activity}
                   planActivities={planActivities}
+                  loading={planActivitiesLoading}
+                  // Only when there is nothing to edit: a failed background refetch keeps the query's
+                  // `isError` set while the rows it already holds stay usable, and an editor open on
+                  // an activity always has at least that activity in a loaded list.
+                  error={planActivitiesError && planActivities.length === 0}
                   gate={gating.members}
                   {...(onReparented ? { onReparented } : {})}
                 />

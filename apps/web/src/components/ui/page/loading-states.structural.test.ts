@@ -92,7 +92,8 @@ const DECLARED: Record<string, Declared> = {
   'features/schedule-health/components/ScheduleHealthPanel.tsx': {
     kind: 'action',
     sites: 1,
-    reason: 'a computation the reader is waiting for ("Checking the plan…")',
+    reason:
+      'a server computation the reader is waiting for ("Checking the plan…"); a skeleton of ADR-0116\'s fixed check rows would look settled when nothing is (owner, 2026-10-19, #533)',
   },
   'features/interchange/components/ImportScheduleDialog.tsx': {
     kind: 'action',

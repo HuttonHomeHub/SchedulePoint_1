@@ -59,6 +59,23 @@ was not run: every pull request in the window was reviewed at merge.
 
 ---
 
+## 2026-10-19 — Four owner answers on the 2026-10-18 follow-ups (tech debt #522, #523, #533, #534)
+
+**#522 — a real five working days.** The default duration is five working days of the activity's own
+calendar, not five calendar days. (Handled by its own task; recorded here with the other three.)
+
+**#523 — fix the amber now.** `--plot-warning` sits outside sRGB, so the contrast gate computed a
+colour the screen clamps. It is re-solved in gamut at the same contrast floors rather than waiting
+for the next change to the criticality ladder.
+
+**#533 — keep the schedule health spinner.** The panel waits on a server computation, and a skeleton
+of ADR-0116's fixed check rows would look settled when nothing is. It stays a `Spinner`, and the
+reason is written where `loading-states.structural.test.ts` declares it.
+
+**#534 — wire the props.** `ActivityEditorSession` passes `planActivitiesLoading` and
+`planActivitiesError` to the Members tab, so its skeleton and error branches are reachable and tested
+through the editor, instead of deleting them.
+
 ## 2026-10-19 — Three product-owner answers after the Dependabot batch (tech debt #64)
 
 **#64 — a Viewer keeps the one-line summary on an assignment row.** This answers the one question the

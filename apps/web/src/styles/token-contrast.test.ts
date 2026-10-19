@@ -5,6 +5,7 @@ import {
   contrastRatio,
   deltaE76,
   fmtRatio,
+  oklchInGamut,
   parseColour,
   relativeLuminance,
   type Srgb,
@@ -272,6 +273,24 @@ describe('the diagram tells its three criticality states apart', () => {
       value,
       `${a} vs ${b} is ${fmtRatio(value)}, needs 1.5:1 (ceiling is 1.70:1)`,
     ).toBeGreaterThanOrEqual(1.5);
+  });
+
+  /**
+   * **A rung written outside sRGB is a colour nobody authored** (`docs/TECH_DEBT.md` #523). A
+   * browser clamps the out-of-range channel, so the ratio computed from the clamped value above
+   * describes a colour the screen only approximates. `--warning` was `oklch(0.528 0.13 62)`, whose
+   * linear blue is -0.0069, for the project's life; `--destructive` carries the same warning in
+   * `globals.css`, and this holds both.
+   */
+  it.each(['--warning', '--destructive'])('%s is written inside the sRGB gamut', (name) => {
+    const written = tokens.get(name);
+    const match = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/.exec(written ?? '');
+    expect(
+      match,
+      `${name} resolves to "${String(written)}", which is not a plain oklch()`,
+    ).not.toBeNull();
+    const [L, C, H] = match!.slice(1).map(Number) as [number, number, number];
+    expect(oklchInGamut(L, C, H), `${name} ${String(written)} is outside sRGB`).toBe(true);
   });
 
   it('keeps each of the three perceivable against the ground it is painted on', () => {

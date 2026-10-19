@@ -10,6 +10,7 @@ import { StackByControl } from './StackByControl';
 
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { LoadingShape, Skeleton } from '@/components/ui/page';
 
 /**
  * The plan's **resource loading histogram** read view (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a
@@ -123,7 +124,11 @@ export function ResourceHistogram({
       </div>
 
       {histogram.isPending ? (
-        <p className="text-muted-foreground text-sm">Loading histogram…</p>
+        // The chart's plot is a fixed `PLOT_HEIGHT` (176 px = h-44), so the outline holds that height
+        // and the table that follows it arrives below, not through it.
+        <LoadingShape label="Loading histogram…">
+          <Skeleton className="h-44 w-full" />
+        </LoadingShape>
       ) : histogram.isError ? (
         <div className="flex flex-col items-start gap-3">
           <p role="alert" className="text-destructive-text text-sm">
