@@ -101,6 +101,19 @@ describe('deriveActivityEditorGating — definition scopes', () => {
   );
 
   /**
+   * `docs/TECH_DEBT.md` #64: a surface that shows a summary to a Viewer and shaded editors to a
+   * Planner without the pen can only tell them apart by this flag — both are `writable: false`
+   * with a sentence.
+   */
+  it('marks a role refusal, and only a role refusal, as roleDenied', () => {
+    expect(gate('viewer', 'held').resources.roleDenied).toBe(true);
+    expect(gate('contributor', 'notHeld').resources.roleDenied).toBe(true);
+    expect(gate('planner', 'notHeld').resources.writable).toBe(false);
+    expect(gate('planner', 'notHeld').resources.roleDenied).toBeUndefined();
+    expect(gate('planner', 'held').resources.roleDenied).toBeUndefined();
+  });
+
+  /**
    * Notes are the third rule, not a fourth: annotating a plan is not editing its schedule
    * (ADR-0046), so the tab must stay open to a Contributor while a Planner holds the pen — the same
    * capability a merged Save would have destroyed for progress.
@@ -114,6 +127,7 @@ describe('deriveActivityEditorGating — definition scopes', () => {
       writable: false,
       reason: 'Your role cannot add notes.',
       readable: true,
+      roleDenied: true,
     });
   });
 });
@@ -140,6 +154,7 @@ describe('deriveActivityEditorGating — progress is never pen-gated', () => {
     const g = gate('viewer', 'held');
     expect(g.progress.writable).toBe(false);
     expect(g.progress.reason).toMatch(/role/i);
+    expect(g.progress.roleDenied).toBe(true);
   });
 });
 

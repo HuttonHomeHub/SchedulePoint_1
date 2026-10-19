@@ -68,6 +68,7 @@ export function ActivityResourcesPanel({
   activityHoursPerDay,
   isMilestone = false,
   canWrite,
+  roleCanWrite,
   writeReason,
   canReadCost = true,
   enabled = true,
@@ -98,6 +99,15 @@ export function ActivityResourcesPanel({
    * since a curve has no span to distribute units over (TECH_DEBT #44b). Defaults false. */
   isMilestone?: boolean;
   canWrite: boolean;
+  /**
+   * Whether this member's **role** could ever write here, as distinct from {@link canWrite}, which
+   * is the role AND the pen right now. `false` is a Viewer: each row keeps its one-line summary,
+   * since nothing will ever make it editable. Anything else with a {@link writeReason} is a member
+   * whose pen was taken: the rows keep their editors mounted and shaded with that reason, because
+   * unmounting them under a reader mid-edit drops focus to `<body>` (WCAG 2.4.3, TECH_DEBT #64).
+   * Absent, a host with no reason cannot say which it is, and the summary is the safe answer.
+   */
+  roleCanWrite?: boolean;
   /**
    * Why this member cannot assign resources, when {@link canWrite} is false. Supplying it **shows**
    * the Assign a resource section shaded with the reason (the house shade-with-a-reason rule);
@@ -181,6 +191,13 @@ export function ActivityResourcesPanel({
   // ONE gate object for the assign form — the fields and the Save read the same one, so they
   // cannot disagree about whether this member may assign (`docs/TECH_DEBT.md` #66).
   const assignGate = { writable: canWrite, reason: writeReason ?? null };
+  // Rows keep their editors for anyone whose refusal can lift — a writer, or a role that may write
+  // but has no pen right now. A reason is required for the second: shaded fields with no sentence
+  // are the dead end the house rule forbids.
+  const rowsEditable = canWrite || (writeReason !== undefined && roleCanWrite === true);
+  // The rows' gate: same object as the assign form's while they are editable, and reasonless
+  // otherwise so the provider prints nothing above a Viewer's summaries.
+  const rowGate = { writable: canWrite, reason: rowsEditable ? assignGate.reason : null };
   const search = useResourceSearch(
     orgSlug,
     { q: debouncedResourceQuery },
@@ -320,31 +337,34 @@ export function ActivityResourcesPanel({
           ) : (assignments.data ?? []).length === 0 ? (
             <NoticeStrip emphasis="dashed" message="No resources assigned yet." />
           ) : (
-            <ul className="flex flex-col gap-2">
-              {(assignments.data ?? []).map((assignment) => (
-                <AssignmentRow
-                  key={assignment.id}
-                  orgSlug={orgSlug}
-                  planId={planId}
-                  activityId={activityId ?? ''}
-                  assignment={assignment}
-                  resource={resourceById.get(assignment.resourceId)}
-                  durationType={activityDurationType}
-                  showCurve={showCurve}
-                  showLag={showLag}
-                  {...(activityHoursPerDay === undefined
-                    ? {}
-                    : { hoursPerDay: activityHoursPerDay })}
-                  canWrite={canWrite}
-                  canReadCost={canReadCost}
-                  onRemoved={() => (onRowRemoved ? onRowRemoved() : listRef.current?.focus())}
-                  {...(onAssignmentEdited ? { onEdited: onAssignmentEdited } : {})}
-                  {...(currentDriver !== undefined && currentDriver.id !== assignment.id
-                    ? { otherDriver: currentDriver }
-                    : {})}
-                />
-              ))}
-            </ul>
+            // One gate, one reason sentence, for every row beneath it (ADR-0083 D5, TECH_DEBT #64).
+            <FieldGateProvider gate={rowGate}>
+              <ul className="flex flex-col gap-2">
+                {(assignments.data ?? []).map((assignment) => (
+                  <AssignmentRow
+                    key={assignment.id}
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    activityId={activityId ?? ''}
+                    assignment={assignment}
+                    resource={resourceById.get(assignment.resourceId)}
+                    durationType={activityDurationType}
+                    showCurve={showCurve}
+                    showLag={showLag}
+                    {...(activityHoursPerDay === undefined
+                      ? {}
+                      : { hoursPerDay: activityHoursPerDay })}
+                    rowsEditable={rowsEditable}
+                    canReadCost={canReadCost}
+                    onRemoved={() => (onRowRemoved ? onRowRemoved() : listRef.current?.focus())}
+                    {...(onAssignmentEdited ? { onEdited: onAssignmentEdited } : {})}
+                    {...(currentDriver !== undefined && currentDriver.id !== assignment.id
+                      ? { otherDriver: currentDriver }
+                      : {})}
+                  />
+                ))}
+              </ul>
+            </FieldGateProvider>
           )}
         </div>
       </FormSection>

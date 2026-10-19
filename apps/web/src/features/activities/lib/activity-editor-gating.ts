@@ -62,6 +62,15 @@ export interface ScopeGate {
    * cannot read cost. Hidden rather than shaded, because shading implies a value is there.
    */
   readable: boolean;
+  /**
+   * The refusal is the caller's **role**, which no pen hand-off will change — present (and `true`)
+   * only then, so a gate built any other way is unchanged. `reason` alone cannot say: both a Viewer
+   * and a Planner whose pen was taken are `writable: false` with a sentence. A surface that renders
+   * a read-only summary for the first and shaded editors for the second needs this (ADR-0083 D5,
+   * `docs/TECH_DEBT.md` #64): the summary is right for a state that never flips, and wrong for one
+   * that can flip under a reader mid-edit.
+   */
+  roleDenied?: true;
 }
 
 export type ActivityEditorGating = Record<ActivityWritePath, ScopeGate>;
@@ -93,7 +102,7 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
 
   // The definition rule, shared by all four definition scopes and (since M0) by steps.
   const penGated = (): ScopeGate => {
-    if (!canWrite) return { writable: false, reason: NO_ROLE, readable: true };
+    if (!canWrite) return { writable: false, reason: NO_ROLE, readable: true, roleDenied: true };
     if (penManaged && !holdsPen) return { writable: false, reason: noPen(holder), readable: true };
     return { writable: true, reason: null, readable: true };
   };
@@ -110,7 +119,7 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // Never pen-gated (ADR-0028 Q-C) — this is the capability a merged Save would have destroyed.
     progress: canProgress
       ? { writable: true, reason: null, readable: true }
-      : { writable: false, reason: NO_PROGRESS_ROLE, readable: true },
+      : { writable: false, reason: NO_PROGRESS_ROLE, readable: true, roleDenied: true },
     steps: definition,
     // Logic and Resources join the definition side unchanged — **the same object**, not a second
     // expression of the same rule. Adding a link or an assignment has always needed the role and
@@ -128,6 +137,6 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // reuses that gate object rather than restating it.
     notes: canProgress
       ? { writable: true, reason: null, readable: true }
-      : { writable: false, reason: NO_NOTES_ROLE, readable: true },
+      : { writable: false, reason: NO_NOTES_ROLE, readable: true, roleDenied: true },
   };
 }

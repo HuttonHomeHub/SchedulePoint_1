@@ -1458,6 +1458,22 @@ give, hidden when there is not — a Viewer who can never add a link should not 
 Hiding it from someone who normally _may_ write, such as a Planner who has not taken the pen, is the
 lit-but-inert dead end inverted and reads as breakage rather than as a rule (ADR-0062).
 
+**Editing a row in a list: in place, or in a dialog, and the edit decides.** Both idioms are kept,
+and this is the rule for choosing (`docs/TECH_DEBT.md` #69, owner's decision 2026-10-19).
+
+- **In place** when the row's fields fit on the row and each saves on its own. The assignment row
+  edits budgeted units, rate, join delay, curve, driving and cost (where enabled: rate and join
+  delay are flag-gated, cost by `canReadCost`) beside the resource's name, each with its own
+  **Save** (`apps/web/src/features/resources/components/AssignmentRow.tsx`).
+- **A dialog** when the edit needs a picker or more than one step. A dependency's type, lag, lag
+  calendar and the activity it joins are chosen together, so the Logic tab's row opens an edit
+  dialog (`apps/web/src/features/dependencies/components/DependencyTable.tsx`, which opens
+  `EditDependencyDialog.tsx`).
+
+An in-place row stays mounted when the pen goes and its fields shade with the reason (ADR-0083 D5).
+A row whose edit lives in a dialog should shade the control that opens it; the Logic tab does not
+yet, and hides its Edit and Remove from a Planner without the pen instead (`docs/TECH_DEBT.md` #535).
+
 **Labels never say `(optional)`.** It was on eleven of twenty-two labels in one dialog, which is
 enough that it stopped meaning anything. Where optionality matters, the section description or the
 field hint says so in a sentence.

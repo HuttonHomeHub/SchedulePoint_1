@@ -941,6 +941,10 @@ export function ActivityEditorSession({
                   {...(joinLagFactor === undefined ? {} : { activityHoursPerDay: joinLagFactor })}
                   isMilestone={isMilestoneType(activity.type)}
                   canWrite={gating.resources.writable}
+                  // A Viewer keeps the one-line summary on each row; a Planner whose pen was taken
+                  // keeps the editors, shaded (`docs/TECH_DEBT.md` #64). Only `gating` can tell the
+                  // two apart — `writable` and `reason` are the same shape for both.
+                  roleCanWrite={!gating.resources.roleDenied}
                   // Shaded with the reason, never hidden — the same seam the Logic tab uses one
                   // block above. Dropping it made a Planner without the pen meet a Resources tab
                   // whose assign form had simply vanished, with a padlock on the rail as the only

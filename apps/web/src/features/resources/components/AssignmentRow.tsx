@@ -5,7 +5,7 @@ import {
   type ResourceCurveType,
   type ResourceSummary,
 } from '@repo/types';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import {
   useDeleteAssignment,
@@ -37,10 +37,10 @@ import {
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
-import { CheckboxField } from '@/components/ui/form';
+import { FieldGateLock, resolveFieldGate, useFieldGate } from '@/components/ui/field-gate';
+import { CheckboxField, SelectField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { DURATION_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
 import { minorToMajorInput } from '@/lib/format-money';
 
@@ -93,6 +93,41 @@ function DerivedDurationNote({
 }
 
 /**
+ * What the enclosing `FieldGateProvider` says about this row's fields. The row's controls are
+ * hand-assembled — an input and its Save share one flex line, which `TextField`'s stacked layout
+ * cannot express — so they apply ADR-0083's treatment themselves, from the same context the
+ * primitives read: `readonly` rather than `disabled`, the lock beside the label, the group's one
+ * reason sentence in `aria-describedby`.
+ */
+function useRowGate(): { shut: boolean; reasonId: string | undefined } {
+  const { shut, groupReasonId } = resolveFieldGate(undefined, useFieldGate());
+  return { shut, reasonId: groupReasonId };
+}
+
+/** Joins `aria-describedby` ids, dropping the absent ones. */
+function describedBy(...ids: Array<string | undefined>): string | undefined {
+  return ids.filter(Boolean).join(' ') || undefined;
+}
+
+/** A row field's label, with the lock when the row is shut (ADR-0083 D6). */
+function RowLabel({
+  htmlFor,
+  shut,
+  children,
+}: {
+  htmlFor: string;
+  shut: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Label htmlFor={htmlFor} className={shut ? 'flex items-center gap-1.5' : undefined}>
+      {children}
+      {shut ? <FieldGateLock /> : null}
+    </Label>
+  );
+}
+
+/**
  * Seed a MAJOR-unit money text field from a stored minor-units value: blank when unset, else the major
  * amount as a string. Reuses {@link minorToMajorInput} (the shared minor→major conversion) so this
  * inline editor and the RHF dialogs divide by the same minor-units factor.
@@ -129,6 +164,7 @@ function AssignmentCostFields({
 }): React.ReactElement {
   const update = useUpdateAssignment(orgSlug, planId);
   const announce = useAnnounce();
+  const { shut, reasonId } = useRowGate();
   const budgetedId = useId();
   const budgetedErrorId = useId();
   const actualCostId = useId();
@@ -157,7 +193,8 @@ function AssignmentCostFields({
     actualUnits !== seededActualUnits;
 
   const save = (): void => {
-    if (hasError || !changed) return;
+    // The click guard `aria-disabled` needs: it leaves the button clickable.
+    if (shut || hasError || !changed) return;
     const before = assignment;
     // The promise, not a per-call `onSuccess`: react-query keeps those only for an observer's latest call.
     void update
@@ -187,7 +224,9 @@ function AssignmentCostFields({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={budgetedId}>Budgeted cost</Label>
+          <RowLabel htmlFor={budgetedId} shut={shut}>
+            Budgeted cost
+          </RowLabel>
           <Input
             id={budgetedId}
             type="number"
@@ -197,7 +236,8 @@ function AssignmentCostFields({
             value={budgetedCost}
             onChange={(event) => setBudgetedCost(event.target.value)}
             aria-invalid={budgetedError ? true : undefined}
-            aria-describedby={budgetedError ? budgetedErrorId : undefined}
+            aria-describedby={describedBy(budgetedError ? budgetedErrorId : undefined, reasonId)}
+            readOnly={shut || undefined}
             className="w-32"
           />
           {budgetedError ? (
@@ -207,7 +247,9 @@ function AssignmentCostFields({
           ) : null}
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={actualCostId}>Actual cost</Label>
+          <RowLabel htmlFor={actualCostId} shut={shut}>
+            Actual cost
+          </RowLabel>
           <Input
             id={actualCostId}
             type="number"
@@ -217,7 +259,11 @@ function AssignmentCostFields({
             value={actualCost}
             onChange={(event) => setActualCost(event.target.value)}
             aria-invalid={actualCostError ? true : undefined}
-            aria-describedby={actualCostError ? actualCostErrorId : undefined}
+            aria-describedby={describedBy(
+              actualCostError ? actualCostErrorId : undefined,
+              reasonId,
+            )}
+            readOnly={shut || undefined}
             className="w-32"
           />
           {actualCostError ? (
@@ -227,7 +273,9 @@ function AssignmentCostFields({
           ) : null}
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={actualUnitsId}>Actual units</Label>
+          <RowLabel htmlFor={actualUnitsId} shut={shut}>
+            Actual units
+          </RowLabel>
           <Input
             id={actualUnitsId}
             type="number"
@@ -236,7 +284,11 @@ function AssignmentCostFields({
             value={actualUnits}
             onChange={(event) => setActualUnits(event.target.value)}
             aria-invalid={actualUnitsError ? true : undefined}
-            aria-describedby={actualUnitsError ? actualUnitsErrorId : undefined}
+            aria-describedby={describedBy(
+              actualUnitsError ? actualUnitsErrorId : undefined,
+              reasonId,
+            )}
+            readOnly={shut || undefined}
             className="w-28"
           />
           {actualUnitsError ? (
@@ -251,6 +303,8 @@ function AssignmentCostFields({
           variant="outline"
           aria-label={`Save cost for ${name}`}
           disabled={!changed || hasError || update.isPending}
+          aria-disabled={shut || undefined}
+          aria-describedby={reasonId}
           aria-busy={update.isPending}
           onClick={save}
         >
@@ -278,7 +332,7 @@ export function AssignmentRow({
   showCurve,
   showLag,
   hoursPerDay,
-  canWrite,
+  rowsEditable,
   canReadCost = true,
   onRemoved,
   onEdited,
@@ -298,7 +352,14 @@ export function AssignmentRow({
   showLag: boolean;
   /** Working hours per day on the activity's SAVED calendar — see {@link ActivityResourcesPanel}. */
   hoursPerDay?: number;
-  canWrite: boolean;
+  /**
+   * Show the editors. False renders the one-line summary instead, and is for a role that can never
+   * edit (a Viewer). It is **not** "the pen is gone": that case keeps the editors mounted and shuts
+   * them through the enclosing `FieldGateProvider`, because unmounting a focused field drops focus
+   * to `<body>` (WCAG 2.4.3) and discards what was typed (ADR-0083 D5, TECH_DEBT #64). Whether the
+   * editors are *writable* is that provider's answer, not a prop.
+   */
+  rowsEditable: boolean;
   /** May this member see cost figures (see {@link ActivityResourcesPanel}). Defaults true. */
   canReadCost?: boolean;
   /** Called after a successful unassign so the parent can restore focus (the row unmounts). */
@@ -315,6 +376,7 @@ export function AssignmentRow({
   const update = useUpdateAssignment(orgSlug, planId);
   const remove = useDeleteAssignment(orgSlug, planId);
   const announce = useAnnounce();
+  const { shut, reasonId } = useRowGate();
   const unitsId = useId();
   const unitsErrorId = useId();
   const unitsNoteId = useId();
@@ -325,6 +387,16 @@ export function AssignmentRow({
   const lagId = useId();
   const lagErrorId = useId();
   const lagHelpId = useId();
+  // The loading-curve select is the one control here that a shut gate natively disables (ADR-0083
+  // D1's named exception), and a disabled control drops focus to `<body>` — the exact failure the
+  // read-only inputs beside it avoid. So when the gate shuts under a focused select, focus is handed
+  // to the list's reason sentence (ADR-0083 D8: the primitive provides the target, the host moves).
+  const curveFocused = useRef(false);
+  useEffect(() => {
+    if (!shut || !curveFocused.current || reasonId === undefined) return;
+    curveFocused.current = false;
+    document.getElementById(reasonId)?.focus();
+  }, [shut, reasonId]);
   // Seeded from the row's persisted value. The parent keys this component by the
   // assignment id (not its version), so a save/driving-toggle refetch keeps the row
   // mounted — focus is preserved — while the persisted-value diff below drives Save.
@@ -413,6 +485,8 @@ export function AssignmentRow({
   };
 
   const saveUnits = (): void => {
+    // The click guard the `aria-disabled` shading needs — see `saveLag`.
+    if (shut) return;
     if ('error' in unitsValidation) {
       announce(`Budgeted units for “${name}” not saved: ${unitsValidation.error}`);
       return;
@@ -433,6 +507,7 @@ export function AssignmentRow({
   };
 
   const saveRate = (): void => {
+    if (shut) return;
     if ('error' in rateValidation) {
       announce(`Rate for “${name}” not saved: ${rateValidation.error}`);
       return;
@@ -495,7 +570,7 @@ export function AssignmentRow({
   const lagError = lagChanged && !lagParsed.ok ? lagParsed.message : undefined;
   // Shaded rather than natively disabled — see the button. Nothing to save, something wrong with
   // what was typed, or a save already in flight.
-  const lagUnavailable = !lagChanged || lagError !== undefined || update.isPending;
+  const lagUnavailable = !lagChanged || lagError !== undefined || update.isPending || shut;
 
   const saveLag = (): void => {
     // The click guard the `aria-disabled` shading needs: an `aria-disabled` control is still
@@ -524,6 +599,7 @@ export function AssignmentRow({
   };
 
   const unassign = (): void => {
+    if (shut) return;
     const removed = assignment;
     // The promise, not a per-call `onSuccess`: the list refetches before that callback would run, which
     // unmounts this row and the observer with it, and the undo record would be dropped.
@@ -556,11 +632,13 @@ export function AssignmentRow({
           {remove.error.message}
         </p>
       ) : null}
-      {canWrite ? (
+      {rowsEditable ? (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={unitsId}>Budgeted units</Label>
+              <RowLabel htmlFor={unitsId} shut={shut}>
+                Budgeted units
+              </RowLabel>
               <div className="flex items-center gap-2">
                 <Input
                   id={unitsId}
@@ -570,7 +648,8 @@ export function AssignmentRow({
                   value={units}
                   onChange={(event) => setUnits(event.target.value)}
                   aria-invalid={unitsInvalid ? true : undefined}
-                  aria-describedby={unitsDescribedBy}
+                  aria-describedby={describedBy(unitsDescribedBy, reasonId)}
+                  readOnly={shut || undefined}
                   className="w-28"
                 />
                 <Button
@@ -580,6 +659,8 @@ export function AssignmentRow({
                   // Distinct accessible name — a row can show two "Save" buttons (units + rate).
                   aria-label={`Save budgeted units for ${name}`}
                   disabled={!unitsChanged || unitsInvalid || update.isPending}
+                  aria-disabled={shut || undefined}
+                  aria-describedby={reasonId}
                   aria-busy={update.isPending}
                   onClick={saveUnits}
                 >
@@ -603,7 +684,9 @@ export function AssignmentRow({
                 only behind the flag. */}
             {triadOn ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={rateId}>Units / time (rate)</Label>
+                <RowLabel htmlFor={rateId} shut={shut}>
+                  Units / time (rate)
+                </RowLabel>
                 <div className="flex items-center gap-2">
                   <Input
                     id={rateId}
@@ -613,7 +696,8 @@ export function AssignmentRow({
                     value={rate}
                     onChange={(event) => setRate(event.target.value)}
                     aria-invalid={rateInvalid ? true : undefined}
-                    aria-describedby={rateDescribedBy}
+                    aria-describedby={describedBy(rateDescribedBy, reasonId)}
+                    readOnly={shut || undefined}
                     className="w-28"
                   />
                   <Button
@@ -622,6 +706,8 @@ export function AssignmentRow({
                     variant="outline"
                     aria-label={`Save rate for ${name}`}
                     disabled={!rateChanged || rateInvalid || update.isPending}
+                    aria-disabled={shut || undefined}
+                    aria-describedby={reasonId}
                     aria-busy={update.isPending}
                     onClick={saveRate}
                   >
@@ -649,11 +735,22 @@ export function AssignmentRow({
               // (ADR-0083 D1/D2). A checkbox's only operation is changing its value, so it takes
               // `aria-disabled` plus a guard and stays in the tab order — which is the whole point
               // here, since the material sentence is the reason a planner is looking at this row.
-              gate={{
-                writable: !isMaterial && !update.isPending,
-                reason: isMaterial ? MATERIAL_DRIVING_HINT : null,
-              }}
+              //
+              // Shut by the row's gate (the pen) and not material: no gate of its own, so the field
+              // inherits the group's reason — an own gate would win and leave that sentence
+              // unlinked. A material resource keeps its own, the nearer and more specific reason.
+              gate={
+                shut && !isMaterial
+                  ? undefined
+                  : {
+                      writable: !shut && !isMaterial && !update.isPending,
+                      reason: isMaterial ? MATERIAL_DRIVING_HINT : null,
+                    }
+              }
               hint={isMaterial ? undefined : DRIVING_HINT}
+              // A material resource's own gate wins the reason (above), which would leave the group's
+              // pen sentence unlinked while the row is shut — so name both.
+              aria-describedby={isMaterial && shut ? reasonId : undefined}
               onChange={(event) => toggleDriving(event.target.checked)}
             />
             {/* Loading curve (M7 rung 5, ADR-0044 §3) — shapes the resource histogram, not the dates.
@@ -661,11 +758,21 @@ export function AssignmentRow({
                 default. Saved immediately on change. */}
             {showCurve ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={curveId}>Loading curve</Label>
-                <Select
+                <SelectField
+                  label="Loading curve"
                   id={curveId}
+                  onFocus={() => {
+                    curveFocused.current = true;
+                  }}
+                  // A blur that arrives because the select was just disabled is the gate shutting,
+                  // not the reader leaving — keep the flag so the effect above can act on it.
+                  onBlur={(event) => {
+                    if (!event.currentTarget.disabled) curveFocused.current = false;
+                  }}
                   value={assignment.curveType}
-                  disabled={update.isPending}
+                  // An in-flight save is a gate (ADR-0083 D2). Absent otherwise, so the row's own gate
+                  // still reaches the field — an always-present own gate would override it.
+                  gate={update.isPending ? { writable: false, reason: null } : undefined}
                   onChange={(event) => changeCurve(event.target.value as ResourceCurveType)}
                   className="w-40"
                 >
@@ -674,7 +781,7 @@ export function AssignmentRow({
                       {RESOURCE_CURVE_LABELS[curve]}
                     </option>
                   ))}
-                </Select>
+                </SelectField>
               </div>
             ) : null}
             {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives. Its own
@@ -682,7 +789,9 @@ export function AssignmentRow({
                 keystroke would send `4` on the way to `4h`. */}
             {showLag ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={lagId}>{assignmentLagLabel(hoursPerDay)}</Label>
+                <RowLabel htmlFor={lagId} shut={shut}>
+                  {assignmentLagLabel(hoursPerDay)}
+                </RowLabel>
                 <div className="flex items-center gap-2">
                   <Input
                     id={lagId}
@@ -693,7 +802,8 @@ export function AssignmentRow({
                     aria-invalid={lagError ? true : undefined}
                     // Whichever paragraph is actually rendered — the help is replaced by the error,
                     // so naming both would point at an id that is not in the document.
-                    aria-describedby={lagError ? lagErrorId : lagHelpId}
+                    aria-describedby={describedBy(lagError ? lagErrorId : lagHelpId, reasonId)}
+                    readOnly={shut || undefined}
                     className="w-28"
                   />
                   <Button
@@ -708,6 +818,7 @@ export function AssignmentRow({
                     // blurred to `<body>` by the browser each time. `saveLag` re-checks the same
                     // condition, so the click guard is real rather than decorative.
                     aria-disabled={lagUnavailable || undefined}
+                    aria-describedby={reasonId}
                     aria-busy={update.isPending}
                     className="aria-busy:pointer-events-none"
                     onClick={saveLag}
@@ -737,6 +848,8 @@ export function AssignmentRow({
               size="sm"
               variant="ghost"
               disabled={remove.isPending}
+              aria-disabled={shut || undefined}
+              aria-describedby={reasonId}
               onClick={unassign}
               aria-label={`Unassign ${name}`}
             >
