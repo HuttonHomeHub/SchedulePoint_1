@@ -388,7 +388,7 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await expect(sheet).toBeHidden();
 
   // A Menu.
-  await page.getByRole('button', { name: /^Account/ }).click();
+  await page.getByRole('button', { name: /Account:/ }).click();
   const menu = page.getByRole('menu', { name: 'Account' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toBeAttached();

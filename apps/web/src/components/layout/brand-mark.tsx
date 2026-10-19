@@ -30,12 +30,14 @@ export function BrandMark({
 }): React.ReactElement {
   return (
     <span className={cn('flex shrink-0 items-center gap-2', className)}>
+      {/* The initial is painted by `content`, not typed as a text node (WCAG 2.5.3): axe-core 4.14's
+          `label-content-name-mismatch` reads visible text whether or not it is `aria-hidden`, so a
+          typed "S" made the link's visible words "S SchedulePoint", which its name does not hold. */}
       <span
         aria-hidden="true"
-        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-bold"
-      >
-        S
-      </span>
+        data-testid="brand-tile"
+        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-bold before:content-['S']"
+      />
       {variant === 'lockup' ? (
         <span className="font-semibold tracking-tight">SchedulePoint</span>
       ) : null}

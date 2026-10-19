@@ -9,8 +9,8 @@
     "react-hook-form": "7.89.0",
     "react-dom": "19.3.1",
     "lucide-react": "1.54.0",
-    "axe-core": "4.13.0",
-    "@axe-core/playwright": "4.13.0",
+    "axe-core": "4.14.0",
+    "@axe-core/playwright": "4.14.0",
     "@tanstack/react-router": "1.170.41",
     "@tanstack/history": "1.162.4",
     "@tanstack/router-core": "1.171.34",
@@ -47,7 +47,7 @@
       "ref": "index.js:170-172",
       "package": "@axe-core/playwright",
       "path": "dist/index.js",
-      "lines": "170-172",
+      "lines": "171-173",
       "anchor": "options(options) {",
       "citedBy": ["apps/web/e2e-shell/org-less-screens.spec.ts", "docs/TECH_DEBT.md"]
     },
@@ -470,7 +470,7 @@
       "ref": "axe.js:19564-19569",
       "package": "axe-core",
       "path": "axe.js",
-      "lines": "19564-19569",
+      "lines": "23749-23754",
       "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
       "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
     },
@@ -1165,7 +1165,7 @@
       "ref": "axe.js:33491-33496",
       "package": "axe-core",
       "path": "axe.js",
-      "lines": "33491-33496",
+      "lines": "37970-37975",
       "anchor": "id: 'target-size',",
       "citedBy": [
         "docs/specs/staff-console-design/feature-spec.md",

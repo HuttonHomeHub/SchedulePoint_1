@@ -57,7 +57,7 @@ test.describe('Authentication journey', () => {
 
     // Sign out lives in the account chip's menu (ADR-0055 S1) — the header no longer carries a
     // bare button, so the journey opens the chip first.
-    await page.getByRole('button', { name: /^Account/ }).click();
+    await page.getByRole('button', { name: /Account:/ }).click();
     await page.getByRole('menuitem', { name: /sign out/i }).click();
     await expect(page).toHaveURL(/\/sign-in/);
 

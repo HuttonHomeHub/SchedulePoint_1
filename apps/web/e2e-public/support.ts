@@ -325,15 +325,15 @@ export function invitePath(url: string): string {
  *
  * **This helper shipped broken and unused.** Its locator guessed at three accessible names
  * (`account menu`, `open user menu`, and the literal name of one test's organisation) and the
- * control carries none of them — it is `aria-label={`Account: ${email}`}` (`account-chip.tsx:74`).
+ * control carries none of them — it is `"<initials>, Account: <email>"` (`account-chip.tsx`'s `accountLabel`).
  * Nothing caught that because until ADR-0077 §9 added the sign-out confirmation journey, **no test
  * called it**: an unused helper is not a tested one, and a locator that matches nothing fails only
- * on the day somebody relies on it. Anchored on the real label now, and on `^Account:` rather than
+ * on the day somebody relies on it. Anchored on the real label now, and on `Account:` rather than
  * the whole string so it does not become a second place the test's email address has to be spelt.
  */
 export async function signOut(page: Page): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: /^Account:/ }).click();
+  await page.getByRole('button', { name: /Account:/ }).click();
   await page.getByRole('menuitem', { name: /sign out/i }).click();
   await expect(page).toHaveURL(/\/sign-in/);
 }

@@ -39,7 +39,7 @@ export async function openFromAccountMenu(
   page: Page,
   item: 'Your account' | 'My activity',
 ): Promise<void> {
-  await page.getByRole('button', { name: /^Account:/ }).click();
+  await page.getByRole('button', { name: /Account:/ }).click();
   await page.getByRole('menuitem', { name: item }).click();
 }
 
