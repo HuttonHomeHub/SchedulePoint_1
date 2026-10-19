@@ -129,6 +129,8 @@ import {
   clampLaneDelta,
   isLaneOnly,
   isNoOp,
+  PLACEMENTS_BATCH_MAX,
+  tooManyToMoveReason,
 } from '@/features/tsld/model/bulk-move';
 import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
@@ -968,6 +970,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // down to nothing sends nothing, and the routing below reads the delta that is written.
         const delta = clampLaneDelta(rows, requested);
         if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
+        // Refused before anything is written or held, here rather than in either gesture so the
+        // drag and the keyboard share it (TECH_DEBT #528).
+        if (rows.length > PLACEMENTS_BATCH_MAX)
+          return { applied: false, conflict: tooManyToMoveReason(rows.length) };
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
           delta,

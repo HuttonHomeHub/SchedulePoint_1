@@ -17,6 +17,19 @@ import { barDatesFor } from '@/lib/bar-dates';
  * rule existed to prevent, arriving by the other door.
  */
 
+/**
+ * The most rows the placements endpoint takes in one write (`@ArrayMaxSize(2000)`,
+ * `update-placements.dto.ts`). A plural move is ONE batch by design, so a larger selection cannot be
+ * moved at all; the client says so before writing rather than show the server's validation sentence
+ * (TECH_DEBT #528).
+ */
+export const PLACEMENTS_BATCH_MAX = 2000;
+
+/** Why a selection that is too large to move in one batch is not moved, naming the cap. */
+export function tooManyToMoveReason(count: number): string {
+  return `${count.toLocaleString('en-GB')} activities are selected, and a move takes at most ${PLACEMENTS_BATCH_MAX.toLocaleString('en-GB')} at once. Select fewer and move them again.`;
+}
+
 /** A day + lane delta, as the drag produced it. */
 export interface BulkMoveDelta {
   /** Days to shift every selected activity. May be negative; 0 means "lane-only". */

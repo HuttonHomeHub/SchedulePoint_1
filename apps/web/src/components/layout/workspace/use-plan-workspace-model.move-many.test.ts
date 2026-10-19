@@ -213,6 +213,23 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     expect(h.batchPlacements).not.toHaveBeenCalled();
   });
 
+  /** Verified red against the unguarded method: 2,001 rows reached `batchPlacements`. */
+  it('refuses more rows than one batch takes, naming the cap, before writing (TECH_DEBT #528)', async () => {
+    const rows = Array.from({ length: 2001 }, (_, i) => ({ ...ACTIVITY, id: `r${String(i)}` }));
+    const outcome = await moveMany()(rows, { dayDelta: 1, laneDelta: 0 });
+    expect(outcome.applied).toBe(false);
+    expect(outcome.conflict).toMatch(/2,001 activities are selected.*at most 2,000 at once/);
+    expect(h.batchPlacements).not.toHaveBeenCalled();
+    expect(h.hold).not.toHaveBeenCalled();
+  });
+
+  it('writes a selection of exactly the cap', async () => {
+    const rows = Array.from({ length: 2000 }, (_, i) => ({ ...ACTIVITY, id: `r${String(i)}` }));
+    h.batchPlacements.mockResolvedValue(rows.map((r) => ({ id: r.id, version: 8 })));
+    const outcome = await moveMany()(rows, { dayDelta: 1, laneDelta: 0 });
+    expect(outcome.applied).toBe(true);
+  });
+
   it('carries each row’s OWN version, so one stale bar cannot be masked by another', async () => {
     await moveMany()([ACTIVITY, OTHER], { dayDelta: 1, laneDelta: 0 });
     const sent = h.batchPlacements.mock.calls[0]?.[0] as {
