@@ -247,7 +247,11 @@ rules exist because that is true of any machine nobody chose.
 
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
-**Status:** open · **Verified:** 2026-09-11 · **Size:** S once one question is answered (see the 2026-09-11 assessment) · **Owner:** web
+**Status:** open · **Verified:** 2026-09-11 · **Size:** S — the question is answered (2026-10-19, below) · **Owner:** web
+
+> **Answered 2026-10-19 by the product owner** (`docs/DECISIONS.md`): a **Viewer keeps the one-line
+> summary**; a Planner whose pen is taken keeps the editors, shaded through `FieldGateProvider` with
+> `writeReason` passed down. `AssignmentRow` must tell role from pen. Nothing changes for a Viewer.
 
 > **Most of this row was discharged by ADR-0083 and nobody closed it** — found by the 2026-09-01
 > verification sweep, and it is a **half-executed** close: that ADR's own step 8 says _"Delete #64
