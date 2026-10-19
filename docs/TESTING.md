@@ -220,6 +220,13 @@ clicks actually became a pick. When a defect report and the code disagree, that
 gap is where the answer is — write the suite that measures it rather than the
 test that re-states the code.
 
+`apps/web/e2e-authoring-flow-off/` is the same journey's **flag-off** twin
+(`playwright.authoring-flow-off.config.ts`, `test:e2e:authoring-flow-off`; `docs/TECH_DEBT.md` #76). The
+Link tool's pointer pick runs through echo plumbing wired outside the flag, and no other config pins the
+flag off, so this suite drives that pick in a browser with `VITE_CANVAS_AUTHORING_FLOW=false`: the link
+comes out the right way round, no mode band shows, Enter does not link, and Escape drops an open pick. It
+reuses `e2e-authoring-flow/support.ts` rather than copying it.
+
 Journeys include automated accessibility assertions.
 
 **`VITE_CANVAS_LINK_ROUTING` deliberately has no journey of its own**, and that is

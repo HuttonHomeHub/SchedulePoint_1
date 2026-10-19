@@ -924,6 +924,18 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:authoring-flow
 
+      # Canvas authoring flow with the flag OFF (playwright.authoring-flow-off.config.ts,
+      # docs/specs/flag-off-link-pick/, TECH_DEBT #76). The Link tool's two-click pick runs through
+      # echo plumbing the authoring-flow epic wired unconditionally, so a build that sets
+      # VITE_CANVAS_AUTHORING_FLOW=false still depends on it; no other config runs with the flag
+      # off and a unit test cannot hit-test a canvas. Three short steps: the pick links in the right
+      # direction, no mode band shows, and Escape drops an open pick. Placed on shard 4 because it
+      # was the lightest before this suite was added (935 s against 936 s, scripts/e2e-durations.json).
+      # Runs after the prior suites tear down their servers.
+      - name: Web end-to-end tests (canvas authoring flow, flag off)
+        if: ${{ matrix.shard == 4 }}
+        run: pnpm --filter @repo/web test:e2e:authoring-flow-off
+
       # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
       # enforced at the API. **The first journey in this repository to run in Visual mode at all** —
       # the other fourteen canvas configs pin VITE_SCHEDULING_MODES off, each for a good local

@@ -3,8 +3,8 @@
   "run": "38317448630",
   "job": "115037754588",
   "measured": "2026-10-13",
-  "residualCheck": "The 50 web durations sum to 3760 s. There is no independently-recorded total to reconcile against this time: each figure is a median of three runs, so no single run's suite steps sum to it. The projected shard sums (suite steps only) are 936 s (shard 1), 936 s (shard 2), 953 s (shard 3) and 935 s (shard 4); with the 114 s median fixed cost, 1,050 / 1,050 / 1,067 / 1,049 s. The check still does what it exists for - a hand-edit cannot pass unnoticed - and this edit is recorded rather than hidden by rounding it into a neighbour.",
-  "keyedBy": "The package.json SCRIPT NAME, not the CI step's title and not a prose suite label. A title is prose; the script is the key check:e2e-roster derives its own roster from, so the two cannot drift apart. Verified as an exact set equality in both directions against apps/web/package.json (44) and apps/api/package.json (2) on 2026-09-11, and again on 2026-10-13 by this file's test (50 web, 2 API).",
+  "residualCheck": "The 51 web durations sum to 3785 s. There is no independently-recorded total to reconcile against this time: each figure is a median of three runs, so no single run's suite steps sum to it. The projected shard sums (suite steps only) are 936 s (shard 1), 936 s (shard 2), 953 s (shard 3) and 960 s (shard 4); with the 114 s median fixed cost, 1,050 / 1,050 / 1,067 / 1,074 s. The check still does what it exists for - a hand-edit cannot pass unnoticed - and this edit is recorded rather than hidden by rounding it into a neighbour. 2026-10-19: test:e2e:authoring-flow-off (25 s) is an ESTIMATE, not a harvest (the flag-on suite is nine tests in 80 s; this is three short ones, 27 s locally), and it was placed on shard 4, the lightest by 1 s; it moves shard 4 from 935 to 960 s.",
+  "keyedBy": "The package.json SCRIPT NAME, not the CI step's title and not a prose suite label. A title is prose; the script is the key check:e2e-roster derives its own roster from, so the two cannot drift apart. Verified as an exact set equality in both directions against apps/web/package.json (44) and apps/api/package.json (2) on 2026-09-11, and again on 2026-10-13 by this file's test (50 web, 2 API; 51 web from 2026-10-19).",
   "seconds": {
     "web": {
       "test:e2e": 389,
@@ -16,6 +16,7 @@
       "test:e2e:audit": 31,
       "test:e2e:authoring": 22,
       "test:e2e:authoring-flow": 80,
+      "test:e2e:authoring-flow-off": 25,
       "test:e2e:axis-markers": 26,
       "test:e2e:calendar-shifts": 27,
       "test:e2e:copy-paste": 33,
