@@ -58,6 +58,7 @@ fourteen newest rows read, seven of them checked against code, the rows the wind
 was not run: every pull request in the window was reviewed at merge.
 
 ---
+
 ## 2026-10-19 — Four owner answers on the 2026-10-18 follow-ups (tech debt #522, #523, #533, #534)
 
 **#522 — a real five working days.** The default duration is five working days of the activity's own

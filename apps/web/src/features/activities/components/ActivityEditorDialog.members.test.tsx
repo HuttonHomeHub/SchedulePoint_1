@@ -146,10 +146,18 @@ describe('ActivityEditorDialog — the Members tab', () => {
   });
 
   it('says so when the plan’s activities could not be loaded', () => {
-    mount({ planActivitiesError: true });
+    mount({ planActivitiesError: true, planActivities: [] });
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The plan’s activities could not be loaded, so membership cannot be edited.',
+      'The plan’s activities could not be loaded, so membership cannot be edited right now.',
     );
     expect(screen.queryByRole('button', { name: 'Save membership' })).not.toBeInTheDocument();
+  });
+
+  // A failed background refetch leaves the query's `isError` set while the rows it holds are still
+  // good; the form stays rather than being replaced by a failure it does not need to report.
+  it('keeps the form when a refetch failed but the activities are still held', () => {
+    mount({ planActivitiesError: true });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Pour slab/ })).toBeInTheDocument();
   });
 });

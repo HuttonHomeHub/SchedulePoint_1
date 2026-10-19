@@ -92,9 +92,9 @@ describe('WeightedStepsPanel — first load', () => {
   it('shows an outline of a step with one spoken label while the steps load', () => {
     const { container } = render(<Host gate={OPEN_GATE} onSave={vi.fn()} loading />);
     expect(screen.getByRole('status')).toHaveTextContent('Loading steps…');
-    expect(
-      container.querySelectorAll('[data-loading-shape] [data-skeleton]').length,
-    ).toBeGreaterThan(0);
+    // One step card of three labelled fields, each a label bar over a control-height block.
+    expect(container.querySelectorAll('[data-loading-shape] li')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-loading-shape] [data-skeleton]')).toHaveLength(6);
     expect(container.querySelector('[aria-busy="true"] [role="status"]')).toBeNull();
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
   });
