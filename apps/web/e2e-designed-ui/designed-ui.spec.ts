@@ -201,7 +201,7 @@ for (const { choice, colorScheme } of THEMES) {
       // `backgroundColor` off the button yields `rgba(0,0,0,0)` and a ratio against nothing.
       // `computedPair` also walks ancestors for the first painted backdrop, which the hand-rolled
       // read this replaces did not.
-      const chip = 'header button[aria-label^="Account"] span';
+      const chip = 'header button[aria-label*="Account"] span';
       expect(contrast(await computedPair(page, chip))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D5 — the rail's secondary text. Same root cause as D1, on the other surface.

@@ -8,9 +8,13 @@ describe('BrandMark', () => {
   it('reads as the product name once, not twice', () => {
     render(<BrandMark />);
     // The tile is decorative — it repeats the wordmark's first letter, so exposing it would make
-    // a screen reader announce "S SchedulePoint".
+    // a screen reader announce "S SchedulePoint". It is also painted rather than typed, so the
+    // link's visible words are the wordmark alone (WCAG 2.5.3, axe-core 4.14).
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
-    expect(screen.getByText('S')).toHaveAttribute('aria-hidden', 'true');
+    const tile = screen.getByTestId('brand-tile');
+    expect(tile).toHaveAttribute('aria-hidden', 'true');
+    expect(tile).toBeEmptyDOMElement();
+    expect(tile).toHaveClass("before:content-['S']");
   });
 
   it('paints its tile from tokens so each surface gets a validated pair', () => {
@@ -19,7 +23,7 @@ describe('BrandMark', () => {
         <BrandMark />
       </Surface>,
     );
-    const tile = screen.getByText('S');
+    const tile = screen.getByTestId('brand-tile');
     // `bg-primary` inside chrome resolves to `--chrome-primary` — amber on Corporate's navy,
     // the brand blue on Light/Dark. A literal amber would be unreadable on a white header and
     // would be exactly the one-off styling the design system forbids.

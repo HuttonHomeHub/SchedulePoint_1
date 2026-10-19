@@ -47,7 +47,7 @@ test('the shell withholds the Project Explorer on the three routes that have no 
   // **The route out is still offered.** Withholding navigation that cannot navigate must not also
   // withhold the navigation that can — the account menu is how a reader with no organisation
   // reaches their own two screens, and it is the only way off this one.
-  await expect(page.getByRole('button', { name: /^Account:/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Account:/ })).toBeVisible();
 
   // ---------------------------------------- 2 & 3. /account and /me/activity, still with no org
   await openFromAccountMenu(page, 'Your account');

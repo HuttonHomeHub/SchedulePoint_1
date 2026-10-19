@@ -17,6 +17,12 @@ function initialsOf(name: string | undefined, email: string | undefined): string
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
+/** The chip's accessible name: its visible initials first, then who is signed in. */
+function accountLabel(initials: string, email: string | undefined): string {
+  const account = email ? `Account: ${email}` : 'Account';
+  return initials === '?' ? account : `${initials}, ${account}`;
+}
+
 /**
  * The **account chip**: an initials avatar that opens a menu holding the signed-in identity, the
  * account screen, keyboard shortcuts and Sign out.
@@ -57,8 +63,10 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
         aria-expanded={open}
         // The name has to carry who is signed in: the avatar shows initials, which on their own
         // identify nobody. Previously the header printed the email in full; now the accessible
-        // name does the same work without a low-contrast line of text on the band.
-        aria-label={email ? `Account: ${email}` : 'Account'}
+        // name does the same work without a low-contrast line of text on the band. It leads with
+        // the initials because they are the button's visible words (WCAG 2.5.3 Label in Name): a
+        // speech-input user says what they see.
+        aria-label={accountLabel(initials, email)}
         onClick={toggle}
         className={cn(
           // `pointer-coarse:min-h-(--control-h)` (ADR-0118 M3) — measured 52 x 32 on touch, under

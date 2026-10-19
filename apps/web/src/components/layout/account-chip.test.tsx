@@ -17,13 +17,18 @@ import { ThemeProvider } from '@/hooks/use-theme';
  * These tests pin what that move must not break: the identity is still reachable, sign-out still
  * runs its mutation and navigates, and its pending state still guards a second press.
  */
-const h = vi.hoisted(() => ({
-  navigate: vi.fn(),
-  signOutMutate: vi.fn(),
-  isPending: false,
-  /** `null` is the answer for almost everybody — the guard 404s every non-staff caller. */
-  staff: null as { userId: string; email: string; dualHatted: boolean } | null,
-}));
+const h = vi.hoisted(() => {
+  /** Set in `beforeEach`; a test that needs another identity overrides it. */
+  const user: { email?: string; name?: string } = {};
+  return {
+    navigate: vi.fn(),
+    signOutMutate: vi.fn(),
+    isPending: false,
+    /** `null` is the answer for almost everybody — the guard 404s every non-staff caller. */
+    staff: null as { userId: string; email: string; dualHatted: boolean } | null,
+    user,
+  };
+});
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
@@ -38,7 +43,7 @@ vi.mock('@/features/staff/api/staff-identity', () => ({
 }));
 
 vi.mock('@/features/auth', () => ({
-  useSession: () => ({ data: { user: { email: 'ada@example.com', name: 'Ada Lovelace' } } }),
+  useSession: () => ({ data: { user: h.user } }),
   useSignOut: () => ({ mutate: h.signOutMutate, isPending: h.isPending }),
 }));
 
@@ -63,6 +68,7 @@ beforeEach(() => {
   h.signOutMutate.mockReset();
   h.isPending = false;
   h.staff = null;
+  h.user = { email: 'ada@example.com', name: 'Ada Lovelace' };
   window.localStorage.clear();
   document.documentElement.className = '';
   Object.defineProperty(window, 'matchMedia', {
@@ -79,9 +85,23 @@ beforeEach(() => {
 describe('AccountChip', () => {
   it('names the signed-in user on the trigger, since initials identify nobody', () => {
     renderChip();
-    expect(screen.getByRole('button', { name: 'Account: ada@example.com' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'AL, Account: ada@example.com' })).toHaveTextContent(
       'AL',
     );
+  });
+
+  // WCAG 2.5.3 Label in Name (axe-core 4.14's `label-content-name-mismatch`): the initials are the
+  // button's visible words, so the name leads with them — and drops them when there are none.
+  it('leads the name with the initials it shows, with or without an email', () => {
+    h.user = { name: 'Ada Lovelace' };
+    renderChip();
+    expect(screen.getByRole('button', { name: 'AL, Account' })).toHaveTextContent('AL');
+  });
+
+  it('names a user with no name and no email plainly, since "?" is not a word', () => {
+    h.user = {};
+    renderChip();
+    expect(screen.getByRole('button', { name: 'Account' })).toHaveTextContent('?');
   });
 
   it('keeps the email out of the header and inside the menu', () => {
