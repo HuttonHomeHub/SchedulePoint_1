@@ -1,5 +1,16 @@
 # @repo/api
 
+## 0.96.2
+
+### Patch Changes
+
+- [#1076](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1076) [`9b0102c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9b0102c7e9edebc009817886666829735b61ae63) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A calendar that something in Recently deleted still uses can no longer be narrowed to a single project; the refusal says to restore that item and move it to another calendar first, instead of letting the project's later clear-out fail on it. Creating a plan or project, or importing a schedule, inside one that is being deleted is now refused cleanly, instead of leaving the new item active under a deleted parent.
+
+- [#1074](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1074) [`d6b6af2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d6b6af2046bca1ba9ed361ea9e9c12201946b227) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Near-critical now means five working days of the activity's own calendar, so on calendars with
+  shorter working days fewer activities are flagged. It used to be a fixed 7,200 working minutes, which
+  is fifteen working days on an eight-hour calendar. A plan's near-critical flags and count change the
+  next time it is recalculated.
+
 ## 0.96.1
 
 ### Patch Changes
