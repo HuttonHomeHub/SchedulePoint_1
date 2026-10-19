@@ -1318,6 +1318,9 @@ assignments. Nothing brings it back. Nothing in the product can, either: `POST â
 exist and is refused by design (ADR-0096 D1), so there is no button anywhere that does what this
 setting does on a timer.
 
+Resources and organisation-wide calendars also appear under **Recently deleted** (ADR-0195) and are
+**not** on this timer (D4): they stay until restored. A project's own calendars go with the project.
+
 The owner's step-by-step version of everything below (preview, switch-on day, switching off,
 recovering something) is [`docs/guides/switch-on-the-clear-out.md`](guides/switch-on-the-clear-out.md).
 

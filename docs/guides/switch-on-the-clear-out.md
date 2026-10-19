@@ -12,6 +12,10 @@ removed**, together with everything inside it (a client's projects, their plans,
 those plans, and their logic, notes, baselines and resource assignments). **Nothing in SchedulePoint
 can bring it back afterwards.** Only a backup copy can.
 
+Two kinds of item in Recently deleted are not on this clock: a **resource** and an **organisation-wide
+calendar** stay there until someone restores them, however long that is. A calendar that belongs to one
+project goes with its project.
+
 **Read these four facts before you start**
 
 1. **The 90 days count from the day each item was deleted**, not from the day you switch it on.

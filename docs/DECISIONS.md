@@ -10,6 +10,55 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-19 — Reconciliation pass: the agents again, and a bin that now holds rows the clear-out never touches
+
+**What was done.** The pass in `docs/RECONCILE.md` over the 64 commits since 2026-10-15 and ADR-0195 to ADR-0203
+(`check:reconcile-due` fired at 9 against a threshold of 8). Every computed gate was green before it started
+(`check:counts`, `check:claims`, `check:playbook`), so what follows is what they cannot see.
+
+**What was found wrong.**
+
+- **The agents, again.** `grep -c '0195\|0196\|0197\|0198\|0199\|0200\|0201\|0202\|0203'
+.claude/agents/*.md` returned 0 for all fifteen files. Six now carry one or two lines each: `component-`,
+  `accessibility-` and `ux-reviewer` (ADR-0202: a skeleton when the settled shape is known, a spinner for a gate
+  or an action, one sentence outside any busy subtree, the gate that declares every spinner), `security-reviewer`
+  (ADR-0198's two guest flags and what stays excluded; ADR-0195 D5's per-entity restore permissions),
+  `database-architect` (ADR-0201's calendar-deleted refusal and lock order; library rows never expire) and
+  `api-reviewer` (ADR-0196's advisory union). ADR-0199, 0200 and 0203 are left out for now: they are painter, export and
+  layout facts, no reviewer was shown to need them, and an agent file is paid for on every run.
+- **`docs/guides/switch-on-the-clear-out.md` and `docs/DEPLOYMENT.md` said an item that has sat in Recently deleted
+  for 90 days is permanently removed.** ADR-0195 D4 put resources and organisation-wide calendars in the same bin and
+  gave them no expiry, so the sentence an owner reads before switching the clear-out on was wider than the code.
+  Both now say which rows are not on the clock (a project's own calendars go with the project,
+  `hierarchy-expiry.runner.ts`). `CLAUDE.md` section 17 already scopes the expiry to clients, projects and plans.
+
+**Register rows #521 to #534 (not edited here; another task owns them).** Their claims were read against the
+code and almost all hold. Three things for that task: **#532** counts seven plain-text first-load states, but
+`ActivityLogicPanel`'s two ("Loading predecessors…", "Loading successors…") are `DataTable` skeletons today
+(`DependencyTable.tsx` passes `loadingLabel`; the test still finds the sentence because the skeleton speaks it), so
+five remain, and `resource-strip-panel.tsx` is `components/layout/workspace/resource-strip-panel.tsx:386`, not `:324`.
+**#531** ends with a second `**Next:**` line ("a fix is shared with the hierarchy … not a calendar patch") that
+belongs to #520. **#530** names `countActivePlansOutsideProject`, which is `countActivePlansUsingOutsideProject`
+(`calendar.repository.ts:746`), and cites `calendars.service.ts:1029-1049` for the guard, now `:1043-1060`; the
+`resources` count it also says is missing from the guard's reach does exist as `countActiveResourcesUsingCalendar`
+but counts active rows only, so the row's conclusion stands. #527's `bulk-move.ts` lines are `:50-51`.
+
+**Negative results.** All gated counts agree (26 modules, 35 models, 75 migrations, 1694 files, 47 suites,
+203 ADRs; 48 playbook plans); `check:claims` passes 152 claims against the bumped dependencies and
+`docs/HANDOFF.md` records each bump's prose as re-read; the four unbuilt ADRs are still unbuilt (no `bullmq`,
+`ioredis`, `redis`, `@aws-sdk`, `@opentelemetry`, `@casl` or `@radix-ui` in any manifest); all eleven manifest
+descriptions are accurate (the `@repo/layout` one is unaffected by ADR-0203); the NestJS 12 upgrade left no
+"NestJS 11" in a live document; `API.md` describes the guest flags, the advisory union, `derivedDurationMinutes` and
+the two restore routes as built; `DESIGN_SYSTEM.md`'s loading section names three gates that exist
+(`loading-states.structural.test.ts`, `data-table.sample.structural.test.ts`). Rows #518 to #520 were read and #521, #522,
+#526, #527, #530, #532 and #534 were checked against the code (#523, #524, #525, #528 and #529 were only read); #64 and #271 carry their 2026-10-17 and 2026-10-19 notes.
+
+**Scope, stated honestly.** Steps 1 to 3, 5 (the nine ADRs' documents) and 6 are complete. Step 4 is a sample (the
+fourteen newest rows read, seven of them checked against code, the rows the window closed, #64 and #271), not all of the register. Step 5a was not run. Step 7
+was not run: every pull request in the window was reviewed at merge.
+
+---
+
 ## 2026-10-19 — Three product-owner answers after the Dependabot batch (tech debt #64)
 
 **#64 — a Viewer keeps the one-line summary on an assignment row.** This answers the one question the

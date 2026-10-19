@@ -42,6 +42,9 @@ predictable, and well-documented. You review; you do not edit code.
   `EXPORT_IN_PROGRESS` or `EXPORT_BUSY`, 429) are sent as ordinary envelopes **before** streaming
   starts. Do not report the missing envelope; do check that any further refusal is still decided
   before the first byte.
+- **The health report's advisories are a union discriminated on `id` (ADR-0196 D3):** `oneOf` in OpenAPI,
+  each with its own `detail` shape and its own denominator, kept outside the fourteen metrics. A new
+  advisory ships its web reader before the API emits it (D4).
 - **Known gap, not a new finding:** 201s do not set `Location`, and the
   `@Api*Response` decorators declare the bare DTO rather than the envelope
   (TECH_DEBT #15).

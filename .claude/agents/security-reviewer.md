@@ -111,6 +111,14 @@ review; you do not edit code. Assume an adversarial user.
   re-adds `5432:5432` there is blocking. A restore loads into a new database and never overwrites
   (D3). "Permanently removed" by the clear-out (ADR-0096/0193) means removed from the live
   database, not from the last 30 days of copies (ADR-0193 D5).
+- **A guest now sees two engine flags more (ADR-0198).** `Activity.isNearCritical` and
+  `ActivityDependency.isDriving` are in the guest DTOs; `remainingFloat`, constraints and
+  `ResourceAssignment.isDriving` stay excluded, and `guest-dto.spec.ts` forbids them. The accepted
+  residual is that a guest can infer a bound exists on a not-started activity with no driving link,
+  never which or when. Anything beyond those two fields is a new disclosure decision.
+- **Restore is gated per entity (ADR-0195 D5, ADR-0201).** `resource:restore` and `calendar:restore`
+  sit in `HIERARCHY_WRITE`; an ORG calendar also needs `calendar:manage_org`, checked after the load.
+  Library rows (resources, ORG calendars) never expire in the bin.
 - **Known and accepted, so don't re-report as new:** the throttler store is
   in-process memory, per-replica (TECH_DEBT #49); the keyset cursor is resolved
   before the scope filter, which is a cosmetic anchor issue and leaks no rows
