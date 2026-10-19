@@ -112,6 +112,8 @@ describe('PlansService', () => {
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // The parent-lock statement a create takes (`FOR SHARE`); a row back means the parent is active.
+  let txQueryRaw: ReturnType<typeof vi.fn>;
   // The plan ids the scheduling-input stamp named (its parameters: the organisation, then the ids).
   const stampedPlanIds = (): string[][] =>
     txExecuteRaw.mock.calls
@@ -144,8 +146,11 @@ describe('PlansService', () => {
     // The tx handle exposes $executeRaw (the calendar advisory lock) for the
     // calendar-assignment path; repo methods are mocked, so they ignore the tx arg.
     txExecuteRaw = vi.fn();
+    txQueryRaw = vi.fn().mockResolvedValue([{ id: 'locked' }]);
     prisma = {
-      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: txExecuteRaw })),
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
+        cb({ $executeRaw: txExecuteRaw, $queryRaw: txQueryRaw }),
+      ),
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     audit = { record: vi.fn().mockResolvedValue(undefined) };
@@ -177,7 +182,20 @@ describe('PlansService', () => {
           // Defaults to the org's seeded Standard calendar.
           calendarId: 'cal-standard',
         }),
+        expect.anything(),
       );
+    });
+
+    it('404s and does not insert when the parent is deleted between the read and the lock', async () => {
+      // The race of docs/TECH_DEBT.md #531: the read saw an active project, a delete then won it.
+      txQueryRaw.mockResolvedValue([]);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+          name: 'X',
+          plannedStart: '2026-01-01',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(plans.create).not.toHaveBeenCalled();
     });
 
     it('defaults calendarId to null when the org has no active Standard calendar', async () => {

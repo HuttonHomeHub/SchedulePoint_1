@@ -83,6 +83,8 @@ describe('ProjectsService', () => {
     restoreBatch: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  // The parent-lock statement a create takes (`FOR SHARE`); a row back means the client is active.
+  let txQueryRaw: ReturnType<typeof vi.fn>;
   let audit: { record: ReturnType<typeof vi.fn> };
   let service: ProjectsService;
 
@@ -102,7 +104,10 @@ describe('ProjectsService', () => {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
       restoreBatch: vi.fn().mockResolvedValue({}),
     };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({})) };
+    txQueryRaw = vi.fn().mockResolvedValue([{ id: 'locked' }]);
+    prisma = {
+      $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $queryRaw: txQueryRaw })),
+    };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     service = new ProjectsService(
@@ -125,7 +130,17 @@ describe('ProjectsService', () => {
       expect(result.id).toBe('p1');
       expect(projects.create).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: ORG_ID, clientId: CLIENT_ID, name: 'Riverside' }),
+        expect.anything(),
       );
+    });
+
+    it('404s and does not insert when the client is deleted between the read and the lock', async () => {
+      // The race of docs/TECH_DEBT.md #531: the read saw an active client, a delete then won it.
+      txQueryRaw.mockResolvedValue([]);
+      await expect(
+        service.create(principalWith(ALL), 'acme', CLIENT_ID, { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(projects.create).not.toHaveBeenCalled();
     });
 
     it('404s when the parent client is missing/deleted (and does not create)', async () => {

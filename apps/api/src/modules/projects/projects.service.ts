@@ -4,6 +4,7 @@ import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockActiveClientForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import {
@@ -120,14 +121,25 @@ export class ProjectsService {
     const client = await this.loadActiveClient(clientId, organization.id);
 
     try {
-      const project = await this.projects.create({
-        // Copy the organisation id from the parent client, never from input.
-        organizationId: client.organizationId,
-        clientId: client.id,
-        name: dto.name,
-        description: dto.description ?? null,
-        createdBy: principal.userId,
-        updatedBy: principal.userId,
+      // The read above is the 404 and the organisation check; the lock is the guarantee. The
+      // insert's foreign-key check takes `FOR KEY SHARE`, which a client delete's `FOR NO KEY
+      // UPDATE` does not conflict with (`docs/TECH_DEBT.md` #531).
+      const project = await this.prisma.$transaction(async (tx) => {
+        if (!(await lockActiveClientForShare(tx, client.id))) {
+          throw new NotFoundError('Client not found.');
+        }
+        return this.projects.create(
+          {
+            // Copy the organisation id from the parent client, never from input.
+            organizationId: client.organizationId,
+            clientId: client.id,
+            name: dto.name,
+            description: dto.description ?? null,
+            createdBy: principal.userId,
+            updatedBy: principal.userId,
+          },
+          tx,
+        );
       });
       this.logger.info(
         {
