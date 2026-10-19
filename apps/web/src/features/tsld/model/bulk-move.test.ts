@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { bulkMoveSnapshots, isLaneOnly, isNoOp, movedPlacement } from './bulk-move';
+import { bulkMoveSnapshots, clampLaneDelta, isLaneOnly, isNoOp, movedPlacement } from './bulk-move';
 
 /**
  * The bulk row builder (`docs/specs/canvas-multi-select/` M4-T2), collapsed to one behaviour by
@@ -105,6 +105,47 @@ describe('movedPlacement', () => {
       'laneIndex',
       'visualStart',
     ]);
+  });
+});
+
+describe('a plural move past the top lane (TECH_DEBT #526)', () => {
+  const trio = [
+    activity({ id: 'a', laneIndex: 0 }),
+    activity({ id: 'b', laneIndex: 1 }),
+    activity({ id: 'c', laneIndex: 2 }),
+  ];
+
+  it('holds the lane delta to what the topmost selected row can take', () => {
+    expect(clampLaneDelta(trio, { dayDelta: 3, laneDelta: -2 })).toEqual({
+      dayDelta: 3,
+      laneDelta: 0,
+    });
+    expect(clampLaneDelta(trio.slice(1), { dayDelta: 0, laneDelta: -5 }).laneDelta).toBe(-1);
+  });
+
+  it('leaves a delta the set can take, and every downward one, as it was', () => {
+    const delta = { dayDelta: 1, laneDelta: 0 };
+    expect(clampLaneDelta(trio, delta)).toBe(delta);
+    const down = { dayDelta: 0, laneDelta: 4 };
+    expect(clampLaneDelta(trio, down)).toBe(down);
+    expect(clampLaneDelta(trio.slice(1), { dayDelta: 0, laneDelta: -1 }).laneDelta).toBe(-1);
+  });
+
+  /**
+   * Verified red against the per-row clamp alone: lanes 0, 1, 2 dragged up two came back 0, 0, 0 —
+   * the browser journey in `e2e-multi-select` read the same three zeros from the API.
+   */
+  it('keeps the set\u2019s relative lanes in the snapshots a drag writes', () => {
+    const { after } = bulkMoveSnapshots({
+      activities: trio,
+      delta: { dayDelta: 0, laneDelta: -2 },
+    });
+    expect(after.map((p) => p.laneIndex)).toEqual([0, 1, 2]);
+    const partial = bulkMoveSnapshots({
+      activities: trio.slice(1),
+      delta: { dayDelta: 0, laneDelta: -5 },
+    });
+    expect(partial.after.map((p) => p.laneIndex)).toEqual([0, 1]);
   });
 });
 

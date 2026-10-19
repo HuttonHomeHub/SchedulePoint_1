@@ -206,6 +206,13 @@ describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
     }
   });
 
+  it('sends nothing for an upward move the set cannot take (TECH_DEBT #526)', async () => {
+    const top: ActivitySummary = { ...ACTIVITY, laneIndex: 0 };
+    const outcome = await moveMany()([top, OTHER], { dayDelta: 0, laneDelta: -2 });
+    expect(outcome).toEqual({ applied: false, conflict: null });
+    expect(h.batchPlacements).not.toHaveBeenCalled();
+  });
+
   it('carries each row’s OWN version, so one stale bar cannot be masked by another', async () => {
     await moveMany()([ACTIVITY, OTHER], { dayDelta: 1, laneDelta: 0 });
     const sent = h.batchPlacements.mock.calls[0]?.[0] as {

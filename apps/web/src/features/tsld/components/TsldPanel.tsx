@@ -36,6 +36,7 @@ import {
 } from '../model/canvas-selection';
 import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
+import { clampLaneDelta, isNoOp } from '../model/bulk-move';
 import { drawnDaySpan } from '../model/drawn-span';
 import {
   pluralMoveAnnouncement,
@@ -67,6 +68,7 @@ import {
   startFrozenPluralReason,
   summaryNotMovablePluralReason,
   STARTS_NOT_CHANGED_NOTE,
+  topLanePluralReason,
 } from '../render/hit-test';
 import {
   buildBaselineGhosts,
@@ -2688,10 +2690,19 @@ export function TsldPanel({
         // as by the drag (reported 2026-09-23).
         const originSpan = dataDate ? drawnDaySpan(activity, barDateSource, dataDate) : null;
         const originStart = originSpan?.startDay ?? 0;
-        const delta = {
+        const requested = {
           dayDelta: intent.startDay === undefined ? 0 : intent.startDay - originStart,
           laneDelta: intent.laneIndex === undefined ? 0 : intent.laneIndex - activity.laneIndex,
         };
+        // The set keeps its shape at the top (TECH_DEBT #526): the lane part is held to what the
+        // topmost selected bar can take, the same answer the keyboard's Alt+Up gives by refusing.
+        // A drag that was ONLY upward and is clamped to nothing says why, rather than reporting a
+        // failed write that never happened.
+        const delta = clampLaneDelta(rows, requested);
+        if (isNoOp(delta) && !isNoOp(requested)) {
+          showConflict(topLanePluralReason(rows.filter((a) => a.laneIndex === 0).length), false);
+          return;
+        }
         // **Hold the dragged bar at the drop position while the batch is in flight**, exactly as
         // the single-bar path below does. Without this the gesture machine clears its own ghost
         // synchronously at pointer-up, so the bar the planner just dragged snapped *back* to its

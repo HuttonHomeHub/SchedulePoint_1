@@ -15,6 +15,7 @@ import {
   clearSelection,
   dragBar,
   mapBars,
+  mapBarsAcross,
   placements,
 } from './support';
 
@@ -66,6 +67,7 @@ const FIXTURE = [
 const NAMES = FIXTURE.map((row) => row.name);
 
 test('the canvas plural selection: build a set, chain it, delete it, undo it', async ({ page }) => {
+  test.setTimeout(120_000);
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
@@ -395,6 +397,53 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
         { timeout: 20_000 },
       )
       .toBe(3);
+  });
+
+  await test.step('a plural drag past the top lane keeps the set\u2019s relative lanes (TECH_DEBT #526)', async () => {
+    // Three bars in lanes 0, 1 and 2, grabbed by the LOWEST and dragged up two lanes. The grabbed
+    // bar can legally go two up; the one already in lane 0 cannot go anywhere. Clamping each row's
+    // lane on its own closed all three up into lane 0, so the set lost its shape. The set-level
+    // clamp refuses the vertical part, as the keyboard's Alt+Up does at the top, and keeps the
+    // horizontal part. The bars are on DIFFERENT days: stacked on one day they overlap once
+    // collapsed, and the overlap resolver (ADR-0153) re-spreads them, hiding the defect. Its own
+    // plan, so the steps above leave nothing in the way.
+    await newPlan(page, 'Plural drag at the top');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Top A', durationDays: 2, startOn: '2026-01-05' },
+      { name: 'Top B', durationDays: 2, startOn: '2026-01-08' },
+      { name: 'Top C', durationDays: 2, startOn: '2026-01-11' },
+    ]);
+    await ensurePen(page);
+    await clearSelection(page);
+    const bars = await mapBarsAcross(page, [200, 760, 1400]);
+    const ids = [...bars.keys()].slice(0, 3);
+    expect(ids.length, 'need three probed bars to drag a plural selection').toBe(3);
+
+    const list = diagramList(page);
+    await list.focus();
+    await page.keyboard.press('Control+a');
+    await announced(page, /selected/i);
+
+    const before = await placements(page, orgSlug);
+    const byLane = [...ids].sort((a, b) => before.get(a)!.laneIndex - before.get(b)!.laneIndex);
+    expect(byLane.map((id) => before.get(id)?.laneIndex)).toEqual([0, 1, 2]);
+    const grab = bars.get(byLane[2]!)!;
+    await dragBar(page, grab, { x: grab.x + 80, y: grab.y - 120 });
+
+    await expect
+      .poll(
+        async () => {
+          const after = await placements(page, orgSlug);
+          return ids.filter(
+            (id) => after.get(id)?.visualEffectiveStart !== before.get(id)?.visualEffectiveStart,
+          ).length;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(3);
+    const after = await placements(page, orgSlug);
+    expect(byLane.map((id) => after.get(id)?.laneIndex)).toEqual([0, 1, 2]);
   });
 });
 

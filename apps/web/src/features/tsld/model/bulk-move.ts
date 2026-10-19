@@ -35,6 +35,25 @@ function shiftIso(iso: string, days: number): string {
   return at.toISOString().slice(0, 10);
 }
 
+/**
+ * The delta with its lane part held to what the whole set can take (TECH_DEBT #526).
+ *
+ * Lane 0 is the top, so the topmost selected row bounds how far the set can go up. Clamping each
+ * row's lane on its own (the `Math.max(0, …)` in {@link movedPlacement}) lets the rows that have
+ * room keep moving while the one at the top stays, so the lanes between them close up and the
+ * selection changes shape; the set-level clamp moves them all by the same, smaller amount. The
+ * keyboard nudge reaches the same answer by refusing `Alt+↑` at the top, and the drag shares this
+ * so the two inputs agree at the boundary.
+ */
+export function clampLaneDelta(
+  activities: readonly ActivitySummary[],
+  delta: BulkMoveDelta,
+): BulkMoveDelta {
+  if (delta.laneDelta >= 0 || activities.length === 0) return delta;
+  const laneDelta = Math.max(delta.laneDelta, 0 - Math.min(...activities.map((a) => a.laneIndex)));
+  return laneDelta === delta.laneDelta ? delta : { ...delta, laneDelta };
+}
+
 /** The placement a row already has — the `before` half of the undo snapshot. */
 export function currentPlacement(activity: ActivitySummary): ActivityPlacement {
   return {
@@ -113,8 +132,9 @@ export function bulkMoveSnapshots(params: {
   after: ActivityPlacement[];
   versions: Map<string, number>;
 } {
+  const delta = clampLaneDelta(params.activities, params.delta);
   const before = params.activities.map(currentPlacement);
-  const after = params.activities.map((a) => movedPlacement(a, params.delta));
+  const after = params.activities.map((a) => movedPlacement(a, delta));
   const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
   return { before, after, versions };
 }

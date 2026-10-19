@@ -124,7 +124,12 @@ import {
   type TsldEditOutcome,
 } from '@/features/tsld';
 import { dayOf, laneSnapshotOf, resolveLaneDrop } from '@/features/tsld/model/auto-resolve';
-import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bulk-move';
+import {
+  bulkMoveSnapshots,
+  clampLaneDelta,
+  isLaneOnly,
+  isNoOp,
+} from '@/features/tsld/model/bulk-move';
 import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
   activityDefinitionInput,
@@ -956,9 +961,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
        */
       moveMany: async (
         rows: readonly ActivitySummary[],
-        delta: { dayDelta: number; laneDelta: number },
+        requested: { dayDelta: number; laneDelta: number },
         options?: { coalesce?: boolean; pressedAt?: number },
       ): Promise<{ applied: boolean; conflict: string | null }> => {
+        // The set-level lane clamp, applied here as well as in the snapshots so a move that clamps
+        // down to nothing sends nothing, and the routing below reads the delta that is written.
+        const delta = clampLaneDelta(rows, requested);
         if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
