@@ -49,7 +49,11 @@ describe('calendarScopeErrorMessage', () => {
 
     expect(message).toContain(CALENDAR_ERROR.CALENDAR_SCOPE_NARROWING_BLOCKED);
     expect(message).toContain('2 plans, 1 activity and 3 resources');
-    expect(message).toContain('reassign them');
+    expect(message).toBe(
+      `${CALENDAR_ERROR.CALENDAR_SCOPE_NARROWING_BLOCKED} Still used by 2 plans, 1 activity and 3 resources outside it — ` +
+        'reassign them to another calendar first; anything in Recently deleted counts too, ' +
+        'so restore it and move it, or leave it there until it is cleared.',
+    );
   });
 
   it('drops zero classes from the narrowing counts rather than saying "0 plans"', () => {

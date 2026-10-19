@@ -68,6 +68,11 @@ export class ProjectPlansController {
   @ApiCreatedResponse({ type: PlanResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'A plan with this name already exists for this project.' })
+  @ApiNotFoundResponse({
+    description:
+      'Organisation or project not found (or the caller is not a member), including' +
+      ' a project that was deleted while this request was in flight.',
+  })
   async create(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

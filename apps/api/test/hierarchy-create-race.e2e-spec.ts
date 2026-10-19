@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import { permissionsForRole } from '../src/common/auth/org-permissions';
 import { Principal } from '../src/common/auth/principal';
 import { ClientsService } from '../src/modules/clients/clients.service';
+import { InterchangeService } from '../src/modules/interchange/interchange.service';
 import { PlansService } from '../src/modules/plans/plans.service';
 import { ProjectsService } from '../src/modules/projects/projects.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -35,8 +36,11 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  *   create resumes, finds the parent deleted and is refused 404, inserting nothing. Without the
  *   transaction there is no second look and the row lands active under the deleted parent.
  *
+ * The XER import creates a plan (and calendars) under a project by the same route, so it is held
+ * at the same seams.
+ *
  * **Verify it red before trusting it:** remove `lockActiveProjectChainForShare` from
- * `PlansService.create`, or `lockActiveClientForShare` from `ProjectsService.create`, and the cases
+ * `PlansService.create` or `InterchangeService.commit`, or `lockActiveClientForShare` from `ProjectsService.create`, and the cases
  * naming them must fail.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -46,6 +50,25 @@ const PASSWORD = 'correct-horse-battery';
 const HOLD_MS = 1_000;
 /** Guard so a create that never reaches the seam fails the test instead of hanging it. */
 const REACH_TIMEOUT_MS = 15_000;
+
+/** The smallest well-formed XER: one project, one task. */
+const MINIMAL_XER = [
+  'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+  '%T\tPROJECT',
+  '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date',
+  '%R\tP1\tSample\t2026-01-05 00:00\t2026-01-04 00:00',
+  '%T\tTASK',
+  '%F\ttask_id\tproj_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+  '%R\tT1\tP1\tA1000\tMobilise\tTT_Task\t40',
+  '%E',
+].join('\n');
+
+const xerUpload = () => ({
+  originalname: 'race.xer',
+  mimetype: 'application/octet-stream',
+  size: Buffer.byteLength(MINIMAL_XER),
+  buffer: Buffer.from(MINIMAL_XER, 'utf8'),
+});
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -296,5 +319,56 @@ describe.skipIf(!hasDatabase)('Create against a delete of its parent (below HTTP
     });
     expect(await orphans(w)).toEqual({ plans: 0, projects: 0 });
     expect(await prisma.project.count({ where: { clientId: w.clientId, name: 'Late' } })).toBe(0);
+  });
+
+  it('an XER import against a delete of its project ends with both deleted', async () => {
+    // Red without: lockActiveProjectChainForShare in InterchangeService.commit.
+    const w = await world();
+    const importer = app.get(InterchangeService);
+    const result = await raceHeld({
+      installSeam: (hold) =>
+        wrap(
+          (importer as unknown as { plans: Record<string, unknown> }).plans,
+          'create',
+          'before',
+          hold,
+        ),
+      create: () => importer.commit(w.principal, w.orgSlug, w.projectId, xerUpload()),
+      remove: () => app.get(ProjectsService).remove(w.principal, w.orgSlug, w.projectId),
+    });
+
+    expect(result.deleteFinishedWhileHeld, 'the delete was not held by the import').toBe(false);
+    // The import commits and the delete then sweeps the new plan. The recalculation that follows
+    // either read the plan first (the import succeeds, its plan already in the bin) or finds it gone
+    // (the import fails and its compensation, CLAUDE.md §17, hard-deletes what it made), and which
+    // wins is a race of its own. What must hold either way: nothing is left ACTIVE under the
+    // deleted project.
+    expect(result.removeResult.status).toBe('fulfilled');
+    expect(await orphans(w)).toEqual({ plans: 0, projects: 0 });
+    expect(await prisma.plan.count({ where: { projectId: w.projectId, deletedAt: null } })).toBe(0);
+  });
+
+  it('an XER import that read its project before the delete committed is refused 404', async () => {
+    const w = await world();
+    const importer = app.get(InterchangeService);
+    const result = await raceHeld({
+      installSeam: (hold) =>
+        wrap(
+          (importer as unknown as { projects: Record<string, unknown> }).projects,
+          'findActiveByIdInOrg',
+          'after',
+          hold,
+        ),
+      create: () => importer.commit(w.principal, w.orgSlug, w.projectId, xerUpload()),
+      remove: () => app.get(ProjectsService).remove(w.principal, w.orgSlug, w.projectId),
+    });
+
+    expect(result.deleteFinishedWhileHeld, 'the delete had nothing to wait for').toBe(true);
+    expect(result.createResult).toMatchObject({
+      status: 'rejected',
+      reason: { message: 'Project not found.' },
+    });
+    expect(await orphans(w)).toEqual({ plans: 0, projects: 0 });
+    expect(await prisma.plan.count({ where: { projectId: w.projectId } })).toBe(0);
   });
 });

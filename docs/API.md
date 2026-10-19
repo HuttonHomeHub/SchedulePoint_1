@@ -206,6 +206,13 @@ the edit-lock endpoints and the gated-write note below. (Separately, a **409** o
 control" — not a lock/version conflict; it reads the same "conflicting state" 409
 as e.g. restoring a child whose parent is still deleted.)
 
+**A create under a parent answers 404 if the parent was deleted while it ran.**
+`POST …/clients/:clientId/projects`, `POST …/projects/:projectId/plans` and the XER import commit
+(`POST …/projects/:projectId/interchange/commit`) read the parent, then lock it in the transaction that inserts
+(`docs/TECH_DEBT.md` #531). A parent deleted between the two is `404` ("Project not found." /
+"Client not found.") and nothing is created; a parent deleted after the lock waits for the create
+and then sweeps the new row with its siblings. The OpenAPI 404 on each create says so.
+
 ### Plan edit-lock (ADR-0028)
 
 The single-editor "pen" lives under a plan as an `edit-lock` sub-resource. Reads
@@ -1497,8 +1504,9 @@ nothing on screen to say why (`docs/TECH_DEBT.md` #519). The envelope is the one
 - `PARENT_DELETED` is reported first when both apply.
 - **409 `CALENDAR_OTHER_PROJECT`** (ADR-0201 D5) is the second refusal on the same routes: a plan or
   activity in the batch uses an active **PROJECT**-tier calendar that now belongs to a different project
-  (an ORG calendar can be narrowed while the plan sits in the bin, because the narrowing guard counts only
-  active users, `docs/TECH_DEBT.md` #530). `details` carries `calendar` `{ id, name, deleteBatchId }` and
+  (the narrowing guard now counts rows in Recently deleted and refuses that narrowing, so the state
+  arises only from a narrowing made before `docs/TECH_DEBT.md` #530 was fixed, or by another route).
+  `details` carries `calendar` `{ id, name, deleteBatchId }` and
   `projectId`, the project the calendar now belongs to; `calendar.deleteBatchId` is **`null`**, because the
   calendar is live. It is checked after `CALENDAR_DELETED`, and `PARENT_DELETED` outranks both. It is a
   different string from the **422** `CALENDAR_WRONG_SCOPE` a binding write answers with. The cure is to make the
