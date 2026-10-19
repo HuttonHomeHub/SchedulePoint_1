@@ -322,7 +322,7 @@ async function seedProgramme(page, slug) {
       successorId: made[made.length - 1].id,
     });
     // **A THIRD path, sized to land NEAR-CRITICAL** — total float > 0 but ≤ 5 days
-    // (`NEAR_CRITICAL_THRESHOLD_MINUTES`). Without it the fixture has only two of the three
+    // (`NEAR_CRITICAL_THRESHOLD_DAYS`). Without it the fixture has only two of the three
     // criticality states, so the tightest pair in the whole ladder — near-critical against
     // on-schedule at 1.55:1 — was verified by the contrast matrix and by NOTHING that renders.
     // The legend printed a swatch with no bar anywhere in the evidence set to point at.

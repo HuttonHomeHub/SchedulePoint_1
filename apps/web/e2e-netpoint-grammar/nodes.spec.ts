@@ -96,7 +96,7 @@ test.describe('NetPoint grammar — bars and nodes', () => {
    * **All three rungs, measured** (FC-G4). The reference plan has no near-critical activity (nothing
    * there has 1–5 days of total float), so the accessibility review could judge only critical against
    * on schedule from its pictures. This plan has one of each: `Pour` and `Cure` are the critical
-   * chain, `Rebar` feeds `Cure` with 3 days of float (near-critical, `NEAR_CRITICAL_THRESHOLD_MINUTES`
+   * chain, `Rebar` feeds `Cure` with 3 days of float (near-critical, `NEAR_CRITICAL_THRESHOLD_DAYS`
    * is 5 days) and `Fence` stands alone with 11.
    *
    * Each rung's rim is measured by walking straight UP from a node's centre, clear of the bar that
