@@ -605,8 +605,26 @@ function drawLegend(
   const swatchTop = y + 3;
   ctx.font = LEGEND_FONT;
   ctx.textBaseline = 'alphabetic';
+  const measure = (text: string): number => {
+    const measured = ctx.measureText(text) as TextMetrics | undefined;
+    return (measured && measured.width) || text.length * 6.5;
+  };
+  const limit = maxWidth - BAND_PAD;
   let x = BAND_PAD;
-  for (const entry of legend) {
+  for (let i = 0; i < legend.length; i += 1) {
+    const entry = legend[i]!;
+    const entryWidth = SWATCH_W + LEGEND_LABEL_GAP + measure(entry.label);
+    const left = legend.length - i - 1;
+    // Reserve room for the "+N more" the NEXT entry would need if this one is the last that fits, so
+    // the count itself can never be the thing that overflows. A narrow crop used to drop the
+    // trailing entries without a word (TECH_DEBT #525); ADR-0127 D3 counts what it does not draw,
+    // and the strip caption below already does (ADR-0200 D3).
+    const reserve = left > 0 ? LEGEND_ENTRY_GAP + measure(`+${String(left)} more`) : 0;
+    if (x + entryWidth + reserve > limit) {
+      ctx.fillStyle = palette.mutedInk;
+      ctx.fillText(`+${String(legend.length - i)} more`, x, y + SWATCH_H);
+      return;
+    }
     const colour = entry.colour(palette);
     if (entry.kind === 'fill') {
       ctx.fillStyle = colour;
@@ -661,15 +679,9 @@ function drawLegend(
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    const labelX = x + SWATCH_W + LEGEND_LABEL_GAP;
     ctx.fillStyle = palette.mutedInk;
-    ctx.fillText(entry.label, labelX, y + SWATCH_H);
-    const measured = ctx.measureText(entry.label) as TextMetrics | undefined;
-    const labelWidth = (measured && measured.width) || entry.label.length * 6.5;
-    const nextX = labelX + labelWidth + LEGEND_ENTRY_GAP;
-    // Stop cleanly if the row would overflow the raster (rare — a very narrow view crop).
-    if (nextX > maxWidth) break;
-    x = nextX;
+    ctx.fillText(entry.label, x + SWATCH_W + LEGEND_LABEL_GAP, y + SWATCH_H);
+    x += entryWidth + LEGEND_ENTRY_GAP;
   }
 }
 

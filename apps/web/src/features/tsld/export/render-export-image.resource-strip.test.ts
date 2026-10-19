@@ -224,7 +224,9 @@ describe('renderExportImage — the resource strip', () => {
 
     expect(drawn).toContain('Crane crew');
     expect(drawn).not.toContain('Other (4 resources)');
-    const more = drawn.find((t) => /^\+\d+ more$/.test(t));
+    // At 190 px the title band's own key overflows too and says so (#525), so the caption's count
+    // is the LAST one drawn: the caption paints after the band.
+    const more = drawn.filter((t) => /^\+\d+ more$/.test(t)).at(-1);
     expect(more).toBeDefined();
     // Drawn + counted = every entry: nothing vanishes silently (ADR-0127 D3).
     const shown = crowded.legend.filter((e) => drawn.includes(e.label)).length;

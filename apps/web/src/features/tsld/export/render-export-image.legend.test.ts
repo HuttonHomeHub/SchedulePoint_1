@@ -87,3 +87,22 @@ describe('the export legend names the over-allocation badge exactly when it is d
     expect(await legendLabels({ flaggedIds: new Set(['a1']) })).not.toContain('Over-allocated');
   });
 });
+
+describe('a narrow crop counts the legend entries it cannot fit (#525)', () => {
+  it('draws the entries that fit and states how many it dropped', async () => {
+    flags.resourceView = true;
+    const scene = { flaggedIds: new Set(['a1']) };
+    const whole = await legendLabels(scene);
+    expect(whole.some((label) => /^\+\d+ more$/.test(label))).toBe(false);
+
+    const narrow = await legendLabels(scene, 200);
+    const more = narrow.find((label) => /^\+\d+ more$/.test(label));
+    expect(more, 'a key that lost entries says so').toBeDefined();
+    const dropped = Number(/\d+/.exec(more!)![0]);
+    const drawn = narrow.filter((label) => label !== more);
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.length + dropped).toBe(whole.length);
+    // The entries kept are the leading ones, in order: the count never swaps them.
+    expect(drawn).toEqual(whole.slice(0, drawn.length));
+  });
+});
