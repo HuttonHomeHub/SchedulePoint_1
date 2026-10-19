@@ -1543,12 +1543,12 @@ export const CALENDAR_ERROR = {
    */
   RESOURCE_REQUIRES_ORG_CALENDAR: 'A resource can only use an organisation-wide calendar.',
   /**
-   * Narrowing an ORG calendar to one project while active plans/activities outside that project
-   * — or any active resource — still reference it (→ 409). Widening is always safe and never
+   * Narrowing an ORG calendar to one project while plans/activities outside that project
+   * — or any resource — still reference it, **including ones in Recently deleted** (→ 409). Widening is always safe and never
    * blocked; the per-class counts ride in `details`.
    */
   CALENDAR_SCOPE_NARROWING_BLOCKED:
-    'This calendar is still used outside the project you are narrowing it to.',
+    'This calendar is still used outside the project you are narrowing it to, including by anything in Recently deleted.',
   /** `scope: PROJECT` needs a `projectId`, and `scope: ORG` forbids one (→ 422). */
   CALENDAR_SCOPE_PROJECT_MISMATCH:
     'A project calendar must name the project it belongs to, and an organisation calendar must not name one.',

@@ -445,18 +445,21 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
 
   // ---------------------------------------------------------------------------------------------
   describe('a calendar narrowed to another project while the plan was in the bin (ADR-0201 D5)', () => {
-    /** Narrow the plan's ORG calendar to a second project, which the guard allows: no ACTIVE user. */
+    /**
+     * Move the plan's ORG calendar to a second project **underneath** the API. The narrowing guard
+     * now counts a binned plan or activity (#530), so the PATCH is refused; the restore guard (D5)
+     * is the defence in depth for a calendar that moved anyway, and this is how a test reaches it.
+     */
     async function narrowToOtherProject(w: World): Promise<string> {
       const other = await w.actor.agent
         .post(`${API}/clients/${w.clientId}/projects`)
         .send({ name: 'Elsewhere' })
         .expect(201);
       const otherProjectId = other.body.data.id as string;
-      const { version } = await prisma.calendar.findUniqueOrThrow({ where: { id: w.calendarId } });
-      await w.actor.agent
-        .patch(`${API}/calendars/${w.calendarId}`)
-        .send({ scope: 'PROJECT', projectId: otherProjectId, version })
-        .expect(200);
+      await prisma.calendar.update({
+        where: { id: w.calendarId },
+        data: { scope: 'PROJECT', projectId: otherProjectId },
+      });
       return otherProjectId;
     }
 
@@ -491,11 +494,10 @@ describe.skipIf(!hasDatabase)('Restore onto a deleted calendar (e2e)', () => {
         .post(`${API}/clients/${w.clientId}/projects`)
         .send({ name: 'Elsewhere' })
         .expect(201);
-      const { version } = await prisma.calendar.findUniqueOrThrow({ where: { id: own.id } });
-      await w.actor.agent
-        .patch(`${API}/calendars/${own.id}`)
-        .send({ scope: 'PROJECT', projectId: other.body.data.id, version })
-        .expect(200);
+      await prisma.calendar.update({
+        where: { id: own.id },
+        data: { scope: 'PROJECT', projectId: other.body.data.id },
+      });
       await w.pen();
 
       const refused = await w.actor.agent.post(
