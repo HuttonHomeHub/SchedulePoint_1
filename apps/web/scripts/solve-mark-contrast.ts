@@ -199,7 +199,7 @@ for (const [name, c] of [
 }
 
 out('\n## Reported, not fixed here\n');
-const rungs: Array<[string, Oklch]> = [['--plot-warning', [0.528, 0.13, 62]]];
+const rungs: Array<[string, Oklch]> = [['--plot-warning', [0.528, 0.12, 62]]];
 for (const [name, c] of rungs)
   out(
     `${name} ${css(c)} in sRGB gamut: ${oklchInGamut(...c)} (tolerance 1e-4); ratio on ground ${fmtRatio(

@@ -1098,7 +1098,9 @@
   --plot-secondary-foreground: var(--page-secondary-foreground);
   --plot-success: oklch(0.475 0.084 178);
   --plot-success-foreground: var(--page-success-foreground);
-  --plot-warning: oklch(0.528 0.13 62);
+  /* Chroma 0.12, not 0.13: at 0.528 / 62 the 0.13 asked for a blue channel below zero, which a
+     browser clamps, so the gate measured a colour the screen did not show (TECH_DEBT #523). */
+  --plot-warning: oklch(0.528 0.12 62);
   --plot-warning-foreground: oklch(1 0 0);
   --plot-info: var(--page-info);
   --plot-info-foreground: var(--page-info-foreground);
