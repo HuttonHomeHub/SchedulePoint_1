@@ -31,6 +31,7 @@ describe('createAuth security options', () => {
     isProduction: false,
     requireEmailVerification: false,
     sendVerificationEmail: () => Promise.resolve(),
+    verifyPageUrl: 'http://localhost:5173/verify-email',
     sendPasswordReset: () => Promise.resolve(),
     recordAuthEvent: () => Promise.resolve(),
     findUserIdByEmail: () => Promise.resolve(null),
@@ -41,6 +42,33 @@ describe('createAuth security options', () => {
     const auth = createAuth(prisma, options);
 
     expect(auth.options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it('emails a link to the confirm page with the token in the fragment (TECH_DEBT #88)', async () => {
+    // The library's own `url` points at its GET /verify-email, which verifies on arrival — so any
+    // scanner that fetches the link would verify the address. The emailed link must be ours, and the
+    // token must be in the fragment so no server, proxy log or Referer ever holds it.
+    const sent: { to: string; verifyUrl: string }[] = [];
+    const auth = createAuth(prisma, {
+      ...options,
+      sendVerificationEmail: (input) => {
+        sent.push(input);
+        return Promise.resolve();
+      },
+    });
+
+    await auth.options.emailVerification?.sendVerificationEmail?.({
+      user: { email: 'a@example.com' } as never,
+      url: 'http://localhost:3000/api/auth/verify-email?token=tok.en&callbackURL=%2F',
+      token: 'tok.en+/=',
+    });
+
+    expect(sent).toEqual([
+      {
+        to: 'a@example.com',
+        verifyUrl: 'http://localhost:5173/verify-email#token=tok.en%2B%2F%3D',
+      },
+    ]);
   });
 
   it('routes the auth library’s own logging into the injected sink (TECH_DEBT #94)', () => {

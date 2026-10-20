@@ -18,6 +18,7 @@ import {
   LockedError,
   NotFoundError,
   ValidationError,
+  VerificationLinkExpiredError,
 } from '../errors/domain-errors';
 import { isBodyParserError } from '../http/body-parser-errors';
 
@@ -163,7 +164,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (error instanceof NotFoundError) return HttpStatus.NOT_FOUND;
     if (error instanceof ConflictError) return HttpStatus.CONFLICT;
     if (error instanceof ForbiddenError) return HttpStatus.FORBIDDEN;
-    if (error instanceof GoneError) return HttpStatus.GONE;
+    if (error instanceof GoneError || error instanceof VerificationLinkExpiredError) {
+      return HttpStatus.GONE;
+    }
     if (error instanceof LockedError) return HttpStatus.LOCKED;
     if (error instanceof ValidationError) return HttpStatus.UNPROCESSABLE_ENTITY;
     return HttpStatus.BAD_REQUEST;

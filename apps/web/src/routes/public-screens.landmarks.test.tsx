@@ -132,12 +132,19 @@ describe('every public screen is one page with one heading', () => {
 
   it('verify-email — verified', () => {
     mount(<VerifyEmailScreen />, { verified: '1' });
-    expectPublicHeading('Email verified');
+    expectPublicHeading('Email address confirmed');
   });
 
   it('verify-email — the link failed', () => {
     mount(<VerifyEmailScreen />, { error: 'TOKEN_EXPIRED' });
     expectPublicHeading('That link did not work');
+  });
+
+  it('verify-email — the emailed link, before the press', () => {
+    window.location.hash = '#token=tok';
+    mount(<VerifyEmailScreen />);
+    expectPublicHeading('Confirm your email address');
+    window.location.hash = '';
   });
 
   it('verify-email — waiting', () => {

@@ -44,6 +44,23 @@ export class GoneError extends DomainError {
 }
 
 /**
+ * A verification link whose token has aged out (→ 410). Its own code, not `GONE`, because the page
+ * answering it offers a different remedy — send a new link — than any other expired thing does.
+ */
+export class VerificationLinkExpiredError extends DomainError {
+  readonly code = 'VERIFICATION_LINK_EXPIRED';
+}
+
+/**
+ * A verification link that cannot be used and is not merely old: malformed, forged, or naming an
+ * account that no longer exists (→ 400, the default). One error for all three, so the answer never
+ * narrates whether an account exists.
+ */
+export class VerificationLinkInvalidError extends DomainError {
+  readonly code = 'VERIFICATION_LINK_INVALID';
+}
+
+/**
  * The action requires holding the plan edit-lock (the "pen") and the caller does
  * not, or the caller's lease was taken over / expired (→ 423 Locked). Distinct
  * from {@link ConflictError} (409): a 409 is a lost-update / uniqueness clash on a

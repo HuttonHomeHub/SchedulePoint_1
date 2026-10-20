@@ -355,9 +355,12 @@ function passwordResetText(email: PasswordResetEmail): string {
 /** Mirrors {@link invitationText}: plain text, one action, no template machinery. */
 function verificationText(email: EmailVerificationEmail): string {
   return [
-    'Confirm your email address to finish setting up your SchedulePoint account:',
+    'Open this link, then press “Confirm my email address” to finish setting up your ' +
+      'SchedulePoint account:',
     '',
     email.verifyUrl,
+    '',
+    'The link works for about an hour.',
     '',
     'If you did not create an account, you can ignore this message.',
   ].join('\n');

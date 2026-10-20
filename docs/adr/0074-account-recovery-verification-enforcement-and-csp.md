@@ -489,6 +489,17 @@ Each milestone Accepts when it lands, in the ADR-0035 style, so a reader can tel
 | **M5-T2** — CSP to enforce                | **Pending — operator**  | Needs an observed clean report-only window across every route with the console open. The automated gate (`test:e2e:csp`) covers the signed-out surfaces and the authenticated shell; canvas export, the printed programme and `upgrade-insecure-requests` still need a human with a console. Not code.                      |
 | **M5-T6/T7/T8** — verification enforced   | **Pending — operator**  | Ordered: a bundle carrying M2 **and** the M5 fixes must be live first, then count unverified accounts, then backfill the ones already holding a membership, then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. Enforcing against an older bundle re-arms the three dead ends M2 closed. `TECH_DEBT` #16.                      |
 
+## Amendment, 2026-10-20 — the emailed verification link confirms on a press
+
+M2 above treats `/verify-email` as a landing screen that Better Auth's own `GET /verify-email`
+redirects to after verifying. That shape let a mail scanner that fetched the link verify the address
+for the recipient (`docs/TECH_DEBT.md` #88). It is replaced, by the owner's approval of
+[`docs/specs/verify-email-confirm/spec.md`](../specs/verify-email-confirm/spec.md): the emailed link is
+`{web}/verify-email#token=…`, the page verifies nothing until **Confirm** is pressed, and the press
+`POST`s the token to `/api/v1/email-verification/confirm`, which calls Better Auth's verifier. The old
+`GET /api/auth/verify-email` is shadowed with a `303` to the page. Nothing else in this ADR changes:
+the reset link already had the page-plus-POST shape, and no session is issued on confirm.
+
 ## References
 
 - Spec and plan: [`docs/specs/account-security/`](../specs/account-security/feature-spec.md)

@@ -2212,6 +2212,32 @@ controller's 30 / 60 s per handler.
   their organisation memberships).
 - Protected routes are guarded server-side; `401`/`403` as per the table above.
 
+### Confirming an email address (TECH_DEBT #88)
+
+`POST /api/v1/email-verification/confirm` — `@Public()`, body `{ "token": string }` (non-empty, at
+most 2048 characters; the token is the one in the **fragment** of the emailed link,
+`{web}/verify-email#token=…`). Throttled to 10 requests per minute per IP.
+
+It exists because Better Auth's own `GET /api/auth/verify-email` verifies on arrival, so a mail
+scanner that fetched the emailed link verified the address for the recipient. The emailed link now
+opens a page, and only this `POST` — sent when the person presses **Confirm** — verifies.
+
+| Status | `error.code`                | Meaning                                                                                              |
+| ------ | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `200`  | —                           | `{ "data": { "verified": true } }`. Also returned for an address that is already verified.           |
+| `400`  | `VERIFICATION_LINK_INVALID` | Malformed or forged token, or its account no longer exists (one code, so existence is not narrated). |
+| `410`  | `VERIFICATION_LINK_EXPIRED` | The token is older than an hour.                                                                     |
+| `422`  | `VALIDATION_FAILED`         | Body failed validation (no token, empty, not a string, too long).                                    |
+| `429`  | `RATE_LIMITED`              | Too many attempts.                                                                                   |
+
+No session is issued: confirming never signs anyone in. The `auth.email_verified` audit row is
+written once, on the press, carrying the caller's IP and user agent.
+
+**The legacy link is shadowed.** `GET` and `HEAD` `/api/auth/verify-email?token=…` (the shape in
+emails sent before this change, valid for up to an hour) never verify: they answer `303` to
+`{web}/verify-email#token=…` (or `?error=INVALID_TOKEN` with no usable token), with
+`Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+
 ## OpenAPI / docs
 
 - The spec is generated from decorators (`@nestjs/swagger`) and served at

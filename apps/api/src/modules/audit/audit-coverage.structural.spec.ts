@@ -76,6 +76,9 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'DELETE /api/v1/organizations/:orgSlug/projects/:projectId': ['project.deleted'],
   'PATCH /api/v1/organizations/:orgSlug/members/:memberId': ['member.role_changed'],
   'POST /api/v1/invitations/accept': ['invitation.accepted', 'member.joined'],
+  // Recorded by Better Auth's `afterEmailVerification` seam, not by the controller (TECH_DEBT #88):
+  // the confirm POST calls the library's verifier, which writes `auth.email_verified` itself.
+  'POST /api/v1/email-verification/confirm': ['auth.email_verified'],
   'POST /api/v1/organizations': ['organization.created', 'member.joined'],
   'POST /api/v1/organizations/:orgSlug/clients/:clientId/restore': ['client.restored'],
   'POST /api/v1/organizations/:orgSlug/invitations': ['invitation.created'],

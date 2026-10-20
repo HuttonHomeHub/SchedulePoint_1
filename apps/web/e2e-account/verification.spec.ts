@@ -26,6 +26,7 @@ import { firstUrlIn, SmtpSink } from './smtp-sink';
 const PASSWORD = 'correct-horse-battery';
 
 const SMTP_PORT = Number(process.env.E2E_SMTP_PORT ?? 3026);
+const API_PORT = process.env.E2E_VERIFY_API_PORT ?? '3001';
 const sink = new SmtpSink();
 
 test.beforeAll(async () => {
@@ -42,6 +43,32 @@ async function signUp(page: Page, email: string, name: string): Promise<void> {
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: /create an account/i }).click();
+}
+
+/**
+ * Open the emailed link and press Confirm (TECH_DEBT #88): the link opens a page, and only the
+ * press verifies. Returns on the "confirmed" screen, where the way on is a Sign in link.
+ */
+async function followAndConfirm(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await expect(page.getByRole('heading', { name: 'Confirm your email address' })).toBeVisible();
+  await page.getByRole('button', { name: 'Confirm my email address' }).click();
+  await expect(page.getByRole('heading', { name: 'Email address confirmed' })).toBeVisible();
+}
+
+async function expectNoAxeViolations(page: Page): Promise<void> {
+  await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze()
+    .then((r) => expect(r.violations, JSON.stringify(r.violations, null, 2)).toEqual([]));
+}
+
+async function expectSignInRefused(page: Page, email: string): Promise<void> {
+  await page.goto('/sign-in');
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('Confirm your email address first')).toBeVisible();
 }
 
 test('sign-up with verification enforced explains itself instead of bouncing', async ({
@@ -63,10 +90,7 @@ test('sign-up with verification enforced explains itself instead of bouncing', a
   // The address rides along so the resend does not have to ask for it again.
   expect(new URL(page.url()).searchParams.get('email')).toBe(email);
 
-  await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa'])
-    .analyze()
-    .then((r) => expect(r.violations, JSON.stringify(r.violations, null, 2)).toEqual([]));
+  await expectNoAxeViolations(page);
 
   // ---------------------------------------------------------------- sign-in explains, with a way out
   const signInContext = await browser.newContext();
@@ -85,9 +109,8 @@ test('sign-up with verification enforced explains itself instead of bouncing', a
   await expect(signInPage.getByText(/an email is on its way/i)).toBeVisible();
 
   // ---------------------------------------------------------------- follow the link, then sign in
-  const mail = await sink.waitFor(email, /\/verify-email\?/);
-  await signInPage.goto(firstUrlIn(mail.body));
-  await expect(signInPage.getByRole('heading', { name: 'Email verified' })).toBeVisible();
+  const mail = await sink.waitFor(email, /\/verify-email#/);
+  await followAndConfirm(signInPage, firstUrlIn(mail.body));
 
   await signInPage.getByRole('link', { name: 'Sign in' }).click();
   await signInPage.getByLabel('Email', { exact: true }).fill(email);
@@ -115,8 +138,8 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
   const adminContext = await browser.newContext();
   const admin = await adminContext.newPage();
   await signUp(admin, adminEmail, 'Verify Inviter');
-  const adminMail = await sink.waitFor(adminEmail, /\/verify-email\?/);
-  await admin.goto(firstUrlIn(adminMail.body));
+  const adminMail = await sink.waitFor(adminEmail, /\/verify-email#/);
+  await followAndConfirm(admin, firstUrlIn(adminMail.body));
   await admin.getByRole('link', { name: 'Sign in' }).click();
   await admin.getByLabel('Email', { exact: true }).fill(adminEmail);
   await admin.getByLabel('Password').fill(PASSWORD);
@@ -151,8 +174,8 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
   // They have to be signed in for the card to know who they are, and signing in is refused while
   // unverified — so this is the path a real invitee takes: verify is the only way forward, and the
   // card must say so rather than offering an Accept the server will refuse.
-  const inviteeMail = await sink.waitFor(inviteeEmail, /\/verify-email\?/);
-  await invitee.goto(firstUrlIn(inviteeMail.body));
+  const inviteeMail = await sink.waitFor(inviteeEmail, /\/verify-email#/);
+  await followAndConfirm(invitee, firstUrlIn(inviteeMail.body));
   await invitee.getByRole('link', { name: 'Sign in' }).click();
   await invitee.getByLabel('Email', { exact: true }).fill(inviteeEmail);
   await invitee.getByLabel('Password').fill(PASSWORD);
@@ -172,4 +195,68 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
 
   await adminContext.close();
   await inviteeContext.close();
+});
+
+test('fetching the emailed link, or the old API link, verifies nothing; only the press does', async ({
+  browser,
+  request,
+}) => {
+  const email = `scanner-${Date.now()}@example.com`;
+  sink.clear();
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signUp(page, email, 'Scanner Subject');
+  const mail = await sink.waitFor(email, /\/verify-email#/);
+  const emailedUrl = firstUrlIn(mail.body);
+  const token = new URLSearchParams(new URL(emailedUrl).hash.slice(1)).get('token');
+  expect(token, 'the token travels in the fragment').toBeTruthy();
+
+  // What a mail scanner does: fetch the link. The fragment is never sent, so this is the page shell.
+  expect((await request.get(emailedUrl)).ok()).toBe(true);
+  // And the shape emails carried before this change, aimed straight at the API: GET and HEAD must
+  // redirect to the page and verify nothing.
+  const legacy = `http://localhost:${API_PORT}/api/auth/verify-email?token=${encodeURIComponent(token ?? '')}`;
+  for (const method of ['get', 'head'] as const) {
+    const res = await request[method](legacy, { maxRedirects: 0 });
+    expect(res.status(), `${method} of the legacy link`).toBe(303);
+    expect(res.headers()['location']).toContain('/verify-email#token=');
+  }
+  const refusedContext = await browser.newContext();
+  await expectSignInRefused(await refusedContext.newPage(), email);
+  await refusedContext.close();
+
+  // The page shows its button and, on arrival, has sent nothing.
+  await page.goto(emailedUrl);
+  await expect(page.getByRole('heading', { name: 'Confirm your email address' })).toBeVisible();
+  await expectNoAxeViolations(page);
+  // The token is stripped from the address bar once captured.
+  await expect(page).toHaveURL(/\/verify-email$/);
+
+  await page.getByRole('button', { name: 'Confirm my email address' }).click();
+  await expect(page.getByRole('heading', { name: 'Email address confirmed' })).toBeVisible();
+  await expectNoAxeViolations(page);
+
+  await page.getByRole('link', { name: 'Sign in' }).click();
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  await context.close();
+});
+
+test('a link that is not a token says so after the press, and offers a fresh one', async ({
+  page,
+}) => {
+  await page.goto('/verify-email#token=garbage');
+  await page.getByRole('button', { name: 'Confirm my email address' }).click();
+
+  await expect(page.getByRole('heading', { name: 'That link did not work' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /send another verification email/i }),
+  ).toBeVisible();
+  await expectNoAxeViolations(page);
 });
