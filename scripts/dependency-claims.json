@@ -575,6 +575,14 @@
       "path": "dist/api/routes/email-verification.mjs",
       "lines": "287-288",
       "anchor": "\tif (user.user.emailVerified) {\n\t\tif (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
+      "citedBy": ["docs/specs/verify-email-confirm/spec.md", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "email-verification.mjs:287-288",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "287-288",
+      "anchor": "\tif (user.user.emailVerified) {\n\t\tif (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["apps/web/src/routes/verify-email.tsx"]
     },
     {
@@ -767,14 +775,6 @@
         "docs/adr/0077-public-screens-brand-surface.md",
         "docs/specs/public-screens-brand/implementation-plan.md"
       ]
-    },
-    {
-      "ref": "sign-up.mjs:150",
-      "package": "better-auth",
-      "path": "dist/api/routes/sign-up.mjs",
-      "lines": "150",
-      "anchor": "const { name, email, password, image, callbackURL: _callbackURL, rememberMe, ...rest } = b",
-      "citedBy": ["apps/web/src/features/auth/api/use-session.ts"]
     },
     {
       "ref": "sign-up.mjs:163",
