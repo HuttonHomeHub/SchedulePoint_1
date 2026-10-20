@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { resolveFieldGate, useFieldGate } from '@/components/ui/field-gate';
 
 /** Pick the "other end" of a link relative to the activity the panel is about. */
 export type Endpoint = 'predecessor' | 'successor';
@@ -37,6 +38,12 @@ export function DependencyTable({
   endpoint: Endpoint;
   caption: string;
   emptyLabel: string;
+  /**
+   * Passing both `onEdit` and `onRemove` adds the Actions column. A reader the enclosing
+   * `FieldGateProvider` has shut still gets the buttons, shaded and described by the gate's
+   * reason, and these are never called (TECH_DEBT #535); with no provider the column behaves as it
+   * always has.
+   */
   onEdit?: (dependency: DependencySummary) => void;
   onRemove?: (dependency: DependencySummary) => void;
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
@@ -49,6 +56,10 @@ export function DependencyTable({
   planCalendarId?: string;
   planActivities?: ActivitySummary[];
 }): React.ReactElement {
+  // Shut by the enclosing gate (the pen is taken), the buttons stay and shade rather than unmount:
+  // an unmounted focused button drops focus to `<body>` (WCAG 2.4.3). `aria-disabled`, never native
+  // `disabled`, so they stay in the tab order and the reason is reachable (ADR-0083).
+  const { shut, groupReasonId: reasonId } = resolveFieldGate(undefined, useFieldGate());
   // The whole endpoint, not just its calendar: which calendar an end's work happens on is
   // type-gated (`docs/TECH_DEBT.md` #86), so naming the calendar alone would supply half a frame.
   const endpointOf = (activityId: string): LagEndpoint | undefined =>
@@ -124,7 +135,7 @@ export function DependencyTable({
         // flag + write role) — absent, the row is byte-for-byte today's.
         <div
           className="flex justify-end gap-2"
-          {...(onNudgeLag
+          {...(onNudgeLag && !shut
             ? {
                 onKeyDown: (event: React.KeyboardEvent) => {
                   if (
@@ -143,7 +154,12 @@ export function DependencyTable({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onEdit(dep)}
+            aria-disabled={shut || undefined}
+            aria-describedby={reasonId}
+            // The click guard `aria-disabled` needs: it leaves the button clickable.
+            onClick={() => {
+              if (!shut) onEdit(dep);
+            }}
             aria-label={`Edit link to ${dep[endpoint].name}`}
           >
             Edit
@@ -151,7 +167,11 @@ export function DependencyTable({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onRemove(dep)}
+            aria-disabled={shut || undefined}
+            aria-describedby={reasonId}
+            onClick={() => {
+              if (!shut) onRemove(dep);
+            }}
             aria-label={`Remove link to ${dep[endpoint].name}`}
           >
             Remove

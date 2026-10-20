@@ -891,6 +891,9 @@ export function ActivityEditorSession({
                   calendars={calendars}
                   {...(planCalendarId === undefined ? {} : { planCalendarId })}
                   canManageLogic={gating.logic.writable}
+                  // A Viewer keeps the plain tables; a Planner whose pen was taken keeps the row
+                  // buttons, shaded (`docs/TECH_DEBT.md` #535).
+                  roleCanManageLogic={!gating.logic.roleDenied}
                   enabled={current === 'logic'}
                   activity={activity}
                   {...(gating.logic.reason ? { manageLogicReason: gating.logic.reason } : {})}

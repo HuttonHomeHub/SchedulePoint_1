@@ -1471,8 +1471,11 @@ and this is the rule for choosing (`docs/TECH_DEBT.md` #69, owner's decision 202
   `EditDependencyDialog.tsx`).
 
 An in-place row stays mounted when the pen goes and its fields shade with the reason (ADR-0083 D5).
-A row whose edit lives in a dialog should shade the control that opens it; the Logic tab does not
-yet, and hides its Edit and Remove from a Planner without the pen instead (`docs/TECH_DEBT.md` #535).
+A row whose edit lives in a dialog shades the control that opens it: the Logic tab keeps a Planner's
+Edit and Remove, `aria-disabled` and described by the reason, when the pen is taken, and an open
+dialog closes rather than unmounting (`docs/TECH_DEBT.md` #535). A Viewer sees no buttons at all.
+The reason prints once per group — above the rows, and again above the add form — on purpose, as on
+the Resources tab.
 
 **Labels never say `(optional)`.** It was on eleven of twenty-two labels in one dialog, which is
 enough that it stopped meaning anything. Where optionality matters, the section description or the

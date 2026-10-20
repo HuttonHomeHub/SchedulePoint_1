@@ -10,6 +10,14 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-20 — The Logic tab shades a pen-less Planner's Edit and Remove (tech debt #535)
+
+#64's split, applied to the dependency rows. A Planner whose pen was taken keeps Edit and Remove on
+every row, `aria-disabled` and described by the one reason sentence; a Viewer keeps the table with
+no Actions column. Unmounting the buttons dropped a focused button's focus to `<body>`. The panel
+withholds that sentence while there are no rows, since the Add a link form below it already says it.
+The edit and remove dialogs stay mounted and close, so the browser returns focus to the opener.
+
 ## 2026-10-19 — Row editing: two idioms kept, and #64's split built (tech debt #64, #69)
 
 **#69 — keep both row-edit idioms, and write the rule.** The assignment row edits in place and the

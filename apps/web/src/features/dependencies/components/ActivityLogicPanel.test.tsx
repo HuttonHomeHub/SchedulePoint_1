@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityLogicPanel } from './ActivityLogicPanel';
 
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
@@ -285,5 +286,180 @@ describe('ActivityLogicPanel post-remove focus target (#67)', () => {
     expect(target).toContainElement(screen.getByRole('heading', { name: 'Successors' }));
     // The add form is NOT — that is the part that made the old target the wrong answer.
     expect(target).not.toContainElement(screen.getByRole('heading', { name: /Add a link/i }));
+  });
+});
+
+/**
+ * `docs/TECH_DEBT.md` #535. A Planner whose pen was taken used to meet a table with no Actions
+ * column at all, and a pen taken while Edit or Remove was focused unmounted that button and dropped
+ * focus to `<body>` (WCAG 2.4.3). The rows now keep their buttons, shaded with the Add a link form's
+ * own reason — the Resources tab's #64.
+ */
+describe('ActivityLogicPanel shaded rows (#535)', () => {
+  const REASON = 'Start editing to change this activity.';
+
+  beforeEach(() => {
+    fetchAllPages.mockReset().mockResolvedValue([link()]);
+    fetchOne.mockReset().mockResolvedValue({});
+  });
+
+  function shadedProps(
+    extra: Partial<React.ComponentProps<typeof ActivityLogicPanel>> = {},
+  ): Partial<React.ComponentProps<typeof ActivityLogicPanel>> {
+    return {
+      canManageLogic: false,
+      manageLogicReason: REASON,
+      roleCanManageLogic: true,
+      planActivities: OTHERS,
+      ...extra,
+    };
+  }
+
+  it('keeps a Viewer’s tables as they were: no Actions column, no reason sentence on the rows', async () => {
+    renderPanel({ roleCanManageLogic: false, planActivities: OTHERS });
+    await screen.findByText('Excavate');
+    expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove link/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(REASON)).not.toBeInTheDocument();
+  });
+
+  it('keeps a Viewer’s tables bare even when the host passes a reason', async () => {
+    renderPanel({ roleCanManageLogic: false, manageLogicReason: REASON });
+    await screen.findByText('Excavate');
+    expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove link/ })).not.toBeInTheDocument();
+  });
+
+  it('shows a pen-less Planner Edit and Remove, aria-disabled and described by the reason', async () => {
+    renderPanel(shadedProps());
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    const remove = screen.getByRole('button', { name: 'Remove link to Pour slab' });
+
+    for (const button of [edit, remove]) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      // Shaded, never natively disabled: it must stay in the tab order (ADR-0083).
+      expect(button).not.toBeDisabled();
+      const describedBy = button.getAttribute('aria-describedby');
+      expect(describedBy).toBeTruthy();
+      expect(document.getElementById(describedBy!)).toHaveTextContent(REASON);
+    }
+    // One sentence above the two tables, not one per row.
+    expect(edit.getAttribute('aria-describedby')).toBe(remove.getAttribute('aria-describedby'));
+  });
+
+  it('prints the reason once when there are no rows to describe: the form’s own sentence', async () => {
+    fetchAllPages.mockResolvedValue([]);
+    renderPanel(shadedProps());
+    await screen.findByText(/No predecessors/);
+    expect(screen.getAllByText(REASON)).toHaveLength(1);
+  });
+
+  it('writes nothing on a click: no dialog opens', async () => {
+    renderPanel(shadedProps());
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    fireEvent.click(edit);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link to Pour slab' }));
+
+    expect(screen.queryByRole('heading', { name: 'Edit dependency' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Remove dependency' })).not.toBeInTheDocument();
+    expect(fetchOne).not.toHaveBeenCalled();
+  });
+
+  it('nudges nothing on Shift + →, and does not advertise the chord', async () => {
+    const onNudgeLag = vi.fn();
+    renderPanel(shadedProps({ onNudgeLag }));
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    fireEvent.keyDown(edit, { key: 'ArrowRight', shiftKey: true });
+
+    expect(onNudgeLag).not.toHaveBeenCalled();
+    expect(screen.queryByText(/nudges that link’s lag/)).not.toBeInTheDocument();
+  });
+
+  it('still nudges for a writer (the guard is the gate, not the prop)', async () => {
+    const onNudgeLag = vi.fn();
+    renderPanel({ canManageLogic: true, planActivities: OTHERS, onNudgeLag });
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    fireEvent.keyDown(edit, { key: 'ArrowRight', shiftKey: true });
+    expect(onNudgeLag).toHaveBeenCalledWith(expect.objectContaining({ id: 'd1' }), 1);
+  });
+
+  it('keeps the focused Edit button focused and shades it when the pen is taken (AC3)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (props: Partial<React.ComponentProps<typeof ActivityLogicPanel>>) => (
+      <QueryClientProvider client={queryClient}>
+        <ActivityLogicPanel orgSlug="acme" planId="pl1" activity={ACTIVITY} {...props} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(
+      ui({ canManageLogic: true, roleCanManageLogic: true, planActivities: OTHERS }),
+    );
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    edit.focus();
+    expect(edit).toHaveFocus();
+    expect(edit).not.toHaveAttribute('aria-disabled');
+
+    rerender(ui(shadedProps()));
+
+    const after = screen.getByRole('button', { name: 'Edit link to Excavate' });
+    // The very same node: unmounting it is what dropped focus to <body>.
+    expect(after).toBe(edit);
+    expect(after).toHaveFocus();
+    expect(after).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('closes an open Edit dialog when the pen is taken, leaving the row’s button in place (AC4)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (props: Partial<React.ComponentProps<typeof ActivityLogicPanel>>) => (
+      <QueryClientProvider client={queryClient}>
+        <ActivityLogicPanel orgSlug="acme" planId="pl1" activity={ACTIVITY} {...props} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(
+      ui({ canManageLogic: true, roleCanManageLogic: true, planActivities: OTHERS }),
+    );
+    const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });
+    edit.focus();
+    fireEvent.click(edit);
+    const dialog = (await screen.findByRole('heading', { name: 'Edit dependency' })).closest(
+      'dialog',
+    )!;
+    expect(dialog.open).toBe(true);
+
+    rerender(ui(shadedProps()));
+
+    // The dialog is closed, not unmounted with focus inside it. jsdom stubs `showModal`/`close` and
+    // has no top layer, so the browser's own focus return to the opener is asserted by the
+    // journey, not here (ADR-0111); what this tier can pin is that the element is the same one.
+    await waitFor(() => expect(dialog.open).toBe(false));
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Edit link to Excavate' })).toBe(edit);
+    expect(edit).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('announces that editing stopped, and reopens nothing when the pen comes back', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (props: Partial<React.ComponentProps<typeof ActivityLogicPanel>>) => (
+      <AnnouncerProvider>
+        <QueryClientProvider client={queryClient}>
+          <ActivityLogicPanel orgSlug="acme" planId="pl1" activity={ACTIVITY} {...props} />
+        </QueryClientProvider>
+      </AnnouncerProvider>
+    );
+    const writer = { canManageLogic: true, roleCanManageLogic: true, planActivities: OTHERS };
+    const { rerender } = render(ui(writer));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit link to Excavate' }));
+    const dialog = (await screen.findByRole('heading', { name: 'Edit dependency' })).closest(
+      'dialog',
+    )!;
+    expect(dialog.open).toBe(true);
+
+    rerender(ui(shadedProps()));
+    await waitFor(() => expect(dialog.open).toBe(false));
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(`Editing stopped. ${REASON}`),
+    );
+
+    rerender(ui(writer));
+    expect(dialog.open).toBe(false);
   });
 });
