@@ -1,6 +1,6 @@
 # Feature Spec + Plan: The Logic tab shades a pen-less Planner's Edit and Remove (#535)
 
-- **Status:** Draft — awaiting the product owner's approval
+- **Status:** Approved — by the product owner, 2026-10-20, as written
 - **Author(s):** Claude, for the product owner
 - **Date:** 2026-10-20
 - **Tracking:** `docs/TECH_DEBT.md` #535
