@@ -620,21 +620,23 @@ A lighter-weight running log of smaller decisions is in
   `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
   is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
   opposite of the mistake the bullet below this one records.
-- **Backups are built and not running until the operator does the host steps** (ADR-0192, 2026-10-14).
+- **Backups run on the owner's host since 2026-10-20, and only where an operator set them up** (ADR-0192).
   The `backup` service, the API's `/backups` mount and the closed database port exist only in a compose
   file the operator edits by hand (`docs/guides/back-up-and-restore.md`); without the mount an update
-  migrates exactly as before and no copy is taken. Copies live on the same disk as the database, and
-  with the mount an update that changes the database is **held** if its copy cannot be made. Do not
-  read "shipped" as "in use", and do not arm `RETENTION_HIERARCHY_ENABLED` before a same-day `check`
-  has passed on the host.
-- **Retention now covers customer hierarchy too, and it is off.** ADR-0096's expiry
-  permanently deletes soft-deleted clients/projects/plans past
+  migrates exactly as before and no copy is taken. The owner did those steps on 2026-10-20 and `check`
+  passed twice that day (`docs/DECISIONS.md`). Copies live on the same disk as the database, and
+  with the mount an update that changes the database is **held** if its copy cannot be made. Any
+  other host is unprotected until its operator does the same, and `RETENTION_HIERARCHY_ENABLED` is
+  never armed before a same-day `check` has passed on the host.
+- **Retention covers customer hierarchy too, and it is ON on the owner's host since 2026-10-20.**
+  ADR-0096's expiry permanently deletes soft-deleted clients/projects/plans past
   `RETENTION_HIERARCHY_DAYS` (90) — see the hard-delete bullet below for what that
   means. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so on any host
-  that has not opted in, **nothing has ever been permanently deleted** and
-  Recently deleted shows no countdown (the preview is a command; the owner's steps are
-  [`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). Do not read
-  "shipped" as "deleting" here.
+  that has not opted in, nothing has ever been permanently deleted and
+  Recently deleted shows no countdown (the preview is a command; the steps are
+  [`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). The owner
+  armed it on 2026-10-20 after a same-day `check`; its first run removed 9 test clients deleted
+  2026-07-21 (`docs/DECISIONS.md`). On that host, do read "shipped" as "deleting".
 - **Retention is enforced on three tables and not on `audit_events`, and the difference is a
   decision.** `csp_reports` (30 days), `mail_events` (12 months) and `perf_probe_results`
   (365 days) are swept hourly since 2026-08-10 (ADR-0087) — this application's **first** scheduled
@@ -696,7 +698,7 @@ A lighter-weight running log of smaller decisions is in
   in the database. Export is `GET …/plans/:id/export/:format` for XER and MSPDI
   (ADR-0050 M4) plus the TSLD's CSV/PNG/PDF and the printed programme
   (ADR-0059 M4). The org-wide export is **Export data** in the rail, `POST …/organizations/:slug/export`
-  (ADR-0194), built and not yet used on the owner's server.)
+  (ADR-0194), first used on the owner's server on 2026-10-20.)
 - **Hosting is decided** (settled 2026-08-01, `docs/TECH_DEBT.md` #5): Docker
   Compose on the product owner's host, with releases pulled automatically. A
   _different_ target — managed host, or self-hosted Kubernetes — has not been

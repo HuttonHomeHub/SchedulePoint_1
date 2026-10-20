@@ -46,24 +46,25 @@ not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
   trigger**, not open work; #511 is open but its next step is a reading on the owner's server
   (parked under the hard rule).
 
-## What the owner has to do (in this order)
+## The three host steps: DONE on 2026-10-20
 
-Unchanged. **The owner parked these again on 2026-10-17, 2026-10-18, 2026-10-19 and 2026-10-20 —
-do not raise them unless the owner does.** When they report a result, record it in
-`docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on
-the real server, fix the guide.
+Later on 2026-10-20 the owner asked to do them and was guided through them in the same chat (full record
+in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are **Done**.
 
-1. **Backups — host steps and one practice check** (row 5). Guide:
-   [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). About an hour in all. Done when
-   the owner reports one `CHECK PASSED` with its date and the copy's file name. While there, the owner
-   can check the Env box for a `POSTGRES_PASSWORD` line (the guide's "Set a database password").
-2. **Export — download once** (row 6). Guide:
-   [`docs/guides/export-your-organisation.md`](guides/export-your-organisation.md), about 10 minutes.
-3. **Clear-out — switch on, only on a day step 1 has passed** (row 7). Guide:
-   [`docs/guides/switch-on-the-clear-out.md`](guides/switch-on-the-clear-out.md). Irreversible; the owner
-   alone switches `RETENTION_HIERARCHY_ENABLED` on. Run the preview first.
-
-Walk the owner through them **one at a time, in plain English**, waiting for each result.
+- **Backups:** on. Folder `/apps/schedulepoint/backups` on the owner's server (stacks live in `/apps`,
+  not `/opt/stacks`; the terminal is Dockge's own, signed in as root, so no `sudo`). `CHECK PASSED` on
+  `schedulepoint-2026-10-20T1601Z.dump` and on `schedulepoint-2026-10-20T1632Z.dump`. `.env` saved.
+- **Export:** `schedulepoint-export-wood-group-20261020T1615Z.zip`, opened and correct.
+- **Clear-out:** **ON** (`RETENTION_HIERARCHY_ENABLED=true`). The compose file needed the pass-through
+  line added first. The first run removed 9 Wood Group test clients deleted 2026-07-21; `…T1632Z` is
+  the copy taken just before. More test clients from late July and August expire over the next weeks,
+  as the owner saw on the preview and in Recently deleted.
+- The guides were corrected where they did not match the server. New row **#536** (the Audit log names
+  the clear-out "Unknown"; the bin and the preview round days left differently).
+- **For the alerts step, when the owner returns to it:** their compose file already sets
+  `MAIL_ALERT_URL` (an ntfy topic) and `HEARTBEAT_URL`, but the heartbeat URL reads
+  `https://hc-ping.com/my-first-check`, which looks like an unfinished placeholder. Check it then; do not
+  raise it before.
 
 ## Decided — do not re-ask
 
@@ -100,8 +101,6 @@ The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 
 2026-10-18, 2026-10-19 and 2026-10-20). A session does not bring them up until the owner does. When the
 owner returns to one, the steps are ready:
 
-- **The three host steps above** (backups, export, clear-out) — offer them when the owner is ready, do
-  not press.
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
   a quiet time). When a test alert reaches the owner's phone, close #100.
 - **Run the device check sheet** (`docs/specs/pre-1-0-hardening/device-check-sheet.md`, ~1½–2 hours in two
@@ -143,7 +142,7 @@ Runners-up: #280 (a check-and-push command), #313 (one shared sign-up helper for
 The next reconciliation pass when `check:reconcile-due` warns (it warned this session; last pass
 2026-10-19).
 
-Still offer only if the owner raises them: the three host steps, and row 9 at the 1.0 cut.
+Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
 ## Environment notes a new session would otherwise rediscover
 
