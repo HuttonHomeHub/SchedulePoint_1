@@ -84,8 +84,8 @@ rows below are the ones a person could meet, one line each, as read from each ro
 - **#223** — the resource strip under the diagram is not in the exports or the printout. Closed on 2026-10-17:
   a strip that is open now exports and prints as shown, with a caption and legend.
 - **#229** and **#307** — two small keyboard and screen-reader details (a menu that closes and reopens when its
-  own button is pressed, and a focusable "loading" row in the project tree). The combo-box half of #229 closed
-  on 2026-10-16.
+  own button is pressed, and a focusable "loading" row in the project tree). Both closed: #229 on 2026-10-17
+  and #307 on 2026-10-20 (#1082).
 - **#500, #504, #505, #501** — the faults fixed or measured in this same batch. All four are now closed (#976, #980,
   #978, #981).
 

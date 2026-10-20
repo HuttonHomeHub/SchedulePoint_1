@@ -38,9 +38,6 @@ not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
     "two revisions" when one choice is enough. It now reads "Choose what to compare in Compare
     revisions… first" (UX reviewer chose it). Item **(h) stays open**; the #263 row stays open.
   - **#1083** the Version Packages release.
-- **Known stale line in a file this session must not edit:** `docs/RELEASE_1_0.md` (around lines
-  87–89) still names #307 as an open keyboard detail. That file belongs to the owner's other chat;
-  mention it there rather than editing it here.
 - **Correction to the previous hand-off:** it listed **#520** as open; #520 was closed on
   2026-10-17 by ADR-0201 D3 (#1050). #509, #510, #512, #513 and #515–#517 are **deferred on a
   trigger**, not open work. #511 was closed on 2026-10-20 with the owner's first real copy times
