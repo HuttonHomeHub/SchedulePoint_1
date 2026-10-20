@@ -453,7 +453,7 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     line). A new row without one fails A8b; an `unverified` row with one fails A8a.
   - **`check:claims` now fails on a registered claim nothing cites.** When a change removes the
     last citation of a `scripts/dependency-claims.json` entry, delete the entry in the same change.
-  - **A literal `file.mjs:3-4` in a comment or fixture under `scripts/` reads as a citation** to
+  - **A literal file name followed by a colon and a line range (in a doc, a comment or a fixture) reads as a citation** to
     `check:claims`; build such strings with `join` in tests.
   - **Stack the next PR on the one under review in its own worktree** (`git checkout -b x <head>`,
     cherry-pick, run `pnpm prepush`). After the squash, the merged tree equals the tested head, so
