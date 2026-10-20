@@ -188,3 +188,49 @@ export function treeKeydown(
       return null;
   }
 }
+
+/** The tree intents that move the roving focus to another row, as opposed to expanding or opening. */
+export type FocusMove = 'prev' | 'next' | 'first' | 'last' | 'firstChild';
+
+/**
+ * Where a focus move lands, as a row index (`docs/TECH_DEBT.md` #307(a)).
+ *
+ * **A `loading` row is transient status text and is never a destination while a real row exists.**
+ * It has no operable command whose reason must stay reachable (so ADR-0082's "a shaded item keeps
+ * its focus" does not transfer) and it is guaranteed to unmount when its fetch resolves — which is
+ * how #297 (a stale tab stop) and #305 (focus dropped to `<body>`) were both reached. Skipping it
+ * shrinks both surfaces to the root case. `empty` and `error` rows are settled state and stay
+ * reachable.
+ *
+ * When there is nowhere to go the answer is `from` itself: focus stays put. The root case needs no
+ * special branch — a whole list that is loading is a single `loading` row, which is the only row
+ * there is, so `first`/`last` fall back to it.
+ */
+export function focusTarget(rows: readonly VisibleRow[], from: number, move: FocusMove): number {
+  const settled = (index: number): boolean => {
+    const row = rows[index];
+    return row !== undefined && row.type !== 'loading';
+  };
+  switch (move) {
+    case 'next':
+    case 'prev': {
+      const step = move === 'next' ? 1 : -1;
+      for (let i = from + step; i >= 0 && i < rows.length; i += step) {
+        if (settled(i)) return i;
+      }
+      return from;
+    }
+    case 'first': {
+      const found = rows.findIndex((row) => row.type !== 'loading');
+      return found >= 0 ? found : 0;
+    }
+    case 'last': {
+      const found = rows.findLastIndex((row) => row.type !== 'loading');
+      return found >= 0 ? found : rows.length - 1;
+    }
+    case 'firstChild':
+      // The child of an expanded node is the next row; if that is its loading placeholder the
+      // parent keeps the focus, since the placeholder is the only thing there.
+      return settled(from + 1) ? from + 1 : from;
+  }
+}

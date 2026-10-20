@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   flattenVisible,
+  focusTarget,
   selectionFromParams,
   treeKeydown,
   type ChildGroup,
@@ -132,5 +133,76 @@ describe('treeKeydown', () => {
     expect(treeKeydown('ArrowLeft', { expandable: true, expanded: true })).toBe('collapse');
     expect(treeKeydown('ArrowLeft', { expandable: false, expanded: false })).toBe('toParent');
     expect(treeKeydown('x', { expandable: true, expanded: true })).toBeNull();
+  });
+});
+
+describe('focusTarget (#307a)', () => {
+  const none = new Map<string, ChildGroup>();
+  const loadingGroup: ChildGroup = { status: 'loading', nodes: [] };
+  // c1 (expanded, children loading), c2, c3 (expanded, children loading) -> a placeholder sits
+  // between peers and at the very end.
+  const rows = flattenVisible(
+    loaded([client('c1'), client('c2'), client('c3')]),
+    new Map([
+      ['c1', loadingGroup],
+      ['c3', loadingGroup],
+    ]),
+    new Set(['c1', 'c3']),
+  );
+
+  it('lays the fixture out as client, placeholder, client, client, placeholder', () => {
+    expect(rows.map((row) => row.type)).toEqual(['node', 'loading', 'node', 'node', 'loading']);
+  });
+
+  it('steps over a placeholder in either direction', () => {
+    expect(focusTarget(rows, 0, 'next')).toBe(2);
+    expect(focusTarget(rows, 2, 'prev')).toBe(0);
+  });
+
+  it('stays put when only a placeholder lies ahead', () => {
+    expect(focusTarget(rows, 3, 'next')).toBe(3);
+    expect(focusTarget(rows, 0, 'prev')).toBe(0);
+  });
+
+  it('goes to the first and last settled row', () => {
+    expect(focusTarget(rows, 2, 'first')).toBe(0);
+    expect(focusTarget(rows, 0, 'last')).toBe(3);
+  });
+
+  it('keeps the parent when its only child is the placeholder', () => {
+    expect(focusTarget(rows, 0, 'firstChild')).toBe(0);
+    expect(focusTarget(rows, 3, 'firstChild')).toBe(3);
+  });
+
+  it('enters a real child', () => {
+    const open = flattenVisible(
+      loaded([client('c1')]),
+      new Map([['c1', loaded([project('p1', 'c1')])]]),
+      new Set(['c1']),
+    );
+    expect(focusTarget(open, 0, 'firstChild')).toBe(1);
+  });
+
+  it('keeps empty and error rows reachable — they are settled state', () => {
+    const settled = flattenVisible(
+      loaded([client('c1'), client('c2')]),
+      new Map<string, ChildGroup>([
+        ['c1', loaded([])],
+        ['c2', { status: 'error', nodes: [] }],
+      ]),
+      new Set(['c1', 'c2']),
+    );
+    expect(settled.map((row) => row.type)).toEqual(['node', 'empty', 'node', 'error']);
+    expect(focusTarget(settled, 0, 'next')).toBe(1);
+    expect(focusTarget(settled, 0, 'firstChild')).toBe(1);
+    expect(focusTarget(settled, 0, 'last')).toBe(3);
+  });
+
+  it('keeps the root placeholder focusable when it is the only row', () => {
+    const root = flattenVisible(loadingGroup, none, new Set());
+    expect(root.map((row) => row.type)).toEqual(['loading']);
+    expect(focusTarget(root, 0, 'first')).toBe(0);
+    expect(focusTarget(root, 0, 'last')).toBe(0);
+    expect(focusTarget(root, 0, 'next')).toBe(0);
   });
 });
