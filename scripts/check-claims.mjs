@@ -5,7 +5,7 @@
  * ## Why this exists
  *
  * SchedulePoint's docs and docblocks cite `better-auth` and `better-call` source by file and line
- * — 34 distinct citations at the time of writing — and they are load-bearing rather than
+ * — 152 registered citations at the time of writing — and they are load-bearing rather than
  * decorative. Whole decisions rest on them: ADR-0074 hashes reset tokens because
  * `processIdentifier` returns the identifier unchanged with no `verification` key configured;
  * ADR-0075 rejects an abort-on-send-failure design because `sign-up.mjs` answers a duplicate
@@ -34,6 +34,9 @@
  *    sources must be in the register — in either the `file.mjs:234` form or the prose form
  *    "`file.mjs`, lines **234**". This is the half that keeps the register honest over time: a new
  *    citation cannot be added without recording what it says and what proves it.
+ * 4. **No dead registration.** A registered `ref` that nothing cites fails the gate
+ *    (`deadRegistrations`, ADR-0164 D5, `docs/TECH_DEBT.md` #410) — delete the entry, or restore the
+ *    citation it protected. It was a `note:` on stderr with exit 0 until then.
  *
  * ## The extension class, and why it is ONE list
  *
@@ -71,7 +74,12 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CITATIONS, FOREIGN_UNVERIFIABLE, ownGlobs } from './lib/citation-patterns.mjs';
+import {
+  CITATIONS,
+  deadRegistrations,
+  FOREIGN_UNVERIFIABLE,
+  ownGlobs,
+} from './lib/citation-patterns.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const register = JSON.parse(readFileSync(join(root, 'scripts/dependency-claims.json'), 'utf8'));
@@ -402,15 +410,10 @@ for (const [ref, where] of [...found].sort()) {
   );
 }
 
-// A registered claim nobody cites any more is dead weight, and dead weight is what makes a
-// register stop being read. Reported, not failed — deleting is a judgement call.
-for (const claim of register.claims) {
-  if (!found.has(claim.ref)) {
-    console.warn(
-      `  note: ${claim.ref} is registered but no longer cited anywhere. Consider removing it.`,
-    );
-  }
-}
+// A registered claim nobody cites any more fails the gate (ADR-0164 D5, #410): it either protects
+// nothing, or marks a decision whose evidence a rewrite dropped. If the citation walk above finds
+// nothing, every entry reads dead — loud, which is correct; a gate must not pass vacuously.
+problems.push(...deadRegistrations(register.claims, found));
 
 if (problems.length > 0) {
   console.error('Dependency-internal claims are out of date:\n');

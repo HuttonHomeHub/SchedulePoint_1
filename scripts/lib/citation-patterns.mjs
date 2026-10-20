@@ -97,3 +97,32 @@ export const FOREIGN_UNVERIFIABLE = new Set(['auth.css']);
 export function ownGlobs() {
   return CITED_EXTENSIONS.map((ext) => `*.${ext}`);
 }
+
+/**
+ * The registered claims that nothing cites any more, as gate findings (ADR-0164 D5,
+ * `docs/TECH_DEBT.md` #410).
+ *
+ * A dead entry used to print `note: … registered but no longer cited` and exit 0, which is the
+ * pass-with-findings outcome ADR-0164 D5 refuses: the register is the half of this gate that keeps
+ * a citation from being added unrecorded, and an entry whose citation is gone either protects
+ * nothing or marks a decision that lost its evidence — both are worth a person's attention, and a
+ * line on stderr that never fails a build gets none.
+ *
+ * Lives here rather than in `check-claims.mjs` because that script runs at module top level and
+ * cannot be imported without executing the whole gate; this is the pure part, so a suite can drive
+ * it.
+ *
+ * @param {{ ref: string, citedBy?: string[] }[]} claims
+ * @param {{ has(ref: string): boolean }} foundRefs refs the completeness scan saw cited
+ * @returns {string[]}
+ */
+export function deadRegistrations(claims, foundRefs) {
+  return claims
+    .filter((claim) => !foundRefs.has(claim.ref))
+    .map(
+      (claim) =>
+        `${claim.ref}: registered (citedBy: ${claim.citedBy?.join(', ') ?? 'not recorded'}) but cited nowhere.\n` +
+        `    Delete the entry if the citation was retired with its decision, or restore the\n` +
+        `    citation if a rewrite dropped it while a decision still rests on it.`,
+    );
+}

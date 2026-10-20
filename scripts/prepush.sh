@@ -36,8 +36,7 @@
 # finding is invisible here by construction — which is exactly what `pnpm lint` did before
 # ADR-0164 armed `--max-warnings=0` on every workspace: a warning passed silently, and four real
 # staleness defects shipped under it before anyone read one. `check:claims`' `note: … registered
-# but no longer cited` line is the same defect outside lint, confirmed and filed rather than fixed
-# here (an ADR-0105 shared-gate trigger of its own).
+# but no longer cited` line was the same defect outside lint; it is a failing finding now (#410).
 set -uo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
