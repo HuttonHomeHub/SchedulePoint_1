@@ -1,6 +1,6 @@
 import type { ClientSummary, PlanSummary, ProjectSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -327,25 +327,55 @@ describe('HierarchyTree', () => {
    */
   it('arrow keys step over a loading placeholder (#307)', async () => {
     holdProjects = new Promise<ProjectSummary[]>(() => {});
-    clients.push({ ...clients[0]!, id: 'c2', name: 'Southgate' });
-    try {
-      renderTree();
-      const north = await screen.findByRole('treeitem', { name: /Northgate/ });
-      fireEvent.click(north); // expand: the child fetch is held, so a `loading` row renders
-      await screen.findByRole('treeitem', { name: /Loading/ });
+    holdClients = Promise.resolve([...clients, { ...clients[0]!, id: 'c2', name: 'Southgate' }]);
+    renderTree();
+    const north = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(north); // expand: the child fetch is held, so a `loading` row renders
+    await screen.findByRole('treeitem', { name: /Loading/ });
 
-      fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowRight' });
-      expect(north.tabIndex).toBe(0);
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowRight' });
+    expect(north.tabIndex).toBe(0);
+    await waitFor(() => expect(document.activeElement).toBe(north));
 
-      fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
-      const south = screen.getByRole('treeitem', { name: /Southgate/ });
-      await waitFor(() => expect(document.activeElement).toBe(south));
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    const south = screen.getByRole('treeitem', { name: /Southgate/ });
+    await waitFor(() => expect(document.activeElement).toBe(south));
 
-      fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' });
-      await waitFor(() => expect(document.activeElement).toBe(north));
-    } finally {
-      clients.pop();
-    }
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' });
+    await waitFor(() => expect(document.activeElement).toBe(north));
+  });
+
+  /**
+   * **A nested placeholder that holds DOM focus is still handed back (#305 via #307).** The arrow
+   * keys no longer reach one, but a pointer or `focus()` can. Placeholders carry no `onFocus`, so
+   * `focusedKey` stays on the real row while the browser's focus sits on the placeholder — and when
+   * its fetch resolves it unmounts under the focus ring. The tree container must take the focus
+   * and exactly one row keep the tab stop. Giving state rows an `onFocus` that sets `focusedKey`
+   * fails the tab-stop assertion before the fetch resolves (the placeholder would take `tabIndex`
+   * 0); the hand-off half is independent of it, because `resolvedFocusedKey` drops a vanished key.
+   */
+  it('hands focus back when a focused NESTED placeholder resolves away (#307)', async () => {
+    let releaseProjects!: (value: ProjectSummary[]) => void;
+    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+      releaseProjects = resolve;
+    });
+
+    renderTree();
+    const north = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(north);
+    const placeholder = await screen.findByRole('treeitem', { name: /Loading/ });
+    act(() => placeholder.focus());
+    expect(document.activeElement).toBe(placeholder);
+    // The tab stop stays on the real row: a placeholder with an `onFocus` would take it.
+    expect(north.tabIndex).toBe(0);
+    expect(placeholder.tabIndex).toBe(-1);
+
+    releaseProjects(projects);
+    await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tree')));
+    const stops = screen.getAllByRole('treeitem').filter((element) => element.tabIndex === 0);
+    expect(stops).toHaveLength(1);
   });
 
   /**

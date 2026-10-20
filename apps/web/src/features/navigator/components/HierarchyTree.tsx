@@ -9,6 +9,7 @@ import { useNavigatorCrud, type NodeActionTarget } from '../lib/navigator-crud-c
 import { nodeActions } from '../lib/tree-actions';
 import {
   focusTarget,
+  isSettledRow,
   treeKeydown,
   type NodeKind,
   type TreeNodeData,
@@ -123,8 +124,9 @@ export function HierarchyTree({
    * `useAnnounce()` polite live region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and nothing
    * implemented it: `useAnnounce` had no reference anywhere under `features/navigator`. So the only
    * way a keyboard or AT user learnt that an expansion had resolved was to be standing on the
-   * placeholder when it vanished, which is the accidental signal #307 records and the reason that
-   * row keeps the placeholder focusable for now.
+   * placeholder when it vanished, which is the accidental signal #307 recorded. The arrow keys
+   * now skip a `loading` row while a real row exists (#307(a), `focusTarget`), so this
+   * announcement is the signal rather than an accident of where the focus happened to be.
    *
    * **Only the visible rail speaks.** The shell mounts two `HierarchyTree`s — the pinned rail and
    * the drawer — sharing one expansion set (ADR-0029 Phase 2), so both see the same transition and
@@ -202,7 +204,7 @@ export function HierarchyTree({
   const activeKey =
     resolvedFocusedKey ??
     (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ??
-    (rows.find((row) => row.type !== 'loading') ?? rows[0])?.key ??
+    (rows.find(isSettledRow) ?? rows[0])?.key ??
     null;
   const activeIndex = useMemo(
     () => rows.findIndex((row) => row.key === activeKey),

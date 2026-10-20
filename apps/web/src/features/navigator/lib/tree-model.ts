@@ -193,6 +193,14 @@ export function treeKeydown(
 export type FocusMove = 'prev' | 'next' | 'first' | 'last' | 'firstChild';
 
 /**
+ * Whether a row may be a focus destination: everything except the transient `loading` placeholder.
+ * One predicate so the arrow-key target and the tab-stop fallback cannot disagree about it.
+ */
+export function isSettledRow(row: VisibleRow): boolean {
+  return row.type !== 'loading';
+}
+
+/**
  * Where a focus move lands, as a row index (`docs/TECH_DEBT.md` #307(a)).
  *
  * **A `loading` row is transient status text and is never a destination while a real row exists.**
@@ -209,7 +217,7 @@ export type FocusMove = 'prev' | 'next' | 'first' | 'last' | 'firstChild';
 export function focusTarget(rows: readonly VisibleRow[], from: number, move: FocusMove): number {
   const settled = (index: number): boolean => {
     const row = rows[index];
-    return row !== undefined && row.type !== 'loading';
+    return row !== undefined && isSettledRow(row);
   };
   switch (move) {
     case 'next':
@@ -221,11 +229,11 @@ export function focusTarget(rows: readonly VisibleRow[], from: number, move: Foc
       return from;
     }
     case 'first': {
-      const found = rows.findIndex((row) => row.type !== 'loading');
+      const found = rows.findIndex(isSettledRow);
       return found >= 0 ? found : 0;
     }
     case 'last': {
-      const found = rows.findLastIndex((row) => row.type !== 'loading');
+      const found = rows.findLastIndex(isSettledRow);
       return found >= 0 ? found : rows.length - 1;
     }
     case 'firstChild':
