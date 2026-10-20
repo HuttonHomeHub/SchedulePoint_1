@@ -2,4 +2,4 @@
 '@repo/web': patch
 ---
 
-The Logic tab now keeps each link's Edit and Remove buttons, greyed out with the reason, when another planner takes the pen, instead of removing them.
+In the activity editor's Logic tab, a planner whose pen is taken now sees each link's Edit and Remove buttons stay in place, greyed out with the reason, instead of disappearing.

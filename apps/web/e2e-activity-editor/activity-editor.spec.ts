@@ -318,6 +318,45 @@ test('a row’s Edit keeps focus, shaded, when the pen is taken under it', async
   await expect(page.getByRole('heading', { name: 'Edit dependency' })).toHaveCount(0);
 });
 
+test('an open Edit dialog closes when the pen is taken, and focus is back on the row’s Edit', async ({
+  account,
+  page,
+}) => {
+  const stamp = Date.now();
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Pour slab');
+
+  await openEditor(page, 'Pour slab', 'Logic');
+  const editor = activityEditor(page);
+  await editor.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
+  await editor.getByRole('button', { name: 'Add link' }).click();
+  const edit = editor.getByRole('button', { name: 'Edit link to Excavate' });
+  await edit.click();
+  const editDialog = page.getByRole('dialog', { name: 'Edit dependency' });
+  await expect(editDialog).toBeVisible();
+
+  // TECH_DEBT #535 (AC4): the pen is taken server-side while the dialog is open. The dialog closes
+  // rather than unmounting, so the browser hands focus back to the button that opened it.
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+  expect(planId).not.toBe('');
+  await page.evaluate(
+    async ({ slug, plan }) => {
+      const res = await fetch(`/api/v1/organizations/${slug}/plans/${plan}/edit-lock`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`release failed: ${String(res.status)}`);
+    },
+    { slug: account.orgSlug, plan: planId },
+  );
+  await expect(editDialog).toHaveCount(0, { timeout: 25_000 });
+  await expect(edit).toHaveAttribute('aria-disabled', 'true');
+  await expect(edit).toBeFocused();
+});
+
 test('without the pen, the Logic tab is read-only and the server refuses a write', async ({
   account,
   page,

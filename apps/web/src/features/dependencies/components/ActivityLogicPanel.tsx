@@ -176,6 +176,24 @@ export function ActivityLogicPanel({
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
+  // The pen going while an Edit or Remove dialog is open: its `open` already drops with
+  // `canManageLogic`, but the targets are cleared explicitly rather than left to the native close
+  // event reaching `onClose`, so nothing reopens when the pen comes back. Cleared during render (the
+  // documented way to adjust state to a prop), announced in an effect, since the dialog the reader
+  // was in has just closed under them (WCAG 4.1.3).
+  if (!canManageLogic && (editingId !== null || removingId !== null)) {
+    setEditingId(null);
+    setRemovingId(null);
+    setRemoveError(null);
+  }
+  const dialogWasOpen = useRef(false);
+  useEffect(() => {
+    if (!canManageLogic && dialogWasOpen.current) {
+      announce(manageLogicReason ? `Editing stopped. ${manageLogicReason}` : 'Editing stopped.');
+    }
+    dialogWasOpen.current = canManageLogic && (editingId !== null || removingId !== null);
+  }, [canManageLogic, editingId, removingId, manageLogicReason, announce]);
+
   const others = activity
     ? (planActivities ?? []).filter((candidate) => candidate.id !== activity.id)
     : [];

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityLogicPanel } from './ActivityLogicPanel';
 
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
@@ -319,6 +320,7 @@ describe('ActivityLogicPanel shaded rows (#535)', () => {
     await screen.findByText('Excavate');
     expect(screen.queryByRole('button', { name: /Edit link/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remove link/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(REASON)).not.toBeInTheDocument();
   });
 
   it('keeps a Viewer’s tables bare even when the host passes a reason', async () => {
@@ -432,5 +434,32 @@ describe('ActivityLogicPanel shaded rows (#535)', () => {
     expect(document.body.contains(dialog)).toBe(true);
     expect(screen.getByRole('button', { name: 'Edit link to Excavate' })).toBe(edit);
     expect(edit).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('announces that editing stopped, and reopens nothing when the pen comes back', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (props: Partial<React.ComponentProps<typeof ActivityLogicPanel>>) => (
+      <AnnouncerProvider>
+        <QueryClientProvider client={queryClient}>
+          <ActivityLogicPanel orgSlug="acme" planId="pl1" activity={ACTIVITY} {...props} />
+        </QueryClientProvider>
+      </AnnouncerProvider>
+    );
+    const writer = { canManageLogic: true, roleCanManageLogic: true, planActivities: OTHERS };
+    const { rerender } = render(ui(writer));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit link to Excavate' }));
+    const dialog = (await screen.findByRole('heading', { name: 'Edit dependency' })).closest(
+      'dialog',
+    )!;
+    expect(dialog.open).toBe(true);
+
+    rerender(ui(shadedProps()));
+    await waitFor(() => expect(dialog.open).toBe(false));
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(`Editing stopped. ${REASON}`),
+    );
+
+    rerender(ui(writer));
+    expect(dialog.open).toBe(false);
   });
 });
