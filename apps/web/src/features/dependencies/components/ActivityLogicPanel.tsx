@@ -221,8 +221,12 @@ export function ActivityLogicPanel({
         }
       : {};
   // The rows' gate: shut with the reason while shaded, reasonless otherwise so the provider prints
-  // nothing above a Viewer's read-only tables (ADR-0083 D5).
-  const rowGate = { writable: canManageLogic, reason: rowsShaded ? manageLogicReason : null };
+  // nothing above a Viewer's read-only tables (ADR-0083 D5). Also reasonless while there are no rows:
+  // with no buttons to describe, the sentence would only repeat the Add a link form's own.
+  const rowGate = {
+    writable: canManageLogic,
+    reason: rowsShaded && links.length > 0 ? manageLogicReason : null,
+  };
 
   const confirmRemove = (): void => {
     if (!removing) return;

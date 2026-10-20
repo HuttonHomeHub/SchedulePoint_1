@@ -345,6 +345,13 @@ describe('ActivityLogicPanel shaded rows (#535)', () => {
     expect(edit.getAttribute('aria-describedby')).toBe(remove.getAttribute('aria-describedby'));
   });
 
+  it('prints the reason once when there are no rows to describe: the form’s own sentence', async () => {
+    fetchAllPages.mockResolvedValue([]);
+    renderPanel(shadedProps());
+    await screen.findByText(/No predecessors/);
+    expect(screen.getAllByText(REASON)).toHaveLength(1);
+  });
+
   it('writes nothing on a click: no dialog opens', async () => {
     renderPanel(shadedProps());
     const edit = await screen.findByRole('button', { name: 'Edit link to Excavate' });

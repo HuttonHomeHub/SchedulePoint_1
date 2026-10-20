@@ -268,6 +268,56 @@ test('a planner adds a link from the Logic tab, and the row appears in Predecess
   ).toEqual([]);
 });
 
+test('a row’s Edit keeps focus, shaded, when the pen is taken under it', async ({
+  account,
+  page,
+}) => {
+  const stamp = Date.now();
+  await enterOrg(page, account.orgSlug);
+  await openProject(page, stamp);
+  await createAndOpenPlan(page, 'Tower');
+  await ensurePen(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Pour slab');
+
+  await openEditor(page, 'Pour slab', 'Logic');
+  const editor = activityEditor(page);
+  await editor.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
+  await editor.getByRole('button', { name: 'Add link' }).click();
+  const edit = editor.getByRole('button', { name: 'Edit link to Excavate' });
+  await expect(edit).toBeVisible();
+  await expect(edit).not.toHaveAttribute('aria-disabled', 'true');
+
+  // TECH_DEBT #535, the Resources tab's #64: the button used to unmount when the pen went, and
+  // focus fell to <body>. The modal editor covers the toolbar, so the pen is taken the way a
+  // takeover or an expiry would take it — released server-side while the button is focused — and
+  // the status poll then tells the page.
+  await edit.focus();
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+  expect(planId).not.toBe('');
+  await page.evaluate(
+    async ({ slug, plan }) => {
+      const res = await fetch(`/api/v1/organizations/${slug}/plans/${plan}/edit-lock`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error(`release failed: ${String(res.status)}`);
+    },
+    { slug: account.orgSlug, plan: planId },
+  );
+  // The lock status polls every 15 s; allow one full interval and a margin.
+  await expect(edit).toHaveAttribute('aria-disabled', 'true', { timeout: 25_000 });
+  await expect(edit).toBeFocused();
+  const reasonId = await edit.getAttribute('aria-describedby');
+  expect(reasonId).toBeTruthy();
+  await expect(page.locator(`[id="${reasonId}"]`)).toHaveText(
+    'Start editing to change this activity.',
+  );
+
+  // Shaded is inert: a forced press opens no dialog.
+  await edit.click({ force: true });
+  await expect(page.getByRole('heading', { name: 'Edit dependency' })).toHaveCount(0);
+});
+
 test('without the pen, the Logic tab is read-only and the server refuses a write', async ({
   account,
   page,
