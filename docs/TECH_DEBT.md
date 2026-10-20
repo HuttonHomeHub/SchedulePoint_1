@@ -99,6 +99,14 @@ The table above carries the older, one-line rows. Items that need more than a ta
 section here. Both are the same register — the split is how much explaining a row needs, not how
 important it is.
 
+**Row header fields.** A row's header is the `**Field:** value` lines that open at column 0, with
+fields separated by `·` on one line or wrapped across lines. `**Status:**` takes one of `open`,
+`deferred`, `standing` or `unverified`, optionally followed by a qualifier in brackets.
+`**Verified:** YYYY-MM-DD` dates the **whole row** — "last checked in full on this date" — never one
+sub-claim in it (product owner, 2026-10-20). So `unverified` carries no `Verified` field, and every
+other status carries one, or the row is restatused `unverified`: `check:debt-status` A8a and A8b. A
+field on a continuation line that does not itself open with a field is not read.
+
 Headings are `### <number>. <title>`, always — so a row is a **child** of this section. A row
 written `## ` is a **sibling** of `## Detailed items`, which puts it outside the section that
 contains it.
@@ -1825,117 +1833,6 @@ fails and therefore what to do about it: a periodic re-derivation pass cannot fi
 never right, and will keep finding the same class forever unless the ordering changes at the point of
 writing.
 
-### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
-
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
-**Owner:** repo
-
-**Re-verified 2026-09-10 by probe rather than by reading**, because the previous verification was a
-measurement and deserved the same treatment: `fieldValue` on a real inline header returns
-`Status -> "open · **Verified:** 2026-09-09"` and `Verified -> null`. So the anchor is unchanged,
-A8 still cannot fire, and — worth noting for whoever fixes it — `Status` does not merely survive,
-it returns the **whole rest of the line** including the other fields, which every consumer is
-today parsing past by accident.
-
-`check-debt-status.mjs` reads exactly two fields through `fieldValue`: `Status` and `Verified`.
-`Status` is written at column 0 on every detailed row and is read correctly. `Verified` is written
-**only inline**, in the header block's `**Status:** … · **Verified:** … · **Size:** …` form — and
-`fieldValue` anchors on `^`, so it returns `null` for every row that carries a date.
-Of the two fields the gate reads, one is 100% readable and the other is 0% readable.
-
-So **A8 has never been able to fire.** Measured rather than reasoned about — a script over the real
-document reports `fieldValue` seeing `Verified` on **0** rows and a whole-line scan finding it on
-many.
-
-> **Re-derived 2026-09-12, and the finding stands while every figure and the exhibit have moved.**
-> `fieldValue` now reads `Status` on **102 of 102** rows and `Verified` on **0 of 102**, with **96**
-> rows carrying a `**Verified:**` date — against this row's original "66 detailed rows" and "six
-> rows that carry a date". The ratio is the claim and it is unchanged at sixteen times the
-> population; the absolute numbers are removed above rather than restated, because they are what
-> went stale, and `check:counts` does not gate this row.
->
-> **The live exhibit is gone, and how it went is the interesting part.** This row cited `#117`
-> reading `**Status:** unverified · **Verified:** 2026-09-01` as the contradiction "in the register
-> right now". `#117` now reads `**Status:** deferred · **Verified:** 2026-09-11`: somebody corrected
-> it by hand in an ordinary sweep. So the register healed the instance while the gate that exists to
-> refuse it still cannot fire — which is the weaker half of ADR-0058's own argument showing up as
-> evidence. A reader who checked this row by grepping for `unverified` today would find only prose
-> quoting it (three sites, all of them rows _about_ this contradiction) and could reasonably conclude
-> the row was wrong, or that A8 works. **Neither is true**, and that is why the exhibit is recorded
-> as withdrawn rather than deleted.
-
-> **What the unreadable field COSTS, measured 2026-09-13 — and the number is the argument for
-> repairing rather than deleting.** This row establishes that nothing reads `Verified:`. The
-> consequence is that nothing keeps it current, and that is now countable: **18 rows record, in their
-> own bodies, a check later than their `Verified:` field** — "swept 2026-09-11 item by item",
-> "re-derived 2026-09-12", "re-counted 2026-09-12" — with a lag of **1 to 4 days**. Eight of the
-> eighteen (`#86 #165 #194 #195 #202 #211 #247 #292`) predate 2026-09-13 and belong to at least two
-> earlier sessions, so this is not one person's slip. **`#247` was itself one of the eight**: the row
-> about the field nobody reads had a stale copy of that field.
->
-> **The cost is not hypothetical, and it was observed rather than predicted.** Work here is selected
-> by asking which open rows carry an old `Verified:` date. Run on 2026-09-13, that query returned
-> `#165`, `#181`, `#194`, `#202`, `#211` and `#266` as candidates — every one of which had already
-> been re-derived, four of them within the previous 48 hours. The field is not merely unread by the
-> gate; it actively misdirects the one decision it exists to inform, and the only thing standing
-> between that and repeated work is somebody keeping a list in their head, which is what ADR-0058
-> says to replace.
->
-> **It also bears on the question this row says to settle first.** If `Verified:` meant "the thing
-> this row describes is confirmed", these eighteen bodies would not be writing "re-derived" beside a
-> different date — the field is plainly being used as _when was this row last checked_, and simply
-> not maintained. That is evidence for repairing A8 rather than deleting it, though it does not
-> settle `#117`'s case, where the two facts genuinely come apart.
->
-> **Twelve of the eighteen are now correct** — ten this session's own, plus `#194` (re-derived here:
-> `frontend-only.json` reads `active: false`, its `history` holds two entries, and the `reason` field
-> carries the corrected count), plus this row, whose core
-> claim was re-derived by probe to earn the bump rather than assumed: `fieldValue` reads `Status` on
-> **104 of 104** rows and `Verified` on **0 of 104**, with **98** carrying a date. (Those are the
-> row's 102/102, 0/102 and 96 with the population two rows larger; the ratio is the claim and it is
-> unchanged.) The remaining **six** (`#86 #165 #195 #202 #211 #292`) are deliberately **left alone**, because bumping a date is
-> asserting a check, and those checks were somebody else's. That asymmetry is the whole reason a field like this cannot be repaired by a
-> sweep — only the person who did the work can honestly write it down, which is precisely why it
-> wants a gate.
-
-**Two assertions in the same file disagree about the document's shape, and the one that disagrees is
-the silent one.** A2 splits the status value on `[\s·—|]` before checking the vocabulary, so it was
-written by somebody who knew fields are `·`-separated on one line. A8 was written as though they are
-not. Nothing was wrong in either assertion read alone; the wrongness is in the relationship — the
-ADR-0093 shape, inside the gate rather than the product.
-
-**This is `#245` stopping being hypothetical.** That row says the gate's assertions have no
-re-runnable coverage and argues from principle. A8 is the first one shown to be dead, and it was
-found by trying to _use_ the field rather than by reading the code — which is also why it survived
-ADR-0120, its own red run, and two register sweeps.
-
-**Do not fix it here.** `fieldValue` is shared by `check:debt-status` and `check:reconcile-due`
-(ADR-0124 established both consumers), so widening it is a shared-gate change and ADR-0105 makes the
-spec mandatory. It also needs a decision rather than a patch, because **A8's premise may be the
-wrong half**: `#117`'s date is not a mistake — the row was verified on 2026-09-01 and its _subject_
-(CSP report delivery from a real browser) genuinely remains unverifiable without a deployed host. If
-"this row was checked" and "the thing this row describes is confirmed" are two different facts, then
-`unverified` + a `Verified:` date is a legitimate state and A8 should be deleted rather than
-repaired. Settle that before touching the parser.
-
-**A near-miss worth knowing about while deciding.** `docs/TECH_DEBT.md:1235` opens a sentence with
-`**Unverified:**` at column 0 — prose, not a field. It is harmless today because no assertion reads
-that name, and it is exactly what a column-0 reader would misclassify if one were added.
-
-**What the sweep could not do because of this.** The 2026-09-03 pass verified 32 rows and could
-record the result only as prose, because the field meant for it is unreadable. Sixteen rows carry a
-dated correction note and are identifiable from the diff; the other sixteen were checked, found
-accurate, and left no trace **in the repository**. A clean check that leaves no record is work that
-gets done twice.
-
-**That sentence first read "left no trace at all", and it was wrong** — corrected here rather than
-edited quietly, because how it was wrong is the useful part. The list of which rows were checked did
-survive, in the scheduled wake-up message driving the sweep, which is outside the repository and
-dies with the session. So the work was recoverable by luck for a few hours and unrecoverable after
-that, which is worse than plainly lost: it reads as recorded right up until somebody needs it. The
-list is now written into `#246`, so the practical half is closed and what remains is the mechanism —
-a field the register writes and its own gate cannot read.
-
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
@@ -2371,7 +2268,7 @@ blocked the epic.
 
 ### 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
-**Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
+**Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4) · **Verified:** 2026-10-20 (by reading `scripts/measure-band-copy.mjs`, `MAX_CLONE_SET_SIZE` 50 and `MAX_CLONE_LINK_COUNT` 90 in `apps/web/src/features/activity-copy/model/clone-graph.ts:74-83`, and the activities controller, which has no duplicate route)
 
 `docs/specs/activity-copy-paste/` planned an optional **Milestone B** — `POST
 …/plans/:planId/activities/duplicate`, making a band copy atomic: one transaction, one pen
@@ -5371,7 +5268,7 @@ not silent) with the failure message naming the wrong cause.
 
 ### 225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
 
-**Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9)
+**Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9) · **Verified:** 2026-10-20 (by reading `apps/web/src/features/resources/model/stack-series.ts`, which still ranks by total, and `apps/api/prisma/schema.prisma`, which has no per-resource colour)
 
 The stacked histogram assigns cycle member _n_ to segment _n_ **by rank** — biggest total gets the
 first colour. So when two resources swap totals (an assignment edit, a recalculation, an exact tie
@@ -6022,6 +5919,9 @@ One line each. The story lives where the link points, not here.
 | 54  | `schema.prisma` declared a full `@@index([parentId])` on `activities`, the DB a partial one                                              | 2026-07-27 | `DECISIONS.md` 2026-07-27 "The Prisma datamodel stops describing indexes it cannot describe" ("TECH_DEBT #54 closed"); comment at `schema.prisma:1591`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 61  | `Toolbar`'s `showLabel` conflated priority with presentation                                                                             | 2026-07-27 | `DECISIONS.md` 2026-07-27 "Toolbar labels are a policy, not a side-effect of priority" ("#61, now closed"); ADR-0031; row removed by `bd011eb9`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 511 | The copy before an update is unmeasured on a large database                                                                              | 2026-10-20 | **Closed, measured on the owner's database.** The first real copies on the owner's server took 4 s (`schedulepoint-2026-10-20T1601Z.dump`, 1.0 MB, per `LAST-BACKUP.txt`) and 1 s (`…T1632Z`, 1.0 MB), against the API image's 300 s healthcheck start period (`apps/api/Dockerfile:75`); the pre-update copy runs the same `pg_dump` (`apps/api/docker-entrypoint.sh`), so the margin is about 75 times. Reopen if a nightly copy in `LAST-BACKUP.txt` passes about 60 s, or if `web` fails to start after an API recreate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 247 | A8 read a field at column 0 that the register only ever writes inline, so it had never fired                                             | 2026-10-20 | **Closed by `docs/specs/register-gate-repairs/` M1.** `fieldValue` (`scripts/lib/doc-register.mjs`) now reads a field on a header line after a `·` separator, so `Verified` is found on 134 rows (was 0) and `Status` stops at its own separator. Pinned by seven cases in `doc-register.test.mjs`, five red on the old reader. The row's claim that `check:reconcile-due` shares `fieldValue` was already stale: it imports no such function.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 302 | A row's status could contradict the fields beside it, and `check:debt-status` passed it                                                  | 2026-10-20 | **Closed by `docs/specs/register-gate-repairs/` M2.** A8 is two limbs in `scripts/check-debt-status.mjs`: A8a (`unverified` carries no `Verified`) and A8b (any other status carries a `YYYY-MM-DD` one). Seven rows failed A8b (#110, #225, #261, #282, #283, #284, #342); each was re-read and dated in the same commit. `DECISIONS.md` 2026-10-20 records that `Verified` dates the whole row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 410 | `check:claims` passed while printing a dead-registration note                                                                            | 2026-10-20 | **Closed by `docs/specs/register-gate-repairs/` M3.** `deadRegistrations` (`scripts/lib/citation-patterns.mjs`) turns each uncited registered ref into a problem, so the gate exits 1; `scripts/check-claims.test.mjs` is chained into `check:claims`. Measured first: zero dead entries at the base, so nothing was deleted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 61³ | The resource-assignment routes asserted the plan edit-lock but never declared it                                                         | 2026-07-29 | Closed and deleted by `75d1069c`, which added `@ApiLockedResponse` to `resource-assignments.controller.ts`. The number had been reused after the row above.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
@@ -6682,7 +6582,7 @@ replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verifi
 ### 261. ADR-0026 §9's frame-rate gate does not say at what canvas size it applies
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-08 (#75's viewport discriminator) ·
-**Size:** S · **Owner:** repo
+**Size:** S · **Owner:** repo · **Verified:** 2026-10-20 (by reading `docs/adr/0026-tsld-canvas-rendering-and-architecture.md` §9, which still names no canvas size)
 
 > **PARKED 2026-09-10 with the rest of the canvas-performance programme.** The exhibit that made
 > this urgent is contaminated (see below) and size flips no verdict anywhere measured. **Trigger:**
@@ -7728,7 +7628,7 @@ records: an instruction that is correct, is not followed, and has no mechanism b
 
 ### 282. P3's reason for never grading Fit rests on a figure no reading since has come near
 
-**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the third real-hardware reading set,
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-20 (by reading `docs/specs/revision-compare-changes/m0-condition.md:87-90`, where P3 still reads "never graded") · **Raised:** 2026-09-10 (the third real-hardware reading set,
 #75 item 6) · **Size:** S · **Owner:** repo
 
 > **PARKED 2026-09-10. Its two documentation halves are DONE** — P3's stale 10.2 pp premise is
@@ -7815,7 +7715,7 @@ mechanism).
 ### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** M ·
-**Owner:** repo
+**Owner:** repo · **Verified:** 2026-10-20 (by reading `apps/api/src/modules/staff/dto/create-probe-result.dto.ts` and the schema, neither of which has a power-state field)
 
 > **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
 > nothing currently depends on the explanation. #75's question is answered: §9's gate is **met** at
@@ -7889,7 +7789,7 @@ that makes readings incomparable).
 ### 284. `on screen` means two different things depending on which scenario printed it
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the five-sitting probe set) ·
-**Size:** M · **Owner:** repo
+**Size:** M · **Owner:** repo · **Verified:** 2026-10-20 (by reading `apps/web/src/features/perf-probe/ui/probe-report.ts:203` and `:251-252`, where `on screen` and the head line's `visibleBars` still answer different questions)
 
 > **PARKED 2026-09-10 with the probe.** It misleads a reader of probe output and nothing else — the
 > judging is unaffected and conservative. **Trigger:** the probe is next opened for any reason, or
@@ -8697,128 +8597,6 @@ name.
 > the gate. What changes is the evidence for it: the manual list has now drifted twice in
 > four days, and both times the cause was an epic that had no reason to look here.
 
-### 302. A row's status can contradict the fields beside it, and `check:debt-status` passes it
-
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-11 (overnight register sweep) · **Size:** S · **Owner:** repo
-
-`#298` shipped carrying `**Status:** unverified` and `**Verified:** 2026-09-11` **on the same
-line**. Those cannot both be true: ADR-0120 introduced `unverified` to mean precisely _nobody has
-checked this_, and a verification date is the record that somebody did. The gate reported OK.
-
-**It is not a hole in the gate's coverage — it is outside its subject.** `check-debt-status.mjs`
-asserts that every row carries a status and that the status is one of the vocabulary's words. It
-never compares a status against the other fields on its own line, so no assertion could have fired.
-That is the ADR-0124 shape stated the other way round: _finding is generous, refusing is strict_,
-and here there is no refusing pass at all for this pair.
-
-**Why it matters more than a tidy-up.** `unverified` is the one status that makes a claim about the
-**reader's** obligation rather than the code — it says "do not act on this until somebody checks".
-A row wearing it beside a verification date tells two different people two different things, and
-the one who believes the status does redundant work while the one who believes the date acts on an
-unchecked claim. It is also the cheapest possible drift: nobody edits a status line twice.
-
-**The remedy is a coherence pass, and it is a shared-gate change.** Adding an assertion to
-`check-debt-status.mjs` touches a gate `prepush.sh` derives and CI runs, which is an ADR-0105
-trigger — so it is filed rather than folded into the sweep that found it, the same reasoning
-`#298` records for its own two findings. The rule to encode, once somebody specs it: `unverified`
-and a `**Verified:**` date are mutually exclusive; every other status requires one.
-
-**Blind spot to state up front:** this would catch the contradiction and not the lie. A row whose
-author writes a date without checking anything is invisible to any parser, which is why ADR-0076
-classes that as the non-computable third kind.
-
-**Re-derived 2026-09-13, and the proposed rule is SHIPPABLE — which is the finding, because the
-neighbouring proposal in `#312` is not.** Both halves of the rule this row asks for were run against
-the register:
-
-- **`unverified` beside a `**Verified:**` date — zero.** This row's only exhibit is gone. `#298` was
-  **born** with the contradiction in `69207b1d`, and `3c4a6161` removed it — **both on 2026-09-11**,
-  the day this row was raised. `#298` today reads `open · Verified: 2026-09-13`. Nothing recorded
-  either the birth or the repair, and the repair was incidental: the row was annotated for an
-  unrelated reason and the status line came with it.
-- **A status other than `unverified` with no `**Verified:**` field at all — two.** `#110`
-  (`deferred (on a measured trigger)`) and `#225` (`deferred`). Both are genuinely unverified rows
-  wearing a verified-looking status, which is the same defect this row describes with the fields the
-  other way round.
-
-**Two findings, one edit.** Contrast `#312`, whose gate reports **40** on the same day: a coherence
-pass here fails on two rows and can be armed the moment they are fixed, so this one does not need
-the report-only-then-repair-then-arm sequence ADR-0120 needed. That is the difference between a rule
-whose population somebody measured before proposing it and one whose population nobody did.
-
-**One implementation note for whoever specs it, because getting it wrong would contradict A2.**
-`#110`'s status is `deferred (on a measured trigger)` and passes correctly: `check-debt-status.mjs:212`
-takes the **first whitespace-delimited token**, so the parenthetical is tolerated by design. A
-coherence assertion must reuse that same extraction, or it will disagree with A2 about what the
-status even is — and disagree only on rows whose author added a qualifier, which is the population
-most likely to be doing something unusual.
-
-**A structural oddity found on the way, filed here rather than as its own row because nothing is
-broken by it.** `## Closed numbers` is at `docs/TECH_DEBT.md:5778`, and **37 detailed `### N.` rows
-live after it** — `#249`, `#251`, `#256`, `#257` and the rest. Since they are `###` under a `##`,
-markdown nests them: 37 live, open rows are children of a section headed _Closed numbers_. The gate
-is unaffected and correctly counts **103** detailed rows, because it reads headings globally rather
-than scoping by section — but ADR-0124 made `sections()` end a section at the same level **or
-shallower**, so any future section-scoped reader of this file inherits the whole 3,090-line tail as
-"Closed numbers". Worth knowing before writing one.
-
-~~**And the gate's own report banner is stale in the direction that misleads an investigator.**~~ —
-**closed, verified gone 2026-10-17.** `check-debt-status.mjs` no longer prints
-`REPORT ONLY (not yet armed; see M4)`; the gate has been armed since 2026-08-30 and `prepush.sh`
-derives it from the `check:debt-status` key. What stays open here is the status-coherence ask above.
-
-**One commit is behind an unusual share of tonight's findings, which is worth a sentence on its
-own.** `69207b1d` — _"four delivery gates, the Gantt's typed dates, and a focus-hand-off"_, carrying
-ADR-0134, ADR-0135 and ADR-0136 — both **created** `#298` wearing this row's contradiction and wrote
-`#249`'s "nothing in that pass touched `plan-workspace-toolbar.tsx`" **in a commit that touched that
-file**. Two register-accuracy defects from one change, and neither is a coding mistake: they are
-what a commit large enough to span three ADRs does to the prose written alongside it. Recorded as an
-observation rather than a rule — one commit is not a population, and the remedy ("smaller commits")
-is not this row's to propose.
-
-**A third coherence pair — and checking it properly turned a clean assertion into a rejected one.
-The reason is worth more than the assertion would have been.**
-
-The two halves measured above compare the status **word** against the **`Verified:` field**. A third
-pair looks unchecked: **`Verified:` against the row's own body.** A row annotated _"Re-derived
-2026-09-13"_ whose header still says `Verified: 2026-09-09` appears to say it was last checked four
-days before the newest thing written in it. Nothing looks at that.
-
-**Measured: 32 rows, as a census rather than a sample.** All 32 were opened and the offending line
-read, to separate a real mismatch from a date merely quoted in passing. **All 32 carry a dated
-annotation of their own** — _"Re-derived 2026-09-12"_ (`#247`, `#195`), _"CLOSED 2026-09-11"_
-(`#116`, `#206`, `#228`), _"swept 2026-09-11"_ (`#202`) — newer than their own header. Zero false
-positives on that predicate.
-
-**And then the assertion fails, on a row this pass had already written.** `#264`'s annotation says,
-in its own words, _"this is a partial re-check, not a re-run of the sweep"_. Bumping its `Verified:`
-to match would assert the **whole row** was checked that day, which is false — so the gate would not
-repair `#264`, it would **corrupt** it.
-
-**The two fields mean different things, and that is the finding.** `**Verified:**` is a claim about
-the **whole row**; a dated annotation is a claim about **one thing in it**. The pair is therefore a
-contradiction only when the annotation's scope is the whole row — and **scope is prose**. A gate
-asserting `Verified ≥ newest date in body` is not computable in the sense that matters: it would
-fire on careful rows and be silenced by bumping a field that then means less than it did. It would
-push hardest on exactly the authors who wrote down that their check was partial. **Rejected**, and
-this is the same shape as `#312`'s "base + part is not computable" — a pair that looks decidable
-until you ask what one half actually claims.
-
-**What this pass did instead, stated so the numbers are not mistaken for a repair.** Five of the 32
-were created tonight by the annotation pass that wrote this row's own re-derivation. Four — `#197`,
-`#200`, `#215`, `#268` — carry annotations that re-derive what the row claims, so their headers are
-**moved to 2026-09-13**. The fifth, `#264`, is **deliberately left at 2026-09-10**, and its
-annotation now says why: a partial re-check does not earn a whole-row date. The remaining 27 are
-untouched, because each needs the same judgement and a sweep that applied one rule to all of them
-would be the defect this paragraph just rejected.
-
-**The residual is real and smaller than it looked.** A reader still cannot tell a stale header from a
-deliberately-unmoved one without reading the annotation. The cheap honest fix is not a gate but a
-convention — say _"partial"_ where it is partial, which `#264` already did and is why this was
-catchable at all. Whether that earns a field of its own is a question for whoever specs the coherence
-pass; it is **not** the third assertion, and bundling it as one would ship a gate that makes the
-register less true.
-
 ### 320. Four findings the diagnostics gate pass recorded rather than folded
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
@@ -9064,29 +8842,15 @@ Both are a SQL query away — the same cheap move that produced this row. Neithe
 structural argument (a packer still leaves no gaps); both bear on whether the **domain** claim was
 right, and it is the domain claim that was refused here.
 
-### 326. Four findings the staff-console gate pass recorded rather than folded
+### 326. Three findings the staff-console gate pass recorded rather than folded
 
 **Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (ADR-0143 M6) · **Size:** M · **Owner:** web
 
 Four reviews over the staff-console epic; six blocking defects were folded with regression tests
-verified red. These four were not, each for a reason, and they are here rather than in the gate-pass
+verified red. These were not, each for a reason, and they are here rather than in the gate-pass
 write-up so they are findable by symptom (`#312`'s lesson).
 
-**(a) `DataTable`'s `cellClassName` replaces the default padding rather than merging with it.**
-`data-table.tsx` renders `className={column.cellClassName ?? 'py-2 pr-4'}`, so any caller that sets
-`cellClassName` for width or wrapping silently loses the cell padding and the gap to the next column.
-ADR-0143 M5 hit exactly that (three `break-all` columns with no padding) and fixed it by retyping
-`py-2 pr-4` into each call site, which leaves the footgun for the next consumer.
-
-**Measured before deciding, and the measurement is why it is filed rather than fixed: 30 call sites
-override `cellClassName`, and roughly a dozen are right-aligned action columns spelling
-`py-2 text-right whitespace-nowrap` — i.e. dropping `pr-4` on purpose, or at least depending on
-today's look.** So `cn('py-2 pr-4', column.cellClassName)` is a shared-contract change that
-repaints a dozen tables across the product. ADR-0105 makes that a spec-level change and ADR-0136
-records that folding a shared-gate change into an epic's last milestone is the thing ADR-0105 exists
-to stop. What a fix needs first is a decision about whether those twelve want `pr-4` back.
-
-**(b) Two `warning` badges sit outside the console's derived vocabulary.** `InstallationPanel`
+**(a) Two `warning` badges sit outside the console's derived vocabulary.** `InstallationPanel`
 renders "Email verification: off" and "Edit lock: off" as `Badge variant="warning"`, and neither
 corresponds to a check in `console-status.ts`'s five. A reader who trusts the Status summary's
 "Nothing needs attention" and stops reading never learns those two are flagged. It may be a correct
@@ -9095,13 +8859,13 @@ written nowhere, and it sits in tension with a summary whose stated job is to en
 checked. The decision is a product one: either they join `CHECK_IDS`, or the summary says what it
 does not cover, or the badges stop being `warning`.
 
-**(c) Both expression-scanning gates see only literal JSX.** `container-query.structural.test.ts`
+**(b) Both expression-scanning gates see only literal JSX.** `container-query.structural.test.ts`
 and `data-table.empty.structural.test.ts` read the `className=`/`empty=` expression itself, so a
 value assembled in a variable and passed in escapes either. Nothing in the tree does that today
 (checked), and no cheap predicate resolves an identifier — the reach is now named in both docblocks
 rather than implied by silence (ADR-0131), which is the honest state and not a fix.
 
-**(d) The bundle floor's drift predates this epic and the remaining headroom is thin.**
+**(c) The bundle floor's drift predates this epic and the remaining headroom is thin.**
 `apps/web/bundle-budget.json` records `measuredAt: 2026-09-11` at 404,744 B; the **pre-epic** commit
 of 2026-09-14 already measured 423,207 B, so about 18.5 kB of what the gate reports as drift belongs
 to other work merged in between. ADR-0143 spent 557 B of it. Re-measure the floor, or the next small
@@ -9254,8 +9018,7 @@ cheap opinion.
 
 ### 342. A client's plan count was built, measured, and withdrawn — two remedies, neither applied
 
-**Status:** open
-**Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9)
+**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-20 (by reading `ClientDetail` in `packages/types/src/index.ts:257-261`, which carries `projectCount` and no `planCount`)
 
 `ClientDetail` carries `projectCount` and deliberately **no** plan count, because a count of plans
 across a client's projects has no stable query plan. Measured on a diluted local estate (500
@@ -9864,17 +9627,6 @@ function. `apps/web` carries 44 such directives, each now with a written reason 
 a standing cost the reasons justify, not a to-do; M0-T3's probe could not reproduce the scope the
 spec predicted (`react-hooks/refs` fired in both tested placements), so read the cost as real but
 unmeasured.
-
-### 410. `check:claims` passes while printing a dead-registration note
-
-**Status:** open · **Verified:** 2026-09-28 (hook-deps-gate M0-T5) · **Raised:** 2026-09-20 ·
-**Size:** S · **Owner:** repo
-
-`scripts/check-claims.mjs` prints `note: … is registered but no longer cited anywhere` for a dead
-entry in `dependency-claims.json` and exits 0, so under `prepush.sh` the note goes to a log and only
-`ok` is shown — the pass-with-findings shape ADR-0164 D5 rules out. It is the one confirmed instance
-outside lint in M0-T5's survey. Changing a shared gate's exit behaviour is an ADR-0105 trigger of its
-own, so it was filed rather than folded into ADR-0164.
 
 ### 411. A warm local ESLint cache can under-report type-aware findings under `--max-warnings=0`
 

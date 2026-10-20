@@ -216,6 +216,56 @@ it('does NOT read an indented status — a declaration is at column 0', () => {
   assert.equal(fieldValue(row.body, 'Status'), null);
 });
 
+// ── fieldValue — inline header fields (`docs/TECH_DEBT.md` #247) ───────────────────────────────
+//
+// The register writes a header as `**Status:** open · **Verified:** 2026-09-13 · **Size:** S`, and
+// `fieldValue` only matched a field that opened the line — so `Verified` read `null` on every row
+// (A8 could never fire) and `Status` returned the whole rest of the line.
+it('reads an inline field after a separator', () => {
+  const body = '**Status:** open · **Verified:** 2026-09-13 · **Size:** S\n\nBody.';
+  assert.equal(fieldValue(body, 'Verified'), '2026-09-13');
+});
+
+it('a field stops at the next separator rather than returning the rest of the line', () => {
+  const body = '**Status:** open · **Verified:** 2026-09-13 · **Size:** S';
+  assert.equal(fieldValue(body, 'Status'), 'open');
+  assert.equal(fieldValue(body, 'Size'), 'S');
+});
+
+it('reads a non-adjacent field', () => {
+  const body = '**Status:** open · **Raised:** 2026-09-01 · **Verified:** 2026-09-10';
+  assert.equal(fieldValue(body, 'Verified'), '2026-09-10');
+});
+
+it('trims the trailing separator of a wrapped header and keeps a parenthetical value', () => {
+  const body =
+    '**Status:** deferred (on a measured trigger) · **Verified:** 2026-10-19 ·\n**Size:** M';
+  assert.equal(fieldValue(body, 'Status'), 'deferred (on a measured trigger)');
+  assert.equal(fieldValue(body, 'Verified'), '2026-10-19');
+});
+
+it('a value with commas and backticks runs to the next separator', () => {
+  const body =
+    '**Status:** open · **Verified:** 2026-10-01, by reading `a.ts`, `b.ts` · **Size:** S';
+  assert.equal(fieldValue(body, 'Verified'), '2026-10-01, by reading `a.ts`, `b.ts`');
+});
+
+// Guards, green on the old reader too — pinned so the widening cannot loosen the prose rule.
+it('does NOT read an inline field from quoted or code-spanned prose', () => {
+  assert.equal(
+    fieldValue('> reading `**Status:** x · **Verified:** 2026-09-01` as a clash', 'Verified'),
+    null,
+  );
+  assert.equal(fieldValue('Prose with · **Verified:** 2026-09-01 inside it.', 'Verified'), null);
+});
+
+it('does NOT read an inline field from a line that opens with prose', () => {
+  assert.equal(
+    fieldValue('The row says **Status:** open · **Verified:** 2026-09-01', 'Verified'),
+    null,
+  );
+});
+
 // ── tableRows — cells by index, never by text ──────────────────────────────────────────────────
 it('reads table cells by index, so a date in a prose column is not a date column', () => {
   const rows = tableRows(traps, 'Row six');

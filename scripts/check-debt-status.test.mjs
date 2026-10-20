@@ -27,13 +27,14 @@ import { join } from 'node:path';
 import { runGate } from './check-debt-status.mjs';
 import { REPO_ROOT } from './lib/doc-register.mjs';
 
-const detailedRow = (n) =>
-  `### ${n}. Row ${n}\n\n**Status:** open · **Verified:** 2026-10-05\n\nBody of ${n}.\n`;
+const detailedRow = (n, header = '**Status:** open · **Verified:** 2026-10-05') =>
+  `### ${n}. Row ${n}\n\n${header}\n\nBody of ${n}.\n`;
 const ledgerLine = (n) => `| ${n} | What ${n} was | 2026-01-01 | Recorded. |`;
 
 /**
  * Build a throwaway register. Numbers are passed per region: `compact` rows sit above
  * `## Detailed items`, `detailed` are `###` rows, `ledger` are lines in the Closed-numbers table.
+ * `headers` maps a detailed number to its header line, replacing the default `open · Verified`.
  * `afterLedger` is raw text placed after the ledger table, where the real register keeps detailed
  * rows that continue past it. `ledgerHeading: false` withholds the `## Closed numbers` heading.
  *
@@ -44,6 +45,7 @@ const ledgerLine = (n) => `| ${n} | What ${n} was | 2026-01-01 | Recorded. |`;
 function tree({
   compact = [1],
   detailed = [2, 3],
+  headers = {},
   ledger = [4, 5],
   afterLedger = '',
   ledgerHeading = true,
@@ -64,7 +66,7 @@ function tree({
     '',
     '## Detailed items',
     '',
-    ...detailed.map(detailedRow),
+    ...detailed.map((n) => (headers[n] ? detailedRow(n, headers[n]) : detailedRow(n))),
     ledgerHeading ? '## Closed numbers' : '## Something else',
     '',
     '| # | What it was | Closed | Where the record is |',
@@ -197,6 +199,42 @@ it('deleting the HIGHEST number is not reported — a known blind spot, pinned',
   // changes visibly rather than silently. Mutation: none — it documents what the gate does not do.
   const r = gate(make({ ledger: [4] }));
   assert.equal(r.code, 0, `5 was the highest and is not demanded: ${r.problems.join(' | ')}`);
+});
+
+// ── A8 — status and Verified agree (#247, #302) ────────────────────────────────────────────────
+const a8 = (r) => r.problems.filter((p) => tag(p).startsWith('A8'));
+const a8For = (header) =>
+  a8(gate(make({ detailed: [2], ledger: [3, 4, 5], headers: { 2: header } })));
+
+it('an `unverified` row that carries a Verified field is A8a', () => {
+  // Red on the old reader: `Verified` read null on every row, so this passed clean.
+  // Mutation: restore the own-line-only `fieldValue`.
+  const found = a8For('**Status:** unverified · **Verified:** 2026-10-05');
+  assert.deepEqual(found.map(tag), ['A8a']);
+});
+
+it('a `deferred` row with no Verified field is A8b', () => {
+  // Red on the old gate: no such rule existed.
+  const found = a8For('**Status:** deferred · **Owner:** web');
+  assert.deepEqual(found.map(tag), ['A8b']);
+  assert.match(found[0], /restatus it `unverified`/);
+});
+
+it('a Verified value that is not a date is A8b', () => {
+  assert.deepEqual(a8For('**Status:** open · **Verified:** not yet').map(tag), ['A8b']);
+});
+
+it('a status with a qualifier and a dated Verified is clean — statusToken is reused', () => {
+  assert.deepEqual(
+    a8For('**Status:** deferred (on a measured trigger) · **Verified:** 2026-10-05 (by reading x)'),
+    [],
+  );
+});
+
+it('`unverified` with no Verified is clean, and an out-of-vocabulary token is still A8-checked', () => {
+  assert.deepEqual(a8For('**Status:** unverified · **Owner:** web'), []);
+  assert.deepEqual(a8For('**Status:** closed · **Verified:** 2026-10-05'), []);
+  assert.deepEqual(a8For('**Status:** closed').map(tag), ['A8b']);
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

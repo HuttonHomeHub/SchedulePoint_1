@@ -28,7 +28,7 @@
     "check:surface-contract": "node scripts/check-surface-contract.mjs",
     "check:flags": "node scripts/check-flags.mjs",
     "check:counts": "node scripts/check-counts.mjs",
-    "check:claims": "node scripts/lib/citation-patterns.test.mjs && node scripts/check-claims.mjs",
+    "check:claims": "node scripts/lib/citation-patterns.test.mjs && node scripts/check-claims.test.mjs && node scripts/check-claims.mjs",
     "check:advisory-agreement": "node scripts/check-advisory-agreement.mjs",
     "check:ci-roster": "node scripts/check-ci-roster.mjs",
     "check:e2e-roster": "node scripts/check-e2e-roster.mjs",
