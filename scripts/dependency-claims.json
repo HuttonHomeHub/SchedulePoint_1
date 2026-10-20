@@ -1502,6 +1502,83 @@
       "lines": "163",
       "anchor": "if (ctx.context.options.emailAndPassword?.onPasswordReset) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request);",
       "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
+    },
+    {
+      "ref": "email-verification.mjs:31-36",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "31-36",
+      "anchor": "const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:126-127",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "126-127",
+      "anchor": "method: \"GET\",\n\toperationId: \"verifyEmail\"",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:173-182",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "173-182",
+      "anchor": "throw APIError.from(\"UNAUTHORIZED\", error);",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:189",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "189",
+      "anchor": "if (!user) return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:294-296",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "294-296",
+      "anchor": "afterEmailVerification(updatedUser, ctx.request)",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:297-298",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "297-298",
+      "anchor": "autoSignInAfterVerification",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
+    },
+    {
+      "ref": "base.mjs:29-51",
+      "package": "better-auth",
+      "path": "dist/auth/base.mjs",
+      "lines": "29-51",
+      "anchor": "const handler = async (request) => {",
+      "citedBy": [
+        "apps/api/src/common/auth/email-verification.service.ts",
+        "docs/specs/verify-email-confirm/spec.md"
+      ]
     }
   ]
 }
