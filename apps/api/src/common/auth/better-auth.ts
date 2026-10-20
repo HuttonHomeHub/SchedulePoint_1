@@ -59,6 +59,13 @@ export interface CreateAuthOptions {
    */
   sendVerificationEmail: (input: { to: string; verifyUrl: string }) => Promise<void>;
   /**
+   * The web page that confirms an address on a press (TECH_DEBT #88), e.g. `https://app/verify-email`.
+   * The emailed link is composed from it and the token, **not** taken from the `url` Better Auth
+   * passes: that URL points at the library's own `GET /verify-email`, which verifies on arrival and
+   * so verifies for any mail scanner that fetches it (`email-verification.mjs:31-36`, `:126-127`).
+   */
+  verifyPageUrl: string;
+  /**
    * Deliver the password-reset link (ADR-0074). A callback for the same reason as
    * `sendVerificationEmail` — this factory stays a pure function of its options.
    *
@@ -255,8 +262,14 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
      */
     emailVerification: {
       sendOnSignUp: true,
-      sendVerificationEmail: async ({ user, url }) => {
-        await options.sendVerificationEmail({ to: user.email, verifyUrl: url });
+      // The token rides in the fragment, never the query: a fragment is not sent to any server, so
+      // no proxy or API log holds it and no `Referer` carries it (the share link's precedent). The
+      // library also passes a `url`, deliberately ignored — see `verifyPageUrl`.
+      sendVerificationEmail: async ({ user, token }) => {
+        await options.sendVerificationEmail({
+          to: user.email,
+          verifyUrl: `${options.verifyPageUrl}#token=${encodeURIComponent(token)}`,
+        });
       },
       // The audit seam for `auth.email_verified` (ADR-0072). NOT `hooks.after`: `/verify-email`
       // returns `{ status: true, user: null }` and, when a `callbackURL` is present — which is how

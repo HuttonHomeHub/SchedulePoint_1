@@ -11,6 +11,8 @@ import {
   LockedError,
   NotFoundError,
   ValidationError,
+  VerificationLinkExpiredError,
+  VerificationLinkInvalidError,
 } from '../errors/domain-errors';
 import { tagBodyParserErrors } from '../http/body-parser-errors';
 
@@ -55,6 +57,8 @@ describe('AllExceptionsFilter — domain error → status/code mapping', () => {
     [new GoneError('gone'), HttpStatus.GONE, 'GONE'],
     [new ValidationError('bad'), HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_FAILED'],
     [new LockedError('locked'), HttpStatus.LOCKED, 'LOCKED'],
+    [new VerificationLinkExpiredError('old'), HttpStatus.GONE, 'VERIFICATION_LINK_EXPIRED'],
+    [new VerificationLinkInvalidError('bad'), HttpStatus.BAD_REQUEST, 'VERIFICATION_LINK_INVALID'],
   ])('maps %s → %i', (error, status, code) => {
     const { host, sent } = mockHost();
     filter.catch(error, host);

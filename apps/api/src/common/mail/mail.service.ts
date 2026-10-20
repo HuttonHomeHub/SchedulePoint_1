@@ -19,12 +19,13 @@ export interface InvitationEmail {
 }
 
 /**
- * The address-ownership proof (Theme B2). Better Auth mints the URL and token; this port only
- * carries them, so the token's lifetime, single-use and hashing stay the library's business.
+ * The address-ownership proof (Theme B2). Better Auth mints the token; the URL is composed from it
+ * (`{web}/verify-email#token=…`) and this port only carries it, so the token's lifetime, single-use
+ * and hashing stay the library's business.
  */
 export interface EmailVerificationEmail {
   to: string;
-  /** Absolute URL that marks the address verified when followed. */
+  /** Absolute URL of the page where the address is confirmed on a press — following it alone verifies nothing. */
   verifyUrl: string;
 }
 

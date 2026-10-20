@@ -8,6 +8,8 @@ import { MailService } from '../mail/mail.service';
 
 import { AuthContextService } from './auth-context.service';
 import { AUTH_INSTANCE, createAuth } from './better-auth';
+import { EmailVerificationController } from './email-verification.controller';
+import { EmailVerificationService } from './email-verification.service';
 
 /**
  * Global module exposing the authentication seam: the configured Better Auth
@@ -17,6 +19,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
  */
 @Global()
 @Module({
+  controllers: [EmailVerificationController],
   providers: [
     {
       provide: AUTH_INSTANCE,
@@ -35,6 +38,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
           trustedProxies: config.trustedProxyIps,
           isProduction: config.isProduction,
           requireEmailVerification: config.requireEmailVerification,
+          verifyPageUrl: `${config.appUrl}/verify-email`,
           // The auth library reaches mail through the port, never a transport — so which adapter
           // is bound stays `MailModule`'s decision and this wiring is the same in every environment.
           sendVerificationEmail: (input) => mail.sendEmailVerification(input),
@@ -83,6 +87,7 @@ import { AUTH_INSTANCE, createAuth } from './better-auth';
         }),
     },
     AuthContextService,
+    EmailVerificationService,
   ],
   exports: [AUTH_INSTANCE, AuthContextService],
 })

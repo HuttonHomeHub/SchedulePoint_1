@@ -1,7 +1,7 @@
-import { VersioningType } from '@nestjs/common';
+import { HttpStatus, VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, text, type Request, type RequestHandler } from 'express';
+import { json, text, type Request, type RequestHandler, type Response } from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
@@ -100,10 +100,29 @@ export function configureHttpApp(app: NestExpressApplication): void {
   });
 
   const auth = app.get<AuthInstance>(AUTH_INSTANCE);
-  app
-    .getHttpAdapter()
-    .getInstance()
-    .all(/^\/api\/auth(?:\/|$)/, boundAuthBody, toNodeHandler(auth));
+  const express = app.getHttpAdapter().getInstance();
+  // **Shadows Better Auth's `GET /verify-email`, which verifies on arrival** (TECH_DEBT #88). Emails
+  // sent before the confirm page existed still carry that URL for up to an hour, and a mail scanner
+  // that fetches one would verify the address on the recipient's behalf. This answers instead with a
+  // redirect to the page that confirms on a press, and never verifies. It is registered BEFORE the
+  // Better Auth mount because Express matches in registration order; `.get` also answers `HEAD`. The
+  // token was already in this request line, so the redirect adds no exposure — and the fragment it
+  // lands in is never sent onward. The confirm POST calls the auth handler directly, so this does
+  // not shadow it.
+  const verifyPage = `${config.appUrl}/verify-email`;
+  express.get('/api/auth/verify-email', (req: Request, res: Response) => {
+    const { token } = req.query;
+    const usable = typeof token === 'string' && token !== '' && token.length <= 2048;
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.redirect(
+      HttpStatus.SEE_OTHER,
+      usable
+        ? `${verifyPage}#token=${encodeURIComponent(token)}`
+        : `${verifyPage}?error=INVALID_TOKEN`,
+    );
+  });
+  express.all(/^\/api\/auth(?:\/|$)/, boundAuthBody, toNodeHandler(auth));
 
   // **The extra two types are not decoration: without them the CSP sink records nothing.** A
   // browser posts a violation report as `application/csp-report` (the legacy `report-uri`
