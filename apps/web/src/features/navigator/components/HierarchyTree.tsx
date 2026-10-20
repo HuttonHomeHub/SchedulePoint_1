@@ -7,7 +7,14 @@ import { useExpansionState, type UseExpansionState } from '../hooks/use-expansio
 import { useHierarchyTree, type LazyLoadOutcome } from '../hooks/use-hierarchy-tree';
 import { useNavigatorCrud, type NodeActionTarget } from '../lib/navigator-crud-context';
 import { nodeActions } from '../lib/tree-actions';
-import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '../lib/tree-model';
+import {
+  focusTarget,
+  isSettledRow,
+  treeKeydown,
+  type NodeKind,
+  type TreeNodeData,
+  type VisibleRow,
+} from '../lib/tree-model';
 import {
   anchorAt,
   pinnedRange,
@@ -117,8 +124,9 @@ export function HierarchyTree({
    * `useAnnounce()` polite live region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and nothing
    * implemented it: `useAnnounce` had no reference anywhere under `features/navigator`. So the only
    * way a keyboard or AT user learnt that an expansion had resolved was to be standing on the
-   * placeholder when it vanished, which is the accidental signal #307 records and the reason that
-   * row keeps the placeholder focusable for now.
+   * placeholder when it vanished, which is the accidental signal #307 recorded. The arrow keys
+   * now skip a `loading` row while a real row exists (#307(a), `focusTarget`), so this
+   * announcement is the signal rather than an accident of where the focus happened to be.
    *
    * **Only the visible rail speaks.** The shell mounts two `HierarchyTree`s — the pinned rail and
    * the drawer — sharing one expansion set (ADR-0029 Phase 2), so both see the same transition and
@@ -181,8 +189,9 @@ export function HierarchyTree({
   // for EVERY row, nothing carried `tabIndex={0}`, and the container is itself `tabIndex={-1}`
   // — so the Project Explorer dropped out of the Tab sequence altogether (WCAG 2.2 §2.1.1).
   // Reached without a peer or a second session: a synthetic `loading` row is focusable and
-  // keyed `${parentId}:loading`, so arrowing onto a placeholder and letting its fetch resolve
-  // is enough (`docs/TECH_DEBT.md` #297; the suite's #297 case measured 0 stops).
+  // keyed `${parentId}:loading`, so landing on a placeholder and letting its fetch resolve
+  // is enough (`docs/TECH_DEBT.md` #297; the suite's #297 case measured 0 stops). Arrow keys no
+  // longer land on one while a real row exists (#307(a)), but the ROOT placeholder still can.
   //
   // `Toolbar.tsx`'s `effectiveActiveId` and `Deck.tsx`'s `rovingId` resolve the same way, each
   // after the same defect. They are deliberately NOT extracted into one helper: those two are
@@ -195,7 +204,7 @@ export function HierarchyTree({
   const activeKey =
     resolvedFocusedKey ??
     (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ??
-    rows[0]?.key ??
+    (rows.find(isSettledRow) ?? rows[0])?.key ??
     null;
   const activeIndex = useMemo(
     () => rows.findIndex((row) => row.key === activeKey),
@@ -278,8 +287,9 @@ export function HierarchyTree({
    * **The tab stop is not the focus ring, and `#297` only repaired the first.**
    *
    * A row can leave `rows` while the browser's focus is physically on it — a synthetic `loading`
-   * row keyed `${parentId}:loading` is focusable and is guaranteed to be unmounted when its fetch
-   * resolves; a real node goes the same way on a collapse or a peer's delete. Neither existing
+   * row keyed `${parentId}:loading` is focusable (only the root one is keyboard-reachable now,
+   * #307(a)) and is guaranteed to be unmounted when its fetch resolves; a real node goes the same
+   * way on a collapse or a peer's delete. Neither existing
    * effect can help: `pendingFocus` is keyed on `focusedKey`, which does not change here, and
    * `afterDelete` fires only for this rail's own delete. Measured, focus landed on `<body>` with
    * the tab stop perfectly correct — WCAG 2.2 §2.4.3, level A (`docs/TECH_DEBT.md` #305).
@@ -448,19 +458,11 @@ export function HierarchyTree({
     event.preventDefault();
     switch (intent) {
       case 'next':
-        focusRow(Math.min(activeIndex + 1, rows.length - 1));
-        break;
       case 'prev':
-        focusRow(Math.max(activeIndex - 1, 0));
-        break;
       case 'first':
-        focusRow(0);
-        break;
       case 'last':
-        focusRow(rows.length - 1);
-        break;
       case 'firstChild':
-        focusRow(Math.min(activeIndex + 1, rows.length - 1));
+        focusRow(focusTarget(rows, activeIndex, intent));
         break;
       case 'expand':
         if (row.node) tree.expand(row.node.id);

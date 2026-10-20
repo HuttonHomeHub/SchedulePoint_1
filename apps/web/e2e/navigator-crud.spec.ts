@@ -134,3 +134,57 @@ test('a writer deletes a project from the tree (cascade) and it lands in Recentl
   await page.goto(`/orgs/${orgSlug}/recently-deleted`);
   await expect(page.getByText('Riverside')).toBeVisible();
 });
+
+// docs/TECH_DEBT.md #307(a): a `Loading…` placeholder is transient status text, so the arrow keys
+// step over it to the next real row. jsdom has no focus ring to measure, so this is the real-browser
+// proof; the unit suite pins the choice of target.
+test('arrow keys in the Project Explorer step over a loading placeholder', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+
+  for (const name of ['Northgate', 'Southgate']) {
+    await rail(page).getByRole('button', { name: 'New client' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByRole('button', { name: 'Create client' }).click();
+    await expect(rail(page).getByRole('treeitem', { name: new RegExp(name) })).toBeVisible();
+  }
+
+  // Hold the projects fetch open so Northgate's only child stays the placeholder.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pattern = '**/organizations/*/clients/*/projects*';
+  await page.route(pattern, async (route) => {
+    await held;
+    await route.continue();
+  });
+
+  try {
+    const northgate = rail(page).getByRole('treeitem', { name: /Northgate/ });
+    const southgate = rail(page).getByRole('treeitem', { name: /Southgate/ });
+    await northgate.focus();
+    await page.keyboard.press('ArrowRight'); // expand
+    await expect(northgate).toHaveAttribute('aria-expanded', 'true');
+    const placeholder = rail(page).getByRole('treeitem', { name: /Loading/ });
+    await expect(placeholder).toBeVisible();
+
+    // ArrowRight on an expanded node moves to its first child; the only child is the placeholder.
+    await page.keyboard.press('ArrowRight');
+    await expect(northgate).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(southgate).toBeFocused();
+    await expect(placeholder).not.toBeFocused();
+
+    await page.keyboard.press('ArrowUp');
+    await expect(northgate).toBeFocused();
+
+    release();
+    await expect(placeholder).toHaveCount(0);
+  } finally {
+    release();
+    await page.unroute(pattern);
+  }
+});

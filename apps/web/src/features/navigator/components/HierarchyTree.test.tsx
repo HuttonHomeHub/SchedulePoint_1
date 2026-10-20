@@ -1,6 +1,6 @@
 import type { ClientSummary, PlanSummary, ProjectSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -96,9 +96,12 @@ const plans: PlanSummary[] = [
 // same sequence produces both defects (a stale tab stop and a dropped focus ring), so a second
 // deferred-fetch harness would be a second chance to get the reproduction subtly wrong.
 let holdProjects: Promise<ProjectSummary[]> | null = null;
+// #307(a): arrow keys no longer land on a child-level placeholder, so #297 and #305 are reached on
+// the ROOT one — held here — which is the only row there is while the client list loads.
+let holdClients: Promise<ClientSummary[]> | null = null;
 
 const route = (path: string): Promise<unknown> => {
-  if (path.endsWith('/clients')) return Promise.resolve(clients);
+  if (path.endsWith('/clients')) return holdClients ?? Promise.resolve(clients);
   if (path.includes('/clients/c1/projects')) return holdProjects ?? Promise.resolve(projects);
   if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
   if (path.endsWith('/plans/pl1')) return Promise.resolve(plans[0]);
@@ -152,6 +155,7 @@ beforeEach(() => {
   navigate.mockClear();
   params = {};
   holdProjects = null;
+  holdClients = null;
 });
 
 describe('HierarchyTree', () => {
@@ -255,22 +259,20 @@ describe('HierarchyTree', () => {
    * **Verified red against the pre-fix derivation: 0 tab stops.**
    */
   it('keeps exactly one tab stop when a focused loading row resolves away (#297)', async () => {
-    let releaseProjects!: (value: ProjectSummary[]) => void;
-    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
-      releaseProjects = resolve;
+    let releaseClients!: (value: ClientSummary[]) => void;
+    holdClients = new Promise<ClientSummary[]>((resolve) => {
+      releaseClients = resolve;
     });
 
     renderTree();
-    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
-    fireEvent.click(client); // expand: the child fetch is held, so a `loading` row renders
+    // The client list is the only thing on screen: a lone `loading` row, which keeps the tab stop.
+    // Home is the tree's OWN key and writes `focusedKey` (see the #143 case above for why
+    // `element.focus()` would not), so the key names a row the resolve is about to remove.
+    await screen.findByRole('treeitem', { name: /Loading/ });
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'Home' });
 
-    // Drive the roving model with the tree's OWN key, not `element.focus()` — see the #143 case
-    // above for why that distinction matters in this harness.
-    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
-
-    // The fetch resolves and the placeholder is replaced, so `focusedKey` now names nothing.
-    releaseProjects(projects);
-    await screen.findByRole('treeitem', { name: /Fit-out/ });
+    releaseClients(clients);
+    await screen.findByRole('treeitem', { name: /Northgate/ });
 
     const stops = screen.getAllByRole('treeitem').filter((element) => element.tabIndex === 0);
     expect(stops).toHaveLength(1);
@@ -291,24 +293,22 @@ describe('HierarchyTree', () => {
    * **Verified red against the pre-fix component: `activeElement` was `BODY`.**
    */
   it('hands focus back to the tree when a focused row is removed under it (#305)', async () => {
-    let releaseProjects!: (value: ProjectSummary[]) => void;
-    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
-      releaseProjects = resolve;
+    let releaseClients!: (value: ClientSummary[]) => void;
+    holdClients = new Promise<ClientSummary[]>((resolve) => {
+      releaseClients = resolve;
     });
 
     renderTree();
-    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
-    fireEvent.click(client); // expand: the child fetch is held, so a `loading` row renders
-
-    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    await screen.findByRole('treeitem', { name: /Loading/ });
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'Home' });
     // The placeholder really does hold focus — asserted, because if it does not then the case
     // below proves nothing about a row being removed from under a focus ring (the ADR-0093 shape).
     await waitFor(() => {
       expect(document.activeElement).toHaveAttribute('aria-disabled', 'true');
     });
 
-    releaseProjects(projects);
-    await screen.findByRole('treeitem', { name: /Fit-out/ });
+    releaseClients(clients);
+    await screen.findByRole('treeitem', { name: /Northgate/ });
 
     // Focus must not be left on `<body>`. The tree container is the destination the shared
     // hand-off mechanism uses, so the reader's next Tab or arrow key still reaches the diagram.
@@ -316,6 +316,66 @@ describe('HierarchyTree', () => {
       expect(document.activeElement).not.toBe(document.body);
     });
     expect(screen.getByRole('tree')).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  /**
+   * **#307(a) — a transient placeholder is never a keyboard destination while a real row exists.**
+   * The client's children are held, so its `Loading…` row sits directly under it. ArrowDown must
+   * step over it to the next client, and ArrowRight on the expanded client (whose only child is
+   * that placeholder) must leave the focus where it is. The root case stays focusable — the #297
+   * and #305 cases above are reached through it.
+   */
+  it('arrow keys step over a loading placeholder (#307)', async () => {
+    holdProjects = new Promise<ProjectSummary[]>(() => {});
+    holdClients = Promise.resolve([...clients, { ...clients[0]!, id: 'c2', name: 'Southgate' }]);
+    renderTree();
+    const north = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(north); // expand: the child fetch is held, so a `loading` row renders
+    await screen.findByRole('treeitem', { name: /Loading/ });
+
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowRight' });
+    expect(north.tabIndex).toBe(0);
+    await waitFor(() => expect(document.activeElement).toBe(north));
+
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    const south = screen.getByRole('treeitem', { name: /Southgate/ });
+    await waitFor(() => expect(document.activeElement).toBe(south));
+
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' });
+    await waitFor(() => expect(document.activeElement).toBe(north));
+  });
+
+  /**
+   * **A nested placeholder that holds DOM focus is still handed back (#305 via #307).** The arrow
+   * keys no longer reach one, but a pointer or `focus()` can. Placeholders carry no `onFocus`, so
+   * `focusedKey` stays on the real row while the browser's focus sits on the placeholder — and when
+   * its fetch resolves it unmounts under the focus ring. The tree container must take the focus
+   * and exactly one row keep the tab stop. Giving state rows an `onFocus` that sets `focusedKey`
+   * fails the tab-stop assertion before the fetch resolves (the placeholder would take `tabIndex`
+   * 0); the hand-off half is independent of it, because `resolvedFocusedKey` drops a vanished key.
+   */
+  it('hands focus back when a focused NESTED placeholder resolves away (#307)', async () => {
+    let releaseProjects!: (value: ProjectSummary[]) => void;
+    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+      releaseProjects = resolve;
+    });
+
+    renderTree();
+    const north = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(north);
+    const placeholder = await screen.findByRole('treeitem', { name: /Loading/ });
+    act(() => placeholder.focus());
+    expect(document.activeElement).toBe(placeholder);
+    // The tab stop stays on the real row: a placeholder with an `onFocus` would take it.
+    expect(north.tabIndex).toBe(0);
+    expect(placeholder.tabIndex).toBe(-1);
+
+    releaseProjects(projects);
+    await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tree')));
+    const stops = screen.getAllByRole('treeitem').filter((element) => element.tabIndex === 0);
+    expect(stops).toHaveLength(1);
   });
 
   /**
