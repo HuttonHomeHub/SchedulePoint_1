@@ -10,6 +10,30 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-20 — The verification link confirms on a press; the old library route is shadowed (#88)
+
+**Decided.** The owner approved `docs/specs/verify-email-confirm/spec.md` with both defaults: **pressing
+Confirm does not sign the person in** (the link would otherwise be a sign-in credential for whoever holds
+a forwarded or shared mailbox), and the token travels in the URL fragment.
+
+- The emailed link is now `{web}/verify-email#token=…`. The page verifies nothing until Confirm is
+  pressed; the press `POST`s the token to `/api/v1/email-verification/confirm`, which calls Better Auth's
+  own verifier (its public `handler`, with the caller's user agent and `x-forwarded-for` forwarded so the
+  `auth.email_verified` audit row keeps its evidence).
+- Better Auth's `GET /api/auth/verify-email` verifies on arrival and cannot be switched off, so it is
+  **shadowed** by a plain Express handler registered before the library mount (`app-setup.ts`): `GET` and
+  `HEAD` answer `303` to the page and never verify. That protects the emails already in inboxes at deploy,
+  which carry the old URL for up to an hour. A library hook was rejected: it would rest on hook semantics
+  for a route the library owns, where this is an ordinary Express fact.
+- No new ADR: page-plus-POST is the shape ADR-0074 already uses for reset, and the shadow is one handler.
+  ADR-0074 carries a short amendment note.
+
+**Not changed.** The invitation link was already safe behind a real button press. The password-reset
+link's redirect still carries the raw token on a `Location` header; that is the library's route and was
+out of this change's scope.
+
+---
+
 ## 2026-10-20 — The owner did the three host steps: backups on, export taken, clear-out switched on (1.0 rows 5, 6, 7)
 
 **What was done, on the owner's server, guided step by step.** The owner lifted their own "no hands-on
