@@ -784,16 +784,20 @@ Three kinds of job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   `pnpm check:counts` re-derives `CLAUDE.md`'s six stage-banner figures from the
   tree; it exists because every one of them was wrong at a reconciliation pass,
   the correction told readers to re-run `ls | wc -l`, and five of six were wrong
-  again a day later (ADR-0076). `pnpm check:claims` pins the 34 file-and-line
-  citations this repository makes into `better-auth` and `better-call` — the
+  again a day later (ADR-0076). `pnpm check:claims` pins the file-and-line
+  citations this repository makes into its dependencies — the
   version each was verified against, an anchor from the code at each cited line,
-  and that no citation exists outside `scripts/dependency-claims.json`. Those
+  that no citation exists outside `scripts/dependency-claims.json`, and that no
+  registered entry is left uncited (a dead registration fails; it was a note that
+  exited 0 until `docs/TECH_DEBT.md` #410). Those
   citations are load-bearing (ADR-0074 and ADR-0075 both turn on them) and a
   minor bump moves every one while the prose keeps reading as authoritative.
   `pnpm check:debt-status` asserts that every `docs/TECH_DEBT.md` row carries a
   status a parser can find, that no row is annotated CLOSED in its heading while
   still present in the file, and that the compact table cannot silently regrow,
-  and that every number from 1 to the highest in use is a live row or a ledger line —
+  and that every number from 1 to the highest in use is a live row or a ledger line,
+  and that a row's status and its `**Verified:**` date agree (an `unverified` row carries none; any
+  other status carries a `YYYY-MM-DD` one — A8, which could not fire until #247) —
   because that file decides what gets picked up next, and **14 of its 138 rows**
   carried a machine-readable status, so a candidate recommended from it had been
   fixed three weeks earlier (ADR-0120). `pnpm check:spec-status` reads every spec document's

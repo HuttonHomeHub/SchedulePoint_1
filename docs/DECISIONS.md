@@ -10,6 +10,28 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-20 — `**Verified:**` dates the whole row, and the register's checker can now see it (tech debt #247, #302, #410)
+
+**Decided by the product owner, taking the default for Q1 of `docs/specs/register-gate-repairs/`.**
+A `**Verified:**` date means "this whole row was last checked in full on this date", not "the
+subject of one sentence was confirmed". So `unverified` beside a date is a contradiction, and every
+other status needs a date or must be restatused `unverified` — the rule `check:debt-status` A8 now
+enforces as A8a and A8b. The alternative (a date confirms the subject only) would have deleted A8a
+and was an ADR-sized decision about what a status means; it was not taken.
+
+**Why it surfaced now.** A8 had never fired: `fieldValue` read only a field that opened its line, and
+the register writes `**Status:** open · **Verified:** …` inline, so `Verified` read `null` on all 141
+rows. Widening the reader (header lines only, field at the start or after `·`) made 134 `Verified`
+dates visible and exposed seven rows with a non-`unverified` status and no date (#110, #225, #261,
+#282, #283, #284, #342). Each was re-read against what it cites and dated in the same change; none
+had to be restatused. `check:claims` also stopped printing a dead-registration note and exiting 0
+(ADR-0164 D5): it fails, and there were zero dead entries to delete.
+
+**Consequence.** A future header written with `|` or `—` between fields, or a field on a continuation
+line that does not itself open with a field, is unread; the `fieldValue` docblock says so.
+
+---
+
 ## 2026-10-20 — The verification link confirms on a press; the old library route is shadowed (#88)
 
 **Decided.** The owner approved `docs/specs/verify-email-confirm/spec.md` with both defaults: **pressing
