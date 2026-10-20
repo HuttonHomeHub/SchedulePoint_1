@@ -200,30 +200,44 @@ export function openDetailedRow(md, number) {
   return status !== null && statusToken(status) === 'open' ? row : null;
 }
 
+/** A line that opens at column 0 with some `**Word:**` — a register row's header block. */
+const HEADER_LINE = /^\*\*[A-Z][A-Za-z -]*:\*\*/;
+
 /**
- * The value of a `**Field:**` line, or `null`.
+ * The value of a `**Field:**` in a row's header block, or `null`.
  *
- * **Column 0, and the field must open the line — that anchor is the ONLY guard.** `#219` contains
- * the literal `**Status:**` inside a sentence asking for this gate; an unanchored search finds it
- * and reports a status the row does not have. The anchor already excludes it, because prose does
- * not begin a line with the field.
+ * **A line is read only if it OPENS at column 0 with a `**Word:**` — that anchor is the guard.**
+ * `#219` contains the literal `**Status:**` inside a sentence asking for this gate; an unanchored
+ * search finds it and reports a status the row does not have. Prose does not begin a line with a
+ * field, so the anchor excludes it — and also excludes quoted `> … · **Verified:** …` lines.
+ *
+ * **On such a header line the field may sit at the start or after a ` · ` separator**, which is how
+ * the register writes it (`**Status:** open · **Verified:** 2026-09-13 · **Size:** S`). The value
+ * runs to the next ` · **` or the end of the line; a trailing `·` (a header wrapped onto the next
+ * line) is trimmed. Until `docs/TECH_DEBT.md` #247 this read only a field that opened the line, so
+ * `Verified` was never found and returned `null` on every row, and `Status` returned the rest of
+ * the line including its siblings.
+ *
+ * **Known blind spot, stated rather than hidden:** a field on a continuation line that does not
+ * itself open with a field (`… item 6) · **Size:** S`) is unread, and so is a header written with
+ * `|` or `—` between fields. Both were read against the register and are prose or absent there.
  *
  * **Inline code spans are deliberately NOT stripped**, and this docblock claimed for some time that
- * they were — a false sentence in the shared module, three lines above the comment recording why
- * (`docs/TECH_DEBT.md` #231's epic found it). Stripping was tried and removed as actively wrong:
- * see the comment inside the loop below. Do not "restore" it.
+ * they were — a false sentence in the shared module (`docs/TECH_DEBT.md` #231's epic found it).
+ * Stripping was tried and removed as actively wrong: it ate two real declarations whose value
+ * cites a symbol (`**Status:** … (ADR-0083 M7 — \`scheduleRefusal\`)`). Do not "restore" it.
  */
 export function fieldValue(body, field) {
+  const own = new RegExp(`^\\*\\*${field}:\\*\\*\\s*(.*)$`);
+  const inline = new RegExp(`\\s·\\s+\\*\\*${field}:\\*\\*\\s*(.*)$`);
   for (const raw of body.split('\n')) {
-    // **The `^` anchor is the whole guard, and a broader one was actively wrong.**
-    // This first skipped any line containing a backtick, reasoning that a row quoting the field is
-    // discussing it rather than declaring it. That over-matched: it ate two REAL declarations whose
-    // value happens to cite a symbol (`**Status:** ... (ADR-0083 M7 — \`scheduleRefusal\`)`), and the
-    // gate then under-reported the register by two rows. The prose case it was defending against —
-    // #219's "a \`**Status:**\` line on every row" — does not begin at column 0, so the anchor
-    // already excludes it. Verified by fixture: `Row two` stays null with this guard gone.
-    const m = new RegExp(`^\\*\\*${field}:\\*\\*\\s*(.*)$`).exec(raw);
-    if (m) return m[1].trim();
+    if (!HEADER_LINE.test(raw)) continue;
+    const m = own.exec(raw) ?? inline.exec(raw);
+    if (m)
+      return m[1]
+        .split(/\s·\s+\*\*/)[0]
+        .replace(/\s*·\s*$/, '')
+        .trim();
   }
   return null;
 }
