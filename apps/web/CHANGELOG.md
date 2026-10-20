@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.194.4
+
+### Patch Changes
+
+- [#1084](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1084) [`17ce68c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/17ce68cb301e670cb2e84432471e3e647d68b8d8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When nothing has been chosen yet, the Compare on diagram toggle now asks you to choose what to compare, rather than claiming two revisions are needed.
+
+- [#1082](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1082) [`a078cbc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a078cbc9de9889ec8b1b80e3296df17c8a14c1ba) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the Project Explorer, the arrow keys no longer stop on a "Loading…" row while a projects or plans list is still arriving. They go straight to the next real row, and Right Arrow on an expanded folder that is still loading leaves the focus where it is.
+
 ## 0.194.3
 
 ### Patch Changes
