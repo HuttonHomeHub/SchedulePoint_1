@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 
 import { AppConfigService } from '../../config/app-config.service';
 import {
@@ -10,6 +10,12 @@ import { AUTH_INSTANCE, type AuthInstance } from './better-auth';
 
 /** Better Auth's rate limiter answers a bare status; named so the comparison is not a magic number. */
 const TOO_MANY_REQUESTS = 429;
+
+/**
+ * Forwarded headers are evidence for an audit row and Better Auth's limiter, not data worth
+ * trusting at length: capped so a hostile client cannot make this process build a megabyte header.
+ */
+const MAX_FORWARDED_HEADER = 512;
 
 /** The request evidence the audit row `auth.email_verified` is made from. */
 export interface ForwardedEvidence {
@@ -51,9 +57,25 @@ export class EmailVerificationService {
     url.searchParams.set('token', token);
 
     const headers = new Headers();
-    if (evidence.userAgent !== undefined) headers.set('user-agent', evidence.userAgent);
-    if (evidence.forwardedFor !== undefined) headers.set('x-forwarded-for', evidence.forwardedFor);
+    try {
+      if (evidence.userAgent !== undefined) {
+        headers.set('user-agent', evidence.userAgent.slice(0, MAX_FORWARDED_HEADER));
+      }
+      if (evidence.forwardedFor !== undefined) {
+        headers.set('x-forwarded-for', evidence.forwardedFor.slice(0, MAX_FORWARDED_HEADER));
+      }
+    } catch {
+      // `Headers` refuses a value that is not a valid header value. Node's parser already rejects
+      // those on the way in, so this is defence in depth: the caller's request is malformed, which
+      // is a 400, not a fault of ours.
+      throw new BadRequestException('The request headers could not be read.');
+    }
 
+    // **The response is discarded on purpose, `Set-Cookie` included.** Confirming must never sign
+    // anyone in. Today that holds because `autoSignInAfterVerification` is not configured
+    // (`email-verification.mjs:297-298`) and `user.changeEmail` is not enabled; enabling
+    // `changeEmail` mints `updateTo` tokens whose verification creates a session, so doing so
+    // means re-reviewing this endpoint before it ships.
     const response = await this.auth.handler(new Request(url, { method: 'GET', headers }));
     if (response.ok) return;
 

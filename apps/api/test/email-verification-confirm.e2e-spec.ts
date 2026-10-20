@@ -136,6 +136,16 @@ describe.skipIf(!hasDatabase)('Email verification confirm (e2e)', () => {
     },
   );
 
+  it('builds the redirect from the configured app URL, whatever Host the request claims', async () => {
+    const token = tokenOf(await signUp('hostile@example.com'));
+
+    const res = await request(server()).get(legacyUrl(token)).set('Host', 'evil.example');
+
+    expect(res.status).toBe(303);
+    expect(res.headers.location).toBe(`${ORIGIN}/verify-email#token=${encodeURIComponent(token)}`);
+    expect(await verified('hostile@example.com')).toBe(false);
+  });
+
   it('sends a legacy link with no usable token to the page with an error, still verifying nothing', async () => {
     await signUp('notoken@example.com');
 
