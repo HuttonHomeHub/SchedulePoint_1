@@ -193,14 +193,26 @@ export function VerifyEmailScreen(): React.ReactElement {
   // Captured on the first render, before the effect below removes it from the URL (see
   // `/reset-password`, whose reasoning this repeats): an effect would run after a render in which the
   // fragment is already gone.
-  const [token] = useState(tokenFromHash);
+  const [token, setToken] = useState(tokenFromHash);
+
+  // A link pasted into the tab already showing this page changes only the fragment, which the
+  // browser treats as same-document: nothing remounts, so the initial read above never sees it.
+  useEffect(() => {
+    function onHashChange(): void {
+      const next = tokenFromHash();
+      if (next !== '') setToken(next);
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     if (token === '') return;
     void navigate({ to: '/verify-email', search: {}, replace: true });
   }, [token, navigate]);
 
-  if (token !== '') return <ConfirmEmailScreen token={token} />;
+  // Keyed so a second link replaces the first outright, including a failure it left behind.
+  if (token !== '') return <ConfirmEmailScreen key={token} token={token} />;
 
   if (verified) {
     return (

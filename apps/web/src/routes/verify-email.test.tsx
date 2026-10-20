@@ -325,6 +325,20 @@ describe('VerifyEmailScreen — the emailed link', () => {
     await waitFor(() => expect(confirmCalls()).toHaveLength(2));
   });
 
+  it('picks up a link pasted into the tab already showing this page', async () => {
+    renderAt({ email: 'ada@example.com' });
+    expect(screen.getByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
+
+    // Only the fragment changes, so the browser fires `hashchange` and does not reload.
+    window.location.hash = '#token=pasted.token';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your email address' }),
+    ).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith({ to: '/verify-email', search: {}, replace: true });
+  });
+
   it('treats an empty token as no token — the waiting state, not a button with nothing to send', () => {
     window.location.hash = '#token=';
     renderAt({});
