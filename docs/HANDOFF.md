@@ -3,45 +3,45 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-20 (evening). This session did the two rows the owner chose from the
-morning's shortlist, one PR each: **#307(a)** (the Project Explorer's arrow keys no longer stop on a
-"Loading…" row) and **#263(i)** (the Compare on diagram refusal no longer says "two revisions").
-Both are merged and released as **`web` 0.194.4** (Version Packages PR #1083; `api` stays
-**0.96.2**, it had no change). The owner's **hard rule** still stands: nothing that needs them to
-test, measure or check anything on their server or devices (a decision question is fine; a test is
-not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-20 (late evening). This session did the three jobs the owner chose, in order:
+**#88** (the verification email's link opens a Confirm page; only pressing the button confirms),
+then **#247 + #302 + #410** in one PR (three of the repository's own checks now fire as their docs
+say), with **#326(a)** closed in the same PR (already fixed by #335). Released as **`api` 0.97.0**
+and **`web` 0.195.0** (Version Packages PR #1089). The owner's **hard rule** still stands: nothing that
+needs them to test, measure or check anything on their server or devices (a decision question is
+fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's 2026-10-20 answer (in `docs/DECISIONS.md`)
+## The owner's 2026-10-20 answers (in `docs/DECISIONS.md`)
 
-- **#535:** the spec `docs/specs/logic-row-shading/spec.md` approved as written: a Viewer keeps
-  today's link tables; a Planner whose pen is taken keeps each row's Edit and Remove, shaded with
-  the reason; focus stays on a focused button; an open Edit or Remove dialog closes, hands focus
-  back to its button and announces "Editing stopped. <reason>". Shipped in #1079.
-- **Shortlist choice (afternoon):** #307(a) then #263(i), one PR each; nothing else from the list.
-  #307(a)'s default was decided up front: skip a transient loading placeholder whenever a real row
-  exists; the root case (the whole list loading or empty) stays focusable.
+- **Evening choice:** #88, then #247 + #302 + #410 as one PR, then #326(a) checked (closed if
+  already fixed). #116 item 3 stays on the shortlist for next time.
+- **#88:** spec `docs/specs/verify-email-confirm/spec.md` approved with both defaults. **Pressing
+  Confirm does not sign the person in** (a forwarded or shared mailbox would otherwise sign that
+  reader in). Token in the link's `#` part; old-shape links redirect to the new page.
+- **Gates:** spec `docs/specs/register-gate-repairs/spec.md` approved with the default for Q1: **a
+  `**Verified:**` date means the whole row was last checked on that date.**
+- Earlier the same day: #535 (shipped #1079); #307(a) skip-the-placeholder default (#1082).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.96.2 and `web` 0.194.4.
+- **Latest releases:** `api` 0.97.0 and `web` 0.195.0.
 - **This session's PRs, in merge order:**
-  - **#1082** #307(a). A pure `focusTarget` and `isSettledRow` in
-    `features/navigator/lib/tree-model.ts`; `HierarchyTree.tsx` routes Up, Down, Home, End and
-    Right (to the first child) through it. `empty` and `error` rows stay focusable. A real-browser
-    step in `apps/web/e2e/navigator-crud.spec.ts` holds the projects fetch open and checks focus
-    skips the placeholder. Accessibility and component reviewers passed with no blockers; their
-    nits were folded. Not taken: announcing the _start_ of a fetch (the row's other option, which
-    the owner's choice ruled out). #307 is closed in the ledger.
-  - **#1084** #263(i). Checked against the code first: the row's literal symptom had already gone,
-    because `hasRevisionPair` counts a chosen plan (`plan-workspace-toolbar.tsx:315`), so a
-    cross-plan comparison meets no refusal. What remained was the no-comparison sentence claiming
-    "two revisions" when one choice is enough. It now reads "Choose what to compare in Compare
-    revisions… first" (UX reviewer chose it). Item **(h) stays open**; the #263 row stays open.
-  - **#1083** the Version Packages release.
-- **Correction to the previous hand-off:** it listed **#520** as open; #520 was closed on
-  2026-10-17 by ADR-0201 D3 (#1050). #509, #510, #512, #513 and #515–#517 are **deferred on a
-  trigger**, not open work. #511 was closed on 2026-10-20 with the owner's first real copy times
-  (4 s and 1 s against a 300 s start period).
+  - **#1087** #88. New public `POST /api/v1/email-verification/confirm` (10/min) calls Better
+    Auth's own handler with the caller's user agent and forwarded IP, so the
+    `auth.email_verified` audit row keeps its evidence. Emails now link to
+    `{appUrl}/verify-email#token=…`; the page sends nothing until Confirm is pressed and strips the
+    token from the address bar. Better Auth's `GET`/`HEAD /api/auth/verify-email` is **shadowed**
+    in `app-setup.ts` (303 to the page, never verifies), so emails already in inboxes still work.
+    Security, accessibility and UX reviewers: no blockers; their nits were folded. #88 is closed;
+    **new row #537** keeps #88's old password-reset note (Better Auth's reset route redirects
+    with the live token on `Location`).
+  - **#1088** #247 + #302 + #410 + #326(a). `fieldValue` reads an inline header field (start of a
+    header line or after `·`); `check:debt-status` A8 is now **A8a** (`unverified` has no date)
+    and **A8b** (every other status has a dated `**Verified:**`); `check:claims` **fails** on a
+    registered claim nothing cites. Turning A8b on found 7 undated rows (#110, #225, #261, #282,
+    #283, #284, #342); each was re-read and dated 2026-10-20. #326 is now "Three findings…",
+    re-lettered (a)–(c), still open.
+  - **#1089** the Version Packages release.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -90,7 +90,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   inside sRGB; #533 the health panel keeps its spinner; #534 Members loading/error states; #76 flag-off
   journey (Option A); #69 keep both row-edit idioms; #64 Viewer summary / shaded editors for a pen-less
   Planner; the WCAG 2.5.3 header fix is "both fixes"; password reset stays sequential.
-- 2026-10-20: #535 as the spec above; #307(a) skip-the-placeholder default (above).
+- 2026-10-20: #535 as its spec; #307(a) skip-the-placeholder default; #88 no sign-in on Confirm;
+  a `**Verified:**` date dates the whole row (A8a/A8b).
 
 ## Parked by the owner — keep, do not raise
 
@@ -116,27 +117,24 @@ owner returns to one, the steps are ready:
 - #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred on a trigger),
   #391 and #395 (remaining painter items), #509, #510, #512, #513 and #515–#517 (deferred on triggers;
   #509 is the off-site copy: today's copies live on the same disk as the database).
-- **#326(a) may be stale:** `apps/web/src/components/ui/data-table.tsx:75` and `:146` say the cell
-  classes have merged with the default since #335. Check and close it if so.
+- **#537** (new): Better Auth's password-reset route redirects with the live token on its `Location`
+  header; the web strips it on arrival. Library route, so not ours to reshape without a fork.
+- **#326** is now three items (a)–(c); its old (a) was already fixed by #335 and is closed.
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
 
 ## Suggested next
 
-Nothing of this session's is in flight: no open PRs of its own, no wake-ups armed. **#307(a) and
-#263(i) are done.** The rest of the 2026-10-20 shortlist, unchosen — start none until the owner
-picks:
+Nothing of this session's is in flight: no open PRs, no wake-ups armed. **#88, #247, #302, #410
+and #326(a) are done.** Start none until the owner picks:
 
-1. **#88** — an email link scanner can verify an address before the person does; the fix is a
-   Confirm page. Medium; needs a short spec (a new button). Verification is off by default.
-2. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
+1. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
    Medium; needs a spec (it changes ADR-0082's shared menu rule).
-3. **#247 + #302** — the register checker's "unverified rows carry no Verified date" rule can never
-   fire (`scripts/lib/doc-register.mjs` anchors fields at line start). Small, tooling.
+2. **#537** — the reset link's token on a redirect. Small to describe, but the fix is in Better
+   Auth's route; the realistic options are a shadow like #88's or leaving it. Needs a decision.
 
 Runners-up: #280 (a check-and-push command), #313 (one shared sign-up helper for e2e; needs a spec),
-#410 (`check:claims` passes while printing a dead-registration note), #72, #165(b), #354.
-The next reconciliation pass when `check:reconcile-due` warns (it warned this session; last pass
+#72, #165(b), #354. The next reconciliation pass when `check:reconcile-due` warns (last pass
 2026-10-19).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
@@ -448,3 +446,17 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     (`git update-ref -d refs/remotes/origin/<branch>`) and push plainly.
   - **Check a row's symptom in the code before fixing it.** #263(i)'s literal symptom had already
     gone; the fix that remained was smaller and different.
+
+- **2026-10-20 lessons (#88 and the gate repairs):**
+  - **`check:debt-status` now refuses an undated row.** Every row whose status is not `unverified`
+    needs `**Verified:** <date>` inline in its header line (after `·`, or opening a wrapped header
+    line). A new row without one fails A8b; an `unverified` row with one fails A8a.
+  - **`check:claims` now fails on a registered claim nothing cites.** When a change removes the
+    last citation of a `scripts/dependency-claims.json` entry, delete the entry in the same change.
+  - **A literal file name followed by a colon and a line range (in a doc, a comment or a fixture) reads as a citation** to
+    `check:claims`; build such strings with `join` in tests.
+  - **Stack the next PR on the one under review in its own worktree** (`git checkout -b x <head>`,
+    cherry-pick, run `pnpm prepush`). After the squash, the merged tree equals the tested head, so
+    the stacked tree carries over unchanged; only `docs/DECISIONS.md`'s top entry conflicted.
+  - **A page reached by a hash-only navigation does not remount** (`/verify-email` then
+    `/verify-email#token=…`); listen for `hashchange` when the hash carries the input.
