@@ -51,6 +51,9 @@ describe('the Compare on diagram refusal', () => {
     );
     expect(reason).toBeDefined();
     expect(reason).toMatch(/Compare revisions/i);
+    // One choice suffices (the "To" side defaults to Live) and a plan is also a valid choice, so
+    // the old "two revisions" wording described a requirement that does not exist.
+    expect(reason).not.toMatch(/two revisions/i);
   });
 
   it('offers NO refusal for a chosen pair — cross-plan included', () => {
