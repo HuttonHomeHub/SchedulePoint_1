@@ -10,6 +10,47 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-20 — The owner did the three host steps: backups on, export taken, clear-out switched on (1.0 rows 5, 6, 7)
+
+**What was done, on the owner's server, guided step by step.** The owner lifted their own "no hands-on
+testing" rule for this sitting and asked to do the three host steps in order.
+
+- **Backups (row 5).** The `backups` folder was made (owner uid 1000, mode 700), the `backup` service and
+  the API's `/backups` mount were added to the compose file (with full paths, matching the file's own
+  style; the database port was already closed and a database password already set), and the stack was
+  deployed. The first copy, `schedulepoint-2026-10-20T1601Z.dump` (1.0 MB), was taken at 16:01 UTC and
+  `backup check` printed **`CHECK PASSED`** (4 organisations, 4 users, 31 clients, 29 projects, 48 plans,
+  5,795 activities, equal to the live database). The `.env` (four lines) is saved in the owner's password
+  manager.
+- **Export (row 6).** The owner downloaded `schedulepoint-export-wood-group-20261020T1615Z.zip` (12,898
+  records) and opened `clients.csv` (27 clients, 25 of them in Recently deleted) and `plans.csv` (46
+  plans); both read correctly.
+- **Clear-out (row 7).** The compose file lacked the `RETENTION_HIERARCHY_ENABLED:
+${RETENTION_HIERARCHY_ENABLED:-false}` pass-through, so it was added first (it changes nothing by
+  itself; `printenv` then read `false`). The preview listed 9 Wood Group test clients deleted on
+  2026-07-21 (9 projects, 10 plans, 26 activities). A fresh copy, `schedulepoint-2026-10-20T1632Z.dump`,
+  passed `check`, the owner switched `RETENTION_HIERARCHY_ENABLED=true` on, and the log showed
+  `hierarchy expiry ARMED` and 9 `expired a deleted subtree` lines. The preview then read "Nothing is
+  waiting to be removed"; the Audit log shows 9 **Permanently deleted** rows; Recently deleted shows the
+  90-day countdown. `…T1632Z` is the copy to restore from if anything removed that day is wanted back.
+
+**What the guides got wrong on a real server, fixed the same day.** Stacks live in `/apps` there, not
+`/opt/stacks`; two hyphens (`--rm`) were joined into one dash by copying; the folder owner read `node node`
+rather than `1000 1000`; the database lives in a folder, not a volume; and the clear-out guide said
+"stop and ask" where adding the missing pass-through line is a safe, two-minute edit. The Audit log names
+the system actor **Unknown**, not **System** as the guide said, and the bin's "Expires in" rounds down
+where the preview's "due in" rounds up: both recorded as `docs/TECH_DEBT.md` #536.
+
+**Consequences.** Rows 5, 6 and 7 of `docs/RELEASE_1_0.md` are Done. `docs/TECH_DEBT.md` #511 (the copy
+before an update, unmeasured) is closed by the first real timings: 4 s and 1 s for a 1.0 MB copy against the
+API's 300 s start period. The backup side has no step left for the owner: Parts 3 and 4 of the guide are for
+the day they are needed, the weekly glance at the `backup` container is routine, and an off-site copy
+(#509) stays deferred on its trigger, so today's copies share the database's disk. The three host steps leave the
+hand-off's parked list. Any update that changes the database on that server now takes a copy first and
+is held if it cannot. The device check sheet and the alerts (#100) stay parked.
+
+---
+
 ## 2026-10-20 — The Logic tab shades a pen-less Planner's Edit and Remove (tech debt #535)
 
 #64's split, applied to the dependency rows. A Planner whose pen was taken keeps Edit and Remove on

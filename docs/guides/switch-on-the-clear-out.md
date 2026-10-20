@@ -68,9 +68,25 @@ Part 1:** the clear-out stays off until Part 2 step 5.
    RETENTION_HIERARCHY_ENABLED: ${RETENTION_HIERARCHY_ENABLED:-false}
    ```
 
-   **If it is not there, stop** and ask the maintainers. Without it, the setting never reaches
-   SchedulePoint and switching on would do nothing. Do not edit the file yourself. Close the editor
-   without saving.
+   **If it is not there, add it.** Without it, the setting never reaches SchedulePoint and switching
+   on would do nothing. Adding it changes nothing by itself: it says "off unless `.env` says
+   otherwise". Put it on a new line under `api:`'s `environment:`, lined up with the lines around it
+   (six spaces at the start; no Tab key), for example straight after the `PLAN_EDIT_LOCK_ENFORCED`
+   line if you have one. Click **Save**, then check the file in the terminal:
+
+   ```bash
+   docker compose config --quiet && echo FILE-OK
+   ```
+
+   **You should see** `FILE-OK`. Then click **Deploy** (not Update); SchedulePoint is unavailable for
+   about a minute. Confirm it reached SchedulePoint:
+
+   ```bash
+   docker compose exec api printenv RETENTION_HIERARCHY_ENABLED
+   ```
+
+   **You should see** `false`. If you see an error instead, paste your spare copy of the compose file
+   back, click **Save** and **Deploy**, and ask the maintainers.
 
 3. Open a terminal on the server, in the folder with your compose file, and run the preview (5
    minutes):
@@ -211,9 +227,11 @@ that switches the clear-out on**, and Part 3 switches it off again at any time.
    send them the output.
 
 8. Check it in the product (5 minutes). Sign in. Open your organisation's **Audit log** and find a
-   **Permanently deleted** row, by **System**, for each item that was removed. Then open **Recently
+   **Permanently deleted** row for each item that was removed. Its **By** column says **Unknown**: that
+   is SchedulePoint itself, and the label is due to be changed (`docs/TECH_DEBT.md` #536). Then open **Recently
    deleted**: it now says "Deleted items are kept for 90 days, then permanently removed" (or the
-   number in your `RETENTION_HIERARCHY_DAYS`), and each row shows how many days it has left.
+   number in your `RETENTION_HIERARCHY_DAYS`), and each row shows how many days it has left. The screen counts whole days left, so it can say one
+   day fewer than the preview's "due in" for the same item.
 
 9. Write down the date and the copy's name from step 2.
 

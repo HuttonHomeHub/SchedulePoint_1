@@ -42,11 +42,16 @@ data, except the two places that say so plainly: Part 3 step 9 and Part 4 step 2
   the brackets**. For example, `<COPY-NAME>` becomes `schedulepoint-2026-10-15T0200Z.dump`.
 - **`sudo`:** a word you put in front of a command to run it as the administrator. It may ask for the
   server's password. Nothing shows on screen while you type it; that is normal. Press Enter when done.
-  If a Docker command says `permission denied`, put `sudo` in front of it and run it again.
+  If a Docker command says `permission denied`, put `sudo` in front of it and run it again. If your
+  terminal's prompt starts with `root@`, you are already the administrator: leave `sudo` out.
+- **`--` (two hyphens):** several commands contain two hyphens together, as in `--rm`. Some phones and
+  chat apps join them into one dash when you copy. If a command answers `unknown shorthand flag`,
+  retype it with two hyphens.
 
 **How to open a terminal.** Sign in to the server by SSH, or at the server's own screen and keyboard.
-If you are not sure how, ask whoever set the server up. Then run these two commands, with your stack's
-name in place of `YOUR-STACK-NAME`:
+Dockge's own terminal works too. If you are not sure how, ask whoever set the server up. Then run these
+two commands, with your stack's name in place of `YOUR-STACK-NAME`. `/opt/stacks` is Dockge's usual
+stacks folder; some servers keep stacks somewhere else (one keeps them in `/apps`), so use yours:
 
 ```bash
 cd /opt/stacks/YOUR-STACK-NAME
@@ -91,7 +96,8 @@ sudo install -d -o 1000 -g 1000 -m 700 backups
 ```
 
 **You should see:** nothing printed. Then `ls -ld backups` shows a line that starts with `drwx------` and
-has `1000 1000` in it.
+has `1000 1000` in it. Some servers show a name there instead, such as `node node`: that is the same
+user, number 1000, and is correct.
 
 **If not:** if it says `sudo: command not found`, you are probably signed in as the administrator
 (root). Run the same command without the word `sudo`.
@@ -219,7 +225,7 @@ docker compose up -d
 
 **You should see:** the `backup` container being created and the `db` and `api` containers being
 recreated. SchedulePoint is unavailable for about a minute. Your data is kept: it lives in a separate
-volume that this does not touch. The first start also takes the first copy, so `backup` is not healthy
+volume, or a folder such as `db` beside the compose file, that this does not touch. The first start also takes the first copy, so `backup` is not healthy
 until that is done.
 
 **Success is** that the SchedulePoint sign-in page loads again.
