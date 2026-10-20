@@ -29,8 +29,8 @@ a forwarded or shared mailbox), and the token travels in the URL fragment.
   ADR-0074 carries a short amendment note.
 
 **Not changed.** The invitation link was already safe behind a real button press. The password-reset
-link's redirect still carries the raw token on a `Location` header; that is the library's route and was
-out of this change's scope.
+link's redirect still carries the raw token on a `Location` header; that is the library's route, out of
+this change's scope, and is tracked as `docs/TECH_DEBT.md` #537.
 
 ---
 
