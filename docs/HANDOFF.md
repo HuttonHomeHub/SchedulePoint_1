@@ -3,13 +3,13 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-20 (morning). This session did the owner's two jobs: #535 (the Logic tab's
-Edit and Remove now shade for a Planner without the pen instead of vanishing), then a shortlist of
-the next register rows for the owner to choose from. #535 is merged and released as **`web`
-0.194.3** (Version Packages PR #1080; `api` stays **0.96.2**, it had no change). The owner's
-**hard rule** still stands: nothing that needs them to test, measure or check anything on their
-server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the
-owner's call (ADR-0190).
+**Written:** 2026-10-20 (evening). This session did the two rows the owner chose from the
+morning's shortlist, one PR each: **#307(a)** (the Project Explorer's arrow keys no longer stop on a
+"Loading…" row) and **#263(i)** (the Compare on diagram refusal no longer says "two revisions").
+Both are merged and released as **`web` 0.194.4** (Version Packages PR #1083; `api` stays
+**0.96.2**, it had no change). The owner's **hard rule** still stands: nothing that needs them to
+test, measure or check anything on their server or devices (a decision question is fine; a test is
+not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
 ## The owner's 2026-10-20 answer (in `docs/DECISIONS.md`)
 
@@ -17,17 +17,30 @@ owner's call (ADR-0190).
   today's link tables; a Planner whose pen is taken keeps each row's Edit and Remove, shaded with
   the reason; focus stays on a focused button; an open Edit or Remove dialog closes, hands focus
   back to its button and announces "Editing stopped. <reason>". Shipped in #1079.
+- **Shortlist choice (afternoon):** #307(a) then #263(i), one PR each; nothing else from the list.
+  #307(a)'s default was decided up front: skip a transient loading placeholder whenever a real row
+  exists; the root case (the whole list loading or empty) stays focusable.
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.96.2 and `web` 0.194.3.
+- **Latest releases:** `api` 0.96.2 and `web` 0.194.4.
 - **This session's PRs, in merge order:**
-  - **#1079** #535 (spec, fix, unit tests, two journeys in `e2e-activity-editor`, a new
-    `DependencyTable.test.tsx`). Accessibility, component and UX reviewers passed with no blockers;
-    their suggestions were folded. The reason sentence prints once above the link tables and once
-    above the Add a link form, on purpose, as on the Resources tab (`docs/DESIGN_SYSTEM.md`
-    "Editing a row in a list").
-  - **#1080** the Version Packages release.
+  - **#1082** #307(a). A pure `focusTarget` and `isSettledRow` in
+    `features/navigator/lib/tree-model.ts`; `HierarchyTree.tsx` routes Up, Down, Home, End and
+    Right (to the first child) through it. `empty` and `error` rows stay focusable. A real-browser
+    step in `apps/web/e2e/navigator-crud.spec.ts` holds the projects fetch open and checks focus
+    skips the placeholder. Accessibility and component reviewers passed with no blockers; their
+    nits were folded. Not taken: announcing the _start_ of a fetch (the row's other option, which
+    the owner's choice ruled out). #307 is closed in the ledger.
+  - **#1084** #263(i). Checked against the code first: the row's literal symptom had already gone,
+    because `hasRevisionPair` counts a chosen plan (`plan-workspace-toolbar.tsx:315`), so a
+    cross-plan comparison meets no refusal. What remained was the no-comparison sentence claiming
+    "two revisions" when one choice is enough. It now reads "Choose what to compare in Compare
+    revisions… first" (UX reviewer chose it). Item **(h) stays open**; the #263 row stays open.
+  - **#1083** the Version Packages release.
+- **Known stale line in a file this session must not edit:** `docs/RELEASE_1_0.md` (around lines
+  87–89) still names #307 as an open keyboard detail. That file belongs to the owner's other chat;
+  mention it there rather than editing it here.
 - **Correction to the previous hand-off:** it listed **#520** as open; #520 was closed on
   2026-10-17 by ADR-0201 D3 (#1050). #509, #510, #512, #513 and #515–#517 are **deferred on a
   trigger**, not open work; #511 is open but its next step is a reading on the owner's server
@@ -79,7 +92,7 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
   inside sRGB; #533 the health panel keeps its spinner; #534 Members loading/error states; #76 flag-off
   journey (Option A); #69 keep both row-edit idioms; #64 Viewer summary / shaded editors for a pen-less
   Planner; the WCAG 2.5.3 header fix is "both fixes"; password reset stays sequential.
-- 2026-10-20: #535 as the spec above.
+- 2026-10-20: #535 as the spec above; #307(a) skip-the-placeholder default (above).
 
 ## Parked by the owner — keep, do not raise
 
@@ -114,18 +127,15 @@ owner returns to one, the steps are ready:
 
 ## Suggested next
 
-Nothing is in flight: no open PRs, no wake-ups armed. **The owner was given this shortlist on
-2026-10-20 and has not chosen yet** — start none of them until they do:
+Nothing of this session's is in flight: no open PRs of its own, no wake-ups armed. **#307(a) and
+#263(i) are done.** The rest of the 2026-10-20 shortlist, unchosen — start none until the owner
+picks:
 
-1. **#307(a)** — the Project Explorer can put keyboard focus on a "Loading…" row that then vanishes
-   (`HierarchyTree.tsx` `focusRow`). Small; one choice between the row's two options.
-2. **#263(i)** (with (h) optional) — the cross-plan comparison's refusal says "Choose two
-   revisions…" when the planner picked a plan (`tsld-toolbar-items.tsx`). Small.
-3. **#88** — an email link scanner can verify an address before the person does; the fix is a
+1. **#88** — an email link scanner can verify an address before the person does; the fix is a
    Confirm page. Medium; needs a short spec (a new button). Verification is off by default.
-4. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
+2. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
    Medium; needs a spec (it changes ADR-0082's shared menu rule).
-5. **#247 + #302** — the register checker's "unverified rows carry no Verified date" rule can never
+3. **#247 + #302** — the register checker's "unverified rows carry no Verified date" rule can never
    fire (`scripts/lib/doc-register.mjs` anchors fields at line start). Small, tooling.
 
 Runners-up: #280 (a check-and-push command), #313 (one shared sign-up helper for e2e; needs a spec),
@@ -428,3 +438,17 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     is taken under you" while a modal covers the toolbar (#64's and #535's journeys).
   - **After a squash-merge and `checkout -B` onto `main`, the Stop hook reports an unpushed
     commit**; push with `--force-with-lease=<branch>:<old remote sha>` to sync the branch.
+
+- **2026-10-20 lessons (#307(a), #263(i)):**
+  - **Another chat may edit this file at the same time.** The owner's device/host chat had a PR open
+    (#1085) rewriting the host-steps sections here while this session wrote its hand-off. Change
+    only your own sections, so the two diffs touch different lines and merge cleanly.
+  - **After a merge, the Version Packages PR's `get` can show the old head for a minute** even once
+    `git ls-remote` shows the rebuilt `changeset-release/main`. A merge pinned to the new SHA then
+    fails `409 Head branch was modified`; re-read `get` until its `head.sha` matches, read
+    `get_files` again, then merge.
+  - **A stale local `origin/<branch>` ref breaks `--force-with-lease`** when the remote branch no
+    longer exists (`stale info`). Check `git ls-remote` first; delete the tracking ref
+    (`git update-ref -d refs/remotes/origin/<branch>`) and push plainly.
+  - **Check a row's symptom in the code before fixing it.** #263(i)'s literal symptom had already
+    gone; the fix that remained was smaller and different.
