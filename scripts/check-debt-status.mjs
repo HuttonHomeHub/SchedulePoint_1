@@ -325,14 +325,38 @@ export function collectFindings(root) {
     );
   }
 
-  // ── A8 — an `unverified` row carries no Verified date ────────────────────────────────────────
+  // ── A8 — a row's status and its Verified date say the same thing ─────────────────────────────
+  //
+  // **One fact read from two fields: "does this row claim to have been checked?"** (#302, which
+  // merged #247). `**Verified:**` dates the WHOLE row (product owner, 2026-10-20; `docs/TECH_DEBT.md`
+  // "Row header fields"), so:
+  //   A8a — `unverified` with a date is a contradiction: the row says nobody has checked it and
+  //         when somebody did.
+  //   A8b — any other token claims a check and must carry a `YYYY-MM-DD` date, or be restatused.
+  // The token is `statusToken`, the one A2 and `openDetailedRow` use, so `deferred (on a trigger)`
+  // is `deferred`. A token A2 rejects is still checked here; A2 is the one that reports it.
+  //
+  // **A8a could not fire until #247.** `fieldValue` matched only a field that opened its line, so
+  // `Verified` read `null` on all 141 rows and the assertion below passed over every one.
+  // **Red run on the real register (ADR-0110), 2026-10-20**, with the reader widened and the rows
+  // not yet repaired: seven A8b findings (#110, #225, #261, #282, #283, #284, #342), none A8a;
+  // after the row edits in the same commit, zero.
   for (const s of items) {
-    if (
-      (fieldValue(s.body, 'Status') ?? '').toLowerCase().startsWith('unverified') &&
-      fieldValue(s.body, 'Verified')
+    const status = fieldValue(s.body, 'Status');
+    if (status === null) continue; // A1's
+    const token = statusToken(status);
+    const verified = fieldValue(s.body, 'Verified');
+    if (token === 'unverified' && verified !== null) {
+      problems.push(
+        `A8a: ${DOC}:${s.line} is "unverified" but carries a **Verified:** field. One of the two is wrong.`,
+      );
+    } else if (
+      token !== 'unverified' &&
+      !(verified !== null && /^\d{4}-\d{2}-\d{2}/.test(verified))
     ) {
       problems.push(
-        `A8: ${DOC}:${s.line} is "unverified" but carries a **Verified:** date. One of the two is wrong.`,
+        `A8b: ${DOC}:${s.line} status "${token}" claims a check; add **Verified:** <YYYY-MM-DD>, ` +
+          'or restatus it `unverified`.',
       );
     }
   }

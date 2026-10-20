@@ -2371,7 +2371,7 @@ blocked the epic.
 
 ### 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
-**Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
+**Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4) · **Verified:** 2026-10-20 (by reading `scripts/measure-band-copy.mjs`, `MAX_CLONE_SET_SIZE` 50 and `MAX_CLONE_LINK_COUNT` 90 in `apps/web/src/features/activity-copy/model/clone-graph.ts:74-83`, and the activities controller, which has no duplicate route)
 
 `docs/specs/activity-copy-paste/` planned an optional **Milestone B** — `POST
 …/plans/:planId/activities/duplicate`, making a band copy atomic: one transaction, one pen
@@ -5371,7 +5371,7 @@ not silent) with the failure message naming the wrong cause.
 
 ### 225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
 
-**Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9)
+**Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9) · **Verified:** 2026-10-20 (by reading `apps/web/src/features/resources/model/stack-series.ts`, which still ranks by total, and `apps/api/prisma/schema.prisma`, which has no per-resource colour)
 
 The stacked histogram assigns cycle member _n_ to segment _n_ **by rank** — biggest total gets the
 first colour. So when two resources swap totals (an assignment edit, a recalculation, an exact tie
@@ -6682,7 +6682,7 @@ replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verifi
 ### 261. ADR-0026 §9's frame-rate gate does not say at what canvas size it applies
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-08 (#75's viewport discriminator) ·
-**Size:** S · **Owner:** repo
+**Size:** S · **Owner:** repo · **Verified:** 2026-10-20 (by reading `docs/adr/0026-tsld-canvas-rendering-and-architecture.md` §9, which still names no canvas size)
 
 > **PARKED 2026-09-10 with the rest of the canvas-performance programme.** The exhibit that made
 > this urgent is contaminated (see below) and size flips no verdict anywhere measured. **Trigger:**
@@ -7728,7 +7728,7 @@ records: an instruction that is correct, is not followed, and has no mechanism b
 
 ### 282. P3's reason for never grading Fit rests on a figure no reading since has come near
 
-**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the third real-hardware reading set,
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-20 (by reading `docs/specs/revision-compare-changes/m0-condition.md:87-90`, where P3 still reads "never graded") · **Raised:** 2026-09-10 (the third real-hardware reading set,
 #75 item 6) · **Size:** S · **Owner:** repo
 
 > **PARKED 2026-09-10. Its two documentation halves are DONE** — P3's stale 10.2 pp premise is
@@ -7815,7 +7815,7 @@ mechanism).
 ### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** M ·
-**Owner:** repo
+**Owner:** repo · **Verified:** 2026-10-20 (by reading `apps/api/src/modules/staff/dto/create-probe-result.dto.ts` and the schema, neither of which has a power-state field)
 
 > **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
 > nothing currently depends on the explanation. #75's question is answered: §9's gate is **met** at
@@ -7889,7 +7889,7 @@ that makes readings incomparable).
 ### 284. `on screen` means two different things depending on which scenario printed it
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the five-sitting probe set) ·
-**Size:** M · **Owner:** repo
+**Size:** M · **Owner:** repo · **Verified:** 2026-10-20 (by reading `apps/web/src/features/perf-probe/ui/probe-report.ts:203` and `:251-252`, where `on screen` and the head line's `visibleBars` still answer different questions)
 
 > **PARKED 2026-09-10 with the probe.** It misleads a reader of probe output and nothing else — the
 > judging is unaffected and conservative. **Trigger:** the probe is next opened for any reason, or
@@ -9254,8 +9254,7 @@ cheap opinion.
 
 ### 342. A client's plan count was built, measured, and withdrawn — two remedies, neither applied
 
-**Status:** open
-**Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9)
+**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-20 (by reading `ClientDetail` in `packages/types/src/index.ts:257-261`, which carries `projectCount` and no `planCount`)
 
 `ClientDetail` carries `projectCount` and deliberately **no** plan count, because a count of plans
 across a client's projects has no stable query plan. Measured on a diluted local estate (500
