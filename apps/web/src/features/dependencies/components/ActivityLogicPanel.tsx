@@ -10,6 +10,7 @@ import { EditDependencyDialog } from './EditDependencyDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FieldGridContainer } from '@/components/ui/form-layout';
 
 /**
@@ -36,6 +37,7 @@ export function ActivityLogicPanel({
   planCalendarId,
   canManageLogic = false,
   manageLogicReason,
+  roleCanManageLogic,
   enabled = true,
   onAdded,
   onRemoved,
@@ -68,6 +70,16 @@ export function ActivityLogicPanel({
    * cannot, and an invented sentence is worse than none (ADR-0060 M6).
    */
   manageLogicReason?: string;
+  /**
+   * Whether this member's **role** could ever manage links, as distinct from {@link canManageLogic},
+   * which is the role AND the pen right now. `false` is a Viewer: the tables stay read-only, with no
+   * Actions column, since nothing will ever make a row editable. Anything else with a
+   * {@link manageLogicReason} is a member whose pen was taken: each row keeps its Edit and Remove
+   * buttons, shaded with that reason, because unmounting them under a focused reader drops focus to
+   * `<body>` (WCAG 2.4.3, `docs/TECH_DEBT.md` #535 — the Resources tab's #64). Absent, a host that
+   * cannot tell role from pen gets today's behaviour, which is the safe answer.
+   */
+  roleCanManageLogic?: boolean;
   /**
    * Whether this surface is currently showing. False keeps the panel mounted but idle — no
    * dependency queries are issued — for a host that mounts it before it is visible. Default true,
@@ -190,17 +202,27 @@ export function ActivityLogicPanel({
   const editing = byId(editingId);
   const removing = byId(removingId);
 
-  const editHandlers = canManageLogic
-    ? {
-        onEdit: (dep: DependencySummary) => setEditingId(dep.id),
-        onRemove: (dep: DependencySummary) => {
-          setRemoveError(null);
-          setRemovingId(dep.id);
-        },
-        // The keyboard lag nudge rides the same writer gate as edit/remove (ADR-0052 M3).
-        ...(onNudgeLag ? { onNudgeLag } : {}),
-      }
-    : {};
+  // Rows keep their buttons for a writer, and for a role that may write but has no pen right now. A
+  // reason is required for the second: a shaded button with no sentence is the dead end the house
+  // rule forbids.
+  const rowsShaded =
+    !canManageLogic && manageLogicReason !== undefined && roleCanManageLogic === true;
+  const editHandlers =
+    canManageLogic || rowsShaded
+      ? {
+          onEdit: (dep: DependencySummary) => setEditingId(dep.id),
+          onRemove: (dep: DependencySummary) => {
+            setRemoveError(null);
+            setRemovingId(dep.id);
+          },
+          // The keyboard lag nudge rides the same writer gate as edit/remove (ADR-0052 M3), so it
+          // is not handed to a shaded table at all.
+          ...(onNudgeLag && canManageLogic ? { onNudgeLag } : {}),
+        }
+      : {};
+  // The rows' gate: shut with the reason while shaded, reasonless otherwise so the provider prints
+  // nothing above a Viewer's read-only tables (ADR-0083 D5).
+  const rowGate = { writable: canManageLogic, reason: rowsShaded ? manageLogicReason : null };
 
   const confirmRemove = (): void => {
     if (!removing) return;
@@ -242,28 +264,31 @@ export function ActivityLogicPanel({
             </p>
           ) : null}
           <div ref={linksRef} tabIndex={-1} className="flex flex-col gap-6 outline-none">
-            <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium">Predecessors</h3>
-              <DependencyTable
-                query={predecessors}
-                endpoint="predecessor"
-                caption="Predecessors"
-                emptyLabel="No predecessors — nothing has to finish before this activity."
-                {...lagReadout}
-                {...editHandlers}
-              />
-            </section>
-            <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium">Successors</h3>
-              <DependencyTable
-                query={successors}
-                endpoint="successor"
-                caption="Successors"
-                emptyLabel="No successors — this activity doesn’t drive anything yet."
-                {...lagReadout}
-                {...editHandlers}
-              />
-            </section>
+            {/* One gate, one reason sentence, above both tables (ADR-0083 D5, TECH_DEBT #535). */}
+            <FieldGateProvider gate={rowGate}>
+              <section className="flex flex-col gap-2">
+                <h3 className="text-sm font-medium">Predecessors</h3>
+                <DependencyTable
+                  query={predecessors}
+                  endpoint="predecessor"
+                  caption="Predecessors"
+                  emptyLabel="No predecessors — nothing has to finish before this activity."
+                  {...lagReadout}
+                  {...editHandlers}
+                />
+              </section>
+              <section className="flex flex-col gap-2">
+                <h3 className="text-sm font-medium">Successors</h3>
+                <DependencyTable
+                  query={successors}
+                  endpoint="successor"
+                  caption="Successors"
+                  emptyLabel="No successors — this activity doesn’t drive anything yet."
+                  {...lagReadout}
+                  {...editHandlers}
+                />
+              </section>
+            </FieldGateProvider>
           </div>
           {/* What exists, then the form that adds to it (ADR-0061 §2). The two "Add …" buttons
               that used to sit beside these headings opened a second dialog on top of this one. */}
@@ -288,11 +313,14 @@ export function ActivityLogicPanel({
         </FieldGridContainer>
       </div>
 
-      {canManageLogic ? (
+      {/* Kept mounted while the rows are shaded, with `open` also requiring the pen, so the native
+          <dialog> closes and hands focus back to the row's button instead of being unmounted with
+          focus inside it (TECH_DEBT #535). */}
+      {canManageLogic || rowsShaded ? (
         <>
           <EditDependencyDialog
             orgSlug={orgSlug}
-            open={editing !== undefined}
+            open={canManageLogic && editing !== undefined}
             onClose={() => setEditingId(null)}
             calendars={calendars}
             {...(planCalendarId === undefined ? {} : { planCalendarId })}
@@ -301,7 +329,7 @@ export function ActivityLogicPanel({
             {...(onEdited ? { onSaved: onEdited } : {})}
           />
           <ConfirmDialog
-            open={removing !== undefined}
+            open={canManageLogic && removing !== undefined}
             onClose={() => {
               setRemovingId(null);
               setRemoveError(null);
