@@ -3,60 +3,42 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-19 (evening). This session ran the owner's five jobs in order: the
-reconciliation pass, the 2026-10-18 follow-up rows #521–#534, #333's after-reading and #76's
-flag-off journey, the org-export axe hardening, and #64 with #69. All of it is merged and released
-as **`api` 0.96.2 and `web` 0.194.2** (Version Packages PR #1072; tags confirmed with
-`git ls-remote --tags`). The owner's **hard rule** still stands: nothing that needs them to test,
-measure or check anything on their server or devices (a decision question is fine; a test is not).
-**1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-20 (morning). This session did the owner's two jobs: #535 (the Logic tab's
+Edit and Remove now shade for a Planner without the pen instead of vanishing), then a shortlist of
+the next register rows for the owner to choose from. #535 is merged and released as **`web`
+0.194.3** (Version Packages PR #1080; `api` stays **0.96.2**, it had no change). The owner's
+**hard rule** still stands: nothing that needs them to test, measure or check anything on their
+server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the
+owner's call (ADR-0190).
 
-## The owner's 2026-10-19 answers (all in `docs/DECISIONS.md`)
+## The owner's 2026-10-20 answer (in `docs/DECISIONS.md`)
 
-- **#522:** near-critical means total float ≤ **5 working days of the activity's own calendar**
-  (its hours-per-day), not a fixed 7,200 minutes. Shipped in #1074.
-- **#523:** bring the near-critical amber inside the sRGB gamut now. Shipped in #1071.
-- **#533:** the schedule health panel **keeps its spinner** (it waits on a server computation).
-- **#534:** wire the Members tab's loading and error states. Shipped in #1071.
-- **#76:** build the flag-off journey (spec Option A). Shipped in #1073.
-- **#69:** keep **both** row-edit idioms and write the rule in `docs/DESIGN_SYSTEM.md` ("Editing a
-  row in a list"). Shipped in #1077.
-- **#64:** a Viewer keeps the one-line assignment summary; a Planner whose pen is taken keeps the
-  editors, shaded with the reason. Shipped in #1077.
-- Earlier the same day: the WCAG 2.5.3 header fix is "both fixes" (do not switch
-  `label-content-name-mismatch` off); password reset stays sequential (no adapter transactions).
+- **#535:** the spec `docs/specs/logic-row-shading/spec.md` approved as written: a Viewer keeps
+  today's link tables; a Planner whose pen is taken keeps each row's Edit and Remove, shaded with
+  the reason; focus stays on a focused button; an open Edit or Remove dialog closes, hands focus
+  back to its button and announces "Editing stopped. <reason>". Shipped in #1079.
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.96.2 and `web` 0.194.2.
-- **This session's PRs, in merge order** (each rebased on `main` just before, `pnpm prepush` plus the
-  e2e suites it touches run locally, the relevant reviewers run and folded, every deduped check green
-  on the exact head, merge pinned to that head):
-  - **#1068** the reconciliation pass (six reviewer agents learnt ADR-0195–0203; the clear-out guide
-    and `DEPLOYMENT.md` said everything in the bin expires, which ADR-0195 made untrue).
-  - **#1069** #333 closed with its M2 after-reading (`docs/specs/landing-two-columns/m2-after.md`;
-    the Surface upright shows the landing in one column, 3 of 4 boxes visible).
-  - **#1070** the org-export axe scans switch transitions off before scanning (the
-    `getAnimations()` wait could pass before the hover-out transition started).
-  - **#1071** #523, #532 (narrowed to the Members height gap), #533, #534.
-  - **#1073** #76: new config `playwright.authoring-flow-off.config.ts`, suite
-    `e2e-authoring-flow-off/`, CI shard 4.
-  - **#1074** #522 (engine; persisted near-critical flags change only at each plan's **next
-    recalculation**; no backfill).
-  - **#1075** #521, #524–#529 (guest legend, export legend, plural-move gaps).
-  - **#1076** #530, #531 (binned rows now hold a calendar against narrowing; plan/project create
-    and the XER import take the parent row lock). It also rewrote one journey in
-    `apps/web/e2e/recently-deleted.spec.ts` whose setup #530 now refuses; ADR-0201 D5's restore
-    refusal is now reachable only from data narrowed before #530, and stays covered by unit tests and
-    the API e2e.
-  - **#1077** #64, #69, and a **new row #535** (see below).
-  - **#1072** the Version Packages release.
+- **Latest releases:** `api` 0.96.2 and `web` 0.194.3.
+- **This session's PRs, in merge order:**
+  - **#1079** #535 (spec, fix, unit tests, two journeys in `e2e-activity-editor`, a new
+    `DependencyTable.test.tsx`). Accessibility, component and UX reviewers passed with no blockers;
+    their suggestions were folded. The reason sentence prints once above the link tables and once
+    above the Add a link form, on purpose, as on the Resources tab (`docs/DESIGN_SYSTEM.md`
+    "Editing a row in a list").
+  - **#1080** the Version Packages release.
+- **Correction to the previous hand-off:** it listed **#520** as open; #520 was closed on
+  2026-10-17 by ADR-0201 D3 (#1050). #509, #510, #512, #513 and #515–#517 are **deferred on a
+  trigger**, not open work; #511 is open but its next step is a reading on the owner's server
+  (parked under the hard rule).
 
 ## What the owner has to do (in this order)
 
-Unchanged. **The owner parked these again on 2026-10-17, 2026-10-18 and 2026-10-19 — do not raise
-them unless the owner does.** When they report a result, record it in `docs/RELEASE_1_0.md` (rows 5,
-6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on the real server, fix the guide.
+Unchanged. **The owner parked these again on 2026-10-17, 2026-10-18, 2026-10-19 and 2026-10-20 —
+do not raise them unless the owner does.** When they report a result, record it in
+`docs/RELEASE_1_0.md` (rows 5, 6, 7) and `docs/DECISIONS.md`, and if a guide is wrong or unclear on
+the real server, fix the guide.
 
 1. **Backups — host steps and one practice check** (row 5). Guide:
    [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). About an hour in all. Done when
@@ -72,8 +54,8 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
 
 ## Decided — do not re-ask
 
-- **Hard rule (2026-10-18, restated 2026-10-19):** offer nothing that needs the owner to test, measure
-  or check anything on their server or devices. Decision questions are fine.
+- **Hard rule (2026-10-18, restated 2026-10-19 and 2026-10-20):** offer nothing that needs the owner to
+  test, measure or check anything on their server or devices. Decision questions are fine.
 - Do not cut 1.0 until the owner says.
 - The clear-out is switched on only by the owner, on a day a backup `check` has passed.
 - Export size: accept the current design; do nothing about the 100-plan estimate unless the owner raises
@@ -93,13 +75,17 @@ Walk the owner through them **one at a time, in plain English**, waiting for eac
   the project calendar back; #368 Route A; #234 defer the text-only states, load early, cautious contract,
   and the four SC amendments; #382 gate ~150 activities; #58 the tint follows the switch; #271 paging
   not now.
-- All of the 2026-10-19 answers in the section above.
+- 2026-10-19 answers: #522 near-critical is ≤ 5 working days of the activity's own calendar; #523 amber
+  inside sRGB; #533 the health panel keeps its spinner; #534 Members loading/error states; #76 flag-off
+  journey (Option A); #69 keep both row-edit idioms; #64 Viewer summary / shaded editors for a pen-less
+  Planner; the WCAG 2.5.3 header fix is "both fixes"; password reset stays sequential.
+- 2026-10-20: #535 as the spec above.
 
 ## Parked by the owner — keep, do not raise
 
 The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16, 2026-10-17,
-2026-10-18 and 2026-10-19). A session does not bring them up until the owner does. When the owner
-returns to one, the steps are ready:
+2026-10-18, 2026-10-19 and 2026-10-20). A session does not bring them up until the owner does. When the
+owner returns to one, the steps are ready:
 
 - **The three host steps above** (backups, export, clear-out) — offer them when the owner is ready, do
   not press.
@@ -115,27 +101,37 @@ returns to one, the steps are ready:
 
 ## Open rows worth knowing
 
-- **#535 (new, 2026-10-19):** the Logic tab **hides** a pen-less Planner's Edit and Remove instead of
-  shading them (`ActivityLogicPanel.tsx` builds `onEdit`/`onRemove` only with `canManageLogic`;
-  `DependencyTable.tsx` then drops the Actions column). It contradicts ADR-0062/ADR-0083 and drops
-  focus to `<body>` when the pen is taken. The same shape as #64; a natural next fix.
-- **#532** is now only the Members table's placeholder rows being 4–8 px shorter than settled rows
-  (needs a `Column` prop, a component contract: ADR-0105 spec trigger). Accepted known gap.
+- **#532** is only the Members table's placeholder rows being 4–8 px shorter than settled rows (needs
+  a `Column` prop, a component contract: ADR-0105 spec trigger). Accepted known gap.
 - **#271** stays open for cursor paging (owner: not now).
-- #520 (project-calendar restore vs project delete; low), #509–#513 (backup follow-ups), #515–#517
-  (export follow-ups), #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred
-  on a trigger), #391 and #395 (remaining painter items).
+- #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred on a trigger),
+  #391 and #395 (remaining painter items), #509–#513 and #515–#517 (deferred on triggers; #511 needs a
+  host reading).
+- **#326(a) may be stale:** `apps/web/src/components/ui/data-table.tsx:75` and `:146` say the cell
+  classes have merged with the default since #335. Check and close it if so.
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
 
 ## Suggested next
 
-Nothing is in flight: no open PRs, no wake-ups armed. Candidates for the owner to pick from:
+Nothing is in flight: no open PRs, no wake-ups armed. **The owner was given this shortlist on
+2026-10-20 and has not chosen yet** — start none of them until they do:
 
-1. **#535**, the Logic tab's hidden Edit/Remove (about half a day; same treatment as #64, needs an
-   accessibility review before release per §19.13).
-2. The next reconciliation pass when `check:reconcile-due` warns (this one ran 2026-10-19).
-3. Any register row the owner names.
+1. **#307(a)** — the Project Explorer can put keyboard focus on a "Loading…" row that then vanishes
+   (`HierarchyTree.tsx` `focusRow`). Small; one choice between the row's two options.
+2. **#263(i)** (with (h) optional) — the cross-plan comparison's refusal says "Choose two
+   revisions…" when the planner picked a plan (`tsld-toolbar-items.tsx`). Small.
+3. **#88** — an email link scanner can verify an address before the person does; the fix is a
+   Confirm page. Medium; needs a short spec (a new button). Verification is off by default.
+4. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
+   Medium; needs a spec (it changes ADR-0082's shared menu rule).
+5. **#247 + #302** — the register checker's "unverified rows carry no Verified date" rule can never
+   fire (`scripts/lib/doc-register.mjs` anchors fields at line start). Small, tooling.
+
+Runners-up: #280 (a check-and-push command), #313 (one shared sign-up helper for e2e; needs a spec),
+#410 (`check:claims` passes while printing a dead-registration note), #72, #165(b), #354.
+The next reconciliation pass when `check:reconcile-due` warns (it warned this session; last pass
+2026-10-19).
 
 Still offer only if the owner raises them: the three host steps, and row 9 at the 1.0 cut.
 
@@ -416,3 +412,19 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     if needed; give each suite's `VITE_` flags from its config.
   - **The org-export journey is `apps/web/e2e-audit/org-export.spec.ts`** (there is no
     `e2e-org-export` folder). Its axe scans now switch transitions off before scanning (#1070).
+
+- **2026-10-20 lessons (#535):**
+  - **A fresh worktree needs `pnpm turbo run build` for the packages before vitest**: the builder
+    found `@repo/types` had no `dist` even after `pnpm --dir <worktree> --filter "./packages/*" build`
+    had exited 0 from the main checkout (why was not established). Run the build from inside the
+    worktree and check for `packages/types/dist`.
+  - **`react-hooks/set-state-in-effect` refuses clearing state in an effect.** Reset state that
+    follows a prop during render (`if (!canManageLogic && editingId !== null) setEditingId(null)`)
+    and keep only the announcement in the effect.
+  - **jsdom's `<dialog>` does not return focus on `close()`.** A focus-return claim (AC4) needs a
+    Playwright step; the unit test can only show the dialog closed and the opener survived.
+  - **Releasing the pen server-side from a journey** (`fetch DELETE …/edit-lock` in
+    `page.evaluate`, then wait ≤ 25 s for the 15 s status poll) is the reusable way to test "the pen
+    is taken under you" while a modal covers the toolbar (#64's and #535's journeys).
+  - **After a squash-merge and `checkout -B` onto `main`, the Stop hook reports an unpushed
+    commit**; push with `--force-with-lease=<branch>:<old remote sha>` to sync the branch.
