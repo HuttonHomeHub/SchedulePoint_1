@@ -41,7 +41,11 @@ rather than `1000 1000`; the database lives in a folder, not a volume; and the c
 the system actor **Unknown**, not **System** as the guide said, and the bin's "Expires in" rounds down
 where the preview's "due in" rounds up: both recorded as `docs/TECH_DEBT.md` #536.
 
-**Consequences.** Rows 5, 6 and 7 of `docs/RELEASE_1_0.md` are Done. The three host steps leave the
+**Consequences.** Rows 5, 6 and 7 of `docs/RELEASE_1_0.md` are Done. `docs/TECH_DEBT.md` #511 (the copy
+before an update, unmeasured) is closed by the first real timings: 4 s and 1 s for a 1.0 MB copy against the
+API's 300 s start period. The backup side has no step left for the owner: Parts 3 and 4 of the guide are for
+the day they are needed, the weekly glance at the `backup` container is routine, and an off-site copy
+(#509) stays deferred on its trigger, so today's copies share the database's disk. The three host steps leave the
 hand-off's parked list. Any update that changes the database on that server now takes a copy first and
 is held if it cannot. The device check sheet and the alerts (#100) stay parked.
 

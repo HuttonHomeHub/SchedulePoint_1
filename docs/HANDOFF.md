@@ -43,8 +43,8 @@ not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
   mention it there rather than editing it here.
 - **Correction to the previous hand-off:** it listed **#520** as open; #520 was closed on
   2026-10-17 by ADR-0201 D3 (#1050). #509, #510, #512, #513 and #515–#517 are **deferred on a
-  trigger**, not open work; #511 is open but its next step is a reading on the owner's server
-  (parked under the hard rule).
+  trigger**, not open work. #511 was closed on 2026-10-20 with the owner's first real copy times
+  (4 s and 1 s against a 300 s start period).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -117,8 +117,8 @@ owner returns to one, the steps are ready:
   a `Column` prop, a component contract: ADR-0105 spec trigger). Accepted known gap.
 - **#271** stays open for cursor paging (owner: not now).
 - #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred on a trigger),
-  #391 and #395 (remaining painter items), #509–#513 and #515–#517 (deferred on triggers; #511 needs a
-  host reading).
+  #391 and #395 (remaining painter items), #509, #510, #512, #513 and #515–#517 (deferred on triggers;
+  #509 is the off-site copy: today's copies live on the same disk as the database).
 - **#326(a) may be stale:** `apps/web/src/components/ui/data-table.tsx:75` and `:146` say the cell
   classes have merged with the default since #335. Check and close it if so.
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs

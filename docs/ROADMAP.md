@@ -716,11 +716,10 @@ What 1.0 requires and promises is written down in [`RELEASE_1_0.md`](RELEASE_1_0
 been cut. Required before it, each to be specified on its own: a tested database backup and restore, a
 whole-organisation export (specified and approved 2026-10-14,
 [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md); spec and plan at
-[`docs/specs/organisation-export/`](specs/organisation-export/); its format, census and permission are built, the
-endpoint and page are not), and the recycle bin's 90-day permanent clear-out turned on and proven
-(specified and approved 2026-10-14, [ADR-0193](adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md);
-spec and plan at [`docs/specs/recycle-bin-clear-out/`](specs/recycle-bin-clear-out/); its preview command and
-restore-race fix are built, the switch-on is the owner's). Collaborative
+[`docs/specs/organisation-export/`](specs/organisation-export/)), and the recycle bin's 90-day permanent clear-out
+turned on and proven (specified and approved 2026-10-14, [ADR-0193](adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md);
+spec and plan at [`docs/specs/recycle-bin-clear-out/`](specs/recycle-bin-clear-out/)). **All three are built and
+done on the owner's server since 2026-10-20** (`RELEASE_1_0.md` rows 5, 6 and 7; `DECISIONS.md`, 2026-10-20). Collaborative
 editing is not in 1.0 (`DECISIONS.md`, 2026-10-12). Two owner tasks are parked and listed there without a position.
 
 Deleted resources and calendars gain a restore in Recently deleted (approved 2026-10-17,
@@ -773,8 +772,9 @@ discriminators. Each becomes a spec/plan before build:
   [`docs/specs/database-backup/`](specs/database-backup/)). The API image carries `schedulepoint-backup` (a nightly
   copy kept 30 days, `check`, `restore`, and the copy taken before an update that changes the database), proven on
   every pull request. The release compose file has the `backup` service and no longer publishes the database port.
-  The owner's guide is [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). Not running on the host
-  until the owner does its Part 1 and records one `CHECK PASSED` (milestone 4). Pre-1.0 requirement (a).
+  The owner's guide is [`docs/guides/back-up-and-restore.md`](guides/back-up-and-restore.md). **Running on the owner's
+  host since 2026-10-20**, with `CHECK PASSED` recorded twice that day (milestone 4 done; `DECISIONS.md`, 2026-10-20).
+  Pre-1.0 requirement (a), done.
 
 - **A contrast theme is the reader's palette.** **Approved 2026-10-13; built as `pre-1-0-batch-2` M2; measured and
   journey-tested in emulation, real Windows still on the device check sheet** ([ADR-0191](adr/0191-a-contrast-theme-is-the-readers-palette.md); spec and plan at
