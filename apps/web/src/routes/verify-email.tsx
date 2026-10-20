@@ -67,7 +67,7 @@ import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
  */
 export function pendingDescription(email: string | undefined): string {
   const target = email ?? 'your address';
-  return `A link to confirm ${target} should arrive in the next few minutes. Open it to finish setting up your account. If nothing arrives, check your spam folder and send a new link. If that does not work either, the problem is probably at our end rather than yours — try again shortly.`;
+  return `A link to confirm ${target} should arrive in the next few minutes. Open it and press Confirm to finish setting up your account. If nothing arrives, check your spam folder and send a new link. If that does not work either, the problem is probably at our end rather than yours — try again shortly.`;
 }
 
 /**
@@ -114,16 +114,38 @@ function ConfirmEmailScreen({ token }: { token: string }): React.ReactElement {
   // the new information is.
   const errorRef = useOutcomeFocus<HTMLDivElement>(confirm.isError);
   const failure = confirm.isError ? confirmEmailFailure(confirm.error) : null;
+  // Nothing that depends on the session is drawn until the read settles, so it cannot shift the
+  // layout after first paint (ADR-0202). A failed read leaves `data` undefined and so reads as
+  // signed out, which is the safe answer: the way on is then the sign-in page.
+  // `failureCount` because a failing read stays `pending` while react-query retries it, which would
+  // hold the placeholder for seconds.
+  const sessionSettled = !session.isPending || session.failureCount > 0;
   const signedInAs = session.data?.user.email;
+
+  const title = confirm.isSuccess
+    ? 'Email address confirmed'
+    : failure === 'expired'
+      ? 'That link has expired'
+      : failure === 'invalid'
+        ? 'That link did not work'
+        : 'Confirm your email address';
+  useDocumentTitle(title);
 
   if (confirm.isSuccess) {
     return (
-      <AuthShell title="Email address confirmed">
+      <AuthShell title={title}>
         <div className="flex flex-col gap-4">
           <Alert purpose="event" tone="success" tabIndex={-1} ref={outcomeRef}>
-            Your email address is confirmed. You can sign in now.
+            Your email address is confirmed.
+            {!sessionSettled
+              ? ''
+              : signedInAs === undefined
+                ? ' You can sign in now.'
+                : ` You're still signed in as ${signedInAs}.`}
           </Alert>
-          {signedInAs === undefined ? (
+          {!sessionSettled ? (
+            <div className="min-h-10" aria-hidden />
+          ) : signedInAs === undefined ? (
             <Link to="/sign-in" className={buttonVariants()}>
               Sign in
             </Link>
@@ -139,7 +161,7 @@ function ConfirmEmailScreen({ token }: { token: string }): React.ReactElement {
 
   if (failure === 'expired' || failure === 'invalid') {
     return (
-      <AuthShell title={failure === 'expired' ? 'That link has expired' : 'That link did not work'}>
+      <AuthShell title={title}>
         <Alert purpose="event" tone="error" tabIndex={-1} ref={errorRef}>
           {failure === 'expired' ? EXPIRED_COPY : FAILED_COPY}
         </Alert>
@@ -153,7 +175,9 @@ function ConfirmEmailScreen({ token }: { token: string }): React.ReactElement {
       title="Confirm your email address"
       description="Press the button to finish setting up your SchedulePoint account."
     >
-      {signedInAs === undefined ? null : (
+      {!sessionSettled ? (
+        <div className="min-h-10" aria-hidden />
+      ) : signedInAs === undefined ? null : (
         <p className="text-muted-foreground text-sm">
           You&apos;re signed in as {signedInAs}. Confirming this link won&apos;t change who is
           signed in.
@@ -163,12 +187,14 @@ function ConfirmEmailScreen({ token }: { token: string }): React.ReactElement {
         <Alert purpose="event" tone="error" tabIndex={-1} ref={errorRef}>
           {failure === 'rate-limited'
             ? 'Too many attempts. Wait a minute, then try again.'
-            : "We couldn't confirm your address just now. Try again in a moment."}
+            : "We couldn't confirm your address just now. Try again in a moment. If this keeps happening, use the link in your email again."}
         </Alert>
       )}
       <Button
         type="button"
-        className="aria-disabled:pointer-events-none"
+        // Wraps at text-only 200 %, as the resend button does (ADR-0077 M6-T1); the primitive's
+        // `whitespace-nowrap` exists for toolbar controls, not a full-width form action.
+        className="h-auto py-2 whitespace-normal aria-disabled:pointer-events-none"
         aria-disabled={confirm.isPending}
         aria-busy={confirm.isPending}
         onClick={() => {
@@ -183,7 +209,6 @@ function ConfirmEmailScreen({ token }: { token: string }): React.ReactElement {
 
 export function VerifyEmailScreen(): React.ReactElement {
   useNoindex();
-  useDocumentTitle('Verify your email');
   const search = useSearch({ strict: false });
   const navigate = useNavigate();
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
@@ -194,6 +219,8 @@ export function VerifyEmailScreen(): React.ReactElement {
   // `/reset-password`, whose reasoning this repeats): an effect would run after a render in which the
   // fragment is already gone.
   const [token, setToken] = useState(tokenFromHash);
+  // The emailed link's screen names its own state, so this one stays out of its way.
+  useDocumentTitle(token === '' ? 'Verify your email' : null);
 
   // A link pasted into the tab already showing this page changes only the fragment, which the
   // browser treats as same-document: nothing remounts, so the initial read above never sees it.
@@ -216,10 +243,7 @@ export function VerifyEmailScreen(): React.ReactElement {
 
   if (verified) {
     return (
-      <AuthShell
-        title="Email verified"
-        description="Your address is confirmed. You can sign in now."
-      >
+      <AuthShell title="Email address confirmed" description="You can sign in now.">
         <Link to="/sign-in" className={buttonVariants()}>
           Sign in
         </Link>

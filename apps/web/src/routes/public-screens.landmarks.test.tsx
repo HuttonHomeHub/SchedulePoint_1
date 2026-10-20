@@ -132,7 +132,7 @@ describe('every public screen is one page with one heading', () => {
 
   it('verify-email — verified', () => {
     mount(<VerifyEmailScreen />, { verified: '1' });
-    expectPublicHeading('Email verified');
+    expectPublicHeading('Email address confirmed');
   });
 
   it('verify-email — the link failed', () => {

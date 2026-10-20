@@ -50,10 +50,16 @@ afterEach(() => {
 describe('VerifyEmailScreen', () => {
   it('confirms success when the handler redirects back with ?verified=1', () => {
     renderAt({ verified: '1' });
-    expect(screen.getByRole('heading', { name: 'Email verified' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Email address confirmed' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     // Nothing to resend — offering it here would invite a second, pointless email.
     expect(screen.queryByRole('button', { name: /send another/i })).not.toBeInTheDocument();
+  });
+
+  it('offers the sign-in way out beside the resend in the waiting state', () => {
+    renderAt({ email: 'ada@example.com' });
+    expect(screen.getByText(/Already confirmed\?/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('offers a resend without asking, when the address is in the URL', () => {
@@ -145,6 +151,7 @@ describe('pendingDescription', () => {
     const copy = pendingDescription('planner@example.com');
     expect(copy).not.toMatch(/we sent|we've sent|we have sent/i);
     expect(copy).toMatch(/should arrive/i);
+    expect(copy).toMatch(/press Confirm/);
   });
 
   it('names the address, because a typo at sign-up is the commonest cause of silence', () => {
@@ -248,6 +255,55 @@ describe('VerifyEmailScreen — the emailed link', () => {
 
     expect(await screen.findByRole('link', { name: 'Continue' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      "Your email address is confirmed. You're still signed in as ada@example.com.",
+    );
+  });
+
+  it('draws nothing that depends on the session until it settles, so nothing shifts', async () => {
+    window.location.hash = '#token=jwt.token.value';
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      path === '/me' ? new Promise(() => {}) : Promise.resolve({ verified: true }),
+    );
+    renderAt({});
+
+    expect(screen.queryByText(/signed in as/)).not.toBeInTheDocument();
+    press();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      /^Your email address is confirmed\.$/,
+    );
+    expect(screen.queryByRole('link', { name: /sign in|continue/i })).not.toBeInTheDocument();
+  });
+
+  it('treats a failed session read as signed out', async () => {
+    window.location.hash = '#token=jwt.token.value';
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      path === '/me'
+        ? Promise.reject(new TypeError('offline'))
+        : Promise.resolve({ verified: true }),
+    );
+    renderAt({});
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/me'));
+    press();
+    expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('You can sign in now.');
+  });
+
+  it('names the tab after the state it is in', async () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }));
+    expect(document.title).toBe('Confirm your email address · SchedulePoint');
+
+    press();
+    await screen.findByRole('heading', { name: 'Email address confirmed' });
+    expect(document.title).toBe('Email address confirmed · SchedulePoint');
+  });
+
+  it('lets the Confirm button wrap rather than overflow at large text', () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }));
+    expect(screen.getByRole('button', { name: 'Confirm my email address' })).toHaveClass(
+      'whitespace-normal',
+    );
   });
 
   it('keeps the button focused and busy while the press is in flight', async () => {
@@ -305,7 +361,7 @@ describe('VerifyEmailScreen — the emailed link', () => {
     press();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      "We couldn't confirm your address just now. Try again in a moment.",
+      "We couldn't confirm your address just now. Try again in a moment. If this keeps happening, use the link in your email again.",
     );
     expect(screen.getByRole('button', { name: 'Confirm my email address' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Confirm your email address' })).toBeInTheDocument();

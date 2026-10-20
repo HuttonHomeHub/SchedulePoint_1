@@ -88,7 +88,7 @@ export const URL_STATES = [
     heading: 'Confirm your email address',
     primary: 'Confirm my email address',
   },
-  { path: '/verify-email?verified=1', heading: 'Email verified', primary: 'Sign in' },
+  { path: '/verify-email?verified=1', heading: 'Email address confirmed', primary: 'Sign in' },
   {
     path: '/verify-email?error=TOKEN_EXPIRED',
     heading: 'That link did not work',
