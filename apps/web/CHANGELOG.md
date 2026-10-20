@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.194.3
+
+### Patch Changes
+
+- [#1079](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1079) [`dbe3832`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dbe38326a379a7f98c4b2164b4f9eb325b16ecb7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the activity editor's Logic tab, a planner whose pen is taken now sees each link's Edit and Remove buttons stay in place, greyed out with the reason, instead of disappearing.
+
 ## 0.194.2
 
 ### Patch Changes
