@@ -64,8 +64,8 @@ export const MD = 768;
  * A public state this suite can reach from a URL alone, with the heading that identifies it and the
  * control a reader is meant to press.
  *
- * These eleven are the **driven** states. `public-screens.spec.ts`'s closing docblock lists what is
- * synthesised and what is not covered at all — a suite that quietly measures eleven of thirty-four
+ * These twelve are the **driven** states. `public-screens.spec.ts`'s closing docblock lists what is
+ * synthesised and what is not covered at all — a suite that quietly measures twelve of thirty-five
  * while reading as though it measured all of them is the defect class this repository keeps naming.
  */
 export const URL_STATES = [
@@ -82,6 +82,11 @@ export const URL_STATES = [
     path: '/verify-email',
     heading: 'Verify your email',
     primary: 'Send another verification email',
+  },
+  {
+    path: '/verify-email#token=e2e',
+    heading: 'Confirm your email address',
+    primary: 'Confirm my email address',
   },
   { path: '/verify-email?verified=1', heading: 'Email verified', primary: 'Sign in' },
   {

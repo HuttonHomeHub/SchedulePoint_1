@@ -160,7 +160,9 @@ async function onboardStaff(page, sink) {
   const verifyUrl = firstUrlIn(mail.body);
   if (!verifyUrl) throw new Error(`no verification link was sent to ${email}`);
   await page.goto(verifyUrl);
-  await page.waitForLoadState('networkidle');
+  // The link opens a page and verifies nothing until Confirm is pressed (TECH_DEBT #88).
+  await page.getByRole('button', { name: 'Confirm my email address' }).click();
+  await page.getByRole('heading', { name: 'Email address confirmed' }).waitFor();
 }
 
 /**

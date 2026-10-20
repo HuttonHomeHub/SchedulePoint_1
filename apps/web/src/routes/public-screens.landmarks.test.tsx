@@ -140,6 +140,13 @@ describe('every public screen is one page with one heading', () => {
     expectPublicHeading('That link did not work');
   });
 
+  it('verify-email — the emailed link, before the press', () => {
+    window.location.hash = '#token=tok';
+    mount(<VerifyEmailScreen />);
+    expectPublicHeading('Confirm your email address');
+    window.location.hash = '';
+  });
+
   it('verify-email — waiting', () => {
     mount(<VerifyEmailScreen />, { email: 'ada@example.com' });
     expectPublicHeading('Verify your email');

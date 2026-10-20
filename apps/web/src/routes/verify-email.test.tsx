@@ -4,21 +4,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { pendingDescription, VerifyEmailScreen } from './verify-email';
 
+import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
 /**
- * The six arrivals `/verify-email` serves (ADR-0074 M2-T3). The screen is a **landing** screen —
- * it never holds or spends a token — so every state here is driven by search params the auth
- * handler put in the URL, plus the resend it offers.
+ * The arrivals `/verify-email` serves (ADR-0074 M2-T3, TECH_DEBT #88). The original six are driven
+ * by search params; the emailed link's arrival is driven by the URL fragment, and nothing it
+ * carries is spent until Confirm is pressed.
  */
 const search = vi.hoisted((): { current: Record<string, unknown> } => ({ current: {} }));
+const navigate = vi.hoisted(() => vi.fn());
 
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => search.current,
+  useNavigate: () => navigate,
   Link: ({ children, ...rest }: { children: React.ReactNode; to?: string }) => (
     <a href={typeof rest.to === 'string' ? rest.to : '/'}>{children}</a>
   ),
 }));
+
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, apiFetch: vi.fn() };
+});
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: { sendVerificationEmail: vi.fn() },
@@ -34,7 +42,10 @@ function renderAt(params: Record<string, unknown>) {
   );
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  window.location.hash = '';
+});
 
 describe('VerifyEmailScreen', () => {
   it('confirms success when the handler redirects back with ?verified=1', () => {
@@ -161,5 +172,166 @@ describe('pendingDescription', () => {
     const copy = pendingDescription('a@b.test');
     expect(copy).toMatch(/our end rather than yours/i);
     expect(copy).not.toMatch(/ask whoever set up/i);
+  });
+});
+
+/**
+ * The emailed link (TECH_DEBT #88): `/verify-email#token=…`. The property under test is that
+ * nothing is sent until the button is pressed — a page that confirmed on load would be the scanner
+ * hazard again.
+ */
+describe('VerifyEmailScreen — the emailed link', () => {
+  const ME = { user: { email: 'ada@example.com' }, memberships: [] };
+
+  /** `/me` answers the given session; the confirm POST answers per `confirm`. */
+  function arriveWithToken(
+    confirm: () => Promise<unknown>,
+    session: unknown = null,
+    token = 'jwt.token.value',
+  ) {
+    window.location.hash = `#token=${token}`;
+    vi.mocked(apiFetch).mockImplementation((path: string) =>
+      path === '/me' ? Promise.resolve(session) : confirm(),
+    );
+    return renderAt({});
+  }
+
+  const press = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm my email address' }));
+  const confirmCalls = () =>
+    vi.mocked(apiFetch).mock.calls.filter(([path]) => path === '/email-verification/confirm');
+
+  it('asks for a press and sends nothing on arrival', async () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }));
+
+    expect(screen.getByRole('heading', { name: 'Confirm your email address' })).toBeInTheDocument();
+    expect(screen.getByText(/finish setting up your SchedulePoint account/)).toBeInTheDocument();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/me'));
+    expect(confirmCalls()).toHaveLength(0);
+  });
+
+  it('strips the token from the address bar once it has been captured', () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }));
+
+    expect(navigate).toHaveBeenCalledWith({ to: '/verify-email', search: {}, replace: true });
+  });
+
+  it('posts the token on the press and reports success, with a way to sign in', async () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }));
+
+    press();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Email address confirmed' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your email address is confirmed. You can sign in now.',
+    );
+    expect(confirmCalls()).toEqual([
+      [
+        '/email-verification/confirm',
+        { method: 'POST', body: JSON.stringify({ token: 'jwt.token.value' }) },
+      ],
+    ]);
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    // Focus follows the outcome: the Confirm button that was pressed is gone.
+    expect(document.activeElement).toBe(screen.getByRole('status'));
+  });
+
+  it('says who is signed in, and offers Continue rather than Sign in, when there is a session', async () => {
+    arriveWithToken(() => Promise.resolve({ verified: true }), ME);
+
+    expect(await screen.findByText(/You're signed in as ada@example.com/)).toBeInTheDocument();
+    expect(screen.getByText(/won't change who is signed in/)).toBeInTheDocument();
+
+    press();
+
+    expect(await screen.findByRole('link', { name: 'Continue' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the button focused and busy while the press is in flight', async () => {
+    arriveWithToken(() => new Promise(() => {}));
+
+    const button = screen.getByRole('button', { name: 'Confirm my email address' });
+    button.focus();
+    fireEvent.click(button);
+
+    const busy = await screen.findByRole('button', { name: 'Confirming…' });
+    expect(busy).toHaveAttribute('aria-disabled', 'true');
+    expect(document.activeElement).toBe(busy);
+    // A second press while pending must not send a second request.
+    fireEvent.click(busy);
+    expect(confirmCalls()).toHaveLength(1);
+  });
+
+  it('offers a fresh link when the link has expired', async () => {
+    arriveWithToken(() =>
+      Promise.reject(new ApiFetchError(410, { code: 'VERIFICATION_LINK_EXPIRED', message: 'old' })),
+    );
+
+    press();
+
+    expect(
+      await screen.findByRole('heading', { name: 'That link has expired' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Confirmation links work for an hour.');
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByRole('alert'));
+  });
+
+  it('says the link did not work for a malformed or unknown token', async () => {
+    arriveWithToken(
+      () =>
+        Promise.reject(
+          new ApiFetchError(400, { code: 'VERIFICATION_LINK_INVALID', message: 'bad' }),
+        ),
+      null,
+      'garbage',
+    );
+
+    press();
+
+    expect(
+      await screen.findByRole('heading', { name: 'That link did not work' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Send yourself a fresh one');
+  });
+
+  it('keeps the button, and says why, when the service is unreachable', async () => {
+    arriveWithToken(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    press();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "We couldn't confirm your address just now. Try again in a moment.",
+    );
+    expect(screen.getByRole('button', { name: 'Confirm my email address' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Confirm your email address' })).toBeInTheDocument();
+  });
+
+  it('asks the reader to wait on a 429, and lets them press again', async () => {
+    arriveWithToken(() =>
+      Promise.reject(new ApiFetchError(429, { code: 'RATE_LIMITED', message: 'slow down' })),
+    );
+
+    press();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many attempts. Wait a minute, then try again.',
+    );
+    press();
+    await waitFor(() => expect(confirmCalls()).toHaveLength(2));
+  });
+
+  it('treats an empty token as no token — the waiting state, not a button with nothing to send', () => {
+    window.location.hash = '#token=';
+    renderAt({});
+
+    expect(screen.getByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Confirm my email address' }),
+    ).not.toBeInTheDocument();
   });
 });

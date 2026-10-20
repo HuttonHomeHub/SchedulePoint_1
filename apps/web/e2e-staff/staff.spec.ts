@@ -489,7 +489,9 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     const verifyUrl = firstUrlIn(mail.body);
     expect(verifyUrl, 'a verification link must have been sent').toBeTruthy();
     await staff.goto(verifyUrl);
-    await staff.waitForLoadState('networkidle');
+    // The link opens a page and verifies nothing until Confirm is pressed (TECH_DEBT #88).
+    await staff.getByRole('button', { name: 'Confirm my email address' }).click();
+    await expect(staff.getByRole('heading', { name: 'Email address confirmed' })).toBeVisible();
 
     // **Sign in again, because verifying does not leave you signed in.** Observed, not assumed: the
     // account was `email_verified = t` in the database and `/staff` still answered "Not found",

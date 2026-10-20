@@ -386,13 +386,13 @@ test('a signed-out visitor at an unmatched organisation address is sent to sign-
  *   weaker second opinion pretending to be a stronger one.
  * - **Firefox and WebKit.** Chromium-first (`CLAUDE.md` §17, TECH_DEBT #25a), like all 26 siblings.
  * - **Real mail.** No message is sent or read here; `e2e-account` owns the SMTP round trip.
- * - **Eleven of the thirty-four landable states are driven by URL; three more by a real invitation
+ * - **Twelve of the thirty-five landable states are driven by URL; three more by a real invitation
  *   against a real API; one is synthesised by fulfilling a 429.** The remaining nineteen are
  *   *outcome* states behind a successful mutation ("Check your email", "Password changed", the
  *   pending and error branches of each form) and are asserted in each route's own unit suite, where
  *   the mutation is already mocked and every branch is reachable. What is measured **here** is
  *   geometry, and geometry belongs to the shell those nineteen share: the same `AuthShell`, the
- *   same card, the same panel. The distinction matters because "33 states verified in a browser"
+ *   same card, the same panel. The distinction matters because "34 states verified in a browser"
  *   would be false, and this file is the only place the reader can find out.
  */
 
