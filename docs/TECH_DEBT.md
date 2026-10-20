@@ -7102,8 +7102,12 @@ to share a code. Documented intent (ADR-0126 D9), not a defect — but `activity
 are activatable in the Changes view. Deliberate (verification versus action) and documented in the
 component, but a planner may expect to click through from the list they were told to read first.
 
-**(i)** The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
-terms even when reached through the cross-plan picker, where the planner chose a _plan_.
+**(i)** ~~The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
+terms even when reached through the cross-plan picker, where the planner chose a _plan_~~ —
+**CLOSED 2026-10-20.** The literal symptom was already gone: `hasRevisionPair` counts a chosen plan
+(`plan-workspace-toolbar.tsx:315`), so the cross-plan path meets no refusal. What remained was
+"two revisions" when one choice suffices and a plan is also a valid choice; it now reads "Choose
+what to compare in Compare revisions… first", pinned negatively in `compare-overlay-refusal.test.ts`.
 
 **Three are placement and style.**
 

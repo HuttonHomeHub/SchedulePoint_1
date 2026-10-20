@@ -428,7 +428,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
       !ctx.hasDiagram
         ? LENS_NO_DIAGRAM_REASON
         : !ctx.hasRevisionPair
-          ? 'Choose two revisions in Compare revisions… first'
+          ? 'Choose what to compare in Compare revisions… first'
           : undefined,
   },
   {
