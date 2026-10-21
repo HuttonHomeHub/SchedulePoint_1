@@ -673,3 +673,51 @@ describe('Toolbar — a later item survives an earlier one appearing', () => {
     }
   });
 });
+
+/**
+ * **The primitive is WIRED to the focus-handoff hook, proved by behaviour (#306c).** Every other
+ * container-focus case here calls `bar.focus()` directly, so none of them touches the spread:
+ * deleting `{...focusHandoff}` from `Toolbar.tsx` left every one of them green and only the
+ * structural gate noticed. This drives the real sequence instead — focus a control, have the
+ * registry stop offering it (a peer's write), and expect focus back on the container.
+ *
+ * **Verified red** by deleting `{...focusHandoff}` from `Toolbar.tsx`: `activeElement` stays `BODY`.
+ */
+describe('Toolbar — hands focus back when the control under it is removed (#306)', () => {
+  interface ShowCtx {
+    readonly show: boolean;
+  }
+  const handoffItems: ToolbarItem<ShowCtx>[] = defineToolbar<ShowCtx>([
+    { id: 'stay', group: 'frame', order: 1, label: 'Stay', onActivate: () => {} },
+    {
+      id: 'leaves',
+      group: 'frame',
+      order: 2,
+      label: 'Leaves',
+      isVisible: (ctx) => ctx.show,
+      onActivate: () => {},
+    },
+  ]);
+
+  it('moves focus to the container instead of dropping it on <body>', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback): number => frames.push(cb));
+    try {
+      const { rerender } = render(
+        <Toolbar items={handoffItems} context={{ show: true }} label="T" />,
+      );
+      const leaves = screen.getByRole('button', { name: 'Leaves' });
+      leaves.focus();
+      // Asserted, because if focus never reached the control the case proves nothing about removal.
+      expect(document.activeElement).toBe(leaves);
+
+      rerender(<Toolbar items={handoffItems} context={{ show: false }} label="T" />);
+      expect(screen.queryByRole('button', { name: 'Leaves' })).toBeNull();
+      for (const cb of frames.splice(0)) cb(0);
+
+      expect(document.activeElement).toBe(screen.getByRole('toolbar', { name: 'T' }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

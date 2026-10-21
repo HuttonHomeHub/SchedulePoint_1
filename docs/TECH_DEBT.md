@@ -7923,7 +7923,7 @@ version-sensitive and the register cannot say so).
 
 ### 306. `useToolbarFocusHandoff` has a third consumer, and neither its name nor its gate knows
 
-**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (the component review of #305's fix, which measured both halves) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-21 · **Raised:** 2026-09-12 (the component review of #305's fix, which measured both halves) · **Size:** S · **Owner:** web
 
 `#305` was fixed by adopting `components/ui/toolbar/use-focus-handoff.ts` on the Project Explorer's
 `role="tree"` container. That was the right call — ADR-0135 D1 exists because "was focus dropped, and
@@ -7950,55 +7950,21 @@ permanent.
 > ADR-0105-trigger-worthy improvement found mid-change is **filed**, not asserted in a source
 > comment, because nothing makes a comment discoverable to whoever triages debt next.
 
-**(b) The structural gate cannot see the third adopter.**
-`focus-handoff-seam.structural.test.ts:27` is `const PRIMITIVES = ['Toolbar.tsx', 'Deck.tsx']`,
-scoped to `src/components/ui/toolbar/`, and all five of its assertions (`:38`, `:45`, `:61`, `:84`,
-`:91`) are `it.each(PRIMITIVES)`. `HierarchyTree.tsx` is invisible to every one of them — so
-`Toolbar` and `Deck` each get a unit test **and** a structural gate, and the Explorer's spread is
-protected by one unit case alone. A future refactor could drop `{...focusHandoff}` from the tree and
-only that case would notice.
+**(b) and (c) were closed on 2026-10-21 and are recorded here so the row stays findable by symptom.**
+`focus-handoff-seam.structural.test.ts` now derives its consumers by scanning `src/` for production
+files that import the hook (comments stripped) and asserts the three known ones are found, so a fourth
+adopter joins the import and spread assertions the day it is written; `HierarchyTree.tsx` is covered
+by both. `Toolbar.test.tsx` and `Deck.test.tsx` each gained a case that removes the focused control
+from under focus and expects focus back on the container, without calling `bar.focus()`. Measured by
+deleting `{...focusHandoff}` from each: the two new behavioural cases fail (previously every
+behavioural case stayed green), and so do the structural spread assertions — 6 failures across the
+three files; deleting it from `HierarchyTree.tsx` fails the structural spread case for the tree.
 
-**(c) The exposure is INVERTED between the consumers, and that is the sharper finding.** Added
-2026-09-12 by the spec pass (`docs/specs/focus-handoff-consumer-census/`), verified here by
-mutation rather than accepted:
-
-Nothing asserts that `Toolbar` or `Deck` is **wired**. `use-focus-handoff.test.tsx:81-127` mounts a
-**synthetic** harness, and all five container-focus cases in the primitives' own suites
-(`Toolbar.test.tsx:474`, `:485`, `:508-514`; `Deck.test.tsx:275`, `:286`) call `bar.focus()`
-directly, so none of them exercises the spread. Measured: deleting `{...focusHandoff}` from
-`Toolbar.tsx` leaves **164 of 165 tests passing** — the single failure is
-`focus-handoff-seam.structural.test.ts`'s assertion 2, and **every behavioural case is green**.
-
-So each consumer is covered by exactly the instrument the other two lack:
-
-| consumer            | structural gate | behavioural test                                    |
-| ------------------- | --------------- | --------------------------------------------------- |
-| `Toolbar.tsx`       | **yes**         | no — its cases focus the bar directly               |
-| `Deck.tsx`          | **yes**         | no — same                                           |
-| `HierarchyTree.tsx` | **no** (b)      | **yes**, red-verified against the pre-fix component |
-
-That makes assertion 2 the gate's most load-bearing assertion rather than its third, and it means
-**the newest consumer is the only one whose wiring is proved by behaviour** — while being the only
-one the gate cannot see. Neither half of that is an accident of this row; both were true before it
-was filed.
-
-This is **not a regression introduced by #305's fix**: ADR-0135's own Consequences section predicted
-it in as many words — _"a third primitive would be invisible to it"_ — and accepted it as a known
-gap. What changed is that the gap is now real rather than hypothetical.
-
-**What would close it.** Two independent pieces, either order:
-
-- Derive the gate's roster instead of listing it (the ADR-0073 C4 rule, which this repository applies
-  to `prepush.sh`, `check:ci-roster` and the scene-parity gate already): find the consumers by
-  scanning for the import, so the next adopter is covered the day it is written. Note the assertion
-  about a "DISTINCT marker attribute" (`:91`) is toolbar-shaped and a tree consumer has no marker at
-  all, so a derived roster needs that assertion to be conditional on the consumer declaring one —
-  which is a real design question, not a list edit.
-- Rename to `useFocusHandoff` / `containerLabel` under `components/ui/`, as one mechanical commit with
-  no forwarding shim. **That is the ADR-0105 trigger**, so it needs the spec, and it is worth doing
-  only alongside (or after) the roster change — renaming without it just moves the invisible file.
-
-Related: #305 (the fix that created this), ADR-0135 (the mechanism and its predicted gap), #204(c).
+**What remains is (a) alone, and it is declined, not forgotten.** Renaming to `useFocusHandoff` /
+`containerLabel` and moving it under `components/ui/` changes an exported hook's public contract —
+the ADR-0105 spec trigger — for no behavioural gain, and leaves a forwarding shim or touches three
+call sites. It is worth doing only alongside other work on the hook; until then the imprecise name
+is the cost, and the derived roster above means the move can no longer hide a consumer.
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 
