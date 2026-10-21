@@ -589,12 +589,13 @@ const forgotPasswordRoute = createRoute({
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reset-password',
-  // Both params are composed by Better Auth's own redirect, so they go through `searchString`
-  // — see its docblock for the rule and for what dropping one costs.
-  validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => {
-    const token = searchString(search.token);
+  // `error` is composed by the API's redirect for an unusable legacy link, so it goes through
+  // `searchString` — see its docblock for the rule and for what dropping one costs. The token is
+  // not a search param any more: it travels in the fragment (TECH_DEBT #537), so a stray `?token=`
+  // is dropped here rather than read.
+  validateSearch: (search: Record<string, unknown>): { error?: string } => {
     const error = searchString(search.error);
-    return { ...(token ? { token } : {}), ...(error ? { error } : {}) };
+    return error ? { error } : {};
   },
   component: ResetPasswordScreen,
 });

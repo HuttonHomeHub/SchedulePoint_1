@@ -500,6 +500,13 @@ for the recipient (`docs/TECH_DEBT.md` #88). It is replaced, by the owner's appr
 `GET /api/auth/verify-email` is shadowed with a `303` to the page. Nothing else in this ADR changes:
 the reset link already had the page-plus-POST shape, and no session is issued on confirm.
 
+**Amended 2026-10-21 (TECH_DEBT #537, [`docs/specs/reset-link-fragment/`](../specs/reset-link-fragment/feature-spec.md)).**
+The reset link now takes the same fragment shape: `{web}/reset-password#token=…`, composed from the
+token Better Auth passes to `sendResetPassword` (not its `url`), so the token is sent to no server
+until the form's `POST`. Better Auth's `GET /reset-password/:token` is shadowed in `app-setup.ts`
+with a `303` to that fragment, no token lookup, so links already emailed still work. The web no longer
+sends `redirectTo`. Whether a link is still good is learned on submit, not on arrival.
+
 ## References
 
 - Spec and plan: [`docs/specs/account-security/`](../specs/account-security/feature-spec.md)

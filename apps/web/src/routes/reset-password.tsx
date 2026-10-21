@@ -1,4 +1,4 @@
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -10,43 +10,79 @@ import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
+ * The `token` in the URL fragment (`#token=…`), or `''`. A fragment, not a query, so the token is never
+ * sent to a server and never rides in a `Referer` (TECH_DEBT #537; `/verify-email` is the precedent).
+ * Read from `window.location` rather than the router because the router's `useSearch` does not carry it.
+ */
+function tokenFromHash(): string {
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? '';
+}
+
+/**
+ * Better Auth's codes for a token the server will not accept (`password.mjs:150`, and the two
+ * checks after it in the same handler): spent or expired, or its user gone. Both mean "ask for a
+ * new link".
+ */
+const UNUSABLE_LINK_CODES: ReadonlySet<string> = new Set(['INVALID_TOKEN', 'USER_NOT_FOUND']);
+
+/**
  * Set a new password from an emailed link (`/reset-password`, ADR-0074 M4) — behind
  * `VITE_PASSWORD_RESET`.
  *
- * **The token is captured once into component state and stripped from the URL immediately.** The
- * emailed link lands on Better Auth's `GET /reset-password/:token`, which checks the token and
- * redirects here with `?token=…` (valid) or `?error=INVALID_TOKEN` (spent or expired). Left in the
- * address bar, that live token would sit in browser history and ride along in the referrer of any
- * later navigation. `replace: true` also keeps Back from restoring it.
+ * **The emailed link is `/reset-password#token=…`, and the token is captured once into component
+ * state and stripped from the URL immediately.** A fragment is never sent to any server, so no
+ * proxy or API log holds it (TECH_DEBT #537). Left in the address bar it would still sit in browser
+ * history and ride along in the referrer of a later navigation; `replace: true` also keeps Back from
+ * restoring it. Links emailed before that change point at Better Auth's `GET /reset-password/:token`,
+ * which the API answers with a redirect to this same fragment form, so there is one shape here.
  *
- * **`validateSearch` is permissive** (see the route definition): a hand-edited URL, a truncated
- * paste, a mail client that mangles the query — none of those may crash the screen. Neither param
- * present is the same state as an explicit error, and both offer the way out rather than a form
- * that cannot work.
+ * **Whether the token is still good is learned on submit, not on arrival.** The page no longer asks
+ * the server about a token it has not been asked to use, so a spent or expired link shows the form
+ * and is reported when the password is sent — as the same "no longer valid" screen, never as a
+ * generic error under a form that cannot work.
+ *
+ * **A hand-edited URL, a truncated paste, a mail client that mangles the link** — none of those may
+ * crash the screen. No token (and `?error=INVALID_TOKEN`, which the API's redirect for an unusable
+ * legacy link produces) is the same state as a refused one, and both offer the way out rather than
+ * a form that cannot work.
  */
 export function ResetPasswordScreen(): React.ReactElement {
   useNoindex();
   useDocumentTitle('Choose a new password');
-  const search = useSearch({ strict: false });
   const navigate = useNavigate();
   // Owned here, not in the form (ADR-0077 M2-T3): this screen used to keep the heading "Choose a
   // new password" over a body that already said the password had been changed.
   const reset = useResetPassword();
+  const linkRejected = reset.isError && UNUSABLE_LINK_CODES.has(reset.error.code ?? '');
   const outcomeRef = useOutcomeFocus<HTMLDivElement>(reset.isSuccess);
+  const rejectedRef = useOutcomeFocus<HTMLDivElement>(linkRejected);
 
   // Captured on the first render, before the effect below removes it from the URL. A `useState`
   // initialiser rather than an effect: an effect would run after a render in which the token is
-  // already gone from `search`, and there would be nothing left to capture.
-  const [token] = useState(() =>
-    'token' in search && typeof search.token === 'string' ? search.token : '',
-  );
+  // already gone from the URL, and there would be nothing left to capture.
+  const [token, setToken] = useState(tokenFromHash);
+  const { reset: clearAttempt } = reset;
+
+  // A link pasted into the tab already showing this page changes only the fragment, which the
+  // browser treats as same-document: nothing remounts, so the initial read above never sees it.
+  useEffect(() => {
+    function onHashChange(): void {
+      const next = tokenFromHash();
+      if (next === '') return;
+      setToken(next);
+      // The new link starts clean: a rejection of the old one must not outlive it.
+      clearAttempt();
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [clearAttempt]);
 
   useEffect(() => {
     if (token === '') return;
     void navigate({ to: '/reset-password', search: {}, replace: true });
   }, [token, navigate]);
 
-  if (token === '') {
+  if (token === '' || linkRejected) {
     // One state for "the link was spent or expired" and for "there is no token here at all". The
     // difference is not actionable — both are fixed by asking for a fresh link — and a screen that
     // distinguished them would be reporting on a token it should not be reasoning about.
@@ -55,9 +91,18 @@ export function ResetPasswordScreen(): React.ReactElement {
         title="That link is no longer valid"
         description="Reset links work once and expire after an hour. Ask for a new one and it will replace any earlier link."
       >
-        <Link to="/forgot-password" className={buttonVariants()}>
-          Send a new link
-        </Link>
+        <div className="flex flex-col gap-4">
+          {linkRejected ? (
+            // Arriving here from the form unmounts the submit button the reader just pressed, so
+            // focus would fall to `<body>`; the outcome takes it instead (WCAG 2.4.3).
+            <Alert purpose="event" tone="error" tabIndex={-1} ref={rejectedRef}>
+              That link has already been used or has expired, so your password has not been changed.
+            </Alert>
+          ) : null}
+          <Link to="/forgot-password" className={buttonVariants()}>
+            Send a new link
+          </Link>
+        </div>
       </AuthShell>
     );
   }

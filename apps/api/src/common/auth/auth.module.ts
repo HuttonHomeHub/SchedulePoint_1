@@ -39,6 +39,7 @@ import { EmailVerificationService } from './email-verification.service';
           isProduction: config.isProduction,
           requireEmailVerification: config.requireEmailVerification,
           verifyPageUrl: `${config.appUrl}/verify-email`,
+          resetPageUrl: `${config.appUrl}/reset-password`,
           // The auth library reaches mail through the port, never a transport — so which adapter
           // is bound stays `MailModule`'s decision and this wiring is the same in every environment.
           sendVerificationEmail: (input) => mail.sendEmailVerification(input),

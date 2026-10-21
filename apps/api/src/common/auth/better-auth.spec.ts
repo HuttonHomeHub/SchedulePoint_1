@@ -32,6 +32,7 @@ describe('createAuth security options', () => {
     requireEmailVerification: false,
     sendVerificationEmail: () => Promise.resolve(),
     verifyPageUrl: 'http://localhost:5173/verify-email',
+    resetPageUrl: 'http://localhost:5173/reset-password',
     sendPasswordReset: () => Promise.resolve(),
     recordAuthEvent: () => Promise.resolve(),
     findUserIdByEmail: () => Promise.resolve(null),
@@ -67,6 +68,32 @@ describe('createAuth security options', () => {
       {
         to: 'a@example.com',
         verifyUrl: 'http://localhost:5173/verify-email#token=tok.en%2B%2F%3D',
+      },
+    ]);
+  });
+
+  it('emails a link to the reset page with the token in the fragment (TECH_DEBT #537)', async () => {
+    // The library's own `url` is its GET /reset-password/:token: the token would sit in the API
+    // request line and then in the onward `?token=` request. The emailed link must be ours.
+    const sent: { to: string; resetUrl: string }[] = [];
+    const auth = createAuth(prisma, {
+      ...options,
+      sendPasswordReset: (input) => {
+        sent.push(input);
+        return Promise.resolve();
+      },
+    });
+
+    await auth.options.emailAndPassword?.sendResetPassword?.({
+      user: { email: 'a@example.com' } as never,
+      url: 'http://localhost:3000/api/auth/reset-password/tok.en?callbackURL=%2F',
+      token: 'tok.en+/=',
+    });
+
+    expect(sent).toEqual([
+      {
+        to: 'a@example.com',
+        resetUrl: 'http://localhost:5173/reset-password#token=tok.en%2B%2F%3D',
       },
     ]);
   });
