@@ -62,8 +62,8 @@ const buttonVariants = cva(
         // is the drift class this register tracks, in the design system rather than in prose.
         // Row icon button for a target in a row that GROWS with it. 28 px on a fine pointer, 44 on
         // a coarse one (ADR-0118 D2), written as a coarse override for the reason `icon` gives
-        // above. The row has to be able to take the extra 16 px: the rows of the six
-        // `RowActionsMenu` tables and the activities table are content-sized, so the button sets
+        // above. The row has to be able to take the extra 16 px: the rows of the
+        // `RowActionsMenu` lists and the activities table are content-sized, so the button sets
         // the row and nothing overflows (`docs/TECH_DEBT.md` #215, `docs/specs/dense-row-touch-targets/`).
         //
         // A target in a row that grows with it is `icon-row`; a target in a fixed container is

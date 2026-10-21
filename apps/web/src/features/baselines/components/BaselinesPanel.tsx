@@ -1,6 +1,5 @@
 import type { BaselineSummary } from '@repo/types';
-import { useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 
 import { useActivateBaseline, useBaselines, useDeleteBaseline } from '../api/use-baselines';
 
@@ -19,8 +18,8 @@ import { formatCalendarDate, formatTimestamp } from '@/lib/format-date';
  * A plan's baselines (M7, ADR-0025): name, active badge, when captured, the captured
  * project finish, and the frozen activity count. Writers (`canManage`, the plan-write
  * roles) get **Capture**, plus per-row **Activate** with **Delete** behind the row's `⋯` (ADR-0145
- * D2); everyone else reads. Exactly one baseline is active — activating one deactivates the rest server-side, and
- * the list refetches. States come from the shared DataTable.
+ * D2); everyone else reads. Exactly one baseline is active — activating one deactivates the rest
+ * server-side, and the list refetches. States come from the shared DataTable.
  */
 export function BaselinesPanel({
   orgSlug,
@@ -47,17 +46,25 @@ export function BaselinesPanel({
     });
   };
 
+  // Focus moves in an effect, not beside the close: `Dialog` closes from a passive effect, and
+  // focusing the region first lets the browser's own restore land on the removed row's button
+  // (`NoteItem` records the race). Effects run child-first, so the close has happened by here.
+  const focusRegionAfterClose = useRef(false);
+  useEffect(() => {
+    if (deleting || !focusRegionAfterClose.current) return;
+    focusRegionAfterClose.current = false;
+    regionRef.current?.focus();
+  }, [deleting]);
+
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
     deleteBaseline.mutate(deleting.id, {
       onSuccess: () => {
-        flushSync(() => {
-          setDeleting(null);
-          setDeleteError(null);
-        });
+        focusRegionAfterClose.current = true;
+        setDeleting(null);
+        setDeleteError(null);
         announce(`Baseline “${name}” deleted.`);
-        regionRef.current?.focus();
       },
       onError: (err) =>
         setDeleteError(err instanceof Error ? err.message : 'Couldn’t delete this baseline.'),

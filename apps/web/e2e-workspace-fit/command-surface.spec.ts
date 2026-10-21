@@ -3021,7 +3021,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
   });
 
   /**
-   * **The list pages' `⋯`** (`RowActionsMenu`, on every list; Clients is the one swept). The loop above
+   * **The list pages' `⋯`** (`RowActionsMenu`; Clients is the one swept). The loop above
    * runs on the plan page only, so this leaves it, sweeps the Clients table at both coarse widths
    * and returns to the plan URL it saved — a later test in this serial group needs the plan.
    */

@@ -125,6 +125,15 @@ describe('NoteItem', () => {
     await waitFor(() => expect(screen.getByTestId('announcer')).toHaveTextContent('Note deleted.'));
   });
 
+  it('returns focus to the row menu when the delete confirm is cancelled', () => {
+    renderItem();
+    const trigger = screen.getByRole('button', { name: /^Actions for note 1 by/ });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(trigger).toHaveFocus();
+  });
+
   it('surfaces a 403 on delete as an in-dialog error (keeps the note)', async () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(403, { code: 'FORBIDDEN', message: 'You can no longer delete this note.' }),

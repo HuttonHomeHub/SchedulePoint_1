@@ -308,20 +308,36 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
+});
 
-  // Last, because it removes the baseline the steps above read variance from. Delete lives behind
-  // the row's `⋯` like every other list (ADR-0145 D2), inside a modal — so this drives the menu
-  // portalled into the dialog, the confirm, and the row going.
+/**
+ * **A baseline is deleted from the row's `⋯`** (ADR-0145 D2): the menu portals into the open
+ * Baselines dialog, the confirm follows, the row goes, and focus lands back inside the dialog
+ * rather than on `<body>`. Its own test because the variance journey above already uses the whole
+ * 30 s budget.
+ */
+test('a planner deletes a baseline from the row menu', async ({ page }) => {
+  const stamp = Date.now() + 2;
+  await onboard(page, stamp);
+  await openNewPlan(page);
+  await addActivity(page, 'Dig');
+
   await page.getByRole('button', { name: 'Analysis' }).click();
   await page.getByRole('menuitem', { name: /Baselines/ }).click();
-  const reopened = page.getByRole('dialog', { name: /Baselines/ });
-  await reopened.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
+  const baselines = page.getByRole('dialog', { name: /Baselines/ });
+  await baselines.getByRole('button', { name: 'Capture baseline' }).first().click();
+  await baselines.getByLabel('Name').fill('Contract Baseline');
+  await baselines.getByRole('button', { name: 'Capture baseline' }).last().click();
+  await expect(baselines.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
+
+  await baselines.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page
     .getByRole('alertdialog', { name: 'Delete baseline' })
     .getByRole('button', { name: 'Delete' })
     .click();
-  await expect(reopened.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
+  await expect(baselines.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
+  await expect(baselines.locator(':focus')).toHaveCount(1);
 });
 
 /**
