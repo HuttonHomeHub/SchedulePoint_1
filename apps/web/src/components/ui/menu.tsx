@@ -283,9 +283,7 @@ export function Menu({
       onKeyDown={onKeyDown}
       style={{ position: 'fixed', left, top, maxHeight }}
       className={cn(
-        // `max-w-72` (ADR-0204): a shaded item prints its reason inline, and a sentence wraps
-        // inside the panel instead of widening it past the viewport.
-        'border-border bg-popover text-popover-foreground z-50 max-w-72 min-w-40 overflow-y-auto rounded-md border p-1 shadow-md',
+        'border-border bg-popover text-popover-foreground z-50 min-w-40 overflow-y-auto rounded-md border p-1 shadow-md',
       )}
     >
       <MenuCloseContext.Provider value={closeRestoring}>{children}</MenuCloseContext.Provider>
@@ -513,7 +511,14 @@ export function MenuItem({
       {showReason ? (
         <>
           <span className="flex items-center gap-2">{children}</span>
-          <span id={reasonId} aria-hidden="true" className="text-muted-foreground text-xs">
+          <span
+            id={reasonId}
+            aria-hidden="true"
+            // `max-w-72` caps the REASON, not the panel (ADR-0204): a sentence wraps inside 18rem
+            // instead of widening the menu, while an ordinary menu's own labels (an organisation
+            // name, a long plan title) keep the width they always had.
+            className="text-muted-foreground max-w-72 text-xs"
+          >
             {disabledReason}
           </span>
         </>
@@ -526,11 +531,9 @@ export function MenuItem({
   return srDescription ? (
     <>
       {button}
-      {srDescription ? (
-        <span id={srDescriptionId} className="sr-only">
-          {srDescription}
-        </span>
-      ) : null}
+      <span id={srDescriptionId} className="sr-only">
+        {srDescription}
+      </span>
     </>
   ) : (
     button

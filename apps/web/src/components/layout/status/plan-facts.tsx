@@ -301,7 +301,6 @@ function ScheduleStateRegion({
   const refusalTip = useTooltip({
     content: state.kind === 'stale' ? (state.refusal ?? undefined) : undefined,
     purpose: 'reason-echo',
-    revealOnPress: true,
   });
   // `current` renders nothing — not an affirmative "up to date" chip. A bar that says everything is
   // fine, every second of every session, is a bar a reader stops reading, and it would be the

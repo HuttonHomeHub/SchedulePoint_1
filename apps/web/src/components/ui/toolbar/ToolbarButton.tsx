@@ -172,7 +172,6 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
       content: tipped ? title : reasonTip ? disabledReason : undefined,
       purpose: reasonTip ? 'reason-echo' : tipPurpose,
       disabled: !tipped && !reasonTip,
-      revealOnPress: disabled === true && !!disabledReason,
       ...tooltipOptions,
     });
     // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr

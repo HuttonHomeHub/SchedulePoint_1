@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useId } from 'react';
+import { useCallback, useId } from 'react';
 
 import type { ToolbarLabelState } from './toolbar-registry';
 import {
@@ -169,13 +169,27 @@ export function ToolbarSplitButton({
   const primaryTip = useTooltip({
     content: primaryReasonId ? primaryDisabledReason : undefined,
     purpose: 'reason-echo',
-    revealOnPress: true,
   });
   const caretTip = useTooltip({
     content: caretReasonId ? caretDisabledReason : undefined,
     purpose: 'reason-echo',
-    revealOnPress: true,
   });
+  const setTipPrimaryRef = primaryTip.triggerProps.ref;
+  const setTipCaretRef = caretTip.triggerProps.ref;
+  const setPrimaryRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      setTipPrimaryRef(el);
+      primaryRef.current = el;
+    },
+    [setTipPrimaryRef, primaryRef],
+  );
+  const setCaretRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      setTipCaretRef(el);
+      caretRef.current = el;
+    },
+    [setTipCaretRef, caretRef],
+  );
   return (
     <span
       className={cn(
@@ -198,10 +212,7 @@ export function ToolbarSplitButton({
       <button
         {...itemProps}
         {...primaryTip.triggerProps}
-        ref={(el) => {
-          primaryTip.triggerProps.ref(el);
-          primaryRef.current = el;
-        }}
+        ref={setPrimaryRef}
         onFocus={(event) => {
           primaryTip.triggerProps.onFocus(event);
           itemProps.onFocus?.(event);
@@ -274,10 +285,7 @@ export function ToolbarSplitButton({
       </button>
       <button
         {...caretTip.triggerProps}
-        ref={(el) => {
-          caretTip.triggerProps.ref(el);
-          caretRef.current = el;
-        }}
+        ref={setCaretRef}
         type="button"
         tabIndex={-1}
         aria-haspopup={haspopup}

@@ -37,8 +37,8 @@ gets changing: the name is unchanged, the description is the same sentence, and 
 It sits under the label as `text-muted-foreground text-xs`, is `aria-hidden`, and is still referenced by the item's
 `aria-describedby`. Name-from-content skips a hidden child, while a **directly referenced** hidden node still
 yields the description (accname 1.2, step 2A), so the name stays the label. This retires the `sr-only` sibling
-`MenuItem` used, which was a non-permitted child of `role="menu"`. The menu panel gains `max-w-72` so a sentence
-wraps instead of widening the panel. Every shaded item prints its own reason, even where several share one sentence:
+`MenuItem` used, which was a non-permitted child of `role="menu"`. The reason (not the panel) carries `max-w-72`,
+so a sentence wraps instead of widening the menu while every other menu keeps the width its labels give it. Every shaded item prints its own reason, even where several share one sentence:
 a reason the reader has to look elsewhere for is the defect.
 
 ### D3 — On a toolbar the reason is a tooltip with a new purpose, `'reason-echo'`
@@ -49,10 +49,12 @@ in (ADR-0117's rule), and it is not `'description'` because that links the tip w
 the tip in the same tick a screen reader announces the control, which would read the sentence twice beside the
 permanent `sr-only` description.
 
-`useTooltip` also gains `revealOnPress`: a click on the trigger opens the tip. A shaded control's press does
+`'reason-echo'` also opens on a click of the trigger (no separate option, so it can never be set on a live
+control). A shaded control's press does
 nothing, so showing why is the answer to it, not the "tap that does both" noise ADR-0117's touch rule exists to
 prevent. It reaches a finger and a keyboard Enter or Space; a released long-press is still swallowed first, and
-Escape still closes the tip without being withheld from the application.
+Escape still closes the tip without being withheld from the application. The tip closes when the control
+stops being shaded, so a stale tip cannot reappear on a control the reader has left.
 
 The tip is opened by hover (400 ms), by focus (immediately) and by a press on the shaded control. The native
 `title` is withdrawn from a shaded labelled control that has a reason; a live control keeps the `title` it had.

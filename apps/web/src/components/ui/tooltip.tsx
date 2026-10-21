@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -34,6 +34,11 @@ import {
  * noise). A press outside trigger and tip dismisses an open tooltip, because a touch device has no
  * Escape; a pen takes the hover path only.
  *
+ * **The portalled panel is still a React child of the trigger**, so a click on the tip bubbles through
+ * the React tree to the trigger's handlers. This is deliberately not stopped (`stopPropagation` on a
+ * non-interactive panel is a jsx-a11y error, and the tip is a visual echo): every `reason-echo`
+ * trigger guards its own `onClick` while shaded, and the tip sits off the trigger (`placeTip`).
+ *
  * **At most one tooltip is open application-wide** (module-level token): per-instance state leaves
  * two open when the pointer crosses a gap quickly.
  *
@@ -61,6 +66,11 @@ export interface TooltipOptions {
    *   panel is `aria-hidden` and nothing is linked — because linking it too would read the sentence
    *   twice: focus opens the tip in the same tick a screen reader announces the control. A separate
    *   value rather than a reuse of `'name-echo'`, so the call site says which case it is in.
+   *   **It also opens on a click of the trigger**: a shaded control's press does nothing, so showing
+   *   why is the answer to it rather than the "tap that does both" noise the touch rule below exists
+   *   to prevent. That reaches a finger, which has no hover, and a keyboard Enter or Space. A released
+   *   long-press is still swallowed first. It is part of the purpose so it can never be set on a live
+   *   control.
    */
   purpose: 'name-echo' | 'description' | 'reason-echo';
   /** Suppresses the whole mechanism (e.g. a control that has a visible label). */
@@ -85,13 +95,6 @@ export interface TooltipOptions {
    * focus; the Minimap toggle's panel is the case, and it is accepted rather than designed around.
    */
   dismissOnPress?: boolean;
-  /**
-   * A click on the trigger **opens** the tip (ADR-0204) — the opposite of {@link dismissOnPress}.
-   * For a shaded control: the press does nothing, so showing why is the answer to it rather than the
-   * "tap that does both" noise the touch rule above exists to avoid. It reaches a finger, which has
-   * no hover, and a keyboard Enter or Space. A released long-press is still swallowed first.
-   */
-  revealOnPress?: boolean;
 }
 
 /** The two options a container forwards to every tooltip it owns (`Toolbar`, `ToolbarButton`). */
@@ -206,7 +209,6 @@ export function useTooltip({
   disabled = false,
   placement = 'below',
   dismissOnPress = false,
-  revealOnPress = false,
 }: TooltipOptions): TooltipApi {
   const active = !disabled && !!content;
   const tipId = useId();
@@ -258,6 +260,14 @@ export function useTooltip({
     },
     [clearTimers, handle],
   );
+
+  // A tip must not outlive the control's right to show it. `open` already hides it while inactive,
+  // but `onBlur` and `onPointerLeave` return early when inactive, so `openState` would otherwise
+  // survive an unshade and the tip would reappear, holding the one-open token, on a control the
+  // reader has long left once it reshades.
+  useEffect(() => {
+    if (!active) close();
+  }, [active, close]);
 
   const reallyOpen = (): void => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -356,10 +366,14 @@ export function useTooltip({
   const height = box?.height ?? TIP_ESTIMATE.height;
   const position = openState ? placeTip(openState.box, width, height, placement) : null;
 
+  // Stable, so a consumer that merges it with its own ref (useCallback) is not detached and
+  // re-attached on every render.
+  const setTriggerRef = useCallback((el: HTMLElement | null): void => {
+    triggerRef.current = el;
+  }, []);
+
   const triggerProps: TooltipApi['triggerProps'] = {
-    ref: (el) => {
-      triggerRef.current = el;
-    },
+    ref: setTriggerRef,
     onPointerEnter: (event) => {
       if (!active) return;
       // Hover is the fine-pointer path; a touch "enter" is the finger landing, which is the
@@ -433,7 +447,7 @@ export function useTooltip({
     },
     onClickCapture: (event) => {
       if (!suppressNextClick.current) {
-        if (active && revealOnPress) {
+        if (active && purpose === 'reason-echo') {
           clearTimers();
           reallyOpen();
         }

@@ -166,8 +166,10 @@ export function ToolbarPopover({
         ? 'description'
         : 'name-echo',
     disabled: !tipped && !reasonTip,
-    revealOnPress: disabled === true && !!disabledReason,
   });
+  // Icon-only: the caller's `title` only (the tip names it). Labelled and shaded with a reason: none,
+  // since the tip is the reason (ADR-0204). Otherwise the caller's `title`, else the reason.
+  const titleAttr = iconOnly ? title : reasonTip ? undefined : (title ?? disabledReason);
   const fullDescribedBy =
     [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
   // **The item's own state outranks the transient fact that its panel is showing** — the same rule
@@ -217,15 +219,7 @@ export function ToolbarPopover({
         // and in that state the `aria-label` is already carrying the name. An icon-only trigger
         // speaks through the Tooltip primitive above instead of a native `title` — two tips on one
         // hover — so it keeps a `title` only when the caller passes one.
-        {...(iconOnly
-          ? title
-            ? { title }
-            : {}
-          : reasonTip
-            ? {}
-            : (title ?? disabledReason)
-              ? { title: title ?? disabledReason }
-              : {})}
+        {...(titleAttr ? { title: titleAttr } : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         onFocus={(event) => {
           tip.triggerProps.onFocus(event);

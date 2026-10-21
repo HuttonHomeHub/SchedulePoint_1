@@ -269,9 +269,11 @@ describe('PlanStatusBar', () => {
       expect(onRecalculate).not.toHaveBeenCalled();
       // ADR-0204: the reason is also a tip for a keyboard or a press, never a hover-only `title`.
       expect(button).not.toHaveAttribute('title');
-      expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
-        'Start editing to recalculate.',
-      );
+      const tipNode = document.querySelector('[data-tooltip]');
+      expect(tipNode).toHaveTextContent('Start editing to recalculate.');
+      // The tip is visual only: the `sr-only` description is still the one AT channel.
+      expect(tipNode).toHaveAttribute('aria-hidden', 'true');
+      expect(button).toHaveAccessibleDescription('Start editing to recalculate.');
     });
   });
 

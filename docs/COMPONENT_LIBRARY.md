@@ -853,7 +853,7 @@ control's accessible name (the icon-only case): the panel is `aria-hidden` and N
 content carries something the name does not: `role="tooltip"`, linked while open.
 `'reason-echo'` (ADR-0204) — the content restates why a shaded control is shut, which it already
 carries as a permanent `sr-only` description: wired like `'name-echo'`, so the sentence is read once.
-`revealOnPress` makes a click on the trigger open the tip (a shaded control's press does nothing).
+A click on the trigger also opens a `'reason-echo'` tip (a shaded control's press does nothing).
 The caller states which case they are in; the compiler enforces it.
 
 WCAG 1.4.13 in full: **Dismissible** (Escape, claimed only while open, `preventDefault` ONLY —
@@ -867,13 +867,13 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 
 **When to reach for it — the `title` discriminator** (spec §4.2's table, binding):
 
-| The `title` you are about to write is…                   | Do this instead                                                                                 |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| an icon-only control's name                              | `useTooltip({ purpose: 'name-echo' })` — never `title`                                          |
-| a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                       |
-| a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                         |
-| a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces    |
-| a shaded labelled control's reason (ADR-0204)            | `useTooltip({ purpose: 'reason-echo', revealOnPress: true })` — the `sr-only` description stays |
+| The `title` you are about to write is…                   | Do this instead                                                                              |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| an icon-only control's name                              | `useTooltip({ purpose: 'name-echo' })` — never `title`                                       |
+| a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                    |
+| a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
+| a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
+| a shaded labelled control's reason (ADR-0204)            | `useTooltip({ purpose: 'reason-echo' })` — the `sr-only` description stays                   |
 
 ## Page archetypes: `ListRow` and `RowSubject` — a row's subject wraps, it never clips
 

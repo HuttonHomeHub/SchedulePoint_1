@@ -336,6 +336,17 @@ describe('Toolbar (APG primitive)', () => {
     expect(addBtn).toHaveAccessibleDescription('Start editing to add activities');
     fireEvent.click(addBtn);
     expect(add).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-tooltip]')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('opens no tip when a live button is clicked (a press reveals a reason, never a name)', () => {
+    const add = vi.fn();
+    render(
+      <Toolbar items={makeItems({ add })} context={{ count: 1 }} label="T" authoringEnabled />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'add' }));
+    expect(add).toHaveBeenCalledOnce();
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
   });
 
   it('enables the pen-gated group when authoring is on', () => {
