@@ -361,10 +361,9 @@ the app origin; a client that still sends one (an old cached bundle) is origin-c
 point at `/api/auth/reset-password/<token>`; the API answers those with a redirect to the new form,
 so they keep working for the hour they live.
 
-The rejection itself is tested (`apps/api/test/password-reset.e2e-spec.ts`) so the failure mode
-is at least a known one. Note the origin check is now explicitly on in every environment —
-Better Auth defaults it **off** under `isTest()`, which meant the suite had been proving a
-weaker posture than production ships (ADR-0074).
+A reverse-proxy access log still records the token for hits on the legacy path
+(`/api/auth/reset-password/<token>`) until the old emails expire, at most an hour after the last
+pre-change email was sent; links emailed after the change never put it in a path or query.
 
 Put the credential in your secret store, not in `docker-compose.yml`. Deliverability (SPF,
 DKIM, DMARC on the sending domain) is a provider-side task this application does not do for

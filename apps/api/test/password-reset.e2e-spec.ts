@@ -210,6 +210,21 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
       expect(res.headers.location).toBe(`${ORIGIN}/reset-password?error=INVALID_TOKEN`);
     });
 
+    it('answers an undecodable percent-escape in the legacy path with the error redirect, not a 400 page', async () => {
+      const res = await request(server()).get('/api/auth/reset-password/%E0%A4%A');
+
+      expect(res.status).toBe(303);
+      expect(res.headers.location).toBe(`${ORIGIN}/reset-password?error=INVALID_TOKEN`);
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+
+    it('re-encodes a token that needs percent-encoding in the redirect', async () => {
+      const res = await request(server()).get('/api/auth/reset-password/a%2Bb%2Fc%3D');
+
+      expect(res.status).toBe(303);
+      expect(res.headers.location).toBe(`${ORIGIN}/reset-password#token=a%2Bb%2Fc%3D`);
+    });
+
     it('leaves the POST alone: a spent token is refused with INVALID_TOKEN', async () => {
       const res = await resetPassword('never-issued').expect(400);
 

@@ -2238,6 +2238,13 @@ emails sent before this change, valid for up to an hour) never verify: they answ
 `{web}/verify-email#token=…` (or `?error=INVALID_TOKEN` with no usable token), with
 `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
 
+**The reset link is a page, and its legacy route is shadowed the same way.** The emailed reset link is
+`{web}/reset-password#token=…` (the token never reaches a server until `POST /api/auth/reset-password`).
+`GET` and `HEAD` `/api/auth/reset-password/:token` (the shape in emails sent before this change, valid
+for up to an hour) do no token lookup: they answer `303` to `{web}/reset-password#token=…` (or
+`?error=INVALID_TOKEN` when the token is unusable, including an undecodable path), with
+`Cache-Control: no-store` and `Referrer-Policy: no-referrer`. `callbackURL` is ignored.
+
 ## OpenAPI / docs
 
 - The spec is generated from decorators (`@nestjs/swagger`) and served at

@@ -1,7 +1,14 @@
 import { HttpStatus, VersioningType } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import { json, text, type Request, type RequestHandler, type Response } from 'express';
+import {
+  json,
+  text,
+  type NextFunction,
+  type Request,
+  type RequestHandler,
+  type Response,
+} from 'express';
 import helmet from 'helmet';
 
 import { AUTH_INSTANCE, type AuthInstance } from './common/auth/better-auth';
@@ -141,6 +148,19 @@ export function configureHttpApp(app: NestExpressApplication): void {
   express.get('/api/auth/reset-password/:token', (req: Request, res: Response) => {
     fragmentRedirect(res, resetPage, req.params.token);
   });
+  // A malformed percent-escape makes Express's param decode throw before the handler runs, which
+  // would answer a default 400 page. An undecodable token is an unusable one, so it takes the same
+  // error redirect. Scoped to this path and to the two methods the route answers.
+  express.use(
+    '/api/auth/reset-password',
+    (err: unknown, req: Request, res: Response, next: NextFunction) => {
+      if (err instanceof URIError && (req.method === 'GET' || req.method === 'HEAD')) {
+        fragmentRedirect(res, resetPage, undefined);
+        return;
+      }
+      next(err);
+    },
+  );
   express.all(/^\/api\/auth(?:\/|$)/, boundAuthBody, toNodeHandler(auth));
 
   // **The extra two types are not decoration: without them the CSP sink records nothing.** A
