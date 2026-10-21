@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.98.0
+
+### Minor Changes
+
+- [#1096](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1096) [`2d5aaed`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2d5aaed910a461bb1acbf576b6c76b8635588245) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The password-reset link in the email now opens the app's own "Choose a new password" page directly, and the reset token is no longer sent to the server until you submit the new password. Links from earlier emails keep working. If a link has already been used or has expired, you are told so when you submit, with a way to request a new one.
+
 ## 0.97.0
 
 ### Minor Changes
