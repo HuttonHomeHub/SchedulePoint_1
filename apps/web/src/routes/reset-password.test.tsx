@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ResetPasswordScreen } from './reset-password';
@@ -22,6 +22,11 @@ vi.mock('@/lib/auth-client', () => ({
   authClient: { resetPassword: vi.fn() },
 }));
 
+/** `replaceState`, not `location.hash =`: the latter fires an async `hashchange` the screen would hear. */
+function setHash(hash: string): void {
+  window.history.replaceState(null, '', `/${hash}`);
+}
+
 function renderScreen(params: Record<string, unknown> = {}) {
   search.current = params;
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -39,6 +44,7 @@ function fill({ next = 'brand-new-password', confirm = 'brand-new-password' } = 
 }
 
 afterEach(() => {
+  window.history.replaceState(null, '', '/');
   navigate.fn.mockReset();
   vi.clearAllMocks();
 });
@@ -81,6 +87,91 @@ describe('ResetPasswordScreen — arriving', () => {
     expect(document.querySelector('meta[name="robots"]')).not.toBeNull();
     unmount();
     expect(document.querySelector('meta[name="robots"]')).toBeNull();
+  });
+});
+
+describe('ResetPasswordScreen — the fragment link (TECH_DEBT #537)', () => {
+  it('reads the token from the fragment and strips it with replace', async () => {
+    setHash('#token=frag-123');
+    vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
+    renderScreen({});
+
+    expect(screen.getByLabelText('New password')).toBeInTheDocument();
+    expect(navigate.fn).toHaveBeenCalledWith({ to: '/reset-password', search: {}, replace: true });
+    fill();
+    await waitFor(() =>
+      expect(authClient.resetPassword).toHaveBeenCalledWith({
+        token: 'frag-123',
+        newPassword: 'brand-new-password',
+      }),
+    );
+  });
+
+  it('prefers the fragment over a leftover query token', async () => {
+    setHash('#token=frag-123');
+    vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
+    renderScreen({ token: 'query-456' });
+    fill();
+
+    await waitFor(() =>
+      expect(authClient.resetPassword).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'frag-123' }),
+      ),
+    );
+  });
+
+  it('picks up a link pasted into the tab already showing the page', async () => {
+    vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
+    renderScreen({});
+    expect(
+      screen.getByRole('heading', { name: 'That link is no longer valid' }),
+    ).toBeInTheDocument();
+
+    act(() => {
+      window.location.hash = '#token=pasted-789';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
+    fill();
+    await waitFor(() =>
+      expect(authClient.resetPassword).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'pasted-789' }),
+      ),
+    );
+  });
+
+  it.each(['INVALID_TOKEN', 'USER_NOT_FOUND'])(
+    'reports a link the server refused (%s) as "no longer valid", with focus moved to the outcome',
+    async (code) => {
+      vi.mocked(authClient.resetPassword).mockResolvedValue({
+        error: { message: 'Invalid token', code },
+      });
+      setHash('#token=spent');
+      renderScreen({});
+      fill();
+
+      expect(
+        await screen.findByRole('heading', { name: 'That link is no longer valid' }),
+      ).toBeInTheDocument();
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('your password has not been changed');
+      await waitFor(() => expect(document.activeElement).toBe(alert));
+      expect(screen.getByRole('link', { name: 'Send a new link' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
+    },
+  );
+
+  it('does not treat other failures as a dead link (the form stays)', async () => {
+    vi.mocked(authClient.resetPassword).mockResolvedValue({
+      error: { message: 'Too many requests', code: 'RATE_LIMITED' },
+    });
+    setHash('#token=still-good');
+    renderScreen({});
+    fill();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests');
+    expect(screen.getByLabelText('New password')).toBeInTheDocument();
   });
 });
 

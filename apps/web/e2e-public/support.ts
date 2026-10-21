@@ -79,6 +79,11 @@ export const URL_STATES = [
     primary: 'Set new password',
   },
   {
+    path: '/reset-password#token=e2e',
+    heading: 'Choose a new password',
+    primary: 'Set new password',
+  },
+  {
     path: '/verify-email',
     heading: 'Verify your email',
     primary: 'Send another verification email',
