@@ -104,7 +104,7 @@ it('pushes through pnpm when every gate is green', () =>
   }));
 
 it('does not push and says NOT PUSHED when a gate fails', () =>
-  withFixture({ 'check:fail': 'node -e process.exit(1)' }, (f) => {
+  withFixture({ 'check:fail': 'node -e "process.exit(1)"' }, (f) => {
     const before = remoteMain(f.remote);
     const r = sh(f.work, ['bash', 'scripts/prepush.sh', '--push', 'origin', 'HEAD:main']);
     assert.equal(r.status, 1, r.out);
@@ -114,7 +114,7 @@ it('does not push and says NOT PUSHED when a gate fails', () =>
   }));
 
 it('the #280 replay: a red gate piped through tail still does not push', () =>
-  withFixture({ 'check:fail': 'node -e process.exit(1)' }, (f) => {
+  withFixture({ 'check:fail': 'node -e "process.exit(1)"' }, (f) => {
     const before = remoteMain(f.remote);
     const r = sh(f.work, [
       'bash',
@@ -126,7 +126,7 @@ it('the #280 replay: a red gate piped through tail still does not push', () =>
   }));
 
 it('an advisory WARN still pushes', () =>
-  withFixture({ 'check:reconcile-due': 'node -e process.exit(2)' }, (f) => {
+  withFixture({ 'check:reconcile-due': 'node -e "process.exit(2)"' }, (f) => {
     const r = sh(f.work, ['bash', 'scripts/prepush.sh', '--push', 'origin', 'HEAD:main']);
     assert.equal(r.status, 0, r.out);
     assert.match(r.out, /WARN/);
