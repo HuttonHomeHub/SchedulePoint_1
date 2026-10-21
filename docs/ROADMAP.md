@@ -1017,7 +1017,10 @@ discriminators. Each becomes a spec/plan before build:
   being disabled is not operability but _readability_, so "you may not edit this" was being
   implemented as "you may not read it either". There is no gated fill and that is measured — on
   every light theme the control's outline has 0.36 of headroom over 1.4.11 and the `auth` family
-  has none, so the state is carried by a lock glyph and a linked sentence instead.
+  has none, so the state is carried by a lock glyph and a linked sentence instead. **A shaded
+  control's reason is now visible to every input** (ADR-0204, 2026-10-21): a row-menu item prints it
+  under its name, and a labelled toolbar control shows it as a tip on hover, focus or a press — it was
+  `sr-only` or a hover-only `title`, so a mouse-only or touch reader never saw why.
 - **Feature-flag retirement and the privacy position** — **shipped as decisions** (ADR-0084 with
   `pnpm check:flags`, 2026-08-09; ADR-0085 decision-only). 58 flags, every one default-on, each a
   rollback contract nobody had ever ended; they now carry dated tags and a retirement schedule.

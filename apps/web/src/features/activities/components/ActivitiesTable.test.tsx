@@ -9,6 +9,7 @@ import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 import { ActivitiesTable } from './ActivitiesTable';
 
 import { anActivity } from '@/test/activity-fixture';
+import { menuItemLabel } from '@/test/menu-item-label';
 
 // This is the BASE table suite — the M4/M5 flag surfaces (Conflict badge, per-activity calendar
 // column) are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
@@ -71,9 +72,7 @@ function renderTable(
 /** Opens the row's overflow "Actions for …" menu and returns its menuitem labels. */
 function openRowMenu(name: string): string[] {
   fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
-  return within(screen.getByRole('menu'))
-    .getAllByRole('menuitem')
-    .map((i) => i.textContent);
+  return within(screen.getByRole('menu')).getAllByRole('menuitem').map(menuItemLabel);
 }
 
 describe('ActivitiesTable', () => {
@@ -108,6 +107,11 @@ describe('ActivitiesTable', () => {
     // The reason is a description, not part of the name — the ToolbarButton trap.
     expect(edit).toHaveAccessibleName('Edit');
     expect(edit.getAttribute('aria-describedby')).not.toBeNull();
+    // ADR-0204: the reason is printed inside the item for a mouse or a finger, not only announced.
+    const reasonId = edit.getAttribute('aria-describedby') ?? '';
+    const reason = within(edit).getByText((_, node) => node?.id === reasonId);
+    expect(reason).toBeVisible();
+    expect(reason.textContent).not.toBe('');
   });
 
   it('shades write actions for a progress-reporter, keeping progress actionable', () => {

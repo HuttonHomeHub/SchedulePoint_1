@@ -14,6 +14,7 @@ import {
   selectionActionItems,
   type SelectionBarContext,
 } from '@/features/plan-actions/selection-actions';
+import { menuItemLabel } from '@/test/menu-item-label';
 
 /**
  * **M5-T3's menu, actually driven.**
@@ -336,12 +337,12 @@ describe('the openAt handle (ADR-0177 D3)', () => {
     act(() => {
       expect(ref.current?.openAt({ x: 40, y: 50 }, row)).toBe(true);
     });
-    const viaHandle = screen.getAllByRole('menuitem').map((el) => el.textContent);
+    const viaHandle = screen.getAllByRole('menuitem').map(menuItemLabel);
     expect(screen.getByRole('menu', { name: 'Actions for Foundations' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
-    expect(screen.getAllByRole('menuitem').map((el) => el.textContent)).toEqual(viaHandle);
+    expect(screen.getAllByRole('menuitem').map(menuItemLabel)).toEqual(viaHandle);
   });
 
   it('reports false and opens nothing when the row has no context', () => {

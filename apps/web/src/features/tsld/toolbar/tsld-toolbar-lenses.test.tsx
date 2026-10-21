@@ -94,7 +94,11 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     renderRows(ctx({ hasDiagram: false }));
     const trigger = screen.getByRole('button', { name: /Filter/ });
     expect(trigger).toHaveAttribute('aria-disabled', 'true');
-    expect(trigger).toHaveAttribute('title', 'Add an activity first');
+    // ADR-0204: the reason is a tip on focus (not a hover-only `title`), and stays the description.
+    expect(trigger).not.toHaveAttribute('title');
+    fireEvent.focus(trigger);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Add an activity first');
+    expect(trigger).toHaveAccessibleDescription('Add an activity first');
   });
 
   // Colour-by moved into `View ▾` in ADR-0090 M2-T2 (183 px of pinned Row-1 width, paid at every

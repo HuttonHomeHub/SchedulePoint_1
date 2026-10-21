@@ -850,8 +850,11 @@ return (
 **`purpose` is the sharp edge and has no default.** `'name-echo'` — the content restates the
 control's accessible name (the icon-only case): the panel is `aria-hidden` and NO
 `aria-describedby` is added, or a screen reader hears "Zoom in, Zoom in". `'description'` — the
-content carries something the name does not: `role="tooltip"`, linked while open. The caller
-states which case they are in; the compiler enforces it.
+content carries something the name does not: `role="tooltip"`, linked while open.
+`'reason-echo'` (ADR-0204) — the content restates why a shaded control is shut, which it already
+carries as a permanent `sr-only` description: wired like `'name-echo'`, so the sentence is read once.
+A click on the trigger also opens a `'reason-echo'` tip (a shaded control's press does nothing).
+The caller states which case they are in; the compiler enforces it.
 
 WCAG 1.4.13 in full: **Dismissible** (Escape, claimed only while open, `preventDefault` ONLY —
 never `stopPropagation`, because a tooltip arms from incidental hover/focus and must not withhold
@@ -870,6 +873,7 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 | a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                    |
 | a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
 | a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
+| a shaded labelled control's reason (ADR-0204)            | `useTooltip({ purpose: 'reason-echo' })` — the `sr-only` description stays                   |
 
 ## Page archetypes: `ListRow` and `RowSubject` — a row's subject wraps, it never clips
 

@@ -1050,6 +1050,23 @@ describe.each(THEME_SELECTORS)('%s — a destructive menu item at rest', (theme)
   });
 });
 
+/**
+ * **A shaded control's reason, printed (ADR-0204).** A menu item prints it in `text-muted-foreground
+ * text-xs` on `--popover`, and its hovered or focused item sits on `--accent`; a reason tip is the
+ * same ink on the same panel. Small text, so 4.5:1. Held in the `page` scope because a menu and a tip
+ * are portalled to `body`, outside every surface scope, so the page's tokens are the ones they read.
+ */
+describe.each(THEME_SELECTORS)('%s — a shaded control’s printed reason', (theme) => {
+  it.each(['--popover', '--accent'])('--muted-foreground on %s is legible', (fill) => {
+    const tokens = resolve(theme, 'page');
+    const value = ratio(tokens, fill, '--muted-foreground');
+    expect(
+      value,
+      `--muted-foreground on ${fill} is ${fmtRatio(value)}, needs 4.5:1`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

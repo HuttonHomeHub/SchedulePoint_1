@@ -281,6 +281,21 @@ describe('Combobox', () => {
       openWithKeyboard();
       const bravo = screen.getByRole('option', { name: 'Bravo' });
       expect(bravo).toHaveAccessibleDescription('Archived calendar');
+      expect(bravo).toHaveAccessibleName('Bravo');
+    });
+
+    it("prints a disabled option's reason inside the option, hidden from AT (ADR-0204)", () => {
+      const reasoned: ComboboxOption[] = [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Bravo', disabled: true, disabledReason: 'Archived calendar' },
+      ];
+      render(<Harness options={reasoned} />);
+      openWithKeyboard();
+      const reason = within(screen.getByRole('option', { name: 'Bravo' })).getByText(
+        'Archived calendar',
+      );
+      expect(reason).toBeVisible();
+      expect(reason).toHaveAttribute('aria-hidden', 'true');
     });
 
     it('does not describe an enabled option or an unreasoned disabled one', () => {

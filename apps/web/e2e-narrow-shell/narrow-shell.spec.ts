@@ -1835,3 +1835,43 @@ test.describe('the editing row leads on the scrolling line (owner decision, 2026
     expect(doY, 'DO is drawn below LOOK at 1280').toBeGreaterThan(lookY);
   });
 });
+
+/**
+ * **The worst-case shaded row menu fits the design floor** (ADR-0204 consequence, ADR-0179). A shaded
+ * item now prints its reason under its name, so a row menu with every write action shut is the
+ * tallest this product draws. At 1024 × 600 it must stay inside the window, and where it scrolls the
+ * last action must still be reachable.
+ */
+test('a fully shaded activities row menu fits 1024 x 600 and keeps every action reachable', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const orgSlug = await seedOrganisation(page);
+  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+  await seedActivity(page, orgSlug, 'Dig footings');
+
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await page.reload();
+  await ensurePen(page);
+  await page.getByRole('button', { name: 'Expand activities panel' }).click();
+  // Giving up the pen shades every write action in the row menu, each with its reason.
+  await page.getByRole('button', { name: 'Stop editing' }).click();
+  await page.getByRole('button', { name: 'Actions for Dig footings' }).click();
+  const menu = page.getByRole('menu', { name: 'Actions for Dig footings' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  const box = await menu.boundingBox();
+  expect(box, 'the menu has a layout box').not.toBeNull();
+  if (!box) return;
+  expect(box.y, 'the menu starts inside the window').toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height, 'the menu ends inside the window').toBeLessThanOrEqual(600);
+  expect(box.x + box.width, 'the menu is not wider than the window').toBeLessThanOrEqual(1024);
+  const items = menu.getByRole('menuitem');
+  const last = items.last();
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport();
+});

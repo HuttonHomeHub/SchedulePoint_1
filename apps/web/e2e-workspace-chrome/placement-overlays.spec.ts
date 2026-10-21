@@ -401,6 +401,18 @@ test.describe('the feasible window and the levelled lens', () => {
     // Resolved as a screen reader resolves it: a shaded control whose reason is unreachable is the
     // same defect as an absent one (ADR-0082).
     await expect(command).toHaveAccessibleDescription(/Start editing to apply levelled dates/);
+    // ADR-0204: the same sentence is visible to a keyboard (focus) and a press, which fires nothing
+    // — it used to be a hover-only `title`. The tip is `aria-hidden`, so it adds nothing to AT.
+    const reasonTip = page.locator('[data-tooltip]');
+    await command.focus();
+    await expect(reasonTip).toHaveText(/Start editing to apply levelled dates/);
+    await expect(reasonTip).toHaveAttribute('aria-hidden', 'true');
+    await page.mouse.move(0, 0);
+    // `force`: Playwright treats `aria-disabled` as not-enabled, and pressing a shaded control is the point.
+    await command.click({ force: true });
+    await expect(reasonTip).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Apply levelled dates' })).toHaveCount(0);
+    expect(await placedCount()).toBe(0);
     await ensurePen(page);
     await expect(command).not.toHaveAttribute('aria-disabled', 'true');
 

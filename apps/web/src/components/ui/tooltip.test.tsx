@@ -153,6 +153,71 @@ describe('useTooltip', () => {
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
   });
 
+  it("purpose 'reason-echo': aria-hidden, no describedby, opens on focus (red: linked anyway)", () => {
+    render(<Host purpose="reason-echo" content="Start editing to change this." />);
+    fireEvent.focus(screen.getByRole('button'));
+    expect(tip()).toHaveAttribute('aria-hidden', 'true');
+    expect(tip()).not.toHaveAttribute('role');
+    expect(tip()).toHaveTextContent('Start editing to change this.');
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
+  });
+
+  describe("purpose 'reason-echo' opens on a press (ADR-0204)", () => {
+    it('a click opens the tip without a focus or a hover (red: the click is ignored)', () => {
+      render(<Host purpose="reason-echo" />);
+      fireEvent.click(screen.getByRole('button'));
+      expect(tip()).not.toBeNull();
+    });
+
+    it('a plain name-echo click shows no tip', () => {
+      render(<Host purpose="name-echo" />);
+      fireEvent.click(screen.getByRole('button'));
+      expect(tip()).toBeNull();
+    });
+
+    it('a stale tip does not reappear after the control unshades, loses focus and reshades (red: effect removed)', () => {
+      const { rerender } = render(<Host purpose="reason-echo" content="Start editing." />);
+      const button = screen.getByRole('button');
+      fireEvent.focus(button);
+      expect(tip()).not.toBeNull();
+      // Unshaded: no reason, so the mechanism is inert and the tip is hidden.
+      rerender(<Host purpose="reason-echo" content={undefined} />);
+      expect(tip()).toBeNull();
+      // Focus leaves while inert — `onBlur` returns early, so nothing closes the stale state.
+      fireEvent.blur(button);
+      rerender(<Host purpose="reason-echo" content="Start editing." />);
+      expect(tip()).toBeNull();
+      // And it released the app-wide token, so another tip can open normally.
+      fireEvent.focus(button);
+      expect(document.querySelectorAll('[data-tooltip]')).toHaveLength(1);
+    });
+
+    it('Escape still closes it and is not withheld from the application', () => {
+      render(<Host purpose="reason-echo" />);
+      fireEvent.click(screen.getByRole('button'));
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => void document.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(true);
+      expect(tip()).toBeNull();
+    });
+
+    it('a released long-press is still swallowed, not turned into a second reveal', () => {
+      const onCommand = vi.fn();
+      render(<Host purpose="reason-echo" onCommand={onCommand} />);
+      const button = screen.getByRole('button');
+      fireEvent.pointerDown(button, { pointerType: 'touch', clientX: 10, clientY: 10 });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS + 10));
+      fireEvent.pointerUp(button, { pointerType: 'touch' });
+      fireEvent.click(button);
+      expect(onCommand).not.toHaveBeenCalled();
+      expect(tip()).not.toBeNull();
+    });
+  });
+
   it("purpose 'description': role=tooltip, linked while open", () => {
     render(<Host purpose="description" content="Recomputes every date" />);
     fireEvent.focus(screen.getByRole('button'));

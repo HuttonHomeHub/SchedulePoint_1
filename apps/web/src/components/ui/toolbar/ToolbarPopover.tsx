@@ -148,6 +148,8 @@ export function ToolbarPopover({
   // MORE than the name, so it is linked to the control; one that restates the name is not, or a
   // screen reader says the name twice. A shaded trigger's reason already rides `aria-describedby`.
   const tipped = iconOnly && !open;
+  // A labelled trigger that is shut says why to every input (ADR-0204) — see `ToolbarButton`.
+  const reasonTip = !iconOnly && disabled === true && !!disabledReason;
   const tip = useTooltip({
     content: iconOnly
       ? disabled === true && disabledReason
@@ -155,10 +157,19 @@ export function ToolbarPopover({
         : description
           ? `${label} — ${description}`
           : label
-      : undefined,
-    purpose: description && disabled !== true ? 'description' : 'name-echo',
-    disabled: !tipped,
+      : reasonTip
+        ? disabledReason
+        : undefined,
+    purpose: reasonTip
+      ? 'reason-echo'
+      : description && disabled !== true
+        ? 'description'
+        : 'name-echo',
+    disabled: !tipped && !reasonTip,
   });
+  // Icon-only: the caller's `title` only (the tip names it). Labelled and shaded with a reason: none,
+  // since the tip is the reason (ADR-0204). Otherwise the caller's `title`, else the reason.
+  const titleAttr = iconOnly ? title : reasonTip ? undefined : (title ?? disabledReason);
   const fullDescribedBy =
     [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
   // **The item's own state outranks the transient fact that its panel is showing** — the same rule
@@ -208,13 +219,7 @@ export function ToolbarPopover({
         // and in that state the `aria-label` is already carrying the name. An icon-only trigger
         // speaks through the Tooltip primitive above instead of a native `title` — two tips on one
         // hover — so it keeps a `title` only when the caller passes one.
-        {...(iconOnly
-          ? title
-            ? { title }
-            : {}
-          : (title ?? disabledReason)
-            ? { title: title ?? disabledReason }
-            : {})}
+        {...(titleAttr ? { title: titleAttr } : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         onFocus={(event) => {
           tip.triggerProps.onFocus(event);

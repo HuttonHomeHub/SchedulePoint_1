@@ -1,6 +1,6 @@
 # ADR-0082 — A shaded menu item keeps its focus, and its reason
 
-**Status:** Proposed
+**Status:** Proposed; §2 amended by [ADR-0204](0204-a-shaded-control-says-why-to-every-input.md) (2026-10-21) — the reason is now printed as well as announced
 **Date:** 2026-08-08
 **Extends:** ADR-0062 M6 (present and shaded, never hidden, never a dead end) into the menu tier.
 **Supersedes:** nothing. Reverses one tested posture of `components/ui/menu.tsx`, recorded below.
@@ -182,7 +182,7 @@ for the same APG citation.
   unavailable.", and with none it reads exactly as before. Behaviour with no disabled option is unchanged.
 - **ArrowDown on open can land on a disabled first row.** That is APG-consistent: the first option is the
   first option, shaded or not. Enter there is refused with the reason announced.
-- **The reason is `sr-only` by design**, with no visible text, exactly as `Menu`'s `disabledReason` is
+- **The reason is `sr-only` by design** _(superseded 2026-10-21 by ADR-0204: it is now printed inline inside the item, `aria-hidden` and still described)_, with no visible text, exactly as `Menu`'s `disabledReason` is
   (`menu.tsx` renders it in an `sr-only` span). A sighted reader sees the shaded row; making the reason
   visible would be a separate design decision for both primitives.
 - **A pointer press on a disabled option announces the reason too**, as Enter does, and does not commit.

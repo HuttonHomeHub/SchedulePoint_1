@@ -85,9 +85,14 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     // different DEFAULT in a layout-less environment, not a change to what a planner sees: at a real
     // 1920 the control is labelled either way, and `item-widths` measures it at 120 px labelled and
     // 32 px icon-only at 1440.
-    expect(btn).toHaveAttribute('title', 'Add an activity to go to today');
-    // The reason is also `aria-describedby`-associated, which is the part that must never regress —
-    // a title alone is a hover affordance, unreachable by keyboard and by touch (ADR-0082).
+    // ADR-0204: that reason is now a tip on focus and press rather than a hover-only `title`.
+    expect(btn).not.toHaveAttribute('title');
+    fireEvent.focus(btn);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
+      'Add an activity to go to today',
+    );
+    // The reason is also `aria-describedby`-associated, which is the part that must never regress
+    // (ADR-0082).
     const describedBy = btn.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toHaveTextContent(

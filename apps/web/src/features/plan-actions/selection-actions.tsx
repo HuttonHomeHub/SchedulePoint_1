@@ -17,7 +17,7 @@ import {
   Waypoints,
   X,
 } from 'lucide-react';
-import { useId, useMemo, useRef } from 'react';
+import { useCallback, useId, useMemo, useRef } from 'react';
 
 import { CONFLICT_READOUT_ICON, CONFLICT_READOUT_TEXT } from './conflict-readout';
 import { CONFLICT_REMEDIES } from './conflict-remedy';
@@ -293,17 +293,37 @@ function IsolateControl({
   const mainButtonRef = useRef<HTMLButtonElement>(null);
   const disabled = api.disabled;
   const modeLabel = ISOLATE_MODE_LABELS[ctx.isolateMode];
+  const reasonId = useId();
+  const reason = disabled ? api.disabledReason : undefined;
+  // The reason is the tip (ADR-0204): the native `title` it replaces was hover-only. The `title`
+  // also reached AT as the description (the `aria-label` pins the name), so the same sentence now
+  // rides an `sr-only` span linked by `aria-describedby`, and the tip is `'reason-echo'`.
+  const reasonTip = useTooltip({ content: reason, purpose: 'reason-echo' });
+  const setTipRef = reasonTip.triggerProps.ref;
+  const setMainButtonRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      setTipRef(el);
+      mainButtonRef.current = el;
+    },
+    [setTipRef],
+  );
   return (
     <>
       <span className="inline-flex items-center">
         <button
           {...api.itemProps}
-          ref={mainButtonRef}
+          {...reasonTip.triggerProps}
+          ref={setMainButtonRef}
+          onFocus={(event) => {
+            reasonTip.triggerProps.onFocus(event);
+            api.itemProps.onFocus?.();
+          }}
           type="button"
           aria-pressed={ctx.isolateActive}
           aria-disabled={disabled || undefined}
           aria-label={ctx.isolateActive ? `Isolate logic path: ${modeLabel}` : 'Isolate logic path'}
-          title={disabled ? (api.disabledReason ?? 'Isolate logic path') : 'Isolate logic path'}
+          {...(reason ? { 'aria-describedby': reasonId } : {})}
+          {...(reason ? {} : { title: 'Isolate logic path' })}
           onClick={() => {
             // Primary affordance TOGGLES isolate (off → start in the current/last mode; on → exit),
             // so a pressed button exits rather than re-opening the menu (U1).
@@ -336,6 +356,12 @@ function IsolateControl({
           <span className="truncate">
             {ctx.isolateActive ? `Isolating · ${modeLabel}` : 'Isolate'}
           </span>
+          {reason ? (
+            <span id={reasonId} className="sr-only">
+              {reason}
+            </span>
+          ) : null}
+          {reasonTip.tooltip}
         </button>
         <button
           ref={triggerRef}

@@ -361,12 +361,13 @@ export function MenuSection({
  * it the moment it was written. Use it for a reason the reader can act on (the ADR-0028 pen, a
  * role); a permanently inert "Coming soon" placeholder needs no sentence beyond its label.
  *
- * The `sr-only` span is a **sibling** of the button, not a child. `ToolbarButton` had to keep its
- * copy inside — the button is that component's single forwarded-ref root — and pin the name with
- * `aria-label` to stop it leaking, because a button's accessible name comes from its content. This
- * component forwards no ref and takes arbitrary `children` (so there is no label string to pin
- * `aria-label` to anyway), which makes the sibling the simpler and stricter answer: the name is
- * whatever the children say, and nothing else.
+ * **The reason is printed, and hidden from the name** (ADR-0204, amending ADR-0082 §2). It renders as
+ * visible secondary text under the label, so a mouse or touch reader sees why without a gesture.
+ * It is `aria-hidden` and sits inside the button: name-from-content skips a hidden child, so the
+ * name stays the label, while `aria-describedby` still resolves a *directly referenced* hidden node
+ * (accname 1.2, step 2A) — the description is announced once, not twice. It used to be an `sr-only`
+ * sibling of the button, a non-permitted child of `role="menu"`. The `srDescription` span stays a
+ * sibling: its fact has its own visible carrier.
  */
 export function MenuItem({
   checked,
@@ -411,7 +412,8 @@ export function MenuItem({
   checked?: boolean;
   selected?: boolean;
   disabled?: boolean;
-  /** Why this item is shut, for a reader who can do something about it. Announced as a description. */
+  /** Why this item is shut, for a reader who can do something about it. Printed under the label and
+   * announced as a description (ADR-0204). */
   disabledReason?: string;
   /**
    * A fact about the item that a sighted reader gets some other way — announced as a description
@@ -442,8 +444,9 @@ export function MenuItem({
   // Only when there IS something to point at: `aria-describedby` pointing at an element that renders
   // nothing is a dangling reference, which some AT reads as an empty description rather than as
   // absence. Reason first, then the standing description — the same order `ToolbarButton` composes.
+  const showReason = disabled && Boolean(disabledReason);
   const describedBy =
-    [disabled && disabledReason ? reasonId : undefined, srDescription ? srDescriptionId : undefined]
+    [showReason ? reasonId : undefined, srDescription ? srDescriptionId : undefined]
       .filter(Boolean)
       .join(' ') || undefined;
   const button = (
@@ -485,7 +488,8 @@ export function MenuItem({
         // `pointer-coarse:min-h-(--control-h)` (ADR-0118 M3): a menu item is a touch target, and
         // at 32 px it was the one control class the epic's surface sweeps structurally cannot
         // see — a menu is portalled and only exists while open. The fine 32 px is untouched.
-        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none pointer-coarse:min-h-(--control-h)',
+        'flex w-full gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none pointer-coarse:min-h-(--control-h)',
+        showReason ? 'flex-col justify-center' : 'items-center',
         disabled
           ? [
               'text-muted-foreground cursor-default',
@@ -504,23 +508,32 @@ export function MenuItem({
             ],
       )}
     >
-      {children}
+      {showReason ? (
+        <>
+          <span className="flex items-center gap-2">{children}</span>
+          <span
+            id={reasonId}
+            aria-hidden="true"
+            // `max-w-72` caps the REASON, not the panel (ADR-0204): a sentence wraps inside 18rem
+            // instead of widening the menu, while an ordinary menu's own labels (an organisation
+            // name, a long plan title) keep the width they always had.
+            className="text-muted-foreground max-w-72 text-xs"
+          >
+            {disabledReason}
+          </span>
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 
-  return describedBy ? (
+  return srDescription ? (
     <>
       {button}
-      {disabled && disabledReason ? (
-        <span id={reasonId} className="sr-only">
-          {disabledReason}
-        </span>
-      ) : null}
-      {srDescription ? (
-        <span id={srDescriptionId} className="sr-only">
-          {srDescription}
-        </span>
-      ) : null}
+      <span id={srDescriptionId} className="sr-only">
+        {srDescription}
+      </span>
     </>
   ) : (
     button

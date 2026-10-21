@@ -12,6 +12,7 @@ import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 import { anActivity } from '@/test/activity-fixture';
+import { menuItemLabel } from '@/test/menu-item-label';
 
 /**
  * **The Gantt under a finger and a stylus** (ADR-0177) — the wiring, in jsdom.
@@ -337,7 +338,7 @@ describe('a row opens its menu on contextmenu (ADR-0177 D3)', () => {
       />,
     );
   const row = () => screen.getByRole('row', { name: /Excavate/ });
-  const itemNames = () => screen.getAllByRole('menuitem').map((el) => el.textContent);
+  const itemNames = () => screen.getAllByRole('menuitem').map(menuItemLabel);
 
   it('opens the same items the ⋯ opens, named for the activity', () => {
     renderRow();

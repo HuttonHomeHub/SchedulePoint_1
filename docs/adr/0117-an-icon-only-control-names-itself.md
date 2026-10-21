@@ -1,6 +1,6 @@
 # ADR-0117 — An icon-only control names itself, and a tooltip states its purpose
 
-- **Status:** Accepted (fix-slice M-B landed 2026-08-28)
+- **Status:** Accepted (fix-slice M-B landed 2026-08-28); `purpose` vocabulary extended by [ADR-0204](0204-a-shaded-control-says-why-to-every-input.md)
 - **Date:** 2026-08-28
 - **Spec:** [`docs/specs/fix-slice-2026-08/`](../specs/fix-slice-2026-08/) §4.2
 

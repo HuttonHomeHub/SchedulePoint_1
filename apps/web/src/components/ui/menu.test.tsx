@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { createRef, useRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
@@ -117,9 +117,9 @@ describe('Menu', () => {
   });
 
   it('announces a disabled reason as a DESCRIPTION, leaving the name alone', () => {
-    // The `ToolbarButton` trap, asserted rather than commented: an sr-only reason rendered inside
-    // the button leaks into the accessible NAME as well as the description. Here the span is a
-    // sibling, so the name is exactly what the children say.
+    // The `ToolbarButton` trap, asserted rather than commented: a reason rendered inside the
+    // button leaks into the accessible NAME as well as the description unless it is `aria-hidden`
+    // (ADR-0204). Hidden, the name is exactly what the children say.
     render(
       <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
         <MenuItem
@@ -134,6 +134,45 @@ describe('Menu', () => {
     const item = screen.getByRole('menuitem', { name: 'Duplicate' });
     expect(item).toHaveAccessibleName('Duplicate');
     expect(item).toHaveAccessibleDescription('Start editing to change this activity.');
+  });
+
+  it('prints a disabled reason as visible text inside the item (ADR-0204)', () => {
+    render(
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
+        <MenuItem disabled disabledReason="Start editing to change this." onSelect={vi.fn()}>
+          Edit
+        </MenuItem>
+        <MenuItem onSelect={vi.fn()}>Open</MenuItem>
+      </Menu>,
+    );
+    const shaded = screen.getByRole('menuitem', { name: 'Edit' });
+    const reason = within(shaded).getByText('Start editing to change this.');
+    expect(reason).toBeVisible();
+    expect(reason).toHaveAttribute('aria-hidden', 'true');
+    // The description is announced once: the reason is referenced, not duplicated as a sibling.
+    expect(screen.getAllByText('Start editing to change this.')).toHaveLength(1);
+    const live = screen.getByRole('menuitem', { name: 'Open' });
+    expect(live).not.toHaveAttribute('aria-describedby');
+    expect(live.textContent).toBe('Open');
+  });
+
+  it('keeps the name the label and the description reason-first with srDescription', () => {
+    render(
+      <Menu open openerRef={null} onClose={vi.fn()} anchor={{ x: 0, y: 0 }} label="Row actions">
+        <MenuItem
+          disabled
+          disabledReason="Take the lock."
+          srDescription="3 conflicts."
+          selected={false}
+          busy
+          onSelect={vi.fn()}
+        >
+          Edit
+        </MenuItem>
+      </Menu>,
+    );
+    const item = screen.getByRole('menuitemradio', { name: 'Edit' });
+    expect(item).toHaveAccessibleDescription('Take the lock. 3 conflicts.');
   });
 
   it('wraps ArrowUp onto the LAST item even when focus sits on a disabled one', () => {
