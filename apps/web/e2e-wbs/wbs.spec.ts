@@ -88,7 +88,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
     els.map((el) => {
       const box = (el.closest('label') ?? el).getBoundingClientRect();
       return {
-        name: el.getAttribute('aria-label') ?? '?',
+        name: (el as HTMLInputElement).labels?.[0]?.textContent ?? '?',
         w: Math.round(box.width),
         h: Math.round(box.height),
       };

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { CheckboxField, SelectField, TextField, TextareaField } from './form';
@@ -73,6 +73,43 @@ describe('CheckboxField density', () => {
     expect(screen.getByRole('checkbox').closest('label')).toHaveClass('font-medium');
     rerender(<CheckboxField label="Today" density="compact" />);
     expect(screen.getByRole('checkbox').closest('label')).toHaveClass('font-normal');
+  });
+});
+
+describe('CheckboxField label modes', () => {
+  it('renders the default shape unchanged when no new prop is passed', () => {
+    const { container } = render(<CheckboxField label="Today" />);
+    expect(container.innerHTML).toMatch(
+      /^<div class="flex flex-col gap-1\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
+    );
+  });
+
+  it('names a hidden-label box from the label text and makes the label the hit target', () => {
+    render(
+      <CheckboxField label="Select Excavate" labelHidden targetData={{ 'data-row-select': '' }} />,
+    );
+    const box = screen.getByRole('checkbox', { name: 'Select Excavate' });
+    expect(box).not.toHaveAttribute('aria-label');
+    const label = box.closest('label');
+    expect(label).toHaveClass('size-6', 'pointer-coarse:size-(--control-h)');
+    expect(label).toHaveAttribute('data-row-select', '');
+  });
+
+  it('keeps a shut hidden-label box reachable, cancelled and explained, with no lock icon', () => {
+    render(
+      <CheckboxField
+        label="Select Excavate"
+        labelHidden
+        gate={{ writable: false, reason: 'Take the pen to edit.' }}
+      />,
+    );
+    const box = screen.getByRole('checkbox', { name: 'Select Excavate' });
+    expect(box).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(box);
+    // A cancelled click leaves the box unchecked; `change` never fires in a real browser.
+    expect(box).not.toBeChecked();
+    expect(box).toHaveAccessibleDescription('Take the pen to edit.');
+    expect(box.closest('label')?.querySelector('svg')).toBeNull();
   });
 });
 

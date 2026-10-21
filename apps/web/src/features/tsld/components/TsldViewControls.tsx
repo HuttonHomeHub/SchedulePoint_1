@@ -5,6 +5,7 @@ import type { ZoomLevel } from '../render/render-model';
 import { ZOOM_LEVELS } from '../render/time-scale';
 
 import { Button } from '@/components/ui/button';
+import { CheckboxField } from '@/components/ui/form';
 import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
 
 const ZOOM_LABELS: Record<ZoomLevel, string> = {
@@ -107,16 +108,13 @@ export function TsldViewControls({
       <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1 border-0 p-0">
         <legend className="sr-only">Diagram layers</legend>
         {TOGGLES.map(({ key, label }) => (
-          // `py-1` + `min-h-6` gives each label a ≥24px hit target (WCAG 2.2 SC 2.5.8, AA).
-          <label key={key} className="flex min-h-6 items-center gap-1.5 py-1 text-sm">
-            <input
-              type="checkbox"
-              className="accent-primary size-4"
-              checked={toggles[key]}
-              onChange={() => onToggle(key)}
-            />
-            {label}
-          </label>
+          <CheckboxField
+            key={key}
+            density="compact"
+            label={label}
+            checked={toggles[key]}
+            onChange={() => onToggle(key)}
+          />
         ))}
       </fieldset>
     </div>

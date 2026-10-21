@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import {
   ACTIVITY_CALENDAR_ENABLED,
@@ -123,32 +124,17 @@ function SelectAllCheckbox({
   useEffect(() => {
     if (ref.current) ref.current.indeterminate = indeterminate;
   }, [indeterminate]);
+  // The hit target is the primitive's label (`docs/TECH_DEBT.md` #72, #470): 24 px with a mouse,
+  // `--control-h` with a finger, around the 16 px box. `data-row-select` is the coarse sweep's hook.
   return (
-    // **The `<label>` is the hit target, not decoration** (`docs/TECH_DEBT.md` #72). A bare
-    // `size-4` input is a **16 px** pointer target, below WCAG 2.2 §2.5.8's 24 px AA floor, and it
-    // sat outside every instrument that could say so: the target-size sweep is scoped to the
-    // command surfaces, and axe's `target-size` rule is `wcag22aa` (not requested) *and* ships
-    // `enabled: false`. The box stays 16 px — this widens what a pointer may hit, not what a reader
-    // sees. `ActivityMembersPanel` has always done it this way; these two never did.
-    //
-    // **24 px with a mouse, `--control-h` (44) with a finger** (`docs/TECH_DEBT.md` #470; it was a named
-    // coarse exception, `data-coarse-exempt="row-select"`, until ADR-0188 retired it). The growth is free
-    // in a body row, which a coarse pointer already makes 61 px for the `⋯`; only the header row gains
-    // (41 or 57 to 61, `m0-measurement.md` §1). `data-row-select` is the coarse sweep's hook: it measures
-    // this label, the hit target, and not the 16 px input inside it.
-    <label
-      data-row-select=""
-      className="flex size-6 cursor-pointer items-center justify-center pointer-coarse:size-(--control-h)"
-    >
-      <input
-        ref={ref}
-        type="checkbox"
-        className="accent-primary size-4 align-middle"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        aria-label="Select all activities"
-      />
-    </label>
+    <CheckboxField
+      ref={ref}
+      label="Select all activities"
+      labelHidden
+      targetData={{ 'data-row-select': '' }}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+    />
   );
 }
 
@@ -181,7 +167,7 @@ type RowAction = {
  *
  * The snapshot is a boolean, so `useSyncExternalStore` re-renders this leaf only when THIS row's
  * answer flips — the other 1,999 boxes and their rows stay put (`docs/TECH_DEBT.md` #334, M2).
- * 24 px of hit area around a 16 px box (44 under a coarse pointer) — see `SelectAllCheckbox` for why.
+ * 24 px of hit area around a 16 px box (44 under a coarse pointer) — see `CheckboxField`'s `labelHidden`.
  */
 function RowSelectCheckbox({
   store,
@@ -194,18 +180,13 @@ function RowSelectCheckbox({
 }): React.ReactElement {
   const checked = useSyncExternalStore(store.subscribe, () => store.getState().selectedIds.has(id));
   return (
-    <label
-      data-row-select=""
-      className="flex size-6 cursor-pointer items-center justify-center pointer-coarse:size-(--control-h)"
-    >
-      <input
-        type="checkbox"
-        className="accent-primary size-4 align-middle"
-        checked={checked}
-        onChange={() => store.toggleRow(id)}
-        aria-label={`Select ${name}`}
-      />
-    </label>
+    <CheckboxField
+      label={`Select ${name}`}
+      labelHidden
+      targetData={{ 'data-row-select': '' }}
+      checked={checked}
+      onChange={() => store.toggleRow(id)}
+    />
   );
 }
 
