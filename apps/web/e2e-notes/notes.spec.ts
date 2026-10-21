@@ -94,7 +94,8 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
   await logic.getByRole('tab', { name: 'Notes' }).click();
-  await logic.getByRole('button', { name: /^Delete note \d+ by/ }).click();
+  await logic.getByRole('button', { name: /^Actions for note \d+ by/ }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
   const confirm = page.getByRole('alertdialog', { name: 'Delete note' });
   await confirm.getByRole('button', { name: 'Delete' }).click();
   await expect(logic.getByText('No notes yet.')).toBeVisible();

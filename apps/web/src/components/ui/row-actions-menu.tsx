@@ -54,12 +54,12 @@ export interface RowActionsMenuProps {
  * nowhere to show actions at all; these tables have an actions column, and burying `Edit` behind a
  * click would trade the frequent interaction for the infrequent.
  *
- * **What is extracted, and what deliberately is not.** Written out side by side, the five menus
- * share **no items at all** — calendars offers a tier move, resources an archive, clients and
- * projects and plans only a delete. What they share is the trigger: a ghost icon button carrying
+ * **What is extracted, and what deliberately is not.** Written out side by side, the menus
+ * share **no items at all** — calendars offers a tier move, resources an archive, clients,
+ * projects, plans, baselines and notes only a delete. What they share is the trigger: a ghost icon button carrying
  * `aria-haspopup`, `aria-expanded`, a subject-bearing name, the anchor arithmetic, and a `Menu`
  * whose label is the **same string** as the trigger's, so the phrase a reader hears opening the menu
- * is the phrase they hear landing inside it. That is five copies of a keyboard and naming contract,
+ * is the phrase they hear landing inside it. That is a copy per list of a keyboard and naming contract,
  * which is exactly the thing ADR-0065 and ADR-0121 record drifting invisibly — each copy looks right
  * alone, and only somebody opening two rows in two tables would ever see they differ.
  *

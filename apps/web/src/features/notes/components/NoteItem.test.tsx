@@ -110,8 +110,9 @@ describe('NoteItem', () => {
     vi.mocked(apiFetch).mockResolvedValue(undefined);
     const { onFocusRegion } = renderItem();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Delete note 1 by/ }));
-    // The confirm dialog's own "Delete" button (exact name), not the row's "Delete note 1 by …".
+    fireEvent.click(screen.getByRole('button', { name: /^Actions for note 1 by/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    // The confirm dialog's own "Delete" button; the menu item above has closed with the menu.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
@@ -124,13 +125,23 @@ describe('NoteItem', () => {
     await waitFor(() => expect(screen.getByTestId('announcer')).toHaveTextContent('Note deleted.'));
   });
 
+  it('returns focus to the row menu when the delete confirm is cancelled', () => {
+    renderItem();
+    const trigger = screen.getByRole('button', { name: /^Actions for note 1 by/ });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(trigger).toHaveFocus();
+  });
+
   it('surfaces a 403 on delete as an in-dialog error (keeps the note)', async () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(403, { code: 'FORBIDDEN', message: 'You can no longer delete this note.' }),
     );
     const { onFocusRegion } = renderItem();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Delete note 1 by/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Actions for note 1 by/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(

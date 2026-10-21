@@ -130,12 +130,14 @@ describe('NoteThread', () => {
     const mine = (await screen.findByText('Mine')).closest('li')!;
     const theirs = screen.getByText('Theirs').closest('li')!;
     expect(within(mine).getByRole('button', { name: /^Edit note \d+ by/ })).toBeInTheDocument();
-    expect(within(mine).getByRole('button', { name: /^Delete note \d+ by/ })).toBeInTheDocument();
+    expect(
+      within(mine).getByRole('button', { name: /^Actions for note \d+ by/ }),
+    ).toBeInTheDocument();
     expect(
       within(theirs).queryByRole('button', { name: /^Edit note \d+ by/ }),
     ).not.toBeInTheDocument();
     expect(
-      within(theirs).queryByRole('button', { name: /^Delete note \d+ by/ }),
+      within(theirs).queryByRole('button', { name: /^Actions for note \d+ by/ }),
     ).not.toBeInTheDocument();
   });
 

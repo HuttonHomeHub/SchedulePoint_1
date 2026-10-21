@@ -895,8 +895,8 @@ first need it** — no such primitive exists in `components/ui/` today. Don't ci
 one as though it were available; build it to the entry, then drop the marker.
 `ls apps/web/src/components/ui/` is the authoritative inventory.
 
-- **Buttons** — variants `primary | secondary | outline | ghost | destructive |
-link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`. One
+- **Buttons** — variants `default | secondary | outline | ghost |
+destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon buttons require `aria-label`. One
   primary action per view. **`icon` (40px fine / 44px coarse) is the size for a
   close/toggle affordance** — it reaches the house rule through `--control-h`'s input
   axis (ADR-0118 §D2), so a panel close needs no special size. `icon-lg` was that

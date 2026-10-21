@@ -1033,6 +1033,23 @@ describe.each(THEME_SELECTORS)('%s — a condition strip trigger while hovered',
   });
 });
 
+/**
+ * **A destructive menu item at rest.** `MenuItem destructive` paints `text-destructive-text` on the
+ * menu's `--popover` fill, a pair nothing asserted. Held in the `page` scope, where the row menus
+ * live: `chrome` and `brand` rebind the ink without rebinding `--popover` (measured 2.46:1), and no
+ * row menu opens there, so the generic table above would assert a state the product never shows.
+ */
+describe.each(THEME_SELECTORS)('%s — a destructive menu item at rest', (theme) => {
+  it('--destructive-text on --popover is legible', () => {
+    const tokens = resolve(theme, 'page');
+    const value = ratio(tokens, '--popover', '--destructive-text');
+    expect(
+      value,
+      `--destructive-text on --popover is ${fmtRatio(value)}, needs 4.5:1`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

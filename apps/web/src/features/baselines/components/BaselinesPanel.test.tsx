@@ -75,7 +75,13 @@ describe('BaselinesPanel', () => {
     // The inactive baseline can be activated; the active one shows a disabled "Active".
     expect(screen.getByRole('button', { name: 'Activate Revised Baseline' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Contract Baseline is active' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Delete Revised Baseline' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Actions for Revised Baseline' }),
+    ).toBeInTheDocument();
+    // Delete is behind the row's menu, not a button beside Activate (ADR-0145 D2).
+    expect(
+      screen.queryByRole('button', { name: 'Delete Revised Baseline' }),
+    ).not.toBeInTheDocument();
   });
 
   // T6 (placement-baseline-variance): the "Compares" column reports what a variance read
@@ -94,7 +100,7 @@ describe('BaselinesPanel', () => {
       screen.queryByRole('button', { name: 'Activate Revised Baseline' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Delete Revised Baseline' }),
+      screen.queryByRole('button', { name: 'Actions for Revised Baseline' }),
     ).not.toBeInTheDocument();
   });
 
@@ -109,9 +115,20 @@ describe('BaselinesPanel', () => {
 
   it('confirms before deleting, warning when the active baseline is removed', () => {
     renderPanel(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Contract Baseline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Contract Baseline' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     expect(screen.getByRole('heading', { name: 'Delete baseline' })).toBeInTheDocument();
     expect(screen.getByText(/Variance will be hidden/)).toBeInTheDocument();
+  });
+
+  it('marks the menu Delete as destructive and returns focus to the row menu on Cancel', () => {
+    renderPanel(true);
+    const trigger = screen.getByRole('button', { name: 'Actions for Contract Baseline' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toHaveClass('text-destructive-text');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(trigger).toHaveFocus();
   });
 
   it('shows an empty state when there are no baselines', () => {

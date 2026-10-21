@@ -311,6 +311,43 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
 });
 
 /**
+ * **A baseline is deleted from the row's `⋯`** (ADR-0145 D2): the menu portals into the open
+ * Baselines dialog, the confirm follows, the row goes, and focus lands back inside the dialog
+ * rather than on `<body>`. Its own test because the variance journey above already uses the whole
+ * 30 s budget.
+ */
+test('a planner deletes a baseline from the row menu', async ({ page }) => {
+  const stamp = Date.now() + 2;
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await useAllDaysCalendar(page, orgSlug);
+  await addActivity(page, 'Dig');
+  // A baseline freezes the plan's COMPUTED schedule (ADR-0025), so capture is only offered a result
+  // once the plan has been recalculated — the precondition the variance journey above sets too.
+  await recalculate(page);
+  await awaitComputedSchedule(page, orgSlug);
+
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: /Baselines/ }).click();
+  const baselines = page.getByRole('dialog', { name: /Baselines/ });
+  await expect(baselines).toBeVisible();
+  await baselines.getByRole('button', { name: 'Capture baseline' }).first().click();
+  await baselines.getByLabel('Name').fill('Contract Baseline');
+  await baselines.getByRole('button', { name: 'Capture baseline' }).last().click();
+  // Unscoped, as the variance journey reads it: the capture form is a second dialog.
+  await expect(page.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
+
+  await baselines.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete baseline' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(page.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
+  await expect(baselines.locator(':focus')).toHaveCount(1);
+});
+
+/**
  * **Earned value draws its headline grid and table headings while its read is held**
  * (`docs/specs/loading-skeletons/` M5): the real labels are on screen at once, one sentence is
  * spoken, no spinner is drawn, and the sentence is gone once the figures arrive.

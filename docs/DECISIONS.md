@@ -10,6 +10,30 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-21 — Five specs approved with all defaults (#165, #72, #354 + #280, #116 item 3, #537)
+
+**Decided by the product owner.** This session the owner chose to fix #313, #354, #280, #116 item 3,
+#537, #72 and #165. #313 was narrowed first (PR #1091). The five specs under `docs/specs/` —
+`screen-tidy-165`, `checkbox-field-adoption`, `gate-invocation-repairs`, `shaded-reason-visible`,
+`reset-link-fragment` — were approved with every default taken:
+
+- `CLAUDE.md` §19.8 names `pnpm prepush:push` as the gate to run.
+- Shaded menu items print their reason inline, and the five labelled toolbar controls get a reason
+  tooltip too.
+- An expired reset link is reported on submit.
+- Delete for notes and baselines moves behind the row's `⋯`, the same rule as clients, projects,
+  plans and resources (ADR-0145 D2) — two presses for a destructive action, everywhere.
+
+**The stale-row lesson, from the #165 spec.** Items (b) and (e) of #165 were already fixed — (b) by
+page-composition M3 on 2026-09-17, (e) by staff-console-design M0 (ADR-0143) — and four of (d)'s six
+Deletes had moved under ADR-0145 D2. The register row and the hand-off had recorded none of it, so the
+brief repeated two fixed items as live work. Re-reading the code, not the row, is what found it
+(CLAUDE.md §19.11); the row now closes (b) and (e) by record and narrows (d) to the two buttons that
+were really left. Also corrected there: the row's claim that `SegmentedControl` also serves the plan
+workspace mode row was false.
+
+---
+
 ## 2026-10-20 — `**Verified:**` dates the whole row, and the register's checker can now see it (tech debt #247, #302, #410)
 
 **Decided by the product owner, taking the default for Q1 of `docs/specs/register-gate-repairs/`.**
