@@ -126,8 +126,10 @@ describe('every public screen is one page with one heading', () => {
   });
 
   it('reset-password — with a token', () => {
-    mount(<ResetPasswordScreen />, { token: 'tok' });
+    window.history.replaceState(null, '', '/#token=tok');
+    mount(<ResetPasswordScreen />);
     expectPublicHeading('Choose a new password');
+    window.history.replaceState(null, '', '/');
   });
 
   it('verify-email — verified', () => {
@@ -188,11 +190,14 @@ describe('every public screen names itself in the tab (ADR-0077 M5-T1)', () => {
     [<SignInScreen key="a" />, {}, 'Sign in · SchedulePoint'],
     [<SignUpScreen key="b" />, {}, 'Create an account · SchedulePoint'],
     [<ForgotPasswordScreen key="c" />, {}, 'Reset your password · SchedulePoint'],
-    [<ResetPasswordScreen key="d" />, { token: 'tok' }, 'Choose a new password · SchedulePoint'],
+    [<ResetPasswordScreen key="d" />, {}, 'Choose a new password · SchedulePoint'],
     [<VerifyEmailScreen key="e" />, {}, 'Verify your email · SchedulePoint'],
     [<AcceptInviteScreen key="f" />, {}, 'Accept your invitation · SchedulePoint'],
   ] as const)('%#', (element, params, expected) => {
+    // The reset screen is titled for its form only when it arrives on a fragment link.
+    if (expected.startsWith('Choose')) window.history.replaceState(null, '', '/#token=tok');
     const { unmount } = mount(element, params);
+    window.history.replaceState(null, '', '/');
     expect(document.title).toBe(expected);
     unmount();
     // Restored, or `/reset-password`'s title rides into the app for the rest of the session — the
