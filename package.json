@@ -26,7 +26,7 @@
     "check:build-contract": "node scripts/check-build-contract.mjs",
     "check:spec-status": "node scripts/check-spec-status.mjs",
     "check:surface-contract": "node scripts/check-surface-contract.mjs",
-    "check:flags": "node scripts/check-flags.mjs",
+    "check:flags": "node scripts/lib/playwright-pins.test.mjs && node scripts/check-flags.mjs",
     "check:counts": "node scripts/check-counts.mjs",
     "check:claims": "node scripts/lib/citation-patterns.test.mjs && node scripts/check-claims.test.mjs && node scripts/check-claims.mjs",
     "check:advisory-agreement": "node scripts/check-advisory-agreement.mjs",
