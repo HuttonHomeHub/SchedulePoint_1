@@ -497,6 +497,12 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 23  | `pnpm check:format`                                         | always (`pnpm format` fixes it); CI runs the same command                                         |
 | 24  | `pnpm check:web-bundle`                                     | you changed anything the web bundle imports — a dependency, a route, a lazy boundary (ADR-0160)   |
 
+**One spec rather than a whole suite:** `scripts/e2e-local.sh web:<suite> -- <playwright args>` (or
+`measure:<name> -- <args>`) forwards everything after `--` to Playwright with the bootstrap intact —
+`measure:toolbar -- tech-debt-287.spec.ts`, `web:wbs -- --grep "nest a summary"`. Only one
+`web`, `web:<suite>` or `measure:<name>` target may carry arguments; the script refuses the rest
+(`docs/TECH_DEBT.md` #308).
+
 **Steps 17–22 were missing until 2026-09-13, and the reason is this table's own subject.** It calls
 itself the reference for what each step is, and it is **hand-maintained beside a roster
 `prepush.sh` derives** — so every gate added since it was written had to be copied here by

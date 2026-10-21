@@ -17,8 +17,16 @@
 #   scripts/e2e-local.sh api web:wbs     # both
 #   scripts/e2e-local.sh api backup      # the backup round trip (ADR-0192); seeds its own fixture
 #   scripts/e2e-local.sh --db-only       # just bring the database up
+#   scripts/e2e-local.sh measure:toolbar -- tech-debt-287.spec.ts   # one spec, bootstrap intact
+#   scripts/e2e-local.sh web:wbs -- --grep "nest a summary"          # any Playwright arguments
 #
 # A `web:<name>` target maps to `pnpm --filter @repo/web test:e2e:<name>`.
+#
+# Everything after the first `--` is forwarded to Playwright, and only `web`, `web:<name>` and
+# `measure:<name>` accept it. Combining it with more than one of those targets is refused: the
+# arguments would be applied to each, and a spec path that exists in one suite fails in the next.
+# (`measure:draw`, `measure:activities-panel` and `measure:relayout` are `node` scripts, so the
+# arguments reach that script rather than Playwright.)
 set -euo pipefail
 
 # Where the full log lands. Defaulted rather than opt-in: an instrument nobody has to remember to
@@ -33,6 +41,32 @@ export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-local-e2e-secret-at-least-32-ch
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+
+# --- Arguments --------------------------------------------------------------
+# Split `<targets> [-- <playwright args>]` before anything is started, so a refusal costs nothing.
+targets=()
+fwd=()
+after_sep=0
+for arg in "$@"; do
+  if [ "$after_sep" -eq 1 ]; then
+    fwd+=("$arg")
+  elif [ "$arg" = "--" ]; then
+    after_sep=1
+  else
+    targets+=("$arg")
+  fi
+done
+if [ "${#fwd[@]}" -gt 0 ]; then
+  forwardable=0
+  for t in "${targets[@]+"${targets[@]}"}"; do
+    case "$t" in web | web:* | measure:*) forwardable=$((forwardable + 1)) ;; esac
+  done
+  if [ "${#targets[@]}" -ne 1 ] || [ "$forwardable" -ne 1 ]; then
+    echo "Arguments after '--' go to Playwright, so they need exactly one target and it must be" >&2
+    echo "'web', 'web:<suite>' or 'measure:<name>' (got ${#targets[@]}: ${targets[*]:-none})." >&2
+    exit 2
+  fi
+fi
 
 # --- 0. Keep the whole log, whatever the caller did with the pipe -----------
 #
@@ -108,7 +142,6 @@ echo "ready: ${DATABASE_URL}"
 log "Migrations"
 pnpm --filter @repo/api exec prisma migrate deploy
 
-targets=("$@")
 if [ "${#targets[@]}" -eq 0 ]; then targets=("api"); fi
 for t in "${targets[@]}"; do [ "$t" = "--db-only" ] && exit 0; done
 
@@ -188,7 +221,7 @@ for target in "${targets[@]}"; do
       # journeys share a database other suites have already written to; if one fails on a missing
       # fixture rather than on an assertion, re-run it alone before believing it.
       log "Web end-to-end (base journey, chromium)"
-      pnpm --filter @repo/web exec playwright test --project=chromium
+      pnpm --filter @repo/web exec playwright test --project=chromium ${fwd[@]+"${fwd[@]}"}
       ;;
     web:*)
       suite="${target#web:}"
@@ -204,7 +237,7 @@ for target in "${targets[@]}"; do
         node -e "console.error(Object.keys(require('./apps/web/package.json').scripts).filter((k) => k.startsWith('test:e2e')).map((k) => '  ' + k.replace(/^test:e2e:?/, 'web:') || '  web').join('\n'))" >&2
         exit 1
       fi
-      pnpm --filter @repo/web "test:e2e:${suite}"
+      pnpm --filter @repo/web "test:e2e:${suite}" ${fwd[@]+"${fwd[@]}"}
       ;;
     # **Measurement harnesses, which need the same bootstrap and were not getting it.**
     #
@@ -220,7 +253,7 @@ for target in "${targets[@]}"; do
     measure:*)
       name="${target#measure:}"
       log "Measurement harness (${name})"
-      pnpm --filter @repo/web "measure:${name}"
+      pnpm --filter @repo/web "measure:${name}" ${fwd[@]+"${fwd[@]}"}
       ;;
     *)
       echo "Unknown target '${target}'. Use 'api', 'backup', 'web', 'web:<suite>', 'measure:<name>', or --db-only." >&2
