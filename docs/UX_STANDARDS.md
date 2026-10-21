@@ -111,7 +111,9 @@ entry stops being needed.
   keyboard focus, and on a coarse-pointer long-press — via `useTooltip({ purpose: 'name-echo' })`,
   never via `title`, which is hover-only and therefore names the control to a mouse and to nobody
   else. A long-press shows the name **without** firing the command; a tap fires the command and
-  shows nothing. The binding `title` discriminator table is in
+  shows nothing. **A shaded labelled control says why to every input the same way**
+  (ADR-0204): its reason is the tip, via `purpose: 'reason-echo'`, and a press on it —
+  which does nothing — opens the tip (`revealOnPress`). The binding `title` discriminator table is in
   [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`.
 - **Destructive actions** require explicit confirmation (AlertDialog) and use
   the `destructive` intent; prefer reversible actions with undo.
@@ -206,7 +208,10 @@ entry stops being needed.
     means a planner never learns the row can do the thing, and never learns what
     would let them — and it made one operation wear two mental models depending
     on whether they were on the table or the canvas. Shaded items stay arrow-key
-    stops so the reason is reachable by keyboard. **Omit** only when the action
+    stops so the reason is reachable by keyboard, and **the reason is visible to every
+    input** (ADR-0204): in a menu it is printed under the label, and on a toolbar it is a
+    tooltip opened by hover, focus or a press of the shaded control — never a hover-only
+    `title`. **Omit** only when the action
     does not apply to that object, its flag is off, or there is nothing to show;
     when **every** item would be shaded, show no trigger at all.
   - The reason names the next step in the app's existing words ("Start editing

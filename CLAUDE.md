@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 26 API modules
 > (`apps/api/src/modules/`), 35 Prisma models across 75 migrations, 1697 web
 > source files with 48 Playwright suites beside the base journey, and
-> 203 ADRs.
+> 204 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -483,7 +483,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0079** _(Accepted)_ — Search that navigates: the find cursor, the Escape rule, and zoom-to-selection → [`0079-search-that-navigates.md`](docs/adr/0079-search-that-navigates.md)
 - **ADR-0080** _(Accepted)_ — The canvas plural selection, and what a bulk action owes its subject → [`0080-canvas-plural-selection.md`](docs/adr/0080-canvas-plural-selection.md)
 - **ADR-0081** _(Proposed)_ — A milestone is its entry point, and the journey is the gate → [`0081-milestone-entry-point-and-journey.md`](docs/adr/0081-milestone-entry-point-and-journey.md)
-- **ADR-0082** _(Proposed; amended 2026-10-16 — `Combobox` follows §1–§2; 2026-10-17 — `Menu`'s opener press)_ — A shaded menu item keeps its focus, and its reason → [`0082-disabled-menu-items-stay-reachable.md`](docs/adr/0082-disabled-menu-items-stay-reachable.md)
+- **ADR-0082** _(Proposed; §2 amended by ADR-0204; amended 2026-10-16 — `Combobox` follows §1–§2; 2026-10-17 — `Menu`'s opener press)_ — A shaded menu item keeps its focus, and its reason → [`0082-disabled-menu-items-stay-reachable.md`](docs/adr/0082-disabled-menu-items-stay-reachable.md)
 - **ADR-0083** _(Proposed)_ — A gated form field is read-only, not disabled → [`0083-shaded-form-fields.md`](docs/adr/0083-shaded-form-fields.md)
 - **ADR-0084** _(Accepted)_ — A feature flag is a rollback contract with an expiry date → [`0084-feature-flag-retirement.md`](docs/adr/0084-feature-flag-retirement.md)
 - **ADR-0088** _(Accepted)_ — Feature flags are classified, not scheduled → [`0088-flag-classification.md`](docs/adr/0088-flag-classification.md)
@@ -516,7 +516,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0114** _(Accepted)_ — A row that cannot shrink is never asked to wrap → [`0114-a-row-that-cannot-shrink-never-wraps.md`](docs/adr/0114-a-row-that-cannot-shrink-never-wraps.md)
 - **ADR-0115** _(Accepted)_ — A bound governs what it encloses, and the wrap was measured from one state → [`0115-a-bound-governs-what-it-encloses.md`](docs/adr/0115-a-bound-governs-what-it-encloses.md)
 - **ADR-0116** _(Accepted)_ — A health finding is not a conflict, and a report never omits a check → [`0116-a-health-finding-is-not-a-conflict.md`](docs/adr/0116-a-health-finding-is-not-a-conflict.md)
-- **ADR-0117** _(Accepted)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
+- **ADR-0117** _(Accepted; `purpose` set extended by ADR-0204)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
 - **ADR-0118** _(Accepted; amended by ADR-0177, ADR-0179, ADR-0183 and ADR-0188)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
 - **ADR-0120** _(Accepted)_ — A documented obligation with no computed observer → [`0120-a-documented-obligation-with-no-computed-observer.md`](docs/adr/0120-a-documented-obligation-with-no-computed-observer.md)
 - **ADR-0121** _(Accepted)_ — One stack derivation, two renderers, and a cap set by height rather than cost → [`0121-one-derivation-two-renderers-and-a-cap-set-by-height.md`](docs/adr/0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)
@@ -606,6 +606,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0201** _(Accepted; amends ADR-0176 D3)_ — A restore brings nothing back onto a deleted calendar → [`0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md`](docs/adr/0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)
 - **ADR-0202** _(Accepted; amends ADR-0146 D3)_ — A loading state is the settled shape, and says one sentence → [`0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md`](docs/adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)
 - **ADR-0203** _(Accepted; amends ADR-0152 D1, D3 and D4 for Re-layout)_ — Re-layout starts from several places and may use the rows the diagram already has → [`0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md`](docs/adr/0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)
+- **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
