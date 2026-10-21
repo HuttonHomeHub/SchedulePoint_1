@@ -13,9 +13,11 @@
  * two shapes where the blindness could matter are refused by declaration (ADR-0124) rather than
  * read through it:
  *
- *  - a `/*` inside a string literal would swallow everything up to the next `*\/`, possibly a real
- *    pin on a later line;
- *  - a `//` inside a string followed by a pin on the same line would swallow that pin.
+ *  - a `/*` after a quote earlier on its line (a string literal) or after a `//` on its line (a
+ *    line comment) would open a block comment that swallows everything up to the next `*\/`,
+ *    possibly a real pin on a later line — the line-comment form is `// specs under e2e/*.spec.ts`;
+ *  - a `//` after a quote earlier on its line, followed by a pin on the same line, would swallow
+ *    that pin.
  *
  * A `//` string with the pin on an earlier or later line is safe and is read normally. Neither
  * refused shape occurs in any config today. The quote test is deliberately crude (a quote earlier
@@ -37,14 +39,14 @@ export function findPins(text) {
   const refusals = [];
   text.split('\n').forEach((line, i) => {
     const n = i + 1;
-    if (/['"`][^'"`\n]*\/\*/.test(line)) {
+    if (/['"`][^'"`\n]*\/\*/.test(line) || /\/\/.*\/\*/.test(line)) {
       refusals.push(
-        `line ${n}: a "/*" inside a string literal — cannot read this safely, the comment stripper would swallow code up to the next "*/"`,
+        `line ${n}: a "/*" after a quote earlier on the line, or after a "//" — cannot read this safely, the comment stripper would swallow code up to the next "*/"`,
       );
     }
     if (/['"`][^'"`\n]*\/\/[^\n]*VITE_[A-Z0-9_]+\s*:\s*'(?:true|false)'/.test(line)) {
       refusals.push(
-        `line ${n}: a pin after a "//" inside a string literal — cannot read this safely, the comment stripper would swallow the pin; put the pin on its own line`,
+        `line ${n}: a pin after a "//" that follows a quote earlier on the line — cannot read this safely, the comment stripper would swallow the pin; put the pin on its own line`,
       );
     }
   });

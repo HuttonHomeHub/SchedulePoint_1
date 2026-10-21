@@ -872,8 +872,7 @@ When operating in this repo, Claude Code should:
    nobody has to keep a list in their head. Following the old wording on
    2026-08-22 sent an ADR to CI that `check:adr-coverage` refused, in a change
    whose whole subject was filing one — a documented gate that could not fail
-   locally because the instruction did not name it. To push, run `pnpm prepush:push`: it
-   pushes only if no gate failed, which a `| tail … && git push` chain cannot promise. **plus
+   locally because the instruction did not name it. **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures
@@ -883,7 +882,8 @@ When operating in this repo, Claude Code should:
    five CI rounds on the ADR-0063 enablement journey, every failure in the test
    rather than the product, every one visible in the first local run. **A local
    database is available and always has been** — that gap was a process gap, not
-   a tooling one.
+   a tooling one. To push, run `pnpm prepush:push`: it pushes only if no gate failed, which a
+   `| tail … && git push` chain cannot promise.
 9. **A GitHub `check_suite` event is not proof that CI passed.** Before merging,
    read the check runs for the PR's **current head** (`get_check_runs`), **dedupe
    by check-run name keeping the most recently started**, and confirm every

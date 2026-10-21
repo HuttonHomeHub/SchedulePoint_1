@@ -390,7 +390,8 @@ once pushed on a red gate — `pnpm prepush 2>&1 | tail -5 && git push`, where `
 cannot happen: nothing at the call site is left to get wrong. An advisory WARN still pushes. It refuses
 before running anything if the working tree is dirty (the gates would validate content the push does
 not carry) or `git push --dry-run` rejects the arguments, refuses after the run if `HEAD` moved or the
-tree changed, and refuses `--checks`, which skips lint, typecheck and test. Bare `pnpm prepush` is
+tree changed, and refuses `--checks`, which skips lint, typecheck and test. The `--dry-run` needs a reachable remote (offline is a refusal, with git's own error printed) and may
+prompt for credentials once, before the gate starts. Bare `pnpm prepush` is
 unchanged, for when you want the result without pushing.
 
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to

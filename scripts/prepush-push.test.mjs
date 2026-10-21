@@ -23,19 +23,27 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'prepush.sh');
 const NOOP = 'node -e 0';
 
+// Hermetic: no user or system git config (signing, hooks, aliases) and no GIT_* from an outer git.
+const ENV = {
+  ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))),
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_SYSTEM: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+};
+
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
-  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: ENV });
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout.trim();
 }
 
 /**
  * @param {Record<string, string>} gates extra `check:*` scripts
+ * @param {string} root an existing empty directory the caller removes
  * @returns {{ work: string, remote: string, root: string }}
  */
-function fixture(gates) {
-  const root = mkdtempSync(join(tmpdir(), 'prepush-push-'));
+function fixture(gates, root) {
   const remote = join(root, 'remote.git');
   const work = join(root, 'work');
   git(root, ['init', '-q', '--bare', '-b', 'main', remote]);
@@ -56,10 +64,10 @@ function fixture(gates) {
     JSON.stringify({ name: 'stub', private: true, scripts }),
   );
   git(work, ['add', '-A']);
-  git(work, ['commit', '-q', '-m', 'base']);
+  git(work, ['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'base']);
   git(work, ['push', '-q', 'origin', 'HEAD:main']);
   // One commit that exists only locally, so a push visibly advances the remote.
-  git(work, ['commit', '-q', '--allow-empty', '-m', 'to push']);
+  git(work, ['-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'to push']);
   return { work, remote, root };
 }
 
@@ -68,7 +76,7 @@ const remoteMain = (remote) => git(remote, ['rev-parse', 'main']);
 
 /** @param {string} cwd @param {string[]} args */
 function sh(cwd, args) {
-  const r = spawnSync(args[0] ?? '', args.slice(1), { cwd, encoding: 'utf8' });
+  const r = spawnSync(args[0] ?? '', args.slice(1), { cwd, encoding: 'utf8', env: ENV });
   return { status: r.status, out: `${r.stdout}${r.stderr}` };
 }
 
@@ -78,11 +86,11 @@ const it = (name, fn) => cases.push([name, fn]);
 
 /** @param {Record<string, string>} gates @param {(f: ReturnType<typeof fixture>) => void} body */
 function withFixture(gates, body) {
-  const f = fixture(gates);
+  const root = mkdtempSync(join(tmpdir(), 'prepush-push-'));
   try {
-    body(f);
+    body(fixture(gates, root));
   } finally {
-    rmSync(f.root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 }
 
@@ -141,15 +149,28 @@ it('refuses, before any gate, a push that --dry-run rejects', () =>
     const r = sh(f.work, ['bash', 'scripts/prepush.sh', '--push', 'no-such-remote', 'main']);
     assert.equal(r.status, 1, r.out);
     assert.match(r.out, /--dry-run/);
+    assert.match(r.out, /git: /, "git's own error must be shown");
     assert.doesNotMatch(r.out, /Pre-push gate/);
   }));
 
 it('refuses when HEAD moves during the run', () =>
-  withFixture({ 'check:move': 'git commit -q --allow-empty -m moved' }, (f) => {
+  withFixture(
+    { 'check:move': 'git -c commit.gpgsign=false commit -q --allow-empty -m moved' },
+    (f) => {
+      const before = remoteMain(f.remote);
+      const r = sh(f.work, ['bash', 'scripts/prepush.sh', '--push', 'origin', 'HEAD:main']);
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /NOT PUSHED: HEAD or the checked-out branch moved/);
+      assert.equal(remoteMain(f.remote), before);
+    },
+  ));
+
+it('refuses when the branch is switched at the same commit during the run', () =>
+  withFixture({ 'check:switch': 'git checkout -q -b elsewhere' }, (f) => {
     const before = remoteMain(f.remote);
     const r = sh(f.work, ['bash', 'scripts/prepush.sh', '--push', 'origin', 'HEAD:main']);
     assert.equal(r.status, 1, r.out);
-    assert.match(r.out, /NOT PUSHED: HEAD moved/);
+    assert.match(r.out, /NOT PUSHED/);
     assert.equal(remoteMain(f.remote), before);
   }));
 

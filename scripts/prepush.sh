@@ -78,11 +78,14 @@ if [ "$PUSH" -eq 1 ]; then
     echo "Refusing to run prepush:push: the working tree is dirty, so the gates would validate content the push does not carry. Commit or stash first." >&2
     exit 1
   fi
-  if ! git push --dry-run ${PUSH_ARGS[@]+"${PUSH_ARGS[@]}"} >/dev/null 2>&1; then
+  # Needs a reachable remote (offline is a refusal) and may prompt for credentials once, up front.
+  if ! dry_err="$(git push --dry-run ${PUSH_ARGS[@]+"${PUSH_ARGS[@]}"} 2>&1 >/dev/null)"; then
     echo "Refusing to run prepush:push: \`git push --dry-run ${PUSH_ARGS[*]:-}\` fails. Fix the push arguments or upstream first." >&2
+    printf '%s\n' "$dry_err" | sed 's/^/  git: /' >&2
     exit 1
   fi
   start_head="$(git rev-parse HEAD)"
+  start_ref="$(git symbolic-ref -q HEAD || echo detached)"
 fi
 
 failed=()
@@ -206,8 +209,8 @@ if [ ${#failed[@]} -eq 0 ]; then
     echo "These do not block the push. They are obligations whose remedy is a judgement, not an edit."
   fi
   if [ "$PUSH" -eq 1 ]; then
-    if [ "$(git rev-parse HEAD)" != "$start_head" ] || [ -n "$(git status --porcelain)" ]; then
-      echo "NOT PUSHED: HEAD moved or the working tree changed during the run, so the gates did not check what would be pushed." >&2
+    if [ "$(git rev-parse HEAD)" != "$start_head" ] || [ "$(git symbolic-ref -q HEAD || echo detached)" != "$start_ref" ] || [ -n "$(git status --porcelain)" ]; then
+      echo "NOT PUSHED: HEAD or the checked-out branch moved, or the working tree changed during the run, so the gates did not check what would be pushed." >&2
       exit 1
     fi
     echo "Pushing: git push ${PUSH_ARGS[*]:-}"

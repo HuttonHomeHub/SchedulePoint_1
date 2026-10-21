@@ -72,6 +72,15 @@ it('refuses a "/*" inside a string literal, naming the line', () => {
   assert.match(refusals[0] ?? '', /^line 2: /);
 });
 
+it('refuses a "/*" inside a line comment, which would swallow the pin on the next line', () => {
+  const { pins, refusals } = findPins(
+    `// specs under e2e/*.spec.ts\nenv: { VITE_A: 'false' },\n/** note */`,
+  );
+  assert.equal(refusals.length, 1);
+  assert.match(refusals[0] ?? '', /^line 1: /);
+  assert.deepEqual(pins, []);
+});
+
 let failed = 0;
 for (const [name, fn] of cases) {
   try {
