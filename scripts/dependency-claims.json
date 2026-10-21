@@ -744,6 +744,65 @@
       "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts"]
     },
     {
+      "ref": "password.mjs:49",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "49",
+      "anchor": "use: [originCheck((ctx) => ctx.body.redirectTo)]",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:73",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "73",
+      "anchor": "resetPasswordTokenExpiresIn || 3600 * 1",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:74",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "74",
+      "anchor": "const verificationToken = generateId(24);",
+      "citedBy": [
+        "docs/specs/reset-link-fragment/feature-spec.md",
+        "docs/specs/reset-link-fragment/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:77",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "77",
+      "anchor": "identifier: `reset-password:${verificationToken}`",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:92-128",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "92-128",
+      "anchor": "throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:150",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "150",
+      "anchor": "if (!token) throw APIError.from(\"BAD_REQUEST\", BASE_ERROR_CODES.INVALID_TOKEN);",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "origin-check.mjs:76",
+      "package": "better-auth",
+      "path": "dist/api/middlewares/origin-check.mjs",
+      "lines": "76",
+      "anchor": "if (!url) return;",
+      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
       "ref": "sign-in.mjs:264",
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
