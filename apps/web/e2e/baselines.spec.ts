@@ -318,17 +318,24 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
  */
 test('a planner deletes a baseline from the row menu', async ({ page }) => {
   const stamp = Date.now() + 2;
-  await onboard(page, stamp);
+  const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
+  await useAllDaysCalendar(page, orgSlug);
   await addActivity(page, 'Dig');
+  // A baseline freezes the plan's COMPUTED schedule (ADR-0025), so capture is only offered a result
+  // once the plan has been recalculated — the precondition the variance journey above sets too.
+  await recalculate(page);
+  await awaitComputedSchedule(page, orgSlug);
 
   await page.getByRole('button', { name: 'Analysis' }).click();
   await page.getByRole('menuitem', { name: /Baselines/ }).click();
   const baselines = page.getByRole('dialog', { name: /Baselines/ });
+  await expect(baselines).toBeVisible();
   await baselines.getByRole('button', { name: 'Capture baseline' }).first().click();
   await baselines.getByLabel('Name').fill('Contract Baseline');
   await baselines.getByRole('button', { name: 'Capture baseline' }).last().click();
-  await expect(baselines.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
+  // Unscoped, as the variance journey reads it: the capture form is a second dialog.
+  await expect(page.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
 
   await baselines.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
@@ -336,7 +343,7 @@ test('a planner deletes a baseline from the row menu', async ({ page }) => {
     .getByRole('alertdialog', { name: 'Delete baseline' })
     .getByRole('button', { name: 'Delete' })
     .click();
-  await expect(baselines.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
   await expect(baselines.locator(':focus')).toHaveCount(1);
 });
 
