@@ -110,8 +110,9 @@ describe('NoteItem', () => {
     vi.mocked(apiFetch).mockResolvedValue(undefined);
     const { onFocusRegion } = renderItem();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Delete note 1 by/ }));
-    // The confirm dialog's own "Delete" button (exact name), not the row's "Delete note 1 by …".
+    fireEvent.click(screen.getByRole('button', { name: /^Actions for note 1 by/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    // The confirm dialog's own "Delete" button; the menu item above has closed with the menu.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
@@ -130,7 +131,8 @@ describe('NoteItem', () => {
     );
     const { onFocusRegion } = renderItem();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Delete note 1 by/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Actions for note 1 by/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(

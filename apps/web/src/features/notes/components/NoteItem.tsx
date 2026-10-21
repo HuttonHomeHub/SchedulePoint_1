@@ -18,6 +18,8 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TextareaField } from '@/components/ui/form';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { ApiFetchError } from '@/lib/api/client';
 import { formatTimestamp } from '@/lib/format-date';
 
@@ -197,17 +199,17 @@ export function NoteItem({
               >
                 Edit
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeleting(true);
-                }}
-                aria-label={`Delete ${noteLabel(note, position)}`}
-              >
-                Delete
-              </Button>
+              <RowActionsMenu subject={noteLabel(note, position)}>
+                <MenuItem
+                  destructive
+                  onSelect={() => {
+                    setDeleteError(null);
+                    setDeleting(true);
+                  }}
+                >
+                  Delete
+                </MenuItem>
+              </RowActionsMenu>
             </div>
           ) : null}
         </>

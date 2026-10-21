@@ -11,13 +11,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { formatCalendarDate, formatTimestamp } from '@/lib/format-date';
 
 /**
  * A plan's baselines (M7, ADR-0025): name, active badge, when captured, the captured
  * project finish, and the frozen activity count. Writers (`canManage`, the plan-write
- * roles) get **Capture**, plus per-row **Activate** / **Delete**; everyone else reads.
- * Exactly one baseline is active — activating one deactivates the rest server-side, and
+ * roles) get **Capture**, plus per-row **Activate** with **Delete** behind the row's `⋯` (ADR-0145
+ * D2); everyone else reads. Exactly one baseline is active — activating one deactivates the rest server-side, and
  * the list refetches. States come from the shared DataTable.
  */
 export function BaselinesPanel({
@@ -108,17 +110,17 @@ export function BaselinesPanel({
           >
             {b.isActive ? 'Active' : 'Activate'}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setDeleteError(null);
-              setDeleting(b);
-            }}
-            aria-label={`Delete ${b.name}`}
-          >
-            Delete
-          </Button>
+          <RowActionsMenu subject={b.name}>
+            <MenuItem
+              destructive
+              onSelect={() => {
+                setDeleteError(null);
+                setDeleting(b);
+              }}
+            >
+              Delete
+            </MenuItem>
+          </RowActionsMenu>
         </div>
       ),
     });

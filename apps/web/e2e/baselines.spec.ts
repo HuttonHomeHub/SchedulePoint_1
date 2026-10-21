@@ -308,6 +308,20 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
+
+  // Last, because it removes the baseline the steps above read variance from. Delete lives behind
+  // the row's `⋯` like every other list (ADR-0145 D2), inside a modal — so this drives the menu
+  // portalled into the dialog, the confirm, and the row going.
+  await page.getByRole('button', { name: 'Analysis' }).click();
+  await page.getByRole('menuitem', { name: /Baselines/ }).click();
+  const reopened = page.getByRole('dialog', { name: /Baselines/ });
+  await reopened.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete baseline' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(reopened.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
 });
 
 /**
