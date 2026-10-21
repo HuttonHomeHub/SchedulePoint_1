@@ -105,6 +105,9 @@ function scheduleColumn(
   };
 }
 
+/** The coarse sweep's hook, on the label (the hit target) rather than the 16 px input. */
+const ROW_SELECT_TARGET = { 'data-row-select': '' } as const;
+
 /**
  * The bulk-assign column's select-all box. Its own component only because `indeterminate` is a DOM
  * property with no HTML attribute, so it has to be written to the node after render — "some but not
@@ -131,7 +134,7 @@ function SelectAllCheckbox({
       ref={ref}
       label="Select all activities"
       labelHidden
-      targetData={{ 'data-row-select': '' }}
+      targetData={ROW_SELECT_TARGET}
       checked={checked}
       onChange={(event) => onChange(event.target.checked)}
     />
@@ -183,7 +186,7 @@ function RowSelectCheckbox({
     <CheckboxField
       label={`Select ${name}`}
       labelHidden
-      targetData={{ 'data-row-select': '' }}
+      targetData={ROW_SELECT_TARGET}
       checked={checked}
       onChange={() => store.toggleRow(id)}
     />

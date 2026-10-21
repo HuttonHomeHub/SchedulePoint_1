@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { CheckboxField, SelectField, TextField, TextareaField } from './form';
@@ -84,6 +85,20 @@ describe('CheckboxField label modes', () => {
     );
   });
 
+  it('renders the compact default shape unchanged when no new prop is passed', () => {
+    const { container } = render(<CheckboxField label="Today" density="compact" />);
+    expect(container.innerHTML).toMatch(
+      /^<div class="flex flex-col gap-0\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm font-normal"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
+    );
+  });
+
+  it('lets a caller set indeterminate through the forwarded ref', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<CheckboxField ref={ref} label="All" labelHidden />);
+    ref.current!.indeterminate = true;
+    expect(screen.getByRole('checkbox', { name: 'All' })).toHaveProperty('indeterminate', true);
+  });
+
   it('names a hidden-label box from the label text and makes the label the hit target', () => {
     render(
       <CheckboxField label="Select Excavate" labelHidden targetData={{ 'data-row-select': '' }} />,
@@ -110,6 +125,11 @@ describe('CheckboxField label modes', () => {
     expect(box).not.toBeChecked();
     expect(box).toHaveAccessibleDescription('Take the pen to edit.');
     expect(box.closest('label')?.querySelector('svg')).toBeNull();
+    expect(box).not.toBeDisabled();
+    box.focus();
+    expect(box).toHaveFocus();
+    expect(box).toHaveClass('aria-disabled:accent-muted-foreground');
+    expect(screen.getByText('Take the pen to edit.')).toHaveClass('sr-only');
   });
 });
 

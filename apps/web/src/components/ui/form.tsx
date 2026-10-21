@@ -267,9 +267,11 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'>, GatedField
   density?: 'default' | 'compact';
   /**
    * Hides the label text visually (it stays the accessible name) for a bare box in a table cell.
-   * The `<label>` then becomes a square hit target — 24px with a mouse, `--control-h` with a finger
-   * — around the 16px box, because a bare `size-4` input is below WCAG 2.2 SC 2.5.8's 24px floor.
-   * `className` styles the input only, so the label's size is not offered to callers.
+   * The `<label>` then becomes a square hit target — `size-6` (24px) with a mouse,
+   * `--control-h` with a finger — around the 16px box, because a bare `size-4` input is below
+   * WCAG 2.2 SC 2.5.8's 24px floor. `className` styles the input only, so the label's size is not
+   * offered to callers. The lock icon is suppressed and the box's own gate reason is read aloud
+   * but not shown; a `hint` or `error` paragraph still renders under the box.
    */
   labelHidden?: boolean;
   /**
@@ -282,7 +284,7 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'>, GatedField
 /**
  * Accessible labelled checkbox — the boolean sibling of {@link TextField}. The `&lt;label&gt;` wraps the
  * native `&lt;input type="checkbox"&gt;` and its text (so the accessible name never depends on `aria-label`),
- * clears the WCAG 2.2 SC 2.5.8 ≥24px hit target (`min-h-6` + `py-1`), and links any error/hint via
+ * clears the WCAG 2.2 SC 2.5.8 ≥24px hit target (`min-h-6` + `py-1`; with `labelHidden`, a `size-6` square that grows to `--control-h` under a coarse pointer), and links any error/hint via
  * `aria-describedby`. Forwards its ref so `register()` can be spread directly onto it. Centralises the
  * checkbox chrome so it isn't hand-rolled per feature (DESIGN_SYSTEM.md — no one-off styling).
  */
@@ -334,7 +336,13 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
             type="checkbox"
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
-            className={cn('accent-primary size-4', className)}
+            className={cn(
+              'accent-primary size-4',
+              // A shut box with no visible label or lock still has to look shut (ADR-0083).
+              labelHidden &&
+                'aria-disabled:accent-muted-foreground aria-disabled:cursor-not-allowed',
+              className,
+            )}
             // A checkbox's ONLY operation is to change its value, so there is nothing for
             // `readOnly` to preserve — and `readonly` is inert on a checkbox in any case. It takes
             // `aria-disabled` + a guard on the one event that changes it, which keeps it in the tab
@@ -364,7 +372,7 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
           </p>
         ) : null}
         {ownReason ? (
-          <p id={gateId} className="text-muted-foreground text-sm">
+          <p id={gateId} className={labelHidden ? 'sr-only' : 'text-muted-foreground text-sm'}>
             {ownReason}
           </p>
         ) : null}
