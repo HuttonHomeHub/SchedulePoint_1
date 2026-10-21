@@ -3568,12 +3568,13 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 
 ### 165. Five screens photographed for the first time, and what they showed
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-10-21
 
 **Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(c) is CLOSED 2026-09-01 too** — fixed in `e560ac2c`, whose message names `#165c`, and this
 header was not updated: the already-fixed-and-unclosed shape at ITEM granularity, which is harder
 to see than at row granularity because the row is legitimately still open. **(a) is CLOSED
-2026-08-22; (b), (d) and (e) remain open.** _(That read "(b)–(e) remain open" until 2026-09-13,
+2026-08-22; (b) and (e) are CLOSED 2026-10-21 by record (both were fixed earlier and this header
+never said so); (d) remains open, narrowed to two buttons.** _(That read "(b)–(e) remain open" until 2026-09-13,
 a range which silently included (c) — already closed two sentences earlier in this same paragraph.
 It is a letter list now, because a range is exactly what lets a closed item hide inside it.)_ The
 product owner's decision was to shoot, report and choose;
@@ -3663,7 +3664,7 @@ rendered as an empty bordered strip on **every organisation route** for a Contri
 > resolve to the ledger. Kept in place rather than deleted, because the pair is the record of what
 > this change knowingly did not do.
 
-**b. `My activity`'s filter row wraps ragged.** _(Re-shoot before designing: closing (a) widened
+**b. `My activity`'s filter row wraps ragged. (CLOSED 2026-10-21, page-composition M3.)** _(Re-shoot before designing: closing (a) widened
 `<main>` on this screen by ~298 px, so the W1 photograph this describes no longer shows the layout
 that will be worked on. Found by the #165a spec check.)_ Five `Show` chips, then `Outcome` and `From` on the
 same line, then `To` and `Clear filters` wrapping below — four group labels at three different
@@ -3710,12 +3711,26 @@ chips, `Outcome` is plain text.
 > rows for a two-row picture, because it grouped by `top` and the bar is `items-end`, so a 56 px
 > field and a 54 px group on one visual row have tops 2 px apart.
 
+> **(b) CLOSED 2026-10-21 — the styling half was fixed on 2026-09-17 and the row never said so.**
+> Page-composition M3 (`docs/specs/page-composition/m3-m4-record.md`, lines 4 and 110) made the
+> `SegmentedControl` group a track: `bg-muted border-input … rounded-md border p-1` and a selected
+> option with `ring-1 ring-input` (lines 156–159 and 191–193 of `segmented-control.tsx`). It is gated
+> at 3:1 for `--muted`/`--input` and `--background`/`--input` in every scope (lines 112 and 158 of
+> `token-contrast.test.ts`), and `e2e-page-composition/composition.spec.ts` (lines 599–649) asserts
+> the track is present at rest with nothing selected, in a real browser. `/me/activity` renders the
+> same `AuditFilterBar` (line 92 of `routes/my-activity.tsx`).
+> **The "other consumer is the plan workspace mode row (ADR-0119)" sentence above is false.** The
+> primitive's consumers are `AuditFilterBar.tsx` (line 93), `RecentlyDeletedTable.tsx` (line 413) and
+> `ResourceCollisionResolver.tsx` (line 63); the mode row is toolbar segments
+> (`features/tsld/toolbar/plan-mode-segments.structural.test.ts`), not this primitive. Found by the
+> #165 spec check, 2026-10-21, which read the code rather than the row.
+
 **c. `All events shown` is a filled dark button that is not an action. (CLOSED 2026-09-01,
 `e560ac2c`.)** It is a status, rendered in
 the same treatment as `Change password` and `New project`. ADR-0099's status bar exists because
 _"`Recalculate` stops being a button pretending to be a status"_; this is that, one screen along.
 
-**d. `client-detail`'s row actions are bare text links.** `Edit` and `Delete` sit at the right of each
+**d. `client-detail`'s row actions are bare text links. (Narrowed 2026-10-21 to `BaselinesPanel` and `NoteItem`; the other four are closed by ADR-0145 D2.)** `Edit` and `Delete` sit at the right of each
 row as unadorned text, with **`Delete` visually identical to `Edit`** — a destructive action carrying
 no destructive treatment. `docs/UX_STANDARDS.md` "Row / node actions" specifies the APG `Menu`
 primitive. Check this against ADR-0097 Landing F before acting: that milestone re-counted row-action
@@ -3743,8 +3758,15 @@ crowded table, so this may be a knowing exclusion rather than an oversight.
 > tables at once. That belongs in a design pass with its own review, not in a one-file edit — which
 > is what the item's own instruction to check first was for.
 
+> **(d) NARROWED 2026-10-21 — four of the six Deletes had already moved.** ADR-0145 D2 put Delete in
+> `RowActionsMenu` as a destructive `MenuItem` (painting `text-destructive-text`) for
+> `ProjectsTable`, `PlansTable`, `ClientsTable` and `ResourcesTable`. Two survive as ghost buttons
+> beside a ghost sibling — `BaselinesPanel` and `NoteItem` — on plan surfaces that epic excluded by
+> scope, not by decision. Fixing them is `docs/specs/screen-tidy-165/` M2; the product owner chose
+> the same rule everywhere (two presses for a note or baseline delete), 2026-10-21.
+
 **e. `/staff` is still unphotographed, and the mechanism is recorded rather than left to be
-rediscovered.** The console is five panels (ADR-0086) that nobody has ever looked at in any theme.
+rediscovered. (CLOSED 2026-10-21, ADR-0143 M0.)** The console is five panels (ADR-0086) that nobody has ever looked at in any theme.
 `shoot.mjs` boots no servers, and `/staff` is gated on the API's `STAFF_EMAILS`. The shot now exists
 and **skips loudly**, naming what would make it run — a silent skip in a shot list is
 indistinguishable from coverage, which is the failure W1 exists to correct. What it needs:
@@ -3803,6 +3825,15 @@ p-6`) rather than the ADR-0097/0098 archetype, because all five panels predate t
 > ten days and nothing has revisited them. Not filed: the measure it lands on is defensible, and
 > changing the frame of five panels is a design pass with a ux review, not a consequence of
 > labelling a table.
+
+> **(e) CLOSED 2026-10-21 — the mechanism was built by staff-console-design M0 (ADR-0143), and the
+> row never said so.** `apps/web/scripts/shoot.mjs` (lines 124–166, `onboardStaff`) signs up the
+> allow-listed address, runs the journeys' `SmtpSink`, follows the verify link and presses Confirm;
+> the shots `staff` and `staff-unhealthy` follow (around lines 880 and 893). It is opt-in through
+> `SHOOT_STAFF=1` and skips loudly with the full recipe (lines 1229–1237). Of the two shapes the
+> paragraph above named, **shape 1 — a catalogue onboarding path with a mail sink — is what was
+> built, and shape 2 (photographed by its journey instead) is not needed.**
+> (`docs/specs/staff-console-design/m0-measurement.md`, lines 70–93.)
 
 > **Item (b) misdescribes the control, and did so when the row was filed** (2026-09-03 sweep). It
 > says `Outcome` is "plain text" beside `Show`'s chips, with no stated reason. `AuditFilterBar.tsx`

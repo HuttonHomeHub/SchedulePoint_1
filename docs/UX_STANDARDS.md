@@ -229,7 +229,7 @@ entry stops being needed.
     pass a context; it is built from one exported `rowActionsLabel()` rather than
     templated per call site, because the format has already drifted once.
   - **Delete goes behind the `⋯`.** Two presses for a destructive action is the
-    cheapest place to spend a moment's friction (ADR-0145 D3, product-owner
+    cheapest place to spend a moment's friction (ADR-0145 D2, product-owner
     decision).
 - **A control that clears state is always rendered, and shaded when there is
   nothing to clear** — `Clear filters` sits in the filter bar at rest as well as
