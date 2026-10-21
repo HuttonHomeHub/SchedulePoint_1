@@ -161,11 +161,20 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   // Stated negatively too, because the defect was a plausible-looking sentence rather than a
   // missing one: nothing here may offer a control this reader does not have.
   await expect(reason).not.toHaveText(/Start editing/);
+  // ADR-0204: the reason is printed inside the item for a mouse or a finger, and the name stays the
+  // bare label — the visible sentence must not leak into it.
+  await expect(reason).toBeVisible();
+  await expect(lockedEdit.locator(`#${reasonId ?? ''}`)).toHaveCount(1);
   // A shaded item stays an arrow-key stop, which is the only way that sentence is reachable by
   // keyboard. `itemsOf` filtered disabled items until ADR-0082, so this line is the primitive's
   // posture change observed through the product rather than through the primitive's own suite.
-  const labels = await lockedMenu.getByRole('menuitem').allTextContents();
-  const editIndex = labels.indexOf('Edit');
+  // The index comes from the DOM position, not from `allTextContents()`: a shaded item prints its
+  // reason inside the button (ADR-0204), so its text is no longer its label.
+  const editIndex = await lockedEdit.evaluate((el) =>
+    Array.from(el.closest('[role="menu"]')?.querySelectorAll('[role^="menuitem"]') ?? []).indexOf(
+      el,
+    ),
+  );
   expect(editIndex).toBeGreaterThan(-1);
   await b.keyboard.press('Home');
   for (let i = 0; i < editIndex; i += 1) await b.keyboard.press('ArrowDown');

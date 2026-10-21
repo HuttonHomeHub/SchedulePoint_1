@@ -68,12 +68,18 @@ function renderTable(
   );
 }
 
+/** A menu item's label as the accessible name reads it: a shaded item prints its reason inside the
+ * button as `aria-hidden` text (ADR-0204), which `textContent` would include. */
+function labelOf(el: HTMLElement): string {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
+  return copy.textContent ?? '';
+}
+
 /** Opens the row's overflow "Actions for …" menu and returns its menuitem labels. */
 function openRowMenu(name: string): string[] {
   fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
-  return within(screen.getByRole('menu'))
-    .getAllByRole('menuitem')
-    .map((i) => i.textContent);
+  return within(screen.getByRole('menu')).getAllByRole('menuitem').map(labelOf);
 }
 
 describe('ActivitiesTable', () => {

@@ -67,6 +67,14 @@ const openMenu = (ctx = context()) => {
   return ctx;
 };
 
+/** A menu item's label as the accessible name reads it: a shaded item prints its reason inside the
+ * button as `aria-hidden` text (ADR-0204), which `textContent` would include. */
+function labelOf(el: HTMLElement): string {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
+  return copy.textContent ?? '';
+}
+
 describe('the trigger', () => {
   it('names its own row, so forty rows are not forty identical buttons', () => {
     render(<GanttRowMenu context={() => context()} activityName="Piling" />);
@@ -336,12 +344,12 @@ describe('the openAt handle (ADR-0177 D3)', () => {
     act(() => {
       expect(ref.current?.openAt({ x: 40, y: 50 }, row)).toBe(true);
     });
-    const viaHandle = screen.getAllByRole('menuitem').map((el) => el.textContent);
+    const viaHandle = screen.getAllByRole('menuitem').map(labelOf);
     expect(screen.getByRole('menu', { name: 'Actions for Foundations' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Foundations' }));
-    expect(screen.getAllByRole('menuitem').map((el) => el.textContent)).toEqual(viaHandle);
+    expect(screen.getAllByRole('menuitem').map(labelOf)).toEqual(viaHandle);
   });
 
   it('reports false and opens nothing when the row has no context', () => {

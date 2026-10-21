@@ -102,6 +102,14 @@ const edge = (container: HTMLElement, which: 'start' | 'finish') =>
 
 beforeEach(() => window.sessionStorage.clear());
 
+/** A menu item's label as the accessible name reads it: a shaded item prints its reason inside the
+ * button as `aria-hidden` text (ADR-0204), which `textContent` would include. */
+function labelOf(el: HTMLElement): string {
+  const copy = el.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
+  return copy.textContent ?? '';
+}
+
 describe('a selected bar is armed for a finger (ADR-0177 D2)', () => {
   it('carries pan-y, touch-none edges and a shape cue only while selected', () => {
     const unselected = render(<GanttPanel activities={[task()]} drag={dragBundle()} />);
@@ -337,7 +345,7 @@ describe('a row opens its menu on contextmenu (ADR-0177 D3)', () => {
       />,
     );
   const row = () => screen.getByRole('row', { name: /Excavate/ });
-  const itemNames = () => screen.getAllByRole('menuitem').map((el) => el.textContent);
+  const itemNames = () => screen.getAllByRole('menuitem').map(labelOf);
 
   it('opens the same items the ⋯ opens, named for the activity', () => {
     renderRow();

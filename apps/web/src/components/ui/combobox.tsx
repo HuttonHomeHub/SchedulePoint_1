@@ -471,6 +471,7 @@ export function Combobox({
           // still 32, and an option in an open listbox is a touch target like any other. The 32 px
           // fine form is untouched: a picker's row rhythm is a density choice.
           'flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm pointer-coarse:min-h-(--control-h)',
+          reason && 'flex-wrap',
           option.disabled === true && 'text-muted-foreground cursor-default',
           // The active option is highlighted with a ring as well as a tint: `bg-accent` alone is
           // ~1.09:1 on the popover surface and fails WCAG 1.4.11 (the `MenuItem` precedent).
@@ -492,7 +493,9 @@ export function Combobox({
           </span>
         ) : null}
         {reason ? (
-          <span id={reasonId} className="sr-only">
+          // ADR-0204: printed for every input, hidden from the name (the option's `aria-label`
+          // already pins it) and referenced by `aria-describedby` so it is announced once.
+          <span id={reasonId} aria-hidden="true" className="text-muted-foreground w-full text-xs">
             {reason}
           </span>
         ) : null}
