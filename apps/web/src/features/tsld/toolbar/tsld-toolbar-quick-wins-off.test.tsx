@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
@@ -60,7 +60,14 @@ describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', (
       // `aria-describedby`. The discriminator is whether the visible label is rendered, and the
       // label span is the button's first text node.
       const iconOnly = !btn.textContent?.startsWith(name);
-      expect(btn).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
+      if (iconOnly) {
+        expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+      } else {
+        // ADR-0204: a labelled shaded control shows its reason as a tip, not a hover-only `title`.
+        expect(btn).not.toHaveAttribute('title');
+        fireEvent.focus(btn);
+        expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Coming soon');
+      }
     }
     // **Clear visual start was a fourth here and is deliberately gone** (ADR-0094 M4-T1).
     // It moved to the selection bar, which registers it behind the SAME `VITE_TOOLBAR_QUICK_WINS`

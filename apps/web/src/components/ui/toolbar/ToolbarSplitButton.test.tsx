@@ -171,6 +171,26 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
     expect(reasonOf(caret)).toBe("Set the plan's start date first");
   });
 
+  it('shows each shut half’s reason as a tip on focus and on a press, with no native title (ADR-0204)', () => {
+    const { primary, caret } = renderSplit({
+      primaryDisabled: true,
+      caretDisabled: true,
+      primaryDisabledReason: 'Add an activity first',
+      caretDisabledReason: "Set the plan's start date first",
+    });
+    expect(primary).not.toHaveAttribute('title');
+    expect(caret).not.toHaveAttribute('title');
+    fireEvent.focus(primary);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Add an activity first');
+    expect(document.querySelector('[data-tooltip]')).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(caret);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
+      "Set the plan's start date first",
+    );
+    // Description unchanged and announced once: the tip adds no `aria-describedby` of its own.
+    expect(reasonOf(caret)).toBe("Set the plan's start date first");
+  });
+
   it('keeps the accessible name off the reason', () => {
     // The reason span lives inside the button, and a button's name comes from its content — so
     // without the `aria-label` pin the name becomes "Today Add an activity first".

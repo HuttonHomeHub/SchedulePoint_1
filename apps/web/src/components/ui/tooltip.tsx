@@ -56,8 +56,13 @@ export interface TooltipOptions {
    *   "Zoom in, Zoom in". It is a VISUAL affordance for sighted pointer/touch/keyboard users.
    * `'description'`: the content carries something the name does not. The panel is
    *   `role="tooltip"` and is linked with `aria-describedby` while open.
+   * `'reason-echo'` (ADR-0204): the content restates why a shaded control is shut, which the control
+   *   already carries as a permanent `sr-only` description. Wired exactly as `'name-echo'` — the
+   *   panel is `aria-hidden` and nothing is linked — because linking it too would read the sentence
+   *   twice: focus opens the tip in the same tick a screen reader announces the control. A separate
+   *   value rather than a reuse of `'name-echo'`, so the call site says which case it is in.
    */
-  purpose: 'name-echo' | 'description';
+  purpose: 'name-echo' | 'description' | 'reason-echo';
   /** Suppresses the whole mechanism (e.g. a control that has a visible label). */
   disabled?: boolean | undefined;
   /**
@@ -80,6 +85,13 @@ export interface TooltipOptions {
    * focus; the Minimap toggle's panel is the case, and it is accepted rather than designed around.
    */
   dismissOnPress?: boolean;
+  /**
+   * A click on the trigger **opens** the tip (ADR-0204) — the opposite of {@link dismissOnPress}.
+   * For a shaded control: the press does nothing, so showing why is the answer to it rather than the
+   * "tap that does both" noise the touch rule above exists to avoid. It reaches a finger, which has
+   * no hover, and a keyboard Enter or Space. A released long-press is still swallowed first.
+   */
+  revealOnPress?: boolean;
 }
 
 /** The two options a container forwards to every tooltip it owns (`Toolbar`, `ToolbarButton`). */
@@ -194,6 +206,7 @@ export function useTooltip({
   disabled = false,
   placement = 'below',
   dismissOnPress = false,
+  revealOnPress = false,
 }: TooltipOptions): TooltipApi {
   const active = !disabled && !!content;
   const tipId = useId();
@@ -419,7 +432,13 @@ export function useTooltip({
       close();
     },
     onClickCapture: (event) => {
-      if (!suppressNextClick.current) return;
+      if (!suppressNextClick.current) {
+        if (active && revealOnPress) {
+          clearTimers();
+          reallyOpen();
+        }
+        return;
+      }
       // A fired long-press already answered this gesture; the command must not also run.
       suppressNextClick.current = false;
       event.preventDefault();
@@ -433,10 +452,11 @@ export function useTooltip({
       ? createPortal(
           <div
             ref={tipRef}
-            // 'name-echo' is purely visual: hiding it from AT is what prevents "Zoom in, Zoom in".
-            {...(purpose === 'name-echo'
-              ? { 'aria-hidden': true }
-              : { role: 'tooltip', id: tipId })}
+            // 'name-echo' and 'reason-echo' are purely visual: hiding them from AT is what prevents
+            // "Zoom in, Zoom in" and a shaded control's reason read twice.
+            {...(purpose === 'description'
+              ? { role: 'tooltip', id: tipId }
+              : { 'aria-hidden': true })}
             data-tooltip=""
             style={{ position: 'fixed', left: position.left, top: position.top }}
             // 1.4.13 Hoverable: the pointer may rest ON the tooltip.

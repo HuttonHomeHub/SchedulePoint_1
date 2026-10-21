@@ -162,10 +162,17 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
      * read it twice. `'name-echo'` is also `aria-hidden`, so AT hears nothing new and nothing twice.
      */
     const tipPurpose = tipped && description && !disabled ? 'description' : 'name-echo';
+    // **A labelled control that is shut says why to every input** (ADR-0204): the native `title` it
+    // used to carry is hover-only, so a finger or a keyboard never saw the sentence. The reason
+    // alone is the tip — the label is already painted — and the tip is `'reason-echo'` because the
+    // permanent `sr-only` description below is the AT channel. A press opens it too: the press did
+    // nothing, so showing why is the answer. The tipped (label-absent) branch keeps `label — reason`.
+    const reasonTip = !tipped && disabled === true && !!disabledReason;
     const tip = useTooltip({
-      content: tipped ? title : undefined,
-      purpose: tipPurpose,
-      disabled: !tipped,
+      content: tipped ? title : reasonTip ? disabledReason : undefined,
+      purpose: reasonTip ? 'reason-echo' : tipPurpose,
+      disabled: !tipped && !reasonTip,
+      revealOnPress: disabled === true && !!disabledReason,
       ...tooltipOptions,
     });
     // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr
@@ -196,7 +203,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         {...(busy ? { 'aria-busy': true } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
         {...(!tipped && !describedBy && visibleLabel === undefined ? {} : { 'aria-label': label })}
-        {...(!tipped && title ? { title } : {})}
+        {...(!tipped && !reasonTip && title ? { title } : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         tabIndex={tabIndex}
         onClick={() => {

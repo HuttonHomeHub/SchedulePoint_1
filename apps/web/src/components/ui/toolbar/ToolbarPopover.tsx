@@ -148,6 +148,8 @@ export function ToolbarPopover({
   // MORE than the name, so it is linked to the control; one that restates the name is not, or a
   // screen reader says the name twice. A shaded trigger's reason already rides `aria-describedby`.
   const tipped = iconOnly && !open;
+  // A labelled trigger that is shut says why to every input (ADR-0204) — see `ToolbarButton`.
+  const reasonTip = !iconOnly && disabled === true && !!disabledReason;
   const tip = useTooltip({
     content: iconOnly
       ? disabled === true && disabledReason
@@ -155,9 +157,16 @@ export function ToolbarPopover({
         : description
           ? `${label} — ${description}`
           : label
-      : undefined,
-    purpose: description && disabled !== true ? 'description' : 'name-echo',
-    disabled: !tipped,
+      : reasonTip
+        ? disabledReason
+        : undefined,
+    purpose: reasonTip
+      ? 'reason-echo'
+      : description && disabled !== true
+        ? 'description'
+        : 'name-echo',
+    disabled: !tipped && !reasonTip,
+    revealOnPress: disabled === true && !!disabledReason,
   });
   const fullDescribedBy =
     [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
@@ -212,9 +221,11 @@ export function ToolbarPopover({
           ? title
             ? { title }
             : {}
-          : (title ?? disabledReason)
-            ? { title: title ?? disabledReason }
-            : {})}
+          : reasonTip
+            ? {}
+            : (title ?? disabledReason)
+              ? { title: title ?? disabledReason }
+              : {})}
         {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         onFocus={(event) => {
           tip.triggerProps.onFocus(event);

@@ -426,7 +426,14 @@ describe('TSLD toolbar registry (two-row)', () => {
       // NOT `hasAttribute('aria-label')` — see the sibling case: a labelled button with a linked
       // reason carries one too. The visible label is the button's first text node.
       const iconOnly = !item.textContent?.startsWith(name);
-      expect(item).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
+      if (iconOnly) {
+        expect(item).toHaveAttribute('title', `${name} — Coming soon`);
+      } else {
+        // ADR-0204: a labelled shaded control shows its reason as a tip, not a hover-only `title`.
+        expect(item).not.toHaveAttribute('title');
+        fireEvent.focus(item);
+        expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Coming soon');
+      }
     }
   });
 

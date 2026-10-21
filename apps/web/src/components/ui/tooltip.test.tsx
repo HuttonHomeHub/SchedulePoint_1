@@ -29,6 +29,7 @@ function Host({
     disabled: options.disabled,
     ...(options.placement ? { placement: options.placement } : {}),
     ...(options.dismissOnPress ? { dismissOnPress: options.dismissOnPress } : {}),
+    ...(options.revealOnPress ? { revealOnPress: options.revealOnPress } : {}),
   });
   return (
     <>
@@ -151,6 +152,54 @@ describe('useTooltip', () => {
     expect(tip()).toHaveAttribute('aria-hidden', 'true');
     expect(tip()).not.toHaveAttribute('role');
     expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
+  });
+
+  it("purpose 'reason-echo': aria-hidden, no describedby, opens on focus (red: linked anyway)", () => {
+    render(<Host purpose="reason-echo" content="Start editing to change this." />);
+    fireEvent.focus(screen.getByRole('button'));
+    expect(tip()).toHaveAttribute('aria-hidden', 'true');
+    expect(tip()).not.toHaveAttribute('role');
+    expect(tip()).toHaveTextContent('Start editing to change this.');
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-describedby');
+  });
+
+  describe('revealOnPress (ADR-0204)', () => {
+    it('a click opens the tip without a focus or a hover (red: the click is ignored)', () => {
+      render(<Host purpose="reason-echo" revealOnPress />);
+      fireEvent.click(screen.getByRole('button'));
+      expect(tip()).not.toBeNull();
+    });
+
+    it('does nothing when the option is off (a plain click shows no tip)', () => {
+      render(<Host purpose="reason-echo" />);
+      fireEvent.click(screen.getByRole('button'));
+      expect(tip()).toBeNull();
+    });
+
+    it('Escape still closes it and is not withheld from the application', () => {
+      render(<Host purpose="reason-echo" revealOnPress />);
+      fireEvent.click(screen.getByRole('button'));
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => void document.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(true);
+      expect(tip()).toBeNull();
+    });
+
+    it('a released long-press is still swallowed, not turned into a second reveal', () => {
+      const onCommand = vi.fn();
+      render(<Host purpose="reason-echo" revealOnPress onCommand={onCommand} />);
+      const button = screen.getByRole('button');
+      fireEvent.pointerDown(button, { pointerType: 'touch', clientX: 10, clientY: 10 });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS + 10));
+      fireEvent.pointerUp(button, { pointerType: 'touch' });
+      fireEvent.click(button);
+      expect(onCommand).not.toHaveBeenCalled();
+      expect(tip()).not.toBeNull();
+    });
   });
 
   it("purpose 'description': role=tooltip, linked while open", () => {

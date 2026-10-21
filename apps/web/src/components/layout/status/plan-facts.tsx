@@ -5,6 +5,7 @@ import { scheduleStateAttr, type ScheduleState } from './schedule-state';
 
 import { PenStatusOutlet } from '@/components/layout/workspace/plan-slot-host';
 import { Button } from '@/components/ui/button';
+import { useTooltip } from '@/components/ui/tooltip';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -294,6 +295,14 @@ function ScheduleStateRegion({
   onRecalculate: () => void;
 }): React.ReactElement | null {
   const reasonId = useId();
+  // The refusal is the tip too (ADR-0204): the native `title` it replaces was hover-only, so a
+  // finger or a keyboard never saw why the button is shut. `'reason-echo'` because the `sr-only`
+  // sibling below is the AT channel; a press opens it, since the press does nothing.
+  const refusalTip = useTooltip({
+    content: state.kind === 'stale' ? (state.refusal ?? undefined) : undefined,
+    purpose: 'reason-echo',
+    revealOnPress: true,
+  });
   // `current` renders nothing — not an affirmative "up to date" chip. A bar that says everything is
   // fine, every second of every session, is a bar a reader stops reading, and it would be the
   // loudest thing on the status row in the commonest state. `pending` renders nothing for a
@@ -345,9 +354,8 @@ function ScheduleStateRegion({
         //
         // The unit suite could not have caught it — it asked for `{ name: /Recalculate/ }`, which a
         // polluted name still matches. It asks for the exact name now.
-        {...(state.refusal
-          ? { 'aria-label': 'Recalculate', 'aria-describedby': reasonId, title: state.refusal }
-          : {})}
+        {...refusalTip.triggerProps}
+        {...(state.refusal ? { 'aria-label': 'Recalculate', 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (!state.refusal) onRecalculate();
         }}
@@ -359,6 +367,7 @@ function ScheduleStateRegion({
             {state.refusal}
           </span>
         ) : null}
+        {refusalTip.tooltip}
       </Button>
     </span>
   );

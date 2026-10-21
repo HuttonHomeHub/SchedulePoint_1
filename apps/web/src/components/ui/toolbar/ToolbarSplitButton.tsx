@@ -9,6 +9,7 @@ import {
   toolbarSplitCaretVariants,
 } from './toolbar-styles';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface ToolbarSplitButtonProps {
@@ -94,7 +95,8 @@ export interface ToolbarSplitButtonProps {
    * Whether the visible label shows — pass the render API's `labelState`, already resolved by
    * `resolveLabelVisibility`. `'hidden'` withholds it, keeping it as the accessible name. Mirrors
    * `ToolbarPopover`'s prop of the same name so the two triggers resolve the same way. A split
-   * button cannot be `'roomy'`: its tooltip is a native `title`.
+   * button cannot be `'roomy'`: its live tooltip is a native `title` (a shaded half's reason is the
+   * Tooltip primitive, ADR-0204).
    */
   labelState?: ToolbarLabelState;
   /** Paint the glyph a step quieter than the label — pass the render API's `quietIcons` (toolbar-grid M3). */
@@ -161,6 +163,19 @@ export function ToolbarSplitButton({
   const primaryDescribedBy = primaryReasonId ?? primaryDescriptionId;
   const caretReasonId = caretOff && caretDisabledReason ? `${reasonIds}-c` : undefined;
   const controlState = pressed ? (activeKind ?? 'armed') : open ? 'open' : 'rest';
+  // A shut half says why to every input (ADR-0204): the native `title` was hover-only. Each half
+  // gets its own tip, `'reason-echo'` because the `sr-only` sibling is the AT channel; a press on a
+  // shaded half opens it, since the press did nothing.
+  const primaryTip = useTooltip({
+    content: primaryReasonId ? primaryDisabledReason : undefined,
+    purpose: 'reason-echo',
+    revealOnPress: true,
+  });
+  const caretTip = useTooltip({
+    content: caretReasonId ? caretDisabledReason : undefined,
+    purpose: 'reason-echo',
+    revealOnPress: true,
+  });
   return (
     <span
       className={cn(
@@ -182,7 +197,15 @@ export function ToolbarSplitButton({
     >
       <button
         {...itemProps}
-        ref={primaryRef}
+        {...primaryTip.triggerProps}
+        ref={(el) => {
+          primaryTip.triggerProps.ref(el);
+          primaryRef.current = el;
+        }}
+        onFocus={(event) => {
+          primaryTip.triggerProps.onFocus(event);
+          itemProps.onFocus?.(event);
+        }}
         type="button"
         aria-pressed={pressed}
         aria-disabled={primaryOff || undefined}
@@ -191,7 +214,9 @@ export function ToolbarSplitButton({
         // its content, so without this the reason would join the name as well as the description.
         {...(labelClass === null || primaryDescribedBy ? { 'aria-label': label } : {})}
         {...(primaryDescribedBy ? { 'aria-describedby': primaryDescribedBy } : {})}
-        title={primaryOff ? (primaryDisabledReason ?? title) : title}
+        {...(primaryReasonId
+          ? {}
+          : { title: primaryOff ? (primaryDisabledReason ?? title) : title })}
         onClick={() => {
           if (!primaryOff) onPrimary();
         }}
@@ -245,9 +270,14 @@ export function ToolbarSplitButton({
             {primaryDescription}
           </span>
         ) : null}
+        {primaryTip.tooltip}
       </button>
       <button
-        ref={caretRef}
+        {...caretTip.triggerProps}
+        ref={(el) => {
+          caretTip.triggerProps.ref(el);
+          caretRef.current = el;
+        }}
         type="button"
         tabIndex={-1}
         aria-haspopup={haspopup}
@@ -255,7 +285,6 @@ export function ToolbarSplitButton({
         aria-disabled={caretOff || undefined}
         aria-label={caretLabel}
         {...(caretReasonId ? { 'aria-describedby': caretReasonId } : {})}
-        {...(caretOff && caretDisabledReason ? { title: caretDisabledReason } : {})}
         onClick={() => {
           if (!caretOff) onOpenMenu();
         }}
@@ -277,6 +306,7 @@ export function ToolbarSplitButton({
             {caretDisabledReason}
           </span>
         ) : null}
+        {caretTip.tooltip}
       </button>
     </span>
   );
