@@ -30,6 +30,7 @@
  *      words. Six editing specs then clicked controls the now-unconditional pen shades, and timed
  *      out. ADR-0084 D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
  *      whole Playwright config can BE one, which is a distinction only a red run made visible.
+ *      Pins are read from code, not comments (`scripts/lib/playwright-pins.mjs`, #354).
  *   4a. A **retired** flag leaves no declaration behind, in `env.ts` or `vite-env.d.ts`. Matches
  *      declaration forms only and word-bounded, because a naive scan fires on correct history notes
  *      and on live prefix siblings — see the assertion for both named fixtures.
@@ -53,6 +54,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { findPins } from './lib/playwright-pins.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENV = join(ROOT, 'apps/web/src/config/env.ts');
@@ -241,11 +244,17 @@ for (const [flag, sites] of detectAlternativeSurfaces()) {
 // Both still stop a retirement — a config referencing a flag that no longer exists is dead config —
 // but the remedy differs by an order of magnitude, so the message has to say which one you are
 // looking at: a `'false'` pin is a spec conversion, a `'true'` pin is a line deletion.
+//
+// **Pins are read from CODE, not comments** (`scripts/lib/playwright-pins.mjs`, #354): a docblock
+// that wrote a pin out as an example used to block a retirement as if it were one. The two string
+// shapes the shared comment stripper cannot read safely are refused loudly rather than read.
 const WEB = join(ROOT, 'apps/web');
 const retired = new Set(register.retired.map((r) => r.flag));
 for (const file of readdirSync(WEB).filter((n) => /^playwright.*\.config\.ts$/.test(n))) {
   const config = readFileSync(join(WEB, file), 'utf8');
-  for (const [, flag, value] of config.matchAll(/(VITE_[A-Z0-9_]+)\s*:\s*'(true|false)'/g)) {
+  const { pins, refusals } = findPins(config);
+  for (const refusal of refusals) problems.push(`apps/web/${file}: ${refusal}`);
+  for (const { flag, value } of pins) {
     if (!retired.has(flag)) continue;
     problems.push(
       value === 'false'
