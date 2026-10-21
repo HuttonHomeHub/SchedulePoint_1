@@ -3196,13 +3196,34 @@ because it still would not close finding 2 above.
 **What is owed instead:** the comparison surfaces say plainly that a float difference across a
 calendar-factor change is not a schedule change. Nothing today distinguishes the two for a reader.
 
-### 313. The sign-up→onboarding wait is widened at 4 of 64 sites, and a widened one still failed
+### 313. One Firefox-only base-journey sign-up failure is unexplained, and its trace was never read
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+**Status:** open · **Verified:** 2026-10-21 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
 
-**The heading read "4 of 61" until 2026-09-13** — the figure is 64, re-derived below, and the
-heading is corrected here rather than only in the body, because a heading is what a reader takes
-away from a list of rows.
+**Corrected and narrowed to `open` 2026-10-21 (owner's decision); everything below the next two paragraphs is
+the 2026-09-13 record, kept as written.** The heading read "widened at 4 of 61" until 2026-09-13 and
+"4 of 64" until today; both are stale. Re-counted on `46edeb5` from `apps/web`:
+`grep -rn "create your organisation" e2e*/` returns **73** sites, and
+`grep -rn -A1 "create your organisation" e2e*/ | grep -c 15_000` returns **71** carrying
+`{ timeout: 15_000 }` on the next line. **All 13 base-journey sites** in `e2e/*.spec.ts` are widened
+(same pipeline over that glob: 13). The two that are not are **not waits at all**: line 296 of
+`e2e-public/support.ts` is `toBeHidden()` and line 656 of `e2e-staff/staff.spec.ts` is
+`toHaveCount(0)`, both negative assertions where a longer timeout would only slow a pass. So every
+positive wait is widened, and the ten un-widened neighbours this row counted on 2026-09-13 are gone.
+The multi-line-locator site it mentions is also gone as a non-assertion: lines 120, 150, 184 and 244
+of `e2e-account/verification.spec.ts` are positive `expect`s with the timeout on the following line.
+A mechanical aside from the same count: the shared `onboard(` helper the remedy paragraph proposes
+now exists in **35** files under `apps/web/e2e*/` (`grep -rln "async function onboard("`), five of
+them base-journey specs (`navigator-crud`, `baselines`, `recently-deleted`, `schedule`, `tsld`).
+
+**What is left is one thing:** `e2e/dependencies.spec.ts` failed three consecutive times at 15 s on
+Firefox on 2026-09-13 (the expectation now sits at lines 98–100), and why is **unknown**. The trace
+(`playwright-report-web-shard-1`, artifact 10312829458) was never read, and this container cannot
+reproduce it: `/opt/pw-browsers` holds only chromium (re-listed today). **Trigger: the next time a
+base-journey sign-up wait fails on CI, read that run's trace first, before touching any timeout.**
+Not re-checked today: whether that artifact still exists (GitHub expires artifacts), and whether the
+failure recurs, since nothing was run on Firefox. The sizing and the "off the table" findings below
+were not re-measured and stand as dated.
 
 `#182` was closed on 2026-08-28 by giving _"three base-journey sign-up specs"_ an explicit
 `{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
@@ -3333,12 +3354,13 @@ files that row wants converted to acquire the pen, and `#121`'s trigger is _"the
 base-journey editing spec needs changing for any reason"_. If this turns out to be test-side,
 convert the file while it is open; if it is app-side, nothing here fires.
 
-**Why it is worth a row rather than a re-run.** The preamble is shared by 61 sites, so whatever this
-is, it is the single most-executed piece of test code in the estate, and a flake there taxes every
-suite. The remedy candidates — read the trace first; then either a shared `signUpAndOnboard` helper
-so there is one wait to tune instead of 61, or a fix to whatever makes the transition slow — both
-change how every e2e suite is set up, so ADR-0105 fires on the fix and it wants a spec rather than
-57 more edits.
+**Why it is worth a row rather than a re-run.** The preamble is the single most-executed piece of
+test code in the estate, so whatever this is, a flake there taxes every suite. The remedy candidates
+were: read the trace first; then either a shared helper so there is one wait to tune, or a fix to
+whatever makes the transition slow. **The ADR-0105 conclusion this paragraph first drew ("both change
+how every e2e suite is set up, so it fires and wants a spec") was withdrawn on 2026-09-13** — a
+one-directory helper triggers nothing — and the per-suite helper has since landed in 35 files. What
+remains is reading one trace, and a test-side fix would be an edit to one spec.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
