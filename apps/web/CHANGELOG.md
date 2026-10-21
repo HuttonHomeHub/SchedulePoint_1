@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.196.0
+
+### Minor Changes
+
+- [#1093](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1093) [`29217e2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/29217e2bab51400be334cb75b0625e3476d23fee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleting a baseline or a note is now in the row's **⋯** menu, marked as destructive, like every other
+  list. Edit and Activate stay beside it.
+
+- [#1096](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1096) [`2d5aaed`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2d5aaed910a461bb1acbf576b6c76b8635588245) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The password-reset link in the email now opens the app's own "Choose a new password" page directly, and the reset token is no longer sent to the server until you submit the new password. Links from earlier emails keep working. If a link has already been used or has expired, you are told so when you submit, with a way to request a new one.
+
+- [#1097](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1097) [`a8d0875`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a8d0875fc845172f187f860a964ce8346d9cee69) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When a control is shaded because you cannot use it right now, the reason is now shown to everyone, not just to screen readers or to people hovering with a mouse. In a row menu the reason is printed under the item's name. On the toolbar, in the status bar's Recalculate button and in the selection bar's Isolate button, the reason appears as a tip when you hover over the control, tab to it, or press it, so it also reaches touch and keyboard users.
+
+### Patch Changes
+
+- [#1095](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1095) [`7b22197`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b2219781c4f4720f1b67be308e8f8ee706a08c2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The selection boxes in the activities table and the layer toggles on the diagram now use the shared checkbox component, so they behave the same as every other checkbox. Nothing looks different apart from a slightly wider gap between each layer toggle and its label in the shared guest view.
+
 ## 0.195.0
 
 ### Minor Changes
