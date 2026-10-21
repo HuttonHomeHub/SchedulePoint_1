@@ -106,11 +106,15 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
   function tokenFromLastEmail(): string {
     const url = mail.resetUrls.at(-1);
     expect(url, 'no reset email was sent').toBeDefined();
-    // `{authBaseURL}/reset-password/{token}?callbackURL=…`
-    const token = new URL(url as string).pathname.split('/').at(-1);
+    // `{appUrl}/reset-password#token=…` (TECH_DEBT #537)
+    const token = decodeURIComponent(new URL(url as string).hash.replace(/^#token=/, ''));
     expect(token).toBeTruthy();
-    return token as string;
+    return token;
   }
+
+  /** The shape a reset emailed before the fragment link: Better Auth's own GET, token in the path. */
+  const legacyUrl = (token: string) =>
+    `/api/auth/reset-password/${encodeURIComponent(token)}?callbackURL=${encodeURIComponent(`${ORIGIN}/reset-password`)}`;
 
   const resetPassword = (token: string, newPassword = NEW_PASSWORD) =>
     request(server())
@@ -144,6 +148,73 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
     // And only the real address produced an email, which is the difference that must stay invisible
     // to the caller.
     expect(mail.resetUrls).toHaveLength(1);
+  });
+
+  describe('the emailed link carries the token in the fragment (TECH_DEBT #537)', () => {
+    it('links to the web page, with the token in the fragment and nothing under /api', async () => {
+      await signUp('locked-out@example.com');
+      await requestReset('locked-out@example.com').expect(200);
+
+      const parsed = new URL(mail.resetUrls.at(-1) as string);
+      expect(`${parsed.origin}${parsed.pathname}`).toBe(`${ORIGIN}/reset-password`);
+      expect(parsed.search).toBe('');
+      expect(parsed.hash).toMatch(/^#token=.+/);
+    });
+
+    it('still sends the link when the request names no redirectTo', async () => {
+      await signUp('locked-out@example.com');
+
+      await request(server())
+        .post('/api/auth/request-password-reset')
+        .set('Origin', ORIGIN)
+        .send({ email: 'locked-out@example.com' })
+        .expect(200);
+
+      expect(mail.resetUrls).toHaveLength(1);
+      await resetPassword(tokenFromLastEmail()).expect(200);
+    });
+
+    it.each(['get', 'head'] as const)(
+      'redirects the legacy API link (%s) to the fragment form without consuming the token',
+      async (method) => {
+        await signUp('locked-out@example.com');
+        await requestReset('locked-out@example.com').expect(200);
+        const token = tokenFromLastEmail();
+
+        const res = await request(server())[method](legacyUrl(token));
+
+        expect(res.status).toBe(303);
+        expect(res.headers.location).toBe(
+          `${ORIGIN}/reset-password#token=${encodeURIComponent(token)}`,
+        );
+        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['referrer-policy']).toBe('no-referrer');
+        // The shadow performs no lookup and no consume, so the token still works afterwards.
+        await resetPassword(token).expect(200);
+      },
+    );
+
+    it('builds the legacy redirect from the configured app URL, whatever callbackURL or Host say', async () => {
+      const res = await request(server())
+        .get('/api/auth/reset-password/some-token?callbackURL=https%3A%2F%2Fevil.example%2Fx')
+        .set('Host', 'evil.example');
+
+      expect(res.status).toBe(303);
+      expect(res.headers.location).toBe(`${ORIGIN}/reset-password#token=some-token`);
+    });
+
+    it('answers a legacy link with an unusable token with an error redirect', async () => {
+      const res = await request(server()).get(legacyUrl('x'.repeat(2049)));
+
+      expect(res.status).toBe(303);
+      expect(res.headers.location).toBe(`${ORIGIN}/reset-password?error=INVALID_TOKEN`);
+    });
+
+    it('leaves the POST alone: a spent token is refused with INVALID_TOKEN', async () => {
+      const res = await resetPassword('never-issued').expect(400);
+
+      expect(res.body.code).toBe('INVALID_TOKEN');
+    });
   });
 
   describe('B1 — the token is not stored in the clear', () => {

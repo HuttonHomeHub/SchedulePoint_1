@@ -60,6 +60,22 @@ export const boundAuthBody: RequestHandler = (req, res, next) => {
 };
 
 /**
+ * 303 to `{page}#token=…`, or to `{page}?error=INVALID_TOKEN` when there is no usable token. The two
+ * legacy-link shadows share it (TECH_DEBT #88, #537): the token was already in the inbound request
+ * line, so the redirect adds no exposure, and the fragment it lands in is never sent onward.
+ * `no-store` keeps the `Location` out of shared caches; `no-referrer` keeps it out of any later hop.
+ */
+function fragmentRedirect(res: Response, page: string, token: unknown): void {
+  const usable = typeof token === 'string' && token !== '' && token.length <= 2048;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.redirect(
+    HttpStatus.SEE_OTHER,
+    usable ? `${page}#token=${encodeURIComponent(token)}` : `${page}?error=INVALID_TOKEN`,
+  );
+}
+
+/**
  * Applies the HTTP-layer wiring shared by production bootstrap (`main.ts`) and
  * the e2e tests, so both exercise identical middleware ordering.
  *
@@ -111,16 +127,19 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // not shadow it.
   const verifyPage = `${config.appUrl}/verify-email`;
   express.get('/api/auth/verify-email', (req: Request, res: Response) => {
-    const { token } = req.query;
-    const usable = typeof token === 'string' && token !== '' && token.length <= 2048;
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    res.redirect(
-      HttpStatus.SEE_OTHER,
-      usable
-        ? `${verifyPage}#token=${encodeURIComponent(token)}`
-        : `${verifyPage}?error=INVALID_TOKEN`,
-    );
+    fragmentRedirect(res, verifyPage, req.query.token);
+  });
+  // **Shadows Better Auth's `GET /reset-password/:token` for a related reason**
+  // (TECH_DEBT #537). That route checks the token and redirects to `?token=…`, putting a live token
+  // in the onward request line of every proxy; the emailed link now carries it in a fragment, and
+  // links sent before that change still hit this path for up to an hour. This answers with the
+  // fragment redirect and does **no token lookup** — so it is no validity oracle and costs no
+  // database read per GET (`password.mjs:92-128` does one). A bad token is learned on the POST. The
+  // target is `config.appUrl` only, so `callbackURL` is ignored and the route cannot be steered. The
+  // POST `/reset-password` has no `:token` segment and is untouched.
+  const resetPage = `${config.appUrl}/reset-password`;
+  express.get('/api/auth/reset-password/:token', (req: Request, res: Response) => {
+    fragmentRedirect(res, resetPage, req.params.token);
   });
   express.all(/^\/api\/auth(?:\/|$)/, boundAuthBody, toNodeHandler(auth));
 

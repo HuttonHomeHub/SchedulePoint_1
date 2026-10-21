@@ -346,17 +346,15 @@ export const RESET_PASSWORD_DISABLED = 'RESET_PASSWORD_DISABLED';
  * There is one submitted state, and no branch a caller could read as an existence oracle — that is
  * a requirement, not a copy preference.
  *
- * `redirectTo` is where the emailed link's handler sends the browser once it has checked the token.
- * It is origin-checked server-side (`password.mjs:50`), which is why `disableOriginCheck: false`
- * and a correct `CORS_ORIGINS` are M0 deployment preconditions rather than nice-to-haves.
+ * **No `redirectTo`** (TECH_DEBT #537). It only fed Better Auth's own link, which the API no longer
+ * emails: the link is composed server-side as `{appUrl}/reset-password#token=…`. An absent value
+ * skips the origin check (`origin-check.mjs:76`); a sent one is still checked
+ * (`password.mjs:50`), so `disableOriginCheck: false` stays a deployment precondition.
  */
 export function useRequestPasswordReset() {
   return useMutation<void, AuthError, string>({
     mutationFn: async (email: string): Promise<void> => {
-      const { error } = await authClient.requestPasswordReset({
-        email,
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const { error } = await authClient.requestPasswordReset({ email });
       if (error) {
         throw new AuthError(
           messageFrom(error, 'Could not send the email. Try again in a moment.'),

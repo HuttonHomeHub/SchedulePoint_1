@@ -1,4 +1,4 @@
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -35,22 +35,20 @@ const UNUSABLE_LINK_CODES: ReadonlySet<string> = new Set(['INVALID_TOKEN', 'USER
  * history and ride along in the referrer of a later navigation; `replace: true` also keeps Back from
  * restoring it. Links emailed before that change point at Better Auth's `GET /reset-password/:token`,
  * which the API answers with a redirect to this same fragment form, so there is one shape here.
- * (`?token=` is still read as a fallback until the API emits only fragments.)
  *
  * **Whether the token is still good is learned on submit, not on arrival.** The page no longer asks
  * the server about a token it has not been asked to use, so a spent or expired link shows the form
  * and is reported when the password is sent — as the same "no longer valid" screen, never as a
  * generic error under a form that cannot work.
  *
- * **`validateSearch` is permissive** (see the route definition): a hand-edited URL, a truncated
- * paste, a mail client that mangles the link — none of those may crash the screen. Neither a token
- * nor an error is the same state as an explicit error, and both offer the way out rather than a
- * form that cannot work.
+ * **A hand-edited URL, a truncated paste, a mail client that mangles the link** — none of those may
+ * crash the screen. No token (and `?error=INVALID_TOKEN`, which the API's redirect for an unusable
+ * legacy link produces) is the same state as a refused one, and both offer the way out rather than
+ * a form that cannot work.
  */
 export function ResetPasswordScreen(): React.ReactElement {
   useNoindex();
   useDocumentTitle('Choose a new password');
-  const search = useSearch({ strict: false });
   const navigate = useNavigate();
   // Owned here, not in the form (ADR-0077 M2-T3): this screen used to keep the heading "Choose a
   // new password" over a body that already said the password had been changed.
@@ -62,11 +60,7 @@ export function ResetPasswordScreen(): React.ReactElement {
   // Captured on the first render, before the effect below removes it from the URL. A `useState`
   // initialiser rather than an effect: an effect would run after a render in which the token is
   // already gone from the URL, and there would be nothing left to capture.
-  const [token, setToken] = useState(
-    () =>
-      tokenFromHash() ||
-      ('token' in search && typeof search.token === 'string' ? search.token : ''),
-  );
+  const [token, setToken] = useState(tokenFromHash);
   const { reset: clearAttempt } = reset;
 
   // A link pasted into the tab already showing this page changes only the fragment, which the

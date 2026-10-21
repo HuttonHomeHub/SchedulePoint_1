@@ -74,11 +74,6 @@ export const URL_STATES = [
   { path: '/forgot-password', heading: 'Reset your password', primary: 'Send a reset link' },
   { path: '/reset-password', heading: 'That link is no longer valid', primary: 'Send a new link' },
   {
-    path: '/reset-password?token=e2e',
-    heading: 'Choose a new password',
-    primary: 'Set new password',
-  },
-  {
     path: '/reset-password#token=e2e',
     heading: 'Choose a new password',
     primary: 'Set new password',

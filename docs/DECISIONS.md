@@ -10,6 +10,20 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-21 — The reset link carries its token in the fragment, and an expired link is found out on submit (tech debt #537)
+
+**Decided by the product owner, approving `docs/specs/reset-link-fragment/` with every default.** The
+emailed reset link is `{web}/reset-password#token=…`, composed from the token (not Better Auth's `url`),
+so the token reaches no server, proxy log or `Referer` until the form is submitted. The library's
+`GET /reset-password/:token` is shadowed with a permanent `303` to the fragment form, doing **no token
+lookup** (no validity oracle, no database read per GET); the web stopped sending `redirectTo`.
+
+**The cost, accepted:** a spent or expired link is reported when the form is submitted (as "That link is
+no longer valid"), not on arrival — the alternative was a new public token-check endpoint for a
+one-hour edge. No flag, no ADR: a second instance of #88's pattern.
+
+---
+
 ## 2026-10-21 — Five specs approved with all defaults (#165, #72, #354 + #280, #116 item 3, #537)
 
 **Decided by the product owner.** This session the owner chose to fix #313, #354, #280, #116 item 3,

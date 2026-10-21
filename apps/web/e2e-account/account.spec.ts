@@ -117,9 +117,14 @@ test('a locked-out member recovers their account, and the old session dies', asy
   await expect(stranger.getByText(/if that address has an account/i)).toBeVisible();
 
   // ---------------------------------------------------------------- follow the real link
-  const mail = await sink.waitFor(email, /\/reset-password\//);
+  const mail = await sink.waitFor(email, /\/reset-password#token=/);
   const resetUrl = firstUrlIn(mail.body);
-  expect(resetUrl).toContain('/api/auth/reset-password/');
+  // The token rides in the fragment of a web page, never in an API path or a query (TECH_DEBT #537).
+  expect(new URL(resetUrl).pathname).toBe('/reset-password');
+  expect(resetUrl).not.toContain('/api/');
+  expect(new URL(resetUrl).search).toBe('');
+  const token = new URL(resetUrl).hash.replace(/^#token=/, '');
+  expect(token).not.toBe('');
   // Nothing was sent to the address that has no account.
   expect(sink.all().some((m) => m.to.includes(unknownStamp))).toBe(false);
 
@@ -127,8 +132,8 @@ test('a locked-out member recovers their account, and the old session dies', asy
   await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
   // The token is stripped on arrival: it must not be sitting in the address bar (and so in
   // history, and in the referrer of anything this page later loads).
-  await expect(stranger).toHaveURL(/\/reset-password(\?.*)?$/);
-  expect(new URL(stranger.url()).searchParams.get('token')).toBeNull();
+  await expect(stranger).toHaveURL(/\/reset-password$/);
+  expect(new URL(stranger.url()).hash).toBe('');
 
   await new AxeBuilder({ page: stranger })
     .withTags(['wcag2a', 'wcag2aa'])
@@ -169,11 +174,32 @@ test('a locked-out member recovers their account, and the old session dies', asy
   await expect(stale).toHaveURL(/\/sign-in/);
 
   // ---------------------------------------------------------------- a spent link says so
+  // Found out on submit, not on arrival (TECH_DEBT #537): the page no longer asks the server about a
+  // token it has not been asked to use.
   await stranger.goto(resetUrl);
+  await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  await stranger.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
+  await stranger.getByLabel('Confirm new password').fill(NEW_PASSWORD);
+  await stranger.getByRole('button', { name: 'Set new password' }).click();
   await expect(
     stranger.getByRole('heading', { name: 'That link is no longer valid' }),
   ).toBeVisible();
+  await expect(stranger.getByRole('alert')).toContainText('your password has not been changed');
+  await expect(stranger.getByRole('alert')).toBeFocused();
   await expect(stranger.getByRole('link', { name: 'Send a new link' })).toBeVisible();
+  await new AxeBuilder({ page: stranger })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze()
+    .then((r) => expect(r.violations, JSON.stringify(r.violations, null, 2)).toEqual([]));
+
+  // A link emailed before the fragment change still lands on the page: the API answers it with a
+  // redirect to the fragment form, so the form (not an error) is what a reader meets. The token is
+  // spent here, so the form itself is the assertion — the redirect does no lookup.
+  await stranger.goto(
+    `/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent('/reset-password')}`,
+  );
+  await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  await expect(stranger).toHaveURL(/\/reset-password$/);
 
   await ownContext.close();
   await otherContext.close();

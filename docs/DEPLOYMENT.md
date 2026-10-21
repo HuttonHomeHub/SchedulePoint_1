@@ -351,14 +351,15 @@ nothing, and invitation-accept tells the user to verify with no way to do so. An
 delivery is best-effort by design (ADR-0075), a broken relay at that point produces accounts that
 look created and cannot be used, with the only signal in your logs.
 
-#### Password reset: one precondition that fails silently if you miss it
+#### Password reset: the link is composed from `APP_URL`
 
-`CORS_ORIGINS` **must contain the browser origin the reset link lands on.** Better Auth
-validates `/request-password-reset`'s `redirectTo` against `trustedOrigins`, which is bound to
-`CORS_ORIGINS` — so an app origin missing from that list makes **every** reset fail with an
-origin error and nothing on screen to explain it. The row above already says `CORS_ORIGINS`
-must equal the browser origin for sign-in to work; this is the second thing that breaks, and it
-breaks less visibly.
+The emailed reset link is `{APP_URL}/reset-password#token=…` (TECH_DEBT #537), so `APP_URL` must
+be the address people open the app at — the same value invitations and verification links already
+use. The web no longer sends `redirectTo`, so a reset no longer depends on `CORS_ORIGINS` containing
+the app origin; a client that still sends one (an old cached bundle) is origin-checked against
+`trustedOrigins`, which is bound to `CORS_ORIGINS`, as before. Reset links emailed before the change
+point at `/api/auth/reset-password/<token>`; the API answers those with a redirect to the new form,
+so they keep working for the hour they live.
 
 The rejection itself is tested (`apps/api/test/password-reset.e2e-spec.ts`) so the failure mode
 is at least a known one. Note the origin check is now explicitly on in every environment —

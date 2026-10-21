@@ -56,10 +56,7 @@ describe('ForgotPasswordScreen', () => {
     expect(await screen.findByLabelText('Email')).toHaveValue('');
   });
 
-  it('sends the request with a same-origin redirect target', async () => {
-    // Captured BEFORE the render, so the assertion below compares against a value this test read
-    // rather than one the code under test produced.
-    const { origin } = window.location;
+  it('sends the address alone — the emailed link is composed server-side (TECH_DEBT #537)', async () => {
     vi.mocked(authClient.requestPasswordReset).mockResolvedValue({ error: null });
     renderScreen();
 
@@ -68,23 +65,10 @@ describe('ForgotPasswordScreen', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send a reset link' }));
 
-    // `redirectTo` is origin-checked server-side, which is why CORS_ORIGINS is an M0 deployment
-    // precondition rather than a nicety.
-    //
-    // **Asserted against a captured origin and an absolute URL, not against
-    // `${window.location.origin}` inline** (`docs/TECH_DEBT.md` #97c). The expectation used to read
-    // the same global the source reads, so it restated the implementation instead of pinning the
-    // contract. Reading it once here and asserting a parsed URL says the two things that actually
-    // matter: it is same-origin, and its path is the reset screen.
+    // `redirectTo` only ever fed Better Auth's own link, which the API no longer emails. Sending it
+    // would still be origin-checked server-side for no benefit.
     await waitFor(() => expect(authClient.requestPasswordReset).toHaveBeenCalledTimes(1));
-    const sent = vi.mocked(authClient.requestPasswordReset).mock.calls[0]?.[0] as {
-      email: string;
-      redirectTo: string;
-    };
-    expect(sent.email).toBe('ada@example.com');
-    const target = new URL(sent.redirectTo);
-    expect(target.origin).toBe(origin);
-    expect(target.pathname).toBe('/reset-password');
+    expect(authClient.requestPasswordReset).toHaveBeenCalledWith({ email: 'ada@example.com' });
   });
 
   it('shows one hedged outcome and never promises delivery', async () => {

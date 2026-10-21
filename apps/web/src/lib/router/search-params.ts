@@ -43,7 +43,7 @@ export type SearchRecord = Record<string, string | undefined>;
  *
  * @param search the raw search, with or without its leading `?`.
  * @returns a **null-prototype** object (D8), mirroring `decode` (`qss.js:55-65`), so `'x' in search`
- *   keeps working at `verify-email.tsx`, `reset-password.tsx` and `accept-invite.tsx` — those three
+ *   keeps working at `verify-email.tsx` and `accept-invite.tsx` — those two
  *   test membership rather than truthiness, and an `Object.prototype` would answer `true` for
  *   `'toString'`.
  *

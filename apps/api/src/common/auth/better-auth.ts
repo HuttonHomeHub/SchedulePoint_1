@@ -73,8 +73,19 @@ export interface CreateAuthOptions {
    * `/request-password-reset` throws `RESET_PASSWORD_DISABLED` outright
    * (`api/routes/password.mjs:53-59`), which is why the product had no recovery path rather than
    * merely no screen for one.
+   *
+   * `resetUrl` is `{resetPageUrl}#token=…` — composed here from the token, not the `url` Better Auth
+   * passes (TECH_DEBT #537).
    */
   sendPasswordReset: (input: { to: string; resetUrl: string }) => Promise<void>;
+  /**
+   * The web page that sets a new password, e.g. `https://app/reset-password` (TECH_DEBT #537). The
+   * emailed link is composed from it and the token, **not** taken from the `url` Better Auth passes:
+   * that URL is its own `GET /reset-password/:token`, which carries the token in the API request
+   * line and then redirects with it in a query string (`password.mjs:92-128`), so the token would
+   * sit in every proxy and API access log on the way.
+   */
+  resetPageUrl: string;
   /**
    * Record an authentication event (ADR-0072). A callback for the same reason as
    * `sendVerificationEmail`: this factory stays a pure function of its options and never learns
@@ -190,8 +201,14 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
        * Better Auth owns the token's minting, expiry and single-use; this app carries the URL, and
        * (per the `verification` key below) stores only its hash.
        */
-      sendResetPassword: async ({ user, url }) => {
-        await options.sendPasswordReset({ to: user.email, resetUrl: url });
+      // The token rides in the fragment, never the query (see `resetPageUrl`). The library also
+      // passes a `url`, deliberately ignored; it is built from the same token that the POST accepts
+      // (`password.mjs:74`), which is what makes composing our own link safe.
+      sendResetPassword: async ({ user, token }) => {
+        await options.sendPasswordReset({
+          to: user.email,
+          resetUrl: `${options.resetPageUrl}#token=${encodeURIComponent(token)}`,
+        });
       },
       /**
        * The audit seam for `auth.password_reset_completed` (ADR-0074). NOT `hooks.after`, for the

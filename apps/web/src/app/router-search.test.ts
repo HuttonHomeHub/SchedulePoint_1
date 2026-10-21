@@ -78,27 +78,23 @@ describe('/verify-email search params', () => {
 });
 
 describe('/reset-password search params', () => {
-  it('carries an ordinary token and an error code', () => {
-    expect(validate('/reset-password', '?token=abc123&error=INVALID_TOKEN')).toEqual({
-      token: 'abc123',
+  it('carries the error code the API redirect composes for an unusable legacy link', () => {
+    expect(validate('/reset-password', '?error=INVALID_TOKEN')).toEqual({
       error: 'INVALID_TOKEN',
     });
   });
 
   /**
-   * **CHANGED BY M4, and predicted.** This asserted `'1.2345678901234567e+31'` for two years'
-   * worth of releases and its own comment named the remedy: *"the real remedy is a router-level
-   * `parseSearch` that leaves values alone, which is a change to every route's search handling —
-   * `docs/TECH_DEBT.md` #96."* That is now what the router has, so the token arrives as written.
-   *
-   * The limit is gone rather than pinned, so the case is kept and inverted rather than deleted: it
-   * is the clearest single assertion that the codec was replaced, and the one value no reader could
-   * ever have repaired for itself.
+   * The token left the query in TECH_DEBT #537: it travels in the fragment, which no router (and no
+   * server) sees. A stray `?token=` is dropped rather than read, so nothing downstream can come to
+   * depend on it again. Replaces two cases that pinned how an all-digit query token survived the
+   * old codec (TECH_DEBT #96) — the value is no longer a search param, so there is nothing to coerce.
    */
-  it('carries an all-digit token verbatim, which no reader could ever repair', () => {
-    expect(validate('/reset-password', '?token=12345678901234567890123456789012')).toEqual({
-      token: '12345678901234567890123456789012',
+  it('drops a query token, which is no longer how the link carries it', () => {
+    expect(validate('/reset-password', '?token=abc123&error=INVALID_TOKEN')).toEqual({
+      error: 'INVALID_TOKEN',
     });
+    expect(validate('/reset-password', '?token=12345678901234567890123456789012')).toEqual({});
   });
 });
 
