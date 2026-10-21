@@ -3,45 +3,52 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-20 (late evening). This session did the three jobs the owner chose, in order:
-**#88** (the verification email's link opens a Confirm page; only pressing the button confirms),
-then **#247 + #302 + #410** in one PR (three of the repository's own checks now fire as their docs
-say), with **#326(a)** closed in the same PR (already fixed by #335). Released as **`api` 0.97.0**
-and **`web` 0.195.0** (Version Packages PR #1089). The owner's **hard rule** still stands: nothing that
+**Written:** 2026-10-21 (evening). The owner chose seven register rows and said "fix 1 to 7 in this
+session". All seven are done, in six PRs, plus a small test fix found on the way: **#313** narrowed,
+**#354 + #280** (two of the repository's own checks), **#165** (Delete for notes and baselines behind
+the row's ⋯), **#72** (the shared checkbox), **#537** (the reset link's token moves into the link's
+`#` part) and **#116 item 3** (a greyed-out control now shows its reason to everyone, ADR-0204).
+Released as **`api` 0.98.0** and **`web` 0.196.0**. The owner's **hard rule** still stands: nothing that
 needs them to test, measure or check anything on their server or devices (a decision question is
 fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's 2026-10-20 answers (in `docs/DECISIONS.md`)
+## The owner's 2026-10-21 answers (in `docs/DECISIONS.md`)
 
-- **Evening choice:** #88, then #247 + #302 + #410 as one PR, then #326(a) checked (closed if
-  already fixed). #116 item 3 stays on the shortlist for next time.
-- **#88:** spec `docs/specs/verify-email-confirm/spec.md` approved with both defaults. **Pressing
-  Confirm does not sign the person in** (a forwarded or shared mailbox would otherwise sign that
-  reader in). Token in the link's `#` part; old-shape links redirect to the new page.
-- **Gates:** spec `docs/specs/register-gate-repairs/spec.md` approved with the default for Q1: **a
-  `**Verified:**` date means the whole row was last checked on that date.**
-- Earlier the same day: #535 (shipped #1079); #307(a) skip-the-placeholder default (#1082).
+- **Choice:** fix #313, #354, #280, #116 item 3, #537, #72 and #165 this session.
+- **Five specs approved with every default** (`docs/specs/gate-invocation-repairs/`,
+  `shaded-reason-visible/`, `reset-link-fragment/`, `checkbox-field-adoption/`, `screen-tidy-165/`):
+  CLAUDE.md §19.8 names `pnpm prepush:push`; a shaded menu item prints its reason inline (not a
+  tooltip); the five labelled toolbar controls get a reason tip too; an expired reset link is reported
+  when the form is submitted, not on arrival; Delete for notes and baselines moves behind ⋯ (two
+  presses, the same rule as clients, projects, plans and resources).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.97.0 and `web` 0.195.0.
+- **Latest releases:** `api` 0.98.0 and `web` 0.196.0.
 - **This session's PRs, in merge order:**
-  - **#1087** #88. New public `POST /api/v1/email-verification/confirm` (10/min) calls Better
-    Auth's own handler with the caller's user agent and forwarded IP, so the
-    `auth.email_verified` audit row keeps its evidence. Emails now link to
-    `{appUrl}/verify-email#token=…`; the page sends nothing until Confirm is pressed and strips the
-    token from the address bar. Better Auth's `GET`/`HEAD /api/auth/verify-email` is **shadowed**
-    in `app-setup.ts` (303 to the page, never verifies), so emails already in inboxes still work.
-    Security, accessibility and UX reviewers: no blockers; their nits were folded. #88 is closed;
-    **new row #537** keeps #88's old password-reset note (Better Auth's reset route redirects
-    with the live token on `Location`).
-  - **#1088** #247 + #302 + #410 + #326(a). `fieldValue` reads an inline header field (start of a
-    header line or after `·`); `check:debt-status` A8 is now **A8a** (`unverified` has no date)
-    and **A8b** (every other status has a dated `**Verified:**`); `check:claims` **fails** on a
-    registered claim nothing cites. Turning A8b on found 7 undated rows (#110, #225, #261, #282,
-    #283, #284, #342); each was re-read and dated 2026-10-20. #326 is now "Three findings…",
-    re-lettered (a)–(c), still open.
-  - **#1089** the Version Packages release.
+  - **#1091** #313 narrowed to the one unexplained Firefox-only sign-up failure. Its headline was stale:
+    71 of 73 sign-up waits already carry the 15 s timeout (the other two are not waits).
+  - **#1092** #354 + #280. `check:flags` strips comments before reading Playwright pins and refuses,
+    loudly, the shapes the stripper cannot read safely (a `/*` after a quote or after `//`).
+    `pnpm prepush:push [git push args]` runs the whole gate and pushes only if nothing failed; it refuses
+    a dirty tree, a failing `git push --dry-run`, a HEAD or branch that moved during the gate, and
+    `--checks`. devops-reviewer found a real hole (a `/*` inside a `//` comment hid a pin); fixed first.
+  - **#1093** #165 closed: (b) and (e) were already fixed (the row had not recorded it); (d) Delete for
+    notes and baselines moved behind the row's ⋯. Its new baseline-delete journey failed CI once (it
+    captured a baseline before recalculating); fixed by mirroring the variance journey's set-up.
+  - **#1095** #72 closed: three hand-rolled checkboxes (not five) now use `CheckboxField`, which gained
+    `labelHidden` and `targetData`.
+  - **#1096** #537 closed: the reset email links to `{web}/reset-password#token=…`; the library's
+    `GET /api/auth/reset-password/:token` is shadowed with a 303 to that form and **no token lookup**
+    (security-reviewer: APPROVE; it removes a validity oracle the old GET had).
+  - **#1097** #116 closed (item 3 was its last item): ADR-0204. Menus print a shaded item's reason
+    inline; `Tooltip` gained `purpose: 'reason-echo'` (visual only, also opens on press) for five
+    toolbar controls. The accessibility review found a real defect before ship (a reason tip could
+    reappear on a control already left); fixed with a red-first test. New row **#538** (a read-only
+    Gantt cell's reason is still only a `title`; a decision, not a build).
+  - **#1098** a test fix to #1092's own test: its fixture checks were written `node -e process.exit(1)`
+    with bare brackets, which some shells refuse.
+  - **#1094** the Version Packages release.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -92,11 +99,12 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   Planner; the WCAG 2.5.3 header fix is "both fixes"; password reset stays sequential.
 - 2026-10-20: #535 as its spec; #307(a) skip-the-placeholder default; #88 no sign-in on Confirm;
   a `**Verified:**` date dates the whole row (A8a/A8b).
+- 2026-10-21: the five specs with every default (see the answers above).
 
 ## Parked by the owner — keep, do not raise
 
 The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16, 2026-10-17,
-2026-10-18, 2026-10-19 and 2026-10-20). A session does not bring them up until the owner does. When the
+2026-10-18, 2026-10-19, 2026-10-20 and 2026-10-21). A session does not bring them up until the owner does. When the
 owner returns to one, the steps are ready:
 
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
@@ -111,31 +119,35 @@ owner returns to one, the steps are ready:
 
 ## Open rows worth knowing
 
+- **#538** (new): a read-only Gantt cell's reason is still a native `title` (hover-only). Deliberately
+  left out of ADR-0204: a tip on every cell the arrow keys pass would be noise. Needs a decision.
+- **#313** is now only the one Firefox-only failure of 2026-09-13; its trigger is "read that run's
+  trace first, the next time a base-journey sign-up wait fails on CI".
 - **#532** is only the Members table's placeholder rows being 4–8 px shorter than settled rows (needs
   a `Column` prop, a component contract: ADR-0105 spec trigger). Accepted known gap.
 - **#271** stays open for cursor paging (owner: not now).
 - #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred on a trigger),
   #391 and #395 (remaining painter items), #509, #510, #512, #513 and #515–#517 (deferred on triggers;
   #509 is the off-site copy: today's copies live on the same disk as the database).
-- **#537** (new): Better Auth's password-reset route redirects with the live token on its `Location`
-  header; the web strips it on arrival. Library route, so not ours to reshape without a fork.
-- **#326** is now three items (a)–(c); its old (a) was already fixed by #335 and is closed.
+- **#326** is three items (a)–(c).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
 
 ## Suggested next
 
-Nothing of this session's is in flight: no open PRs, no wake-ups armed. **#88, #247, #302, #410
-and #326(a) are done.** Start none until the owner picks:
+Nothing of this session's is in flight: no open PRs, no wake-ups armed. Start none until the owner
+picks. **None of these has been checked against the code yet**: check each row's symptom first (two
+of this session's seven had already been fixed in part).
 
-1. **#116 item 3** — a greyed-out menu item's reason is only read to screen readers, not shown.
-   Medium; needs a spec (it changes ADR-0082's shared menu rule).
-2. **#537** — the reset link's token on a redirect. Small to describe, but the fix is in Better
-   Auth's route; the realistic options are a shadow like #88's or leaving it. Needs a decision.
+1. **#538** — a decision: should a read-only Gantt cell show its reason when pressed? Small either way.
+2. **#326** (a)–(c) — the three staff-console gate findings.
+3. **#276** — a failing gate's log is tailed to 12 lines; now that `prepush:push` exists, check whether
+   it still bites.
 
-Runners-up: #280 (a check-and-push command), #313 (one shared sign-up helper for e2e; needs a spec),
-#72, #165(b), #354. The next reconciliation pass when `check:reconcile-due` warns (last pass
-2026-10-19).
+Runners-up: #249 (four hand-copied dock-geometry blocks), #299 (nothing asserts that a command CI
+runs is also run by `pnpm prepush`; ADR-0160 may already cover it), #306, #308. The next
+reconciliation pass when `check:reconcile-due` warns on a full clone (last pass 2026-10-19; in this
+shallow clone it warns only because it cannot date ADRs).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -460,3 +472,25 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     the stacked tree carries over unchanged; only `docs/DECISIONS.md`'s top entry conflicted.
   - **A page reached by a hash-only navigation does not remount** (`/verify-email` then
     `/verify-email#token=…`); listen for `hashchange` when the hash carries the input.
+
+- **2026-10-21 lessons (the seven-row batch):**
+  - **Never run a gate as `pnpm -s <gate>` in this container.** Inside a `pnpm` script, the nested
+    `pnpm` (`/root/.local/share/pnpm/.tools/pnpm/10.4.1`) turns a script's exit 2 into 1 when output is
+    silenced, so an advisory WARN reads as a FAIL (`check:doc-register`'s `prepush:push` test failed that
+    way). Plain `pnpm <gate>`, as CI and `pnpm prepush` run it, is fine. Brief builders the same way.
+  - **Never type a command you have not read back.** A stray `ln -sf . /dev/null` replaced `/dev/null`
+    with a link to `/dev`; every `>/dev/null` then failed with "Is a directory" and two e2e suites died
+    before starting. The safety check (rightly) refused deleting it; a container restart restored it.
+    Re-run any suite whose log shows "Is a directory".
+  - **`scripts/e2e-local.sh` always uses ports 3000 and 5173**, so only one suite can run at a time.
+    Builders wrote code and ran unit tests and gates in parallel worktrees; the orchestrator ran every
+    e2e suite serially (queued with `until grep -q ALLDONE <previous log>`), and handed the database to
+    one builder at a time when a builder had to iterate on a journey.
+  - **A journey split out of a long one must copy its set-up.** The new baseline-delete test captured a
+    baseline before recalculating; it passed locally once and failed CI 3/3 in Chromium.
+  - **A row's own "five call sites" or "still open" can be wrong.** #72 had three; #165 (b) and (e)
+    were already done. The feature-analyst caught both by reading the code before writing the spec.
+  - **Resolving `docs/TECH_DEBT.md` in a rebase:** take the other side's file, re-apply only the
+    replayed commit's own change with `git diff <commit>^ <commit> -- docs/TECH_DEBT.md | git apply -3`,
+    then settle the ledger conflict by keeping every row (and the newer wording of a row both sides
+    edited). `docs/DECISIONS.md`: keep both top entries, newest first.
