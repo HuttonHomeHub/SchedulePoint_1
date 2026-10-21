@@ -384,6 +384,15 @@ failures. The script fixes its own working directory, derives the `check:*` rost
 `package.json` rather than restating it, runs every step rather than stopping at the first, and
 exits non-zero if any failed.
 
+**To push after the gate, run `pnpm prepush:push [git-push-args]`** (`docs/TECH_DEBT.md` #280). It
+runs the same full gate and calls `git push` only if no gate FAILed, so the call-site assembly that
+once pushed on a red gate — `pnpm prepush 2>&1 | tail -5 && git push`, where `&&` read `tail`'s status —
+cannot happen: nothing at the call site is left to get wrong. An advisory WARN still pushes. It refuses
+before running anything if the working tree is dirty (the gates would validate content the push does
+not carry) or `git push --dry-run` rejects the arguments, refuses after the run if `HEAD` moved or the
+tree changed, and refuses `--checks`, which skips lint, typecheck and test. Bare `pnpm prepush` is
+unchanged, for when you want the result without pushing.
+
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to
 `scripts/e2e-local.sh` — the rows below still say when that is required.
 

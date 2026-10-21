@@ -25,6 +25,18 @@
 #   scripts/prepush.sh --checks   # the check:* gates only (skips lint/typecheck/test). One gate,
 #                                 # check:web-bundle, builds the web app: ~17 s cold, ~1.5 s on a
 #                                 # turbo cache hit (ADR-0160).
+#   scripts/prepush.sh --push [git-push-args...]
+#                                 # the full gate, then `git push <args>` ONLY if no gate FAILed
+#                                 # (`pnpm prepush:push`). Refuses, before running anything, a dirty
+#                                 # tree or a push `git push --dry-run` rejects; refuses after the
+#                                 # run if HEAD moved or the tree went dirty; and refuses `--checks`.
+#
+# **Why the push lives in here** (`docs/TECH_DEBT.md` #280, closed). This script has always exited
+# 0/1 correctly; what failed was the call site: `pnpm prepush 2>&1 | tail -5 && git push` pushed on
+# a red gate, because a pipeline's status is its LAST stage's and `tail` succeeded. With the push
+# inside the script and after the check, no pipe at the call site can carry a push past a failure.
+# Advisory WARN still pushes, exactly as it passes today. A husky pre-push hook was refused: it
+# would cost every push the full run and `--no-verify` bypasses it.
 #
 # It deliberately does NOT run the e2e half. That needs a database and a browser, takes tens of
 # minutes, and `scripts/e2e-local.sh` already owns it — see docs/TESTING.md "Before you push" for
@@ -42,7 +54,36 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 CHECKS_ONLY=0
-[ "${1:-}" = "--checks" ] && CHECKS_ONLY=1
+PUSH=0
+PUSH_ARGS=()
+if [ "${1:-}" = "--checks" ]; then
+  CHECKS_ONLY=1
+  shift
+fi
+if [ "${1:-}" = "--push" ]; then
+  if [ "$CHECKS_ONLY" -eq 1 ]; then
+    echo "Refusing: --checks with --push would push on the check:* gates alone, skipping lint, typecheck and test." >&2
+    exit 1
+  fi
+  PUSH=1
+  shift
+  PUSH_ARGS=("$@")
+fi
+
+if [ "$PUSH" -eq 1 ]; then
+  # Before the six-minute run, not after it: a dirty tree means the gates would validate content the
+  # push does not carry, and a push `--dry-run` rejects (no upstream, bad ref) would end the run in
+  # an error the first second could have reported.
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "Refusing to run prepush:push: the working tree is dirty, so the gates would validate content the push does not carry. Commit or stash first." >&2
+    exit 1
+  fi
+  if ! git push --dry-run ${PUSH_ARGS[@]+"${PUSH_ARGS[@]}"} >/dev/null 2>&1; then
+    echo "Refusing to run prepush:push: \`git push --dry-run ${PUSH_ARGS[*]:-}\` fails. Fix the push arguments or upstream first." >&2
+    exit 1
+  fi
+  start_head="$(git rev-parse HEAD)"
+fi
 
 failed=()
 warned=()
@@ -164,8 +205,19 @@ if [ ${#failed[@]} -eq 0 ]; then
     printf '\033[33mAll green, with advisory findings: %s\033[0m\n' "${warned[*]}"
     echo "These do not block the push. They are obligations whose remedy is a judgement, not an edit."
   fi
+  if [ "$PUSH" -eq 1 ]; then
+    if [ "$(git rev-parse HEAD)" != "$start_head" ] || [ -n "$(git status --porcelain)" ]; then
+      echo "NOT PUSHED: HEAD moved or the working tree changed during the run, so the gates did not check what would be pushed." >&2
+      exit 1
+    fi
+    echo "Pushing: git push ${PUSH_ARGS[*]:-}"
+    # exec skips the EXIT trap, so the log is removed here.
+    rm -f "$log"
+    exec git push ${PUSH_ARGS[@]+"${PUSH_ARGS[@]}"}
+  fi
   exit 0
 fi
 printf 'FAILED: %s\n' "${failed[*]}"
 [ ${#warned[@]} -gt 0 ] && printf 'WARNED: %s\n' "${warned[*]}"
+[ "$PUSH" -eq 1 ] && echo "NOT PUSHED: a gate failed."
 exit 1
