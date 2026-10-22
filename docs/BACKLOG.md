@@ -242,6 +242,24 @@ a product idea that has not yet earned a roadmap line:
   isolated (the import producer must **not** sit in its transaction, because phase 2 hard-deletes
   the plan on recalculation failure). Three `database-architect` tasks are mandatory at M1/M4/M5.
 
+- `M` **Carry activity notes through XER and MSPDI** (import and export). P6 keeps remarks in
+  `TASKMEMO`, MS Project in `<Notes>`; neither adapter reads them today, so a programme's remarks are
+  lost on import (`docs/TECH_DEBT.md` #543 covers reporting the drop). The target already exists:
+  activity notes (ADR-0046). Demand: on 2026-10-22 the owner's remarks for a programme
+  had to travel in a separate spreadsheet beside the XER.
+
+- `M`–`L` **Labelled swimlanes on the diagram** (one horizontal band per system or trade, with its
+  name). Asked for by the owner on 2026-10-22 ("is there a way to put the systems in swimlanes?"),
+  who then chose, for now, to regroup the WBS by system instead (`docs/DECISIONS.md`, 2026-10-22).
+  Still an open question in `docs/PROJECT_BRIEF.md` ("Default: no in v1") and ADR-0026; this is the
+  first recorded demand. Needs a spec: it is a new diagram band beside the pinned WBS band (ADR-0063).
+
+- `S` **Tidy up the calendars an import leaves behind.** Deleting an imported plan keeps the project
+  calendars its import created (`docs/API.md`: they go with the project, not the plan), so
+  re-importing revisions into one project piles up `"(imported <date>)"` copies that must be removed
+  by hand, and makes `docs/TECH_DEBT.md` #540 more likely. Options: offer to remove an import's
+  unused calendars when its plan is deleted, or let an import reuse an identical calendar.
+
 ## Platform foundations not yet built
 
 Each of these has an **accepted ADR** and no implementation — see

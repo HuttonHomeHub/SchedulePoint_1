@@ -9295,3 +9295,52 @@ The first-load text states this row was raised for are converted (2026-10-19): `
 On the owner's first clear-out run, all nine **Permanently deleted** rows in the Audit log read **By: Unknown**. They were written by SchedulePoint itself (`actorType` `SYSTEM`), and the switch-on guide promised **System**; the guide now says "Unknown" and cites this row. "Unknown" reads as a missing or suspicious actor on the one row type where the actor is certain. The same afternoon the preview said "jkjkjk" was "due in 5 days" while **Recently deleted** said "Expires in 4 days" for the same item (deleted 2026-07-27 16:12, read 2026-10-20 16:38, 4.98 days left): the preview rounds up and the bin rounds down. Neither is wrong, and the guide now warns of it, but two answers to one question from one product is a small trust cost.
 
 **Next:** have `auditActorName` name a `SYSTEM` actor ("SchedulePoint" or "System": a copy decision) with a unit test, and update `docs/guides/switch-on-the-clear-out.md` Part 2 step 8 to match; then decide whether the preview's "due in" should floor like the bin. **Trigger:** any change to the audit log's actor column, or a report that a clear-out row looks unattributed.
+
+### 539. A finish milestone straight after work on another calendar is dated wrongly, or delays its successors a calendar period
+
+**Status:** open · **Verified:** 2026-10-22, by running `computeSchedule` (`apps/api/src/modules/schedule/engine/compute.ts`) on the fixture below in a throwaway Vitest file beside `compute.activity-calendar.spec.ts` · **Raised:** 2026-10-22 (a user programme with weekend shutdown tie-ins, imported as XER) · **Size:** M · **Owner:** api
+
+Construction plans often put a shutdown on a weekend calendar and mark its end with a milestone ("cutover complete") before weekday work resumes. With per-activity calendars (ADR-0037) that milestone is wrong whichever calendar it is given. Fixture: plan calendar Mon-Fri 08:00-16:00; weekend calendar Sat-Sun 07:00-19:00; data date 2027-06-14. `W` is a 2-day (1,440-minute) task on the weekend calendar with `SNET` 2027-06-26, after a 5-day weekday task `A`. `M` is a `FINISH_MILESTONE` after `W`. `K` is a 5-day weekday task after `M`, followed by a `FINISH_MILESTONE` with `FNLT` 2027-07-09. All links are FS with no lag.
+
+- **`M` on the plan calendar:** `M` is dated **Fri 2027-06-25**, the day before `W` starts, and `W`'s total float is **-1,440 minutes** with nothing late. `K` correctly starts Mon 2027-06-28.
+- **`M` on the weekend calendar:** `M` is correctly dated Sun 2027-06-27, but **`K` starts Mon 2027-07-05**, a week late, and `A` and `W` gain float they do not have.
+- **`M` on `allMinutesWorkCalendar`:** correct (`M` Sun 2027-06-27, `K` Mon 2027-06-28, `W` float 0). So does a direct `W` to `K` link with no milestone.
+- **A `START_MILESTONE` on the plan calendar** in the same place gets the right early date (Mon 2027-06-28), but in the full user programme it gave the weekend task **-1,440 minutes** of float, so the late pass has the same fault for start milestones.
+
+The early dates suggest a milestone's instant is re-snapped to its own calendar (forward to its next working minute, or back to its last working day for display) instead of staying at the predecessor's finish. The late pass does the same in reverse. ADR-0155 decided how a finish milestone is dated on one calendar. It did not cover a predecessor on a different calendar.
+
+**Workaround in use:** link the off-calendar work directly to its weekday successors, and hang the milestone off it with a later successor (for example planned MC), so the milestone's late date never constrains the weekend work.
+
+**Next:** turn the fixture into a failing case in `compute.activity-calendar.spec.ts`, then decide the rule (a zero-duration activity keeps its driving predecessor's finish instant; its calendar only decides the date shown). That changes the engine's semantics, so it needs a spec, the ADR-0035 golden contract amended and the conformance matrix re-run (ADR-0034). **Trigger:** none, open now. Weekend and shift shutdowns are routine in the plans this product is for.
+
+### 540. Importing the same file twice in one day fails at commit with a generic "would duplicate" error
+
+**Status:** open · **Verified:** 2026-10-22, by reading `apps/api/src/modules/calendars/calendar.repository.ts` (`findTakenNames` matches exact names only, `name: { in: … }`) and `apps/api/src/modules/interchange/interchange.service.ts` (the calendar disambiguation at `:998` and `:1034`), against `resource.repository.ts` `findTakenNamesWithPrefixes` (`:138`), which the importer already uses for resources at `:969` · **Raised:** 2026-10-22 (the owner's NetPoint-to-XER revisions, imported into one project) · **Size:** S · **Owner:** api
+
+When an imported calendar's name is taken, the importer renames it `"<name> (imported <date>)"` (`interchange.service.ts:104`), but it asks the database only whether the **base** names are taken. So on the second import of the same day, `"<name> (imported <date>)"` is itself taken, the importer does not know, the dry-run stays clean, and the commit fails on the unique index. The owner saw the global fallback text, "That would duplicate an existing record. Check any name or code you have used." (`apps/api/src/common/filters/all-exceptions.filter.ts:187`), on two revisions in a row; renaming the calendar inside the file was the workaround. Resources were fixed for exactly this case: their docblock at `interchange.service.ts:958` names "imported twice on the same day" and they probe by prefix.
+
+**Next:** give calendars the same prefix probe resources use, with a regression test that imports one file twice into one project on one day. No new surface, so this row is its spec. **Trigger:** none, open now; re-importing revisions into one project is the normal way the owner works.
+
+### 541. The import dry-run never checks the plan name, so a clashing name fails only at commit, with the generic message
+
+**Status:** open · **Verified:** 2026-10-22, by reading `apps/api/src/modules/interchange/interchange.service.ts` (commit creates the plan inside the transaction at `:531`; the dry-run probes calendars and resources only, and no `P2002` is mapped to a plan-name message) and `apps/api/src/modules/plans/plans.service.ts:377` (the hand-made path maps `P2002` to a clear message) · **Raised:** 2026-10-22 (the same session as #540; first suspected for that error, then ruled out, but the gap is real) · **Size:** S · **Owner:** api
+
+A plan created by hand with a name its project already has gets a clear refusal. An import that would do the same is not checked by the preview and falls through to the global "That would duplicate an existing record" text at commit, after the planner has already accepted a clean dry-run. `docs/API.md`'s commit row lists no `409` for it.
+
+**Next:** have the dry-run report a clashing plan name as a blocking finding (or offer the next free name), map the commit's `P2002` on the plan to the same wording `plans.service.ts` uses, and add the `409` to `docs/API.md`. This adds a dry-run finding, which the import screen already renders generically; confirm that before treating the row as its own spec (ADR-0105). **Trigger:** none, open now.
+
+### 542. Every XER import says hours-per-day was not imported, and it was
+
+**Status:** open · **Verified:** 2026-10-22, by reading `packages/interchange/src/xer-adapter.ts` (the drop finding's text, "hours-per-day/-week, base-calendar inheritance … were not imported", sits beside `hoursPerDayField`, which maps `day_hr_cnt` to `hoursPerDay` at `:321-328` and is applied at `:409` and `:419`) · **Raised:** 2026-10-22 (the owner's XER import report; the session then wrongly told the owner the app does not store 8 hours a day) · **Size:** S · **Owner:** interchange
+
+ADR-0068 made a calendar carry its hours-per-day and the XER adapter imports it, but the report's calendar drop finding still names hours-per-day among the things not imported. It fires on every XER file with a calendar, so every planner reads a false statement about their data on every import, and it misled the very session diagnosing the import. The MSPDI adapter's equivalent text was already corrected. ADR-0050's mapping table (`day_hr_cnt` "mapped both ways") is right; the message is the stale part.
+
+**Next:** drop "hours-per-day" from the finding (keep hours-per-week and base-calendar inheritance), with a unit test on the finding text so it cannot drift again. **Trigger:** none, open now.
+
+### 543. Activity notes are dropped by both XER and MSPDI import, and the report does not say so
+
+**Status:** open · **Verified:** 2026-10-22, by grepping `packages/interchange/src/` on `origin/main`: no `TASKMEMO` table in the XER adapter and no `<Notes>` handling in the MSPDI adapter; ADR-0050's mapping table has no notes row · **Raised:** 2026-10-22 (the owner's remarks had to be carried in a separate spreadsheet beside the import) · **Size:** S to report, M to carry · **Owner:** interchange
+
+ADR-0050's principle is that every source field is either mapped or **named in the report**. An activity's notes (P6 `TASKMEMO`, MS Project `<Notes>`) are neither: an XER table the importer does not read is skipped silently, so a planner importing a programme full of remarks gets a clean report and no remarks. The app has notes (ADR-0046), so this is a gap in the bridge, not in the model.
+
+**Next:** first, report it: a drop finding whenever the source holds memo or notes content, with a test, which is small and adds no surface. Carrying notes across (import, and export back) is the larger half, recorded in `docs/BACKLOG.md`. **Trigger:** none for the report half; the carry half when the owner asks for it.
