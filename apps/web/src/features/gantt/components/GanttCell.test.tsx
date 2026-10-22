@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GanttCell } from './GanttCell';
@@ -70,11 +70,47 @@ describe('a cell that is shut', () => {
     );
   });
 
-  it('gives a SIGHTED planner the reason too, not only a screen-reader one', () => {
-    // The mirror of ADR-0082's defect. "A summary rolls this up from the activities inside it" is
-    // not deducible from a dimmed fill, and dimming plus silence reads as breakage.
+  it("carries no native title: the app's own tip replaces it, so hover shows one thing (#538)", () => {
+    // A `title` is hover-only and beside the tip it would show twice. The reason still reaches
+    // assistive technology through the `sr-only` description tested above.
     renderCell({ gate: shut });
-    expect(screen.getByRole('gridcell')).toHaveAttribute('title', 'Start editing to change this.');
+    expect(screen.getByRole('gridcell')).not.toHaveAttribute('title');
+  });
+
+  it('shows the reason in a tip on double-click, for a sighted planner (#538)', () => {
+    // The mirror of ADR-0082's defect: dimming plus silence reads as breakage.
+    renderCell({ gate: shut });
+    fireEvent.doubleClick(screen.getByRole('gridcell'));
+    const tip = document.querySelector('[data-tooltip]');
+    expect(tip).toHaveTextContent('Start editing to change this.');
+    expect(tip).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('shows no tip for a single click or a focus, which only select the row (#538)', () => {
+    renderCell({ gate: shut });
+    const cell = screen.getByRole('gridcell');
+    fireEvent.focus(cell);
+    fireEvent.click(cell);
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+  });
+
+  it('shows no tip on double-click when the cell is shut with no reason', () => {
+    renderCell({ gate: { ...shut, reason: null } });
+    fireEvent.doubleClick(screen.getByRole('gridcell'));
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+  });
+
+  it('hands the panel a function that shows the tip, and withdraws it on unmount', () => {
+    const registerShow = vi.fn();
+    const { unmount } = renderCell({ gate: shut, registerShow, cellId: 'a1:duration' });
+    const show = registerShow.mock.calls[0]![1] as () => void;
+    expect(registerShow).toHaveBeenCalledWith('a1:duration', expect.any(Function));
+    act(() => show());
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
+      'Start editing to change this.',
+    );
+    unmount();
+    expect(registerShow).toHaveBeenLastCalledWith('a1:duration', null);
   });
 
   it('carries no title when it is writable, so a live cell has no phantom tooltip', () => {
@@ -96,6 +132,7 @@ describe('a cell that is open', () => {
     renderCell({ onBegin });
     fireEvent.doubleClick(screen.getByRole('gridcell'));
     expect(onBegin).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
   });
 
   it('renders no input until it is the editing cell — 240 of them is the cost of the alternative', () => {

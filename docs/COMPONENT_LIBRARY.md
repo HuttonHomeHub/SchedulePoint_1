@@ -854,6 +854,10 @@ content carries something the name does not: `role="tooltip"`, linked while open
 `'reason-echo'` (ADR-0204) — the content restates why a shaded control is shut, which it already
 carries as a permanent `sr-only` description: wired like `'name-echo'`, so the sentence is read once.
 A click on the trigger also opens a `'reason-echo'` tip (a shaded control's press does nothing).
+`opensOn: 'request'` (default `'focus'`, every other caller) is for a shaded trigger whose click and focus
+already do something else (the Gantt's shut cell, where a click selects its row): the tip opens on hover and
+when the caller calls the returned `show()`, never on focus, a click or a touch long-press, and the next
+`keydown` anywhere closes it (closing only; the key is not withheld).
 The caller states which case they are in; the compiler enforces it.
 
 WCAG 1.4.13 in full: **Dismissible** (Escape, claimed only while open, `preventDefault` ONLY —

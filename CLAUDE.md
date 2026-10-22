@@ -606,7 +606,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0201** _(Accepted; amends ADR-0176 D3)_ — A restore brings nothing back onto a deleted calendar → [`0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md`](docs/adr/0201-a-restore-brings-nothing-back-onto-a-deleted-calendar.md)
 - **ADR-0202** _(Accepted; amends ADR-0146 D3)_ — A loading state is the settled shape, and says one sentence → [`0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md`](docs/adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)
 - **ADR-0203** _(Accepted; amends ADR-0152 D1, D3 and D4 for Re-layout)_ — Re-layout starts from several places and may use the rows the diagram already has → [`0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md`](docs/adr/0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)
-- **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
+- **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117; amended for the Gantt cell, #538)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

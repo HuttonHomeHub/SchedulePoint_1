@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 
 import type { GanttCellGate } from '../model/cell-gate';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -61,6 +62,14 @@ export interface GanttCellProps {
   onChange: (text: string) => void;
   onCommit: () => void;
   onCancel: () => void;
+  /**
+   * Hands the panel a function that shows this cell's reason tip, keyed by `cellId`, and withdraws it
+   * on unmount (`null`). F2 on a row whose editable cells are all shut reaches the tip through it:
+   * focus is on the row, so the panel cannot ask the cell any other way. Stable by the caller.
+   */
+  registerShow?: ((cellId: string, show: (() => void) | null) => void) | undefined;
+  /** The key `registerShow` files this cell under. */
+  cellId?: string | undefined;
   className?: string | undefined;
   /**
    * A leading slot (the name cell's indent and disclosure arrow) drawn before the value AND before
@@ -86,6 +95,8 @@ export function GanttCell({
   onChange,
   onCommit,
   onCancel,
+  registerShow,
+  cellId,
   className,
   lead,
   children,
@@ -93,6 +104,26 @@ export function GanttCell({
   const reasonId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // The tip opens on REQUEST only (ADR-0204, amended for this cell, #538). A click on a cell selects
+  // its row, so the default `reason-echo` — which opens on focus and on every click — would pop a tip
+  // on every selection made without the pen. The gestures that try to EDIT and are refused ask for
+  // it: a double-click here, and F2 through `registerShow`.
+  const { triggerProps, tooltip, show } = useTooltip({
+    content: gate.readOnly ? (gate.reason ?? undefined) : undefined,
+    purpose: 'reason-echo',
+    opensOn: 'request',
+  });
+  const showRef = useRef(show);
+  useEffect(() => {
+    showRef.current = show;
+  });
+  const stableShow = useCallback(() => showRef.current(), []);
+  useEffect(() => {
+    if (registerShow === undefined || cellId === undefined) return;
+    registerShow(cellId, stableShow);
+    return () => registerShow(cellId, null);
+  }, [registerShow, cellId, stableShow]);
 
   // Focus the field when it opens, and select its contents — a planner who pressed F2 to replace a
   // duration should be able to type immediately rather than clear first. Selecting is what a
@@ -207,10 +238,10 @@ export function GanttCell({
       // **A sighted planner gets the reason too.** It was `sr-only` alone until the M6 ux gate,
       // which is the mirror of the defect ADR-0082 was written about: a reason nobody can reach.
       // "A summary rolls this up from the activities inside it" is not deducible from a dimmed
-      // fill, and the two precedents in this tree disagreed with the omission — `ToolbarButton`
-      // gives a shaded control a native `title`, and the `View ▾` lens toggles render the reason
-      // visibly, with a comment saying a sighted planner needs it as much as a screen-reader one.
-      {...(gate.readOnly && gate.reason !== null ? { title: gate.reason } : {})}
+      // fill. It was a native `title` until #538, which a keyboard reader and a finger never see;
+      // the app's own tip replaces it (hover, double-click, F2) and no `title` rides beside it, or
+      // hover would show both (ADR-0204 D3). The `sr-only` span below stays the description.
+      {...triggerProps}
       {...(gate.reason === null ? {} : { 'aria-describedby': reasonId })}
       className={cn(
         'shrink-0 px-2 text-xs',
@@ -223,7 +254,7 @@ export function GanttCell({
         className,
       )}
       style={{ width }}
-      onDoubleClick={gate.writable ? onBegin : undefined}
+      onDoubleClick={gate.writable ? onBegin : show}
     >
       {lead === undefined ? (
         editing ? (
@@ -240,6 +271,7 @@ export function GanttCell({
         </div>
       )}
 
+      {tooltip}
       {gate.reason === null ? null : (
         <span id={reasonId} className="sr-only">
           {gate.reason}

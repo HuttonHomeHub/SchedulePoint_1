@@ -23,18 +23,24 @@ function Host({
 }: Partial<TooltipOptions> & { onCommand?: () => void }): React.ReactElement {
   // `in`, not `??`: the empty-content case passes `content={undefined}` deliberately, and a
   // nullish default would silently swap the subject back in (this harness shipped that first).
-  const { triggerProps, tooltip } = useTooltip({
+  const { triggerProps, tooltip, show } = useTooltip({
     content: 'content' in options ? options.content : 'Zoom in',
     purpose: options.purpose ?? 'name-echo',
     disabled: options.disabled,
     ...(options.placement ? { placement: options.placement } : {}),
     ...(options.dismissOnPress ? { dismissOnPress: options.dismissOnPress } : {}),
+    ...(options.opensOn ? { opensOn: options.opensOn } : {}),
   });
   return (
     <>
       <button {...triggerProps} aria-label="Zoom in" onClick={onCommand}>
         +
       </button>
+      {options.opensOn ? (
+        <button type="button" onClick={show}>
+          ask
+        </button>
+      ) : null}
       {tooltip}
     </>
   );
@@ -214,6 +220,108 @@ describe('useTooltip', () => {
       fireEvent.pointerUp(button, { pointerType: 'touch' });
       fireEvent.click(button);
       expect(onCommand).not.toHaveBeenCalled();
+      expect(tip()).not.toBeNull();
+    });
+  });
+
+  describe("opensOn 'request' (ADR-0204 amended, #538)", () => {
+    const renderRequest = (extra: Partial<TooltipOptions> & { onCommand?: () => void } = {}) =>
+      render(<Host purpose="reason-echo" opensOn="request" {...extra} />);
+    const trigger = (): HTMLElement => screen.getByRole('button', { name: 'Zoom in' });
+
+    it('focus does not open it (red: onFocus ignores the option)', () => {
+      renderRequest();
+      fireEvent.focus(trigger());
+      expect(tip()).toBeNull();
+    });
+
+    it('a click does not open it (red: the reason-echo click path ignores the option)', () => {
+      renderRequest();
+      fireEvent.click(trigger());
+      expect(tip()).toBeNull();
+    });
+
+    it('a touch long-press does not open it and does not swallow the click (red: long-press left on)', () => {
+      const onCommand = vi.fn();
+      renderRequest({ onCommand });
+      fireEvent.pointerDown(trigger(), { pointerType: 'touch', clientX: 10, clientY: 10 });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_LONG_PRESS_MS + 10));
+      fireEvent.pointerUp(trigger(), { pointerType: 'touch' });
+      fireEvent.click(trigger());
+      expect(tip()).toBeNull();
+      expect(onCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it('hover still opens it after the delay', () => {
+      renderRequest();
+      fireEvent.pointerEnter(trigger(), { pointerType: 'mouse' });
+      expect(tip()).toBeNull();
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(tip()).toHaveTextContent('Zoom in');
+    });
+
+    it('show() opens it at once and closes any other open tip (red: show is not returned)', () => {
+      render(
+        <>
+          <Host purpose="name-echo" content="Other" />
+          <Host purpose="reason-echo" opensOn="request" content="Why" />
+        </>,
+      );
+      fireEvent.focus(screen.getAllByRole('button', { name: 'Zoom in' })[0]!);
+      expect(tip()).toHaveTextContent('Other');
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      expect(document.querySelectorAll('[data-tooltip]')).toHaveLength(1);
+      expect(tip()).toHaveTextContent('Why');
+    });
+
+    it('show() is a no-op while the content is absent', () => {
+      renderRequest({ content: undefined });
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      expect(tip()).toBeNull();
+    });
+
+    it('the next keydown anywhere closes it and is not withheld (red: no keydown close)', () => {
+      renderRequest();
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      expect(tip()).not.toBeNull();
+      const event = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => void document.dispatchEvent(event));
+      expect(tip()).toBeNull();
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('Escape closes it with preventDefault only, so it still reaches an outer handler', () => {
+      renderRequest();
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      const outer = vi.fn();
+      window.addEventListener('keydown', outer);
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => void document.body.dispatchEvent(event));
+      window.removeEventListener('keydown', outer);
+      expect(event.defaultPrevented).toBe(true);
+      expect(outer).toHaveBeenCalledTimes(1);
+      expect(tip()).toBeNull();
+    });
+
+    it('the panel is aria-hidden and the trigger is linked to nothing', () => {
+      renderRequest();
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      expect(tip()).toHaveAttribute('aria-hidden', 'true');
+      expect(tip()).not.toHaveAttribute('role');
+      expect(trigger()).not.toHaveAttribute('aria-describedby');
+    });
+
+    it("the default 'focus' mode still opens on focus and click (every other caller unchanged)", () => {
+      render(<Host purpose="reason-echo" />);
+      fireEvent.focus(screen.getByRole('button', { name: 'Zoom in' }));
       expect(tip()).not.toBeNull();
     });
   });
