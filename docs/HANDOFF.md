@@ -3,52 +3,48 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-21 (evening). The owner chose seven register rows and said "fix 1 to 7 in this
-session". All seven are done, in six PRs, plus a small test fix found on the way: **#313** narrowed,
-**#354 + #280** (two of the repository's own checks), **#165** (Delete for notes and baselines behind
-the row's ⋯), **#72** (the shared checkbox), **#537** (the reset link's token moves into the link's
-`#` part) and **#116 item 3** (a greyed-out control now shows its reason to everyone, ADR-0204).
-Released as **`api` 0.98.0** and **`web` 0.196.0**. The owner's **hard rule** still stands: nothing that
+**Written:** 2026-10-22 (morning). The owner was shown last session's shortlist and said "fix them all
+unless there is a valid reason not to". Done, in four PRs plus the release: **#326** closed (two of its
+three findings were already fixed), **#308** (`e2e-local.sh` forwards arguments to Playwright), **#306
+(b)–(c)** (tests only; the rename (a) declined), **#249** (the four docks' sizing from one hook),
+**#276** (a failing gate shows its finding), **#299** (`check:ci-roster` checks every CI command) and
+**#538** (a read-only Gantt cell shows its reason on double-click, double-tap or F2). Released as
+**`web` 0.197.0** (`api` unchanged at 0.98.0). The owner's **hard rule** still stands: nothing that
 needs them to test, measure or check anything on their server or devices (a decision question is
 fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's 2026-10-21 answers (in `docs/DECISIONS.md`)
+## The owner's 2026-10-22 answers (in `docs/DECISIONS.md`)
 
-- **Choice:** fix #313, #354, #280, #116 item 3, #537, #72 and #165 this session.
-- **Five specs approved with every default** (`docs/specs/gate-invocation-repairs/`,
-  `shaded-reason-visible/`, `reset-link-fragment/`, `checkbox-field-adoption/`, `screen-tidy-165/`):
-  CLAUDE.md §19.8 names `pnpm prepush:push`; a shaded menu item prints its reason inline (not a
-  tooltip); the five labelled toolbar controls get a reason tip too; an expired reset link is reported
-  when the form is submitted, not on arrival; Delete for notes and baselines moves behind ⋯ (two
-  presses, the same rule as clients, projects, plans and resources).
+- **Choice:** fix the whole shortlist (#538, #326, #276, #249, #299, #306, #308) unless there is a
+  valid reason not to. **Declined, with the reason:** #306 (a), renaming the focus-handoff hook (a
+  public contract change for no behaviour change). #306 stays open for it.
+- **#538:** show on press. **CQ-1:** double-click, double-tap and F2 only; a single click selects the
+  row quietly.
+- **#299:** "fix them all" is the decision its trigger named. **CQ-2:** `pnpm build` gets a written
+  CI-only reason, not a new `prepush` stage.
+- **Three specs approved with every default:** `docs/specs/gate-failure-output/` (#276),
+  `ci-command-roster/` (#299), `gantt-cell-reason-on-press/` (#538).
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.98.0 and `web` 0.196.0.
+- **Latest releases:** `api` 0.98.0 and `web` 0.197.0.
 - **This session's PRs, in merge order:**
-  - **#1091** #313 narrowed to the one unexplained Firefox-only sign-up failure. Its headline was stale:
-    71 of 73 sign-up waits already carry the 15 s timeout (the other two are not waits).
-  - **#1092** #354 + #280. `check:flags` strips comments before reading Playwright pins and refuses,
-    loudly, the shapes the stripper cannot read safely (a `/*` after a quote or after `//`).
-    `pnpm prepush:push [git push args]` runs the whole gate and pushes only if nothing failed; it refuses
-    a dirty tree, a failing `git push --dry-run`, a HEAD or branch that moved during the gate, and
-    `--checks`. devops-reviewer found a real hole (a `/*` inside a `//` comment hid a pin); fixed first.
-  - **#1093** #165 closed: (b) and (e) were already fixed (the row had not recorded it); (d) Delete for
-    notes and baselines moved behind the row's ⋯. Its new baseline-delete journey failed CI once (it
-    captured a baseline before recalculating); fixed by mirroring the variance journey's set-up.
-  - **#1095** #72 closed: three hand-rolled checkboxes (not five) now use `CheckboxField`, which gained
-    `labelHidden` and `targetData`.
-  - **#1096** #537 closed: the reset email links to `{web}/reset-password#token=…`; the library's
-    `GET /api/auth/reset-password/:token` is shadowed with a 303 to that form and **no token lookup**
-    (security-reviewer: APPROVE; it removes a validity oracle the old GET had).
-  - **#1097** #116 closed (item 3 was its last item): ADR-0204. Menus print a shaded item's reason
-    inline; `Tooltip` gained `purpose: 'reason-echo'` (visual only, also opens on press) for five
-    toolbar controls. The accessibility review found a real defect before ship (a reason tip could
-    reappear on a control already left); fixed with a red-first test. New row **#538** (a read-only
-    Gantt cell's reason is still only a `title`; a decision, not a build).
-  - **#1098** a test fix to #1092's own test: its fixture checks were written `node -e process.exit(1)`
-    with bare brackets, which some shells refuse.
-  - **#1094** the Version Packages release.
+  - **#1100** the three spec approvals; #326 closed (the staff console's badges became consequence
+    lines in ADR-0178; the bundle floor was re-measured 2026-10-02; the literal-JSX limit is accepted
+    and named in both docblocks); #308 closed (`scripts/e2e-local.sh <one target> -- <args>`, pinned
+    by `scripts/e2e-local.test.mjs` in `check:e2e-roster`); #306 (b)–(c) (the focus-handoff gate
+    derives its consumers; Toolbar and Deck get behavioural wiring tests).
+  - **#1101** #249 closed: `useRightDockSize` (the row's `*EffectiveMax` symptom was already gone).
+  - **#1102** #276 + #299 closed. `prepush` prints a short failing log whole, a long one as ranked
+    failure lines (`✗`/`×`/`FAIL`/`ERR_` before `Error`) plus its last 30 lines, capped at 300
+    characters a line. `check:ci-roster` R9–R13: every `ci.yml` `run:` is a prepush stage, a root
+    `check:*`, or a `ciOnly` entry with a reason; it refuses shapes it cannot read (a continued
+    `run:`, flow steps, quoted keys, `working-directory`). ADR-0160 amended. The devops review found a
+    real hole (a `run:` continued on a second line slipped past); fixed first.
+  - **#1103** #538 closed: `useTooltip({ opensOn: 'request' })` + a stable `show()`; ADR-0204
+    amended (its premise was wrong: arrow keys move rows, a click focuses a cell). Known gap, recorded
+    in the ADR: F2 cannot reach a shut cell that sits beside a writable one.
+  - **#1104** the Version Packages release (`web-v0.197.0`).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -99,12 +95,13 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   Planner; the WCAG 2.5.3 header fix is "both fixes"; password reset stays sequential.
 - 2026-10-20: #535 as its spec; #307(a) skip-the-placeholder default; #88 no sign-in on Confirm;
   a `**Verified:**` date dates the whole row (A8a/A8b).
-- 2026-10-21: the five specs with every default (see the answers above).
+- 2026-10-21: the five specs with every default.
+- 2026-10-22: the three specs with every default and the CQ answers above; #306 (a) declined.
 
 ## Parked by the owner — keep, do not raise
 
 The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16, 2026-10-17,
-2026-10-18, 2026-10-19, 2026-10-20 and 2026-10-21). A session does not bring them up until the owner does. When the
+2026-10-18, 2026-10-19, 2026-10-20, 2026-10-21 and 2026-10-22). A session does not bring them up until the owner does. When the
 owner returns to one, the steps are ready:
 
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
@@ -119,9 +116,9 @@ owner returns to one, the steps are ready:
 
 ## Open rows worth knowing
 
-- **#538** (new): a read-only Gantt cell's reason is still a native `title` (hover-only). Deliberately
-  left out of ADR-0204: a tip on every cell the arrow keys pass would be noise. Needs a decision.
-- **#313** is now only the one Firefox-only failure of 2026-09-13; its trigger is "read that run's
+- **#306** is now only (a): the hook's name, folder and `toolbarLabel` option are toolbar-specific
+  while a tree uses it. Declined this session (a public contract change for no behaviour change).
+- **#313** is only the one Firefox-only failure of 2026-09-13; its trigger is "read that run's
   trace first, the next time a base-journey sign-up wait fails on CI".
 - **#532** is only the Members table's placeholder rows being 4–8 px shorter than settled rows (needs
   a `Column` prop, a component contract: ADR-0105 spec trigger). Accepted known gap.
@@ -129,25 +126,27 @@ owner returns to one, the steps are ready:
 - #507 (no exported OpenAPI file; owner's call), #508 (by decision), #321 (deferred on a trigger),
   #391 and #395 (remaining painter items), #509, #510, #512, #513 and #515–#517 (deferred on triggers;
   #509 is the off-site copy: today's copies live on the same disk as the database).
-- **#326** is three items (a)–(c).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
 
 ## Suggested next
 
 Nothing of this session's is in flight: no open PRs, no wake-ups armed. Start none until the owner
-picks. **None of these has been checked against the code yet**: check each row's symptom first (two
-of this session's seven had already been fixed in part).
+picks. **Only #536's first half was checked against the code** (2026-10-22:
+`apps/web/src/features/audit/model/audit-copy.ts:503-506` still returns `'Unknown'` for a `SYSTEM`
+actor); check each other row's symptom first (last session, two of seven had been fixed in part; this
+session #326 was two-thirds fixed and #249's literal symptom was gone).
 
-1. **#538** — a decision: should a read-only Gantt cell show its reason when pressed? Small either way.
-2. **#326** (a)–(c) — the three staff-console gate findings.
-3. **#276** — a failing gate's log is tailed to 12 lines; now that `prepush:push` exists, check whether
-   it still bites.
+1. **#536** — the Audit log names the clear-out "Unknown" (a `SYSTEM` actor has no label in
+   `auditActorName`), and the bin and the preview round "days left" differently. Small; one copy
+   decision for the owner ("SchedulePoint" or "System").
+2. **#349** — `scripts/e2e-local.sh` refuses a busy port but not a busy database, so two runs can
+   share `app_test` and report a product defect. Small; repo tooling.
+3. **#369** — `NODE_RADIUS` and `LAG_HANDLE_R_ACTIVE` are both 5 and nothing couples them. Small.
 
-Runners-up: #249 (four hand-copied dock-geometry blocks), #299 (nothing asserts that a command CI
-runs is also run by `pnpm prepush`; ADR-0160 may already cover it), #306, #308. The next
-reconciliation pass when `check:reconcile-due` warns on a full clone (last pass 2026-10-19; in this
-shallow clone it warns only because it cannot date ADRs).
+Runners-up: #495 (`SizeField` and `TextField` can drift), #371 (thirty measurement scripts repeat one
+esbuild block), #306 (a) only if the owner wants the rename after all. The next reconciliation pass
+when `check:reconcile-due` warns on a full clone (last pass 2026-10-19).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -494,3 +493,17 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     replayed commit's own change with `git diff <commit>^ <commit> -- docs/TECH_DEBT.md | git apply -3`,
     then settle the ledger conflict by keeping every row (and the newer wording of a row both sides
     edited). `docs/DECISIONS.md`: keep both top entries, newest first.
+
+- **2026-10-22 lessons (the shortlist batch):**
+  - **A rebased branch that predates a script change runs the OLD script.** The #538 worktree was
+    cut before #308 landed, so `e2e-local.sh web:x -- -g …` ignored the filter and ran the whole
+    suite. Check `git merge-base` before relying on a tool another PR in the batch changed.
+  - **A fresh worktree's API e2e needs its own `prisma generate`.** Every web suite failed at
+    `webServer` start with `$transaction does not exist on PrismaService` until it ran.
+  - **The new `prepush` output is worth reading now:** a red gate prints its `✗`/`×` lines and a
+    "showing K of N lines; run `pnpm <gate>`" footer instead of a 12-line tail.
+  - **Two gate PRs that read each other's files ship together:** #299 parses `prepush.sh`, which #276
+    changed; they were stacked, validated once, and merged as one PR (#1102).
+  - **Brief builders without the database and run every e2e suite yourself, serially.** Three
+    builders and two reviewers ran in parallel with the orchestrator's e2e queue; only lint once ran
+    out of memory (re-run with `NODE_OPTIONS=--max-old-space-size=8192`).
