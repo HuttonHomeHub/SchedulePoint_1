@@ -170,6 +170,17 @@ LOG_WHOLE_MAX=200
 LOG_MATCH_MAX=40
 # And always the end of the log, where a summary lives.
 LOG_TAIL=30
+# No printed line is wider than this: a minified bundle or a JSON blob in one line is not a finding.
+LOG_LINE_MAX=300
+
+# Indents, drops a trailing CR (CRLF output, progress redraws) and cuts a line at LOG_LINE_MAX.
+clip_log() {
+  awk -v max="$LOG_LINE_MAX" '{
+    sub(/\r$/, "")
+    if (length($0) > max) $0 = substr($0, 1, max) "…"
+    print "        " $0
+  }'
+}
 
 # Prints the log of a non-passing gate. The footer names `pnpm <label>` because every label is also
 # the script that reproduces it, which is why no log path is printed: the log is per run, overwritten
@@ -178,24 +189,30 @@ show_log() {
   local label="$1" total matches shown
   total="$(awk 'END { print NR }' "$log")"
   if [ "$total" -le "$LOG_WHOLE_MAX" ]; then
-    sed 's/^/        /' "$log"
+    clip_log <"$log"
     return
   fi
+  # Strong markers take the slots first; `error` fills what is left, because a passing test that
+  # asserts on an Error would otherwise use all of them before the real finding. Printed in log order.
   matches="$(awk -v limit="$((total - LOG_TAIL))" -v max="$LOG_MATCH_MAX" '
-    NR > limit { exit }
-    /✗|×|FAIL|[Ee]rror|ERR_/ {
-      if (count < max) { count++; printf "%d: %s\n", NR, $0; pending = 1 } else { pending = 0 }
+    FNR == NR {
+      if (NR > limit) next
+      if ($0 ~ /✗|×|FAIL|ERR_/) { if (strong < max) { strong++; picked[NR] = 1 } }
+      else if ($0 ~ /[Ee]rror/) { if (weak < max) { weak++; weakAt[weak] = NR } }
       next
     }
-    pending { printf "%d: %s\n", NR, $0; pending = 0 }
-  ' "$log")"
+    FNR == 1 { for (i = 1; i <= weak && i <= max - strong; i++) picked[weakAt[i]] = 1 }
+    FNR > limit { exit }
+    picked[FNR] { printf "%d: %s\n", FNR, $0; pending = 1; next }
+    pending { printf "%d: %s\n", FNR, $0; pending = 0 }
+  ' "$log" "$log")"
   shown="$LOG_TAIL"
   if [ -n "$matches" ]; then
     shown=$((shown + $(printf '%s\n' "$matches" | awk 'END { print NR }')))
-    printf '%s\n' "$matches" | sed 's/^/        /'
+    printf '%s\n' "$matches" | clip_log
   fi
   printf '        …\n'
-  tail -n "$LOG_TAIL" "$log" | sed 's/^/        /'
+  tail -n "$LOG_TAIL" "$log" | clip_log
   printf '        showing %s of %s lines; run `pnpm %s` for all of it\n' "$shown" "$total" "$label"
 }
 

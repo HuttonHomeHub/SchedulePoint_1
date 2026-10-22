@@ -4,8 +4,8 @@
  *
  * Each case copies the real `prepush.sh` into a throwaway tree with a stub `package.json` (no-op
  * `lint`/`typecheck`/`test`, plus one `check:*` gate that prints a prepared log and exits with a
- * prepared code). Without `--push` the script calls no git, so no repository is needed. No locale
- * is set, so the marker match runs under whatever CI's default is.
+ * prepared code). Without `--push` the script calls no git, so no repository is needed. The child runs under
+ * `LC_ALL=C`, the worst case for matching the multibyte `✗`/`×`.
  *
  * **Verified red** against two wrong implementations, by pointing `PREPUSH_SCRIPT` at them: today's
  * `tail -12` fails the row's case, E6's case and the WARN case (the finding is outside the tail);
@@ -43,7 +43,11 @@ function runGate(gate, lines, code) {
         scripts: { lint: NOOP, typecheck: NOOP, test: NOOP, [gate]: `cat log.txt; exit ${code}` },
       }),
     );
-    const r = spawnSync('bash', ['scripts/prepush.sh'], { cwd: root, encoding: 'utf8' });
+    const r = spawnSync('bash', ['scripts/prepush.sh'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, LC_ALL: 'C' },
+    });
     const out = `${r.stdout}${r.stderr}`;
     // The gate's own output is the indented block; the verdict lines are not indented.
     const shown = out.split('\n').filter((l) => l.startsWith('        '));
@@ -115,6 +119,32 @@ it('still exits 1 and names the failed gate', () => {
   const r = runGate('check:chain', ['✗ x'], 1);
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /FAILED: check:chain/);
+});
+
+it('keeps a real finding when passing tests printed more Error lines than there are slots', () => {
+  const lines = [...filler(60, 'Error: expected'), ...filler(60), '  ✗ real case', ...filler(150)];
+  const r = runGate('check:errors', lines, 1);
+  assert.match(r.out, /\d+:\s+✗ real case/);
+  assert.ok(r.shown.length <= BOUND, `${r.shown.length} lines shown`);
+});
+
+it('cuts a very wide line, in a short log and in a long one', () => {
+  const wide = `✗ ${'x'.repeat(5000)}`;
+  for (const lines of [
+    [wide, '✗ x'],
+    [wide, ...filler(300)],
+  ]) {
+    const r = runGate('check:wide', lines, 1);
+    assert.ok(r.shown.length > 0);
+    for (const l of r.shown) assert.ok(l.length <= 8 + 300 + 20, `${l.length} chars`);
+    assert.match(r.out, /x…/);
+  }
+});
+
+it('drops a trailing carriage return from the lines it prints', () => {
+  const r = runGate('check:crlf', ['✗ a\r', 'progress\r', ...filler(300)], 1);
+  assert.ok(r.shown.length > 0);
+  assert.doesNotMatch(r.out, /\r/);
 });
 
 let failed = 0;

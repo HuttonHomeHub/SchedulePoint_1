@@ -90,6 +90,10 @@ Rejected: **a sentinel in the output instead of an exit code.** It is spoofable 
 echoes a subprocess, `prepush` prints only `tail -12` of a passing gate's log, and it re-creates the
 per-branch promise the shared `report()` exists to remove.
 
+_Correction, 2026-10-22: the sentence above was wrong when written. `prepush` never printed a passing
+gate's log — it prints `ok` — and the `tail -12` was of a **failing** gate's log. Since `docs/TECH_DEBT.md`
+#276 a non-passing gate prints its whole log up to 200 lines, otherwise its marker lines and its last 30._
+
 `check:advisory-agreement` asserts the list against the code in both directions, **reading
 `ADVISORY_GATES` out of `prepush.sh` rather than restating it** — a second copy is the drift it
 exists to prevent, the same rule `check:claims` follows in reading SQL out of a migration.
