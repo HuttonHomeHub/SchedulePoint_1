@@ -856,8 +856,9 @@ carries as a permanent `sr-only` description: wired like `'name-echo'`, so the s
 A click on the trigger also opens a `'reason-echo'` tip (a shaded control's press does nothing).
 `opensOn: 'request'` (default `'focus'`, every other caller) is for a shaded trigger whose click and focus
 already do something else (the Gantt's shut cell, where a click selects its row): the tip opens on hover and
-when the caller calls the returned `show()`, never on focus, a click or a touch long-press, and the next
-`keydown` anywhere closes it (closing only; the key is not withheld).
+when the caller calls the returned `show()` (stable across renders), never on focus, a click or a touch
+long-press. The next `keydown` anywhere closes it (a lone Shift, Control, Alt or Meta does not; closing only,
+the key is not withheld), and so does a scroll, since the tip is `position: fixed`.
 The caller states which case they are in; the compiler enforces it.
 
 WCAG 1.4.13 in full: **Dismissible** (Escape, claimed only while open, `preventDefault` ONLY —
@@ -878,6 +879,7 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 | a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
 | a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
 | a shaded labelled control's reason (ADR-0204)            | `useTooltip({ purpose: 'reason-echo' })` — the `sr-only` description stays                   |
+| a shaded trigger whose click and focus already do things | `useTooltip({ purpose: 'reason-echo', opensOn: 'request' })`, opened by the refused gesture  |
 
 ## Page archetypes: `ListRow` and `RowSubject` — a row's subject wraps, it never clips
 

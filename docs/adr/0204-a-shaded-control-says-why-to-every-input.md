@@ -89,6 +89,15 @@ first shut cell's tip and says its reason once in the polite live region. A sing
 arrow keys are unchanged and show nothing; typing is unbound. The native `title` is withdrawn from the cell for
 D3's reason, and the `sr-only` description (D4) is unchanged. Spec: `docs/specs/gantt-cell-reason-on-press/`.
 
+The tip also closes on a scroll (it is `position: fixed`) and ignores a lone modifier key as the "next key".
+Only a shut cell with a reason runs the hook, in a child component, so writable cells carry no tooltip machinery.
+
+**Known gap, accepted.** F2 shows only the first shut cell's tip, and only when no cell in the row is writable.
+A shut cell beside a writable one has no keyboard route to the visible tip; a screen-reader user still has its
+`sr-only` description, and a mouse or finger has hover and double-click. A cell cursor would close it and is a
+separate decision. F2's announcement goes through `drag.announce`, the one live region the workspace shares;
+`gantt-editing-implies-drag.structural.test.ts` pins that every host passing `editing` passes `drag`.
+
 ## Alternatives considered
 
 - **A tooltip on menu items.** Needs a gesture on touch, pops on every arrow stop, and a tip over a portalled menu

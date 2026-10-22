@@ -1039,6 +1039,8 @@ function GanttPanelBody({
         // F2 used to fall through in silence. The tip is aria-hidden, so nothing is read twice.
         if (firstRefusal !== null) {
           event.preventDefault();
+          // A held key repeats: the tip is already up and the reason already said.
+          if (event.repeat) break;
           cellShows.current.get(`${activity.id}:${firstRefusal.cellKey}`)?.();
           drag?.announce(firstRefusal.reason);
         }
@@ -2172,8 +2174,7 @@ function GanttRowView({
                 onChange={editing.change}
                 onCommit={editing.commit}
                 onCancel={editing.cancel}
-                registerShow={registerCellShow}
-                cellId={`${activity.id}:${cellKey}`}
+                registerShow={(show) => registerCellShow?.(`${activity.id}:${cellKey}`, show)}
                 className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
                 {...(lead === null ? {} : { lead })}
               >

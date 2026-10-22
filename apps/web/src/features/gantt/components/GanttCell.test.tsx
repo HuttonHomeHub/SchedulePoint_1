@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GanttCell } from './GanttCell';
 
+import { TOOLTIP_OPEN_DELAY_MS } from '@/components/ui/tooltip';
 import type { GanttCellGate } from '@/features/gantt/model/cell-gate';
 
 /**
@@ -102,15 +103,68 @@ describe('a cell that is shut', () => {
 
   it('hands the panel a function that shows the tip, and withdraws it on unmount', () => {
     const registerShow = vi.fn();
-    const { unmount } = renderCell({ gate: shut, registerShow, cellId: 'a1:duration' });
-    const show = registerShow.mock.calls[0]![1] as () => void;
-    expect(registerShow).toHaveBeenCalledWith('a1:duration', expect.any(Function));
+    const { unmount } = renderCell({ gate: shut, registerShow });
+    const show = registerShow.mock.calls[0]![0] as () => void;
+    expect(registerShow).toHaveBeenCalledTimes(1);
     act(() => show());
     expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
       'Start editing to change this.',
     );
     unmount();
-    expect(registerShow).toHaveBeenLastCalledWith('a1:duration', null);
+    expect(registerShow).toHaveBeenLastCalledWith(null);
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+  });
+
+  it('does not re-register when the row hands a fresh binding on every render', () => {
+    const first = vi.fn();
+    const { rerender } = renderCell({ gate: shut, registerShow: first });
+    const second = vi.fn();
+    rerender(
+      <div role="treegrid">
+        <div role="row">
+          <GanttCell
+            value="5 d"
+            label="Duration, Foundations"
+            colIndex={3}
+            width={84}
+            gate={shut}
+            editing={false}
+            text="5 d"
+            onBegin={noop}
+            onChange={noop}
+            onCommit={noop}
+            onCancel={noop}
+            registerShow={second}
+          />
+        </div>
+      </div>,
+    );
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it('registers nothing for a writable cell, which runs no tip at all', () => {
+    const registerShow = vi.fn();
+    renderCell({ registerShow });
+    expect(registerShow).not.toHaveBeenCalled();
+  });
+
+  describe('on hover', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    });
+
+    it('shows the same tip after the 400 ms delay, and not before (#538)', () => {
+      renderCell({ gate: shut });
+      fireEvent.pointerEnter(screen.getByRole('gridcell'), { pointerType: 'mouse' });
+      expect(document.querySelector('[data-tooltip]')).toBeNull();
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
+        'Start editing to change this.',
+      );
+    });
   });
 
   it('carries no title when it is writable, so a live cell has no phantom tooltip', () => {

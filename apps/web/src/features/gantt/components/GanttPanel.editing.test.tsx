@@ -322,6 +322,15 @@ describe('keyboard entry into a cell', () => {
       expect(document.querySelector('[data-tooltip]')).toBeNull();
     });
 
+    it('does not announce again while F2 is held down', () => {
+      announce.mockClear();
+      renderRefused(editingBundle({ gateFor: () => SHUT }));
+      fireEvent.keyDown(grid(), { key: 'F2' });
+      fireEvent.keyDown(grid(), { key: 'F2', repeat: true });
+      fireEvent.keyDown(grid(), { key: 'F2', repeat: true });
+      expect(announce).toHaveBeenCalledTimes(1);
+    });
+
     it('shows no tip for Enter on the row, which activates it as before', () => {
       announce.mockClear();
       renderRefused(editingBundle({ gateFor: () => SHUT }));

@@ -652,12 +652,21 @@ test('a start date cannot be typed on a started activity, and the cell says why'
   // A single click selects the row and says nothing; the refused edit gesture says why.
   await startCell(page).click();
   await expect(page.locator('[data-tooltip]')).toHaveCount(0);
+  // Moving through the rows by keyboard is just as quiet.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('[data-tooltip]')).toHaveCount(0);
 
   // Opening it does nothing: no field to type a value that could never be saved, and the tip says why.
   await startCell(page).dblclick();
   await expect(page.getByRole('textbox', { name: /Start, Seeded 0/ })).toHaveCount(0);
   await expect(page.locator('[data-tooltip]')).toBeVisible();
   await expect(page.locator('[data-tooltip]')).toContainText(refusal);
+  // It stays: the focus churn of a double-click (the cell takes focus, the row selects) must not
+  // close it as it opens, and the cell is still where focus sits.
+  await page.waitForTimeout(1000);
+  await expect(page.locator('[data-tooltip]')).toBeVisible();
+  await expect(startCell(page)).toBeFocused();
 
   // And NOTHING was written: a placement on a started activity is inert and would have moved the
   // finish. Asserted at the API after the refusal has had every chance to be a write.

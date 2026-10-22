@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 import type { GanttCellGate } from '../model/cell-gate';
 
-import { useTooltip } from '@/components/ui/tooltip';
+import { useTooltip, type TooltipApi } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -63,13 +63,12 @@ export interface GanttCellProps {
   onCommit: () => void;
   onCancel: () => void;
   /**
-   * Hands the panel a function that shows this cell's reason tip, keyed by `cellId`, and withdraws it
-   * on unmount (`null`). F2 on a row whose editable cells are all shut reaches the tip through it:
-   * focus is on the row, so the panel cannot ask the cell any other way. Stable by the caller.
+   * Hands the panel this cell's "show your reason" function, and withdraws it (`null`) on unmount.
+   * The ROW binds it to the cell's identity, so the pair `(activity, column)` never reaches here. F2
+   * on a row whose editable cells are all shut uses it: focus is on the row, so the panel cannot ask
+   * the cell any other way. Called only while the cell is read-only with a reason.
    */
-  registerShow?: ((cellId: string, show: (() => void) | null) => void) | undefined;
-  /** The key `registerShow` files this cell under. */
-  cellId?: string | undefined;
+  registerShow?: ((show: (() => void) | null) => void) | undefined;
   className?: string | undefined;
   /**
    * A leading slot (the name cell's indent and disclosure arrow) drawn before the value AND before
@@ -96,7 +95,6 @@ export function GanttCell({
   onCommit,
   onCancel,
   registerShow,
-  cellId,
   className,
   lead,
   children,
@@ -104,26 +102,6 @@ export function GanttCell({
   const reasonId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  // The tip opens on REQUEST only (ADR-0204, amended for this cell, #538). A click on a cell selects
-  // its row, so the default `reason-echo` — which opens on focus and on every click — would pop a tip
-  // on every selection made without the pen. The gestures that try to EDIT and are refused ask for
-  // it: a double-click here, and F2 through `registerShow`.
-  const { triggerProps, tooltip, show } = useTooltip({
-    content: gate.readOnly ? (gate.reason ?? undefined) : undefined,
-    purpose: 'reason-echo',
-    opensOn: 'request',
-  });
-  const showRef = useRef(show);
-  useEffect(() => {
-    showRef.current = show;
-  });
-  const stableShow = useCallback(() => showRef.current(), []);
-  useEffect(() => {
-    if (registerShow === undefined || cellId === undefined) return;
-    registerShow(cellId, stableShow);
-    return () => registerShow(cellId, null);
-  }, [registerShow, cellId, stableShow]);
 
   // Focus the field when it opens, and select its contents — a planner who pressed F2 to replace a
   // duration should be able to type immediately rather than clear first. Selecting is what a
@@ -221,7 +199,7 @@ export function GanttCell({
     />
   );
 
-  return (
+  const renderCell = (tip?: TooltipApi): React.ReactElement => (
     <div
       role="gridcell"
       aria-colindex={colIndex}
@@ -241,7 +219,7 @@ export function GanttCell({
       // fill. It was a native `title` until #538, which a keyboard reader and a finger never see;
       // the app's own tip replaces it (hover, double-click, F2) and no `title` rides beside it, or
       // hover would show both (ADR-0204 D3). The `sr-only` span below stays the description.
-      {...triggerProps}
+      {...tip?.triggerProps}
       {...(gate.reason === null ? {} : { 'aria-describedby': reasonId })}
       className={cn(
         'shrink-0 px-2 text-xs',
@@ -254,7 +232,7 @@ export function GanttCell({
         className,
       )}
       style={{ width }}
-      onDoubleClick={gate.writable ? onBegin : show}
+      onDoubleClick={gate.writable ? onBegin : tip ? () => tip.show() : undefined}
     >
       {lead === undefined ? (
         editing ? (
@@ -271,7 +249,7 @@ export function GanttCell({
         </div>
       )}
 
-      {tooltip}
+      {tip?.tooltip}
       {gate.reason === null ? null : (
         <span id={reasonId} className="sr-only">
           {gate.reason}
@@ -290,4 +268,44 @@ export function GanttCell({
       ) : null}
     </div>
   );
+
+  // The tip's hook lives in a child that exists only for a shut cell with a reason, so the writable
+  // cells (most of them, most of the time) run no tooltip machinery at all. The trade is that a gate
+  // flipping shut/open remounts the cell's `div`; an open field is never in a shut cell, so no
+  // typed text is at stake.
+  return gate.readOnly && gate.reason !== null ? (
+    <ShutCellTip reason={gate.reason} registerShow={registerShow}>
+      {renderCell}
+    </ShutCellTip>
+  ) : (
+    renderCell()
+  );
+}
+
+/**
+ * **The reason tip for a shut cell, opened on REQUEST only** (ADR-0204, amended for this cell, #538).
+ * A click on a cell selects its row, so the default `reason-echo` — which opens on focus and on every
+ * click — would pop a tip on every selection made without the pen. The gestures that try to EDIT and
+ * are refused ask for it: a double-click through the render prop, and F2 through `registerShow`.
+ */
+function ShutCellTip({
+  reason,
+  registerShow,
+  children,
+}: {
+  reason: string;
+  registerShow: ((show: (() => void) | null) => void) | undefined;
+  children: (tip: TooltipApi) => React.ReactElement;
+}): React.ReactElement {
+  const tip = useTooltip({ content: reason, purpose: 'reason-echo', opensOn: 'request' });
+  // Bound once: the row hands each cell a binding for its own identity, and a cell is never reused
+  // for another. `show` is stable, so this runs on mount and unmount only.
+  const registerRef = useRef(registerShow);
+  const { show } = tip;
+  useEffect(() => {
+    const register = registerRef.current;
+    register?.(show);
+    return () => register?.(null);
+  }, [show]);
+  return children(tip);
 }

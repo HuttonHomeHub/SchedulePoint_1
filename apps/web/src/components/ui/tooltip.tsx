@@ -145,6 +145,8 @@ export const TOOLTIP_OPEN_DELAY_MS = 400;
 export const TOOLTIP_CLOSE_GRACE_MS = 150;
 /** Coarse-pointer long-press threshold — the platform's "tell me about this" gesture. */
 export const TOOLTIP_LONG_PRESS_MS = 500;
+/** Keys that are not a "next key" for a request-only tip: pressing one alone changes nothing. */
+const MODIFIER_KEYS: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 /** Movement past this cancels a pending long-press (it became a scroll/drag, not a press). */
 const LONG_PRESS_MOVE_TOLERANCE_PX = 8;
 
@@ -291,7 +293,9 @@ export function useTooltip({
     if (!active) close();
   }, [active, close]);
 
-  const reallyOpen = (): void => {
+  // Stable, like the timers: it reaches only refs, the token handle and `setOpen`, so `show` below
+  // can be handed to another component once and still be this instance's.
+  const reallyOpen = useCallback((): void => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     acquireTip(handle);
@@ -302,7 +306,18 @@ export function useTooltip({
         above: rect.top - TIP_OFFSET_PX,
       },
     });
-  };
+  }, [handle]);
+
+  // `show` reads `active` through a ref so its identity never changes with the content.
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  });
+  const show = useCallback((): void => {
+    if (!activeRef.current) return;
+    clearTimers();
+    reallyOpen();
+  }, [clearTimers, reallyOpen]);
 
   const scheduleOpen = (): void => {
     if (openTimer.current !== null) return;
@@ -357,7 +372,8 @@ export function useTooltip({
       if (event.key !== 'Escape') {
         // A request-only tip answered one press; the next key is the reader moving on. Closes only —
         // the key is not withheld from whatever it was pressed for.
-        if (requestOnly) close();
+        // A modifier on its own is the reader reaching for a chord, not moving on.
+        if (requestOnly && !MODIFIER_KEYS.has(event.key)) close();
         return;
       }
       event.preventDefault();
@@ -376,12 +392,16 @@ export function useTooltip({
       if (suppressNextClick.current) return;
       if (triggerRef.current?.contains(event.target as Node)) close();
     };
+    // The tip is `position: fixed`, so a scroll would leave it hanging over whatever moved under it.
+    const onScroll = (): void => close();
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer, true);
+    if (requestOnly) document.addEventListener('scroll', onScroll, true);
     if (dismissOnPress) document.addEventListener('click', onClick, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('scroll', onScroll, true);
       document.removeEventListener('click', onClick, true);
     };
   }, [open, close, dismissOnPress, requestOnly]);
@@ -511,12 +531,6 @@ export function useTooltip({
           portalTarget(),
         )
       : null;
-
-  const show = (): void => {
-    if (!active) return;
-    clearTimers();
-    reallyOpen();
-  };
 
   return { triggerProps, tooltip, show };
 }

@@ -311,6 +311,66 @@ describe('useTooltip', () => {
       expect(tip()).toBeNull();
     });
 
+    it.each(['Shift', 'Control', 'Alt', 'Meta'])(
+      'a lone %s keydown does not close it (red: every key closes)',
+      (key) => {
+        renderRequest();
+        fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+        act(
+          () => void document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })),
+        );
+        expect(tip()).not.toBeNull();
+      },
+    );
+
+    it('a scroll anywhere closes it, since the tip is fixed (red: no scroll listener)', () => {
+      renderRequest();
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      act(() => void document.body.dispatchEvent(new Event('scroll')));
+      expect(tip()).toBeNull();
+    });
+
+    it("a scroll does not close a default 'focus' tip (every other caller unchanged)", () => {
+      render(<Host purpose="reason-echo" />);
+      fireEvent.focus(screen.getByRole('button', { name: 'Zoom in' }));
+      act(() => void document.body.dispatchEvent(new Event('scroll')));
+      expect(tip()).not.toBeNull();
+    });
+
+    it('a plain touch tap still fires the command and shows nothing', () => {
+      const onCommand = vi.fn();
+      renderRequest({ onCommand });
+      fireEvent.pointerDown(trigger(), { pointerType: 'touch', clientX: 10, clientY: 10 });
+      fireEvent.pointerUp(trigger(), { pointerType: 'touch' });
+      fireEvent.click(trigger());
+      expect(onCommand).toHaveBeenCalledTimes(1);
+      expect(tip()).toBeNull();
+    });
+
+    it('unmounting while open removes the tip and releases the one-open token', () => {
+      const { unmount } = renderRequest();
+      fireEvent.click(screen.getByRole('button', { name: 'ask' }));
+      expect(tip()).not.toBeNull();
+      unmount();
+      expect(tip()).toBeNull();
+      render(<Host purpose="name-echo" />);
+      fireEvent.focus(screen.getByRole('button'));
+      expect(document.querySelectorAll('[data-tooltip]')).toHaveLength(1);
+    });
+
+    it('show() keeps its identity across renders and content changes (red: a fresh function each render)', () => {
+      const seen: Array<() => void> = [];
+      function Probe({ content }: { content: string | undefined }): React.ReactElement {
+        const { show } = useTooltip({ content, purpose: 'reason-echo', opensOn: 'request' });
+        seen.push(show);
+        return <span />;
+      }
+      const { rerender } = render(<Probe content="a" />);
+      rerender(<Probe content="b" />);
+      rerender(<Probe content={undefined} />);
+      expect(new Set(seen).size).toBe(1);
+    });
+
     it('the panel is aria-hidden and the trigger is linked to nothing', () => {
       renderRequest();
       fireEvent.click(screen.getByRole('button', { name: 'ask' }));
