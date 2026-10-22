@@ -306,13 +306,16 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       Buffer.from(editedText, 'utf8'),
     ));
 
+    // A fresh project: the source plan's own project already holds its name, which the dry-run
+    // refuses before any report (#541).
+    const dryProject = await project('Dry run');
     const dry = await agent
-      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .post(`/api/v1/organizations/${orgSlug}/projects/${dryProject}/interchange/dry-run`)
       .attach('file', full, 'netpoint-power-plant.xer')
       .expect(200);
     dryRunReport = dry.body.data as Report;
     badOption = await agent
-      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .post(`/api/v1/organizations/${orgSlug}/projects/${dryProject}/interchange/dry-run`)
       .field('restoreLayout', 'MAYBE')
       .attach('file', full, 'netpoint-power-plant.xer');
   }, 360_000);
