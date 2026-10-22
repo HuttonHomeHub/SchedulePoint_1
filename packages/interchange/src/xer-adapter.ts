@@ -435,7 +435,7 @@ export function adaptXerToCanonical(
       entity: 'calendar',
       sourceRef: null,
       detail:
-        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-day/-week, base-calendar inheritance) were not imported',
+        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-week, base-calendar inheritance) were not imported',
       reason: 'not expressible in the SchedulePoint calendar model (ADR-0036)',
     });
   }

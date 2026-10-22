@@ -226,6 +226,14 @@ describe('importXer — CALENDAR.clndr_type drives the tier (ADR-0053 §5)', () 
     expect(calendarDrop?.detail).not.toMatch(/calendar type/);
     expect(calendarDrop?.detail).toMatch(/base-calendar inheritance/);
   });
+
+  it('does NOT claim hours-per-day was dropped (it is imported, ADR-0068)', () => {
+    const { graph, report } = importOk(xerWithClndrType('CA_Base'));
+    const calendarDrop = report.drops.find((f) => f.entity === 'calendar');
+    expect(graph.calendars[0]?.hoursPerDay).toBe(8);
+    expect(calendarDrop?.detail).not.toMatch(/hours-per-day/);
+    expect(calendarDrop?.detail).toMatch(/hours-per-week/);
+  });
 });
 
 describe('importXer — CALENDAR.day_hr_cnt is the calendar’s standard working day (ADR-0068)', () => {
