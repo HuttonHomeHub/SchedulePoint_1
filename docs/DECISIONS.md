@@ -10,6 +10,15 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — #536: a SYSTEM actor reads "System"; the preview floors days left like the bin
+
+**Decided by the product owner** (2026-10-22): the Audit log names a `SYSTEM` actor **System** (the
+clear-out's `hierarchy.expired` rows read "Unknown" on the owner's server). `ANONYMOUS` stays "Not
+signed in" and a genuinely unlabelled actor stays "Unknown". The days-left disagreement (preview
+"due in 5 days", bin "Expires in 4 days" for 4.98 days) is resolved by making the host preview floor
+as the bin does, the default offered; both now answer the same question the same way. Tech debt
+#536 is closed.
+
 ## 2026-10-22 — Swimlanes wait; the NetPoint import session's findings are recorded (tech debt #539–#543)
 
 **Decided by the product owner** in the "Netpoint import format" session (2026-10-22), while turning

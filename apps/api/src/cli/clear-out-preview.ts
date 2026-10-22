@@ -99,7 +99,9 @@ async function describeRoot(
     name: root.name,
     organizationId: root.organizationId,
     deletedAt: root.deletedAt,
-    daysPast: pastMs >= 0 ? Math.floor(pastMs / DAY_MS) : -Math.ceil(-pastMs / DAY_MS),
+    // Floored both ways, as the bin's countdown is (`expiry-copy.ts`): one item must not read
+    // "due in 5 days" here and "Expires in 4 days" there. A negative value is days still to go.
+    daysPast: pastMs >= 0 ? Math.floor(pastMs / DAY_MS) : 0 - Math.floor(-pastMs / DAY_MS),
     projects: scope.projectIds.length,
     plans: scope.planIds.length,
     activities: await countActivities(reader, scope.planIds),

@@ -227,11 +227,10 @@ that switches the clear-out on**, and Part 3 switches it off again at any time.
    send them the output.
 
 8. Check it in the product (5 minutes). Sign in. Open your organisation's **Audit log** and find a
-   **Permanently deleted** row for each item that was removed. Its **By** column says **Unknown**: that
-   is SchedulePoint itself, and the label is due to be changed (`docs/TECH_DEBT.md` #536). Then open **Recently
+   **Permanently deleted** row for each item that was removed. Its **By** column says **System**: that is SchedulePoint itself. Then open **Recently
    deleted**: it now says "Deleted items are kept for 90 days, then permanently removed" (or the
-   number in your `RETENTION_HIERARCHY_DAYS`), and each row shows how many days it has left. The screen counts whole days left, so it can say one
-   day fewer than the preview's "due in" for the same item.
+   number in your `RETENTION_HIERARCHY_DAYS`), and each row shows how many days it has left. Both the screen and the preview count whole days left,
+   rounded down, so they give the same number for the same item.
 
 9. Write down the date and the copy's name from step 2.
 
