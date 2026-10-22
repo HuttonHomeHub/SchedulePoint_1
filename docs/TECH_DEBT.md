@@ -9312,3 +9312,35 @@ The early dates suggest a milestone's instant is re-snapped to its own calendar 
 **Workaround in use:** link the off-calendar work directly to its weekday successors, and hang the milestone off it with a later successor (for example planned MC), so the milestone's late date never constrains the weekend work.
 
 **Next:** turn the fixture into a failing case in `compute.activity-calendar.spec.ts`, then decide the rule (a zero-duration activity keeps its driving predecessor's finish instant; its calendar only decides the date shown). That changes the engine's semantics, so it needs a spec, the ADR-0035 golden contract amended and the conformance matrix re-run (ADR-0034). **Trigger:** none, open now. Weekend and shift shutdowns are routine in the plans this product is for.
+
+### 540. Importing the same file twice in one day fails at commit with a generic "would duplicate" error
+
+**Status:** open · **Verified:** 2026-10-22, by reading `apps/api/src/modules/calendars/calendar.repository.ts` (`findTakenNames` matches exact names only, `name: { in: … }`) and `apps/api/src/modules/interchange/interchange.service.ts` (the calendar disambiguation at `:998` and `:1034`), against `resource.repository.ts` `findTakenNamesWithPrefixes` (`:138`), which the importer already uses for resources at `:969` · **Raised:** 2026-10-22 (the owner's NetPoint-to-XER revisions, imported into one project) · **Size:** S · **Owner:** api
+
+When an imported calendar's name is taken, the importer renames it `"<name> (imported <date>)"` (`interchange.service.ts:104`), but it asks the database only whether the **base** names are taken. So on the second import of the same day, `"<name> (imported <date>)"` is itself taken, the importer does not know, the dry-run stays clean, and the commit fails on the unique index. The owner saw the global fallback text, "That would duplicate an existing record. Check any name or code you have used." (`apps/api/src/common/filters/all-exceptions.filter.ts:187`), on two revisions in a row; renaming the calendar inside the file was the workaround. Resources were fixed for exactly this case: their docblock at `interchange.service.ts:958` names "imported twice on the same day" and they probe by prefix.
+
+**Next:** give calendars the same prefix probe resources use, with a regression test that imports one file twice into one project on one day. No new surface, so this row is its spec. **Trigger:** none, open now; re-importing revisions into one project is the normal way the owner works.
+
+### 541. The import dry-run never checks the plan name, so a clashing name fails only at commit, with the generic message
+
+**Status:** open · **Verified:** 2026-10-22, by reading `apps/api/src/modules/interchange/interchange.service.ts` (commit creates the plan inside the transaction at `:531`; the dry-run probes calendars and resources only, and no `P2002` is mapped to a plan-name message) and `apps/api/src/modules/plans/plans.service.ts:377` (the hand-made path maps `P2002` to a clear message) · **Raised:** 2026-10-22 (the same session as #540; first suspected for that error, then ruled out, but the gap is real) · **Size:** S · **Owner:** api
+
+A plan created by hand with a name its project already has gets a clear refusal. An import that would do the same is not checked by the preview and falls through to the global "That would duplicate an existing record" text at commit, after the planner has already accepted a clean dry-run. `docs/API.md`'s commit row lists no `409` for it.
+
+**Next:** have the dry-run report a clashing plan name as a blocking finding (or offer the next free name), map the commit's `P2002` on the plan to the same wording `plans.service.ts` uses, and add the `409` to `docs/API.md`. This adds a dry-run finding, which the import screen already renders generically; confirm that before treating the row as its own spec (ADR-0105). **Trigger:** none, open now.
+
+### 542. Every XER import says hours-per-day was not imported, and it was
+
+**Status:** open · **Verified:** 2026-10-22, by reading `packages/interchange/src/xer-adapter.ts` (the drop finding's text, "hours-per-day/-week, base-calendar inheritance … were not imported", sits beside `hoursPerDayField`, which maps `day_hr_cnt` to `hoursPerDay` at `:321-328` and is applied at `:409` and `:419`) · **Raised:** 2026-10-22 (the owner's XER import report; the session then wrongly told the owner the app does not store 8 hours a day) · **Size:** S · **Owner:** interchange
+
+ADR-0068 made a calendar carry its hours-per-day and the XER adapter imports it, but the report's calendar drop finding still names hours-per-day among the things not imported. It fires on every XER file with a calendar, so every planner reads a false statement about their data on every import, and it misled the very session diagnosing the import. The MSPDI adapter's equivalent text was already corrected. ADR-0050's mapping table (`day_hr_cnt` "mapped both ways") is right; the message is the stale part.
+
+**Next:** drop "hours-per-day" from the finding (keep hours-per-week and base-calendar inheritance), with a unit test on the finding text so it cannot drift again. **Trigger:** none, open now.
+
+### 543. Activity notes are dropped by both XER and MSPDI import, and the report does not say so
+
+**Status:** open · **Verified:** 2026-10-22, by grepping `packages/interchange/src/` on `origin/main`: no `TASKMEMO` table in the XER adapter and no `<Notes>` handling in the MSPDI adapter; ADR-0050's mapping table has no notes row · **Raised:** 2026-10-22 (the owner's remarks had to be carried in a separate spreadsheet beside the import) · **Size:** S to report, M to carry · **Owner:** interchange
+
+ADR-0050's principle is that every source field is either mapped or **named in the report**. An activity's notes (P6 `TASKMEMO`, MS Project `<Notes>`) are neither: an XER table the importer does not read is skipped silently, so a planner importing a programme full of remarks gets a clean report and no remarks. The app has notes (ADR-0046), so this is a gap in the bridge, not in the model.
+
+**Next:** first, report it: a drop finding whenever the source holds memo or notes content, with a test, which is small and adds no surface. Carrying notes across (import, and export back) is the larger half, recorded in `docs/BACKLOG.md`. **Trigger:** none for the report half; the carry half when the owner asks for it.

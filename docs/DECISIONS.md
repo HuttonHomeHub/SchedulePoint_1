@@ -10,6 +10,27 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — Swimlanes wait; the NetPoint import session's findings are recorded (tech debt #539–#543)
+
+**Decided by the product owner** in the "Netpoint import format" session (2026-10-22), while turning
+a NetPoint programme into an XER for import:
+
+- **Swimlanes:** offered a swimlane feature spec, both, or regrouping the WBS by system, the owner
+  chose **regroup the WBS by system**. A labelled-swimlane diagram is not commissioned; it is
+  recorded in `docs/BACKLOG.md` as demand for a future spec.
+- **#539:** "yes log the app bug on tech debt" — the cross-calendar milestone dating defect. It was
+  written on that session's branch only and is merged with this entry.
+
+**Recorded without a decision** (the session offered to log or fix them and the owner did not
+answer): #540 (a same-day re-import fails on a calendar name the importer did not check) and #541
+(the dry-run does not check the plan name). Also recorded: #542 (every XER import wrongly reports
+hours-per-day as not imported) and #543 (activity notes are dropped silently by both formats), plus
+two backlog items (carry notes; clean up an import's calendars). One observation with no row: on an
+import the owner had laid out by hand, pressing Tidy replaced the rows and the owner found the result
+"too messy"; Tidy shows a preview first, so this is recorded as one judgement, not a defect.
+
+---
+
 ## 2026-10-22 — Three shared-gate and Gantt specs approved, and the rest of the shortlist (tech debt #276, #299, #538, #326, #308, #306, #249)
 
 **Decided by the product owner**, who said "fix them all unless there is a valid reason not to" for
