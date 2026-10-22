@@ -388,3 +388,32 @@ describe('adaptMspdiToCanonical — resources + assignments', () => {
     ]);
   });
 });
+
+describe('adaptMspdiToCanonical — task notes', () => {
+  const noteDrops = (tasks: MspdiTaskSpec[]) =>
+    adaptOk({ ...BASE, tasks }).findings.filter((f) => f.detail.includes('note'));
+
+  it('reports ONE aggregate drop counting the tasks that carry <Notes>', () => {
+    const drops = noteDrops([
+      { uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Remark A' },
+      { uid: '2', id: '2', name: 'B', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Remark B' },
+      { uid: '3', id: '3', name: 'C', outlineLevel: 1, duration: 'PT8H0M0S' },
+    ]);
+    expect(drops).toHaveLength(1);
+    expect(drops[0]).toMatchObject({ kind: 'drop', entity: 'activity', sourceRef: null });
+    expect(drops[0]?.detail).toBe('2 activity notes were not imported');
+  });
+
+  it('says "note was" for exactly one', () => {
+    const drops = noteDrops([
+      { uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Only one' },
+    ]);
+    expect(drops.map((f) => f.detail)).toEqual(['1 activity note was not imported']);
+  });
+
+  it('adds no drop when no task has notes', () => {
+    expect(
+      noteDrops([{ uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S' }]),
+    ).toEqual([]);
+  });
+});

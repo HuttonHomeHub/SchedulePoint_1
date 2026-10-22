@@ -36,6 +36,8 @@ export interface MspdiTaskSpec {
   readonly constraintType?: string;
   readonly constraintDate?: string;
   readonly deadline?: string;
+  /** The task's free-text `<Notes>`. */
+  readonly notes?: string;
   readonly percentComplete?: string;
   readonly physicalPercentComplete?: string;
   readonly actualStart?: string;
@@ -153,6 +155,7 @@ function taskXml(task: MspdiTaskSpec): string {
     leaf('ConstraintType', task.constraintType),
     leaf('ConstraintDate', task.constraintDate),
     leaf('Deadline', task.deadline),
+    leaf('Notes', task.notes),
     leaf('PercentComplete', task.percentComplete),
     leaf('PhysicalPercentComplete', task.physicalPercentComplete),
     leaf('ActualStart', task.actualStart),

@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — The four import findings are fixed, and a plan-name clash refuses the dry-run (tech debt #540–#543)
+
+**Fixed** (all four rows from the NetPoint import session, none adds surface):
+
+- **#542:** the XER calendar drop finding no longer names hours-per-day, which the adapter imports
+  (ADR-0068); it names hours-per-week and base-calendar inheritance, matching MSPDI.
+- **#540:** calendar names are probed by prefix (`CalendarRepository.findTakenNamesWithPrefixes`), as
+  resources already were, so a same-day re-import sees the `(imported <date>)` variant it took.
+- **#541:** the commit maps a `P2002` on the plan insert to the hand-made path's own 409 `NAME_TAKEN`
+  (`plans/plan-name-conflict.ts`, shared). **Default chosen: the dry-run refuses with that same 409**
+  when a live plan already holds the name, rather than adding a report finding kind, because a new kind
+  is a report-contract change (ADR-0105) and the import cannot proceed under that name anyway. The
+  probe ignores soft-deleted plans, as the partial unique index does. The import dialog renders the
+  envelope message in its alert under the file picker, so no UI changed. Offering the next free name
+  instead remains open should the owner prefer it.
+- **#543 (report half only, the owner's decision):** both adapters name activity notes as one aggregate
+  `drop`. #543 is closed; carrying notes is the `docs/BACKLOG.md` item.
+
+---
 ## 2026-10-22 — #536: a SYSTEM actor reads "System"; the preview floors days left like the bin
 
 **Decided by the product owner** (2026-10-22): the Audit log names a `SYSTEM` actor **System** (the
@@ -18,6 +37,8 @@ signed in" and a genuinely unlabelled actor stays "Unknown". The days-left disag
 "due in 5 days", bin "Expires in 4 days" for 4.98 days) is resolved by making the host preview floor
 as the bin does, the default offered; both now answer the same question the same way. Tech debt
 #536 is closed.
+
+---
 
 ## 2026-10-22 — Swimlanes wait; the NetPoint import session's findings are recorded (tech debt #539–#543)
 
