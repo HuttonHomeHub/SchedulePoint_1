@@ -8,6 +8,7 @@ import {
   LANE_HEIGHT,
   TAIL_HEIGHT,
 } from './geometry';
+import { LAG_HANDLE_R, LAG_HANDLE_R_ACTIVE } from './paint';
 import {
   BAR_RADIUS,
   GLYPH_CAP_OVERHANG,
@@ -141,5 +142,17 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
   it('sizes the node from the reference, and wider than the bar it terminates', () => {
     expect(NODE_RADIUS * 2).toBeLessThanOrEqual(REFERENCE_NODE_DIAMETER_PX);
     expect(NODE_RADIUS * 2).toBeGreaterThanOrEqual(BAR_HEIGHT * 2);
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #369: a lag handle and a bar-end node are both traced as a square with a
+   * half-side radius, so they differ only by size. They were once both 5 px, by an arithmetic
+   * nobody chose, which made an active handle indistinguishable from the node it sits on at zero
+   * lag. The sizes are kept as independent literals (changing the handle would move pixels); this
+   * pins the ordering that keeps them apart, so a change to either side is caught by the rule.
+   */
+  it('keeps a lag handle smaller than the node, and the active handle larger than the resting one', () => {
+    expect(LAG_HANDLE_R).toBeLessThan(LAG_HANDLE_R_ACTIVE);
+    expect(LAG_HANDLE_R_ACTIVE).toBeLessThan(NODE_RADIUS);
   });
 });

@@ -464,6 +464,13 @@ screenshot run held the port, and `pkill` did not reach it because the task supe
 Stop the background task, not just the process. The tell is the clock: the export journey takes ~20s
 against its own API with the pen enforced and ~6s against a reused one without it.
 
+**It also refuses a database another run is using** (`docs/TECH_DEBT.md` #349): the script holds a
+Postgres advisory lock on `app_test` for the whole run, and a second run **of this script** exits 1
+naming the holder instead of sharing the database and failing with a plausible assertion about the
+product. The lock dies with the run, however it ends — so `--db-only` takes and releases it, and
+whatever you run against the database after it (or `pnpm --filter @repo/api test:e2e` run directly)
+is not guarded.
+
 **The first version of this note was written INTO the table**, after the header row, so Prettier
 reflowed it into cells and the ten steps below it lost their header and rendered as literal
 pipe-separated text. `check:doc-links` only checks links, so nothing caught it; a review reading the

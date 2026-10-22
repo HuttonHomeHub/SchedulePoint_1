@@ -612,8 +612,8 @@ const LAG_RUN_DASH: readonly number[] = [2, 2];
  * to sit on an 18px bar without hiding it, large enough to read as "grab me"; the emphasised
  * radius is a SIZE change (with the heavier halo below), never colour alone — WCAG 1.4.1. The
  * pointer target is far larger than the ink: `LAG_ANCHOR_PX` gives it 24px (WCAG 2.5.8). */
-const LAG_HANDLE_R = 3.5;
-const LAG_HANDLE_R_ACTIVE = 5;
+export const LAG_HANDLE_R = 3.5;
+export const LAG_HANDLE_R_ACTIVE = 5;
 /** Width (px) of the contrasting halo ring straddling the core's edge, at rest / emphasised. */
 const LAG_HANDLE_HALO_W = 1.5;
 const LAG_HANDLE_HALO_W_ACTIVE = 2;

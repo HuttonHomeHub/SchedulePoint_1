@@ -10,6 +10,17 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — The lag handle and the node stay different sizes; the ordering is pinned, not derived (#369)
+
+**Decided (default, tech debt #369):** no visual change. The row reported `NODE_RADIUS` and
+`LAG_HANDLE_R_ACTIVE` both 5; `NODE_RADIUS` has been 7.5 since NetPoint grammar M2-T2 (read in
+`render-model.ts`), so the active handle (5) is already smaller than the node. Deriving the handle
+radii from the node would move pixels, so `geometry.constant-derivation.test.ts` pins
+`LAG_HANDLE_R < LAG_HANDLE_R_ACTIVE < NODE_RADIUS` instead. **Consequence:** a change to either side
+that lets them meet fails a test rather than shipping silently.
+
+---
+
 ## 2026-10-22 — The four import findings are fixed, and a plan-name clash refuses the dry-run (tech debt #540–#543)
 
 **Fixed** (all four rows from the NetPoint import session, none adds surface):
