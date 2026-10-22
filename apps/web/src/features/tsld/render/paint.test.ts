@@ -3068,8 +3068,9 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
    * circle is drawn without widening the `Ctx2D` surface — so the shape alone cannot tell them
    * apart. Nor can the radius: `NODE_RADIUS` was 5 when this was written and the ACTIVE handle's
    * radius is also 5, so excluding by size silently dropped the one disc two of these cases are
-   * about. (The node is 7.5 since NetPoint grammar M2-T2, so the sizes now differ — which is a
-   * coincidence this discriminator deliberately does not rely on.)
+   * about. (The node is 7.5 since NetPoint grammar M2-T2, so the sizes now differ. That is pinned
+   * as an ordering in `geometry.constant-derivation.test.ts` (#369), and this discriminator still
+   * does not rely on it.)
    *
    * The discriminator is a **positive property of a handle**: it is traced TWICE, once for the
    * core fill and once for the halo stroke, while a node is traced once and then filled and/or
