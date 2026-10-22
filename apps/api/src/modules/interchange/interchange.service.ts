@@ -111,6 +111,15 @@ const CALENDAR_NAME_MAX_LENGTH = 120;
 const RESOURCE_NAME_MAX_LENGTH = 200;
 
 /**
+ * The prefix to probe for `name`'s taken variants. A variant clips the base to make room for its
+ * suffix, so near the ceiling it no longer starts with the whole name; probing by the base clipped
+ * for the longest suffix this importer will build still matches every variant. A shorter prefix only
+ * widens the taken set, which is harmless: disambiguation checks exact membership.
+ */
+export const importedNameProbePrefix = (name: string, maxLength: number): string =>
+  name.slice(0, maxLength - IMPORTED_NAME_SUFFIX('0000-00-00', 9999).length - 1).trimEnd();
+
+/**
  * Business logic for schedule interchange (ADR-0050, C2). This is the thin persisting layer's brain: it
  * resolves the org scope from the caller's own memberships (anti-IDOR), pairs it with the
  * `interchange:import` capability check, and asserts the **target project** belongs to that org before
@@ -982,7 +991,12 @@ export class InterchangeService {
     const nameByKey = new Map<string, string>();
     if (copies.length === 0) return nameByKey;
     const taken = await this.resources.findTakenNamesWithPrefixes(
-      { organizationId, prefixes: [...new Set(copies.map((c) => c.name))] },
+      {
+        organizationId,
+        prefixes: [
+          ...new Set(copies.map((c) => importedNameProbePrefix(c.name, RESOURCE_NAME_MAX_LENGTH))),
+        ],
+      },
       db,
     );
     const today = new Date().toISOString().slice(0, 10);
@@ -1016,7 +1030,9 @@ export class InterchangeService {
             organizationId: project.organizationId,
             scope,
             projectId: scope === 'PROJECT' ? project.id : null,
-            prefixes: [...new Set(names)],
+            prefixes: [
+              ...new Set(names.map((n) => importedNameProbePrefix(n, CALENDAR_NAME_MAX_LENGTH))),
+            ],
           },
           db,
         ),

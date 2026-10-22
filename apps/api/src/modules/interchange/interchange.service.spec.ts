@@ -12,7 +12,11 @@ import type { OrganizationsService } from '../organizations/organizations.servic
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ProjectRepository } from '../projects/project.repository';
 
-import { INTERCHANGE_ERROR, InterchangeService } from './interchange.service';
+import {
+  INTERCHANGE_ERROR,
+  InterchangeService,
+  importedNameProbePrefix,
+} from './interchange.service';
 import type { UploadedInterchangeFile } from './uploaded-file';
 
 const ORG_ID = 'org-1';
@@ -177,5 +181,20 @@ describe('InterchangeService.dryRun', () => {
     await expect(
       service.dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(validXer())),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('importedNameProbePrefix (#540)', () => {
+  it('keeps a short name whole, so its exact match and every variant are probed', () => {
+    expect(importedNameProbePrefix('Standard 5-day', 120)).toBe('Standard 5-day');
+  });
+
+  it('clips a near-ceiling name so the clipped variants an import builds still match', () => {
+    const name = 'x'.repeat(118);
+    const prefix = importedNameProbePrefix(name, 120);
+    const variant = `${name.slice(0, 120 - '(imported 2026-10-22) (2)'.length - 1)} (imported 2026-10-22) (2)`;
+    expect(prefix.length).toBeLessThan(name.length);
+    expect(name.startsWith(prefix)).toBe(true);
+    expect(variant.startsWith(prefix)).toBe(true);
   });
 });

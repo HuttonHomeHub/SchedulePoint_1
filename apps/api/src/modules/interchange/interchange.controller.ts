@@ -14,6 +14,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiCookieAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -96,6 +97,9 @@ export class InterchangeController {
       'unrecognised/malformed file is a 422 rejection and an oversize file a 413.',
   })
   @ApiOkResponse({ type: InterchangeReportResponseDto })
+  @ApiConflictResponse({
+    description: 'The project already holds a plan of the file’s name (`NAME_TAKEN`).',
+  })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiPayloadTooLargeResponse({ description: 'The uploaded file exceeds the maximum size.' })
   @ApiUnprocessableEntityResponse({
@@ -151,6 +155,9 @@ export class InterchangeController {
       'malformed/no file · 413 oversize.',
   })
   @ApiCreatedResponse({ type: InterchangeCommitResponseDto })
+  @ApiConflictResponse({
+    description: 'The project already holds a plan of the file’s name (`NAME_TAKEN`).',
+  })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiPayloadTooLargeResponse({ description: 'The uploaded file exceeds the maximum size.' })
   @ApiUnprocessableEntityResponse({
