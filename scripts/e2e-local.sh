@@ -138,14 +138,62 @@ as_super "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='app_test'\"" | gr
   || as_super "psql -qc \"CREATE DATABASE app_test OWNER app;\""
 echo "ready: ${DATABASE_URL}"
 
-# --- 2. Schema --------------------------------------------------------------
+# --- 2. One run per database ------------------------------------------------
+#
+# **A busy port is refused below and a busy DATABASE was not** (`docs/TECH_DEBT.md` #349). Two runs,
+# or a run and a seeding pass, sharing `app_test` do not fail with an error naming contention: they
+# produce a red assertion about the product, with a screenshot, and the next move is to change the
+# test. When two agents held it, one suite failed with a plausible "the bar never plots" and a
+# second run of the same code failed differently — a defect does not change its symptom.
+#
+# So take a Postgres advisory lock for the whole run, from a background `psql` session. Advisory
+# locks belong to the SESSION, which is why a session is kept open rather than asking once: the
+# lock is released the moment that session ends, including when this script is killed (bash dying
+# closes the pipe, `psql` sees EOF and exits), so a crashed run can never leave a stale lock behind.
+# `pg_try_advisory_lock` refuses at once rather than queueing — a queue would turn a fast failure
+# into a slow one and hide the same fact. The key is fixed (the row's number) and the lock lives in
+# the database it guards, so a different DATABASE_URL is a different lock.
+#
+# Taken before the migration, which is the first thing here that writes to the shared database.
+DB_LOCK_KEY=349
+db_conninfo="${DATABASE_URL%%\?*}" # libpq rejects Prisma's `?schema=public`
+coproc DBLOCK { PGAPPNAME="e2e-local[$$]" psql -qtA "$db_conninfo"; }
+trap 'kill "${DBLOCK_PID:-}" 2>/dev/null || true' EXIT
+# SIGPIPE is ignored for this one write: if `psql` could not connect it is already gone, and writing
+# to it must reach the "no answer" refusal below rather than kill this script silently with status
+# 141. (Not a subshell: bash closes a coproc's descriptors in one.)
+trap '' PIPE
+echo "SELECT pg_try_advisory_lock(${DB_LOCK_KEY});" >&"${DBLOCK[1]}" 2>/dev/null || true
+trap - PIPE
+got=""
+read -r -t 15 got <&"${DBLOCK[0]}" || true
+if [ "$got" != "t" ]; then
+  if [ "$got" = "f" ]; then
+    holder="$(psql -qtA "$db_conninfo" -c "SELECT a.application_name || ' (backend pid ' || l.pid || ')' FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = ${DB_LOCK_KEY} AND l.granted LIMIT 1" 2>/dev/null || true)"
+    cat >&2 <<EOF
+
+Another run already holds the lock on this database (${holder:-holder not found}).
+
+The most likely cause is another scripts/e2e-local.sh run — yours in another terminal, or another
+agent's — using the same app_test. Two runs sharing one database fail with assertions about the
+product, not with an error that names the contention. Wait for it to finish, or point DATABASE_URL
+at a database of your own, then re-run.
+EOF
+  else
+    echo "Could not take the run lock on ${db_conninfo} (no answer from psql); refusing to run unguarded." >&2
+  fi
+  exit 1
+fi
+echo "run lock held (advisory key ${DB_LOCK_KEY})"
+
+# --- 3. Schema --------------------------------------------------------------
 log "Migrations"
 pnpm --filter @repo/api exec prisma migrate deploy
 
 if [ "${#targets[@]}" -eq 0 ]; then targets=("api"); fi
 for t in "${targets[@]}"; do [ "$t" = "--db-only" ] && exit 0; done
 
-# --- 3. Suites --------------------------------------------------------------
+# --- 4. Suites --------------------------------------------------------------
 # Playwright's own `webServer` block starts the API and the dev server, so the
 # only thing it needs from us is a migrated database and a browser it can find.
 #
