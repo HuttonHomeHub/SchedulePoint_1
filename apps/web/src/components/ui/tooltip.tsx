@@ -70,7 +70,7 @@ export interface TooltipOptions {
    *   why is the answer to it rather than the "tap that does both" noise the touch rule below exists
    *   to prevent. That reaches a finger, which has no hover, and a keyboard Enter or Space. A released
    *   long-press is still swallowed first. It is part of the purpose so it can never be set on a live
-   *   control.
+   *   control. A trigger whose plain click already does something else opts out with `opensOn`.
    */
   purpose: 'name-echo' | 'description' | 'reason-echo';
   /** Suppresses the whole mechanism (e.g. a control that has a visible label). */
@@ -95,6 +95,21 @@ export interface TooltipOptions {
    * focus; the Minimap toggle's panel is the case, and it is accepted rather than designed around.
    */
   dismissOnPress?: boolean;
+  /**
+   * What opens the tip (ADR-0204, amended for the Gantt cell, #538). `'focus'` (the default, and every
+   * caller before this option) is the behaviour above: focus, hover, a long-press and, for
+   * `'reason-echo'`, a click.
+   *
+   * `'request'` is for a shut control whose plain click and focus already do something else, so a
+   * tip on either would be noise on every selection: the Gantt's shut cell, which a click merely
+   * focuses while selecting its row. The tip then opens only on hover (after the same 400 ms) and
+   * when the caller asks with {@link TooltipApi.show} — the refused gesture, a double-click or F2.
+   * Focus, a click and a touch long-press never open it, and the long-press path is off, so no click
+   * is ever swallowed. Because the tip answers one press and focus may sit elsewhere (F2 leaves it on
+   * the row), the next `keydown` anywhere closes it as well; that listener only closes, so the key
+   * still does what it was pressed for. Only meaningful with `'reason-echo'`.
+   */
+  opensOn?: 'focus' | 'request';
 }
 
 /** The two options a container forwards to every tooltip it owns (`Toolbar`, `ToolbarButton`). */
@@ -116,6 +131,11 @@ export interface TooltipApi {
   };
   /** The portalled node, or `null` while closed. Render it anywhere in the trigger's JSX. */
   tooltip: React.ReactNode;
+  /**
+   * Open the tip now, closing any other. A no-op while the mechanism is inert. This is the way a
+   * `'request'` tip is shown; under `'focus'` it is available but nothing needs it.
+   */
+  show: () => void;
 }
 
 /** Hover open delay: stops the row flickering as a pointer crosses it. Focus opens immediately —
@@ -125,6 +145,8 @@ export const TOOLTIP_OPEN_DELAY_MS = 400;
 export const TOOLTIP_CLOSE_GRACE_MS = 150;
 /** Coarse-pointer long-press threshold — the platform's "tell me about this" gesture. */
 export const TOOLTIP_LONG_PRESS_MS = 500;
+/** Keys that are not a "next key" for a request-only tip: pressing one alone changes nothing. */
+const MODIFIER_KEYS: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'Meta']);
 /** Movement past this cancels a pending long-press (it became a scroll/drag, not a press). */
 const LONG_PRESS_MOVE_TOLERANCE_PX = 8;
 
@@ -209,6 +231,7 @@ export function useTooltip({
   disabled = false,
   placement = 'below',
   dismissOnPress = false,
+  opensOn = 'focus',
 }: TooltipOptions): TooltipApi {
   const active = !disabled && !!content;
   const tipId = useId();
@@ -216,6 +239,7 @@ export function useTooltip({
   const tipRef = useRef<HTMLDivElement>(null);
   const [openState, setOpen] = useState<{ box: TriggerAnchor } | null>(null);
   const open = active && openState !== null;
+  const requestOnly = opensOn === 'request';
 
   // Every timer lives in a ref and is cleared in the unmount cleanup — a leaked timer fails
   // silently (the ADR-0064 leaked-hold lesson), and a tooltip is exactly the component that
@@ -269,7 +293,9 @@ export function useTooltip({
     if (!active) close();
   }, [active, close]);
 
-  const reallyOpen = (): void => {
+  // Stable, like the timers: it reaches only refs, the token handle and `setOpen`, so `show` below
+  // can be handed to another component once and still be this instance's.
+  const reallyOpen = useCallback((): void => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     acquireTip(handle);
@@ -280,7 +306,18 @@ export function useTooltip({
         above: rect.top - TIP_OFFSET_PX,
       },
     });
-  };
+  }, [handle]);
+
+  // `show` reads `active` through a ref so its identity never changes with the content.
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  });
+  const show = useCallback((): void => {
+    if (!activeRef.current) return;
+    clearTimers();
+    reallyOpen();
+  }, [clearTimers, reallyOpen]);
 
   const scheduleOpen = (): void => {
     if (openTimer.current !== null) return;
@@ -332,7 +369,13 @@ export function useTooltip({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape') {
+        // A request-only tip answered one press; the next key is the reader moving on. Closes only —
+        // the key is not withheld from whatever it was pressed for.
+        // A modifier on its own is the reader reaching for a chord, not moving on.
+        if (requestOnly && !MODIFIER_KEYS.has(event.key)) close();
+        return;
+      }
       event.preventDefault();
       close();
     };
@@ -349,15 +392,19 @@ export function useTooltip({
       if (suppressNextClick.current) return;
       if (triggerRef.current?.contains(event.target as Node)) close();
     };
+    // The tip is `position: fixed`, so a scroll would leave it hanging over whatever moved under it.
+    const onScroll = (): void => close();
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer, true);
+    if (requestOnly) document.addEventListener('scroll', onScroll, true);
     if (dismissOnPress) document.addEventListener('click', onClick, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('scroll', onScroll, true);
       document.removeEventListener('click', onClick, true);
     };
-  }, [open, close, dismissOnPress]);
+  }, [open, close, dismissOnPress, requestOnly]);
 
   // The measured clamp: centre under the trigger, corrected against the tip's real box before
   // paint (the M-C leaf — a third clamp is the defect this epic exists to close).
@@ -393,7 +440,7 @@ export function useTooltip({
       // long-press timer had not yet armed the click suppression — so a pen dwell showed the name
       // AND fired the command, contradicting the grammar (the M-B accessibility review's
       // finding 4). One input, one path.
-      if (event.pointerType !== 'touch') return;
+      if (event.pointerType !== 'touch' || requestOnly) return;
       pressOrigin.current = { x: event.clientX, y: event.clientY };
       const onMove = (move: PointerEvent): void => {
         const origin = pressOrigin.current;
@@ -437,8 +484,9 @@ export function useTooltip({
       cancelPress();
     },
     onFocus: () => {
-      // Focus is deliberate — open immediately, no delay.
-      if (!active) return;
+      // Focus is deliberate — open immediately, no delay. Not for a request-only tip: a click focuses
+      // its trigger, and that is a row being selected, not a question.
+      if (!active || requestOnly) return;
       reallyOpen();
     },
     onBlur: () => {
@@ -447,7 +495,7 @@ export function useTooltip({
     },
     onClickCapture: (event) => {
       if (!suppressNextClick.current) {
-        if (active && purpose === 'reason-echo') {
+        if (active && purpose === 'reason-echo' && !requestOnly) {
           clearTimers();
           reallyOpen();
         }
@@ -484,5 +532,5 @@ export function useTooltip({
         )
       : null;
 
-  return { triggerProps, tooltip };
+  return { triggerProps, tooltip, show };
 }

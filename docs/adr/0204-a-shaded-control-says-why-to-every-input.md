@@ -69,8 +69,34 @@ pins the name), gains the `sr-only` span so removing the `title` loses nothing.
 
 - Icon-only and `'roomy'` toolbar controls already show `label — reason` through `useTooltip`; unchanged.
 - `*Field` gates, `RadioCardGroup` and `BulkSelectionBar` already print the reason; unchanged.
-- The Gantt read-only cell's `title`: a grid cell, not a command, and a tip on every cell the arrow keys cross is
-  noise. Filed as `docs/TECH_DEBT.md` #538.
+- The Gantt read-only cell's `title` was left out here as "a tip on every cell the arrow keys cross is noise";
+  that was resolved on 2026-10-22 (Amendment below).
+
+## Amendment, 2026-10-22 — a tip that opens on request (`docs/TECH_DEBT.md` #538)
+
+The product owner's decision of 2026-10-21 was "show on press". Building it corrected the premise of the
+exclusion above: arrow keys do not cross cells. The grid's roving focus is per **row**, and a cell is
+`tabIndex={-1}` with no cell cursor; what focuses a cell is a **click**, which also selects its row. The default
+`'reason-echo'`, which opens on focus and on every click, would therefore have popped a tip on every row
+selection made without the pen.
+
+`useTooltip` gains `opensOn?: 'focus' | 'request'` (default `'focus'`, so every other caller is unchanged) and
+returns `show()`. Under `'request'` a `'reason-echo'` tip opens on hover (400 ms) and when the caller asks, never
+on focus, a click or a touch long-press (that path is off, so no click is swallowed), and the next `keydown`
+anywhere closes it, closing only: the key still does its work. The Gantt's shut cell uses it. The refused edit
+gestures ask: a double-click or double-tap, and F2 on a row whose editable cells are all shut, which shows the
+first shut cell's tip and says its reason once in the polite live region. A single click, Enter, Space and the
+arrow keys are unchanged and show nothing; typing is unbound. The native `title` is withdrawn from the cell for
+D3's reason, and the `sr-only` description (D4) is unchanged. Spec: `docs/specs/gantt-cell-reason-on-press/`.
+
+The tip also closes on a scroll (it is `position: fixed`) and ignores a lone modifier key as the "next key".
+Only a shut cell with a reason runs the hook, in a child component, so writable cells carry no tooltip machinery.
+
+**Known gap, accepted.** F2 shows only the first shut cell's tip, and only when no cell in the row is writable.
+A shut cell beside a writable one has no keyboard route to the visible tip; a screen-reader user still has its
+`sr-only` description, and a mouse or finger has hover and double-click. A cell cursor would close it and is a
+separate decision. F2's announcement goes through `drag.announce`, the one live region the workspace shares;
+`gantt-editing-implies-drag.structural.test.ts` pins that every host passing `editing` passes `drag`.
 
 ## Alternatives considered
 

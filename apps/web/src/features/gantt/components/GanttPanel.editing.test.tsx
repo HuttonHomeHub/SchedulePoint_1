@@ -1,5 +1,5 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GanttBarDrag } from '../model/bar-drag';
@@ -257,11 +257,88 @@ describe('keyboard entry into a cell', () => {
     expect(begin).toHaveBeenCalledWith({ activityId: 'a1', key: 'duration' }, '5 d');
   });
 
-  it('does nothing on F2 when every editable cell is shut', () => {
+  it('does not open a cell on F2 when every editable cell is shut', () => {
     const begin = vi.fn();
     renderGrid(editingBundle({ begin, gateFor: () => SHUT }));
     fireEvent.keyDown(grid(), { key: 'F2' });
     expect(begin).not.toHaveBeenCalled();
+  });
+
+  describe('a refused F2 says why (#538)', () => {
+    const announce = vi.fn();
+    const renderRefused = (editing: GanttGridEditing) =>
+      render(
+        <GanttPanel
+          activities={[activity()]}
+          editing={editing}
+          drag={{
+            canEdit: true,
+            reason: null,
+            plannedStartIso: '2026-01-01',
+            isWorkingDay: null,
+            moveTo: vi.fn(() => Promise.resolve()),
+            resizeTo: vi.fn(() => Promise.resolve()),
+            resizeStart: vi.fn(() => Promise.resolve()),
+            announce,
+          }}
+        />,
+      );
+
+    it("shows the first shut cell's tip and announces its reason exactly once", () => {
+      announce.mockClear();
+      renderRefused(editingBundle({ gateFor: () => SHUT }));
+      const event = new KeyboardEvent('keydown', { key: 'F2', bubbles: true, cancelable: true });
+      act(() => void grid().dispatchEvent(event));
+      const tips = document.querySelectorAll('[data-tooltip]');
+      expect(tips).toHaveLength(1);
+      expect(tips[0]).toHaveTextContent('Start editing to change this.');
+      expect(announce).toHaveBeenCalledTimes(1);
+      expect(announce).toHaveBeenCalledWith('Start editing to change this.');
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('names the first shut cell in column order, not a later one', () => {
+      renderRefused(editingBundle({ gateFor: (key) => ({ ...SHUT, reason: `Shut: ${key}` }) }));
+      fireEvent.keyDown(grid(), { key: 'F2' });
+      expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Shut: name');
+      expect(announce).toHaveBeenLastCalledWith('Shut: name');
+    });
+
+    it('opens a writable cell exactly as before, with no tip and no announcement', () => {
+      announce.mockClear();
+      const begin = vi.fn();
+      renderRefused(editingBundle({ begin, gateFor: (key) => (key === 'name' ? SHUT : OPEN) }));
+      fireEvent.keyDown(grid(), { key: 'F2' });
+      expect(begin).toHaveBeenCalledWith({ activityId: 'a1', key: 'duration' }, '5 d');
+      expect(document.querySelector('[data-tooltip]')).toBeNull();
+      expect(announce).not.toHaveBeenCalled();
+    });
+
+    it('closes the tip on the next key and still moves the row', () => {
+      renderRefused(editingBundle({ gateFor: () => SHUT }));
+      fireEvent.keyDown(grid(), { key: 'F2' });
+      expect(document.querySelector('[data-tooltip]')).not.toBeNull();
+      fireEvent.keyDown(grid(), { key: 'ArrowDown' });
+      expect(document.querySelector('[data-tooltip]')).toBeNull();
+    });
+
+    it('does not announce again while F2 is held down', () => {
+      announce.mockClear();
+      renderRefused(editingBundle({ gateFor: () => SHUT }));
+      fireEvent.keyDown(grid(), { key: 'F2' });
+      fireEvent.keyDown(grid(), { key: 'F2', repeat: true });
+      fireEvent.keyDown(grid(), { key: 'F2', repeat: true });
+      expect(announce).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows no tip for Enter on the row, which activates it as before', () => {
+      announce.mockClear();
+      renderRefused(editingBundle({ gateFor: () => SHUT }));
+      const row = screen.getAllByRole('row').find((r) => r.getAttribute('aria-rowindex') === '2')!;
+      fireEvent.keyDown(row, { key: 'Enter' });
+      expect(document.querySelector('[data-tooltip]')).toBeNull();
+      expect(announce).not.toHaveBeenCalled();
+    });
   });
 
   it('does nothing on F2 with no editing bundle at all', () => {

@@ -76,7 +76,7 @@ meaning would break a shipped binding. Typing has no edit meaning in this grid t
   - AC-2.1 The tip appears on the first shut editable cell in column order, and the reason is announced once (polite).
   - AC-2.2 F2 on a row with a writable cell opens it exactly as today; no tip, no announcement.
   - AC-2.3 Arrow keys, Home/End, Enter, Space and Shift+F10 behave exactly as today and open no tip.
-  - AC-2.4 The tip closes on Escape (which still reaches the grid, `tooltip.tsx:316-338`), on the next key press, on a press elsewhere, and when the row's focus moves.
+  - AC-2.4 The tip closes on Escape (which still reaches the grid, `tooltip.tsx:316-338`), on the next key press (a modifier on its own does not count), on a press elsewhere, on a scroll, and when the cell it hangs on loses focus. Focus moving between rows closes it through the key press that moved it; a pointer move of focus closes it through the press.
 - **US-3 (AT unchanged).** The cell keeps `aria-readonly` and its `aria-describedby` to the `sr-only` reason, character for character. The tip is `aria-hidden` (`'reason-echo'`, `tooltip.tsx:469-473`), so nothing is read twice.
 
 **Edge cases.** A cell's reason flips while the tip is open (pen taken mid-way): the tip closes when the

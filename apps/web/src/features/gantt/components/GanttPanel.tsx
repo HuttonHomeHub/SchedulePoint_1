@@ -63,6 +63,7 @@ import {
   GANTT_EDITABLE_COLUMNS,
   isCellOpen,
   openCell,
+  type GanttCellKey,
   type GanttGridEditing,
 } from '../model/cell-edit';
 import {
@@ -439,6 +440,13 @@ function GanttPanelBody({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const menuHandles = useRef(new Map<string, GanttRowMenuHandle>());
+  // Each editable cell's "show your reason" function, keyed `activityId:cellKey`. F2 on a row whose
+  // cells are all shut cannot ask a cell directly — focus is on the row — so it asks through this.
+  const cellShows = useRef(new Map<string, () => void>());
+  const registerCellShow = useCallback((cellId: string, show: (() => void) | null): void => {
+    if (show) cellShows.current.set(cellId, show);
+    else cellShows.current.delete(cellId);
+  }, []);
   const pendingFocus = useRef(false);
 
   // Sort and the collapse set are the panel's own state UNLESS a host supplies `viewState` — the
@@ -1008,16 +1016,33 @@ function GanttPanelBody({
         // rather than leaving a reader to infer that F2 is arbitrary.
         if (!row || row.kind !== 'activity' || editing === undefined) break;
         const activity = row.activity;
+        let firstRefusal: { cellKey: GanttCellKey; reason: string } | null = null;
         for (const column of COLUMNS) {
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
           if (cellKey === undefined) continue;
-          if (!editing.gateFor(cellKey, activity.id).writable) continue;
+          const gate = editing.gateFor(cellKey, activity.id);
+          if (!gate.writable) {
+            if (firstRefusal === null && gate.reason !== null) {
+              firstRefusal = { cellKey, reason: gate.reason };
+            }
+            continue;
+          }
           event.preventDefault();
           editing.begin(
             { activityId: activity.id, key: cellKey },
             column.value(activity, barDateSource, hoursPerDayFor?.(activity)),
           );
-          break;
+          return;
+        }
+        // **Nothing could open, so say why** (ADR-0204 amended, #538): the first shut cell's tip for a
+        // sighted reader, and the same sentence once in the polite region for a screen reader, whose
+        // F2 used to fall through in silence. The tip is aria-hidden, so nothing is read twice.
+        if (firstRefusal !== null) {
+          event.preventDefault();
+          // A held key repeats: the tip is already up and the reason already said.
+          if (event.repeat) break;
+          cellShows.current.get(`${activity.id}:${firstRefusal.cellKey}`)?.();
+          drag?.announce(firstRefusal.reason);
         }
         break;
       }
@@ -1394,6 +1419,7 @@ function GanttPanelBody({
                   onSelect={onSelectActivity}
                   onTouchSelect={onTouchSelect}
                   onTouchEngaged={dismissTouchHint}
+                  registerCellShow={registerCellShow}
                   registerMenu={(handle: GanttRowMenuHandle | null) => {
                     if (handle) menuHandles.current.set(id, handle);
                     else menuHandles.current.delete(id);
@@ -1668,6 +1694,8 @@ interface GanttRowViewProps {
   onTouchEngaged?: (() => void) | undefined;
   /** Hands the panel this row's menu handle, so the keyboard opens it the way a hold does. */
   registerMenu?: ((handle: GanttRowMenuHandle | null) => void) | undefined;
+  /** Hands the panel each editable cell's reason-tip function (F2's refusal reaches the cell by it). */
+  registerCellShow?: ((cellId: string, show: (() => void) | null) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
@@ -1726,6 +1754,7 @@ function GanttRowView({
   onTouchSelect,
   onTouchEngaged,
   registerMenu,
+  registerCellShow,
   onToggle,
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
@@ -2145,6 +2174,7 @@ function GanttRowView({
                 onChange={editing.change}
                 onCommit={editing.commit}
                 onCancel={editing.cancel}
+                registerShow={(show) => registerCellShow?.(`${activity.id}:${cellKey}`, show)}
                 className={cn(column.align === 'right' ? 'text-right' : 'text-left')}
                 {...(lead === null ? {} : { lead })}
               >
