@@ -169,7 +169,7 @@ got=""
 read -r -t 15 got <&"${DBLOCK[0]}" || true
 if [ "$got" != "t" ]; then
   if [ "$got" = "f" ]; then
-    holder="$(psql -qtA "$db_conninfo" -c "SELECT a.application_name || ' (backend pid ' || l.pid || ')' FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = ${DB_LOCK_KEY} AND l.granted LIMIT 1" 2>/dev/null || true)"
+    holder="$(psql -qtA "$db_conninfo" -c "SELECT a.application_name || ' (backend pid ' || l.pid || ')' FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.classid = 0 AND l.objid = ${DB_LOCK_KEY} AND l.granted LIMIT 1" 2>/dev/null || true)"
     cat >&2 <<EOF
 
 Another run already holds the lock on this database (${holder:-holder not found}).
