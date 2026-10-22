@@ -9295,3 +9295,20 @@ The first-load text states this row was raised for are converted (2026-10-19): `
 On the owner's first clear-out run, all nine **Permanently deleted** rows in the Audit log read **By: Unknown**. They were written by SchedulePoint itself (`actorType` `SYSTEM`), and the switch-on guide promised **System**; the guide now says "Unknown" and cites this row. "Unknown" reads as a missing or suspicious actor on the one row type where the actor is certain. The same afternoon the preview said "jkjkjk" was "due in 5 days" while **Recently deleted** said "Expires in 4 days" for the same item (deleted 2026-07-27 16:12, read 2026-10-20 16:38, 4.98 days left): the preview rounds up and the bin rounds down. Neither is wrong, and the guide now warns of it, but two answers to one question from one product is a small trust cost.
 
 **Next:** have `auditActorName` name a `SYSTEM` actor ("SchedulePoint" or "System": a copy decision) with a unit test, and update `docs/guides/switch-on-the-clear-out.md` Part 2 step 8 to match; then decide whether the preview's "due in" should floor like the bin. **Trigger:** any change to the audit log's actor column, or a report that a clear-out row looks unattributed.
+
+### 539. A finish milestone straight after work on another calendar is dated wrongly, or delays its successors a calendar period
+
+**Status:** open · **Verified:** 2026-10-22, by running `computeSchedule` (`apps/api/src/modules/schedule/engine/compute.ts`) on the fixture below in a throwaway Vitest file beside `compute.activity-calendar.spec.ts` · **Raised:** 2026-10-22 (a user programme with weekend shutdown tie-ins, imported as XER) · **Size:** M · **Owner:** api
+
+Construction plans often put a shutdown on a weekend calendar and mark its end with a milestone ("cutover complete") before weekday work resumes. With per-activity calendars (ADR-0037) that milestone is wrong whichever calendar it is given. Fixture: plan calendar Mon-Fri 08:00-16:00; weekend calendar Sat-Sun 07:00-19:00; data date 2027-06-14. `W` is a 2-day (1,440-minute) task on the weekend calendar with `SNET` 2027-06-26, after a 5-day weekday task `A`. `M` is a `FINISH_MILESTONE` after `W`. `K` is a 5-day weekday task after `M`, followed by a `FINISH_MILESTONE` with `FNLT` 2027-07-09. All links are FS with no lag.
+
+- **`M` on the plan calendar:** `M` is dated **Fri 2027-06-25**, the day before `W` starts, and `W`'s total float is **-1,440 minutes** with nothing late. `K` correctly starts Mon 2027-06-28.
+- **`M` on the weekend calendar:** `M` is correctly dated Sun 2027-06-27, but **`K` starts Mon 2027-07-05**, a week late, and `A` and `W` gain float they do not have.
+- **`M` on `allMinutesWorkCalendar`:** correct (`M` Sun 2027-06-27, `K` Mon 2027-06-28, `W` float 0). So does a direct `W` to `K` link with no milestone.
+- **A `START_MILESTONE` on the plan calendar** in the same place gets the right early date (Mon 2027-06-28), but in the full user programme it gave the weekend task **-1,440 minutes** of float, so the late pass has the same fault for start milestones.
+
+The early dates suggest a milestone's instant is re-snapped to its own calendar (forward to its next working minute, or back to its last working day for display) instead of staying at the predecessor's finish. The late pass does the same in reverse. ADR-0155 decided how a finish milestone is dated on one calendar. It did not cover a predecessor on a different calendar.
+
+**Workaround in use:** link the off-calendar work directly to its weekday successors, and hang the milestone off it with a later successor (for example planned MC), so the milestone's late date never constrains the weekend work.
+
+**Next:** turn the fixture into a failing case in `compute.activity-calendar.spec.ts`, then decide the rule (a zero-duration activity keeps its driving predecessor's finish instant; its calendar only decides the date shown). That changes the engine's semantics, so it needs a spec, the ADR-0035 golden contract amended and the conformance matrix re-run (ADR-0034). **Trigger:** none, open now. Weekend and shift shutdowns are routine in the plans this product is for.
