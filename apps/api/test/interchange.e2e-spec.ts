@@ -1178,9 +1178,10 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
       .expect(201);
 
+    // A different plan name: the same one is refused before any report (#541).
     const res = await actor.agent
       .post(dryRunUrl(projectId))
-      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
+      .attach('file', Buffer.from(xerWithCalendar('Imported Again'), 'utf8'), 'again.xer')
       .expect(200);
 
     const repairs = res.body.data.repairs as { entity: string; detail: string }[];
