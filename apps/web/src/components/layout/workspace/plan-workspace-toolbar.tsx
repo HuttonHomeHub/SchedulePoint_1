@@ -10,7 +10,6 @@ import {
 } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
-import { dockBounds } from './dock-bounds';
 import { focusOutsideInert, planSurfaceTarget } from './focus-reachable';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
@@ -30,13 +29,10 @@ import {
 } from './use-activity-panel-prefs';
 import { useDockOpener } from './use-dock-opener';
 import { useLateOverlayAnnouncement } from './use-late-overlay-announcement';
-import {
-  NOTES_PANEL_MAX_WIDTH,
-  NOTES_PANEL_MIN_WIDTH,
-  useNotesPanelPrefs,
-} from './use-notes-panel-prefs';
+import { NOTES_PANEL_MIN_WIDTH, useNotesPanelPrefs } from './use-notes-panel-prefs';
 import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+import { useRightDockSize } from './use-right-dock-size';
 import { useShortBodySwap } from './use-short-body-swap';
 import { CanvasLoading } from './workspace-skeleton';
 
@@ -669,73 +665,47 @@ export function ToolbarPlanWorkspace({
   // rewritten, so a width dragged at 1440 is back at 1440 after a visit at 640.
   const notesPanel = useNotesPanelPrefs();
   const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
-  const notesBounds = dockBounds({
-    stored: notesPanel.size,
-    min: NOTES_PANEL_MIN_WIDTH,
-    max: NOTES_PANEL_MAX_WIDTH,
+  const { bounds: notesBounds, onResize: onNotesResize } = useRightDockSize(
+    notesPanel,
+    NOTES_PANEL_MIN_WIDTH,
     bodyWidth,
-  });
-  // A right-docked panel grows as the pointer moves left: width = the body's right edge − X.
-  const notesPointerToSize = useCallback(
+  );
+  // A right-docked panel grows as the pointer moves left: width = the body's right edge − X. One
+  // callback for all four docks, since they share the body's right edge.
+  const rightDockPointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
       (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
     [],
-  );
-  const notesMax = notesBounds.max;
-  const onNotesResize = useCallback(
-    (next: number) => notesPanel.setSize(Math.min(next, notesMax)),
-    [notesPanel, notesMax],
   );
 
   // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
   // `toggleFloatPathsInto` above for why.
   const floatPathsPrefs = useFloatPathsPanelPrefs();
   const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
-  const floatPathsBounds = dockBounds({
-    stored: floatPathsPrefs.size,
-    min: FLOAT_PATHS_PANEL_MIN_WIDTH,
-    max: NOTES_PANEL_MAX_WIDTH,
+  const { bounds: floatPathsBounds, onResize: onFloatPathsResize } = useRightDockSize(
+    floatPathsPrefs,
+    FLOAT_PATHS_PANEL_MIN_WIDTH,
     bodyWidth,
-  });
-  const floatPathsPointerToSize = notesPointerToSize;
-  const floatPathsMax = floatPathsBounds.max;
-  const onFloatPathsResize = useCallback(
-    (next: number) => floatPathsPrefs.setSize(Math.min(next, floatPathsMax)),
-    [floatPathsPrefs, floatPathsMax],
   );
 
   // The Health check dock — the third member of the right-dock set, with its own DERIVED width floor
   // (see the prefs docblock).
   const healthPrefs = useScheduleHealthPanelPrefs();
   const healthDockActive = healthOpen;
-  const healthBounds = dockBounds({
-    stored: healthPrefs.size,
-    min: HEALTH_PANEL_MIN_WIDTH,
-    max: NOTES_PANEL_MAX_WIDTH,
+  const { bounds: healthBounds, onResize: onHealthResize } = useRightDockSize(
+    healthPrefs,
+    HEALTH_PANEL_MIN_WIDTH,
     bodyWidth,
-  });
-  const healthPointerToSize = notesPointerToSize;
-  const healthMax = healthBounds.max;
-  const onHealthResize = useCallback(
-    (next: number) => healthPrefs.setSize(Math.min(next, healthMax)),
-    [healthPrefs, healthMax],
   );
 
   // The revision comparison dock — the fourth member, its floor DERIVED too (the two side pickers
   // side by side, not a number copied from a sibling).
   const revisionPrefs = useRevisionComparePanelPrefs();
   const revisionsDockActive = revisionsOpen;
-  const revisionBounds = dockBounds({
-    stored: revisionPrefs.size,
-    min: REVISION_PANEL_MIN_WIDTH,
-    max: NOTES_PANEL_MAX_WIDTH,
+  const { bounds: revisionBounds, onResize: onRevisionResize } = useRightDockSize(
+    revisionPrefs,
+    REVISION_PANEL_MIN_WIDTH,
     bodyWidth,
-  });
-  const revisionPointerToSize = notesPointerToSize;
-  const revisionMax = revisionBounds.max;
-  const onRevisionResize = useCallback(
-    (next: number) => revisionPrefs.setSize(Math.min(next, revisionMax)),
-    [revisionPrefs, revisionMax],
   );
 
   // An open dock that no width can fit beside the diagram has taken the row: the diagram column is
@@ -2592,7 +2562,7 @@ export function ToolbarPlanWorkspace({
                         sizeLabel="Float paths panel width"
                         onReset={floatPathsPrefs.resetSize}
                         onResize={onFloatPathsResize}
-                        pointerToSize={floatPathsPointerToSize}
+                        pointerToSize={rightDockPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
@@ -2629,7 +2599,7 @@ export function ToolbarPlanWorkspace({
                         sizeLabel="Health check panel width"
                         onReset={healthPrefs.resetSize}
                         onResize={onHealthResize}
-                        pointerToSize={healthPointerToSize}
+                        pointerToSize={rightDockPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
@@ -2658,7 +2628,7 @@ export function ToolbarPlanWorkspace({
                         sizeLabel="Revision comparison panel width"
                         onReset={revisionPrefs.resetSize}
                         onResize={onRevisionResize}
-                        pointerToSize={revisionPointerToSize}
+                        pointerToSize={rightDockPointerToSize}
                         reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
@@ -2687,7 +2657,7 @@ export function ToolbarPlanWorkspace({
                         sizeLabel="Notes panel width"
                         onReset={notesPanel.resetSize}
                         onResize={onNotesResize}
-                        pointerToSize={notesPointerToSize}
+                        pointerToSize={rightDockPointerToSize}
                         // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
                         // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
                         reverseKeys
