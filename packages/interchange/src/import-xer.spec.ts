@@ -770,3 +770,47 @@ describe('importXer — M2 ceilings + hostile-key hardening (security fold)', ()
     if (result.ok) expect(result.graph.resources[0]?.kind).toBe('LABOUR');
   });
 });
+
+describe('importXer — activity notes (TASKMEMO) are named in the report', () => {
+  const MEMO_FIELDS = ['memo_id', 'proj_id', 'task_id', 'memo_type_id', 'task_memo'];
+  const memoDrops = (xer: string) =>
+    importOk(xer).report.drops.filter((f: ReportFinding) => f.detail.includes('note'));
+
+  function withMemos(rows: string[][]): string {
+    const base = cleanXer();
+    return `${base.replace(/\n%E$/, '')}\n${[
+      '%T\tTASKMEMO',
+      `%F\t${MEMO_FIELDS.join('\t')}`,
+      ...rows.map((row) => `%R\t${row.join('\t')}`),
+      '%E',
+    ].join('\n')}`;
+  }
+
+  it('reports ONE aggregate drop counting the activities that carry a note', () => {
+    const drops = memoDrops(
+      withMemos([
+        ['M1', 'P1', 'T1', 'MT1', 'Check the crane pad'],
+        ['M2', 'P1', 'T2', 'MT1', 'Client to confirm'],
+      ]),
+    );
+    expect(drops).toHaveLength(1);
+    expect(drops[0]).toMatchObject({ kind: 'drop', entity: 'activity', sourceRef: null });
+    expect(drops[0]?.detail).toBe('2 activity notes were not imported');
+  });
+
+  it('says "note was" for exactly one, and ignores blank memos and other projects', () => {
+    const drops = memoDrops(
+      withMemos([
+        ['M1', 'P1', 'T1', 'MT1', 'Only one'],
+        ['M2', 'P1', 'T2', 'MT1', '   '],
+        ['M3', 'P9', 'T9', 'MT1', 'Someone else’s'],
+      ]),
+    );
+    expect(drops.map((f: ReportFinding) => f.detail)).toEqual(['1 activity note was not imported']);
+  });
+
+  it('adds no drop when the file has no notes', () => {
+    expect(memoDrops(cleanXer())).toEqual([]);
+    expect(memoDrops(withMemos([['M1', 'P1', 'T1', 'MT1', '']]))).toEqual([]);
+  });
+});

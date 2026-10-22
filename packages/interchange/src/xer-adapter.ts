@@ -47,6 +47,8 @@ const TABLE = {
   projwbs: 'PROJWBS',
   rsrc: 'RSRC',
   taskRsrc: 'TASKRSRC',
+  // Read only to COUNT the notes the import cannot yet carry (ADR-0050: every source field is mapped or named).
+  taskMemo: 'TASKMEMO',
 } as const;
 
 /**
@@ -435,8 +437,26 @@ export function adaptXerToCanonical(
       entity: 'calendar',
       sourceRef: null,
       detail:
-        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-day/-week, base-calendar inheritance) were not imported',
+        'P6 calendar attributes beyond weekly work windows + dated exceptions (hours-per-week, base-calendar inheritance) were not imported',
       reason: 'not expressible in the SchedulePoint calendar model (ADR-0036)',
+    });
+  }
+
+  // Activity notes (P6 `TASKMEMO`) have no canonical field yet, so they would otherwise vanish with a
+  // clean report. One aggregate finding, not one per note (docs/TECH_DEBT.md #543).
+  const notedActivities = rowsOf(document, TABLE.taskMemo).filter((row) => {
+    const rowProject = field(row, 'proj_id');
+    return (
+      field(row, 'task_memo') !== undefined && (rowProject === undefined || rowProject === projId)
+    );
+  }).length;
+  if (notedActivities > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'activity',
+      sourceRef: null,
+      detail: `${notedActivities} activity ${notedActivities === 1 ? 'note was' : 'notes were'} not imported`,
+      reason: 'the import does not carry activity notes yet (ADR-0046, docs/BACKLOG.md)',
     });
   }
 

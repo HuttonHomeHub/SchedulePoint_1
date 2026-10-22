@@ -2,11 +2,21 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanRepository } from '../plans/plan.repository';
 import type { ProjectRepository } from '../projects/project.repository';
 
-import { INTERCHANGE_ERROR, InterchangeService } from './interchange.service';
+import {
+  INTERCHANGE_ERROR,
+  InterchangeService,
+  importedNameProbePrefix,
+} from './interchange.service';
 import type { UploadedInterchangeFile } from './uploaded-file';
 
 const ORG_ID = 'org-1';
@@ -62,6 +72,7 @@ function principalWith(permissions: Permission[]): Principal {
 describe('InterchangeService.dryRun', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let projects: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: { existsActiveNameInProject: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: InterchangeService;
   const planner = principalWith(['interchange:import']);
@@ -71,6 +82,7 @@ describe('InterchangeService.dryRun', () => {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
     projects = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }) };
+    plans = { existsActiveNameInProject: vi.fn().mockResolvedValue(false) };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     // The commit-path collaborators are unused by these dry-run tests (dry-run never persists), so they
     // are supplied as inert stand-ins (typed `never`, assignable to any param); the commit orchestration
@@ -79,7 +91,7 @@ describe('InterchangeService.dryRun', () => {
     service = new InterchangeService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
-      unused,
+      plans as unknown as PlanRepository,
       unused,
       unused,
       unused,
@@ -109,6 +121,24 @@ describe('InterchangeService.dryRun', () => {
     );
     expect(report.mapped.relationships).toBe(0);
     expect(report.repairs.some((r) => r.detail.includes('dangling'))).toBe(true);
+  });
+
+  it('refuses with the hand-made path’s 409 when the project already holds the plan name (#541)', async () => {
+    plans.existsActiveNameInProject.mockResolvedValue(true);
+    const error = await service
+      .dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(validXer()))
+      .then(() => null)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).message).toBe(
+      'A plan with this name already exists for this project.',
+    );
+    expect((error as ConflictError).details).toMatchObject({ reason: 'NAME_TAKEN' });
+    // The probe asks about the name the commit would insert, in the target project.
+    expect(plans.existsActiveNameInProject.mock.calls[0]?.slice(0, 2)).toEqual([
+      PROJECT_ID,
+      'Sample',
+    ]);
   });
 
   it('rejects an unrecognised/garbage file with a ValidationError (422)', async () => {
@@ -151,5 +181,20 @@ describe('InterchangeService.dryRun', () => {
     await expect(
       service.dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(validXer())),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('importedNameProbePrefix (#540)', () => {
+  it('keeps a short name whole, so its exact match and every variant are probed', () => {
+    expect(importedNameProbePrefix('Standard 5-day', 120)).toBe('Standard 5-day');
+  });
+
+  it('clips a near-ceiling name so the clipped variants an import builds still match', () => {
+    const name = 'x'.repeat(118);
+    const prefix = importedNameProbePrefix(name, 120);
+    const variant = `${name.slice(0, 120 - '(imported 2026-10-22) (2)'.length - 1)} (imported 2026-10-22) (2)`;
+    expect(prefix.length).toBeLessThan(name.length);
+    expect(name.startsWith(prefix)).toBe(true);
+    expect(variant.startsWith(prefix)).toBe(true);
   });
 });

@@ -23,10 +23,10 @@ import type { ReportFinding } from './report.js';
  *
  * We parse a **pragmatic, documented subset** — the weekly work windows and the dated exceptions — which
  * is all the SchedulePoint calendar model (weekday shifts + dated exception windows, ADR-0036) can
- * express. Anything else P6 stores (hours-per-day/-week, base-calendar inheritance) is **not imported
- * and is reported**, never silently dropped. The one P6 calendar attribute outside this blob that IS
- * carried is the row's `clndr_type`, which the adapter reads to decide the calendar's SchedulePoint
- * tier (ADR-0053 §5). Days-of-week use P6's numbering
+ * express. Anything else P6 stores (hours-per-week, base-calendar inheritance) is **not imported
+ * and is reported**, never silently dropped. The P6 calendar attributes outside this blob that ARE
+ * carried are the row's `day_hr_cnt` (hours-per-day, ADR-0068) and `clndr_type`, which the adapter
+ * reads to decide the calendar's SchedulePoint tier (ADR-0053 §5). Days-of-week use P6's numbering
  * `1 = Sunday … 7 = Saturday`; exception dates are Excel/OLE serial day-numbers (base 1899-12-30).
  *
  * The parser is deliberately **tolerant + deterministic**: it never throws on a malformed blob — it

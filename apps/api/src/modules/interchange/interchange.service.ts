@@ -38,6 +38,7 @@ import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
+import { isPlanNameConflict, planNameTakenError } from '../plans/plan-name-conflict';
 import { PlanRepository } from '../plans/plan.repository';
 import { ProjectRepository } from '../projects/project.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
@@ -110,6 +111,15 @@ const CALENDAR_NAME_MAX_LENGTH = 120;
 const RESOURCE_NAME_MAX_LENGTH = 200;
 
 /**
+ * The prefix to probe for `name`'s taken variants. A variant clips the base to make room for its
+ * suffix, so near the ceiling it no longer starts with the whole name; probing by the base clipped
+ * for the longest suffix this importer will build still matches every variant. A shorter prefix only
+ * widens the taken set, which is harmless: disambiguation checks exact membership.
+ */
+export const importedNameProbePrefix = (name: string, maxLength: number): string =>
+  name.slice(0, maxLength - IMPORTED_NAME_SUFFIX('0000-00-00', 9999).length - 1).trimEnd();
+
+/**
  * Business logic for schedule interchange (ADR-0050, C2). This is the thin persisting layer's brain: it
  * resolves the org scope from the caller's own memberships (anti-IDOR), pairs it with the
  * `interchange:import` capability check, and asserts the **target project** belongs to that org before
@@ -158,6 +168,14 @@ export class InterchangeService {
   ): Promise<InterchangeReport> {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
     const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
+
+    // A plan name the project already holds fails the commit on `uq_plans_project_name`, after the
+    // planner has accepted a clean preview. Refused here with the same 409 the hand-made path gives
+    // (`PlansService.create`), rather than a report finding — the import cannot proceed under this
+    // name, and a finding would add a kind to the report contract (docs/TECH_DEBT.md #541).
+    if (await this.plans.existsActiveNameInProject(project.id, graph.plan.name, this.prisma)) {
+      throw planNameTakenError();
+    }
 
     // Probe the calendar names the target tiers already hold, so the REVIEWED report already names any
     // suffix-disambiguation the commit will apply (ADR-0053 §5). Read-only, outside any transaction —
@@ -528,19 +546,25 @@ export class InterchangeService {
       graph.plan.defaultCalendarKey,
       calendarIdByKey,
     );
-    const plan = await this.plans.create(
-      {
-        organizationId,
-        projectId: project.id,
-        name: graph.plan.name,
-        description: null,
-        // The mandatory CPM data date (ADR-0033): the source data date → `plannedStart`.
-        plannedStart: parseCalendarDate(graph.plan.dataDate),
-        ...(defaultCalendarId ? { calendarId: defaultCalendarId } : {}),
-        ...stamp,
-      },
-      tx,
-    );
+    const plan = await this.plans
+      .create(
+        {
+          organizationId,
+          projectId: project.id,
+          name: graph.plan.name,
+          description: null,
+          // The mandatory CPM data date (ADR-0033): the source data date → `plannedStart`.
+          plannedStart: parseCalendarDate(graph.plan.dataDate),
+          ...(defaultCalendarId ? { calendarId: defaultCalendarId } : {}),
+          ...stamp,
+        },
+        tx,
+      )
+      .catch((error: unknown) => {
+        // This insert only: the dry-run probe cannot see a plan created between preview and commit.
+        // The plan's only unique besides its id is the per-project name, so a P2002 here is that.
+        throw isPlanNameConflict(error) ? planNameTakenError() : error;
+      });
 
     // 3. Pre-generate an id for EVERY activity — including WBS_SUMMARY nodes (ADR-0038) — up front so
     // both the dependency endpoints and the WBS self-FK (`parentKey`) resolve from one map regardless of
@@ -967,7 +991,12 @@ export class InterchangeService {
     const nameByKey = new Map<string, string>();
     if (copies.length === 0) return nameByKey;
     const taken = await this.resources.findTakenNamesWithPrefixes(
-      { organizationId, prefixes: [...new Set(copies.map((c) => c.name))] },
+      {
+        organizationId,
+        prefixes: [
+          ...new Set(copies.map((c) => importedNameProbePrefix(c.name, RESOURCE_NAME_MAX_LENGTH))),
+        ],
+      },
       db,
     );
     const today = new Date().toISOString().slice(0, 10);
@@ -989,18 +1018,21 @@ export class InterchangeService {
     if (graph.calendars.length === 0) return { nameByKey, findings };
 
     // The names already taken, per tier — one query per tier actually present in the graph.
+    // By prefix, so a variant an earlier import of the same day created is seen (as for resources).
     const takenByScope = new Map<ImportCalendarScope, Set<string>>();
     for (const scope of ['ORG', 'PROJECT'] as const) {
       const names = graph.calendars.filter((c) => c.scope === scope).map((c) => c.name);
       if (names.length === 0) continue;
       takenByScope.set(
         scope,
-        await this.calendars.findTakenNames(
+        await this.calendars.findTakenNamesWithPrefixes(
           {
             organizationId: project.organizationId,
             scope,
             projectId: scope === 'PROJECT' ? project.id : null,
-            names,
+            prefixes: [
+              ...new Set(names.map((n) => importedNameProbePrefix(n, CALENDAR_NAME_MAX_LENGTH))),
+            ],
           },
           db,
         ),

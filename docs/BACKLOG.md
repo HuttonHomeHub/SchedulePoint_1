@@ -244,7 +244,8 @@ a product idea that has not yet earned a roadmap line:
 
 - `M` **Carry activity notes through XER and MSPDI** (import and export). P6 keeps remarks in
   `TASKMEMO`, MS Project in `<Notes>`; neither adapter reads them today, so a programme's remarks are
-  lost on import (`docs/TECH_DEBT.md` #543 covers reporting the drop). The target already exists:
+  lost on import — the report now names them as one aggregate drop (closed `docs/TECH_DEBT.md` #543), but nothing
+  is carried. The target already exists:
   activity notes (ADR-0046). Demand: on 2026-10-22 the owner's remarks for a programme
   had to travel in a separate spreadsheet beside the XER.
 

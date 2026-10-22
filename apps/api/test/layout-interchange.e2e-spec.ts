@@ -306,13 +306,16 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       Buffer.from(editedText, 'utf8'),
     ));
 
+    // A fresh project: the source plan's own project already holds its name, which the dry-run
+    // refuses before any report (#541).
+    const dryProject = await project('Dry run');
     const dry = await agent
-      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .post(`/api/v1/organizations/${orgSlug}/projects/${dryProject}/interchange/dry-run`)
       .attach('file', full, 'netpoint-power-plant.xer')
       .expect(200);
     dryRunReport = dry.body.data as Report;
     badOption = await agent
-      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .post(`/api/v1/organizations/${orgSlug}/projects/${dryProject}/interchange/dry-run`)
       .field('restoreLayout', 'MAYBE')
       .attach('file', full, 'netpoint-power-plant.xer');
   }, 360_000);
@@ -400,9 +403,22 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     expect(advisories?.map((a) => [a.code, a.sourceRef])).toEqual([
       ['ZERO_DURATION_TASK', 'A7550'],
     ]);
+    // #542 changed one drop's wording and nothing else: hours-per-day IS imported, so the calendar
+    // drop stopped claiming it was not. The report is hashed with the M0 wording put back, so any
+    // OTHER change still moves the digest.
+    const calendarDrop = withoutAdvisories.drops.find((d) =>
+      d.detail.includes('base-calendar inheritance'),
+    );
+    expect(calendarDrop?.detail).toContain('(hours-per-week, base-calendar inheritance)');
+    const m0Wording = JSON.parse(
+      JSON.stringify(withoutAdvisories).replace(
+        '(hours-per-week, base-calendar',
+        '(hours-per-day/-week, base-calendar',
+      ),
+    ) as unknown;
     expect({
       tortureGraphDigest: digest(parsed.graph),
-      tortureReportDigest: digest(withoutAdvisories),
+      tortureReportDigest: digest(m0Wording),
     }).toEqual(BASELINE);
   });
 

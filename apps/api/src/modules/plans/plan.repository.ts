@@ -67,6 +67,23 @@ export class PlanRepository {
     return db.plan.create({ data });
   }
 
+  /**
+   * Whether a live plan in the project already holds `name` — the importer's dry-run probe. Mirrors
+   * the unique it predicts: `uq_plans_project_name` is partial on `deleted_at IS NULL`, so a plan in
+   * the bin does not block the name and must not make the preview refuse.
+   */
+  async existsActiveNameInProject(
+    projectId: string,
+    name: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<boolean> {
+    const row = await db.plan.findFirst({
+      where: this.active({ projectId, name }),
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   /** An active plan scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,

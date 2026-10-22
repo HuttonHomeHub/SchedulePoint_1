@@ -396,6 +396,7 @@ export function adaptMspdiToCanonical(
   const relationships: CanonicalRelationship[] = [];
   const summaryStack: Array<{ uid: string; level: number }> = [];
   let relIndex = 0;
+  let notedTasks = 0;
 
   for (const tasksContainer of childElements(project, 'Tasks')) {
     for (const task of childElements(tasksContainer, 'Task')) {
@@ -410,6 +411,7 @@ export function adaptMspdiToCanonical(
         });
         continue;
       }
+      if (childText(task, 'Notes') !== undefined) notedTasks += 1;
 
       const outlineLevel = Math.trunc(numField(task, 'OutlineLevel') ?? 1);
       while (summaryStack.length > 0) {
@@ -558,6 +560,18 @@ export function adaptMspdiToCanonical(
         });
       }
     }
+  }
+
+  // Task `<Notes>` have no canonical field yet, so they would otherwise vanish with a clean report. One
+  // aggregate finding, not one per note (docs/TECH_DEBT.md #543).
+  if (notedTasks > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'activity',
+      sourceRef: null,
+      detail: `${notedTasks} activity ${notedTasks === 1 ? 'note was' : 'notes were'} not imported`,
+      reason: 'the import does not carry activity notes yet (ADR-0046, docs/BACKLOG.md)',
+    });
   }
 
   // --- Resources (`<Resources><Resource>` → the org resource library, ADR-0039) ---------------------

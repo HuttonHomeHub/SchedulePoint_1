@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Plan } from '@prisma/client';
+import type { Plan } from '@prisma/client';
 import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -7,10 +7,7 @@ import type { Permission, Principal } from '../../common/auth/principal';
 import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
-import {
-  HIERARCHY_CONFLICT,
-  HierarchyLifecycleService,
-} from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
 import {
   PLAN_FIELD_CLASS,
@@ -29,6 +26,7 @@ import { ProjectRepository } from '../projects/project.repository';
 import type { CreatePlanDto } from './dto/create-plan.dto';
 import type { UpdatePlanDto } from './dto/update-plan.dto';
 import { diffGovernanceFields } from './plan-governance-fields';
+import { isPlanNameConflict, planNameTakenError } from './plan-name-conflict';
 import { PlanRepository, type PlanPatch } from './plan.repository';
 
 /**
@@ -141,7 +139,7 @@ export class PlansService {
       );
       return plan;
     } catch (error) {
-      if (this.isNameConflict(error)) throw this.nameTakenError();
+      if (isPlanNameConflict(error)) throw planNameTakenError();
       throw error;
     }
   }
@@ -270,7 +268,7 @@ export class PlansService {
         }
       });
     } catch (error) {
-      if (this.isNameConflict(error)) throw this.nameTakenError();
+      if (isPlanNameConflict(error)) throw planNameTakenError();
       throw error;
     }
 
@@ -370,17 +368,6 @@ export class PlansService {
     const project = await this.projects.findActiveByIdInOrg(projectId, organizationId);
     if (!project) throw new NotFoundError('Project not found.');
     return project;
-  }
-
-  /** A Prisma unique-violation from the partial name-per-project index. */
-  private isNameConflict(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-  }
-
-  private nameTakenError(): ConflictError {
-    return new ConflictError('A plan with this name already exists for this project.', {
-      reason: HIERARCHY_CONFLICT.NAME_TAKEN,
-    });
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {
