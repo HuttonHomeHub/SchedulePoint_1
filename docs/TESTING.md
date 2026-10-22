@@ -394,6 +394,11 @@ tree changed, and refuses `--checks`, which skips lint, typecheck and test. The 
 prompt for credentials once, before the gate starts. Bare `pnpm prepush` is
 unchanged, for when you want the result without pushing.
 
+**A gate that does not pass shows why** (`docs/TECH_DEBT.md` #276). A log of up to 200 lines is
+printed whole; a longer one prints its `✗`/`FAIL`/`error` lines (numbered, with the line after each,
+at most 40), its last 30 lines, and a footer naming `pnpm <gate>` to reproduce all of it. A passing
+gate still prints only `ok`.
+
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to
 `scripts/e2e-local.sh` — the rows below still say when that is required.
 
