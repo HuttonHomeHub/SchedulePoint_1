@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — Three shared-gate and Gantt specs approved, and the rest of the shortlist (tech debt #276, #299, #538, #326, #308, #306, #249)
+
+**Decided by the product owner**, who said "fix them all unless there is a valid reason not to" for
+the hand-off's shortlist, then approved three specs with every default:
+
+- **#276** (`docs/specs/gate-failure-output/`): a failing `pnpm prepush` gate prints its whole log when
+  it is short, and its failure lines plus its tail when it is long.
+- **#299** (`docs/specs/ci-command-roster/`): "fix them all" is the decision #299's trigger names, so
+  `check:ci-roster` gains the converse rule, reversing ADR-0160 CQ-2's "this instance only". CQ-2:
+  `pnpm build` gets a written CI-only reason rather than a new `prepush` stage.
+- **#538** (`docs/specs/gantt-cell-reason-on-press/`): a read-only Gantt cell shows its reason on
+  **double-click, double-tap and F2** (CQ-1's default), not on a single click, which selects the row.
+
+**Declined, with the reason:** #306 (a), renaming the focus-handoff hook, changes an exported hook's
+public contract (an ADR-0105 spec trigger) for no change in behaviour. #326, #308, #306 (b)–(c) and
+#249 add no surface and are fixed without a spec.
+
+---
+
 ## 2026-10-21 — The reset link carries its token in the fragment, and an expired link is found out on submit (tech debt #537)
 
 **Decided by the product owner, approving `docs/specs/reset-link-fragment/` with every default.** The
