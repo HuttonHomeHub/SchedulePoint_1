@@ -3,7 +3,7 @@
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md). Schema:
   [`./schema-design.md`](./schema-design.md). Frontend review:
   [`./ui-architecture.md`](./ui-architecture.md).
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-22: SQ-1 to SQ-6 with their defaults, SQ-7 **yes** (M1-T1b is in scope)
 - **Owner:** James Ewbank (product owner). The builder agent builds it, one milestone at a time
   (CLAUDE.md §19.14).
 

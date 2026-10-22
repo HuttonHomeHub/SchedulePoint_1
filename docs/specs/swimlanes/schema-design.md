@@ -1,6 +1,6 @@
 # Schema design: labelled swimlanes
 
-- **Status:** Draft, design only. Nothing in `apps/api/prisma/` is changed by this document.
+- **Status:** Approved with the spec (2026-10-22, SQ-7 yes: the baseline columns are in), design only. Nothing in `apps/api/prisma/` is changed by this document.
 - **Author:** database-architect agent, for the swimlanes spec (`./feature-spec.md` §4.11).
 - **Date:** 2026-10-22
 - **Base:** `origin/main` 9788f1f. Every `file:line` below was read on that tree. Every

@@ -1,6 +1,6 @@
 # Feature Spec: Labelled swimlanes on the TSLD diagram
 
-- **Status:** Draft
+- **Status:** Approved — by the product owner, 2026-10-22: SQ-1 to SQ-6 with their defaults, SQ-7 **yes** (M1-T1b is in scope)
 - **Author(s):** Feature Analyst (Claude Code), for James Ewbank (product owner)
 - **Date:** 2026-10-22 (revised the same day to fold in two reviews: §7)
 - **Tracking issue / epic:** none yet; `docs/BACKLOG.md:251-255` ("Labelled swimlanes on the
