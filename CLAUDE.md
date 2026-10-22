@@ -559,7 +559,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0157** _(Accepted; D2 and D4 amended by ADR-0199)_ — A mark's class is its hue and its shape, and the grid is the quietest mark → [`0157-a-marks-class-is-its-hue-and-its-shape.md`](docs/adr/0157-a-marks-class-is-its-hue-and-its-shape.md)
 - **ADR-0158** _(Accepted)_ — A link leaves and enters at its node → [`0158-a-link-leaves-and-enters-at-its-node.md`](docs/adr/0158-a-link-leaves-and-enters-at-its-node.md)
 - **ADR-0159** _(Accepted)_ — A route reads the text it is drawn beside, and a two-way track splits at its node → [`0159-a-route-reads-the-text-it-is-drawn-beside.md`](docs/adr/0159-a-route-reads-the-text-it-is-drawn-beside.md)
-- **ADR-0160** _(Accepted)_ — A gate CI runs is a gate prepush runs → [`0160-a-gate-ci-runs-is-a-gate-prepush-runs.md`](docs/adr/0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)
+- **ADR-0160** _(Accepted; converse rule built 2026-10-22 as `check:ci-roster` R9–R13)_ — A gate CI runs is a gate prepush runs → [`0160-a-gate-ci-runs-is-a-gate-prepush-runs.md`](docs/adr/0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)
 - **ADR-0161** _(Accepted)_ — A cross-plan link is the same link in one plan → [`0161-a-cross-plan-link-is-the-same-link-in-one-plan.md`](docs/adr/0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)
 - **ADR-0162** _(Accepted)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
 - **ADR-0163** _(Accepted)_ — A guest sees the plan as placed → [`0163-a-guest-sees-the-plan-as-placed.md`](docs/adr/0163-a-guest-sees-the-plan-as-placed.md)

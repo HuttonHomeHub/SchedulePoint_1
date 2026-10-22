@@ -49,6 +49,11 @@
 # ADR-0164 armed `--max-warnings=0` on every workspace: a warning passed silently, and four real
 # staleness defects shipped under it before anyone read one. `check:claims`' `note: … registered
 # but no longer cited` line was the same defect outside lint; it is a failing finding now (#410).
+#
+# **A non-passing gate shows its finding, not its last 12 lines** (`docs/TECH_DEBT.md` #276): a
+# finding early in a long log, or a `✗ <case>` more than eleven cases from a chained suite's end,
+# used to scroll off and force a re-run of the gate alone. `show_log` prints a short log whole and a
+# long one as its marker lines plus its tail, capped so a failing `pnpm test` cannot flood the screen.
 set -uo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -157,6 +162,60 @@ is_advisory() {
   return 1
 }
 
+# A log this short is printed whole: the chained suites (`check:doc-register` is ~110 lines) are
+# where the reader most wants everything.
+LOG_WHOLE_MAX=200
+# Beyond that, at most this many marker lines (each with the line after it, where the suites and
+# `tsc` put the reason), so a log made of findings still prints a bounded amount.
+LOG_MATCH_MAX=40
+# And always the end of the log, where a summary lives.
+LOG_TAIL=30
+# No printed line is wider than this: a minified bundle or a JSON blob in one line is not a finding.
+LOG_LINE_MAX=300
+
+# Indents, drops a trailing CR (CRLF output, progress redraws) and cuts a line at LOG_LINE_MAX.
+clip_log() {
+  awk -v max="$LOG_LINE_MAX" '{
+    sub(/\r$/, "")
+    if (length($0) > max) $0 = substr($0, 1, max) "…"
+    print "        " $0
+  }'
+}
+
+# Prints the log of a non-passing gate. The footer names `pnpm <label>` because every label is also
+# the script that reproduces it, which is why no log path is printed: the log is per run, overwritten
+# by the next gate and removed on exit, so a path would point at the wrong file or none.
+show_log() {
+  local label="$1" total matches shown
+  total="$(awk 'END { print NR }' "$log")"
+  if [ "$total" -le "$LOG_WHOLE_MAX" ]; then
+    clip_log <"$log"
+    return
+  fi
+  # Strong markers take the slots first; `error` fills what is left, because a passing test that
+  # asserts on an Error would otherwise use all of them before the real finding. Printed in log order.
+  matches="$(awk -v limit="$((total - LOG_TAIL))" -v max="$LOG_MATCH_MAX" '
+    FNR == NR {
+      if (NR > limit) next
+      if ($0 ~ /✗|×|FAIL|ERR_/) { if (strong < max) { strong++; picked[NR] = 1 } }
+      else if ($0 ~ /[Ee]rror/) { if (weak < max) { weak++; weakAt[weak] = NR } }
+      next
+    }
+    FNR == 1 { for (i = 1; i <= weak && i <= max - strong; i++) picked[weakAt[i]] = 1 }
+    FNR > limit { exit }
+    picked[FNR] { printf "%d: %s\n", FNR, $0; pending = 1; next }
+    pending { printf "%d: %s\n", FNR, $0; pending = 0 }
+  ' "$log" "$log")"
+  shown="$LOG_TAIL"
+  if [ -n "$matches" ]; then
+    shown=$((shown + $(printf '%s\n' "$matches" | awk 'END { print NR }')))
+    printf '%s\n' "$matches" | clip_log
+  fi
+  printf '        …\n'
+  tail -n "$LOG_TAIL" "$log" | clip_log
+  printf '        showing %s of %s lines; run `pnpm %s` for all of it\n' "$shown" "$total" "$label"
+}
+
 run() {
   local label="$1"; shift
   "$@" >"$log" 2>&1
@@ -165,11 +224,11 @@ run() {
     printf '  \033[32mok\033[0m    %s\n' "$label"
   elif [ $code -eq 2 ] && is_advisory "$label"; then
     printf '  \033[33mWARN\033[0m  %s\n' "$label"
-    tail -12 "$log" | sed 's/^/        /'
+    show_log "$label"
     warned+=("$label")
   else
     printf '  \033[31mFAIL\033[0m  %s\n' "$label"
-    tail -12 "$log" | sed 's/^/        /'
+    show_log "$label"
     failed+=("$label")
   fi
 }

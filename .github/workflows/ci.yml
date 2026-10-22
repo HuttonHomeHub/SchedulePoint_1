@@ -188,6 +188,9 @@ jobs:
       # deliberate exemption below without inventing a config file anyway. The per-step comments
       # in this file are load-bearing documentation and a loop deletes all of them.
       #
+      # It also asserts the converse (R9-R13, #299): every `run:` command in this job is a `prepush`
+      # stage, a root gate, or listed with a reason in `ciOnly` in `scripts/ci-roster.json`.
+      #
       # The gate's own first run failed on itself — added to `package.json` without this step —
       # which is the best possible first red run for a check about missing steps.
       - name: Check every gate runs in CI

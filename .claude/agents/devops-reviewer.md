@@ -74,7 +74,9 @@ not edit code.
   passed prepush and failed CI on it.
 - **The formatting check is a root gate, `check:format`** (since 2026-09-28,
   `docs/specs/prepush-format-gate/`), so `pnpm prepush` runs it and CI runs the same command.
-  What is still unasserted is the CI-to-prepush direction in general (TECH_DEBT #299).
+  The CI-to-prepush direction is asserted by `check:ci-roster` R9–R13 (TECH_DEBT #299,
+  `docs/specs/ci-command-roster/`): a CI `run:` command is a prepush stage, a root gate, or listed
+  with a reason in `scripts/ci-roster.json` `ciOnly`.
 - **Known gap:** the image build has no GHA-backed layer cache, so both images
   rebuild from scratch every run (TECH_DEBT #18).
 

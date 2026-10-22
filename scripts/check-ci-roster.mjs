@@ -36,10 +36,27 @@
  * make naive stripping eat real content. There is none in `ci.yml` today (measured), and R8 below
  * **refuses to run** rather than misreading the file if one ever appears.
  *
+ * ## The converse direction (`docs/TECH_DEBT.md` #299, `docs/specs/ci-command-roster/`)
+ *
+ * R1–R4a ask whether every `prepush` gate runs in CI. R9–R13 ask the other way: **every `run:`
+ * command in a checked CI job is a fixed `prepush` stage, a root `check:*` gate, or carries a
+ * written reason in `scripts/ci-roster.json`'s `ciOnly`.** Two CI-only commands (the web bundle
+ * budget, `format:check`) were each found by a red pull request after `prepush` passed; ADR-0160's
+ * rule that a gate CI runs is a gate prepush runs was prose until this.
+ *
+ * Refused rather than read (R13), because each would let a command through unseen: a `run:` whose
+ * value continues on a deeper-indented line (`&& …` joined by the shell), flow-style steps
+ * (`- {run: …}`), a quoted `"run":` key, a block scalar, and `working-directory:` in a checked job
+ * (it makes `pnpm lint` a different command). A `run:` is read only at the step's own mapping
+ * level, so an `env:`/`with:` entry named `run` is not a command. The prepush stage parser matches
+ * only `run "<label>" pnpm <script>` at the start of a line and fails closed otherwise: a stage
+ * written any other way is not a stage, so CI repeating it is a finding.
+ *
  * ## What this deliberately does NOT check
  *
- * That the CI step is correct, that it runs in a job that actually executes, or that the workflow
- * is triggered at all. It checks that the two rosters name the same gates. A step that is present
+ * Other workflows (`pr-title.yml`, CodeQL), `uses:` steps, and block-scalar `run:` bodies (refused
+ * by R13 rather than read). That the CI step is correct, that it runs in a job that actually
+ * executes, or that the workflow is triggered at all. It checks that the two rosters name the same gates. A step that is present
  * and broken is a different failure with a different owner, and claiming otherwise would make this
  * gate's green mean more than it does.
  */
@@ -53,6 +70,95 @@ const NAME = 'check:ci-roster';
 
 /** The gate's own source, for the R5 self-scan. Exported so the suite reads what the CLI runs. */
 export const SELF = 'scripts/check-ci-roster.mjs';
+
+/** Keep only the entries whose reason is a non-empty string — a blank reason is no reason. */
+function reasoned(map) {
+  return Object.fromEntries(
+    Object.entries(map ?? {}).filter(([, why]) => typeof why === 'string' && why.trim() !== ''),
+  );
+}
+
+/**
+ * The fixed stages `prepush.sh` runs, read from its `run "<label>" pnpm <script>` lines rather than
+ * restated. The derived `run "$gate" pnpm "$gate"` loop does not match: its script is quoted.
+ */
+function parsePrepushStages(text) {
+  const stages = new Set();
+  for (const line of text.split('\n')) {
+    const m = /^\s*run\s+"[^"]+"\s+pnpm\s+([a-z][a-z0-9:-]*)\s*$/.exec(line);
+    if (m) stages.add(`pnpm ${m[1]}`);
+  }
+  return stages;
+}
+
+/**
+ * Jobs and their `run:` values from comment-stripped workflow text: the 2-space-indented keys under
+ * `jobs:`. Text-based like the rest of this gate (see the docblock for why not YAML).
+ */
+function parseJobs(stripped) {
+  const jobs = [];
+  let inJobs = false;
+  let current = null;
+  let stepColumn = -1;
+  let pendingRun = null;
+  const refuse = (line, why) => current?.refusals.push({ line, why });
+  const indentOf = (text) => text.length - text.trimStart().length;
+  stripped.split('\n').forEach((text, index) => {
+    const line = index + 1;
+    if (/^jobs:\s*$/.test(text)) {
+      inJobs = true;
+      return;
+    }
+    if (!inJobs) return;
+    if (/^\S/.test(text)) {
+      inJobs = false;
+      current = null;
+      return;
+    }
+    const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(text);
+    if (job) {
+      current = { name: job[1], runs: [], refusals: [] };
+      jobs.push(current);
+      pendingRun = null;
+      stepColumn = -1;
+      return;
+    }
+    if (!current || text.trim() === '') return;
+    const indent = indentOf(text);
+    // A plain scalar continues on any deeper-indented line: `run: pnpm lint` followed by
+    // `  && curl …` is ONE command to the shell, and reading only the first line passed it.
+    if (pendingRun && indent > pendingRun.column && !pendingRun.block) {
+      refuse(
+        line,
+        'continues the `run:` above it across lines. Write one command per `run:`, on one line',
+      );
+      return;
+    }
+    pendingRun = null;
+    const dash = /^(\s*)-\s+/.exec(text);
+    if (dash) stepColumn = (dash[1] ?? '').length + 2;
+    if (/^\s*-\s*\{/.test(text) || /\{[^}]*\brun\s*:/.test(text)) {
+      refuse(line, 'is a flow-style step, whose `run:` this gate cannot read. Use block style');
+      return;
+    }
+    if (/^\s*(?:-\s+)?["']run["']\s*:/.test(text)) {
+      refuse(line, 'quotes the `run` key, which this gate would silently drop. Write it unquoted');
+      return;
+    }
+    if (/^\s*(?:-\s+)?working-directory\s*:/.test(text)) {
+      refuse(line, 'sets `working-directory`, which makes the `run:` commands a different command');
+      return;
+    }
+    const run = /^(\s*(?:-\s+)?)run:\s*(.*?)\s*$/.exec(text);
+    // Only the step's own mapping: an `env:` or `with:` entry named `run` sits deeper.
+    if (run && (run[1] ?? '').length === stepColumn) {
+      const value = run[2] ?? '';
+      current.runs.push({ value, line });
+      pendingRun = { column: stepColumn, block: /^[|>][-+]?$/.test(value) };
+    }
+  });
+  return jobs;
+}
 
 /**
  * Run the whole gate against a repository root, and return the exit code.
@@ -167,8 +273,13 @@ export function runGate(root) {
   );
 
   let exempt = {};
+  let ciOnlyConfig = {};
   try {
-    exempt = JSON.parse(read('scripts/ci-roster.json')).exempt ?? {};
+    const roster = JSON.parse(read('scripts/ci-roster.json'));
+    exempt = roster.exempt ?? {};
+    // A missing `ciOnly` reads as empty maps, which fails closed: every CI-only command is then a
+    // finding, rather than the whole converse check being skipped.
+    ciOnlyConfig = roster.ciOnly ?? {};
   } catch {
     problems.push(
       'scripts/ci-roster.json is missing or unreadable. It is where an exemption lives; without ' +
@@ -279,6 +390,105 @@ export function runGate(root) {
     );
   }
 
+  // R9–R13 — the converse: what CI runs that `prepush` does not.
+  const ciOnly = {
+    jobs: reasoned(ciOnlyConfig.jobs),
+    commands: Object.fromEntries(
+      Object.entries(reasoned(ciOnlyConfig.commands)).map(([k, v]) => [
+        k.trim().replace(/\s+/g, ' '),
+        v,
+      ]),
+    ),
+  };
+  let prepushStages = new Set();
+  try {
+    prepushStages = parsePrepushStages(read('scripts/prepush.sh'));
+  } catch {
+    // Already reported above as an unreadable advisory set; the stages come from the same file.
+  }
+  const jobs = parseJobs(stripped);
+  const checkedCommands = new Set();
+  let checkedJobs = 0;
+  if (prepushStages.size === 0) {
+    problems.push(
+      'no fixed stage could be parsed from scripts/prepush.sh (`run "<label>" pnpm <script>`), so ' +
+        'every comparison below would be against an empty set. Refused rather than guessed (R13).',
+    );
+  } else if (jobs.length === 0) {
+    problems.push('.github/workflows/ci.yml has no `jobs:` key this gate can read (R13).');
+  } else {
+    for (const job of jobs) {
+      if (job.name in ciOnly.jobs) continue;
+      checkedJobs += 1;
+      for (const { line, why } of job.refusals) {
+        problems.push(`.github/workflows/ci.yml line ${line}: job ${job.name} ${why} (R13).`);
+      }
+      let commands = 0;
+      for (const { value, line } of job.runs) {
+        if (/^[|>][-+]?$/.test(value)) {
+          problems.push(
+            `.github/workflows/ci.yml line ${line}: job ${job.name} has a block-scalar \`run:\` ` +
+              'this gate cannot read command by command. Write one command per `run:` (R13).',
+          );
+          continue;
+        }
+        commands += 1;
+        const command = value.replace(/\s+/g, ' ');
+        checkedCommands.add(command);
+        const asRoot = /^pnpm (check:[a-z][a-z0-9-]*)$/.exec(command);
+        if (prepushStages.has(command)) {
+          continue;
+        }
+        // A root gate is derived by `prepush` from package.json; an undeclared one is R2's finding.
+        if (asRoot) continue;
+        if (command in ciOnly.commands) continue;
+        const runForm = /^pnpm run (check:\S+)$/.exec(command);
+        problems.push(
+          `.github/workflows/ci.yml line ${line}: job ${job.name} runs \`${command}\`, which ` +
+            'scripts/prepush.sh does not (R9).\n' +
+            (runForm
+              ? `      \`pnpm run ${runForm[1]}\` is not matched as \`pnpm ${runForm[1]}\`; write the ` +
+                'short form.\n'
+              : '') +
+            '      Two remedies: make it a root check:* script so prepush derives it, or add it to ' +
+            'scripts/ci-roster.json ciOnly.commands with the reason a contributor need not run it.',
+        );
+      }
+      if (commands === 0) {
+        problems.push(
+          `.github/workflows/ci.yml: checked job ${job.name} has no \`run:\` command this gate can ` +
+            'read. List it under ciOnly.jobs with a reason if it is deliberately not prepush work (R13).',
+        );
+      }
+    }
+    if (checkedJobs === 0) {
+      problems.push(
+        'every job in ci.yml is listed under ciOnly.jobs, so nothing is checked (R13).',
+      );
+    }
+    for (const entry of Object.keys(ciOnly.commands)) {
+      if (prepushStages.has(entry)) {
+        problems.push(
+          `scripts/ci-roster.json lists \`${entry}\` under ciOnly.commands, and ` +
+            'scripts/prepush.sh runs it. One of the two is wrong; delete the entry (R12).',
+        );
+        continue;
+      }
+      if (checkedCommands.has(entry)) continue;
+      problems.push(
+        `scripts/ci-roster.json lists \`${entry}\` under ciOnly.commands, and no checked CI job ` +
+          'runs it. Delete the entry: a stale reason is one nobody is reading (R11).',
+      );
+    }
+    for (const entry of Object.keys(ciOnly.jobs)) {
+      if (jobs.some((j) => j.name === entry)) continue;
+      problems.push(
+        `scripts/ci-roster.json lists job ${entry} under ciOnly.jobs, and ci.yml has no such job. ` +
+          'Delete the entry (R11).',
+      );
+    }
+  }
+
   return report({
     name: NAME,
     problems,
@@ -287,7 +497,9 @@ export function runGate(root) {
     population: declared.length,
     summary:
       `${declared.length} check:* gates, ${declared.filter((g) => inCi.has(g)).length} in CI, ` +
-      `${Object.keys(exempt).length} exempt by written reason.`,
+      `${Object.keys(exempt).length} exempt by written reason; ${checkedCommands.size} CI ` +
+      `commands in ${checkedJobs} checked job(s), ${Object.keys(ciOnly.commands).length} CI-only ` +
+      `by written reason, ${Object.keys(ciOnly.jobs).length} job(s) outside prepush's remit.`,
   });
 }
 

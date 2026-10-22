@@ -90,7 +90,8 @@ Rules are numbered after the existing ones so no shipped label moves (the R3a/R4
 - **R11** A `ciOnly.commands` entry that no checked job runs, or a `ciOnly.jobs` entry naming no job,
   is stale: FAIL.
 - **R12** A `ciOnly.commands` entry for a command `prepush` runs is a contradiction: FAIL.
-- **R13** Refuse rather than misread: a block-scalar `run:` (`|`, `>`, `>-`) in a checked job; no
+- **R13** Refuse rather than misread: a block-scalar `run:` (`|`, `>`, `>-`), a `run:` continued on a
+  deeper-indented line, a flow-style step, a quoted `"run"` key, or `working-directory:` in a checked job; no
   `jobs:` key; zero checked jobs; zero `run:` commands in them; or zero fixed stages parsed from
   `prepush.sh`. None occurs today (E6).
 

