@@ -1122,6 +1122,28 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     );
   });
 
+  it('imports the same calendar three times into one project on one day, each under a free name', async () => {
+    // Regression for #540: the second import took the "(imported <date>)" variant, so the third
+    // probed only the base name, picked that same variant and aborted on the calendar unique.
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+
+    for (const planName of ['Rev A', 'Rev B', 'Rev C']) {
+      await actor.agent
+        .post(commitUrl(projectId))
+        .attach('file', Buffer.from(xerWithCalendar(planName), 'utf8'), 'rev.xer')
+        .expect(201);
+    }
+
+    const calendars = await prisma.calendar.findMany({
+      where: { organizationId: orgId, projectId, deletedAt: null },
+    });
+    const names = calendars.map((c) => c.name);
+    expect(names).toHaveLength(3);
+    expect(new Set(names).size).toBe(3);
+    expect(names).toContain('Site 6-Day');
+  });
+
   it('names the coming rename in the DRY-RUN report, so the planner reviews what will happen', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);

@@ -989,18 +989,19 @@ export class InterchangeService {
     if (graph.calendars.length === 0) return { nameByKey, findings };
 
     // The names already taken, per tier — one query per tier actually present in the graph.
+    // By prefix, so a variant an earlier import of the same day created is seen (as for resources).
     const takenByScope = new Map<ImportCalendarScope, Set<string>>();
     for (const scope of ['ORG', 'PROJECT'] as const) {
       const names = graph.calendars.filter((c) => c.scope === scope).map((c) => c.name);
       if (names.length === 0) continue;
       takenByScope.set(
         scope,
-        await this.calendars.findTakenNames(
+        await this.calendars.findTakenNamesWithPrefixes(
           {
             organizationId: project.organizationId,
             scope,
             projectId: scope === 'PROJECT' ? project.id : null,
-            names,
+            prefixes: [...new Set(names)],
           },
           db,
         ),

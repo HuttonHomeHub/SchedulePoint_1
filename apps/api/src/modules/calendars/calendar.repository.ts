@@ -325,33 +325,38 @@ export class CalendarRepository {
   }
 
   /**
-   * The names already TAKEN in one tier, out of a candidate set — the import's name-collision probe
-   * (ADR-0053 §5). A calendar name is unique per tier among non-deleted rows (`uq_calendars_org_name`
-   * for `ORG`, `uq_calendars_project_name` for `PROJECT`), so an import that blindly inserted a name the
-   * tenant already holds would abort the whole commit on a `P2002` it could never resolve. One indexed
-   * `IN` query per tier, never a query per calendar.
+   * Every calendar name in one tier that STARTS WITH one of `prefixes` — the import's name-collision
+   * probe (ADR-0053 §5). A calendar name is unique per tier among non-deleted rows
+   * (`uq_calendars_org_name` for `ORG`, `uq_calendars_project_name` for `PROJECT`), so an import that
+   * blindly inserted a name the tenant already holds would abort the whole commit on a `P2002` it could
+   * never resolve.
+   *
+   * The probe is by PREFIX, not by the base names, because the case that matters is the same file
+   * imported twice on the same day: the base name is taken AND so is the first `(imported <date>)`
+   * variant, which an exact-name probe cannot see. The caller picks the first free variant in memory.
+   * One indexed query per tier, never a query per calendar.
    *
    * ARCHIVED rows are deliberately included: archiving does NOT free the name (ADR-0053 §4), so an
    * archived calendar still blocks the insert and must still be disambiguated around. That is also why
    * calendars have no unarchive-on-match rule — an import never REUSES a calendar (see the service), so
    * there is nothing to unarchive.
    */
-  async findTakenNames(
+  async findTakenNamesWithPrefixes(
     params: {
       organizationId: string;
       scope: CalendarScope;
       projectId: string | null;
-      names: readonly string[];
+      prefixes: readonly string[];
     },
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<Set<string>> {
-    if (params.names.length === 0) return new Set();
+    if (params.prefixes.length === 0) return new Set();
     const rows = await db.calendar.findMany({
       where: this.active({
         organizationId: params.organizationId,
         scope: params.scope,
         projectId: params.projectId,
-        name: { in: [...params.names] },
+        OR: params.prefixes.map((prefix) => ({ name: { startsWith: prefix } })),
       }),
       select: { name: true },
     });
