@@ -2,8 +2,14 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanRepository } from '../plans/plan.repository';
 import type { ProjectRepository } from '../projects/project.repository';
 
 import { INTERCHANGE_ERROR, InterchangeService } from './interchange.service';
@@ -62,6 +68,7 @@ function principalWith(permissions: Permission[]): Principal {
 describe('InterchangeService.dryRun', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let projects: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: { existsActiveNameInProject: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: InterchangeService;
   const planner = principalWith(['interchange:import']);
@@ -71,6 +78,7 @@ describe('InterchangeService.dryRun', () => {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
     projects = { findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }) };
+    plans = { existsActiveNameInProject: vi.fn().mockResolvedValue(false) };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     // The commit-path collaborators are unused by these dry-run tests (dry-run never persists), so they
     // are supplied as inert stand-ins (typed `never`, assignable to any param); the commit orchestration
@@ -79,7 +87,7 @@ describe('InterchangeService.dryRun', () => {
     service = new InterchangeService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
-      unused,
+      plans as unknown as PlanRepository,
       unused,
       unused,
       unused,
@@ -109,6 +117,24 @@ describe('InterchangeService.dryRun', () => {
     );
     expect(report.mapped.relationships).toBe(0);
     expect(report.repairs.some((r) => r.detail.includes('dangling'))).toBe(true);
+  });
+
+  it('refuses with the hand-made path’s 409 when the project already holds the plan name (#541)', async () => {
+    plans.existsActiveNameInProject.mockResolvedValue(true);
+    const error = await service
+      .dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(validXer()))
+      .then(() => null)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).message).toBe(
+      'A plan with this name already exists for this project.',
+    );
+    expect((error as ConflictError).details).toMatchObject({ reason: 'NAME_TAKEN' });
+    // The probe asks about the name the commit would insert, in the target project.
+    expect(plans.existsActiveNameInProject.mock.calls[0]?.slice(0, 2)).toEqual([
+      PROJECT_ID,
+      'Sample',
+    ]);
   });
 
   it('rejects an unrecognised/garbage file with a ValidationError (422)', async () => {

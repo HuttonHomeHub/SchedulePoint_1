@@ -651,10 +651,13 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
 
     // Committing the SAME file into the SAME project collides on the per-project plan name (409). The
     // plan.create fails mid-transaction, so nothing from the second attempt is persisted.
-    await actor.agent
+    const clash = await actor.agent
       .post(commitUrl(projectId))
       .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
       .expect(409);
+    // The hand-made path's wording, not the global "would duplicate" fallback (#541).
+    expect(clash.body.error.message).toBe('A plan with this name already exists for this project.');
+    expect(clash.body.error.details).toMatchObject({ reason: 'NAME_TAKEN' });
 
     // Still exactly one plan and one plan's worth of activities/dependencies — the failed commit
     // created nothing.
@@ -662,6 +665,29 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     const planId = (await prisma.plan.findFirstOrThrow({ where: { projectId } })).id;
     expect(await prisma.activity.count({ where: { planId } })).toBe(2);
     expect(await prisma.activityDependency.count({ where: { planId } })).toBe(1);
+  });
+
+  it('refuses the DRY-RUN with the same 409 when the plan name is taken, but not for a deleted plan (#541)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(201);
+
+    const clash = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(409);
+    expect(clash.body.error.message).toBe('A plan with this name already exists for this project.');
+    expect(clash.body.error.details).toMatchObject({ reason: 'NAME_TAKEN' });
+
+    // The unique is partial on live rows, so a plan in the bin frees the name and the preview agrees.
+    await prisma.plan.updateMany({ where: { projectId }, data: { deletedAt: new Date() } });
+    await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(200);
   });
 
   it('422s an unrecognised file on commit (nothing created)', async () => {

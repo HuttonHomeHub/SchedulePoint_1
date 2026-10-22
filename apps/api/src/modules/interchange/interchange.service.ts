@@ -38,6 +38,7 @@ import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
+import { isPlanNameConflict, planNameTakenError } from '../plans/plan-name-conflict';
 import { PlanRepository } from '../plans/plan.repository';
 import { ProjectRepository } from '../projects/project.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
@@ -158,6 +159,14 @@ export class InterchangeService {
   ): Promise<InterchangeReport> {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
     const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
+
+    // A plan name the project already holds fails the commit on `uq_plans_project_name`, after the
+    // planner has accepted a clean preview. Refused here with the same 409 the hand-made path gives
+    // (`PlansService.create`), rather than a report finding — the import cannot proceed under this
+    // name, and a finding would add a kind to the report contract (docs/TECH_DEBT.md #541).
+    if (await this.plans.existsActiveNameInProject(project.id, graph.plan.name, this.prisma)) {
+      throw planNameTakenError();
+    }
 
     // Probe the calendar names the target tiers already hold, so the REVIEWED report already names any
     // suffix-disambiguation the commit will apply (ADR-0053 §5). Read-only, outside any transaction —
@@ -528,19 +537,25 @@ export class InterchangeService {
       graph.plan.defaultCalendarKey,
       calendarIdByKey,
     );
-    const plan = await this.plans.create(
-      {
-        organizationId,
-        projectId: project.id,
-        name: graph.plan.name,
-        description: null,
-        // The mandatory CPM data date (ADR-0033): the source data date → `plannedStart`.
-        plannedStart: parseCalendarDate(graph.plan.dataDate),
-        ...(defaultCalendarId ? { calendarId: defaultCalendarId } : {}),
-        ...stamp,
-      },
-      tx,
-    );
+    const plan = await this.plans
+      .create(
+        {
+          organizationId,
+          projectId: project.id,
+          name: graph.plan.name,
+          description: null,
+          // The mandatory CPM data date (ADR-0033): the source data date → `plannedStart`.
+          plannedStart: parseCalendarDate(graph.plan.dataDate),
+          ...(defaultCalendarId ? { calendarId: defaultCalendarId } : {}),
+          ...stamp,
+        },
+        tx,
+      )
+      .catch((error: unknown) => {
+        // This insert only: the dry-run probe cannot see a plan created between preview and commit.
+        // The plan's only unique besides its id is the per-project name, so a P2002 here is that.
+        throw isPlanNameConflict(error) ? planNameTakenError() : error;
+      });
 
     // 3. Pre-generate an id for EVERY activity — including WBS_SUMMARY nodes (ADR-0038) — up front so
     // both the dependency endpoints and the WBS self-FK (`parentKey`) resolve from one map regardless of
