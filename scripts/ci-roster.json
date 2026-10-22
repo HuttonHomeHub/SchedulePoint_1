@@ -1,5 +1,18 @@
 {
-  "_": "Which root `check:*` gates need not appear as a CI step, and why. An entry is a DECISION with a reason, never a way to quiet a gate somebody has not got round to wiring up — if the reason is 'not yet', the remedy is the CI step, not a line here. See scripts/check-ci-roster.mjs.",
+  "_": "Which root `check:*` gates need not appear as a CI step, and why. An entry is a DECISION with a reason, never a way to quiet a gate somebody has not got round to wiring up — if the reason is 'not yet', the remedy is the CI step, not a line here. See scripts/check-ci-roster.mjs. `ciOnly` is the converse (R9-R13, docs/TECH_DEBT.md #299): the `run:` commands CI executes that `pnpm prepush` does not, and the CI jobs prepush does not stand in for. Same rule: an entry is a decision with a reason, and a stale or contradicted entry fails.",
   "__advisory": "ADVISORY gates need NO entry here and must not have one. They are read out of `ADVISORY_GATES` in scripts/prepush.sh — the one place that declares them (ADR-0124 D4: advisory is a declaration, not a number any tool can reach) — and the gate asserts they run in no CI step (R3a) and carry no second reason here (R4a). This file held `check:reconcile-due` until 2026-09-11, with a comment claiming the derivation already existed; it did not, and three of the five M5 specialist reviews found the same back door independently: add the CI step AND delete the entry — the natural pair, since an entry saying 'need not run in CI' looks redundant once it does — and both gates reported OK while a product-owner decision became a blocking gate.",
-  "exempt": {}
+  "exempt": {},
+  "ciOnly": {
+    "jobs": {
+      "e2e-api": "Needs a real PostgreSQL and a booted API; prepush excludes database work by design (scripts/prepush.sh header) and scripts/e2e-local.sh api is the local equivalent.",
+      "e2e-web": "Needs a browser, the built web app and a database; prepush excludes it by design and scripts/e2e-local.sh web:<suite> is the local equivalent. check:e2e-roster rosters its suite steps.",
+      "image": "Builds the Docker images and smoke-boots them (ADR-0020); a contributor's machine is not assumed to have Docker, and the job is the only place the image is built."
+    },
+    "commands": {
+      "pnpm install --frozen-lockfile": "A contributor's working tree is already installed; CI starts from an empty checkout.",
+      "pnpm --filter @repo/api prisma:generate": "Generates the Prisma client a fresh CI checkout lacks; a local install already holds it (the worktree setup runs it once).",
+      "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main": "CI's checkout fetches only the ref under test; check:frontend-only and check:engine-parity need origin/main as a merge base, which a local clone already has.",
+      "pnpm build": "Builds every workspace, including apps/api (nest build) and apps/seed-cli, which prepush never builds: lint, typecheck, test and check:web-bundle build only the packages and the web app. Whether a build can fail where typecheck passes is unmeasured, so these two builds stay CI-first; adding a prepush stage is a separate, measured change (ADR-0142)."
+    }
+  }
 }

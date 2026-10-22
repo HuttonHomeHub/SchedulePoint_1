@@ -94,9 +94,20 @@ the output declaration makes the answer the correct B1/B2 one.
 - `scripts/prepush.sh --checks` is no longer build-free. The usage line says so.
 - `check:ci-roster`'s workspace-resolution branch keeps its tests but has no live CI caller. It is
   kept because a future workspace gate would need it.
-- **The general rule is not built.** Every gate CI runs should be run by prepush or exempt with a
+- **The general rule is not built.** _(Built 2026-10-22; see the amendment below.)_ Every gate CI runs should be run by prepush or exempt with a
   written reason, and nothing asserts that in the CI-to-prepush direction. `pnpm format:check` is
   the other known instance. On the product owner's decision (spec CQ-2) this ADR fixes the bundle
   gate only, and records the rule under `docs/TECH_DEBT.md` #299, because a reverse-direction
   roster assertion changes a shared gate and is an ADR-0105 trigger of its own.
 - **The CPM engine is not imported and no migration runs.** No product code changes.
+
+## Amendment 2026-10-22 — the converse rule is built
+
+The product owner's instruction of 2026-10-21, "fix them all unless there is a valid reason not to",
+is the decision `docs/TECH_DEBT.md` #299's trigger named, and it reverses the answer to CQ-2 above
+("this instance only"). `check:ci-roster` now asserts the CI-to-prepush direction (R9–R13,
+`docs/specs/ci-command-roster/`): every `run:` command in a checked CI job is a fixed `prepush` stage,
+a root `check:*` gate, or a key of `ciOnly.commands` in `scripts/ci-roster.json` with a written reason,
+and every job is checked unless listed under `ciOnly.jobs`. `pnpm build` is such an entry, not a new
+`prepush` stage (spec CQ-2): the API and seed-CLI builds stay CI-first, and the reason says so. No new
+gate and no new CI step. #299 is closed.

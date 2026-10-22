@@ -489,7 +489,7 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
 | 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                   |
 | 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                     |
-| 14  | `pnpm check:ci-roster`                                      | you added a `check:*` script, renamed one, or changed a CI gate step                              |
+| 14  | `pnpm check:ci-roster`                                      | you added a `check:*` script, renamed one, or changed a CI gate step or any CI `run:` command     |
 | 15  | `pnpm check:licenses`                                       | you added or bumped a dependency, or edited `scripts/licence-policy.json`                         |
 | 15a | `pnpm check:e2e-roster`                                     | you added, renamed or removed a Playwright suite, or changed a CI end-to-end step                 |
 | 16  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
