@@ -499,10 +499,15 @@ function humaniseType(subjectType: string): string {
   return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(' ');
 }
 
-/** Who did it. An anonymous event says so rather than showing a blank. */
+/**
+ * Who did it. An anonymous event says so rather than showing a blank, and SchedulePoint's own
+ * work (the retention clear-out) is named "System": the actor there is certain, so "Unknown"
+ * would read as a missing one.
+ */
 export function auditActorName(event: Pick<AuditEvent, 'actorLabel' | 'actorType'>): string {
   if (event.actorLabel !== null && event.actorLabel !== '') return event.actorLabel;
-  return event.actorType === 'ANONYMOUS' ? 'Not signed in' : 'Unknown';
+  if (event.actorType === 'ANONYMOUS') return 'Not signed in';
+  return event.actorType === 'SYSTEM' ? 'System' : 'Unknown';
 }
 
 /**

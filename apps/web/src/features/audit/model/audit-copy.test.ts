@@ -89,6 +89,14 @@ describe('auditActorName', () => {
     );
   });
 
+  it('names SchedulePoint itself "System", not "Unknown"', () => {
+    expect(auditActorName(event({ actorLabel: null, actorType: 'SYSTEM' }))).toBe('System');
+  });
+
+  it('keeps "Unknown" for a labelless actor that is neither anonymous nor the system', () => {
+    expect(auditActorName(event({ actorLabel: null, actorType: 'USER' }))).toBe('Unknown');
+  });
+
   it('uses the label recorded at the time, never a live lookup', () => {
     expect(auditActorName(event())).toBe('admin@example.com');
   });

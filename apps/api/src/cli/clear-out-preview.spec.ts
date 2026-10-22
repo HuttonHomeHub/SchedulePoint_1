@@ -207,14 +207,20 @@ describe('collectPreview thresholds', () => {
     expect(off.due.every((i) => !i.overdue)).toBe(true);
   });
 
-  it('counts whole days past rounding down, and whole days to go rounding up', async () => {
+  it('counts whole days past and whole days to go, both rounding down', async () => {
     const plans = [
       { id: 'a', deletedAt: new Date(cutoff.getTime() - (2 * DAY + 23 * HOUR)) },
       { id: 'b', deletedAt: new Date(cutoff.getTime() + (2 * DAY + HOUR)) },
     ];
     const result = await collectPreview(reader(plans), now, ON);
     expect(result.due.map((i) => [i.name, i.daysPast])).toEqual([['a', 2]]);
-    expect(result.dueSoon.map((i) => [i.name, i.daysPast])).toEqual([['b', -3]]);
+    expect(result.dueSoon.map((i) => [i.name, i.daysPast])).toEqual([['b', -2]]);
+  });
+
+  it('agrees with the bin: 4.98 days to go is 4 in both', async () => {
+    const plans = [{ id: 'c', deletedAt: new Date(cutoff.getTime() + 4.98 * DAY) }];
+    const result = await collectPreview(reader(plans), now, ON);
+    expect(result.dueSoon.map((i) => -i.daysPast)).toEqual([4]);
   });
 
   it('puts exactly seven days ahead outside the window and one millisecond less inside', async () => {
