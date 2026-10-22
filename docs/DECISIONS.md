@@ -29,6 +29,7 @@ get an ADR instead (and may be linked from here).
   `drop`. #543 is closed; carrying notes is the `docs/BACKLOG.md` item.
 
 ---
+
 ## 2026-10-22 — #536: a SYSTEM actor reads "System"; the preview floors days left like the bin
 
 **Decided by the product owner** (2026-10-22): the Audit log names a `SYSTEM` actor **System** (the

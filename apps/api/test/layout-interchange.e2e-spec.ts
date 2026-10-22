@@ -403,9 +403,22 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     expect(advisories?.map((a) => [a.code, a.sourceRef])).toEqual([
       ['ZERO_DURATION_TASK', 'A7550'],
     ]);
+    // #542 changed one drop's wording and nothing else: hours-per-day IS imported, so the calendar
+    // drop stopped claiming it was not. The report is hashed with the M0 wording put back, so any
+    // OTHER change still moves the digest.
+    const calendarDrop = withoutAdvisories.drops.find((d) =>
+      d.detail.includes('base-calendar inheritance'),
+    );
+    expect(calendarDrop?.detail).toContain('(hours-per-week, base-calendar inheritance)');
+    const m0Wording = JSON.parse(
+      JSON.stringify(withoutAdvisories).replace(
+        '(hours-per-week, base-calendar',
+        '(hours-per-day/-week, base-calendar',
+      ),
+    ) as unknown;
     expect({
       tortureGraphDigest: digest(parsed.graph),
-      tortureReportDigest: digest(withoutAdvisories),
+      tortureReportDigest: digest(m0Wording),
     }).toEqual(BASELINE);
   });
 
