@@ -10,7 +10,7 @@
     },
     "commands": {
       "pnpm install --frozen-lockfile": "A contributor's working tree is already installed; CI starts from an empty checkout.",
-      "pnpm --filter @repo/api prisma:generate": "Generates the Prisma client a fresh CI checkout lacks; a local install already holds it (the worktree setup runs it once).",
+      "pnpm --filter @repo/api prisma:generate": "Generates the Prisma client a fresh CI checkout lacks; a local install already holds it.",
       "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main": "CI's checkout fetches only the ref under test; check:frontend-only and check:engine-parity need origin/main as a merge base, which a local clone already has.",
       "pnpm build": "Builds every workspace, including apps/api (nest build) and apps/seed-cli, which prepush never builds: lint, typecheck, test and check:web-bundle build only the packages and the web app. Whether a build can fail where typecheck passes is unmeasured, so these two builds stay CI-first; adding a prepush stage is a separate, measured change (ADR-0142)."
     }

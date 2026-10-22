@@ -44,6 +44,14 @@
  * budget, `format:check`) were each found by a red pull request after `prepush` passed; ADR-0160's
  * rule that a gate CI runs is a gate prepush runs was prose until this.
  *
+ * Refused rather than read (R13), because each would let a command through unseen: a `run:` whose
+ * value continues on a deeper-indented line (`&& …` joined by the shell), flow-style steps
+ * (`- {run: …}`), a quoted `"run":` key, a block scalar, and `working-directory:` in a checked job
+ * (it makes `pnpm lint` a different command). A `run:` is read only at the step's own mapping
+ * level, so an `env:`/`with:` entry named `run` is not a command. The prepush stage parser matches
+ * only `run "<label>" pnpm <script>` at the start of a line and fails closed otherwise: a stage
+ * written any other way is not a stage, so CI repeating it is a finding.
+ *
  * ## What this deliberately does NOT check
  *
  * Other workflows (`pr-title.yml`, CodeQL), `uses:` steps, and block-scalar `run:` bodies (refused
@@ -91,7 +99,12 @@ function parseJobs(stripped) {
   const jobs = [];
   let inJobs = false;
   let current = null;
+  let stepColumn = -1;
+  let pendingRun = null;
+  const refuse = (line, why) => current?.refusals.push({ line, why });
+  const indentOf = (text) => text.length - text.trimStart().length;
   stripped.split('\n').forEach((text, index) => {
+    const line = index + 1;
     if (/^jobs:\s*$/.test(text)) {
       inJobs = true;
       return;
@@ -104,12 +117,45 @@ function parseJobs(stripped) {
     }
     const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(text);
     if (job) {
-      current = { name: job[1], runs: [] };
+      current = { name: job[1], runs: [], refusals: [] };
       jobs.push(current);
+      pendingRun = null;
+      stepColumn = -1;
       return;
     }
-    const run = /^\s*(?:-\s+)?run:\s*(.*?)\s*$/.exec(text);
-    if (run && current) current.runs.push({ value: run[1] ?? '', line: index + 1 });
+    if (!current || text.trim() === '') return;
+    const indent = indentOf(text);
+    // A plain scalar continues on any deeper-indented line: `run: pnpm lint` followed by
+    // `  && curl …` is ONE command to the shell, and reading only the first line passed it.
+    if (pendingRun && indent > pendingRun.column && !pendingRun.block) {
+      refuse(
+        line,
+        'continues the `run:` above it across lines. Write one command per `run:`, on one line',
+      );
+      return;
+    }
+    pendingRun = null;
+    const dash = /^(\s*)-\s+/.exec(text);
+    if (dash) stepColumn = (dash[1] ?? '').length + 2;
+    if (/^\s*-\s*\{/.test(text) || /\{[^}]*\brun\s*:/.test(text)) {
+      refuse(line, 'is a flow-style step, whose `run:` this gate cannot read. Use block style');
+      return;
+    }
+    if (/^\s*(?:-\s+)?["']run["']\s*:/.test(text)) {
+      refuse(line, 'quotes the `run` key, which this gate would silently drop. Write it unquoted');
+      return;
+    }
+    if (/^\s*(?:-\s+)?working-directory\s*:/.test(text)) {
+      refuse(line, 'sets `working-directory`, which makes the `run:` commands a different command');
+      return;
+    }
+    const run = /^(\s*(?:-\s+)?)run:\s*(.*?)\s*$/.exec(text);
+    // Only the step's own mapping: an `env:` or `with:` entry named `run` sits deeper.
+    if (run && (run[1] ?? '').length === stepColumn) {
+      const value = run[2] ?? '';
+      current.runs.push({ value, line });
+      pendingRun = { column: stepColumn, block: /^[|>][-+]?$/.test(value) };
+    }
   });
   return jobs;
 }
@@ -347,7 +393,12 @@ export function runGate(root) {
   // R9–R13 — the converse: what CI runs that `prepush` does not.
   const ciOnly = {
     jobs: reasoned(ciOnlyConfig.jobs),
-    commands: reasoned(ciOnlyConfig.commands),
+    commands: Object.fromEntries(
+      Object.entries(reasoned(ciOnlyConfig.commands)).map(([k, v]) => [
+        k.trim().replace(/\s+/g, ' '),
+        v,
+      ]),
+    ),
   };
   let prepushStages = new Set();
   try {
@@ -369,6 +420,9 @@ export function runGate(root) {
     for (const job of jobs) {
       if (job.name in ciOnly.jobs) continue;
       checkedJobs += 1;
+      for (const { line, why } of job.refusals) {
+        problems.push(`.github/workflows/ci.yml line ${line}: job ${job.name} ${why} (R13).`);
+      }
       let commands = 0;
       for (const { value, line } of job.runs) {
         if (/^[|>][-+]?$/.test(value)) {

