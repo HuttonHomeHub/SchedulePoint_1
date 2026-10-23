@@ -1,5 +1,13 @@
 # @repo/types
 
+## 0.44.0
+
+### Minor Changes
+
+- [#1123](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1123) [`888f5a1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/888f5a11d011fa91af5229288e23cd6cef83aa85) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan can now say where its swimlanes come from, and an activity can be placed in one. The plan update takes `swimlaneSource` (none, hand-made or WBS) and a WBS level of 1 to 3. Activity create and update take `swimlaneId`, and the batch lane-position write takes an in-swimlane lane per activity; the server works out which swimlane or WBS group the lane belongs to. Every activity response now carries its `swimlaneId` and its stored `swimlaneLanes`. Moving an activity into another swimlane appears in its change history. Nothing in the web app uses them yet.
+
+- [#1121](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1121) [`6d67043`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6d670432f949779197685d7395fd8ea86d3e888e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan can now have swimlanes. New routes under `/plans/:planId/swimlanes` list, create (optionally after another), rename, reorder, delete and restore a plan's hand-made swimlanes. Names are unique within a plan ignoring case, a plan holds at most 100, and every write needs Planner or Org Admin and the plan's edit-lock. Deleting and restoring a swimlane are recorded in the audit log. Nothing in the web app uses them yet.
+
 ## 0.43.1
 
 ### Patch Changes

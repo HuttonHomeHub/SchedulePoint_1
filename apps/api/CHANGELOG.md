@@ -1,5 +1,20 @@
 # @repo/api
 
+## 0.99.0
+
+### Minor Changes
+
+- [#1123](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1123) [`888f5a1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/888f5a11d011fa91af5229288e23cd6cef83aa85) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan can now say where its swimlanes come from, and an activity can be placed in one. The plan update takes `swimlaneSource` (none, hand-made or WBS) and a WBS level of 1 to 3. Activity create and update take `swimlaneId`, and the batch lane-position write takes an in-swimlane lane per activity; the server works out which swimlane or WBS group the lane belongs to. Every activity response now carries its `swimlaneId` and its stored `swimlaneLanes`. Moving an activity into another swimlane appears in its change history. Nothing in the web app uses them yet.
+
+- [#1119](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1119) [`315e95c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/315e95cd47aca85d89f765696e180aa98fb02e3d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The organisation export is now format 2.1. It gains three files, `swimlanes`, `activity-swimlane-lanes` and `baseline-activity-swimlane-lanes`, and seven columns at the end of existing files: `plans.swimlaneSource`, `plans.swimlaneWbsLevel`, `activities.swimlaneId`, `baselines.swimlaneSnapshotLevel`, `baselines.swimlaneSource`, `baselines.swimlaneWbsLevel` and `baseline-activities.swimlaneId`. Nothing existing is renamed or changed, so a reader written for 2.0 still reads it. A new baseline now freezes the plan's swimlanes with the rest of the snapshot (`swimlaneSnapshotLevel` is `FULL` on it, `NONE` on every earlier baseline), so a later comparison can place work that has since been removed. Permanently clearing out a deleted client, project or plan now also removes its swimlanes, and counts their lane rows against each hourly run's budget.
+
+- [#1121](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1121) [`6d67043`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6d670432f949779197685d7395fd8ea86d3e888e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan can now have swimlanes. New routes under `/plans/:planId/swimlanes` list, create (optionally after another), rename, reorder, delete and restore a plan's hand-made swimlanes. Names are unique within a plan ignoring case, a plan holds at most 100, and every write needs Planner or Org Admin and the plan's edit-lock. Deleting and restoring a swimlane are recorded in the audit log. Nothing in the web app uses them yet.
+
+### Patch Changes
+
+- Updated dependencies [[`888f5a1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/888f5a11d011fa91af5229288e23cd6cef83aa85), [`6d67043`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6d670432f949779197685d7395fd8ea86d3e888e)]:
+  - @repo/types@0.44.0
+
 ## 0.98.1
 
 ### Patch Changes
