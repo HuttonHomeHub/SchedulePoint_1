@@ -51,8 +51,50 @@ export interface LaneChange {
  * hint is one optional parameter of the one packer rather than a second function, for the reason
  * ADR-0065 gives about `routeOrthogonal`: two packers would drift, and the drift would only be
  * visible to someone comparing two diagrams of the same plan.
+ *
+ * ## The optional swimlane partition
+ *
+ * `partition` maps an activity id to its swimlane key. Absent (or `undefined`), the packer is
+ * unchanged point for point. Present, each swimlane is packed on its own: a bar competes for lanes
+ * only with bars of its own swimlane, and the lane numbers returned are **local to the swimlane**
+ * (each starts at 0) — the same "lane within swimlane" `deriveSwimlaneLanes` returns, so a result can
+ * be stored against a swimlane as it stands. `PackItem.laneIndex` is read the same way: the lane the
+ * item currently holds within its swimlane, which decides whether it appears in the result.
+ *
+ * The hint is confined the same way. A predecessor in another swimlane has no lane in this
+ * swimlane's packing, so it cannot steer the choice; a link across a boundary is not a reason to
+ * pull a bar toward a lane number that means something else over there.
+ *
+ * An id with no entry shares one group with every other such id, so a partial partition packs the
+ * unlisted bars together rather than throwing. A partition that gives every item one key packs
+ * exactly as no partition does.
  */
 export function packLanes(
+  items: readonly PackItem[],
+  predecessorsOf?: ReadonlyMap<string, readonly string[]>,
+  partition?: ReadonlyMap<string, string>,
+): LaneChange[] {
+  if (partition === undefined) {
+    return packGroup(items, predecessorsOf).sort(byChangeId);
+  }
+  // Insertion-ordered groups; the result is sorted by id below, so group order cannot show.
+  const groups = new Map<string | undefined, PackItem[]>();
+  for (const item of items) {
+    const key = partition.get(item.id);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  const changes: LaneChange[] = [];
+  for (const group of groups.values()) changes.push(...packGroup(group, predecessorsOf));
+  return changes.sort(byChangeId);
+}
+
+const byChangeId = (a: LaneChange, b: LaneChange): number =>
+  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+/** One independent packing: the whole plan with no partition, one swimlane's bars with one. */
+function packGroup(
   items: readonly PackItem[],
   predecessorsOf?: ReadonlyMap<string, readonly string[]>,
 ): LaneChange[] {
@@ -87,7 +129,7 @@ export function packLanes(
     if (lane !== item.laneIndex) changes.push({ id: item.id, laneIndex: lane });
   }
 
-  return changes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return changes;
 }
 
 /**
