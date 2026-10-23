@@ -3,53 +3,55 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-23 (just after midnight). The owner chose the whole shortlist in the recommended
-order, asked for a swimlanes spec and a branch tidy-up. Done: **#536**, **#540–#543**, **#349** and
-**#369** closed in three PRs; the **swimlanes spec approved** (SQ-7 "yes"); the **branch list**
-delivered (nothing deleted). Released as **`api` 0.98.1** and **`web` 0.197.1** (all patches). The owner's
-**hard rule** still stands: nothing that needs them to test, measure or check anything on their server
-or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's
-call (ADR-0190).
+**Written:** 2026-10-23 (late evening). The owner asked for **swimlanes M0 and M1** built from the
+approved spec, run to completion; SQ-1 to SQ-6 defaults, SQ-7 yes (M1-T1b in). **Both milestones are
+merged and released** as **`api` 0.99.0** and **`web` 0.197.2**. Everything ships dark: the
+toolbar's Swimlanes item stays `enabled: false` until **M2-T11**. Two CI hardening changes rode along
+(the owner chose "time limit + retry" and "keep the packages"). The owner's **hard rule** still stands:
+nothing that needs them to test, measure or check anything on their server or devices (a decision
+question is fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's 2026-10-22 answers (in `docs/DECISIONS.md`)
+## The owner's answers this session (2026-10-23)
 
-- **Shortlist order:** as recommended (#536, #542, #540+#541, #543, #349, #369).
-- **#536:** a `SYSTEM` actor reads **"System"**. Default taken with it: the host preview now floors
-  days left, as the bin does.
-- **#543:** report the dropped notes only; carrying them is the BACKLOG item.
-- **#541 default (not asked):** the dry-run refuses a clashing plan name with the same 409
-  `NAME_TAKEN` as the hand-made path, rather than a new report-finding kind. Offering the next free
-  name instead is still open if the owner prefers it.
-- **#369 default:** no visual change; a test pins `LAG_HANDLE_R < LAG_HANDLE_R_ACTIVE < NODE_RADIUS`.
-- **Swimlanes (supersedes the morning's "not commissioned"):** SQ-1 "Swimlane"; SQ-2 both sources per
-  plan (by hand, or one per WBS group at a chosen level); SQ-3 off lasts until you leave the plan;
-  SQ-4 guests see them; SQ-5 a drag stops at a WBS swimlane's edge; SQ-6 faint stripes; **SQ-7 yes:
-  baselines record swimlanes** (M1-T1b in scope). Approved: "start building".
+- **Swimlanes M0 and M1:** build them; SQ-1 to SQ-6 take their defaults; **SQ-7 yes** (baselines
+  record swimlanes, M1-T1b in scope). Nothing user-facing before M2's last task.
+- **CI browser install hang:** "Time limit + retry" (D1), then "Keep the packages" (an apt cache).
+  Both are in `docs/specs/ci-browser-install/feature-spec.md` and `docs/DECISIONS.md` (2026-10-23).
+- The 2026-10-22 answers (shortlist order, #536 "System", #543 report only, the seven swimlane
+  answers) are in `docs/DECISIONS.md` and summarised under "Decided" below.
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.98.1 and `web` 0.197.1.
+- **Latest releases:** `api` 0.99.0 and `web` 0.197.2 (Version Packages #1120; `@repo/types` 0.44.0, untagged).
 - **This session's PRs, in merge order:**
-  - **#1107** #536: "System" in the Audit log; `clear-out-preview.ts` floors days left; the
-    switch-on guide's step 8 updated.
-  - **#1109** #540–#543: calendar names probed by prefix (clipped base near the 120-char ceiling);
-    `plans/plan-name-conflict.ts` shared by plans and import; dry-run + commit 409 `NAME_TAKEN` (in
-    OpenAPI and `docs/API.md`); XER drop no longer claims hours-per-day; one aggregate `drop` for
-    XER `TASKMEMO` / MSPDI `<Notes>`. Two e2e set-ups moved off the refused same-name re-import; the
-    FC-2 torture digest is hashed with the M0 wording put back (it reproduces the baseline exactly).
-  - **#1110** #349 + #369: `e2e-local.sh` holds `pg_try_advisory_lock(349)` in a `coproc psql` for
-    the whole run (a second run exits 1 naming the holder; tried live); the lag-handle ordering test.
-  - **#1111** the swimlanes spec, plan, `ui-architecture.md` and `schema-design.md`, approved.
-  - **#1108** the Version Packages release (`api-v0.98.1`, `web-v0.197.1`; `@repo/interchange` 0.13.1, untagged).
-- **Branch tidy-up:** of 168 branches besides `main`, **164 are safe to delete** (content on `main`,
-  checked by squash patch-id and per-file comparison; seven cite commits a PR ref keeps alive). Keep
-  four: `changeset-release/main`; `wip/history-numerator-preaggregate` (the only unmerged work, a
-  deliberately-unadopted perf rewrite whose commit `64ff45d4`
-  `docs/specs/staff-server-readings/m1-measurement.md` cites, with no PR to keep it);
-  `feat/resource-dependent-web` (on `main`, but `docs/specs/activity-editor-restructure/feature-spec.md`
-  cites `75805f0`, reachable only there); `claude/sharp-shannon-1vw28p` (another chat's, from
-  2026-10-22). The list and delete commands were given to the owner; **this environment deleted
-  nothing**. A branch created since (this session's own) can go once merged.
+  - **#1113** M0-T1: `deriveSwimlaneLanes` and `wbsBasisOf` in `packages/layout/src/swimlanes.ts`.
+  - **#1114** CI: the "Install Playwright browsers" step has a time limit, retries, and kills a
+    leftover `apt-get` and repairs dpkg before retrying.
+  - **#1115** M0-T2: an optional `partition` on `packLanes`, `nearestFreeRow` and `rowOccupancy`, with a
+    golden parity suite proving byte-identical output when it is absent.
+  - **#1116** M0-T3: `projectSwimlanes` in `apps/web/src/features/tsld/render/project-swimlanes.ts`.
+  - **#1117** CI: an apt `.deb` cache (`actions/cache/restore@v6` and `save@v6`, keyed on the runner
+    image and the lockfile). It works: later runs restore it and the install takes seconds.
+  - **#1118** M0-T4: the node measurement (`docs/specs/swimlanes/m0-reading.md`). **The §4.5 limits
+    stand** (300 and 150). **Height grows**: swimlanes cannot share a row, so Re-layout went 35 to 54
+    rows on the torture plan and 14 to 16 on the power plant. The owner should see that before M2;
+    no cost bar is attached to it.
+  - **#1119** M1-T1: the schema (`swimlanes`, `activity_swimlane_lanes`, `activities.swimlane_id`,
+    `plans.swimlane_source` / `swimlane_wbs_level`), wired into expiry, restore, import and export
+    (org export format **2.1**). Designed by the database-architect; its name CHECK was rewritten
+    without `BETWEEN` after the backup round trip changed its text (`docs/DATABASE.md` has the rule).
+  - **#1121** M1-T2: the swimlanes module (CRUD, reorder, restore).
+  - **#1122** M1-T1b: baselines freeze swimlanes at capture (`baselines.swimlane_snapshot_level`, the
+    frozen source and level, `baseline_activities.swimlane_id`, `baseline_activity_swimlane_lanes`).
+  - **#1123** M1-T3 and M1-T4: plan `swimlaneSource` / level (behind the pen), activity `swimlaneId`,
+    in-swimlane lanes on the batch write (the server derives the basis), history names a swimlane
+    move; the web types accept the fields and use none of them.
+  - **#1124** M1-T5: the `plan:capability-swimlanes` and `plan:capability-swimlanes-wbs` seed plans
+    and their playbook rows.
+  - **#1120** the Version Packages release.
+- **Reviews:** security, backend performance and API reviewers ran on M1. Folded: a `@Max` on
+  `version`, OpenAPI errors on the plan and activity writes. Kept: `SWIMLANE_NAME_TAKEN`, because the
+  spec names it.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -135,18 +137,20 @@ owner returns to one, the steps are ready:
   #509 is the off-site copy: today's copies live on the same disk as the database).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
-- **New this session, no row yet:** a CI web shard **hung on "Install Playwright browsers"** on
-  four PRs running (shard 1 on #1109, #1110 and #1111; shard 4 on #1112; 2026-10-22 22:09 to
-  2026-10-23 01:21 UTC), each cancelled at 30 minutes before any test body ran; every re-run passed
-  in ~16 minutes. Not the fifth-shard trigger (no test was slow). Worth a row if it continues: a
-  step timeout with one retry, or caching the browsers.
+- **New this session:** **#544** (a project-calendar restore racing its project's delete fails
+  now and then under CPU load; not reproduced on CI) and **#545** (`e2e-local.sh api backup` refuses
+  its own check because the run-lock session is connected; run the fixture and the check directly).
+- **The CI browser-install hang is fixed** (#1114, #1117); no row was needed.
 
 ## Suggested next
 
-**Swimlanes M0** (pure layout functions in `@repo/layout` and `features/tsld/render`, plus the node
-measurement of partitioned Tidy/Re-layout). Approved; ships dark. Then M1 (schema: database-architect
-first, always, with `schema-design.md` as its brief; M1-T1b is in because SQ-7 is yes). Switch the
-session to **Sonnet** for the building (the spec is approved).
+**Swimlanes M2** ("Swimlanes by hand, on the diagram", `docs/specs/swimlanes/implementation-plan.md`
+§M2, the first user-facing milestone). It starts at **M2-T1** (hooks, manual membership,
+`SwimlaneInput`, `deriveDiagramSource`), and everything stays unreachable until **M2-T11** turns the
+toolbar item on, so T1 to T10 can merge one at a time. Each M2 task that changes UI needs the
+component, accessibility and UX reviewers, and M2-T11 needs a journey that drives the real product
+(`CLAUDE.md` §19.11). Before M2-T6, show the owner the row growth from `m0-reading.md` as a decision
+question, not a test. Switch the session to **Sonnet** for the building (the spec is approved).
 
 Shortlist candidates when the owner wants a break from swimlanes (check each row against the code
 first): #539 (a finish milestone after work on another calendar is dated wrongly: an engine defect,
@@ -537,3 +541,19 @@ docs/TECH_DEBT.md` shows only that PR's rows.
   - **feature-analyst wrote into the main checkout** even when resumed from a worktree; the
     ui-architect and database-architect passes ran in parallel safely by each writing its OWN new
     file in the spec folder and leaving the spec to the analyst's fold.
+
+- **2026-10-23 swimlanes lessons:**
+  - **The container restarted about every 20 to 25 minutes** this session, killing Postgres and any
+    long run. Start long jobs with `setsid nohup <script> > log 2>&1 &` (a script that prints one
+    `name=$?` line per step and a final `EXIT`), wait on the log, and bring Postgres back with
+    `scripts/e2e-local.sh --db-only`. A full API e2e takes about 15 minutes, so start it straight
+    after a restart (`uptime`).
+  - **A spec that creates swimlane rows must delete them in `afterAll`**
+    (`await clearDomainData(prisma).catch(() => undefined)`). Leftover swimlanes met other specs'
+    `plan.deleteMany` and failed 45 unrelated tests in one full run.
+  - **A new child table moves the statement-count and tree-clear pins** (`clear-activity-tree`,
+    `clear-baseline-tree`, `activity-history-statements`). Expect to update them in the same PR.
+  - **A schema CHECK must survive `pg_dump`/`pg_restore` text-for-text**: `BETWEEN` on the left of an
+    `AND` came back rewritten, and the backup round trip in CI failed on it (`docs/DATABASE.md`).
+  - **The export 429 test waits on the export's own advisory lock**
+    (`hashtext('org-export')`, `objsubid = 2`); a general "any advisory lock" wait saw the run lock.
