@@ -169,6 +169,11 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       .post(`/api/v1/organizations/other-co/plans/${otherChain.planId}/notes`)
       .send({ body: 'OTHER-ORG-NOTE-MARKER' })
       .expect(201);
+    // Written through the route, so the tenant boundary under test is the one the product has.
+    await otherAdmin.agent
+      .post(`/api/v1/organizations/other-co/plans/${otherChain.planId}/swimlanes`)
+      .send({ name: 'OTHER-ORG-SWIMLANE-MARKER' })
+      .expect(201);
 
     // — Members: one of each role, and one removed. ------------------------------------------------
     const planner = await signUp('planner@example.com');
@@ -633,6 +638,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
 
     // Not vacuous: the export does contain this organisation's own markers.
     expect(bytes).toContain('ACME-PLAN-MARKER');
+    expect(bytes).toContain('ACME-SWIMLANE');
     expect(bytes).toContain('planner@example.com');
     for (const marker of other.markers) {
       expect(bytes, `the export must not contain ${marker}`).not.toContain(marker);

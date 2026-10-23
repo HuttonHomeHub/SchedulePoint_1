@@ -147,6 +147,12 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   //   console, because the read IS the act: it takes everybody's work, cost and names out of the
   //   tenant boundary in one file. Written after the stream ends, outside the snapshot.
   'POST /api/v1/organizations/:orgSlug/export': ['privacy.exported'],
+  // — Swimlanes (swimlanes spec §4.7): only the delete and its restore earn a row. Create, rename
+  // and reorder are durably attributed by the row and change nobody else's work.
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId': ['swimlane.deleted'],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId/restore': [
+    'swimlane.restored',
+  ],
 };
 
 /**
@@ -314,6 +320,11 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'POST /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.DURABLY_ATTRIBUTED,
   'POST /api/v1/organizations/:orgSlug/resources': REASONS.DURABLY_ATTRIBUTED,
   'PUT /api/v1/organizations/:orgSlug/activities/:activityId/steps': REASONS.PLAN_CONTENT,
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/swimlanes': REASONS.READ,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/swimlanes': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/order': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId':
+    REASONS.DURABLY_ATTRIBUTED,
 };
 
 const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD', 'SEARCH'];

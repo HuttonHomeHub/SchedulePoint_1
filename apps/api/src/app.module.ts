@@ -42,6 +42,7 @@ import { ResourcesModule } from './modules/resources/resources.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { ShareModule } from './modules/share/share.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { SwimlanesModule } from './modules/swimlanes/swimlanes.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { VersionModule } from './version/version.module';
 
@@ -128,6 +129,7 @@ function isPrettyLoggingAvailable(): boolean {
     DependenciesModule,
     CrossPlanDependenciesModule,
     NotesModule,
+    SwimlanesModule,
     ScheduleModule,
     CalendarsModule,
     ResourcesModule,

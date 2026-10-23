@@ -2531,6 +2531,10 @@ export const AUDIT_ACTIONS = [
   'activity.reparented',
   'dependency.created',
   'dependency.deleted',
+  // A swimlane is presentation, so only its delete and restore earn a row (swimlanes spec §4.7):
+  // create, rename and reorder are durably attributed by the row and change nobody else's work.
+  'swimlane.deleted',
+  'swimlane.restored',
   // — The rules other people's work is judged by (ADR-0073 family E). These are UPDATES, and they
   //   earn their row on the second test rather than the first: a plan's data date or a shared
   //   calendar's working time re-dates work that other people own, so `updated_by` on the row
@@ -2685,6 +2689,8 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'activity.deleted': 'deletions',
   'activity.restored': 'deletions',
   'dependency.deleted': 'deletions',
+  'swimlane.deleted': 'deletions',
+  'swimlane.restored': 'deletions',
   // Not a deletion — a rearrangement. `activity.dissolved` removes a summary but PROMOTES its
   // children rather than deleting them, so filing it under "what disappeared" would tell a reader
   // looking for lost work that forty activities went away. Its subject is the shape of the plan.

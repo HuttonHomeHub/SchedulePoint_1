@@ -11,6 +11,7 @@ const READ = [
   'dependency:read',
   'calendar:read',
   'baseline:read',
+  'swimlane:read',
 ] as const;
 const WRITE = [
   'client:create',
@@ -26,6 +27,10 @@ const WRITE = [
   'dependency:create',
   'dependency:update',
   'dependency:delete',
+  'swimlane:create',
+  'swimlane:update',
+  'swimlane:delete',
+  'swimlane:restore',
   'calendar:create',
   'calendar:update',
   'calendar:delete',
