@@ -316,6 +316,18 @@ export const seedActivitySchema = z
      */
     laneIndex: z.number().int().min(0).max(10000).optional(),
     /**
+     * The hand-made swimlane this activity is filed in, by {@link SeedSwimlanes} lane key. Optional
+     * and `null` both mean "No swimlane". Only meaningful when the spec's swimlane source is
+     * `MANUAL`: a `WBS` plan's membership is its WBS tree's (`parentKey`), and the API refuses a
+     * `swimlaneId` there (422 `SWIMLANE_SOURCE_IS_WBS`).
+     */
+    swimlaneKey: z.string().min(1).nullable().optional(),
+    /**
+     * The activity's lane INSIDE its swimlane (swimlanes spec §4.12), written through the positions
+     * batch after the activity exists. Distinct from `laneIndex`, the swimlane-free layout's lane.
+     */
+    swimlaneLane: z.number().int().min(0).max(10000).optional(),
+    /**
      * The conformance `test_tags` this activity carries, so a coverage report can say which of the
      * fixture's 117 capability keys a seeded plan actually reaches. Empty for hand-authored plans
      * that claim nothing.
@@ -407,6 +419,36 @@ export const seedUnplaceableSchema = z
   .strict();
 export type SeedUnplaceable = z.infer<typeof seedUnplaceableSchema>;
 
+/**
+ * A plan's swimlane source (swimlanes spec §4.6). `MANUAL` carries the hand-made `lanes`, created in
+ * order through the swimlanes routes. `WBS` carries none: the swimlanes ARE the WBS summaries at
+ * `wbsLevel`, so the spec expresses them with `parentKey` and the API creates no swimlane row.
+ */
+export const seedSwimlanesSchema = z
+  .discriminatedUnion('source', [
+    z
+      .object({
+        source: z.literal('MANUAL'),
+        lanes: z.array(
+          z.object({ key: z.string().min(1), name: z.string().min(1).max(120) }).strict(),
+        ),
+      })
+      .strict(),
+    z
+      .object({
+        source: z.literal('WBS'),
+        wbsLevel: z.number().int().min(1).max(3),
+      })
+      .strict(),
+  ])
+  .refine(
+    (swimlanes) =>
+      swimlanes.source !== 'MANUAL' ||
+      new Set(swimlanes.lanes.map((lane) => lane.key)).size === swimlanes.lanes.length,
+    'swimlane keys must be unique within a spec',
+  );
+export type SeedSwimlanes = z.infer<typeof seedSwimlanesSchema>;
+
 export const seedSpecSchema = z
   .object({
     /** Stable identity for this seed, used to detect a re-run rather than duplicating. */
@@ -424,6 +466,8 @@ export const seedSpecSchema = z
     dependencies: z.array(seedDependencySchema),
     assignments: z.array(seedAssignmentSchema),
     unplaceable: z.array(seedUnplaceableSchema),
+    /** Absent means the plan keeps the default source, `NONE`. */
+    swimlanes: seedSwimlanesSchema.optional(),
   })
   .strict();
 export type SeedSpec = z.infer<typeof seedSpecSchema>;

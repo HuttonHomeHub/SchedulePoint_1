@@ -21,6 +21,7 @@ import {
   resourcesPlan,
 } from './resources.js';
 import { shiftCalendarsPlan } from './shift-calendars.js';
+import { swimlanesPlan, swimlanesWbsPlan } from './swimlanes.js';
 import { typesAndWbsPlan } from './types-wbs.js';
 import { placementOnEarlyPlan, visualPlacementsPlan } from './visual-placements.js';
 
@@ -88,6 +89,8 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'external', label: 'External dates ignored', build: externalIgnoredPlan },
   { key: 'placement', label: 'Visual placement varieties', build: visualPlacementsPlan },
   { key: 'placement', label: 'Placement left on an Early plan', build: placementOnEarlyPlan },
+  { key: 'swimlanes', label: 'Swimlanes made by hand', build: swimlanesPlan },
+  { key: 'swimlanes', label: 'Swimlanes from the WBS', build: swimlanesWbsPlan },
 ];
 
 /** Every capability plan, or just one family's. An unknown family yields an empty list. */
