@@ -77,7 +77,11 @@ export class SwimlanesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a swimlane on a plan (Planner or Org Admin).' })
+  @ApiOperation({
+    summary: 'Create a swimlane on a plan (Planner or Org Admin).',
+    description:
+      'With `after`, inserts below that swimlane; an `after` that is not an active swimlane of this plan is 404.',
+  })
   @ApiCreatedResponse({ type: SwimlaneResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({
@@ -101,7 +105,8 @@ export class SwimlanesController {
   @ApiOperation({
     summary: 'Reorder the plan’s swimlanes (Planner or Org Admin). All-or-nothing.',
     description:
-      'Names every active swimlane exactly once with its version. Returns the new order.',
+      'Names every active swimlane exactly once with its version. Returns the new order. A short ' +
+      'or stale set is 409 `STALE_VERSION`; an id that is unknown or another plan’s is 404.',
   })
   @ApiOkResponse({ type: SwimlaneResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })

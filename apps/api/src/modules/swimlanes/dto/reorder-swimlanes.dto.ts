@@ -6,6 +6,7 @@ import {
   IsArray,
   IsInt,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -23,6 +24,8 @@ export class SwimlaneOrderItemDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  // The INT column's ceiling: a larger value would overflow the comparison and answer 500.
+  @Max(2147483647)
   version!: number;
 }
 

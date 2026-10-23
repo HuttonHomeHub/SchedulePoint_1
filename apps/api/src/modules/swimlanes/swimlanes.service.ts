@@ -140,6 +140,9 @@ export class SwimlanesService {
     }
   }
 
+  // No plan advisory lock, deliberately (schema-design §5): a rename is one version-gated UPDATE of
+  // one row, and reorder locks the plan's swimlanes in id order; only create and restore race the
+  // plan cascade's sweep.
   async update(
     principal: Principal,
     orgSlug: string,
@@ -179,6 +182,8 @@ export class SwimlanesService {
     }
   }
 
+  // No plan advisory lock, deliberately (schema-design §5): reorder locks the plan's swimlanes in id order; only create and restore race the
+  // plan cascade's sweep.
   async reorder(
     principal: Principal,
     orgSlug: string,

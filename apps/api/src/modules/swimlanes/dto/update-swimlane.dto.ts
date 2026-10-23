@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 import { NO_CONTROL_CHARACTERS, SWIMLANE_NAME_MAX, trim } from './create-swimlane.dto';
 
@@ -22,5 +22,7 @@ export class UpdateSwimlaneDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  // The INT column's ceiling: a larger value would overflow the comparison and answer 500.
+  @Max(2147483647)
   version!: number;
 }

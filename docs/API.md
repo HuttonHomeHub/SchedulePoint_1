@@ -685,14 +685,14 @@ needs **`swimlane:read`** (every member); the writes need **`swimlane:create` / 
 (**423**). A swimlane is plan content, so it is soft-deleted on its own, swept with its plan, and never
 listed in Recently deleted.
 
-| Method | Path                                            | Notes                                                                                                                                |
-| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `…/plans/:planId/swimlanes`                     | The plan's active swimlanes, `ORDER BY position, id`. Cursor-paginated; the default page is the 100-swimlane cap, so it is one page. |
-| POST   | `…/plans/:planId/swimlanes`                     | `{ name, after? }` → 201 · 409 `SWIMLANE_NAME_TAKEN` · 422 bad name or `SWIMLANE_LIMIT` · 404 `after` not an active swimlane here.   |
-| PATCH  | `…/plans/:planId/swimlanes/order`               | `{ order: [{ id, version }] }` naming every active swimlane once → 200 with the new order · 409 `STALE_VERSION` · 422 duplicate.     |
-| PATCH  | `…/plans/:planId/swimlanes/:swimlaneId`         | Rename: `{ name, version }` → 200 · 409 `STALE_VERSION` or `SWIMLANE_NAME_TAKEN`.                                                    |
-| DELETE | `…/plans/:planId/swimlanes/:swimlaneId`         | Soft delete → 204. Optional `?version=N` → 409 `STALE_VERSION`. Audited as `swimlane.deleted`.                                       |
-| POST   | `…/plans/:planId/swimlanes/:swimlaneId/restore` | → 200 · 409 `PARENT_DELETED` (plan still deleted) or `SWIMLANE_NAME_TAKEN` · 422 `SWIMLANE_LIMIT`. Audited as `swimlane.restored`.   |
+| Method | Path                                            | Notes                                                                                                                                                                                        |
+| ------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/plans/:planId/swimlanes`                     | The plan's active swimlanes, `ORDER BY position, id`. Cursor-paginated; the default page is the 100-swimlane cap, so it is one page.                                                         |
+| POST   | `…/plans/:planId/swimlanes`                     | `{ name, after? }` → 201 · 409 `SWIMLANE_NAME_TAKEN` · 422 bad name or `SWIMLANE_LIMIT` · 404 `after` not an active swimlane of this plan.                                                   |
+| PATCH  | `…/plans/:planId/swimlanes/order`               | `{ order: [{ id, version }] }` naming every active swimlane once → 200 with the new order · 409 `STALE_VERSION` (stale version, or a short set) · 404 unknown or foreign id · 422 duplicate. |
+| PATCH  | `…/plans/:planId/swimlanes/:swimlaneId`         | Rename: `{ name, version }` → 200 · 409 `STALE_VERSION` or `SWIMLANE_NAME_TAKEN`.                                                                                                            |
+| DELETE | `…/plans/:planId/swimlanes/:swimlaneId`         | Soft delete → 204. Optional `?version=N` → 409 `STALE_VERSION`. Audited as `swimlane.deleted`.                                                                                               |
+| POST   | `…/plans/:planId/swimlanes/:swimlaneId/restore` | → 200 · 409 `PARENT_DELETED` (plan still deleted) or `SWIMLANE_NAME_TAKEN` · 422 `SWIMLANE_LIMIT`. Audited as `swimlane.restored`.                                                           |
 
 A **name** is trimmed, 1 to 80 characters, with no control characters, and unique among the plan's
 active swimlanes **ignoring case** (a soft-deleted name does not block reuse). At most **100** active
