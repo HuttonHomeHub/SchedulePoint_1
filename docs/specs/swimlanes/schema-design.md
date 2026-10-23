@@ -15,6 +15,9 @@
      falls back to the plan composite. The index still pays 3.5–5× and stays.
   3. §3.4: the Organization back-relation to `ActivitySwimlaneLane` is `swimlaneLanes`.
   4. §4 Q6: `LANE_ROWS_PER_ACTIVITY = 2`, with its measurement.
+- **Extended 2026-10-23 by §13** (plan task M1-T1b, SQ-7 "yes"): baselines freeze swimlanes.
+  Migration `20261023160000_baselines_freeze_swimlanes`. §4 Q7, §9's baseline-capture line and
+  §12 OQ-1 are superseded by it.
 
 ---
 
@@ -750,8 +753,8 @@ summaryActivityId, wbsLevel, laneIndex, updatedAt }[]`. The list load reads lane
   commit.
 - **Cross-plan copy:** clears `swimlaneId`. If it does not, the composite FK refuses it with
   `23503`.
-- **Baseline capture** (`baseline.repository.ts:227`): unchanged. It must **not** start copying
-  swimlane data without the Q7 follow-on's level discriminator.
+- **Baseline capture** (`baseline.repository.ts:227`): ~~unchanged~~ superseded by §13 (M1-T1b),
+  which adds the level discriminator and lists the capture sites (§13.8).
 - **Seed catalogue** (`packages/seed`): exercises the new routes only through the public API, as
   ADR-0066 requires.
 
@@ -808,7 +811,8 @@ The spec owner edits `feature-spec.md`; this design does not.
 
 ## 12. Questions for the product owner
 
-- **OQ-1. Should baselines start freezing swimlanes in this epic?** Default: **no** (the spec's
+- **OQ-1. Should baselines start freezing swimlanes in this epic?** **Answered "yes"** by the
+  product owner as SQ-7 (2026-10-22, `docs/DECISIONS.md`); designed in §13. As first asked: Default: **no** (the spec's
   default, Q7). Consequence of the default: removed work in any baseline captured before the
   follow-on is never drawn in a swimlane. It is counted instead, with WBS-mode membership
   partly recoverable from the frozen WBS tree. Freezing now adds about one milestone task:
@@ -816,3 +820,392 @@ The spec owner edits `feature-spec.md`; this design does not.
 
 Nothing else here needs the owner. Every other choice above has a stated technical reason and a
 measurement owed in M1.
+
+---
+
+## 13. M1-T1b: baselines freeze swimlanes (2026-10-23)
+
+- **Status:** Landed, migration `20261023160000_baselines_freeze_swimlanes` (schema only; the
+  capture and ghost code is the builder's, §13.8).
+- **Why now:** the product owner answered SQ-7 "yes" (2026-10-22, `docs/DECISIONS.md`): baselines
+  record each activity's swimlane from the start. This supersedes §4 Q7 and §12 OQ-1.
+- **Author:** database-architect agent. **Base:** `e5f506a` (main + M1-T1). Every behavioural
+  claim marked **(probed)** was run against a scratch database on PostgreSQL 16.15 and, for drift,
+  `postgres:17-alpine` 17.11, with Prisma 6.19.3.
+
+### 13.1 Summary
+
+One enum, three columns on `baselines`, one on `baseline_activities`, one new table. Expand-only;
+no backfill; no data-dependent statement. The sixth amendment to ADR-0025's snapshot-copy model.
+
+| Object                                   | What it holds                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `SwimlaneSnapshotLevel` (new enum)       | `NONE` / `FULL`: whether this baseline recorded swimlanes at all                |
+| `baselines.swimlane_snapshot_level`      | that level, `NOT NULL DEFAULT 'NONE'`                                           |
+| `baselines.swimlane_source`              | the plan's `swimlane_source` at capture; NULL iff the level is `NONE`           |
+| `baselines.swimlane_wbs_level`           | the plan's `swimlane_wbs_level` at capture; 1–3 iff the frozen source is `WBS`  |
+| `baseline_activities.swimlane_id`        | the activity's `swimlane_id` at capture, a correlation UUID with no FK          |
+| `baseline_activity_swimlane_lanes` (new) | every `activity_swimlane_lanes` row of every captured activity, copied verbatim |
+
+**One departure from the plan's sketch** (plan task M1-T1b, and §4 Q7 as first written, said
+"correlation columns on `baseline_activities`" plus "the frozen in-swimlane lane"). One lane column
+cannot freeze what §2 established the live model is: a lane **per basis**. §13.3 explains why the
+lanes are a sibling table and not a column.
+
+### 13.2 What a ghost of removed work needs
+
+A ghost of a **live** activity draws on that activity's live display lane (feature spec, "Revision
+and baseline ghosts"), so it needs nothing frozen. A ghost of **removed** work has no live row to
+sit beside, and with swimlanes on, its position is two facts:
+
+1. **which swimlane it belongs in**, under the source the plan has **today** (MANUAL: its hand-made
+   membership; WBS at level L: its level-L ancestor summary; either way possibly "No swimlane");
+2. **its in-swimlane lane** for that basis.
+
+Neither may be guessed (ADR-0126; `revision-ghosts.ts:32-41`, "The lane is recorded, never
+guessed"). The live rows cannot be used instead: they are gone once the activity expires, and
+while it is only soft-deleted they describe it as it was **at deletion**, not at capture, which
+is a reference and not a copy (ADR-0025). So the capture has to freeze both facts.
+
+### 13.3 The schema
+
+**`SwimlaneSnapshotLevel { NONE, FULL }`**, no `@@map`. Created and used in one migration, which
+is legal (only `ALTER TYPE … ADD VALUE` plus use is not; §3.1).
+
+**`baselines`: three columns.**
+
+```prisma
+  swimlaneSnapshotLevel SwimlaneSnapshotLevel @default(NONE) @map("swimlane_snapshot_level")
+  swimlaneSource        SwimlaneSource?       @map("swimlane_source")
+  swimlaneWbsLevel      Int?                  @map("swimlane_wbs_level") @db.SmallInt
+```
+
+- The level follows its three siblings exactly (`cost_snapshot_level`, `revision_snapshot_level`,
+  `placement_snapshot_level`): a capture-level fact, written unconditionally, immutable, constant
+  `DEFAULT 'NONE'` (metadata-only `ADD COLUMN`, and the literal truth of every existing row).
+- **Why a level and not `swimlane_source IS NULL`** (the criticality precedent, which uses the
+  nullness of its own columns as the discriminator, `schema.prisma` `criticalPathDefinition`
+  docblock). The source has its own `NONE`, so the column would carry two different nothings:
+  "recorded, and swimlanes were off" (`'NONE'`) and "not recorded" (NULL). A reader who confuses
+  them draws nothing where it should count, or counts where it could draw. An explicit level read
+  by an exhaustive switch makes that a compile error. The second-source-of-truth objection the
+  criticality docblock raises does not apply, because the CHECK below makes the three columns one
+  fact.
+- **Why freeze the source and level at all**, when a ghost is placed under **today's** source
+  (§13.6)? Because they say what membership **meant** at capture: under MANUAL it was
+  `swimlane_id`, under WBS at L it was the level-L ancestor. A change list that one day reports
+  "moved from swimlane A to B" needs that, and §4 Q7's point stands: a snapshot can only freeze
+  what existed at capture. Two small columns; ADR-0126 "a baseline freezes the plan's shape".
+- **`ck_baselines_swimlane_snapshot_shape`**, fail-closed on both discriminators (raw SQL):
+
+  ```sql
+  CHECK (CASE swimlane_snapshot_level
+    WHEN 'NONE' THEN swimlane_source IS NULL AND swimlane_wbs_level IS NULL
+    WHEN 'FULL' THEN
+      CASE swimlane_source
+        WHEN 'NONE'   THEN swimlane_wbs_level IS NULL
+        WHEN 'MANUAL' THEN swimlane_wbs_level IS NULL
+        WHEN 'WBS'    THEN swimlane_wbs_level IS NOT NULL AND swimlane_wbs_level BETWEEN 1 AND 3
+        ELSE false
+      END
+    ELSE false END)
+  ```
+
+  The inner CASE is `ck_plans_swimlane_source_level` verbatim, so a frozen copy cannot hold a pair
+  its source refuses. A NULL source under `FULL` matches no inner `WHEN` and is refused by the inner
+  `ELSE`. **(probed)** Refused `23514`: `NONE` with a source; `FULL` with a NULL source; `FULL`/`WBS`
+  with no level; `FULL`/`WBS`/4; `FULL`/`MANUAL`/2. Admitted: `FULL`/`NONE`, `FULL`/`MANUAL`,
+  `FULL`/`WBS`/2, and the default row (`NONE`, NULL, NULL).
+
+- No index: read only with its own row (the sibling levels' reasoning).
+
+**`baseline_activities.swimlane_id`**: `UUID NULL`, no default, **no FK** (the `parent_id` /
+`calendar_id` rule, ADR-0025). Copied from `activities.swimlane_id` **whatever the plan's source
+was** at capture: the live column is kept, and ignored, under WBS and NONE (§3.3), so it is a fact
+of the activity, and a plan switched to MANUAL after the capture still finds it. Under `FULL`, NULL
+is "No swimlane"; under `NONE` it is "unknown". No CHECK (the live column has only its FK), no
+index (read with its row through `(baseline_id, source_activity_id)`).
+
+**`baseline_activity_swimlane_lanes` (new).**
+
+```prisma
+model BaselineActivitySwimlaneLane {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  baselineId        String            @map("baseline_id") @db.Uuid
+  sourceActivityId  String            @map("source_activity_id") @db.Uuid
+  basis             SwimlaneLaneBasis
+  swimlaneId        String?           @map("swimlane_id") @db.Uuid
+  summaryActivityId String?           @map("summary_activity_id") @db.Uuid
+  wbsLevel          Int?              @map("wbs_level") @db.SmallInt
+  laneIndex         Int               @map("lane_index")
+  laneUpdatedAt     DateTime          @map("lane_updated_at") @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(..., onDelete: Restrict)
+  baseline     Baseline     @relation(..., onDelete: Restrict)
+
+  @@unique([baselineId, sourceActivityId, basis, swimlaneId, summaryActivityId, wbsLevel],
+           map: "uq_baseline_activity_swimlane_lanes_basis")   // + NULLS NOT DISTINCT in SQL
+  @@index([organizationId])
+  @@map("baseline_activity_swimlane_lanes")
+}
+```
+
+- **Why every row, and not one "effective" lane column on `baseline_activities`.** Which of an
+  activity's lane rows is the effective one depends on the plan's source, the WBS level and the
+  tree: it is the answer of a rule (`wbsBasisOf`, §4 Q3). Freezing one lane would make the capture
+  run that rule and record its answer, and "a snapshot that computed anything would be recording a
+  rule rather than a fact" is the capture's own principle (`baseline.repository.ts`, the
+  copy-field-for-field comments at the ADR-0126 and M-C blocks). It would also freeze only the
+  capture-time basis: a plan switched from MANUAL to WBS after the capture could never draw that
+  baseline's removed work, because the WBS-basis lane was not the effective one then. Copying the
+  rows keeps the capture rule-free and lets a ghost be placed under **today's** source.
+- **Columns** are the live row's, field for field, under the live names (as `baseline_activities`
+  keeps `parent_id` and `calendar_id`), plus `source_activity_id` (the sibling convention) and
+  **`lane_updated_at`**, the live row's `updated_at`. That one is input, not housekeeping: it is
+  the projection's collision tie-break between two placed members of one basis (§4 Q3, last
+  bullet), so a reader reproducing where a member was drawn needs it.
+- **Correlation UUIDs, no FKs**, for `source_activity_id`, `swimlane_id` and
+  `summary_activity_id` (ADR-0025). `summary_activity_id` is in the source activity id space, as
+  `baseline_activities.parent_id` is. **(probed)** a `SWIMLANE` row naming a non-existent swimlane is
+  admitted.
+- **Rows naming a swimlane or summary that was soft-deleted at capture are copied too.** They are
+  facts, and they are what a later restore of that swimlane returns to.
+- **CHECKs: the live table's two, verbatim.** `ck_baseline_activity_swimlane_lanes_basis_shape`
+  (the fail-closed CASE of §3.5, including the `IS NOT NULL AND` the M1-T1 landing added) and
+  `ck_baseline_activity_swimlane_lanes_lane_index_nonneg`. **(probed)** refused `23514`:
+  `NO_WBS_SUMMARY` with no level, `SWIMLANE` with no swimlane, lane −1.
+- **One index does all the work:** `uq_baseline_activity_swimlane_lanes_basis`, `(baseline_id,
+source_activity_id, basis, swimlane_id, summary_activity_id, wbs_level) NULLS NOT DISTINCT`. It
+  mirrors the live one-row-per-basis unique with `baseline_id` in front, so a capture bug that
+  copied a row twice is refused instead of being frozen as an ambiguity for the life of the
+  baseline. **(probed)** a second `NO_SWIMLANE` row for one (baseline, activity) is refused `23505`.
+  It is full, with leading `baseline_id`, so it is also the `baseline_id` FK RESTRICT check the
+  expiry fires and the load of one baseline's lanes (§13.7). Declared as a plain `@@unique`, per
+  the `docs/DATABASE.md` rule for the clause. This departs from `BaselineDependency`, which
+  deliberately states no freeze-once unique; the difference is that here the unique costs **no
+  extra index**, because the table needs a `baseline_id`-leading index anyway.
+- `baseline_activity_swimlane_lanes_organization_id_idx`: the org FK and the export `org` read.
+- **Lean lifecycle, deliberately unlike the three baseline siblings** (the `activity_swimlane_lanes`
+  and `activity_history_entries` precedent):
+  1. No `version`, `updated_at`, `created_by`, `updated_by`. Rows are immutable and no client
+     writes one; the baseline's `created_by` records the capturer.
+  2. No `deleted_at` / `delete_batch_id`. A row lives exactly as long as its baseline. A baseline
+     soft-delete leaves the rows, a restore needs nothing, and every read reaches them only through
+     a live baseline. The siblings' design costs three cascade sites each (the direct baseline
+     delete, the hierarchy sweep, `restoreBatch`), and `baseline.repository.ts`'s own comment calls
+     the direct-delete one "easy to miss". This table has none. It is also outside the ADR-0172 gate's
+     subject, because it has no `deleted_at`, so a read cannot forget a filter that does not exist.
+- `Organization` gains `baselineLanes` (named so `prisma format` does not realign the block);
+  `Baseline` gains `swimlaneLanes`.
+
+### 13.4 What the capture copies, and the one lock it adds
+
+Inside the existing capture transaction (`baselines.service.ts` `capture`, `:118-240`):
+
+1. **After** `acquirePlanWriteLock` (`:135`) and **before** loading activities, lock the plan's
+   live activities **in id order** (`lockPlanActivityRowsInIdOrder`, `common/db/activity-row-lock.ts:76-90`,
+   which takes `FOR NO KEY UPDATE`; `FOR SHARE` is the minimum that conflicts and either works).
+   - **Why.** A positions batch does **not** take the plan lock (`activities.service.ts:894-940`);
+     it writes `activities` and lane rows under the activity row lock (§5). The capture reads
+     activities and lanes in two statements, so without the row locks a positions batch committing
+     between them freezes lanes one write newer than the activities beside them. `FOR KEY SHARE`
+     would not do: it does not conflict with `FOR NO KEY UPDATE`.
+   - **No new deadlock.** The order is plan lock, then activities in id order: the order the plan
+     cascade already takes (`lockPlansForCascade`, `hierarchy-lifecycle.service.ts:231-234`).
+     A writer that could deadlock with this would already deadlock with the cascade. The writers
+     read for this design that take both (activity update `:647`, `updateParents` `:1137`,
+     `bulkDelete` `:1601`) take the plan lock first; the positions batch takes no plan lock.
+   - **Cost.** A positions batch on that plan waits for the capture to commit. The lock itself is
+     5–6 ms for 2,000 rows, and the lane copy adds 149–200 ms to the transaction (§13.7).
+2. The activity load (`baseline.repository.ts` `loadActiveActivitiesForCapture`, `:322`) also
+   selects `swimlaneId`.
+3. A new load reads `activity_swimlane_lanes` for the captured activity ids (the
+   `uq_activity_swimlane_lanes_basis` leftmost prefix), **every basis, including rows naming
+   deleted swimlanes or summaries**.
+4. The `mirrors` read of the plan under the lock (`baselines.service.ts:185-193`) also selects
+   `swimlaneSource` and `swimlaneWbsLevel`, for the reason that block's comment gives: read under
+   the lock, paired with the rows it describes.
+5. `createWithSnapshot` (`baseline.repository.ts:182`) writes `swimlaneSnapshotLevel: 'FULL'`
+   **unconditionally** (beside the three sibling levels and for their reason: a plan nobody laid
+   out writes zero lane rows, and only the level says that is complete), the frozen source and
+   level, `swimlaneId` on every activity row, and one `createMany` of the lane copies
+   (`updated_at` → `lane_updated_at`) in the same transaction.
+
+`CaptureActivityRow.swimlaneId` is **required** (`string | null`), and the lanes are a required
+array on `CaptureInput`, for the reason that interface already documents: an optional field lets a
+future capture path omit it silently and write a NULL nobody can tell from "never recorded".
+
+### 13.5 What an old baseline reads as
+
+Every baseline captured before this migration reads `swimlane_snapshot_level = 'NONE'`,
+`swimlane_source` and `swimlane_wbs_level` NULL, `baseline_activities.swimlane_id` NULL meaning
+**unknown**, and no lane copies. That is permanent: a capture cannot be re-run.
+
+With swimlanes **off** nothing changes for any baseline: ghosts draw on the global `lane_index` as
+today. With swimlanes **on**, a `NONE` baseline's removed work is **counted, not drawn** (ADR-0127
+D3's `undrawable`), exactly as the feature spec says for the case SQ-7 "no" would have produced.
+Its live-activity ghosts are unaffected.
+
+**A backfill to (`FULL`, `NONE`) was considered and rejected.** It would actually be true of every
+baseline captured before any swimlane write path shipped (none of them could have seen a
+swimlane), on the `hours_per_day_minutes DEFAULT 1440` precedent. But such a baseline has **no lane
+copies**, so with swimlanes on its removed work would still be counted rather than drawn (§13.6
+draws only from a frozen lane row). The backfill would buy nothing a reader can see today, and
+would cost a data-dependent migration (ADR-0107) whose truth rests on release order: M1-T2 depends
+on M1-T1, not on M1-T1b, so a swimlane route could ship first.
+
+### 13.6 How a ghost of removed work is placed (recommended reading; for the builder and the spec owner)
+
+This is the reading the schema is built to support. The spec owns the rule (D8 below). For a
+removed activity on the **from** side of a same-plan comparison, with swimlanes on:
+
+- **From-side level `NONE`:** counted, not drawn (§13.5).
+- **From-side level `FULL`, today's source MANUAL:** the basis is `SWIMLANE(swimlane_id)` if the
+  frozen `swimlane_id` names a swimlane that is **live today**, otherwise `NO_SWIMLANE`. That is the
+  live projection's own rule for a deleted swimlane's members (§6). The lane is the frozen row for
+  that basis.
+- **From-side level `FULL`, today's source WBS at level L:** walk the **frozen** parent chain
+  (`baseline_activities.parent_id`, present because every capture is `revision_snapshot_level =
+'FULL'`) with the shared `wbsBasisOf` (§4 Q3) to the level-L ancestor X. If X is a **live** level-L
+  WBS swimlane today, the basis is `WBS_SUMMARY(X)`; if the frozen chain has no level-L ancestor,
+  it is `NO_WBS_SUMMARY(L)`; if X exists but is not a swimlane today, counted. The lane is the frozen
+  row for that basis.
+- **No frozen row for the resolved basis:** counted, not drawn. Deriving a lane among **today's**
+  members would put removed work "somewhere plausible", which `revision-ghosts.ts:32-41` forbids.
+- **Cross-plan comparisons:** unchanged. Removed work has no anchor and is counted
+  (`revision-ghosts.ts`, `CROSS_PLAN`). Swimlane ids are incomparable across plans.
+- Placement inside today's picture is the live projection's (client-side, spec §4.14 G): the server
+  attaches the frozen facts to the ghost, and the client resolves them, so there is one derivation.
+
+### 13.7 The migration, and the measurements
+
+`apps/api/prisma/migrations/20261023160000_baselines_freeze_swimlanes/migration.sql`, generated by
+`prisma migrate dev --create-only` and hand-edited for the two CHECKs and `NULLS NOT DISTINCT`. Its
+header restates the capture obligations of §13.4 and carries the numbers below.
+
+- **Locks.** `ADD COLUMN` with a constant default or nullable is metadata-only (no rewrite of
+  `baselines` or `baseline_activities`). The CHECK scans `baselines` (one row per capture). The table
+  is created empty. No existing index is built. The API migrates at boot before serving (ADR-0018).
+- **Drift (probed).** `prisma migrate deploy` from empty, then `pnpm --filter @repo/api
+prisma:check-drift`: "No difference detected" on PostgreSQL 16.15 and on `postgres:17-alpine`
+  17.11.
+- **ADR-0107: nothing here a pristine database cannot test.** Every statement's result is
+  independent of existing rows.
+
+**Measurements** (PostgreSQL 16.15 on a shared container, not the deployed host; synthetic rows
+by SQL; warm, three reps). The database held 20 plans of 2,000 activities with 24 baselines each
+(480 baselines, 960,000 `baseline_activities`) and, once copied, two lane rows per activity per
+baseline (1,920,000 lane copies, 96,000 per plan).
+
+| What                                                                  | Result                              |
+| --------------------------------------------------------------------- | ----------------------------------- |
+| This migration, one rolled-back transaction, before any copy existed  | 93–146 ms (metadata-only)           |
+| One capture's lane copy, 4,000 rows, `INSERT … SELECT`                | 149–200 ms                          |
+| The §13.4 row lock, 2,000 activities, `FOR NO KEY UPDATE` in id order | 4.9–6.3 ms (17 ms cold)             |
+| Expiry, lane copies of one plan's 24 baselines (96,000 rows)          | 73–88 ms (0.8–0.9 µs a row)         |
+| Expiry, the same plan's `baseline_activities` (48,000 rows)           | 155–416 ms                          |
+| Expiry, its 24 `baselines`, with the unique index                     | 77–108 ms                           |
+| Expiry, its 24 `baselines`, **without** the unique index              | 4.06–4.44 s (whole-table scan each) |
+| Load one baseline's lanes (4,000 rows)                                | 0.9 ms, index scan on the unique    |
+
+- Copies were stored contiguously per baseline, as one `createMany` writes them. Interleaved at
+  random (the worst case) the lane-copy delete took 294–807 ms.
+- **The unique index earns its keep twice.** Without it the baselines delete's RESTRICT check scans
+  the whole table once per baseline, about 45× slower, so it is the FK index the expiry needs.
+- **The expiry budget.** No baseline child is charged to `budgetCharge`, and this keeps that. On this
+  plan the uncharged baseline work (about 0.3–0.6 s) is already of the order of deleting the plan's
+  2,000 activities (232–236 ms in the M1-T1 header); the lane copies add 73–88 ms to it. That is
+  pre-existing posture, not this table's, and is reported to the caller rather than changed here.
+
+### 13.8 Every code site (for the builder; the schema is landed, nothing below is)
+
+Each entry gives the file, the change, and in brackets what forces it.
+
+- `apps/api/src/modules/baselines/baselines.service.ts` `capture` (`:118-240`): the activity row
+  lock after `:135`; `swimlaneSource` / `swimlaneWbsLevel` in the `mirrors` select (`:185-193`); pass
+  the frozen source, level and lanes to `createWithSnapshot` (§13.4). (Review; capture spec.)
+- `apps/api/src/modules/baselines/baseline.repository.ts`:
+  - `CaptureActivityRow` (`:20`): required `swimlaneId: string | null`. (Compile.)
+  - `CaptureInput` (`:128`): required `swimlane: { source; wbsLevel }` and `lanes`. (Compile.)
+  - `loadActiveActivitiesForCapture` (`:322`): select `swimlaneId`.
+  - A new `loadLanesForCapture(organizationId, activityIds, tx)`, org-scoped, chunked like
+    the expiry's `IN` lists if the plan can exceed the bind limit.
+  - `createWithSnapshot` (`:182`): `swimlaneSnapshotLevel: 'FULL'` unconditionally with the
+    sibling-level comment, source and level, `swimlaneId` per row, and the lane `createMany`.
+  - `softDeleteWithSnapshot` (`:883`): **no change**, deliberately (§13.3, lean lifecycle). Say so in
+    its comment, so the next reader does not add a fourth `updateMany` against a table with no
+    `deleted_at`.
+- `apps/api/src/common/hierarchy/hierarchy-lifecycle.service.ts` (`:190-220` sweep, `:711-735`
+  `restoreBatch`): **no change**, for the same reason.
+- `apps/api/src/common/hierarchy/hierarchy-expiry.runner.ts` (`:150-175`):
+  `tx.baselineActivitySwimlaneLane.deleteMany({ where: { baselineId: { in: chunk } } })` before
+  `tx.baseline.deleteMany`, beside the three other baseline children. (The DMMF census in
+  `hierarchy-expiry.structural.spec.ts` fails the build until it is there; without it every plan
+  holding a `FULL` capture with lanes is unexpirable, retried hourly, with `23503`.) Not charged to
+  the run budget: no baseline child is (`budgetCharge`, `hierarchy-expiry.service.ts:40-43`), and
+  §13.7 measures what that leaves out.
+- `apps/api/src/common/hierarchy/hierarchy-expiry.structural.spec.ts` (`:97-115`): the order literal
+  gains `'baselineActivitySwimlaneLane'` before `'baseline'`. (The spec itself.)
+- `apps/api/src/modules/organization-export/export-columns.ts`: `baselines` (`:474`) appends
+  `swimlaneSnapshotLevel:enum`, `swimlaneSource:enum`, `swimlaneWbsLevel:int`;
+  `baseline_activities` (`:508`) appends `swimlaneId:text`; a new file `baseline-activity-swimlane-lanes`,
+  `read: 'org'`, every column exported (it is the planner's frozen layout, as `laneIndex` is); the
+  format version (`:899`). (The export census.)
+- `apps/api/src/modules/organization-export/organization-export.repository.ts`: `EXPORT_STRATEGY`
+  (`:106-109`) gains `BaselineActivitySwimlaneLane: { read: 'org' }`, and `readPage` (`:173-180`) its
+  read. (The strategy unit test.)
+- `docs/ORGANISATION_EXPORT_FORMAT.md`: the new file's section, the four appended columns, enum
+  values for `baselines.swimlaneSnapshotLevel`, `baselines.swimlaneSource` and
+  `baseline-activity-swimlane-lanes.basis`, the file count and the version.
+  (`export-format-doc.structural.spec.ts`.)
+- **Format version:** M1-T1's wiring bumps `2.0` → `2.1` (§7). If M1-T1 and M1-T1b reach one
+  release, one `2.1` entry covers both; if M1-T1's wiring ships first, this is `2.2`.
+- `packages/types/src/index.ts`: a `SwimlaneSnapshotLevel` union, and `swimlaneSnapshotLevel` on the
+  baseline response; `apps/api/src/modules/baselines/dto/baseline-response.dto.ts` gains the field and
+  a `MutuallyAssignable` lock-step check like `_placementSnapshotLevelLockStep` (`:225`).
+- **Ghosts (§13.6):** `revision-projections.ts` (`FrozenRevisionRowInput`, `:55`) and
+  `baseline.repository.ts` `loadSnapshotRowsForDelta` (`:508`) carry `swimlaneId`; a lane load for
+  the from-side baseline (and the to-side when it is a baseline) through a **live** baseline;
+  `revision-ghosts.ts` `buildRevisionGhosts` (`:86`) attaches the frozen facts to removed-work
+  ghosts only when the from side is `FULL`; `schedule.service.ts` (`:2182`, `:2331`, `:2575`) passes
+  the level; `RevisionGhostBar` (`packages/types/src/index.ts:3590`) gains the optional frozen
+  fields; the web painter resolves them and counts what it cannot place. (Plan: "a revision-ghost
+  unit test".)
+- **ADR:** the swimlanes ADR (spec §4.14) records the sixth amendment to ADR-0025, and ADR-0025's
+  header line in `CLAUDE.md` §16 gains it.
+
+### 13.9 Alternatives considered
+
+- **G. One effective lane on `baseline_activities`** (`swimlane_lane_index` plus the basis columns).
+  No new table, but the capture runs `wbsBasisOf` and records its answer, and only the capture-time
+  basis survives a later source switch (§13.3). Rejected on the snapshot principle.
+- **H. A `baseline_swimlanes` table freezing each swimlane's name and position.** Ghosts draw into
+  **today's** swimlanes, so nothing needs it now. The correlation id always resolves for the life of
+  the baseline: a swimlane row is hard-deleted only with its plan, and the same expiry deletes the
+  plan's baselines first (§6.1). What it would add is the name **as it was** for a future change list
+  ("moved from 'Electrical'") after a rename. Additive later, at the usual permanence cost for
+  renames made before then. Not built; noted for the owner as the one residual (below).
+- **I. Full baseline-sibling lifecycle** (`version`, actor columns, `deleted_at`,
+  `delete_batch_id`). Consistent with `baseline_dependencies`, at three cascade sites and four
+  columns for rows that are never edited (§13.3). Rejected.
+- **J. Foreign keys on the frozen correlation ids.** Today a swimlane cannot be hard-deleted before
+  the baselines that name it, so an FK would hold, but it would make a future swimlane purge wait on
+  every baseline and break ADR-0025's copy-not-reference rule that every sibling follows. Rejected.
+- **K. `REPEATABLE READ` for the capture instead of the row lock.** The snapshot would be taken at
+  the transaction's first statement, the advisory-lock `SELECT`, **before** the lock is granted, so a
+  recalculation that committed while the capture waited would be invisible and the frozen criticality
+  rule would no longer pair with the frozen rows. Rejected.
+- **L. The backfill of §13.5.** Rejected there.
+
+### 13.10 Disagreements with the spec, and questions
+
+- **D8, feature spec "Revision and baseline ghosts".** Replace "A ghost of removed work has no
+  frozen swimlane, so with swimlanes on it is counted, not drawn" with §13.6: drawn from the frozen
+  lane row for the basis resolved under today's source, counted when the baseline is `NONE`, the
+  basis cannot be resolved, or no frozen row exists.
+- **Nothing here needs the product owner.** SQ-7's answer is implemented as asked. One residual is
+  worth knowing, with a default: **swimlane names are not frozen** (§13.9 H). Default: not built,
+  because no reader needs them. Building it later loses only the names of swimlanes renamed before
+  then.

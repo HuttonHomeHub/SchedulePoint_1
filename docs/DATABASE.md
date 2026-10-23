@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 37
-> models across 76 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 38
+> models across 77 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -32,7 +32,7 @@
   **checks:** `ck_<table>_<rule>`.
 - **Enums:** `PascalCase` Prisma type (`ConstraintType`, `SchedulingMode`), `SCREAMING_SNAKE_CASE`
   values. A new enum follows that and carries **no** `@@map`, so its Postgres type is the
-  PascalCase name. Four of the schema's 29 enums predate the pattern and carry an `@@map` to a
+  PascalCase name. Four of the schema's 30 enums predate the pattern and carry an `@@map` to a
   `snake_case` database type — `ActivityHistoryScope` (`activity_history_scope`),
   `ActivityHistoryOrigin` (`activity_history_origin`), `AuditActorType` (`audit_actor_type`) and
   `AuditOutcome` (`audit_outcome`). Existing enum types are not renamed: a rename is a migration
@@ -1253,6 +1253,51 @@ result mean something. Migration `20260920120000_baseline_placement_snapshot` ca
 verbatim, and its whole application is proved against a **populated** database in
 `docs/specs/one-planning-surface/m-a/migration-proof.md` (ADR-0107: this class of defect is
 invisible on an empty table).
+
+#### The swimlane snapshot — a baseline freezes the swimlanes
+
+ADR-0025's **sixth** amendment (swimlanes M1-T1b, SQ-7 "yes", product owner 2026-10-22), designed
+in [`docs/specs/swimlanes/schema-design.md`](specs/swimlanes/schema-design.md) §13; migration
+`20261023160000_baselines_freeze_swimlanes` holds the measurements. It exists so a ghost of
+**removed** work can be drawn in a swimlane rather than only counted: its position is a membership
+and an in-swimlane lane, neither of which may be guessed (ADR-0126).
+
+| Column / table                      | Frozen from                         | Means                                                     |
+| ----------------------------------- | ----------------------------------- | --------------------------------------------------------- |
+| `baselines.swimlane_snapshot_level` | the capture path                    | `NONE` \| `FULL` — whether swimlanes were recorded at all |
+| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`         |
+| `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                        |
+| `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was      |
+| `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim         |
+
+- **A level, not `swimlane_source IS NULL`.** The source has its own `NONE`, so a nullable source
+  would carry two nothings ("recorded, swimlanes off" and "not recorded"). The fail-closed
+  `ck_baselines_swimlane_snapshot_shape` binds the level to the frozen pair (`NONE` ⇒ both NULL;
+  `FULL` ⇒ `ck_plans_swimlane_source_level` verbatim), so the three are one fact.
+- **Every lane row, not one effective lane.** Which row is effective depends on the source, level
+  and tree, i.e. on a rule; a snapshot records facts. Copying the rows also lets a ghost be placed
+  under the source the plan has **today**. `lane_updated_at` copies the live `updated_at`, which is
+  the projection's collision tie-break.
+- **The lane copies have a lean lifecycle**, unlike their three baseline siblings: no `version`,
+  no actor columns, no `deleted_at` / `delete_batch_id`. They are immutable, live exactly as long as
+  their baseline, and are read only through a live baseline, so a baseline soft-delete and restore
+  touch nothing (the `activity_swimlane_lanes` precedent).
+- **The capture locks the plan's live activities in id order** after the plan advisory lock, because
+  a positions batch writes lanes under the activity row lock and not the plan lock; without it the
+  frozen lanes can be one write newer than the frozen activities. The order matches the plan cascade.
+- **Every existing baseline reads `NONE`, permanently**, and with swimlanes on its removed work is
+  counted, not drawn. A backfill to (`FULL`, `NONE`) would be true of them but buys nothing visible
+  (they have no lane copies) and was rejected (§13.5 of the design).
+- Correlation ids carry **no FK** (ADR-0025). The two CHECKs on the copies are the live table's,
+  verbatim. One `NULLS NOT DISTINCT` unique serves the freeze-once guarantee, the `baseline_id` FK
+  RESTRICT check and the load; without it the expiry's baselines delete was ~45× slower.
+
+**Indexes on `baseline_activity_swimlane_lanes`.**
+
+| Index                                                  | On                                     | Kind   | Serves                                                                                                                                                                                 |
+| ------------------------------------------------------ | -------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uq_baseline_activity_swimlane_lanes_basis`            | `(baseline_id, source_activity_id, …)` | unique | `(baseline_id, source_activity_id, basis, swimlane_id, summary_activity_id, wbs_level)` **`NULLS NOT DISTINCT`**: freeze-once per basis, the `baseline_id` FK RESTRICT check, the load |
+| `baseline_activity_swimlane_lanes_organization_id_idx` | `(organization_id)`                    | full   | `organization_id` FK (RESTRICT) + the export `org` read                                                                                                                                |
 
 ### PlanLock: the edit-lock lease
 

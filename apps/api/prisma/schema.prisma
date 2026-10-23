@@ -220,6 +220,11 @@ model Organization {
   swimlanes            Swimlane[]
   swimlaneLanes        ActivitySwimlaneLane[]
 
+  // Their frozen copies inside a baseline (swimlanes M1-T1b, schema-design §13); organization_id
+  // is denormalised from the parent baseline, like every baseline sibling's. Its own block, so the
+  // longer type does not realign the list above.
+  baselineLanes BaselineActivitySwimlaneLane[]
+
   @@map("organizations")
 }
 
@@ -731,6 +736,36 @@ enum SwimlaneLaneBasis {
   WBS_SUMMARY
   /// "No swimlane" while the source is WBS at wbs_level (wbs_level set)
   NO_WBS_SUMMARY
+}
+
+// WHAT A BASELINE FROZE OF THE SWIMLANES — the sixth amendment to ADR-0025's snapshot-copy model
+// (swimlanes M1-T1b, SQ-7 "yes", product owner 2026-10-22; docs/specs/swimlanes/schema-design.md
+// §13). The PlacementSnapshotLevel docblock above carries the general argument; this is its
+// swimlane instance.
+//
+//   NONE  nothing about swimlanes was recorded. The constant DEFAULT, and the literal truth of every
+//         baseline captured before this column existed. `baselines.swimlane_source` and
+//         `.swimlane_wbs_level` are NULL, `baseline_activities.swimlane_id` is NULL meaning
+//         UNKNOWN, and there are no `baseline_activity_swimlane_lanes` rows.
+//   FULL  the capture additionally recorded the plan's `swimlane_source` and `swimlane_wbs_level`,
+//         every captured activity's hand-made membership (`baseline_activities.swimlane_id`, NULL
+//         now meaning "No swimlane") and EVERY `activity_swimlane_lanes` row of every captured
+//         activity, copied into `baseline_activity_swimlane_lanes`.
+//
+// NO PER-ROW TEST AND NO ROW COUNT CAN ANSWER IT. `swimlane_id` is legitimately NULL under FULL
+// (No swimlane, and every activity of a plan whose source is NONE), and a FULL capture of a plan
+// nobody ever laid out writes zero lane rows. Nor can `swimlane_source IS NULL` stand in for it: the
+// source has its own `NONE`, and "recorded, swimlanes were off" and "not recorded" are two different
+// nothings a reader must not confuse. ck_baselines_swimlane_snapshot_shape binds the level to the two
+// frozen plan columns, so the three are one fact and cannot disagree.
+//
+// `NONE` IS PERMANENT for any baseline already captured: a capture cannot be re-run. The pairing
+// with the rows lives in the single capture transaction (a CHECK sees one row of one table). Read
+// it with an exhaustive switch so a third level is a compile error. MUST stay in lock-step with the
+// `SwimlaneSnapshotLevel` union in @repo/types.
+enum SwimlaneSnapshotLevel {
+  NONE
+  FULL
 }
 
 model Client {
@@ -2260,6 +2295,23 @@ model Baseline {
   /// NONE stays correct for every row in the meantime.
   placementSnapshotLevel PlacementSnapshotLevel @default(NONE) @map("placement_snapshot_level")
 
+  /// WHAT this baseline froze of the SWIMLANES (swimlanes M1-T1b) — see the SwimlaneSnapshotLevel
+  /// docblock. A capture-level fact like its three sibling levels, written unconditionally by the
+  /// capture path and then IMMUTABLE. Constant DEFAULT 'NONE' ⇒ metadata-only ADD COLUMN, and every
+  /// existing baseline reads as exactly what it is.
+  ///
+  /// `swimlaneSource` / `swimlaneWbsLevel` are the plan's `swimlane_source` / `swimlane_wbs_level`
+  /// AT CAPTURE, read under the capture's plan lock. They say what membership MEANT then: under
+  /// MANUAL the frozen `baseline_activities.swimlane_id`, under WBS the level-L ancestor in the
+  /// frozen parent tree. NULLABLE WITH NO DEFAULT: NULL iff the level is NONE.
+  /// ck_baselines_swimlane_snapshot_shape (raw SQL, fail-closed on BOTH discriminators) pins it:
+  /// NONE ⇒ both NULL; FULL ⇒ source NOT NULL and the level 1–3 iff the source is WBS — the live
+  /// ck_plans_swimlane_source_level verbatim, so a frozen copy cannot hold what its source refuses.
+  /// No index: read only with its own row, never filtered across baselines.
+  swimlaneSnapshotLevel SwimlaneSnapshotLevel @default(NONE) @map("swimlane_snapshot_level")
+  swimlaneSource        SwimlaneSource?       @map("swimlane_source")
+  swimlaneWbsLevel      Int?                  @map("swimlane_wbs_level") @db.SmallInt
+
   /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
   ///
   /// `baseline_activities.is_critical` and `.total_float` are the OUTPUT of a rule, not properties
@@ -2338,6 +2390,11 @@ model Baseline {
   // FULL-level one whose plan has no dependencies — read `revisionSnapshotLevel`, never this
   // list's length. The same sentence as `assignments` above, and for the same reason.
   dependencies BaselineDependency[]
+
+  // The frozen in-swimlane lanes (swimlanes M1-T1b). EMPTY on a NONE-level baseline AND on a
+  // FULL-level one whose plan nobody laid out in swimlanes — read `swimlaneSnapshotLevel`, never
+  // this list's length. The third time this sentence is written, for the third time for this reason.
+  swimlaneLanes BaselineActivitySwimlaneLane[]
 
   // Baseline name is unique per PLAN among ACTIVE rows — partial unique
   // (uq_baselines_plan_name ON (plan_id, name) WHERE deleted_at IS NULL), raw SQL in
@@ -2544,6 +2601,18 @@ model BaselineActivity {
   placedStart  DateTime? @map("placed_start") @db.Date
   placedFinish DateTime? @map("placed_finish") @db.Date
   visualStart  DateTime? @map("visual_start") @db.Date
+
+  /// THE FROZEN SWIMLANE MEMBERSHIP (swimlanes M1-T1b): `activities.swimlane_id` at capture, copied
+  /// whatever the plan's source was then (the live column is kept, and ignored, under WBS and NONE,
+  /// so it is a fact of the activity and not of the projection). A PLAIN CORRELATION UUID WITH NO
+  /// FOREIGN KEY — the `parentId` / `calendarId` rule above (ADR-0025). It may name a swimlane that
+  /// was soft-deleted at capture, exactly as the live column may.
+  ///
+  /// NULLABLE WITH NO DEFAULT, and the null is NOT a per-row sentinel: under a FULL
+  /// `baselines.swimlane_snapshot_level` NULL is "No swimlane", under NONE it is "unknown". Only the
+  /// level tells them apart. No CHECK (the live column has only its FK) and no index (read only with
+  /// its own row when a comparison loads a whole baseline). IMMUTABLE after capture.
+  swimlaneId String? @map("swimlane_id") @db.Uuid
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -2797,6 +2866,68 @@ model BaselineDependency {
   @@index([baselineId, sourceDependencyId])
   @@index([organizationId])
   @@map("baseline_dependencies")
+}
+
+/// A BaselineActivitySwimlaneLane — one `activity_swimlane_lanes` row, frozen inside a baseline
+/// (swimlanes M1-T1b, SQ-7 "yes"; the sixth amendment to ADR-0025; docs/specs/swimlanes/
+/// schema-design.md §13). It is what lets a ghost of REMOVED work be drawn in a swimlane: the live
+/// lane rows of a removed activity are gone with it at expiry, and ADR-0126 forbids guessing a lane.
+///
+/// WHY EVERY ROW, AND NOT ONE "EFFECTIVE" LANE ON baseline_activities. The live table keeps a lane
+/// per BASIS (schema-design §2); which basis is the effective one depends on the plan's source, the
+/// WBS level and the tree, i.e. on a RULE (`wbsBasisOf`). Freezing one lane would make the capture
+/// run that rule and record its answer, and a snapshot that computes anything records a rule rather
+/// than a fact (baseline.repository.ts, the copy-field-for-field comments). Copying the rows
+/// verbatim keeps the capture rule-free, and a ghost can be placed under whatever source the plan
+/// has TODAY, not only the one it had at capture.
+///
+/// A COPY, field for field, of the live row, plus `lane_updated_at` (the live row's `updated_at`,
+/// which is the projection's collision tie-break, schema-design §4 Q3 — so it is input, not
+/// housekeeping). `source_activity_id`, `swimlane_id` and `summary_activity_id` are PLAIN
+/// CORRELATION UUIDs, NO foreign keys (ADR-0025), in the live id spaces: `source_activity_id` and
+/// `summary_activity_id` name `activities.id`, as `baseline_activities.source_activity_id` and
+/// `.parent_id` do. Rows naming a swimlane or summary that was soft-deleted at capture are copied
+/// too: they are facts, and what a later restore returns to.
+///
+/// Departures from the baseline-sibling template, each deliberate (the ActivitySwimlaneLane /
+/// ActivityHistoryEntry precedent rather than BaselineActivity's):
+/// 1. No `version`, `updated_at`, `created_by` or `updated_by`: rows are immutable and no client
+///    writes one; the parent baseline's `created_by` records the capturer.
+/// 2. No `deleted_at` / `delete_batch_id`: a row lives exactly as long as its baseline. A baseline
+///    soft-delete leaves them, so restore needs nothing, and every read reaches them only through a
+///    live baseline. That removes the three cascade sites BaselineDependency's comments call easy
+///    to miss, and keeps the table out of the ADR-0172 gate's subject (it has no `deleted_at`).
+///
+/// Raw SQL (migration only; Prisma cannot express it): ck_baseline_activity_swimlane_lanes_basis_
+/// shape (the live fail-closed CASE verbatim), ck_baseline_activity_swimlane_lanes_lane_index_
+/// nonneg, and the NULLS NOT DISTINCT clause on the unique below. A frozen copy must not be able to
+/// hold a row its source would refuse, and these are exactly the live table's constraints.
+model BaselineActivitySwimlaneLane {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent baseline (never client input). RESTRICT.
+  organizationId    String            @map("organization_id") @db.Uuid
+  baselineId        String            @map("baseline_id") @db.Uuid
+  sourceActivityId  String            @map("source_activity_id") @db.Uuid
+  basis             SwimlaneLaneBasis
+  swimlaneId        String?           @map("swimlane_id") @db.Uuid
+  summaryActivityId String?           @map("summary_activity_id") @db.Uuid
+  wbsLevel          Int?              @map("wbs_level") @db.SmallInt
+  laneIndex         Int               @map("lane_index")
+  laneUpdatedAt     DateTime          @map("lane_updated_at") @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  baseline     Baseline     @relation(fields: [baselineId], references: [id], onDelete: Restrict)
+
+  // ONE index serves everything: the live table's one-row-per-basis guarantee, mirrored (so a
+  // capture bug that copied a row twice is refused rather than frozen as an ambiguity forever), the
+  // `baseline_id` FK RESTRICT check that expiry fires (leftmost prefix, FULL, no predicate — the
+  // BaselineDependency lesson) and the load-a-baseline's-lanes read. DECLARED as a plain unique so
+  // prisma:check-drift stays empty; the migration adds NULLS NOT DISTINCT (docs/DATABASE.md
+  // "Indexes", the rule for that clause). organization_id: its FK and the export `org` read.
+  @@unique([baselineId, sourceActivityId, basis, swimlaneId, summaryActivityId, wbsLevel], map: "uq_baseline_activity_swimlane_lanes_basis")
+  @@index([organizationId])
+  @@map("baseline_activity_swimlane_lanes")
 }
 
 // ---------------------------------------------------------------------------
