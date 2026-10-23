@@ -30,7 +30,7 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
   return {
     id: 'act-1',
     organizationId: 'org-1',
-    swimlaneId: null,
+    swimlaneId: 'lane-1',
     planId: 'plan-1',
     code: 'A100',
     name: 'Excavate',
@@ -110,6 +110,10 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
 
 /** Keys that must NEVER appear on a guest activity DTO (cost / audit / user / internal). */
 const FORBIDDEN_ACTIVITY_KEYS = [
+  // Swimlanes (swimlanes spec SQ-4): guest exposure is a later, separately reviewed change
+  // (M4-T3). Until it lands, the row carries `swimlaneId` and the guest DTO must not copy it.
+  'swimlaneId',
+  'swimlaneLanes',
   // CQ-4 of `docs/TECH_DEBT.md` #86: a guest adopts the CORRECTED `durationDays` and never learns
   // that a resource is why. The exact-key assertion below already enforces this structurally; both
   // are named here because every other CQ-4 exclusion is, and an exclusion nobody wrote down reads
@@ -470,6 +474,9 @@ describe('GuestPlanViewDto', () => {
     'deletedAt',
     'lockHolder',
     'lockedBy',
+    'swimlaneSource',
+    'swimlaneWbsLevel',
+    'swimlanes',
   ])('never exposes %s', (key) => {
     expect(dto).not.toHaveProperty(key);
   });

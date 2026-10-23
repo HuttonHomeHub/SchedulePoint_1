@@ -143,6 +143,14 @@ export type OrgPermission =
   | 'note:create'
   | 'note:update'
   | 'note:delete'
+  // Swimlanes — a plan's hand-made, labelled bands of lanes (swimlanes spec §2 Permissions).
+  // Reading is every member (`HIERARCHY_READ`); the writes are Planner + Org Admin (`HIERARCHY_WRITE`)
+  // and, unlike notes, structural: each also needs the plan edit-lock pen in the service.
+  | 'swimlane:read'
+  | 'swimlane:create'
+  | 'swimlane:update'
+  | 'swimlane:delete'
+  | 'swimlane:restore'
   // Schedule interchange — importing a foreign schedule file (P6 XER now; MSPDI later) as a new plan
   // (ADR-0050, C2). `interchange:import` is granted to **Planner + Org Admin only** — it creates a plan
   // plus its activities, logic and calendars (a hierarchy-write capability), so it follows the same
@@ -189,6 +197,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'baseline:read',
   'resource:read',
   'note:read',
+  'swimlane:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -230,6 +239,10 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'resource:delete',
   'resource:restore',
   'resource:assign',
+  'swimlane:create',
+  'swimlane:update',
+  'swimlane:delete',
+  'swimlane:restore',
 ];
 
 /**

@@ -19,7 +19,7 @@ import { HierarchyExpiryService } from '../src/common/hierarchy/hierarchy-expiry
 import { HierarchyLifecycleService } from '../src/common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearAuditEvents, clearDomainData } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
@@ -74,6 +74,9 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
   });
 
   afterAll(async () => {
+    // This file leaves a live plan's swimlane and its member behind; a sibling spec whose reset
+    // deletes plans directly would meet the swimlanes' RESTRICT foreign key.
+    await clearDomainData(prisma).catch(() => undefined);
     await app?.close();
   });
 

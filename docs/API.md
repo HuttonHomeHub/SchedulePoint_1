@@ -676,6 +676,32 @@ enough; anyone else is **403** (Org-Admin moderation of others' notes is out of
 v1). The response carries `authorId`, the server-resolved `authorName` (or null),
 and `edited` (true once the body has been revised).
 
+### Swimlanes (swimlanes spec §4.12)
+
+A **swimlane** is a labelled, contiguous band of lanes on a plan's diagram. This section covers the
+hand-made set; the plan's `swimlaneSource` and the activity fields arrive with later routes. Reading
+needs **`swimlane:read`** (every member); the writes need **`swimlane:create` / `update` / `delete` /
+`restore`** (**Planner and Org Admin**) and are **structural**: each also needs the plan edit-lock pen
+(**423**). A swimlane is plan content, so it is soft-deleted on its own, swept with its plan, and never
+listed in Recently deleted.
+
+| Method | Path                                            | Notes                                                                                                                                                                                        |
+| ------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/plans/:planId/swimlanes`                     | The plan's active swimlanes, `ORDER BY position, id`. Cursor-paginated; the default page is the 100-swimlane cap, so it is one page.                                                         |
+| POST   | `…/plans/:planId/swimlanes`                     | `{ name, after? }` → 201 · 409 `SWIMLANE_NAME_TAKEN` · 422 bad name or `SWIMLANE_LIMIT` · 404 `after` not an active swimlane of this plan.                                                   |
+| PATCH  | `…/plans/:planId/swimlanes/order`               | `{ order: [{ id, version }] }` naming every active swimlane once → 200 with the new order · 409 `STALE_VERSION` (stale version, or a short set) · 404 unknown or foreign id · 422 duplicate. |
+| PATCH  | `…/plans/:planId/swimlanes/:swimlaneId`         | Rename: `{ name, version }` → 200 · 409 `STALE_VERSION` or `SWIMLANE_NAME_TAKEN`.                                                                                                            |
+| DELETE | `…/plans/:planId/swimlanes/:swimlaneId`         | Soft delete → 204. Optional `?version=N` → 409 `STALE_VERSION`. Audited as `swimlane.deleted`.                                                                                               |
+| POST   | `…/plans/:planId/swimlanes/:swimlaneId/restore` | → 200 · 409 `PARENT_DELETED` (plan still deleted) or `SWIMLANE_NAME_TAKEN` · 422 `SWIMLANE_LIMIT`. Audited as `swimlane.restored`.                                                           |
+
+A **name** is trimmed, 1 to 80 characters, with no control characters, and unique among the plan's
+active swimlanes **ignoring case** (a soft-deleted name does not block reuse). At most **100** active
+swimlanes per plan, counted under the plan advisory lock. `organizationId` is never accepted: it is
+copied from the plan, and an unknown property is a 422. Anti-IDOR is uniform: another organisation's
+plan, another plan's swimlane, or a deleted one is a **404**, answered before 403 or 423. The 409
+message is fixed text and never echoes a stored name. Create, rename and reorder write no audit row
+(the row is durably attributed); delete and restore do (ADR-0073).
+
 ### Activity change history (ADR-0174)
 
 "Who changed this, and when?" for one activity's own fields, its **links** (recorded on both ends)

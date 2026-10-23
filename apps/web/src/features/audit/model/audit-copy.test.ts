@@ -34,6 +34,26 @@ describe('auditEventCopy', () => {
     }
   });
 
+  it('names the plan a swimlane was deleted from or restored to', () => {
+    const deleted = auditEventCopy(
+      event({
+        action: 'swimlane.deleted',
+        subjectType: 'SWIMLANE',
+        changes: { before: { name: 'Civil', planName: 'Tower' }, after: {} },
+      }),
+    );
+    expect(deleted.title).toBe('Swimlane deleted');
+    expect(deleted.detail).toBe('In Tower');
+    const restored = auditEventCopy(
+      event({
+        action: 'swimlane.restored',
+        subjectType: 'SWIMLANE',
+        changes: { before: {}, after: { name: 'Civil', planName: 'Tower' } },
+      }),
+    );
+    expect(restored.detail).toBe('In Tower');
+  });
+
   // A screen reader announces nothing at all for `→`, so a before/after pair read as one
   // undifferentiated phrase. The word carries the same meaning to every reader
   // (`docs/TECH_DEBT.md` #93e).

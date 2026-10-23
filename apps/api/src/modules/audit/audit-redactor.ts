@@ -149,6 +149,8 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   (ADR-0025), so the row that stopped being the standard is half the story.
   'baseline.activated': ['name', 'planName'],
   'baseline.deleted': ['name', 'planName', 'deleteBatchId'],
+  'swimlane.deleted': ['name', 'planName', 'deleteBatchId'],
+  'swimlane.restored': ['name', 'planName', 'deleteBatchId'],
   // — Library governance (ADR-0073 family F). `scope` is on the delete because a shared-library
   //   calendar going away is a different event from a project one, and the row is the only place
   //   that distinction survives the deletion.
