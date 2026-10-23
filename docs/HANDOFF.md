@@ -135,10 +135,11 @@ owner returns to one, the steps are ready:
   #509 is the off-site copy: today's copies live on the same disk as the database).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
-- **New this session, no row yet:** CI's **web shard 1 hung on "Install Playwright browsers"** three
-  times running (#1109, #1110, #1111, 2026-10-22 22:09–00:24 UTC), each cancelled at 30 minutes
-  before any test body ran, each re-run passing in ~16 minutes. Not the fifth-shard trigger (no test
-  was slow). If it recurs, it is worth a row: a timeout on that step, or caching the browsers.
+- **New this session, no row yet:** a CI web shard **hung on "Install Playwright browsers"** on
+  four PRs running (shard 1 on #1109, #1110 and #1111; shard 4 on #1112; 2026-10-22 22:09 to
+  2026-10-23 01:21 UTC), each cancelled at 30 minutes before any test body ran; every re-run passed
+  in ~16 minutes. Not the fifth-shard trigger (no test was slow). Worth a row if it continues: a
+  step timeout with one retry, or caching the browsers.
 
 ## Suggested next
 
