@@ -39,6 +39,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
   return {
     id: PLAN_ID,
     organizationId: ORG_ID,
+    swimlaneSource: 'NONE',
+    swimlaneWbsLevel: null,
     projectId: 'project-1',
     name: 'Baseline',
     description: null,
@@ -80,6 +82,7 @@ function activity(overrides: Partial<Activity> = {}): Activity {
   return {
     id: ACTIVITY_ID,
     organizationId: ORG_ID,
+    swimlaneId: null,
     planId: PLAN_ID,
     code: null,
     name: 'Excavate',

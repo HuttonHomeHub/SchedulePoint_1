@@ -30,6 +30,7 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
   return {
     id: 'act-1',
     organizationId: 'org-1',
+    swimlaneId: null,
     planId: 'plan-1',
     code: 'A100',
     name: 'Excavate',

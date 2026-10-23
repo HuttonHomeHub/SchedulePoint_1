@@ -27,6 +27,8 @@ const PLAN_ID = 'plan-1';
 const plan = (overrides: Partial<Plan> = {}): Plan => ({
   id: PLAN_ID,
   organizationId: ORG_ID,
+  swimlaneSource: 'NONE',
+  swimlaneWbsLevel: null,
   projectId: 'project-1',
   name: 'Levelled',
   description: null,

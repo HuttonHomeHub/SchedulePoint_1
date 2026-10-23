@@ -43,6 +43,8 @@ export interface ActivityPatch {
   /** WBS parent (ADR-0038, M5-epic); a WBS_SUMMARY in the same plan, or null for top-level. */
   parentId?: string | null;
   laneIndex?: number;
+  /** Hand-made swimlane membership (swimlanes spec §4.6); null is "No swimlane". Same plan by composite FK. */
+  swimlaneId?: string | null;
   /** As-Late-As-Possible placement preference (ADR-0035 §11): display-only, never the pure passes. */
   scheduleAsLateAsPossible?: boolean;
   /** Visual-Planning placement (ADR-0033): hand-placed start, or null to clear it. */

@@ -65,6 +65,9 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   await prisma.activityStep.deleteMany();
   await prisma.resourceAssignment.deleteMany();
   await clearActivityTree(prisma);
+  // Swimlanes are RESTRICT-referenced by `activities.swimlane_id` (and by their lane rows, which
+  // `clearActivityTree` has already removed), so they go after the activities and before the plan.
+  await prisma.swimlane.deleteMany();
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.
   await clearBaselineTree(prisma);

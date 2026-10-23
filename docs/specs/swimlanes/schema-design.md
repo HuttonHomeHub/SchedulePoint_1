@@ -7,6 +7,14 @@
   behavioural claim marked **(probed)** was run against a scratch database on the local
   PostgreSQL 16.15 (`C.UTF-8`, libc provider) and Prisma 6.19.3; the database was dropped after.
 - **Implements:** plan task M1-T1 (`./implementation-plan.md`, "Feature: schema").
+- **Amended 2026-10-23 at landing** (migration `20261023120000_swimlanes`, whose header carries
+  the measurements), by the database-architect agent, approved by the coordinator:
+  1. §3.2 and §3.5: the level branches of both CHECKs gain `IS NOT NULL AND`. As first written they
+     admitted a NULL level (probed: `UPDATE 1`), against their own stated invariant.
+  2. §3.3: without `idx_activities_swimlane_id_fk` the RESTRICT check does not scan the table; it
+     falls back to the plan composite. The index still pays 3.5–5× and stays.
+  3. §3.4: the Organization back-relation to `ActivitySwimlaneLane` is `swimlaneLanes`.
+  4. §4 Q6: `LANE_ROWS_PER_ACTIVITY = 2`, with its measurement.
 
 ---
 
@@ -107,12 +115,15 @@ transaction is legal; only `ALTER TYPE … ADD VALUE` plus use is not. That is t
   CHECK (CASE swimlane_source
            WHEN 'NONE'   THEN swimlane_wbs_level IS NULL
            WHEN 'MANUAL' THEN swimlane_wbs_level IS NULL
-           WHEN 'WBS'    THEN swimlane_wbs_level BETWEEN 1 AND 3
+           WHEN 'WBS'    THEN swimlane_wbs_level IS NOT NULL
+                              AND swimlane_wbs_level BETWEEN 1 AND 3
            ELSE false END)
   ```
 
   This is spec §2 Validation verbatim ("Required when the source is `WBS` and absent
-  otherwise"). A fourth source added later is rejected until it gets a branch.
+  otherwise"). A fourth source added later is rejected until it gets a branch. The `IS NOT NULL`
+  is load-bearing: `NULL BETWEEN 1 AND 3` is NULL and a CHECK admits NULL, so without it
+  `('WBS', NULL)` passes (the amendment note at the top).
 
 - No index. The columns are read with their own plan row and never filtered across plans (the
   `scheduleComputedAt` precedent, `schema.prisma:910-921`).
@@ -154,11 +165,13 @@ Today's single-column FKs cannot do that; the schema says so itself for `calenda
 - **Index: `idx_activities_swimlane_id_fk (swimlane_id) WHERE swimlane_id IS NOT NULL`**, raw SQL
   and not declared (TECH_DEBT #54). It exists **only** to back the RESTRICT check that runs when
   expiry hard-deletes swimlane rows. The check's generated query is `plan_id = $1 AND
-swimlane_id = $2`, which implies the predicate. Without the index, each deleted swimlane scans
-  the whole `activities` table, which is the class measured at 3 m 47 s for `activity_steps`
-  (`schema.prisma:3594-3605`). It is partial, so only assigned activities are in it. There is
-  no other query: membership is read with the plan-scoped activity load (spec §4.11 Q4).
-  **Measure before landing** (§8.3).
+swimlane_id = $2`, which implies the predicate. Without the index the check does **not** scan
+  the table, as this said before landing (the amendment note at the top): the key contains `plan_id`, so it falls back to
+  `activities_plan_id_created_at_id_idx` and walks the plan's just-deleted entries (EXPLAIN
+  ANALYZE, generic plan). Measured: 100 swimlanes of a 2,000-activity plan delete in 33–48 ms
+  without the index against 9.2 ms with it, 3.5–5×, so the index stays. It is partial, so only
+  assigned activities are in it. There is no other query: membership is read with the
+  plan-scoped activity load (spec §4.11 Q4).
 - `ACTIVITY_FIELD_CLASS`: `swimlaneId: 'NOT_INPUT'`. It is absent from `ENGINE_ACTIVITY_SELECT`.
 
 ### 3.4 `swimlanes` (new)
@@ -204,12 +217,13 @@ model Swimlane {
 }
 ```
 
-`Plan` gains `swimlanes Swimlane[]`, `Organization` gains its back-relation, and `Activity` gains
+`Plan` gains `swimlanes Swimlane[]`, `Organization` gains `swimlanes` and `swimlaneLanes` (the
+latter so named that `prisma format` does not realign the whole block), and `Activity` gains
 `swimlaneLanes` plus a second, named back-relation (`summaryLanes`) for `summary_activity_id`.
 
 **Constraints (raw SQL):**
 
-- `ck_swimlanes_name_shape`: `char_length(name) BETWEEN 1 AND 80 AND name = btrim(name) AND name
+- `ck_swimlanes_name_shape`: `char_length(name) >= 1 AND char_length(name) <= 80 AND name = btrim(name) AND name
 !~ '[[:cntrl:]]'`. This backstops spec §2's validation in the database. The DTO trims first,
   so the CHECK guards rather than rejects ordinary input (the `ck_notes_body_length` shape). It
   matters because XER import (spec §4.8) writes names from hostile files.
@@ -282,7 +296,7 @@ CHECK (CASE basis
   WHEN 'WBS_SUMMARY'    THEN swimlane_id IS NULL AND summary_activity_id IS NOT NULL
                              AND wbs_level IS NULL
   WHEN 'NO_WBS_SUMMARY' THEN swimlane_id IS NULL AND summary_activity_id IS NULL
-                             AND wbs_level BETWEEN 1 AND 3
+                             AND wbs_level IS NOT NULL AND wbs_level BETWEEN 1 AND 3
   ELSE false END)
 ```
 
@@ -434,7 +448,9 @@ lanes table, not on `activities`.
 - **The run budget should count lane rows.** `budgetCharge` charges activities plus history rows
   (`hierarchy-expiry.service.ts:38-43`). Lane rows are unbounded in principle (§3.5 Bound), so
   `ExpiryCounts` gains `activitySwimlaneLanes` and the charge gains `ceil(n /
-LANE_ROWS_PER_ACTIVITY)`. The constant's value is measured in M1 (§8.3) and not chosen here.
+LANE_ROWS_PER_ACTIVITY)`. **`LANE_ROWS_PER_ACTIVITY = 2`**, measured at landing: a lane row
+  costs 10.9–11.9 µs against a history row's 5.6–6.4 µs (1.7–2.1×), so scaling the calibrated
+  `HISTORY_ROWS_PER_ACTIVITY = 5` gives 2.4–2.9, and the lower, safe reading is taken.
   Swimlane rows (at most about 100 live per plan, plus deleted ones) are not charged.
 
 **Q7. Baselines.** Not in this epic, and leaving it out makes adding it later **no harder to

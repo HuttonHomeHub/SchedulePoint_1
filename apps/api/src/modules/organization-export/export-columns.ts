@@ -84,7 +84,7 @@ const ACCOUNT_STATE =
 const AUDIT_NETWORK =
   'Never shown on the Audit log screen (ADR-0072): a colleague’s address and browser are a privacy cost with no matching benefit.';
 
-/** The 28 files, in the order the ZIP lists them. */
+/** The 30 files, in the order the ZIP lists them. */
 export const EXPORT_FILES: readonly ExportFile[] = [
   {
     model: 'User',
@@ -248,6 +248,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'createdBy:text',
       'updatedBy:text',
       'deletedAt:instant',
+      // 2.1 — appended (swimlanes), by position like `derivedDurationMinutes` below.
+      'swimlaneSource:enum',
+      'swimlaneWbsLevel:int',
     ),
     withheld: {
       version: VERSION,
@@ -326,6 +329,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       // 1.1 — appended, not placed beside the other computed columns: a reader taking columns by
       // position keeps working within a major (docs/ORGANISATION_EXPORT_FORMAT.md "Versioning").
       'derivedDurationMinutes:int',
+      // 2.1 — appended (swimlanes): the hand-made swimlane the activity belongs to, if any.
+      'swimlaneId:text',
     ),
     withheld: {
       version: VERSION,
@@ -820,6 +825,50 @@ export const EXPORT_FILES: readonly ExportFile[] = [
     },
   },
   {
+    model: 'Swimlane',
+    table: 'swimlanes',
+    file: 'swimlanes',
+    stability: 'promised',
+    read: 'org',
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'planId:text',
+      'name:text',
+      'position:int',
+      'createdAt:instant',
+      'updatedAt:instant',
+      'createdBy:text',
+      'updatedBy:text',
+      'deletedAt:instant',
+    ),
+    withheld: {
+      version: VERSION,
+      deleteBatchId: DELETE_BATCH,
+    },
+  },
+  {
+    model: 'ActivitySwimlaneLane',
+    table: 'activity_swimlane_lanes',
+    file: 'activity-swimlane-lanes',
+    stability: 'promised',
+    read: 'org',
+    // The planner's layout, exported as `activities.laneIndex` is. Nothing is withheld.
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'activityId:text',
+      'basis:enum',
+      'swimlaneId:text',
+      'summaryActivityId:text',
+      'wbsLevel:int',
+      'laneIndex:int',
+      'createdAt:instant',
+      'updatedAt:instant',
+    ),
+    withheld: {},
+  },
+  {
     model: 'AuditEvent',
     table: 'audit_events',
     file: 'audit-events',
@@ -896,7 +945,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '2.0';
+export const EXPORT_FORMAT_VERSION = '2.1';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';

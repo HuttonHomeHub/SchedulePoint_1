@@ -143,7 +143,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
   }
 
   /**
-   * An organisation with a row in every one of the 28 exported tables, and a second organisation
+   * An organisation with a row in every one of the 30 exported tables, and a second organisation
    * beside it whose every name carries a marker the export must never contain.
    */
   async function seedFixture(): Promise<Fixture> {
@@ -325,6 +325,35 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       data: { costPerUnit: new Prisma.Decimal(MAX_DECIMAL) },
     });
     await prisma.activity.update({ where: { id: c.id }, data: { budgetedExpense: BIG_COST } });
+
+    // — Swimlanes: no route writes them yet (the routes come later), so they are written directly.
+    // One live swimlane with a member and a lane row, and one soft-deleted, so `deletedAt` is read.
+    const swimlane = await prisma.swimlane.create({
+      data: { organizationId, planId: chain.planId, name: 'ACME-SWIMLANE', position: 0 },
+    });
+    await prisma.swimlane.create({
+      data: {
+        organizationId,
+        planId: chain.planId,
+        name: 'ACME-DELETED-SWIMLANE',
+        position: 1,
+        deletedAt: new Date('2026-10-01T00:00:00.000Z'),
+      },
+    });
+    await prisma.activity.update({ where: { id: a.id }, data: { swimlaneId: swimlane.id } });
+    await prisma.activitySwimlaneLane.create({
+      data: {
+        organizationId,
+        activityId: a.id,
+        basis: 'SWIMLANE',
+        swimlaneId: swimlane.id,
+        laneIndex: 2,
+      },
+    });
+    await prisma.plan.update({
+      where: { id: chain.planId },
+      data: { swimlaneSource: 'WBS', swimlaneWbsLevel: 2 },
+    });
 
     // — The three records written by one-off migrations (no route makes them). ---------------------
     await prisma.placementMigration.create({
@@ -541,6 +570,8 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       'activity-steps': await prisma.activityStep.count({ where }),
       'activity-history': await prisma.activityHistoryEntry.count({ where }),
       notes: await prisma.note.count({ where }),
+      swimlanes: await prisma.swimlane.count({ where }),
+      'activity-swimlane-lanes': await prisma.activitySwimlaneLane.count({ where }),
       'audit-events': await prisma.auditEvent.count({ where }),
     };
     const { files } = await exportOf(admin);
@@ -788,7 +819,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(row.changes).toEqual({
       before: {},
       after: {
-        formatVersion: '2.0',
+        formatVersion: '2.1',
         files: EXPORT_FILES.length * 2,
         rows: manifest.files.filter((f) => f.kind === 'json').reduce((n, f) => n + f.rows, 0),
         bytes: raw.length,
@@ -844,7 +875,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(rows[0]).toMatchObject({ outcome: 'FAILURE', actorUserId: admin.userId });
     expect((rows[0]!.changes as { after: Json }).after).toMatchObject({
       reason: 'client_aborted',
-      formatVersion: '2.0',
+      formatVersion: '2.1',
     });
 
     // The snapshot and its lock ended with the connection: the next export goes through.

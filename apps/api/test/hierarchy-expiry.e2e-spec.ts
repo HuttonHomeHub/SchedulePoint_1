@@ -92,6 +92,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();
     await clearActivityTree(prisma);
+    await prisma.swimlane.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.resource.deleteMany();
     await prisma.calendarException.deleteMany();
@@ -227,6 +228,35 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.planShare.create({
       data: { organizationId: orgId, planId, tokenHash: 'a'.repeat(64), label: 'QS' },
     });
+    // Swimlanes: `activities.swimlane_id` and the lane rows are RESTRICT, so the runner must delete
+    // lanes first, then activities, then swimlanes (a deleted one included), then the plan. Three
+    // lane rows over the two bases a member can hold, one of them naming a WBS summary.
+    const summaryId = await createActivity(orgId, planId, 'Summary');
+    const swimlane = await prisma.swimlane.create({
+      data: { organizationId: orgId, planId, name: 'Groundworks', position: 0 },
+      select: { id: true },
+    });
+    await prisma.swimlane.create({
+      data: {
+        organizationId: orgId,
+        planId,
+        name: 'Removed',
+        position: 1,
+        deletedAt: new Date('2026-02-01T10:00:00.000Z'),
+      },
+    });
+    await prisma.activity.update({ where: { id: activityId }, data: { swimlaneId: swimlane.id } });
+    await prisma.activitySwimlaneLane.createMany({
+      data: [
+        { basis: 'SWIMLANE' as const, swimlaneId: swimlane.id, laneIndex: 1 },
+        { basis: 'NO_SWIMLANE' as const, laneIndex: 0 },
+        { basis: 'WBS_SUMMARY' as const, summaryActivityId: summaryId, laneIndex: 2 },
+      ].map((lane) => ({ organizationId: orgId, activityId, ...lane })),
+    });
+    // The live plan keeps its own swimlane: an expiry reaches only what its scope owns.
+    await prisma.swimlane.create({
+      data: { organizationId: orgId, planId: otherPlanId, name: 'Live lane', position: 0 },
+    });
 
     await actor.agent.delete(`/api/v1/organizations/acme/clients/${clientId}`).expect(204);
 
@@ -238,9 +268,14 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       clients: 1,
       projects: 1,
       plans: 1,
-      activities: 1,
+      activities: 2,
       activityHistoryEntries: 2,
+      activitySwimlaneLanes: 3,
     });
+    expect(await prisma.activitySwimlaneLane.count()).toBe(0);
+    expect(await prisma.swimlane.findMany({ select: { name: true } })).toEqual([
+      { name: 'Live lane' },
+    ]);
     expect(await prisma.activityHistoryEntry.count()).toBe(0);
     expect(await prisma.client.findUnique({ where: { id: clientId } })).toBeNull();
     expect(await prisma.plan.findUnique({ where: { id: planId } })).toBeNull();

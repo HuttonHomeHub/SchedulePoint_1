@@ -1332,7 +1332,12 @@ export class InterchangeService {
       // History is RESTRICT into activities (ADR-0174 D8). An import records none, so this is a
       // no-op today; it is named so the day an import path records, the rollback does not 23503.
       await tx.activityHistoryEntry.deleteMany({ where: { activity: { planId } } });
+      // Swimlane rows are RESTRICT into activities and swimlanes; no import writes either yet, and
+      // they are named for the same reason as history. Lanes before activities, swimlanes after
+      // them (activities.swimlane_id is RESTRICT) and before the plan.
+      await tx.activitySwimlaneLane.deleteMany({ where: { activity: { planId } } });
       await tx.activity.deleteMany({ where: { planId } });
+      await tx.swimlane.deleteMany({ where: { planId } });
       // The pen we took for the recalc is released best-effort before this runs; clear any residual
       // lock row too so the plan delete can't FK-fail on plan_lock.
       await tx.planLock.deleteMany({ where: { planId } });

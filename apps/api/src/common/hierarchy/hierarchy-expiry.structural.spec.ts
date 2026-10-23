@@ -100,6 +100,7 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'resourceAssignment',
       'activityStep',
       'activityHistoryEntry',
+      'activitySwimlaneLane',
       'note',
       'baselineAssignment',
       'baselineDependency',
@@ -107,6 +108,7 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'baseline',
       'planShare',
       'activity',
+      'swimlane',
       'plan',
       'calendarException',
       'calendar',
@@ -195,6 +197,9 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
     expect(required).toContain('BaselineActivity→Baseline');
     expect(required).toContain('Baseline→Plan');
     expect(required).toContain('Activity→Plan');
+    expect(required).toContain('Swimlane→Plan');
+    expect(required).toContain('Activity→Swimlane');
+    expect(required).toContain('ActivitySwimlaneLane→Activity');
 
     expect(
       missing,

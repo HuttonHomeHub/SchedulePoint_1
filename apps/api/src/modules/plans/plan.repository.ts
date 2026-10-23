@@ -6,6 +6,7 @@ import {
   type Plan,
   type PlanStatus,
   type ProgressRecalcMode,
+  type SwimlaneSource,
   type TotalFloatMode,
 } from '@prisma/client';
 
@@ -42,6 +43,10 @@ export interface PlanPatch {
   plannedStart?: Date;
   /** The plan's default calendar id, or null to clear it (validated in the service). */
   calendarId?: string | null;
+  /** Where the plan's swimlanes come from (swimlanes spec §4.6); a presentation field, never an input. */
+  swimlaneSource?: SwimlaneSource;
+  /** WBS level 1 to 3 when the source is WBS, null otherwise (`ck_plans_swimlane_source_level`). */
+  swimlaneWbsLevel?: number | null;
 }
 
 /**
