@@ -9250,3 +9250,19 @@ The early dates suggest a milestone's instant is re-snapped to its own calendar 
 **Workaround in use:** link the off-calendar work directly to its weekday successors, and hang the milestone off it with a later successor (for example planned MC), so the milestone's late date never constrains the weekend work.
 
 **Next:** turn the fixture into a failing case in `compute.activity-calendar.spec.ts`, then decide the rule (a zero-duration activity keeps its driving predecessor's finish instant; its calendar only decides the date shown). That changes the engine's semantics, so it needs a spec, the ADR-0035 golden contract amended and the conformance matrix re-run (ADR-0034). **Trigger:** none, open now. Weekend and shift shutdowns are routine in the plans this product is for.
+
+### 544. A project-calendar restore racing a delete of its project fails now and then under CPU load
+
+**Status:** open · **Verified:** 2026-10-23, by running `apps/api/test/hierarchy-parent-lock-race.e2e-spec.ts` alone more than 50 times (all passed) and then beside four CPU busy-loop processes (one failure) · **Raised:** 2026-10-23 (swimlanes M1-T1, a full local API e2e run) · **Size:** S · **Owner:** api
+
+The case "a project-calendar restore against a delete of its project ends with both deleted" (`hierarchy-parent-lock-race.e2e-spec.ts`, near line 266) failed once in a full local run with `expected 'rejected' to be 'fulfilled'`: the restore was refused with a 404 instead of finishing before or after the delete. It is not caused by the swimlanes work: the code it exercises is unchanged on `main`, and every CI run since has passed it. The likely cause is the test's timing assumption about which side takes the project's row lock first, which a busy machine can reverse, but that has not been proved.
+
+**Next:** read the restore's lock order against the delete's, and either make the test accept both orders when the end state is "both deleted", or fix the restore if a 404 there is wrong. **Trigger:** the next time it fails, on CI or in a local full run.
+
+### 545. `scripts/e2e-local.sh api backup` refuses its own backup check
+
+**Status:** open · **Verified:** 2026-10-23, by reading `scripts/e2e-local.sh` (the run lock is a `coproc` `psql` connected to `app_test` for the whole run) and `scripts/backup-restore-check.sh` (step 0 exits when any other client session is connected to the source database) · **Raised:** 2026-10-23 (swimlanes M1-T1 schema checks) · **Size:** S · **Owner:** repo
+
+Since #349 (`e2e-local.sh` holds `pg_try_advisory_lock(349)` in a session that stays connected to the database it guards), the `backup` target cannot pass: `backup-restore-check.sh` finds that session and stops with "Something else is connected to app_test (1 sessions); the comparison needs a quiet database." Running `pnpm --filter @repo/api test:e2e:backup-fixture` and then `scripts/backup-restore-check.sh` directly works, and CI's `image` job runs the check on its own, so nothing that ships is affected.
+
+**Next:** have the run lock connect to the `postgres` database with a key derived from the guarded database's name, or let the check ignore the session whose `application_name` starts `e2e-local[`. **Trigger:** none, open now; it is a two-line fix the next time someone works on the script.
