@@ -63,6 +63,9 @@ describe.skipIf(!hasDatabase)('Swimlane placement (e2e, pen enforced)', () => {
   });
 
   afterAll(async () => {
+    // Leave no swimlane behind: a sibling spec whose reset deletes plans directly would meet the
+    // swimlanes' RESTRICT foreign key.
+    await clearDomainData(prisma).catch(() => undefined);
     await app?.close();
     if (priorEnforced === undefined) delete process.env.PLAN_EDIT_LOCK_ENFORCED;
     else process.env.PLAN_EDIT_LOCK_ENFORCED = priorEnforced;
