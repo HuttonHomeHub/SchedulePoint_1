@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  frozenGhostSwimlanes,
   frozenRevisionSide,
   liveRevisionSide,
   revisionDatesBasis,
@@ -34,6 +35,7 @@ const frozen: FrozenRevisionRowInput = {
   percentComplete: null,
   actualStart: null,
   actualFinish: null,
+  swimlaneId: null,
 };
 
 const live: LiveRevisionRowInput = {
@@ -86,5 +88,44 @@ describe('the revision projections read the dates of the basis they are given', 
     const [l] = liveRevisionSide([live], 'NETWORK');
     expect([f!.earlyStart, f!.earlyFinish]).toEqual(['2026-01-05', '2026-01-09']);
     expect([l!.earlyStart, l!.earlyFinish]).toEqual(['2026-01-05', '2026-01-09']);
+  });
+});
+
+describe('frozenGhostSwimlanes', () => {
+  const lane = {
+    sourceActivityId: 'a',
+    basis: 'SWIMLANE' as const,
+    swimlaneId: 'lane-1',
+    summaryActivityId: null,
+    wbsLevel: null,
+    laneIndex: 4,
+    laneUpdatedAt: new Date('2026-01-05T10:00:00.000Z'),
+  };
+
+  it('is null for a NONE baseline, whose null swimlaneId means "unknown" and must not be read', () => {
+    expect(frozenGhostSwimlanes('NONE', [{ ...frozen, swimlaneId: null }], [lane])).toBeNull();
+  });
+
+  it('carries every lane row of an activity on a FULL baseline, choosing none', () => {
+    const second = { ...lane, basis: 'NO_SWIMLANE' as const, swimlaneId: null, laneIndex: 0 };
+    const facts = frozenGhostSwimlanes(
+      'FULL',
+      [{ ...frozen, swimlaneId: 'lane-1' }],
+      [lane, second],
+    );
+    expect(facts?.get('a')).toEqual({
+      swimlaneId: 'lane-1',
+      lanes: [
+        expect.objectContaining({ basis: 'SWIMLANE', laneIndex: 4 }),
+        expect.objectContaining({ basis: 'NO_SWIMLANE', laneIndex: 0 }),
+      ],
+    });
+    expect(facts?.get('a')?.lanes[0]?.laneUpdatedAt).toBe('2026-01-05T10:00:00.000Z');
+  });
+
+  it('gives an activity that froze no lane row an empty list, not an absent entry', () => {
+    // "Recorded nothing for this activity" must stay distinct from "the baseline recorded none".
+    const facts = frozenGhostSwimlanes('FULL', [frozen], []);
+    expect(facts?.get('a')).toEqual({ swimlaneId: null, lanes: [] });
   });
 });

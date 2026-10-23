@@ -401,7 +401,10 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
       .post(baselinesUrl(planId))
       .send({ name: 'Contract Baseline' })
       .expect(201);
-    expect(created.body.data).toMatchObject({ placementSnapshotLevel: 'FULL' });
+    expect(created.body.data).toMatchObject({
+      placementSnapshotLevel: 'FULL',
+      swimlaneSnapshotLevel: 'FULL',
+    });
     const baselineId = created.body.data.id as string;
 
     const detail = await actor.agent.get(`${baselinesUrl(planId)}/${baselineId}`).expect(200);
@@ -413,6 +416,84 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
       placedFinish: '2026-01-08',
       visualStart: '2026-01-06', // the planner's own input, distinct from the engine's output
     });
+  });
+
+  // Swimlanes M1-T1b. No swimlane route exists yet, so the live rows are written directly; the
+  // capture is what is under test. The discriminating parts are the TWO bases on one activity (the
+  // capture copies both and chooses neither) and the live edit afterwards, which must not reach the
+  // frozen copy.
+  it('freezes the swimlanes: FULL level, the plan’s source, the swimlane id and every lane row (M1-T1b)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 3);
+    const b = await makeActivity(actor, planId, 'B', 2);
+    await recalc(actor, planId);
+    const swimlane = await prisma.swimlane.create({
+      data: { organizationId: orgId, planId, name: 'Groundworks', position: 0 },
+    });
+    await prisma.activity.update({ where: { id: a }, data: { swimlaneId: swimlane.id } });
+    await prisma.activitySwimlaneLane.createMany({
+      data: [
+        { basis: 'SWIMLANE' as const, swimlaneId: swimlane.id, laneIndex: 3 },
+        { basis: 'NO_WBS_SUMMARY' as const, wbsLevel: 2, laneIndex: 1 },
+      ].map((lane) => ({ organizationId: orgId, activityId: a, ...lane })),
+    });
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { swimlaneSource: 'WBS', swimlaneWbsLevel: 2 },
+    });
+
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract Baseline' })
+      .expect(201);
+    expect(created.body.data).toMatchObject({ swimlaneSnapshotLevel: 'FULL' });
+    const baselineId = created.body.data.id as string;
+
+    const row = await prisma.baseline.findUniqueOrThrow({ where: { id: baselineId } });
+    expect(row).toMatchObject({
+      swimlaneSnapshotLevel: 'FULL',
+      swimlaneSource: 'WBS',
+      swimlaneWbsLevel: 2,
+    });
+    const snaps = await prisma.baselineActivity.findMany({ where: { baselineId } });
+    expect(snaps.find((r) => r.sourceActivityId === a)?.swimlaneId).toBe(swimlane.id);
+    expect(snaps.find((r) => r.sourceActivityId === b)?.swimlaneId).toBeNull();
+    const lanes = await prisma.baselineActivitySwimlaneLane.findMany({
+      where: { baselineId },
+      orderBy: { laneIndex: 'asc' },
+    });
+    expect(lanes.map((l) => [l.sourceActivityId, l.basis, l.laneIndex, l.wbsLevel])).toEqual([
+      [a, 'NO_WBS_SUMMARY', 1, 2],
+      [a, 'SWIMLANE', 3, null],
+    ]);
+
+    // A live edit afterwards must not reach the frozen copy: it is a copy, not a reference.
+    await prisma.activitySwimlaneLane.updateMany({
+      where: { activityId: a },
+      data: { laneIndex: 9 },
+    });
+    expect(
+      (await prisma.baselineActivitySwimlaneLane.findMany({ where: { baselineId } }))
+        .map((l) => l.laneIndex)
+        .sort(),
+    ).toEqual([1, 3]);
+  });
+
+  it('freezes FULL with no lane rows for a plan nobody laid out (M1-T1b)', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract Baseline' })
+      .expect(201);
+    // The level, not the row count, says the empty copy is complete.
+    expect(created.body.data).toMatchObject({ swimlaneSnapshotLevel: 'FULL' });
+    expect(
+      await prisma.baselineActivitySwimlaneLane.count({
+        where: { baselineId: created.body.data.id as string },
+      }),
+    ).toBe(0);
   });
 
   it('activates only the first baseline; later captures are inactive', async () => {

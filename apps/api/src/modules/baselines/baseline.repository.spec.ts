@@ -98,3 +98,148 @@ describe('BaselineRepository activity counts', () => {
     expect(groupBy).not.toHaveBeenCalled();
   });
 });
+
+describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
+  const lane = {
+    activityId: 'act-1',
+    basis: 'SWIMLANE' as const,
+    swimlaneId: 'lane-1',
+    summaryActivityId: null,
+    wbsLevel: null,
+    laneIndex: 2,
+    laneUpdatedAt: new Date('2026-01-05T10:00:00Z'),
+  };
+  const activity = {
+    id: 'act-1',
+    code: null,
+    name: 'A',
+    type: 'TASK' as const,
+    durationMinutes: 480,
+    earlyStart: null,
+    earlyFinish: null,
+    lateStart: null,
+    lateFinish: null,
+    totalFloat: null,
+    isCritical: false,
+    budgetedCost: 0,
+    budgetedExpense: 0,
+    assignments: [],
+    laneIndex: 0,
+    parentId: null,
+    calendarId: null,
+    constraintType: null,
+    constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
+    percentComplete: 0,
+    actualStart: null,
+    actualFinish: null,
+    placedStart: null,
+    placedFinish: null,
+    visualStart: null,
+    swimlaneId: 'lane-1',
+  };
+
+  function tx() {
+    return {
+      baseline: { create: vi.fn().mockResolvedValue({ id: 'bl-1' }) },
+      baselineActivity: { createMany: vi.fn() },
+      baselineAssignment: { createMany: vi.fn() },
+      baselineDependency: { createMany: vi.fn() },
+      baselineActivitySwimlaneLane: { createMany: vi.fn() },
+    };
+  }
+  const input = (over: object = {}) => ({
+    organizationId: 'org',
+    planId: 'plan',
+    name: 'B',
+    isActive: true,
+    dataDate: null,
+    capturedProjectFinish: null,
+    hoursPerDayMinutes: 1440,
+    criticalityRule: null,
+    actorId: 'user',
+    activities: [activity],
+    dependencies: [],
+    swimlane: { source: 'WBS' as const, wbsLevel: 2 },
+    lanes: [lane],
+    ...over,
+  });
+
+  it('writes the FULL level, the frozen source and level, the swimlane id and a lane copy', async () => {
+    const db = tx();
+    const repository = new BaselineRepository({} as PrismaService);
+    await repository.createWithSnapshot(input(), db as never);
+
+    expect(db.baseline.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        swimlaneSnapshotLevel: 'FULL',
+        swimlaneSource: 'WBS',
+        swimlaneWbsLevel: 2,
+      }),
+    });
+    expect(db.baselineActivity.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ sourceActivityId: 'act-1', swimlaneId: 'lane-1' })],
+    });
+    // `updated_at` becomes `lane_updated_at`; the activity id becomes the source activity id.
+    expect(db.baselineActivitySwimlaneLane.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          organizationId: 'org',
+          baselineId: 'bl-1',
+          sourceActivityId: 'act-1',
+          basis: 'SWIMLANE',
+          swimlaneId: 'lane-1',
+          summaryActivityId: null,
+          wbsLevel: null,
+          laneIndex: 2,
+          laneUpdatedAt: lane.laneUpdatedAt,
+        },
+      ],
+    });
+  });
+
+  it('writes FULL even when the plan has no lane rows to copy, and issues no empty insert', async () => {
+    // The level is the discriminator: zero rows on a FULL baseline means "there were none".
+    const db = tx();
+    const repository = new BaselineRepository({} as PrismaService);
+    await repository.createWithSnapshot(
+      input({ swimlane: { source: 'NONE', wbsLevel: null }, lanes: [] }),
+      db as never,
+    );
+    expect(db.baseline.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        swimlaneSnapshotLevel: 'FULL',
+        swimlaneSource: 'NONE',
+        swimlaneWbsLevel: null,
+      }),
+    });
+    expect(db.baselineActivitySwimlaneLane.createMany).not.toHaveBeenCalled();
+  });
+
+  it('loads lanes org-scoped, chunked, and renames updatedAt to laneUpdatedAt', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        activityId: 'act-1',
+        basis: 'SWIMLANE',
+        swimlaneId: 'lane-1',
+        summaryActivityId: null,
+        wbsLevel: null,
+        laneIndex: 2,
+        updatedAt: lane.laneUpdatedAt,
+      },
+    ]);
+    const repository = new BaselineRepository({} as PrismaService);
+    const ids = Array.from({ length: 8_001 }, (_, i) => `a${i}`);
+    const rows = await repository.loadLanesForCapture('org', ids, {
+      activitySwimlaneLane: { findMany },
+    } as never);
+
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(findMany.mock.calls[0]![0].where).toEqual({
+      organizationId: 'org',
+      activityId: { in: ids.slice(0, 8_000) },
+    });
+    expect(rows[0]).toEqual(lane);
+  });
+});

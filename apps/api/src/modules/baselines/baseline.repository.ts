@@ -8,8 +8,11 @@ import {
   type ConstraintType,
   type DependencyType,
   type LagCalendarSource,
+  type SwimlaneLaneBasis,
+  type SwimlaneSource,
 } from '@prisma/client';
 
+import { chunkIds } from '../../common/db/id-chunks';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CriticalityRule } from '../schedule/criticality-rule';
 import type { PlanCalendarInput } from '../schedule/plan-calendar';
@@ -105,6 +108,30 @@ export interface CaptureActivityRow {
   placedStart: Date | null;
   placedFinish: Date | null;
   visualStart: Date | null;
+  /**
+   * **The frozen SWIMLANE membership** (schema-design §13.3) — the activity's own `swimlane_id`,
+   * copied whatever the plan's swimlane source was at capture: the live column is kept (and
+   * ignored) under WBS and NONE, so it is a fact of the activity and a plan later switched to
+   * MANUAL still finds it. Required for the reason the shape block gives: an optional field lets a
+   * capture path omit it and write a NULL nobody can tell from "never recorded".
+   */
+  swimlaneId: string | null;
+}
+
+/**
+ * One live `activity_swimlane_lanes` row, copied verbatim into `baseline_activity_swimlane_lanes`
+ * (schema-design §13.3). EVERY basis of every captured activity, including rows naming a swimlane
+ * or summary that was soft-deleted at capture: they are facts, and what a later restore returns to.
+ * `laneUpdatedAt` is the live row's `updated_at`, the projection's collision tie-break.
+ */
+export interface CaptureLaneRow {
+  activityId: string;
+  basis: SwimlaneLaneBasis;
+  swimlaneId: string | null;
+  summaryActivityId: string | null;
+  wbsLevel: number | null;
+  laneIndex: number;
+  laneUpdatedAt: Date;
 }
 
 /**
@@ -153,6 +180,14 @@ export interface CaptureInput {
    * discriminator is the only thing that can (the `costSnapshotLevel` precedent, ADR-0071 M3).
    */
   dependencies: CaptureDependencyRow[];
+  /**
+   * The plan's swimlane source and WBS level at capture, read under the same lock as the rows
+   * (schema-design §13.4). Required: `ck_baselines_swimlane_snapshot_shape` refuses a `FULL`
+   * baseline without a source, and the pair is the live `ck_plans_swimlane_source_level` one.
+   */
+  swimlane: { source: SwimlaneSource; wbsLevel: number | null };
+  /** Every lane row of every captured activity (see {@link CaptureLaneRow}). */
+  lanes: CaptureLaneRow[];
 }
 
 /**
@@ -215,6 +250,13 @@ export class BaselineRepository {
         // record. Zero placements on a FULL baseline means "there genuinely were none"; the same
         // nulls on a NONE baseline mean nobody looked. Only this column separates them.
         placementSnapshotLevel: 'FULL',
+        // Swimlanes (schema-design §13.4). Written unconditionally, for the fourth time and the same
+        // reason: a plan nobody laid out writes zero lane rows, and only this level says that is
+        // complete rather than unrecorded. The source and level are the plan's at capture; the
+        // table's CHECK makes the three columns one fact.
+        swimlaneSnapshotLevel: 'FULL',
+        swimlaneSource: input.swimlane.source,
+        swimlaneWbsLevel: input.swimlane.wbsLevel,
         criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
         criticalFloatThresholdMinutes: input.criticalityRule?.criticalFloatThresholdMinutes ?? null,
         totalFloatMode: input.criticalityRule?.totalFloatMode ?? null,
@@ -264,6 +306,8 @@ export class BaselineRepository {
           placedStart: a.placedStart,
           placedFinish: a.placedFinish,
           visualStart: a.visualStart,
+          // The frozen swimlane membership (§13.3), copied whatever the plan's source was.
+          swimlaneId: a.swimlaneId,
           createdBy: input.actorId,
           updatedBy: input.actorId,
         })),
@@ -286,6 +330,25 @@ export class BaselineRepository {
         })),
       );
       if (components.length > 0) await db.baselineAssignment.createMany({ data: components });
+    }
+    // Outside the `activities.length` block for the dependencies' reason below: the level written
+    // above is unconditional, and these are the rows it promises. One `createMany`, same
+    // transaction, so the level and its rows are never separately visible. Rule-free copy: which
+    // row is the effective lane under today's source is the reader's question, not the capture's.
+    if (input.lanes.length > 0) {
+      await db.baselineActivitySwimlaneLane.createMany({
+        data: input.lanes.map((l) => ({
+          organizationId: input.organizationId,
+          baselineId: baseline.id,
+          sourceActivityId: l.activityId,
+          basis: l.basis,
+          swimlaneId: l.swimlaneId,
+          summaryActivityId: l.summaryActivityId,
+          wbsLevel: l.wbsLevel,
+          laneIndex: l.laneIndex,
+          laneUpdatedAt: l.laneUpdatedAt,
+        })),
+      });
     }
     // **Outside the `activities.length` block on purpose.** An edge set cannot be non-empty when
     // the activity set is (an edge names two activities), so nesting it would be harmless today
@@ -362,6 +425,8 @@ export class BaselineRepository {
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         visualStart: true,
+        // The SWIMLANE membership (§13.3), read in the same locked transaction as the rest.
+        swimlaneId: true,
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
@@ -393,6 +458,38 @@ export class BaselineRepository {
         })),
       }),
     );
+  }
+
+  /**
+   * The lane rows of the given activities, every basis — the swimlane half of a capture (schema-
+   * design §13.4). Org-scoped (anti-IDOR), read inside the capture tx after the activity rows are
+   * locked, so the lanes are never one write newer than the activities beside them. No
+   * `deleted_at` filter exists to forget: lane rows carry none. Rows naming a deleted swimlane or
+   * summary are deliberately included. Chunked with {@link chunkIds}, as the expiry's `IN` lists are,
+   * so a large plan stays under the bind-parameter limit.
+   */
+  async loadLanesForCapture(
+    organizationId: string,
+    activityIds: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CaptureLaneRow[]> {
+    const out: CaptureLaneRow[] = [];
+    for (const chunk of chunkIds(activityIds)) {
+      const rows = await db.activitySwimlaneLane.findMany({
+        where: { organizationId, activityId: { in: chunk } },
+        select: {
+          activityId: true,
+          basis: true,
+          swimlaneId: true,
+          summaryActivityId: true,
+          wbsLevel: true,
+          laneIndex: true,
+          updatedAt: true,
+        },
+      });
+      for (const { updatedAt, ...rest } of rows) out.push({ ...rest, laneUpdatedAt: updatedAt });
+    }
+    return out;
   }
 
   /**
@@ -532,6 +629,7 @@ export class BaselineRepository {
       percentComplete: number | null;
       actualStart: Date | null;
       actualFinish: Date | null;
+      swimlaneId: string | null;
     }[]
   > {
     return db.baselineActivity.findMany({
@@ -566,8 +664,59 @@ export class BaselineRepository {
         percentComplete: true,
         actualStart: true,
         actualFinish: true,
+        // The frozen swimlane membership (§13.3). Selected unconditionally like the shape columns:
+        // NULL on a NONE-level baseline, where `frozenGhostSwimlanes` never reads it.
+        swimlaneId: true,
       },
     });
+  }
+
+  /**
+   * The frozen lane rows of the given activities in ONE baseline — what a ghost of removed work
+   * needs to be placed in a swimlane (schema-design §13.6). Reached only through a LIVE baseline
+   * (`deletedAt: null` on the relation): the table has no `deleted_at` of its own, so this is where
+   * "a soft-deleted baseline's lanes are not readable" is stated. Org-scoped in the query, like
+   * {@link loadSnapshotRowsForDelta}, and chunked like the capture's lane load.
+   */
+  async loadFrozenLanesForGhosts(
+    baselineId: string,
+    organizationId: string,
+    sourceActivityIds: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      sourceActivityId: string;
+      basis: SwimlaneLaneBasis;
+      swimlaneId: string | null;
+      summaryActivityId: string | null;
+      wbsLevel: number | null;
+      laneIndex: number;
+      laneUpdatedAt: Date;
+    }[]
+  > {
+    const out = [];
+    for (const chunk of chunkIds(sourceActivityIds)) {
+      out.push(
+        ...(await db.baselineActivitySwimlaneLane.findMany({
+          where: {
+            baselineId,
+            organizationId,
+            baseline: { deletedAt: null },
+            sourceActivityId: { in: chunk },
+          },
+          select: {
+            sourceActivityId: true,
+            basis: true,
+            swimlaneId: true,
+            summaryActivityId: true,
+            wbsLevel: true,
+            laneIndex: true,
+            laneUpdatedAt: true,
+          },
+        })),
+      );
+    }
+    return out;
   }
 
   /**
@@ -887,6 +1036,11 @@ export class BaselineRepository {
   ): Promise<string> {
     const batchId = randomUUID();
     const stamp = { deletedAt: new Date(), deleteBatchId: batchId, updatedBy: actorId };
+    // **No `baselineActivitySwimlaneLane` update, deliberately** (schema-design §13.3, lean
+    // lifecycle): that table has no `deleted_at`, its rows live exactly as long as their baseline,
+    // and every read reaches them through a live baseline. Do not add a fourth `updateMany` against
+    // a column that does not exist; `restoreBatch` and the hierarchy sweep need nothing for the
+    // same reason.
     await db.baselineActivity.updateMany({
       where: { baselineId: id, deletedAt: null },
       data: stamp,

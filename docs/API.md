@@ -375,6 +375,13 @@ will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are
 under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
 the null.
 
+`BaselineSummary.swimlaneSnapshotLevel` is the same kind of discriminator for swimlanes (swimlanes
+M1-T1b, ADR-0025's sixth amendment): `FULL` for every baseline captured since swimlanes shipped, `NONE`
+for every earlier one. A `FULL` capture freezes the plan's swimlane source and level, each activity's
+own swimlane, and a verbatim copy of its lane rows for every basis (the organisation export carries all
+of it: `baselines`, `baseline-activities` and `baseline-activity-swimlane-lanes`). Read the level, never
+the absence of lane copies: a plan nobody laid out freezes none and is still `FULL`.
+
 ### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
 
 `GET …/plans/:planId/schedule/earned-value` phases Planned Value on **one basis per read**, chosen
@@ -2223,6 +2230,13 @@ controller's 30 / 60 s per handler.
     drawn on that day's **end** (ADR-0155), so a client cannot place a milestone
     ghost from the boolean alone; before the field existed every milestone ghost
     was drawn half a day from its live diamond (`docs/TECH_DEBT.md` #383).
+
+    A ghost of **removed** work also carries, additively, its baseline's frozen swimlane facts when that
+    baseline is `swimlaneSnapshotLevel: FULL`: `frozenSwimlaneId`, `frozenLanes[]` (one entry per basis,
+    verbatim) and `frozenAncestorIds` (root first, from the baseline's own parent links). The server
+    places nothing: which swimlane the ghost falls in depends on the plan's source today, which the
+    client derives. A `NONE` baseline's removed ghosts carry none of the three, and the client counts
+    them. Moved ghosts never carry them, and neither does the cross-plan comparison.
 
 ## Authentication
 

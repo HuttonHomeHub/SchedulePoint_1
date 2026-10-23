@@ -26,6 +26,7 @@ const BASELINES: BaselineSummary[] = [
     capturedProjectFinish: '2026-03-01',
     activityCount: 12,
     placementSnapshotLevel: 'FULL',
+    swimlaneSnapshotLevel: 'FULL',
     version: 1,
     createdAt: '2026-01-05T09:00:00Z',
     updatedAt: '2026-01-05T09:00:00Z',
@@ -43,6 +44,7 @@ const BASELINES: BaselineSummary[] = [
     // "Compares" column reads "Earliest dates" for this row and "Placed dates" for the
     // FULL row above.
     placementSnapshotLevel: 'NONE',
+    swimlaneSnapshotLevel: 'NONE',
     version: 1,
     createdAt: '2026-02-01T09:00:00Z',
     updatedAt: '2026-02-01T09:00:00Z',

@@ -825,8 +825,8 @@ measurement owed in M1.
 
 ## 13. M1-T1b: baselines freeze swimlanes (2026-10-23)
 
-- **Status:** Landed, migration `20261023160000_baselines_freeze_swimlanes` (schema only; the
-  capture and ghost code is the builder's, §13.8).
+- **Status:** Landed, migration `20261023160000_baselines_freeze_swimlanes`; the capture, the export, the
+  expiry cascade and the server side of the ghosts landed after it (§13.8); the web painter is M2-T8.
 - **Why now:** the product owner answered SQ-7 "yes" (2026-10-22, `docs/DECISIONS.md`): baselines
   record each activity's swimlane from the start. This supersedes §4 Q7 and §12 OQ-1.
 - **Author:** database-architect agent. **Base:** `e5f506a` (main + M1-T1). Every behavioural

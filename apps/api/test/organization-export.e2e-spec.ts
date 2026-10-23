@@ -143,7 +143,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
   }
 
   /**
-   * An organisation with a row in every one of the 30 exported tables, and a second organisation
+   * An organisation with a row in every one of the 31 exported tables, and a second organisation
    * beside it whose every name carries a marker the export must never contain.
    */
   async function seedFixture(): Promise<Fixture> {
@@ -359,6 +359,12 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       where: { id: chain.planId },
       data: { swimlaneSource: 'WBS', swimlaneWbsLevel: 2 },
     });
+    // A second capture, now that the plan has swimlane rows: the first one froze none, so only this
+    // one gives `baseline-activity-swimlane-lanes` (and the frozen swimlane columns) a row to export.
+    await admin.agent
+      .post(`${base}/plans/${chain.planId}/baselines`)
+      .send({ name: 'ACME-SWIMLANE-BASELINE' })
+      .expect(201);
 
     // — The three records written by one-off migrations (no route makes them). ---------------------
     await prisma.placementMigration.create({
@@ -566,6 +572,9 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       'baseline-activities': await prisma.baselineActivity.count({ where }),
       'baseline-assignments': await prisma.baselineAssignment.count({ where }),
       'baseline-dependencies': await prisma.baselineDependency.count({ where }),
+      'baseline-activity-swimlane-lanes': await prisma.baselineActivitySwimlaneLane.count({
+        where,
+      }),
       shares: await prisma.planShare.count({ where }),
       'records-placement-migrations': await prisma.placementMigration.count({ where }),
       'records-finish-milestone-dates': await prisma.fmDateMigration.count({ where }),
