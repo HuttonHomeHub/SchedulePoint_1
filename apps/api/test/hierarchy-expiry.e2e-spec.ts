@@ -256,6 +256,20 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
         { basis: 'WBS_SUMMARY' as const, summaryActivityId: summaryId, laneIndex: 2 },
       ].map((lane) => ({ organizationId: orgId, activityId, ...lane })),
     });
+    // The baseline's frozen lane copies are RESTRICT-referenced by `baseline_id` and uncharged to
+    // the budget, so the runner must clear them before the baseline or the plan is unexpirable.
+    await prisma.baselineActivitySwimlaneLane.createMany({
+      data: [
+        { basis: 'SWIMLANE' as const, swimlaneId: swimlane.id, laneIndex: 1 },
+        { basis: 'NO_SWIMLANE' as const, laneIndex: 0 },
+      ].map((lane) => ({
+        organizationId: orgId,
+        baselineId: baseline.id,
+        sourceActivityId: activityId,
+        laneUpdatedAt: new Date('2026-02-01T10:00:00.000Z'),
+        ...lane,
+      })),
+    });
     // The live plan keeps its own swimlane: an expiry reaches only what its scope owns.
     await prisma.swimlane.create({
       data: { organizationId: orgId, planId: otherPlanId, name: 'Live lane', position: 0 },
@@ -287,6 +301,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     expect(await prisma.crossPlanDependency.count()).toBe(0);
     expect(await prisma.note.count()).toBe(0);
     expect(await prisma.baseline.count()).toBe(0);
+    expect(await prisma.baselineActivitySwimlaneLane.count()).toBe(0);
     expect(await prisma.planShare.count()).toBe(0);
 
     // The other side of the link is untouched: an expiry may only ever reach what its scope owns.

@@ -19,6 +19,7 @@ function baseline(over: Partial<BaselineSummary> = {}): BaselineSummary {
     capturedProjectFinish: '2026-06-01',
     activityCount: 147,
     placementSnapshotLevel: 'FULL',
+    swimlaneSnapshotLevel: 'FULL',
     version: 1,
     createdAt: '2026-01-05T00:00:00.000Z',
     updatedAt: '2026-01-05T00:00:00.000Z',

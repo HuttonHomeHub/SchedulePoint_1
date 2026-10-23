@@ -9,6 +9,7 @@ import type {
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockPlanActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
@@ -133,9 +134,23 @@ export class BaselinesService {
         // Serialise with recalculation and other captures on this plan, then read a
         // consistent snapshot of the computed activities (ADR-0022/0025).
         await acquirePlanWriteLock(tx, planId);
+        // Then the live activity rows, in id order (the order the plan cascade takes). A positions
+        // batch takes NO plan lock — it writes activities and lane rows under the activity row lock
+        // — and the capture reads activities and lanes in two statements, so without this a batch
+        // committing between them would freeze lanes one write newer than the activities beside
+        // them (schema-design §13.4). It waits for the capture to commit; that is the cost.
+        await lockPlanActivityRowsInIdOrder(tx, [planId]);
         const activities = await this.baselines.loadActiveActivitiesForCapture(
           organization.id,
           planId,
+          tx,
+        );
+        // Every basis of every captured activity, copied verbatim: the capture records facts and
+        // runs no rule, so the plan may be switched to another swimlane source afterwards and the
+        // baseline still holds the lane for it.
+        const lanes = await this.baselines.loadLanesForCapture(
+          organization.id,
+          activities.map((a) => a.id),
           tx,
         );
         // The logic half of the snapshot (ADR-0126), under the SAME lock as the activities above,
@@ -185,6 +200,10 @@ export class BaselinesService {
             scheduleCriticalFloatThresholdMinutes: true,
             scheduleTotalFloatMode: true,
             scheduleMakeOpenEndsCritical: true,
+            // Frozen with the rows they describe, read under the same lock for the same reason as
+            // the criticality mirrors above (schema-design §13.4).
+            swimlaneSource: true,
+            swimlaneWbsLevel: true,
           },
         });
         // Soft-deleted between the check above and this lock. The hierarchy cascade does NOT take
@@ -224,6 +243,8 @@ export class BaselinesService {
             actorId: principal.userId,
             activities,
             dependencies,
+            swimlane: { source: mirrors.swimlaneSource, wbsLevel: mirrors.swimlaneWbsLevel },
+            lanes,
           },
           tx,
         );

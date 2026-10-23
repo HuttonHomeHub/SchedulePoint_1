@@ -4,12 +4,14 @@ import type {
   Baseline,
   BaselineActivity,
   PlacementSnapshotLevel as PrismaPlacementSnapshotLevel,
+  SwimlaneSnapshotLevel as PrismaSwimlaneSnapshotLevel,
 } from '@prisma/client';
 import type {
   BaselineActivitySnapshot,
   BaselineDetail,
   BaselineSummary,
   PlacementSnapshotLevel,
+  SwimlaneSnapshotLevel,
 } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
@@ -74,6 +76,16 @@ export class BaselineResponseDto implements BaselineSummary {
   })
   placementSnapshotLevel!: PlacementSnapshotLevel;
 
+  @ApiProperty({
+    enum: ['NONE', 'FULL'],
+    description:
+      'What this capture froze of the swimlanes (swimlanes M1-T1b, amending ADR-0025). ' +
+      "'NONE' for every baseline captured before swimlanes shipped — its removed work is counted, " +
+      "not drawn, when swimlanes are on. 'FULL' after: the plan's swimlane source and level, each " +
+      "activity's own swimlane, and a copy of its lane rows for every basis.",
+  })
+  swimlaneSnapshotLevel!: SwimlaneSnapshotLevel;
+
   @ApiProperty({ description: 'Optimistic-locking version.' })
   version!: number;
 
@@ -96,6 +108,7 @@ export class BaselineResponseDto implements BaselineSummary {
         : null,
       activityCount,
       placementSnapshotLevel: entity.placementSnapshotLevel,
+      swimlaneSnapshotLevel: entity.swimlaneSnapshotLevel,
       version: entity.version,
       createdAt: entity.createdAt.toISOString(),
       updatedAt: entity.updatedAt.toISOString(),
@@ -225,4 +238,9 @@ type MutuallyAssignable<A, B> = A extends B ? (B extends A ? true : false) : fal
 export const _placementSnapshotLevelLockStep: MutuallyAssignable<
   PrismaPlacementSnapshotLevel,
   PlacementSnapshotLevel
+> = true;
+
+export const _swimlaneSnapshotLevelLockStep: MutuallyAssignable<
+  PrismaSwimlaneSnapshotLevel,
+  SwimlaneSnapshotLevel
 > = true;

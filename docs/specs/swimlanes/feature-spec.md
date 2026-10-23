@@ -788,10 +788,13 @@ switching back restores the hand-made assignment.
   view in place of "lanes a–b" (`TsldMinimap.tsx:159`).
 - **Link routing** (ADR-0065, ADR-0149, ADR-0150): unchanged. The rule sits beneath it (§4.2).
 - **Revision and baseline ghosts** (ADR-0126, ADR-0127). A ghost of a live activity draws on that
-  activity's display lane. A ghost of **removed** work has no frozen swimlane, so with swimlanes on
-  it is **counted, not drawn**. SQ-7 asks whether baselines should start freezing swimlanes now
-  (`schema-design.md` §4 Q7). Baseline capture must not copy swimlane data without that
-  follow-on's level discriminator (`schema-design.md` §9).
+  activity's display lane. A ghost of **removed** work is drawn from the
+  swimlane facts its baseline froze (SQ-7 yes, `schema-design.md` §13.6): the server attaches the
+  activity's frozen swimlane, its frozen lane rows and its frozen WBS ancestors, and the client
+  places it in the lane row for the basis today's source resolves to. It is **counted, not drawn**
+  when the baseline is `NONE` (captured before swimlanes shipped), when the basis cannot be
+  resolved, or when no frozen row exists for it. Deriving a lane among today's members is never the
+  fallback, because that would put removed work "somewhere plausible".
 - **Guest view** (SQ-4, default yes). The guest read gains the swimlane list and each activity's
   **derived** membership and lane. It never gains `parentId`: a guest has none today
   (`share/dto/guest-activity.dto.ts:49-158`). This is an amendment to ADR-0051 §4, like ADR-0163

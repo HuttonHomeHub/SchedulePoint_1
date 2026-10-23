@@ -4,12 +4,15 @@ import type {
   DependencyType,
   LagCalendarSource,
   PlacementSnapshotLevel,
+  SwimlaneLaneBasis,
+  SwimlaneSnapshotLevel,
 } from '@prisma/client';
-import type { VarianceBasis } from '@repo/types';
+import type { RevisionGhostFrozenLane, VarianceBasis } from '@repo/types';
 
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 
 import type { RevisionEdge, RevisionRow } from './revision-delta';
+import type { FrozenGhostSwimlanes } from './revision-ghosts';
 
 /**
  * **The four projections that put a frozen side and a live side into ONE shape**, extracted so that
@@ -74,6 +77,23 @@ export interface FrozenRevisionRowInput {
   readonly percentComplete: number | null;
   readonly actualStart: Date | null;
   readonly actualFinish: Date | null;
+  /**
+   * The activity's own swimlane at capture (schema-design §13.3). NULL means "none" on a `FULL`
+   * baseline and "unknown" on a `NONE` one; only the baseline's `swimlaneSnapshotLevel` says which,
+   * so {@link frozenGhostSwimlanes} is the one reader entitled to interpret it.
+   */
+  readonly swimlaneId: string | null;
+}
+
+/** One `baseline_activity_swimlane_lanes` row, as {@link frozenGhostSwimlanes} projects it. */
+export interface FrozenLaneInput {
+  readonly sourceActivityId: string;
+  readonly basis: SwimlaneLaneBasis;
+  readonly swimlaneId: string | null;
+  readonly summaryActivityId: string | null;
+  readonly wbsLevel: number | null;
+  readonly laneIndex: number;
+  readonly laneUpdatedAt: Date;
 }
 
 /** The columns a live activity row must carry for {@link liveRevisionSide} to project it. */
@@ -136,6 +156,44 @@ export const frozenRevisionSide = (
     actualStart: revisionDate(r.actualStart),
     actualFinish: revisionDate(r.actualFinish),
   }));
+
+/**
+ * **A baseline's frozen swimlane facts, for the ghosts of removed work** (schema-design §13.6).
+ *
+ * `null` unless the baseline's level is `FULL`. That is the whole interpretation this function does,
+ * and it is the reason it takes the level: on a `NONE` baseline every `swimlaneId` is NULL and means
+ * "unknown", on a `FULL` one it means "no swimlane", and nothing downstream can tell them apart.
+ * `null` makes the builder attach nothing, which the client reads as "count, do not draw".
+ *
+ * Every row of an activity is carried (one per basis) and none is chosen: the choice depends on the
+ * plan's source today, which is the client's derivation, not a fact this seam may freeze.
+ */
+export const frozenGhostSwimlanes = (
+  level: SwimlaneSnapshotLevel,
+  rows: readonly FrozenRevisionRowInput[],
+  lanes: readonly FrozenLaneInput[],
+): FrozenGhostSwimlanes | null => {
+  if (level !== 'FULL') return null;
+  const lanesByActivity = new Map<string, RevisionGhostFrozenLane[]>();
+  for (const l of lanes) {
+    const list = lanesByActivity.get(l.sourceActivityId) ?? [];
+    list.push({
+      basis: l.basis,
+      swimlaneId: l.swimlaneId,
+      summaryActivityId: l.summaryActivityId,
+      wbsLevel: l.wbsLevel,
+      laneIndex: l.laneIndex,
+      laneUpdatedAt: l.laneUpdatedAt.toISOString(),
+    });
+    lanesByActivity.set(l.sourceActivityId, list);
+  }
+  return new Map(
+    rows.map((r) => [
+      r.sourceActivityId,
+      { swimlaneId: r.swimlaneId, lanes: lanesByActivity.get(r.sourceActivityId) ?? [] },
+    ]),
+  );
+};
 
 /**
  * A **live** side — the plan's own persisted columns. On `PLACED` the effective-Visual span, which

@@ -10,6 +10,7 @@ import type {
   RevisionCompletionReason,
   RevisionCriticalPathDelta,
   RevisionGhostBar,
+  RevisionGhostFrozenLane,
   RevisionLinkChange,
   RevisionMovedActivity,
   RevisionNotAssessableReason,
@@ -409,6 +410,16 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
   placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
 
+export class RevisionGhostFrozenLaneDto implements RevisionGhostFrozenLane {
+  @ApiProperty({ enum: ['SWIMLANE', 'NO_SWIMLANE', 'WBS_SUMMARY', 'NO_WBS_SUMMARY'] })
+  basis!: RevisionGhostFrozenLane['basis'];
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) swimlaneId!: string | null;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) summaryActivityId!: string | null;
+  @ApiProperty({ type: Number, nullable: true }) wbsLevel!: number | null;
+  @ApiProperty() laneIndex!: number;
+  @ApiProperty({ format: 'date-time' }) laneUpdatedAt!: string;
+}
+
 export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() activityId!: string;
   @ApiProperty() name!: string;
@@ -436,6 +447,33 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
   })
   type!: ActivityType;
   @ApiProperty({ description: 'In the old revision and not in the new.' }) removed!: boolean;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Removed work only, and only from a baseline that froze swimlanes (`swimlaneSnapshotLevel` ' +
+      '`FULL`): the activity’s own swimlane at capture, null for none. Absent means the baseline ' +
+      'recorded none, and the client counts the ghost rather than drawing it.',
+  })
+  frozenSwimlaneId?: string | null;
+
+  @ApiPropertyOptional({
+    type: () => [RevisionGhostFrozenLaneDto],
+    description:
+      'Removed work from a `FULL` baseline: every lane row the activity held at capture, one per ' +
+      'basis, verbatim. The client picks the one for the basis today’s source resolves to.',
+  })
+  frozenLanes?: readonly RevisionGhostFrozenLaneDto[];
+
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'Removed work from a `FULL` baseline: its frozen WBS ancestors, root first (index `L - 1` ' +
+      'is the level-`L` ancestor), from the baseline’s own parent links.',
+  })
+  frozenAncestorIds?: readonly string[];
 }
 
 export class RevisionLinkChangeDto implements RevisionLinkChange {

@@ -1591,6 +1591,16 @@ export type CalendarErrorReason = keyof typeof CALENDAR_ERROR;
 export type PlacementSnapshotLevel = 'NONE' | 'FULL';
 
 /**
+ * What a baseline's capture froze of the SWIMLANES (swimlanes M1-T1b, the sixth amendment to
+ * ADR-0025). `NONE` is the literal truth of every baseline captured before swimlanes shipped: its
+ * removed work is counted, not drawn, when swimlanes are on. `FULL` is the plan's swimlane source
+ * and level, each activity's own swimlane, and a verbatim copy of its lane rows for every basis.
+ * Mutually assignable with Prisma's generated `SwimlaneSnapshotLevel` enum — see the lock-step
+ * check in `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`.
+ */
+export type SwimlaneSnapshotLevel = 'NONE' | 'FULL';
+
+/**
  * Which dates a variance read compared (`placement-baseline-variance`, amending
  * ADR-0025 §Amendments 3): `PLACED` reads the frozen `placedStart`/`placedFinish`
  * against the live `visualEffectiveStart`/`visualEffectiveFinish` — the bars as
@@ -1631,6 +1641,12 @@ export interface BaselineSummary {
    * {@link VarianceBasis}.
    */
   placementSnapshotLevel: PlacementSnapshotLevel;
+  /**
+   * What this capture froze of the swimlanes (swimlanes M1-T1b). `NONE` for every baseline
+   * captured before; read the level, never infer it from the absence of lane copies — a plan nobody
+   * laid out freezes zero lane rows and is still `FULL`.
+   */
+  swimlaneSnapshotLevel: SwimlaneSnapshotLevel;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -3623,6 +3639,44 @@ export interface RevisionGhostBar {
   readonly type: ActivityType;
   /** In the old revision and not in the new. Drawn in a distinct treatment, never as a live bar. */
   readonly removed: boolean;
+  /**
+   * **The FROZEN swimlane facts of REMOVED work** (swimlanes M1-T1b, schema-design §13.6). Present
+   * only on a `removed` ghost whose from-side baseline is `swimlaneSnapshotLevel: 'FULL'`; absent on
+   * every other ghost, which sits beside a live activity and needs nothing frozen. Absent on a
+   * `NONE` baseline too, which is what tells the client to count the ghost rather than draw it.
+   *
+   * The server attaches the facts and does not place the ghost: which swimlane it falls in depends
+   * on the plan's source TODAY, and the client already derives that for live bars, so there is one
+   * derivation. A client that finds no frozen lane for the basis it resolves counts the ghost; it
+   * never derives a lane among today's members (`revision-ghosts.ts`, "recorded, never guessed").
+   *
+   * `frozenSwimlaneId` is the activity's own swimlane at capture (null: none), whatever the plan's
+   * source was then.
+   */
+  readonly frozenSwimlaneId?: string | null;
+  /** Every lane row the activity held at capture, one per basis, verbatim. */
+  readonly frozenLanes?: readonly RevisionGhostFrozenLane[];
+  /**
+   * The activity's FROZEN WBS ancestors, root first (so index `L - 1` is the level-`L` ancestor),
+   * from the baseline's own parent links. Carried because a removed activity's live parent chain
+   * may no longer exist, and a WBS-grouped plan places it by that chain.
+   */
+  readonly frozenAncestorIds?: readonly string[];
+}
+
+/**
+ * One lane row a baseline froze for an activity (`baseline_activity_swimlane_lanes`), in the shape
+ * of the live `activity_swimlane_lanes` row. `laneUpdatedAt` is the live row's `updated_at` at
+ * capture: the projection's collision tie-break between two placed members of one basis.
+ */
+export interface RevisionGhostFrozenLane {
+  readonly basis: SwimlaneLaneBasis;
+  readonly swimlaneId: string | null;
+  readonly summaryActivityId: string | null;
+  readonly wbsLevel: number | null;
+  readonly laneIndex: number;
+  /** ISO 8601 instant. */
+  readonly laneUpdatedAt: string;
 }
 
 /**

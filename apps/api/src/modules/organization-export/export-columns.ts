@@ -84,7 +84,7 @@ const ACCOUNT_STATE =
 const AUDIT_NETWORK =
   'Never shown on the Audit log screen (ADR-0072): a colleague’s address and browser are a privacy cost with no matching benefit.';
 
-/** The 30 files, in the order the ZIP lists them. */
+/** The 31 files, in the order the ZIP lists them. */
 export const EXPORT_FILES: readonly ExportFile[] = [
   {
     model: 'User',
@@ -502,6 +502,10 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'createdBy:text',
       'updatedBy:text',
       'deletedAt:instant',
+      // 2.1 — appended (swimlanes frozen at capture), by position like `plans.swimlaneSource`.
+      'swimlaneSnapshotLevel:enum',
+      'swimlaneSource:enum',
+      'swimlaneWbsLevel:int',
     ),
     withheld: {
       version: VERSION,
@@ -549,6 +553,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'createdBy:text',
       'updatedBy:text',
       'deletedAt:instant',
+      // 2.1 — appended (swimlanes frozen at capture): the activity's own swimlane at capture.
+      'swimlaneId:text',
     ),
     withheld: {
       version: VERSION,
@@ -608,6 +614,29 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       version: VERSION,
       deleteBatchId: DELETE_BATCH,
     },
+  },
+  {
+    model: 'BaselineActivitySwimlaneLane',
+    table: 'baseline_activity_swimlane_lanes',
+    file: 'baseline-activity-swimlane-lanes',
+    stability: 'promised',
+    read: 'org',
+    // The planner's frozen layout, exported as `baselineActivities.laneIndex` is. No lifecycle
+    // columns exist (the rows live exactly as long as their baseline), so nothing is withheld.
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'baselineId:text',
+      'sourceActivityId:text',
+      'basis:enum',
+      'swimlaneId:text',
+      'summaryActivityId:text',
+      'wbsLevel:int',
+      'laneIndex:int',
+      'laneUpdatedAt:instant',
+      'createdAt:instant',
+    ),
+    withheld: {},
   },
   {
     model: 'PlanShare',

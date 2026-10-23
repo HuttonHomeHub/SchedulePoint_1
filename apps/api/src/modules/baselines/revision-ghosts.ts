@@ -1,4 +1,4 @@
-import type { RevisionGhostBar, RevisionLinkChange } from '@repo/types';
+import type { RevisionGhostBar, RevisionGhostFrozenLane, RevisionLinkChange } from '@repo/types';
 
 import type { RevisionEdge, RevisionRow } from './revision-delta';
 
@@ -83,13 +83,56 @@ function isSummary(row: RevisionRow): boolean {
  */
 export type GhostLaneSpace = 'SAME_PLAN' | 'CROSS_PLAN';
 
+/**
+ * **The swimlane facts a `FULL` baseline froze**, keyed by source activity id (swimlanes M1-T1b,
+ * schema-design §13.6). Passed ONLY when the from side's `swimlaneSnapshotLevel` is `FULL`: the
+ * absence of this argument is the `NONE` case, and it is what makes a removed ghost carry no frozen
+ * fact — which the client reads as "count, do not draw". An activity missing from the map froze no
+ * lane row at all, and gets an empty `frozenLanes` rather than none, so "recorded nothing for this
+ * activity" stays distinguishable from "the baseline recorded no swimlanes".
+ *
+ * Carried, not interpreted: which lane applies depends on the plan's source TODAY, which the
+ * client already derives for live bars. This module places nothing.
+ */
+export type FrozenGhostSwimlanes = ReadonlyMap<
+  string,
+  {
+    readonly swimlaneId: string | null;
+    readonly lanes: readonly RevisionGhostFrozenLane[];
+  }
+>;
+
+/**
+ * The activity's frozen ancestors, root first, from the FROZEN parent links alone. A cycle or a
+ * parent the baseline does not hold ends the walk: the chain is what the capture recorded, and a
+ * truncated one is a fact the client then fails to place rather than a position invented for it.
+ */
+function frozenAncestors(
+  start: RevisionRow,
+  byId: ReadonlyMap<string, RevisionRow>,
+): readonly string[] {
+  const chain: string[] = [];
+  const seen = new Set<string>([start.activityId]);
+  let parentId = start.parentId;
+  while (parentId !== null && !seen.has(parentId)) {
+    chain.push(parentId);
+    seen.add(parentId);
+    parentId = byId.get(parentId)?.parentId ?? null;
+  }
+  return chain.reverse();
+}
+
 export function buildRevisionGhosts(
   fromRows: readonly RevisionRow[],
   toRows: readonly RevisionRow[],
   cap: number,
   laneSpace: GhostLaneSpace = 'SAME_PLAN',
+  frozenSwimlanes?: FrozenGhostSwimlanes,
 ): RevisionGhostResult {
   const toById = new Map(toRows.map((r) => [r.activityId, r]));
+  // Built only when there is something to attach: the ancestor walk needs the from side by id.
+  const fromById =
+    frozenSwimlanes === undefined ? null : new Map(fromRows.map((r) => [r.activityId, r]));
   const ghosts: RevisionGhostBar[] = [];
   let undrawable = 0;
   const crossPlan = laneSpace === 'CROSS_PLAN';
@@ -146,6 +189,15 @@ export function buildRevisionGhosts(
       isMilestone: isMilestone(from),
       type: from.type,
       removed,
+      // Removed work only (§13.6): a moved ghost sits beside a live activity and needs nothing
+      // frozen. Cross-plan never passes the argument — swimlane ids are incomparable across plans.
+      ...(removed && frozenSwimlanes !== undefined && fromById !== null
+        ? {
+            frozenSwimlaneId: frozenSwimlanes.get(from.activityId)?.swimlaneId ?? null,
+            frozenLanes: frozenSwimlanes.get(from.activityId)?.lanes ?? [],
+            frozenAncestorIds: frozenAncestors(from, fromById),
+          }
+        : {}),
     });
   }
 

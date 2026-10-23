@@ -84,6 +84,10 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     revisionSnapshotLevel: 'NONE',
     // one-planning-surface M-A: the column exists and ships dark; M-C writes 'FULL'.
     placementSnapshotLevel: 'NONE',
+    // Swimlanes M1-T1b: NONE is what every baseline captured before swimlanes shipped is.
+    swimlaneSnapshotLevel: 'NONE',
+    swimlaneSource: null,
+    swimlaneWbsLevel: null,
     // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
     // unknown, which is what a baseline captured before the freeze shipped should say.
     criticalPathDefinition: null,
@@ -140,6 +144,8 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     placedStart: null,
     placedFinish: null,
     visualStart: null,
+    // The frozen swimlane membership (M1-T1b): null is "no swimlane", a real value on a FULL capture.
+    swimlaneId: null,
     ...overrides,
   };
 }
@@ -163,10 +169,12 @@ describe('BaselinesService', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let txPlanFindFirst: ReturnType<typeof vi.fn>;
+  let txQueryRaw: ReturnType<typeof vi.fn>;
   let baselines: {
     createWithSnapshot: ReturnType<typeof vi.fn>;
     loadActiveActivitiesForCapture: ReturnType<typeof vi.fn>;
     loadActiveDependenciesForCapture: ReturnType<typeof vi.fn>;
+    loadLanesForCapture: ReturnType<typeof vi.fn>;
     countActiveByPlan: ReturnType<typeof vi.fn>;
     findActiveByIdInPlan: ReturnType<typeof vi.fn>;
     findActiveDetailByIdInPlan: ReturnType<typeof vi.fn>;
@@ -192,6 +200,7 @@ describe('BaselinesService', () => {
       createWithSnapshot: vi.fn().mockResolvedValue(baseline()),
       loadActiveActivitiesForCapture: vi.fn().mockResolvedValue([activityRow()]),
       loadActiveDependenciesForCapture: vi.fn().mockResolvedValue([]),
+      loadLanesForCapture: vi.fn().mockResolvedValue([]),
       countActiveByPlan: vi.fn().mockResolvedValue(0),
       findActiveByIdInPlan: vi.fn().mockResolvedValue(baseline()),
       findActiveDetailByIdInPlan: vi.fn(),
@@ -216,11 +225,16 @@ describe('BaselinesService', () => {
       scheduleCriticalFloatThresholdMinutes: null,
       scheduleTotalFloatMode: null,
       scheduleMakeOpenEndsCritical: null,
+      swimlaneSource: 'NONE',
+      swimlaneWbsLevel: null,
     });
+    txQueryRaw = vi.fn().mockResolvedValue([]);
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: vi.fn(),
+          // The capture's activity row lock (`FOR NO KEY UPDATE`, in id order).
+          $queryRaw: txQueryRaw,
           plan: { findFirst: txPlanFindFirst },
         }),
       ),
@@ -292,6 +306,77 @@ describe('BaselinesService', () => {
         service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' }),
       ).rejects.toThrow(NotFoundError);
       expect(baselines.createWithSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('freezes the swimlanes: the plan’s source and level, and every lane row of every activity (M1-T1b)', async () => {
+      txPlanFindFirst.mockResolvedValue({
+        name: 'Baseline plan',
+        scheduleCriticalPathDefinition: null,
+        scheduleCriticalFloatThresholdMinutes: null,
+        scheduleTotalFloatMode: null,
+        scheduleMakeOpenEndsCritical: null,
+        swimlaneSource: 'WBS',
+        swimlaneWbsLevel: 2,
+      });
+      baselines.loadActiveActivitiesForCapture.mockResolvedValue([
+        activityRow({ id: 'act-1', swimlaneId: 'lane-a' }),
+        activityRow({ id: 'act-2', swimlaneId: null }),
+      ]);
+      // Two bases for one activity: the capture copies BOTH and picks neither.
+      const lanes = [
+        {
+          activityId: 'act-1',
+          basis: 'SWIMLANE',
+          swimlaneId: 'lane-a',
+          summaryActivityId: null,
+          wbsLevel: null,
+          laneIndex: 3,
+          laneUpdatedAt: new Date('2026-01-05T10:00:00Z'),
+        },
+        {
+          activityId: 'act-1',
+          basis: 'NO_WBS_SUMMARY',
+          swimlaneId: null,
+          summaryActivityId: null,
+          wbsLevel: 2,
+          laneIndex: 0,
+          laneUpdatedAt: new Date('2026-01-05T11:00:00Z'),
+        },
+      ];
+      baselines.loadLanesForCapture.mockResolvedValue(lanes);
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      // Org-scoped, for exactly the activities being frozen.
+      expect(baselines.loadLanesForCapture).toHaveBeenCalledWith(
+        ORG_ID,
+        ['act-1', 'act-2'],
+        expect.anything(),
+      );
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // The frozen source and level are the plan's, read under the lock — and a pair, because
+          // the baselines CHECK refuses a WBS source with no level.
+          swimlane: { source: 'WBS', wbsLevel: 2 },
+          lanes,
+          activities: [
+            expect.objectContaining({ id: 'act-1', swimlaneId: 'lane-a' }),
+            expect.objectContaining({ id: 'act-2', swimlaneId: null }),
+          ],
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('locks the activity rows after the plan lock and before it reads activities or lanes (M1-T1b)', async () => {
+      // A positions batch takes no plan lock, so without the row lock it could commit between the
+      // activity read and the lane read and freeze lanes one write newer than their activities.
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      const [lock, activities, lanes] = [
+        txQueryRaw,
+        baselines.loadActiveActivitiesForCapture,
+        baselines.loadLanesForCapture,
+      ].map((fn) => fn.mock.invocationCallOrder[0]!);
+      expect(lock).toBeLessThan(activities!);
+      expect(activities).toBeLessThan(lanes!);
     });
 
     it('freezes the plan’s LOGIC alongside its activities (ADR-0126)', async () => {

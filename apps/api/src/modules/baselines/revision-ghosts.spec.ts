@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RevisionEdge, RevisionRow } from './revision-delta';
-import { buildRevisionGhosts, buildRevisionLinkChanges } from './revision-ghosts';
+import {
+  buildRevisionGhosts,
+  buildRevisionLinkChanges,
+  type FrozenGhostSwimlanes,
+} from './revision-ghosts';
 
 /** The shared cap, high enough that only the case testing it is affected. */
 const CAP = 200;
@@ -264,5 +268,81 @@ describe('buildRevisionGhosts — CROSS_PLAN', () => {
 
     expect(result.ghosts).toEqual([]);
     expect(result.undrawable).toBe(1);
+  });
+});
+
+describe('the frozen swimlane facts on a ghost of removed work (M1-T1b)', () => {
+  const frozenLane = {
+    basis: 'SWIMLANE' as const,
+    swimlaneId: 'lane-1',
+    summaryActivityId: null,
+    wbsLevel: null,
+    laneIndex: 2,
+    laneUpdatedAt: '2026-01-05T10:00:00.000Z',
+  };
+  const facts: FrozenGhostSwimlanes = new Map([
+    ['gone', { swimlaneId: 'lane-1', lanes: [frozenLane] }],
+    ['moved', { swimlaneId: 'lane-1', lanes: [frozenLane] }],
+  ]);
+
+  it('FULL: attaches the swimlane, every frozen lane and the frozen ancestors, root first', () => {
+    const from = [
+      row({ activityId: 'root', type: 'WBS_SUMMARY' }),
+      row({ activityId: 'mid', type: 'WBS_SUMMARY', parentId: 'root' }),
+      row({ activityId: 'gone', parentId: 'mid' }),
+    ];
+    const { ghosts } = buildRevisionGhosts(from, [], CAP, 'SAME_PLAN', facts);
+    expect(ghosts).toHaveLength(1);
+    expect(ghosts[0]).toMatchObject({
+      activityId: 'gone',
+      removed: true,
+      frozenSwimlaneId: 'lane-1',
+      frozenLanes: [frozenLane],
+      // Index L - 1 is the level-L ancestor: the WBS placement reads it without walking.
+      frozenAncestorIds: ['root', 'mid'],
+    });
+  });
+
+  it('NONE: attaches nothing, which the client reads as "count, do not draw"', () => {
+    // No facts argument is the NONE case: the builder cannot tell "unknown" from "none" on its own.
+    const { ghosts } = buildRevisionGhosts([row({ activityId: 'gone' })], [], CAP);
+    expect(ghosts[0]).not.toHaveProperty('frozenSwimlaneId');
+    expect(ghosts[0]).not.toHaveProperty('frozenLanes');
+    expect(ghosts[0]).not.toHaveProperty('frozenAncestorIds');
+  });
+
+  it('FULL: a removed activity that froze no lane row carries an empty list and a null swimlane', () => {
+    const { ghosts } = buildRevisionGhosts(
+      [row({ activityId: 'gone' })],
+      [],
+      CAP,
+      'SAME_PLAN',
+      new Map(),
+    );
+    expect(ghosts[0]).toMatchObject({ frozenSwimlaneId: null, frozenLanes: [] });
+  });
+
+  it('attaches nothing to a ghost that only MOVED: it sits beside a live activity', () => {
+    const { ghosts } = buildRevisionGhosts(
+      [row({ activityId: 'moved' })],
+      [row({ activityId: 'moved', earlyStart: '2026-02-05', earlyFinish: '2026-02-09' })],
+      CAP,
+      'SAME_PLAN',
+      facts,
+    );
+    expect(ghosts).toHaveLength(1);
+    expect(ghosts[0]?.removed).toBe(false);
+    expect(ghosts[0]).not.toHaveProperty('frozenLanes');
+  });
+
+  it('survives a cyclic or dangling frozen parent chain by truncating it', () => {
+    const from = [
+      row({ activityId: 'a', parentId: 'b' }),
+      row({ activityId: 'b', parentId: 'a' }),
+      row({ activityId: 'c', parentId: 'missing' }),
+    ];
+    const { ghosts } = buildRevisionGhosts(from, [], CAP, 'SAME_PLAN', new Map());
+    expect(ghosts.find((g) => g.activityId === 'a')?.frozenAncestorIds).toEqual(['b']);
+    expect(ghosts.find((g) => g.activityId === 'c')?.frozenAncestorIds).toEqual(['missing']);
   });
 });

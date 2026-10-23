@@ -143,7 +143,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
   }
 
   /**
-   * An organisation with a row in every one of the 30 exported tables, and a second organisation
+   * An organisation with a row in every one of the 31 exported tables, and a second organisation
    * beside it whose every name carries a marker the export must never contain.
    */
   async function seedFixture(): Promise<Fixture> {
@@ -359,6 +359,12 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       where: { id: chain.planId },
       data: { swimlaneSource: 'WBS', swimlaneWbsLevel: 2 },
     });
+    // A second capture, now that the plan has swimlane rows: the first one froze none, so only this
+    // one gives `baseline-activity-swimlane-lanes` (and the frozen swimlane columns) a row to export.
+    await admin.agent
+      .post(`${base}/plans/${chain.planId}/baselines`)
+      .send({ name: 'ACME-SWIMLANE-BASELINE' })
+      .expect(201);
 
     // — The three records written by one-off migrations (no route makes them). ---------------------
     await prisma.placementMigration.create({
@@ -431,6 +437,35 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       .post(`/api/v1/organizations/${slug}/export`)
       .buffer(true)
       .parse(binary as never);
+  }
+
+  /**
+   * Wait until the server has given back the organisation's export lock.
+   *
+   * The response ends when the last byte is written, but the lock is a transaction-scoped advisory
+   * lock and is released at COMMIT, a few milliseconds later (`organization-export.service.ts`:
+   * the pipeline finishes, then the writer stops, then the snapshot transaction commits). A client
+   * that starts its next download the instant the previous body arrives can therefore meet its own
+   * previous export and be refused 409 under load. That is a test-side race, not a defect: holding
+   * the lock to commit is the guarantee. The assertion that matters here (three succeed, the fourth
+   * is throttled) is unchanged.
+   *
+   * Only the export's own lock is counted: the two-int key's first slot is
+   * `hashtext('org-export')`, which `pg_locks` shows as `classid` (an oid, so a negative int4 reads
+   * as its unsigned value) with `objsubid = 2`. Counting every advisory lock waited forever in a full
+   * run, where other spec files hold plan locks of their own.
+   */
+  async function exportLockReleased(): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const held = await prisma.$queryRaw<{ n: bigint }[]>`
+        SELECT count(*) AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND granted AND objsubid = 2
+          AND classid::bigint = (hashtext('org-export')::bigint + 4294967296) % 4294967296
+          AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+      if (Number(held[0]?.n ?? 0) === 0) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error('the export lock was never released');
   }
 
   /** Every entry of a ZIP, by name. `yauzl` verifies each entry's CRC-32 and size while reading. */
@@ -566,6 +601,9 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       'baseline-activities': await prisma.baselineActivity.count({ where }),
       'baseline-assignments': await prisma.baselineAssignment.count({ where }),
       'baseline-dependencies': await prisma.baselineDependency.count({ where }),
+      'baseline-activity-swimlane-lanes': await prisma.baselineActivitySwimlaneLane.count({
+        where,
+      }),
       shares: await prisma.planShare.count({ where }),
       'records-placement-migrations': await prisma.placementMigration.count({ where }),
       'records-finish-milestone-dates': await prisma.fmDateMigration.count({ where }),
@@ -761,8 +799,10 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     const { admin } = await seedFixture();
     resetThrottleCounters(throttlerStorage);
 
-    for (let i = 0; i < 3; i += 1)
+    for (let i = 0; i < 3; i += 1) {
       expect((await download(admin)).status, `export ${i + 1}`).toBe(200);
+      await exportLockReleased();
+    }
 
     const refused = await admin.agent.post(EXPORT_URL);
     expect(refused.status).toBe(429);

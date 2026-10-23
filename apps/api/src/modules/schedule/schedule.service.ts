@@ -58,9 +58,14 @@ import {
   type RevisionEdge,
   type RevisionRow,
 } from '../baselines/revision-delta';
-import { buildRevisionGhosts, buildRevisionLinkChanges } from '../baselines/revision-ghosts';
+import {
+  buildRevisionGhosts,
+  buildRevisionLinkChanges,
+  type FrozenGhostSwimlanes,
+} from '../baselines/revision-ghosts';
 import {
   frozenRevisionEdges,
+  frozenGhostSwimlanes,
   frozenRevisionSide,
   liveRevisionEdges,
   liveRevisionSide,
@@ -2327,8 +2332,28 @@ export class ScheduleService {
      * projections the delta and the change list read — a second assembly would drift, and the drift
      * would show as a ghost in a place the change list does not mention.
      */
+    // The frozen swimlane facts of REMOVED work, only from a baseline that froze swimlanes (§13.6):
+    // a `NONE` baseline passes nothing, and the client counts rather than draws. Loaded for the
+    // removed ids alone — a moved ghost sits beside a live activity — and after the geometry is
+    // known to be wanted, so a caller that did not ask for ghosts pays nothing.
+    let frozenSwimlanes: FrozenGhostSwimlanes | null = null;
+    if (wantsGeometry && fromBaseline.swimlaneSnapshotLevel === 'FULL') {
+      const toIds = new Set(toSide.map((r) => r.activityId));
+      const removedIds = fromSide.map((r) => r.activityId).filter((id) => !toIds.has(id));
+      frozenSwimlanes = frozenGhostSwimlanes(
+        fromBaseline.swimlaneSnapshotLevel,
+        fromRows,
+        await this.baselines.loadFrozenLanesForGhosts(fromBaseline.id, organization.id, removedIds),
+      );
+    }
     const ghostResult = wantsGeometry
-      ? buildRevisionGhosts(fromSide, toSide, REVISION_ROW_CAP)
+      ? buildRevisionGhosts(
+          fromSide,
+          toSide,
+          REVISION_ROW_CAP,
+          'SAME_PLAN',
+          frozenSwimlanes ?? undefined,
+        )
       : null;
     // The logic half, from the same two edge sets the change list's RELOGICKED class reads — so the
     // picture and the list cannot disagree about what one changed link is. `liveIds` decides what

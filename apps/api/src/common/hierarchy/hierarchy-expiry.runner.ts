@@ -180,6 +180,12 @@ export async function deleteExpiredScope(
     await deleteChunked(baselineIds, (chunk) =>
       tx.baselineActivity.deleteMany({ where: { baselineId: { in: chunk } } }),
     );
+    // The frozen swimlane lanes (schema-design §13.8). `baseline_id` is RESTRICT, so these go before
+    // `baseline`; the table has no `deleted_at`, so this is its only cascade site. Not charged to
+    // the run budget, as no baseline child is (`budgetCharge`) — §13.7 measures what that leaves out.
+    await deleteChunked(baselineIds, (chunk) =>
+      tx.baselineActivitySwimlaneLane.deleteMany({ where: { baselineId: { in: chunk } } }),
+    );
     await deleteChunked(baselineIds, (chunk) =>
       tx.baseline.deleteMany({ where: { id: { in: chunk } } }),
     );

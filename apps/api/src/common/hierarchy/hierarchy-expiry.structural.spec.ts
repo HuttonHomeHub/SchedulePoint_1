@@ -105,6 +105,7 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'baselineAssignment',
       'baselineDependency',
       'baselineActivity',
+      'baselineActivitySwimlaneLane',
       'baseline',
       'planShare',
       'activity',

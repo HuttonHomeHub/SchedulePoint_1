@@ -24,7 +24,7 @@ csv/<file>.csv          the same rows for a spreadsheet
 manifest.json           written last: every file with its rows, bytes and SHA-256, and what was left out
 ```
 
-The JSON is authoritative; the CSV is a view of it. There are 30 files of each kind, listed below. Every
+The JSON is authoritative; the CSV is a view of it. There are 31 files of each kind, listed below. Every
 file is present even when it has no rows: its JSON is `[]` and its CSV is a header row only.
 
 ## How values are written
@@ -145,13 +145,20 @@ version.
 
 Changes since `1.0`:
 
-- **`2.1`** — swimlanes. Two new files, `swimlanes` and `activity-swimlane-lanes`, and three appended
-  columns: `plans.swimlaneSource`, `plans.swimlaneWbsLevel` and `activities.swimlaneId`. A plan's
+- **`2.1`** — swimlanes. Three new files, `swimlanes`, `activity-swimlane-lanes` and
+  `baseline-activity-swimlane-lanes`, and seven appended columns: `plans.swimlaneSource`,
+  `plans.swimlaneWbsLevel`, `activities.swimlaneId`, `baselines.swimlaneSnapshotLevel`,
+  `baselines.swimlaneSource`, `baselines.swimlaneWbsLevel` and `baseline-activities.swimlaneId`. A plan's
   swimlanes are the labelled runs of lanes drawn on its diagram: `swimlanes` holds the hand-made ones
   (a soft-deleted one carries its `deletedAt`), and `activities.swimlaneId` says which of them an
   activity belongs to, kept even while the plan takes its swimlanes from the WBS. `activity-swimlane-lanes`
   holds the lane an activity was last placed on against each grouping it has been placed in, so
-  switching grouping and back returns the same lane. Nothing existing is renamed or retyped, so a
+  switching grouping and back returns the same lane. A baseline now freezes them: its
+  `swimlaneSnapshotLevel` is `FULL` when it recorded swimlanes (`NONE` for every baseline captured
+  before, which recorded none), `swimlaneSource` and `swimlaneWbsLevel` are the plan's at capture,
+  `baseline-activities.swimlaneId` is each activity's own swimlane then, and
+  `baseline-activity-swimlane-lanes` is a verbatim copy of every `activity-swimlane-lanes` row of the
+  captured activities. Nothing existing is renamed or retyped, so a
   reader written for `2.0` reads `2.1` and ignores what it does not know.
 - **`2.0`** — three `activities` columns and one `baseline-activities` column are renamed and documented
   as **working days**: `totalFloatMinutes` → `totalFloatDays` (both files), `freeFloatMinutes` →
@@ -211,11 +218,14 @@ The values each enum column may hold today, by `file.column`. A newer minor vers
 - `baselines.placementSnapshotLevel`: NONE, FULL
 - `baselines.criticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
 - `baselines.totalFloatMode`: START, FINISH, SMALLEST
+- `baselines.swimlaneSnapshotLevel`: NONE, FULL
+- `baselines.swimlaneSource`: NONE, MANUAL, WBS
 - `baseline-activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
 - `baseline-activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `baseline-activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `baseline-dependencies.type`: FS, SS, FF, SF
 - `baseline-dependencies.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
+- `baseline-activity-swimlane-lanes.basis`: SWIMLANE, NO_SWIMLANE, WBS_SUMMARY, NO_WBS_SUMMARY
 - `records-placement-migrations.priorConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `records-cross-plan-lags.lagCalendar`: PREDECESSOR, SUCCESSOR, TWENTY_FOUR_HOUR, PROJECT_DEFAULT
 - `resources.kind`: LABOUR, EQUIPMENT, MATERIAL, GROUP
@@ -592,6 +602,9 @@ Rows: every row of the organisation. Files `json/baselines.json` and `csv/baseli
 | `createdBy`                     | text    |                                                              |
 | `updatedBy`                     | text    |                                                              |
 | `deletedAt`                     | instant |                                                              |
+| `swimlaneSnapshotLevel`         | enum    | FULL when swimlanes were recorded; since 2.1                 |
+| `swimlaneSource`                | enum    | the plan's source at capture, empty when NONE; since 2.1     |
+| `swimlaneWbsLevel`              | int     | 1 to 3 when that source is WBS, else empty; since 2.1        |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -599,42 +612,43 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/baseline-activities.json` and `csv/baseline-activities.csv`.
 
-| Column                    | Type    | Notes                                  |
-| ------------------------- | ------- | -------------------------------------- |
-| `id`                      | text    |                                        |
-| `organizationId`          | text    |                                        |
-| `baselineId`              | text    |                                        |
-| `sourceActivityId`        | text    |                                        |
-| `code`                    | text    |                                        |
-| `name`                    | text    |                                        |
-| `type`                    | enum    |                                        |
-| `durationMinutes`         | int     | minutes                                |
-| `baselineStart`           | date    |                                        |
-| `baselineFinish`          | date    | inclusive last day                     |
-| `lateStart`               | date    |                                        |
-| `lateFinish`              | date    | inclusive last day                     |
-| `totalFloatDays`          | int     | working days                           |
-| `isCritical`              | boolean |                                        |
-| `budgetedCost`            | bigint  |                                        |
-| `budgetedExpense`         | bigint  |                                        |
-| `laneIndex`               | int     | diagram row number; 0 is the first row |
-| `parentId`                | text    |                                        |
-| `calendarId`              | text    |                                        |
-| `constraintType`          | enum    |                                        |
-| `constraintDate`          | date    |                                        |
-| `secondaryConstraintType` | enum    |                                        |
-| `secondaryConstraintDate` | date    |                                        |
-| `percentComplete`         | int     | whole percent, 0 to 100                |
-| `actualStart`             | date    |                                        |
-| `actualFinish`            | date    | inclusive last day                     |
-| `placedStart`             | date    |                                        |
-| `placedFinish`            | date    | inclusive last day                     |
-| `visualStart`             | date    |                                        |
-| `createdAt`               | instant |                                        |
-| `updatedAt`               | instant |                                        |
-| `createdBy`               | text    |                                        |
-| `updatedBy`               | text    |                                        |
-| `deletedAt`               | instant |                                        |
+| Column                    | Type    | Notes                                                                |
+| ------------------------- | ------- | -------------------------------------------------------------------- |
+| `id`                      | text    |                                                                      |
+| `organizationId`          | text    |                                                                      |
+| `baselineId`              | text    |                                                                      |
+| `sourceActivityId`        | text    |                                                                      |
+| `code`                    | text    |                                                                      |
+| `name`                    | text    |                                                                      |
+| `type`                    | enum    |                                                                      |
+| `durationMinutes`         | int     | minutes                                                              |
+| `baselineStart`           | date    |                                                                      |
+| `baselineFinish`          | date    | inclusive last day                                                   |
+| `lateStart`               | date    |                                                                      |
+| `lateFinish`              | date    | inclusive last day                                                   |
+| `totalFloatDays`          | int     | working days                                                         |
+| `isCritical`              | boolean |                                                                      |
+| `budgetedCost`            | bigint  |                                                                      |
+| `budgetedExpense`         | bigint  |                                                                      |
+| `laneIndex`               | int     | diagram row number; 0 is the first row                               |
+| `parentId`                | text    |                                                                      |
+| `calendarId`              | text    |                                                                      |
+| `constraintType`          | enum    |                                                                      |
+| `constraintDate`          | date    |                                                                      |
+| `secondaryConstraintType` | enum    |                                                                      |
+| `secondaryConstraintDate` | date    |                                                                      |
+| `percentComplete`         | int     | whole percent, 0 to 100                                              |
+| `actualStart`             | date    |                                                                      |
+| `actualFinish`            | date    | inclusive last day                                                   |
+| `placedStart`             | date    |                                                                      |
+| `placedFinish`            | date    | inclusive last day                                                   |
+| `visualStart`             | date    |                                                                      |
+| `createdAt`               | instant |                                                                      |
+| `updatedAt`               | instant |                                                                      |
+| `createdBy`               | text    |                                                                      |
+| `updatedBy`               | text    |                                                                      |
+| `deletedAt`               | instant |                                                                      |
+| `swimlaneId`              | text    | hand-made swimlane at capture, empty for none or unknown (since 2.1) |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -683,6 +697,24 @@ Rows: every row of the organisation. Files `json/baseline-dependencies.json` and
 | `deletedAt`           | instant |         |
 
 Not exported: `version`, `deleteBatchId`.
+
+### `baseline-activity-swimlane-lanes`
+
+Rows: every row of the organisation. Files `json/baseline-activity-swimlane-lanes.json` and `csv/baseline-activity-swimlane-lanes.csv`.
+
+| Column              | Type    | Notes                                                      |
+| ------------------- | ------- | ---------------------------------------------------------- |
+| `id`                | text    |                                                            |
+| `organizationId`    | text    |                                                            |
+| `baselineId`        | text    |                                                            |
+| `sourceActivityId`  | text    |                                                            |
+| `basis`             | enum    | which grouping the lane was written against                |
+| `swimlaneId`        | text    | set when `basis` is SWIMLANE                               |
+| `summaryActivityId` | text    | set when `basis` is WBS_SUMMARY                            |
+| `wbsLevel`          | int     | 1 to 3; set when `basis` is NO_WBS_SUMMARY                 |
+| `laneIndex`         | int     | lane within that grouping, from 0                          |
+| `laneUpdatedAt`     | instant | when the activity was last placed on that lane, at capture |
+| `createdAt`         | instant |                                                            |
 
 ### `shares`
 
