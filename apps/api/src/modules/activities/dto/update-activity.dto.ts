@@ -282,6 +282,19 @@ export class UpdateActivityDto {
   @Matches(UUID_REGEX, { message: 'parentId must be a valid UUID.' })
   parentId?: string | null;
 
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Hand-made swimlane membership (swimlanes spec §4.6): the id of an active swimlane of the same ' +
+      'plan, or null for "No swimlane". An unknown, foreign or deleted swimlane is 404. Refused with ' +
+      '422 SWIMLANE_SOURCE_IS_WBS while the plan’s swimlanes come from its WBS.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'swimlaneId must be a valid UUID.' })
+  swimlaneId?: string | null;
+
   @ApiPropertyOptional({ minimum: 0 })
   @IsOptional()
   @Type(() => Number)

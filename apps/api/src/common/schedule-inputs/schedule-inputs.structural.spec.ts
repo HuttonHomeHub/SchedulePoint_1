@@ -66,15 +66,9 @@ describe('the scheduling-input classification', () => {
 
     // `version` is the optimistic lock and `editedField` the triad's control field: neither is
     // persisted scheduling state.
-    //
-    // **Two plan keys are classified before the DTO carries them.** `PlanPatch` gained
-    // `swimlaneSource` and `swimlaneWbsLevel` with the swimlanes schema (M1-T1), and the plan PATCH
-    // route exposes them in M1-T3. The exemption is asserted to be real, so it fails the moment the
-    // DTO gains the keys and has to be deleted then, rather than lingering as a silent carve-out.
-    const DTO_PENDING = ['swimlaneSource', 'swimlaneWbsLevel'];
-    const planDtoKeys = dtoKeys('plans/dto/update-plan.dto.ts', ['version']);
-    expect(planDtoKeys.filter((key) => DTO_PENDING.includes(key))).toEqual([]);
-    expect(Object.keys(PLAN_FIELD_CLASS).sort()).toEqual([...planDtoKeys, ...DTO_PENDING].sort());
+    expect(Object.keys(PLAN_FIELD_CLASS).sort()).toEqual(
+      dtoKeys('plans/dto/update-plan.dto.ts', ['version']),
+    );
     expect(Object.keys(ASSIGNMENT_FIELD_CLASS).sort()).toEqual(
       dtoKeys('resources/dto/update-assignment.dto.ts', ['version', 'editedField']),
     );

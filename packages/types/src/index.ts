@@ -217,6 +217,20 @@ export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS';
 export type SwimlaneLaneBasis = 'SWIMLANE' | 'NO_SWIMLANE' | 'WBS_SUMMARY' | 'NO_WBS_SUMMARY';
 
 /**
+ * One stored in-swimlane lane (swimlanes schema-design §3.5): which basis it was written against —
+ * exactly the columns that basis names are set, the rest `null` — and the lane. `updatedAt` is the
+ * tie-break when two placed members of one basis collide.
+ */
+export interface ActivitySwimlaneLaneSummary {
+  basis: SwimlaneLaneBasis;
+  swimlaneId: string | null;
+  summaryActivityId: string | null;
+  wbsLevel: number | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
  * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.
@@ -361,6 +375,14 @@ export interface PlanSummary {
    * either way). Client-settable plan option, mirroring the other scheduling-option booleans.
    */
   ignoreExternalRelationships: boolean;
+  /**
+   * Where the plan's swimlanes come from (swimlanes spec §4.6): `NONE` (the default), hand-made
+   * (`MANUAL`) or the plan's WBS summaries at {@link PlanSummary.swimlaneWbsLevel}. Presentation, not
+   * a scheduling input: changing it never marks the plan as edited since calculated.
+   */
+  swimlaneSource: SwimlaneSource;
+  /** 1 to 3 when {@link PlanSummary.swimlaneSource} is `WBS`, `null` otherwise. */
+  swimlaneWbsLevel: number | null;
   /**
    * The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Client-settable plan option; default
    * `CPI` (P6's headline EAC = BAC / CPI). Read by the EV2 read module (a query param may override
@@ -588,6 +610,18 @@ export interface ActivitySummary {
   parentId: string | null;
   /** Graphical y-lane for the TSLD canvas. */
   laneIndex: number;
+  /**
+   * The hand-made swimlane this activity belongs to (swimlanes spec §4.6), or `null` for "No
+   * swimlane". Kept and ignored while the plan's source is `WBS` or `NONE`, so switching back
+   * restores it. May name a soft-deleted swimlane: that is how a deleted swimlane's members come back
+   * with it.
+   */
+  swimlaneId: string | null;
+  /**
+   * The activity's in-swimlane lane, one entry per basis it has been placed against (swimlanes spec
+   * §4.4). A basis with no entry means "never placed there"; the projection derives a lane.
+   */
+  swimlaneLanes: ActivitySwimlaneLaneSummary[];
   /**
    * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
    * activity renders at its late-based position; it never changes early/late/float. False by default.

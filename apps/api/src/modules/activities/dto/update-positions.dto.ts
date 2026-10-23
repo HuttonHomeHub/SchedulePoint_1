@@ -1,28 +1,88 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsOptional,
   IsUUID,
+  Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
-/** One activity's new lane, with the version it was read at (optimistic locking). */
-export class ActivityPositionDto {
-  @ApiProperty({ format: 'uuid' })
-  @IsUUID()
-  id!: string;
+import { UUID_REGEX } from '../../../common/validation/uuid';
 
-  @ApiProperty({ minimum: 0, maximum: 10000, description: 'The 0-based lane (y) to move to.' })
+/**
+ * An activity's lane inside its swimlane (swimlanes spec §4.12). There is deliberately **no basis**:
+ * the server derives what the lane is stored against from the plan's source and the activity's
+ * membership, because a client-supplied basis that disagreed with the real one would be stored and
+ * believed (schema-design §4 Q3).
+ */
+export class ActivitySwimlaneLaneDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'MANUAL source only: file the activity in this swimlane (it must be an active swimlane of ' +
+      'this plan, else 404). Omit to leave its membership as it is. Refused with 422 ' +
+      'SWIMLANE_SOURCE_IS_WBS while the plan’s swimlanes come from its WBS.',
+  })
+  @IsOptional()
+  @Matches(UUID_REGEX, { message: 'swimlaneId must be a valid UUID.' })
+  swimlaneId?: string;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: 10000,
+    description:
+      'The 0-based lane inside the swimlane. Refused with 422 SWIMLANE_SOURCE_NONE while the plan has ' +
+      'no swimlane source.',
+  })
   @Type(() => Number)
   @IsInt()
   @Min(0)
   @Max(10000)
   laneIndex!: number;
+}
+
+/**
+ * One activity's new lane, with the version it was read at (optimistic locking). Each row needs the
+ * swimlane-free `laneIndex`, an in-swimlane `swimlane` lane, or both; every body that predates
+ * swimlanes (a `laneIndex` and no `swimlane`) is still valid.
+ */
+export class ActivityPositionDto {
+  @ApiProperty({ format: 'uuid' })
+  @IsUUID()
+  id!: string;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 10000,
+    description:
+      'The 0-based lane (y) to move to in the swimlane-free layout. Required unless `swimlane` is sent.',
+  })
+  // Required exactly when there is no `swimlane`: a row must say where it goes.
+  @ValidateIf(
+    (row: ActivityPositionDto) => row.swimlane === undefined || row.laneIndex !== undefined,
+  )
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  laneIndex?: number;
+
+  @ApiPropertyOptional({
+    type: ActivitySwimlaneLaneDto,
+    description: 'The activity’s lane inside its swimlane. Never writes `laneIndex`.',
+  })
+  // Not `@IsOptional()`: an explicit null must fail validation rather than read as "no swimlane".
+  @ValidateIf((_, value) => value !== undefined)
+  @ValidateNested()
+  @Type(() => ActivitySwimlaneLaneDto)
+  swimlane?: ActivitySwimlaneLaneDto;
 
   @ApiProperty({ minimum: 1, description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

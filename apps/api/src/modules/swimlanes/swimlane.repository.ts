@@ -214,6 +214,32 @@ export class SwimlaneRepository {
     `;
   }
 
+  /**
+   * Lock the named active swimlanes of this plan `FOR SHARE`, in id order, and return the ids found.
+   * The caller holds its activity row locks already (schema-design §5): a swimlane's delete takes
+   * `NO KEY UPDATE`, which conflicts with `FOR SHARE`, so an assignment cannot commit against a
+   * swimlane deleted a moment earlier — `FOR KEY SHARE`, the lock the FK check takes itself, would not
+   * conflict. A shortfall against the ids asked for is a swimlane that is foreign, unknown or deleted,
+   * and the caller answers 404 without saying which.
+   */
+  async lockActiveForShare(
+    organizationId: string,
+    planId: string,
+    ids: readonly string[],
+    db: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT id FROM swimlanes
+      WHERE id IN (SELECT u FROM unnest(${[...ids]}::uuid[]) AS u)
+        AND plan_id = ${planId}::uuid AND organization_id = ${organizationId}::uuid
+        AND deleted_at IS NULL
+      ORDER BY id
+      FOR SHARE
+    `;
+    return rows.map((r) => r.id);
+  }
+
   /** Rewrite `position` to the given dense values in one statement; rows already there are untouched. */
   async rewritePositions(
     organizationId: string,

@@ -6,9 +6,15 @@ import {
   ConstraintType,
   DurationType,
   PercentCompleteType,
+  SwimlaneLaneBasis,
   type Activity,
 } from '@prisma/client';
-import type { ActivitySummary, VisualConflictReason } from '@repo/types';
+import type {
+  ActivitySummary,
+  ActivitySwimlaneLaneSummary,
+  SwimlaneLaneBasis as SwimlaneLaneBasisUnion,
+  VisualConflictReason,
+} from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import {
@@ -19,6 +25,7 @@ import {
   type WithDayFactor,
 } from '../day-factor';
 import type { WithAssignmentCount } from '../resource-assignment-counts';
+import type { WithSwimlaneLanes } from '../swimlane-lanes';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
 /**
@@ -28,6 +35,39 @@ import type { WithAssignmentCount } from '../resource-assignment-counts';
  * lookup would be an N+1. `WithDayFactor` makes it a REQUIRED property, so a service that forgets to
  * decorate is a compile error rather than a response reporting every duration against 24-hour days.
  */
+
+/** One stored in-swimlane lane: the basis it was written against, and exactly the columns that basis names. */
+export class ActivitySwimlaneLaneResponseDto implements ActivitySwimlaneLaneSummary {
+  @ApiProperty({ enum: SwimlaneLaneBasis, enumName: 'SwimlaneLaneBasis' })
+  basis!: SwimlaneLaneBasisUnion;
+
+  @ApiProperty({ format: 'uuid', nullable: true, type: String, description: 'Set for SWIMLANE.' })
+  swimlaneId!: string | null;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description: 'Set for WBS_SUMMARY: the summary whose group the lane is in.',
+  })
+  summaryActivityId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'Set (1 to 3) for NO_WBS_SUMMARY: the WBS level the activity has no group at.',
+  })
+  wbsLevel!: number | null;
+
+  @ApiProperty({ description: 'The 0-based lane inside the swimlane.' })
+  laneIndex!: number;
+
+  @ApiProperty({
+    format: 'date-time',
+    description: 'When the lane was last written; the tie-break when two placed members collide.',
+  })
+  updatedAt!: string;
+}
 
 /**
  * Public representation of an activity (the leaf of Client → Project → Plan →
@@ -233,6 +273,25 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({ description: 'Graphical y-lane for the TSLD canvas.' })
   laneIndex!: number;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'Hand-made swimlane membership (swimlanes spec §4.6), or null for "No swimlane". Kept, and ' +
+      'ignored, while the plan’s swimlanes come from its WBS. May name a deleted swimlane.',
+  })
+  swimlaneId!: string | null;
+
+  @ApiProperty({
+    type: ActivitySwimlaneLaneResponseDto,
+    isArray: true,
+    description:
+      'The in-swimlane lane stored against each basis the activity has been placed on. A basis ' +
+      'with no entry was never placed; the client derives a lane for it.',
+  })
+  swimlaneLanes!: ActivitySwimlaneLaneResponseDto[];
 
   @ApiProperty({ enum: ActivityStatus })
   status!: ActivityStatus;
@@ -483,7 +542,7 @@ export class ActivityResponseDto implements ActivitySummary {
    * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
    */
   static from(
-    entity: WithAssignmentCount<WithDayFactor<Activity>>,
+    entity: WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>>,
     canReadCost: boolean,
   ): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
@@ -513,6 +572,8 @@ export class ActivityResponseDto implements ActivitySummary {
       calendarId: entity.calendarId,
       parentId: entity.parentId,
       laneIndex: entity.laneIndex,
+      swimlaneId: entity.swimlaneId,
+      swimlaneLanes: entity.swimlaneLanes,
       scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
       percentComplete: entity.percentComplete,

@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityDependency, type ResourceAssignment } from '@prisma/client';
 import {
@@ -13,6 +11,7 @@ import {
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import { acquireActivityHistoryLocks } from '../../common/db/activity-history-lock';
+import { uuidV7 } from '../../common/db/uuid-v7';
 import type { KnockOn, StampedLink } from '../../common/hierarchy/hierarchy-lifecycle.service';
 
 import { MAX_KEYED_ITEMS_PER_ENTRY } from './activity-history.constants';
@@ -22,6 +21,7 @@ import {
   assignmentKey,
   assignmentState,
   changedReferenceIds,
+  changedSwimlaneIds,
   diffActivity,
   diffFields,
   hasNonCostChange,
@@ -116,6 +116,7 @@ interface ProbeRow {
 interface ProbedNames {
   calendars: Record<string, string>;
   parents: Record<string, string>;
+  swimlanes?: Record<string, string>;
   resources: Record<string, { code: string | null; name: string }>;
   /** Activities named by an item but not recorded by the call (a knock-on's deleted other end). */
   others: Record<string, { code: string | null; name: string }>;
@@ -256,9 +257,13 @@ export class ActivityHistoryRecorder {
     const refs = changedReferenceIds(before, after);
     return {
       keys: Object.keys(diffActivity(before, after, NO_NAMES)),
-      refs: { ...NO_REFS, ...refs },
+      refs: { ...NO_REFS, ...refs, swimlaneIds: changedSwimlaneIds(before, after) },
       build: (names) =>
-        diffActivity(before, after, { calendars: names.calendars, parents: names.parents }),
+        diffActivity(before, after, {
+          calendars: names.calendars,
+          parents: names.parents,
+          ...(names.swimlanes ? { swimlanes: names.swimlanes } : {}),
+        }),
     };
   }
 
@@ -508,6 +513,35 @@ export class ActivityHistoryRecorder {
   }
 
   /**
+   * One write per activity a positions batch filed in another swimlane, naming both swimlanes as they
+   * are now (a deleted swimlane still has a name). A row that stayed where it was records nothing, so a
+   * lane-only batch (an auto-pack, a lane written inside the same swimlane) makes no entry (CQ-4).
+   */
+  swimlaneWrites(
+    planId: string,
+    rows: ReadonlyArray<{ id: string; before: string | null; after: string | null }>,
+  ): RecordedActivityWrite[] {
+    return rows.map(({ id, before, after }) => {
+      const swimlaneIds = changedSwimlaneIds({ swimlaneId: before }, { swimlaneId: after });
+      return {
+        activityId: id,
+        planId,
+        changes: {
+          keys: swimlaneIds.length === 0 ? [] : ['swimlaneId'],
+          refs: { ...NO_REFS, swimlaneIds },
+          build: (names) =>
+            diffFields(
+              ['swimlaneId'],
+              { swimlaneId: before },
+              { swimlaneId: after },
+              { ...NO_NAMES, ...(names.swimlanes ? { swimlanes: names.swimlanes } : {}) },
+            ),
+        },
+      };
+    });
+  }
+
+  /**
    * The latest entry for each activity (whoever made it), the activity's organisation and its own
    * name, and the reference names the writes asked for — in one statement. The organisation is read
    * here, from the activity row, and copied onto the entry — never taken from the request, so a write
@@ -528,7 +562,7 @@ export class ActivityHistoryRecorder {
   ): Promise<{ rows: Map<string, ProbeRow>; names: ResolvedNames }> {
     const refs = combineChanges(...writes.map((w) => w.changes)).refs;
     const latestChanges = isBatch ? Prisma.sql`NULL::jsonb` : Prisma.sql`h.changes`;
-    // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, and names the calendar, WBS parent, resource, plan and a knock-on's other end as they are now (a deleted one still has a name), so no row may be filtered out.
+    // soft-delete: any-state — records the entry for an activity as it is being soft-deleted, and names the calendar, WBS parent, swimlane, resource, plan and a knock-on's other end as they are now (a deleted one still has a name), so no row may be filtered out.
     const rows = await tx.$queryRaw<ProbeRow[]>`
       WITH names AS (
         SELECT jsonb_build_object(
@@ -536,6 +570,8 @@ export class ActivityHistoryRecorder {
                                  WHERE c.id = ANY(${[...refs.calendarIds]}::uuid[])), '{}'::jsonb),
           'parents', COALESCE((SELECT jsonb_object_agg(p.id, p.name) FROM activities p
                                WHERE p.id = ANY(${[...refs.parentIds]}::uuid[])), '{}'::jsonb),
+          'swimlanes', COALESCE((SELECT jsonb_object_agg(s.id, s.name) FROM swimlanes s
+                                 WHERE s.id = ANY(${[...refs.swimlaneIds]}::uuid[])), '{}'::jsonb),
           'resources', COALESCE((SELECT jsonb_object_agg(r.id,
                                    jsonb_build_object('code', r.code, 'name', r.name))
                                  FROM resources r
@@ -584,6 +620,7 @@ export class ActivityHistoryRecorder {
       names: {
         calendars: new Map(Object.entries(probed?.calendars ?? {})),
         parents: new Map(Object.entries(probed?.parents ?? {})),
+        swimlanes: new Map(Object.entries(probed?.swimlanes ?? {})),
         resources,
         activities,
         plans: new Map(rows.map((r) => [r.activityId, { id: r.planId, name: r.planName }])),
@@ -715,20 +752,6 @@ function stage(
       }
       return;
   }
-}
-
-/**
- * A UUID v7 for a raw insert (house primary-key convention: time-ordered, so the key index appends).
- * Prisma mints these itself for a model `create`; a raw statement has to bring its own. The
- * timestamp is the entry's own database time, so the key orders with `first_recorded_at`.
- */
-function uuidV7(at: Date): string {
-  const b = randomBytes(16);
-  b.writeUIntBE(at.getTime(), 0, 6);
-  b[6] = (b[6]! & 0x0f) | 0x70;
-  b[8] = (b[8]! & 0x3f) | 0x80;
-  const h = b.toString('hex');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 /**

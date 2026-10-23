@@ -72,6 +72,7 @@ const FIELD_LABELS: Record<ActivityHistoryFieldKey, string> = {
   visualStart: 'Placed start',
   laneIndex: 'Lane',
   parentId: 'WBS parent',
+  swimlaneId: 'Swimlane',
   percentComplete: '% complete',
   actualStart: 'Actual start',
   actualFinish: 'Actual finish',

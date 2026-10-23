@@ -68,6 +68,9 @@
   "activities/create-activity.secondaryConstraintType": {
     "surface": "features/share/guest-api.ts"
   },
+  "activities/create-activity.swimlaneId": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the manual-membership hook and the activity editor's swimlane control land in M2-T1 and M2-T10 behind the lens toggle; the same membership is also written by the positions batch's swimlane row. Recorded as a gap so the toggle's flip has to close it."
+  },
   "activities/create-activity.type": {
     "surface": "components/ui/button.tsx"
   },
@@ -176,6 +179,9 @@
   "activities/update-activity.secondaryConstraintType": {
     "surface": "features/share/guest-api.ts"
   },
+  "activities/update-activity.swimlaneId": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the manual-membership hook and the activity editor's swimlane control land in M2-T1 and M2-T10 behind the lens toggle. Recorded as a gap so the toggle's flip has to close it."
+  },
   "activities/update-activity.type": {
     "surface": "components/ui/button.tsx"
   },
@@ -217,6 +223,12 @@
   },
   "activities/update-positions.positions": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
+  },
+  "activities/update-positions.swimlane": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the lane moves and the Move to swimlane… command that send an in-swimlane lane land in M2-T4 and M2-T10 behind the lens toggle. The swimlane-free laneIndex of the same row IS authorable today, so this is an unreachable second lane rather than an unreachable field."
+  },
+  "activities/update-positions.swimlaneId": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the Move to swimlane… command that files an activity through the positions batch lands in M2-T10 behind the lens toggle; the single-activity PATCH carries the same membership. Recorded as a gap so the toggle's flip has to close it."
   },
   "baselines/create-baseline.name": {
     "surface": "components/ui/search-field.tsx"
@@ -529,6 +541,12 @@
   },
   "plans/update-plan.status": {
     "surface": "components/ui/spinner.tsx"
+  },
+  "plans/update-plan.swimlaneSource": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the swimlane setup and manage dialogs that choose the source land in M2-T9 behind the lens toggle. Presentation only: the engine never reads it."
+  },
+  "plans/update-plan.swimlaneWbsLevel": {
+    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the swimlane setup dialog that chooses the WBS level lands in M2-T9 behind the lens toggle. Presentation only: the engine never reads it."
   },
   "plans/update-plan.totalFloatMode": {
     "surface": "features/plans/components/PlanScheduleSettings.tsx"

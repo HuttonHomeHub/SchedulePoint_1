@@ -25,6 +25,7 @@ import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
+import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { ActivitiesService } from './activities.service';
 import type { ActivityRepository } from './activity.repository';
@@ -186,7 +187,10 @@ describe('ActivitiesService', () => {
     findPlanWbsTree: ReturnType<typeof vi.fn>;
     updateParents: ReturnType<typeof vi.fn>;
     updatePlacements: ReturnType<typeof vi.fn>;
+    updateLanePositions: ReturnType<typeof vi.fn>;
+    upsertSwimlaneLanes: ReturnType<typeof vi.fn>;
   };
+  let swimlanes: { lockActiveForShare: ReturnType<typeof vi.fn> };
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     cascadeSoftDeleteActivityLeaves: ReturnType<typeof vi.fn>;
@@ -200,6 +204,7 @@ describe('ActivitiesService', () => {
     $transaction: ReturnType<typeof vi.fn>;
     activity: { findMany: ReturnType<typeof vi.fn> };
     resourceAssignment: { groupBy: ReturnType<typeof vi.fn> };
+    activitySwimlaneLane: { findMany: ReturnType<typeof vi.fn> };
   };
   // Driving-assignment access on the tx client (ADR-0040 activity-path recompute). Default: no
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
@@ -220,6 +225,7 @@ describe('ActivitiesService', () => {
   // (ADR-0038 parent-tree serialisation) and the calendar scope guard's lock go through
   // `tx.$executeRaw` as tagged templates, distinguishable by their namespace argument.
   let txExecuteRaw: ReturnType<typeof vi.fn>;
+  let txQueryRaw: ReturnType<typeof vi.fn>;
   // Hoisted so a test can make the pen refuse (423) and assert the write path stops there.
   let penGuard: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: ActivitiesService;
@@ -261,6 +267,14 @@ describe('ActivitiesService', () => {
       findPlanWbsTree: vi.fn().mockResolvedValue([]),
       updateParents: vi.fn(),
       updatePlacements: vi.fn(),
+      updateLanePositions: vi.fn(),
+      upsertSwimlaneLanes: vi.fn().mockResolvedValue(undefined),
+    };
+    // Default: every swimlane asked for is active in the plan; a test empties it to refuse one.
+    swimlanes = {
+      lockActiveForShare: vi
+        .fn()
+        .mockImplementation((_org: string, _plan: string, ids: string[]) => Promise.resolve(ids)),
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
@@ -274,6 +288,7 @@ describe('ActivitiesService', () => {
     txDrivingFindFirst = vi.fn().mockResolvedValue(null);
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     txExecuteRaw = vi.fn();
+    txQueryRaw = vi.fn().mockResolvedValue([]);
     txParentFindFirst = vi.fn().mockResolvedValue({ name: 'Phase 1' });
     txActivityFindMany = vi.fn().mockResolvedValue([]);
     txActivityCount = vi.fn().mockResolvedValue(0);
@@ -283,9 +298,13 @@ describe('ActivitiesService', () => {
       activity: { findMany: vi.fn().mockResolvedValue([]) },
       // `resourceAssignmentCount` (ADR-0162 decision 6). Default: no live assignment anywhere.
       resourceAssignment: { groupBy: vi.fn().mockResolvedValue([]) },
+      // The lanes stored per swimlane basis, loaded once per response page. Default: none placed.
+      activitySwimlaneLane: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
+          // The id-order activity row lock the swimlane paths take before the swimlane lock.
+          $queryRaw: txQueryRaw,
           activity: {
             findFirst: txParentFindFirst,
             // The history diff's after-read (ADR-0174); the stub recorder below ignores its value.
@@ -330,6 +349,7 @@ describe('ActivitiesService', () => {
       // The batch builders and the knock-on: nothing to record in a unit spec.
       placementWrites: vi.fn().mockReturnValue([]),
       parentWrites: vi.fn().mockReturnValue([]),
+      swimlaneWrites: vi.fn().mockReturnValue([]),
       recordKnockOn: vi.fn().mockResolvedValue(undefined),
     };
     service = new ActivitiesService(
@@ -342,6 +362,7 @@ describe('ActivitiesService', () => {
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
       history as unknown as ActivityHistoryRecorder,
+      swimlanes as unknown as SwimlaneRepository,
       logger,
     );
   });
@@ -1987,6 +2008,294 @@ describe('ActivitiesService', () => {
       await expect(service.restore(principalWith(ALL), 'acme', ACTIVITY_ID)).rejects.toBeInstanceOf(
         NotFoundError,
       );
+    });
+  });
+
+  describe('swimlanes', () => {
+    const SWIMLANE_A = 'swim-a';
+    const SWIMLANE_B = 'swim-b';
+    const reasonOf = (error: unknown): unknown => (error as ValidationError).details;
+
+    describe('create and update', () => {
+      it('files a new activity in a swimlane it share-locked first', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        activities.create.mockResolvedValue(activity({ swimlaneId: SWIMLANE_A }));
+        await service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          name: 'Excavate',
+          swimlaneId: SWIMLANE_A,
+        });
+        expect(swimlanes.lockActiveForShare).toHaveBeenCalledWith(
+          ORG_ID,
+          PLAN_ID,
+          [SWIMLANE_A],
+          expect.anything(),
+        );
+        expect(activities.create).toHaveBeenCalledWith(
+          expect.objectContaining({ swimlaneId: SWIMLANE_A }),
+          expect.anything(),
+        );
+      });
+
+      it('refuses a swimlane on create while the swimlanes come from the WBS (422)', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }),
+        );
+        const error = await service
+          .create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', swimlaneId: SWIMLANE_A })
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_IS_WBS' });
+        expect(activities.create).not.toHaveBeenCalled();
+      });
+
+      it('lets a null swimlane through in WBS mode: it writes nothing', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }),
+        );
+        activities.create.mockResolvedValue(activity());
+        await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'X', swimlaneId: null });
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+
+      it('answers 404 for a swimlane that is foreign, unknown or deleted', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        swimlanes.lockActiveForShare.mockResolvedValue([]);
+        await expect(
+          service.create(principalWith(ALL), 'acme', PLAN_ID, {
+            name: 'X',
+            swimlaneId: SWIMLANE_A,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        expect(activities.create).not.toHaveBeenCalled();
+      });
+
+      it('update: locks the activity row then the swimlane, and patches swimlaneId', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          version: 1,
+          swimlaneId: SWIMLANE_B,
+        });
+        expect(txQueryRaw).toHaveBeenCalledTimes(1);
+        expect(swimlanes.lockActiveForShare).toHaveBeenCalledWith(
+          ORG_ID,
+          PLAN_ID,
+          [SWIMLANE_B],
+          expect.anything(),
+        );
+        expect(txQueryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+          swimlanes.lockActiveForShare.mock.invocationCallOrder[0]!,
+        );
+        expect(activities.updateIfVersionMatches).toHaveBeenCalledWith(
+          ACTIVITY_ID,
+          1,
+          expect.objectContaining({ swimlaneId: SWIMLANE_B }),
+          USER_ID,
+          expect.anything(),
+        );
+      });
+
+      it('update: refuses a changed swimlane in WBS mode but not a resent one', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 }),
+        );
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ swimlaneId: SWIMLANE_A }));
+        const error = await service
+          .update(principalWith(ALL), 'acme', ACTIVITY_ID, { version: 1, swimlaneId: null })
+          .catch((e: unknown) => e);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_IS_WBS' });
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          version: 1,
+          name: 'Renamed',
+          swimlaneId: SWIMLANE_A,
+        });
+        expect(activities.updateIfVersionMatches).toHaveBeenCalledWith(
+          ACTIVITY_ID,
+          1,
+          expect.not.objectContaining({ swimlaneId: expect.anything() }),
+          USER_ID,
+          expect.anything(),
+        );
+      });
+
+      it('update: clearing the swimlane takes no swimlane lock', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        activities.findActiveByIdInOrg.mockResolvedValue(activity({ swimlaneId: SWIMLANE_A }));
+        await service.update(principalWith(ALL), 'acme', ACTIVITY_ID, {
+          version: 1,
+          swimlaneId: null,
+        });
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('updatePositions', () => {
+      const A2 = 'act-2';
+      const call = (positions: unknown[]) =>
+        service.updatePositions(principalWith(ALL), 'acme', PLAN_ID, {
+          positions,
+        } as never);
+
+      beforeEach(() => {
+        activities.updateLanePositions.mockResolvedValue(1);
+        txActivityFindMany.mockResolvedValue([
+          { id: ACTIVITY_ID, swimlaneId: null },
+          { id: A2, swimlaneId: SWIMLANE_A },
+        ]);
+      });
+
+      it('keeps every pre-swimlane body on the old path: no swimlane read, lock or lane row', async () => {
+        await call([{ id: ACTIVITY_ID, laneIndex: 3, version: 1 }]);
+        expect(activities.updateLanePositions).toHaveBeenCalledWith(
+          ORG_ID,
+          PLAN_ID,
+          [{ id: ACTIVITY_ID, laneIndex: 3, version: 1 }],
+          USER_ID,
+          expect.anything(),
+        );
+        expect(txQueryRaw).not.toHaveBeenCalled();
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+        expect(activities.upsertSwimlaneLanes).not.toHaveBeenCalled();
+      });
+
+      it('refuses an in-swimlane lane while the plan has no swimlane source (422)', async () => {
+        const error = await call([
+          { id: ACTIVITY_ID, version: 1, swimlane: { laneIndex: 1 } },
+        ]).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_NONE' });
+        expect(activities.updateLanePositions).not.toHaveBeenCalled();
+      });
+
+      it('refuses a named swimlane while the swimlanes come from the WBS (422)', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }),
+        );
+        const error = await call([
+          { id: ACTIVITY_ID, version: 1, swimlane: { swimlaneId: SWIMLANE_A, laneIndex: 1 } },
+        ]).catch((e: unknown) => e);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_IS_WBS' });
+      });
+
+      it('MANUAL: derives SWIMLANE from the named or current swimlane and No swimlane from none', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        activities.updateLanePositions.mockResolvedValue(3);
+        txActivityFindMany.mockResolvedValue([
+          { id: ACTIVITY_ID, swimlaneId: null },
+          { id: A2, swimlaneId: SWIMLANE_A },
+          { id: 'act-3', swimlaneId: null },
+        ]);
+        await call([
+          { id: ACTIVITY_ID, version: 1, swimlane: { swimlaneId: SWIMLANE_B, laneIndex: 2 } },
+          { id: A2, version: 1, swimlane: { laneIndex: 4 } },
+          { id: 'act-3', version: 1, swimlane: { laneIndex: 0 } },
+        ]);
+        expect(swimlanes.lockActiveForShare).toHaveBeenCalledWith(
+          ORG_ID,
+          PLAN_ID,
+          [SWIMLANE_B, SWIMLANE_A],
+          expect.anything(),
+        );
+        expect(txQueryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+          swimlanes.lockActiveForShare.mock.invocationCallOrder[0]!,
+        );
+        expect(activities.upsertSwimlaneLanes).toHaveBeenCalledWith(
+          ORG_ID,
+          PLAN_ID,
+          [
+            expect.objectContaining({
+              activityId: ACTIVITY_ID,
+              basis: 'SWIMLANE',
+              swimlaneId: SWIMLANE_B,
+              laneIndex: 2,
+            }),
+            expect.objectContaining({
+              activityId: A2,
+              basis: 'SWIMLANE',
+              swimlaneId: SWIMLANE_A,
+              laneIndex: 4,
+            }),
+            expect.objectContaining({
+              activityId: 'act-3',
+              basis: 'NO_SWIMLANE',
+              swimlaneId: null,
+              laneIndex: 0,
+            }),
+          ],
+          expect.anything(),
+        );
+        // Only a row that carried a swimlaneId reaches the UPDATE's swimlane column.
+        expect(activities.updateLanePositions.mock.calls[0]![2]).toEqual([
+          { id: ACTIVITY_ID, version: 1, swimlaneId: SWIMLANE_B },
+          { id: A2, version: 1 },
+          { id: 'act-3', version: 1 },
+        ]);
+      });
+
+      it('MANUAL: 404s when a named swimlane is not an active swimlane of the plan', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        swimlanes.lockActiveForShare.mockResolvedValue([]);
+        await expect(
+          call([
+            { id: ACTIVITY_ID, version: 1, swimlane: { swimlaneId: SWIMLANE_B, laneIndex: 2 } },
+          ]),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        expect(activities.updateLanePositions).not.toHaveBeenCalled();
+      });
+
+      it('WBS: derives the level-L ancestor summary, or No WBS group at that level', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }),
+        );
+        activities.updateLanePositions.mockResolvedValue(2);
+        activities.findPlanWbsTree.mockResolvedValue([
+          { id: 'sum', parentId: null, type: 'WBS_SUMMARY' },
+          { id: ACTIVITY_ID, parentId: 'sum', type: 'TASK' },
+          { id: A2, parentId: null, type: 'TASK' },
+        ]);
+        await call([
+          { id: ACTIVITY_ID, version: 1, swimlane: { laneIndex: 1 } },
+          { id: A2, version: 1, swimlane: { laneIndex: 2 } },
+        ]);
+        expect(activities.upsertSwimlaneLanes.mock.calls[0]![2]).toEqual([
+          {
+            activityId: ACTIVITY_ID,
+            laneIndex: 1,
+            basis: 'WBS_SUMMARY',
+            swimlaneId: null,
+            summaryActivityId: 'sum',
+            wbsLevel: null,
+          },
+          {
+            activityId: A2,
+            laneIndex: 2,
+            basis: 'NO_WBS_SUMMARY',
+            swimlaneId: null,
+            summaryActivityId: null,
+            wbsLevel: 1,
+          },
+        ]);
+        // No hand-made swimlane is involved in a WBS lane.
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+
+      it('404s for an activity that is not in the plan before it derives anything', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        txActivityFindMany.mockResolvedValue([]);
+        await expect(
+          call([{ id: ACTIVITY_ID, version: 1, swimlane: { laneIndex: 1 } }]),
+        ).rejects.toBeInstanceOf(NotFoundError);
+      });
+
+      it('answers 409 when a version is stale and every row is present', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        txActivityFindMany.mockResolvedValue([{ id: ACTIVITY_ID, swimlaneId: null }]);
+        activities.updateLanePositions.mockResolvedValue(0);
+        await expect(
+          call([{ id: ACTIVITY_ID, version: 9, swimlane: { laneIndex: 1 } }]),
+        ).rejects.toBeInstanceOf(ConflictError);
+        expect(activities.upsertSwimlaneLanes).not.toHaveBeenCalled();
+      });
     });
   });
 });

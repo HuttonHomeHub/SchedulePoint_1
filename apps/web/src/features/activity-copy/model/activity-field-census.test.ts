@@ -116,7 +116,11 @@ describe('the clone field census', () => {
     // 63 -> 65 on 2026-10-17: `derivedDurationMinutes` and `derivedDurationDays` (ADR-0197). Engine
     // output — the working time a summary's or level-of-effort's span covers, rewritten by every
     // recalculation — and a clone has no calculated span to carry. Classified `withheld`.
-    expect(entries.length).toBe(65);
+    //
+    // 65 -> 67 on 2026-10-23: `swimlaneId` and `swimlaneLanes` (swimlanes M1-T3). Where a clone sits
+    // among the swimlanes is the paste destination's decision, owned by the swimlane milestones, and
+    // the lane rows are server-kept against the source activity. Both classified `withheld`.
+    expect(entries.length).toBe(67);
   });
 
   it('sends nothing the census withholds', () => {

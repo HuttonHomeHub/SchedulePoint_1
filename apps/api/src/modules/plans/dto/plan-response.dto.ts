@@ -4,6 +4,7 @@ import {
   EacMethod,
   PlanStatus,
   ProgressRecalcMode,
+  SwimlaneSource,
   TotalFloatMode,
   type Plan,
 } from '@prisma/client';
@@ -104,6 +105,24 @@ export class PlanResponseDto implements PlanSummary {
   currencyCode!: string | null;
 
   @ApiProperty({
+    enum: SwimlaneSource,
+    enumName: 'SwimlaneSource',
+    description:
+      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL or WBS. ' +
+      'Presentation only — never a scheduling input.',
+  })
+  swimlaneSource!: SwimlaneSource;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    minimum: 1,
+    maximum: 3,
+    description: 'The WBS level (1 to 3) when the source is WBS, null otherwise.',
+  })
+  swimlaneWbsLevel!: number | null;
+
+  @ApiProperty({
     format: 'date',
     nullable: true,
     type: String,
@@ -166,6 +185,8 @@ export class PlanResponseDto implements PlanSummary {
       // Earned-Value plan options (EV1, ADR-0042): passthrough echo; currencyCode null = inherit.
       eacMethod: entity.eacMethod,
       currencyCode: entity.currencyCode,
+      swimlaneSource: entity.swimlaneSource,
+      swimlaneWbsLevel: entity.swimlaneWbsLevel,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       editedSinceCalculated: isEditedSinceCalculated(

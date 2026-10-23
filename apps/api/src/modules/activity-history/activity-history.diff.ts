@@ -37,13 +37,22 @@ import type {
  * the merge is a table test rather than a mounted write.
  */
 
-/** The activity columns the history diffs. Anything else on the row is ignored by construction. */
-export type ActivityRecordedRow = Pick<Activity, ActivityHistoryFieldKey>;
+/**
+ * The activity columns the history diffs. Anything else on the row is ignored by construction.
+ *
+ * `swimlaneId` is the one optional key: it joined the vocabulary after every caller's row shape was
+ * fixed, and an absent value reads as "no swimlane" on both sides, so a caller that does not select
+ * it can never report a change to it.
+ */
+export type ActivityRecordedRow = Pick<Activity, Exclude<ActivityHistoryFieldKey, 'swimlaneId'>> &
+  Partial<Pick<Activity, 'swimlaneId'>>;
 
-/** Names for the two reference fields, resolved by the caller for the ids that changed. */
+/** Names for the three reference fields, resolved by the caller for the ids that changed. */
 export interface ReferenceNames {
   calendars: ReadonlyMap<string, string>;
   parents: ReadonlyMap<string, string>;
+  /** Optional for the same reason as {@link ActivityRecordedRow}'s `swimlaneId`. */
+  swimlanes?: ReadonlyMap<string, string>;
 }
 
 /** A truncated SHA-256: enough to tell two descriptions apart, too short to be a useful digest of one. */
@@ -74,8 +83,13 @@ function fieldValue(
       return Number(raw);
     case 'reference': {
       const id = raw as string;
-      const table = key === 'calendarId' ? names.calendars : names.parents;
-      return { id, name: table.get(id) ?? '' };
+      const table =
+        key === 'calendarId'
+          ? names.calendars
+          : key === 'swimlaneId'
+            ? names.swimlanes
+            : names.parents;
+      return { id, name: table?.get(id) ?? '' };
     }
     default:
       return raw as string | number | boolean;
@@ -159,6 +173,16 @@ export function changedReferenceIds(
       ? []
       : [before[key], after[key]].filter((id): id is string => id !== null);
   return { calendarIds: ids('calendarId'), parentIds: ids('parentId') };
+}
+
+/** The swimlanes a diff would name, so the caller reads only those names. */
+export function changedSwimlaneIds(
+  before: Pick<ActivityRecordedRow, 'swimlaneId'>,
+  after: Pick<ActivityRecordedRow, 'swimlaneId'>,
+): string[] {
+  const from = before.swimlaneId ?? null;
+  const to = after.swimlaneId ?? null;
+  return from === to ? [] : [from, to].filter((id): id is string => id !== null);
 }
 
 export function linkState(row: {

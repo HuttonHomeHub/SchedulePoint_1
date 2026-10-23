@@ -132,6 +132,16 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
     disposition: 'transformed',
     reason: 'Layout, not definition. The paste places the clone below everything.',
   },
+  swimlaneId: {
+    disposition: 'withheld',
+    reason:
+      'Where the clone sits among the swimlanes is the paste destination’s decision, which the ' +
+      'swimlane milestones own; until then a clone is in no swimlane.',
+  },
+  swimlaneLanes: {
+    disposition: 'withheld',
+    reason: 'Server-kept rows keyed to the source activity; the clone has none until it is placed.',
+  },
   parentId: {
     disposition: 'transformed',
     reason:

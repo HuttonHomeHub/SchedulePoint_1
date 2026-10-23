@@ -24,6 +24,8 @@ export interface PendingChanges {
 export interface NameRefs {
   readonly calendarIds: readonly string[];
   readonly parentIds: readonly string[];
+  /** Swimlanes named by a `swimlaneId` item; a deleted swimlane still has a name. */
+  readonly swimlaneIds: readonly string[];
   readonly resourceIds: readonly string[];
   /** Activities that are not recorded by this call but are named by an item: a knock-on's other end. */
   readonly activityIds: readonly string[];
@@ -33,6 +35,8 @@ export interface NameRefs {
 export interface ResolvedNames {
   readonly calendars: ReadonlyMap<string, string>;
   readonly parents: ReadonlyMap<string, string>;
+  /** Optional so a caller that never names a swimlane need not supply the map. */
+  readonly swimlanes?: ReadonlyMap<string, string>;
   readonly resources: ReadonlyMap<string, ActivityHistoryResourceRef>;
   /**
    * The activities the write records, and any it asked for by {@link NameRefs.activityIds} — a link
@@ -46,6 +50,7 @@ export interface ResolvedNames {
 export const NO_REFS: NameRefs = {
   calendarIds: [],
   parentIds: [],
+  swimlaneIds: [],
   resourceIds: [],
   activityIds: [],
 };
@@ -70,6 +75,7 @@ export function combineChanges(...parts: readonly PendingChanges[]): PendingChan
     refs: {
       calendarIds: union((r) => r.calendarIds),
       parentIds: union((r) => r.parentIds),
+      swimlaneIds: union((r) => r.swimlaneIds),
       resourceIds: union((r) => r.resourceIds),
       activityIds: union((r) => r.activityIds),
     },
