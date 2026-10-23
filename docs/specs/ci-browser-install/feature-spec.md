@@ -11,18 +11,23 @@ ADR-0105 makes a change to a CI step a trigger for a spec, however small. This i
 
 ## 0. Evidence
 
-| #   | Claim                                                                    | Established by                                                                                                                                                                                                                                     |
-| --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E1  | The "Install Playwright browsers" step normally takes about two minutes. | Passing shards on PR #1113 (run 39977297138): every web job that passed went from that step to the tests in minutes.                                                                                                                               |
-| E2  | It stalled for the job's whole 30 minutes on six runs, before any test.  | `docs/HANDOFF.md` (2026-10-23) records four: shard 1 on #1109, #1110 and #1111 and shard 4 on #1112, plus one more that session; the sixth is job 120495141492 on #1113, whose step 11 ran 15:20:40–15:49:55 and was cancelled, steps 12+ skipped. |
-| E3  | A re-run of the same commit passes.                                      | Every one of those re-runs passed in about 16 minutes (HANDOFF.md).                                                                                                                                                                                |
-| E4  | It is not the fifth-shard trigger.                                       | No test was slow; no test ran.                                                                                                                                                                                                                     |
+| #   | Claim                                                                                                                   | Established by                                                                                                                                                                                                                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| E1  | The "Install Playwright browsers" step normally takes about two minutes.                                                | Passing shards on PR #1113 (run 39977297138): every web job that passed went from that step to the tests in minutes.                                                                                                                                                                             |
+| E2  | It stalled for the job's whole 30 minutes on six runs, before any test.                                                 | `docs/HANDOFF.md` (2026-10-23) records four: shard 1 on #1109, #1110 and #1111 and shard 4 on #1112, plus one more that session; the sixth is job 120495141492 on #1113, whose step 11 ran 15:20:40–15:49:55 and was cancelled, steps 12+ skipped.                                               |
+| E3  | A re-run of the same commit passes.                                                                                     | Every one of those re-runs passed in about 16 minutes (HANDOFF.md).                                                                                                                                                                                                                              |
+| E5  | The stall is apt fetching ~142 MB of system packages from a slow mirror, and the first version's retries could not run. | Job 120522287516 on #1114 (first version): `Need to get 142 MB of archives`; one 5.6 MB font took 2 min (16:17:17 → 16:19:19); attempt 1 was killed at 6 min, then attempts 2 and 3 failed in seconds on `Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 3331 (apt-get)`. |
+| E4  | It is not the fifth-shard trigger.                                                                                      | No test was slow; no test ran.                                                                                                                                                                                                                                                                   |
 
 ## 1. What changes
 
 - **D1.** The step runs the same command under `timeout --kill-after=15 360`, up to three times, and
-  fails only if all three fail. `timeout` runs the command in its own process group and signals the
-  group, so a stalled apt or download child is killed with it.
+  fails only if all three fail.
+- **D1a.** After a failed try it stops any leftover `apt-get` (`sudo pkill -TERM -x apt-get`), waits up
+  to 60 s for `apt-get`/`dpkg` to exit, and runs `sudo dpkg --configure -a`. The first version of this
+  change assumed `timeout`'s process-group signal would reach apt; E5 shows it does not, because
+  Playwright runs apt-get through `sudo`, which starts it in its own session. apt keeps the packages
+  it already fetched in its cache, so each try resumes the download.
 - **D2.** The step gets `timeout-minutes: 20` as a ceiling (3 × 6 minutes plus slack), so even a
   retry loop that misbehaves cannot spend the job's 30-minute budget.
 - **D3.** Each failed try prints a `::warning::` annotation, so a retry is visible on the run's
