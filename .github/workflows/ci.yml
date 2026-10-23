@@ -545,8 +545,33 @@ jobs:
       - name: Check schema/migration drift
         run: pnpm --filter @repo/api prisma:check-drift
 
+      # A normal install takes about two minutes, but on six runs (2026-10-22/23)
+      # it stalled for the job's whole 30 minutes and no test ran; every re-run
+      # passed. So each try gets six minutes and a stalled one is killed and
+      # retried, rather than spending the shard's budget on one download
+      # (docs/specs/ci-browser-install/feature-spec.md). The stall is apt
+      # fetching the system packages from a slow mirror. Playwright runs
+      # apt-get through sudo, which starts it in its own session, so the
+      # timeout's signal does not reach it: stop it explicitly so the next try
+      # can take the dpkg lock. apt keeps every package it already fetched, so
+      # the next try resumes the download rather than restarting it.
       - name: Install Playwright browsers
-        run: pnpm --filter @repo/web exec playwright install --with-deps
+        timeout-minutes: 20
+        run: |
+          for attempt in 1 2 3; do
+            if timeout --kill-after=15 360 pnpm --filter @repo/web exec playwright install --with-deps; then
+              exit 0
+            fi
+            echo "::warning::Playwright browser install attempt ${attempt} failed or took over 6 minutes; retrying"
+            sudo pkill -TERM -x apt-get || true
+            for _ in $(seq 1 30); do
+              pgrep -x 'apt-get|dpkg' >/dev/null || break
+              sleep 2
+            done
+            sudo dpkg --configure -a || true
+          done
+          echo "::error::Playwright browser install failed three times"
+          exit 1
 
       # Playwright starts the API and web dev servers itself (see
       # apps/web/playwright.config.ts) and drives the full stack in a browser.

@@ -10,6 +10,14 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-23 — The CI browser install gets a time limit and retries
+
+**Decided by the product owner** (this session), choosing the recommended option: the "Install
+Playwright browsers" step stalled for the job's full 30 minutes on six CI runs (2026-10-22/23) and
+passed on every re-run. Each try now gets six minutes, up to three tries, under a 20-minute step
+ceiling. Caching the browsers was offered and not chosen. Spec:
+[`docs/specs/ci-browser-install/feature-spec.md`](specs/ci-browser-install/feature-spec.md).
+
 ## 2026-10-22 — Swimlanes are commissioned; the spec is approved with SQ-7 "yes"
 
 **Decided by the product owner** (this session), superseding the "not commissioned" line of the
