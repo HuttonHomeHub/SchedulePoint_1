@@ -215,6 +215,10 @@ model Organization {
   // Per-activity change history (ADR-0174). organization_id is copied from the activity row
   // inside the recording transaction, never from the request — the ActivityStep pattern.
   activityHistory      ActivityHistoryEntry[]
+  // Hand-made swimlanes and per-basis in-swimlane lanes (swimlanes schema-design §3.4-3.5).
+  // organization_id is copied from the plan / activity inside the write, never from the request.
+  swimlanes            Swimlane[]
+  swimlaneLanes        ActivitySwimlaneLane[]
 
   @@map("organizations")
 }
@@ -704,6 +708,31 @@ enum PlacementSnapshotLevel {
   FULL
 }
 
+/// Where a plan's swimlanes come from (swimlanes spec §4.6; docs/specs/swimlanes/schema-design.md
+/// §3.1). Pinned to `plans.swimlane_wbs_level` by the fail-closed ck_plans_swimlane_source_level,
+/// so a label added here without a branch there is REJECTED, not admitted. MUST stay in lock-step
+/// with the `SwimlaneSource` union in @repo/types.
+enum SwimlaneSource {
+  NONE
+  MANUAL
+  WBS
+}
+
+/// What an activity's in-swimlane lane was written against (spec §4.4, "lane basis";
+/// schema-design §3.5). Each label pins which basis columns are set, by the fail-closed
+/// ck_activity_swimlane_lanes_basis_shape. MUST stay in lock-step with the `SwimlaneLaneBasis`
+/// union in @repo/types.
+enum SwimlaneLaneBasis {
+  /// a hand-made swimlane (swimlane_id set)
+  SWIMLANE
+  /// "No swimlane" while the source is MANUAL (nothing set)
+  NO_SWIMLANE
+  /// one WBS group: the swimlane of WBS_SUMMARY summary_activity_id (summary_activity_id set)
+  WBS_SUMMARY
+  /// "No swimlane" while the source is WBS at wbs_level (wbs_level set)
+  NO_WBS_SUMMARY
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -999,6 +1028,16 @@ model Plan {
   /// filtered or sorted across plans — the `scheduleComputedAt` precedent. No CHECK: the one
   /// candidate (`>= created_at`) compares two clocks and guards nothing a reader relies on.
   scheduleInputsChangedAt               DateTime                @default(now()) @map("schedule_inputs_changed_at") @db.Timestamptz(3)
+  /// Where this plan's swimlanes come from (swimlanes schema-design §3.2). NOT NULL DEFAULT 'NONE',
+  /// true of every plan that predates the feature. NOT a scheduling input (`NOT_INPUT` in
+  /// PLAN_FIELD_CLASS): a source write must not stamp schedule_inputs_changed_at. It goes through
+  /// the plan PATCH and bumps `version`. No index: read with its own plan row, never filtered
+  /// across plans (the scheduleComputedAt precedent).
+  swimlaneSource                        SwimlaneSource          @default(NONE) @map("swimlane_source")
+  /// The WBS depth whose summaries are the swimlanes: 1 to 3 when swimlane_source = 'WBS', NULL
+  /// otherwise. Enforced by the fail-closed ck_plans_swimlane_source_level (raw SQL, migration
+  /// only). `NOT_INPUT`, no index, for the reasons above.
+  swimlaneWbsLevel                      Int?                    @map("swimlane_wbs_level") @db.SmallInt
   version                               Int                     @default(1)
   createdAt                             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1060,6 +1099,10 @@ model Plan {
   // working minutes by cross-plan-day-boundary M2-T2. ON DELETE CASCADE, for the same reason.
   // Non-scheduling: nothing in the application reads it.
   xplanLagMigrations  CrossPlanLagMigration[]
+  // This plan's hand-made swimlanes (swimlanes schema-design §3.4). RESTRICT FK; swimlane
+  // soft-delete is service-owned and the plan cascade stamps them into the plan's batch.
+  // Hard-deleted only by plan expiry and import compensation, after activities.
+  swimlanes           Swimlane[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -1266,6 +1309,16 @@ model Activity {
   // (parent_id) WHERE deleted_at IS NULL AND parent_id IS NOT NULL — raw SQL in
   // the migration only (see the @@index block below).
   parentId String? @map("parent_id") @db.Uuid
+
+  // Hand-made swimlane membership (swimlanes spec §4.6; schema-design §3.3). NULL = "No
+  // swimlane". Kept, and ignored, while the plan's source is WBS or NONE, so switching back
+  // restores it. May name a SOFT-DELETED swimlane: that is how a deleted swimlane's members come
+  // back on restore. NOT a scheduling input (`NOT_INPUT`; absent from ENGINE_ACTIVITY_SELECT).
+  // Same plan BY THE DATABASE: the FK is composite (plan_id, swimlane_id) → swimlanes (plan_id,
+  // id), unlike calendar_id and parent_id, whose single-column FKs cannot say so. Backed by the
+  // partial idx_activities_swimlane_id_fk (swimlane_id) WHERE swimlane_id IS NOT NULL, raw SQL
+  // in the migration only and NOT declared here (TECH_DEBT #54).
+  swimlaneId String? @map("swimlane_id") @db.Uuid
 
   // CPM output — engine-owned (M6). Nullable/defaulted; never set from input.
   earlyStart            DateTime? @map("early_start") @db.Date
@@ -1606,6 +1659,21 @@ model Activity {
   // as its activity, and every hard-delete path names the table explicitly before deleting
   // activities — see ActivityHistoryEntry for why not CASCADE.
   historyEntries ActivityHistoryEntry[]
+
+  // The hand-made swimlane this activity belongs to (see swimlaneId). Composite FK so the
+  // database refuses a swimlane of another plan (23503); a NULL swimlane_id is admitted (MATCH
+  // SIMPLE). onUpdate Restrict, not Prisma's default CASCADE: plan_id is part of the key, so a
+  // cascading update of swimlanes.plan_id would move activities between plans as a side effect.
+  // Do NOT `include: { swimlane: true }`: a to-one include is outside the ADR-0172 gate and
+  // would return a deleted swimlane as if it were live; read the plan's list separately.
+  swimlane Swimlane? @relation(fields: [planId, swimlaneId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // This activity's in-swimlane lanes, one per basis (ActivitySwimlaneLane). RESTRICT, not
+  // CASCADE: every hard-delete path names the table before deleting activities and counts it
+  // (the ActivityHistoryEntry reason).
+  swimlaneLanes ActivitySwimlaneLane[] @relation("ActivitySwimlaneLanes")
+  // Lane rows whose basis is THIS activity as a WBS_SUMMARY group. RESTRICT, same reason.
+  summaryLanes  ActivitySwimlaneLane[] @relation("ActivitySwimlaneSummaryLanes")
 
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
@@ -3694,6 +3762,107 @@ model ActivityHistoryEntry {
   // Backs the organization FK's RESTRICT check (DATABASE.md "index every FK").
   @@index([organizationId], map: "idx_activity_history_organization_id")
   @@map("activity_history_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Labelled swimlanes (docs/specs/swimlanes/schema-design.md).
+// ---------------------------------------------------------------------------
+
+/// A hand-made swimlane: a labelled, contiguous run of lanes on a plan's diagram (swimlanes
+/// spec §0). Plan content, like a note: soft-deleted on its own, swept into its plan's
+/// delete_batch_id by the plan cascade, hard-deleted only with its plan (ADR-0096 expiry) or by
+/// import compensation. Never listed in Recently deleted. Not a scheduling input.
+///
+/// Lock order (schema-design §5): a write touching both tables locks activities (id order) then
+/// swimlanes (id order). Create and restore take the plan advisory lock; reorder locks the plan's
+/// active rows `ORDER BY id FOR NO KEY UPDATE` before its `UPDATE … FROM unnest`.
+///
+/// Raw-SQL objects (migration only, Prisma cannot express them, so NOT declared here):
+/// uq_swimlanes_plan_name (plan_id, lower(name)) WHERE deleted_at IS NULL;
+/// idx_swimlanes_delete_batch_id (delete_batch_id) WHERE delete_batch_id IS NOT NULL;
+/// ck_swimlanes_name_shape; ck_swimlanes_position_nonneg.
+model Swimlane {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the plan inside the create transaction, never client input. RESTRICT.
+  organizationId String    @map("organization_id") @db.Uuid
+  planId         String    @map("plan_id") @db.Uuid
+  // 1-80 chars, trimmed, no control characters (ck_swimlanes_name_shape). Unique per plan among
+  // live rows IGNORING CASE (uq_swimlanes_plan_name); a soft-deleted name does not block reuse.
+  name           String
+  // Order key, read as ORDER BY position, id. Deliberately NOT unique (schema-design §4 Q1): a
+  // permutation in one UPDATE, and a restore onto a reused slot, must not fail. >= 0
+  // (ck_swimlanes_position_nonneg).
+  position       Int
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan                   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  members      Activity[]
+  lanes        ActivitySwimlaneLane[]
+
+  // The composite FK target for activities (plan_id, swimlane_id). Its leftmost prefix also
+  // backs the plan_id FK, the plan's swimlane list, the cascade sweep and the expiry delete,
+  // so there is no separate (plan_id) index.
+  @@unique([planId, id], map: "uq_swimlanes_plan_id_id")
+  // Backs the organization FK's RESTRICT check, IDOR loads and the export `org` read.
+  @@index([organizationId])
+  @@map("swimlanes")
+}
+
+/// An activity's lane inside one swimlane, kept per BASIS so that switching source, moving
+/// between swimlanes and restoring a deleted swimlane each return the exact lane last written
+/// there (swimlanes schema-design §2). The absence of a row for the activity's current basis
+/// means "never placed there": the projection derives a lane. The server derives the basis; the
+/// client never sends it.
+///
+/// Departures from the house template, each deliberate (the ActivityHistoryEntry precedent):
+/// 1. No `version`: no client writes a row directly. Rows are written only inside an activity
+///    write that holds the activity row lock (id order) and bumps activities.version, so the
+///    activity's version is the optimistic lock for its lanes.
+/// 2. No `deleted_at` / `delete_batch_id`: a row lives exactly as long as its activity.
+///    Soft-deleting the activity leaves its rows, so restore needs nothing.
+/// 3. No `created_by` / `updated_by`: the activity row's `updated_by` records the writer.
+///
+/// Raw SQL (migration only): ck_activity_swimlane_lanes_basis_shape (fail-closed CASE),
+/// ck_activity_swimlane_lanes_lane_index_nonneg, the two partial FK-check indexes
+/// idx_activity_swimlane_lanes_swimlane_id_fk and idx_activity_swimlane_lanes_summary_fk, and the
+/// NULLS NOT DISTINCT clause on the unique index below (Prisma cannot express it).
+model ActivitySwimlaneLane {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  // Copied from the activity inside the write, never from the request.
+  organizationId    String            @map("organization_id") @db.Uuid
+  activityId        String            @map("activity_id") @db.Uuid
+  basis             SwimlaneLaneBasis
+  swimlaneId        String?           @map("swimlane_id") @db.Uuid
+  summaryActivityId String?           @map("summary_activity_id") @db.Uuid
+  wbsLevel          Int?              @map("wbs_level") @db.SmallInt
+  // >= 0 (ck_activity_swimlane_lanes_lane_index_nonneg); the 10,000 ceiling is the DTO's, as
+  // for activities.lane_index.
+  laneIndex         Int               @map("lane_index")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Also the tie-break when two placed members of one basis collide (schema-design §4 Q3):
+  // the later updated_at keeps the lane, then id.
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  activity     Activity     @relation("ActivitySwimlaneLanes", fields: [activityId], references: [id], onDelete: Restrict)
+  swimlane     Swimlane?    @relation(fields: [swimlaneId], references: [id], onDelete: Restrict)
+  summary      Activity?    @relation("ActivitySwimlaneSummaryLanes", fields: [summaryActivityId], references: [id], onDelete: Restrict)
+
+  // DECLARED as a plain unique so prisma:check-drift stays empty. The migration adds NULLS NOT
+  // DISTINCT, which Prisma 6 cannot express and does not compare (schema-design §8.2). One
+  // index: the one-row-per-basis guarantee, the INSERT … ON CONFLICT arbiter, the activity_id FK
+  // RESTRICT check (leftmost prefix, no predicate) and the "lanes of these activities" load.
+  @@unique([activityId, basis, swimlaneId, summaryActivityId, wbsLevel], map: "uq_activity_swimlane_lanes_basis")
+  // Backs the organization FK's RESTRICT check and the export `org` read.
+  @@index([organizationId])
+  @@map("activity_swimlane_lanes")
 }
 
 // A Note — one authored, timestamped entry in an entity's append-accumulating

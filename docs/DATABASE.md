@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 35
-> models across 75 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 37
+> models across 76 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -32,7 +32,7 @@
   **checks:** `ck_<table>_<rule>`.
 - **Enums:** `PascalCase` Prisma type (`ConstraintType`, `SchedulingMode`), `SCREAMING_SNAKE_CASE`
   values. A new enum follows that and carries **no** `@@map`, so its Postgres type is the
-  PascalCase name. Four of the schema's 27 enums predate the pattern and carry an `@@map` to a
+  PascalCase name. Four of the schema's 29 enums predate the pattern and carry an `@@map` to a
   `snake_case` database type — `ActivityHistoryScope` (`activity_history_scope`),
   `ActivityHistoryOrigin` (`activity_history_origin`), `AuditActorType` (`audit_actor_type`) and
   `AuditOutcome` (`audit_outcome`). Existing enum types are not renamed: a rename is a migration
@@ -110,7 +110,7 @@ UPDATE`, which the PostgreSQL documentation says locks rows in the order returne
 ## Soft deletes
 
 - Default to **soft delete** via a nullable `deleted_at timestamptz`. Deletes set
-  the timestamp. Twenty models carry `deleted_at`, and **filtering is per query**:
+  the timestamp. Twenty-one models carry `deleted_at`, and **filtering is per query**:
   nothing excludes soft-deleted rows centrally (there is no Prisma extension,
   middleware or base repository — `PrismaService` is a bare `PrismaClient`).
   Each read **and write** states its rule itself — through the repository's
@@ -254,6 +254,24 @@ Managed composite indexes are declared in `schema.prisma` (`@@index`, Prisma-nam
 partial indexes are **raw SQL in the migration** because Prisma cannot express a
 `WHERE` predicate.
 
+Two rules for constructs the schema first used in `20261023120000_swimlanes`:
+
+- **A `NULLS NOT DISTINCT` unique is declared as a plain `@@unique` of the same `map:` name, and the
+  model says so.** Prisma 6 cannot express the clause, so the migration adds it by hand. Leaving the
+  index undeclared is drift: `prisma migrate diff` emits `DROP INDEX` for an undeclared unique on
+  plain columns. Declared, it is compared by name and columns only, and `prisma:check-drift` stays
+  empty (verified on PostgreSQL 16.15 and `postgres:17-alpine` 17.11). This is the opposite of the
+  partial-index rule (TECH_DEBT #54) because the diff treats the two differently: it ignores a
+  partial or expression index and compares a plain one. Use the clause when nullable key columns
+  must still collide — `uq_activity_swimlane_lanes_basis`, where at least two key columns are NULL
+  for every basis, would otherwise admit any number of rows per (activity, basis).
+- **A case-insensitive unique is `(scope, lower(col)) WHERE deleted_at IS NULL`, raw SQL and
+  undeclared**, and its non-ASCII behaviour is the database collation's, so it is asserted on CI's
+  own `postgres:17-alpine` database by an API e2e test rather than assumed. Measured 2026-10-23 on
+  that image (musl, `en_US.utf8`, libc provider): `'Électrique'` and `'éLECTRIQUE'` collide. If a
+  future image stops folding, the index becomes `lower(col COLLATE "und-x-icu")`. The service maps
+  its `23505` to a 409, and a restore onto a name taken meanwhile is that 409, never a silent rename.
+
 | Index                                         | On                                       | Kind           | Serves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --------------------------------------------- | ---------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `clients_organization_id_created_at_id_idx`   | `(organization_id, created_at, id)`      | full composite | `organization_id` FK (leftmost prefix) + org-scoped active list + its `(created_at, id)` cursor sort — subsumes a standalone org index                                                                                                                                                                                                                                                                                                                                                            |
@@ -318,6 +336,15 @@ partial indexes are **raw SQL in the migration** because Prisma cannot express a
 | `plan_shares_organization_id_idx`             | `(organization_id)`                      | full           | `organization_id` FK (RESTRICT) + org-scoped IDOR / audit loads                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `idx_plan_shares_plan_id`                     | `(plan_id)`                              | partial        | list a plan's LIVE links + the plan-cascade filter (`WHERE deleted_at IS NULL`); partial (not a full composite backing the FK) because plans soft-delete only, so the plan FK RESTRICT check never fires                                                                                                                                                                                                                                                                                          |
 | `idx_plan_shares_delete_batch_id`             | `(delete_batch_id)`                      | partial        | batch restore lookup                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `uq_swimlanes_plan_id_id`                     | `(plan_id, id)`                          | full unique    | the composite FK target for `activities (plan_id, swimlane_id)`; its leftmost prefix also backs the `plan_id` FK, a plan's swimlane list (≤ 100 live rows, sorted in memory by `position, id`), the cascade sweep and the expiry delete — so there is no separate `(plan_id)` or `(plan_id, position)` index                                                                                                                                                                                      |
+| `swimlanes_organization_id_idx`               | `(organization_id)`                      | full           | `organization_id` FK + org-scoped IDOR loads + the export `org` read                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `uq_swimlanes_plan_name`                      | `(plan_id, lower(name))`                 | partial unique | live swimlane name unique per plan **ignoring case** (`WHERE deleted_at IS NULL`); backs `SWIMLANE_NAME_TAKEN` (409). The schema's first case-insensitive unique — see the rule above the table                                                                                                                                                                                                                                                                                                   |
+| `idx_swimlanes_delete_batch_id`               | `(delete_batch_id)`                      | partial        | the plan-batch restore lookup                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `idx_activities_swimlane_id_fk`               | `(swimlane_id)`                          | partial        | the **`activities` → `swimlanes` RESTRICT check** when expiry or compensation deletes swimlanes (`WHERE swimlane_id IS NOT NULL`). Without it the check falls back to `activities_plan_id_created_at_id_idx` and walks the plan's deleted rows: 33–48 ms against 9 ms for 100 swimlanes on a 2,000-activity plan (migration `20261023120000_swimlanes`)                                                                                                                                           |
+| `uq_activity_swimlane_lanes_basis`            | `(activity_id, basis, …)`                | unique         | `(activity_id, basis, swimlane_id, summary_activity_id, wbs_level)` **`NULLS NOT DISTINCT`**: one row per (activity, basis), the `INSERT … ON CONFLICT` arbiter, the `activity_id` FK RESTRICT check (leftmost prefix, all rows) and the "lanes of these activities" load. The schema's first `NULLS NOT DISTINCT` index — declared as a plain `@@unique`, see the rule above the table                                                                                                           |
+| `activity_swimlane_lanes_organization_id_idx` | `(organization_id)`                      | full           | `organization_id` FK + the export `org` read                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `idx_activity_swimlane_lanes_swimlane_id_fk`  | `(swimlane_id)`                          | partial        | the **lanes → `swimlanes` RESTRICT check** (`WHERE swimlane_id IS NOT NULL`). Without it each deleted swimlane scans the whole table: 1.25–1.34 s against 9 ms for one plan's 100 swimlanes beside 200,000 lane rows                                                                                                                                                                                                                                                                              |
+| `idx_activity_swimlane_lanes_summary_fk`      | `(summary_activity_id)`                  | partial        | the **lanes → `activities` (summary) RESTRICT check** (`WHERE summary_activity_id IS NOT NULL`). Without it each deleted activity scans the whole table: 26.6–27.9 s against 0.23 s for a 2,000-activity plan beside 200,000 lane rows                                                                                                                                                                                                                                                            |
 
 The scope/list composites are **full (not partial on `deleted_at`)** so they also
 back the FK `RESTRICT` check, which must find referencing rows _including_
@@ -1556,6 +1583,40 @@ table create).
   409, and that the denormalised `organization_id`/`plan_id` equal the parent's (the CHECK
   enforces shape, not value equality — a unit-tested service invariant, like every
   denormalised-scope sibling).
+
+### Swimlane & ActivitySwimlaneLane: labelled swimlanes
+
+Designed in [`docs/specs/swimlanes/schema-design.md`](specs/swimlanes/schema-design.md), which
+holds the reasoning; migration `20261023120000_swimlanes` holds the measurements.
+
+- **`swimlanes`** is plan content, like a note: soft-deleted on its own (own `delete_batch_id`),
+  swept into its plan's batch by the plan cascade, never listed in Recently deleted, and
+  hard-deleted only with its plan (ADR-0096 expiry) or by import compensation. Order is
+  `position, id` with **no** unique on `position`, so a reorder is one statement and a restore
+  never fails on a reused slot. Names are unique per plan ignoring case (`uq_swimlanes_plan_name`).
+  CHECKs: `ck_swimlanes_name_shape` (1–80 chars, trimmed, no control characters) and
+  `ck_swimlanes_position_nonneg`. It joins the ADR-0172 soft-delete gate automatically.
+- **`activities.swimlane_id`** is hand-made membership, NULL for "No swimlane". Its FK is
+  **composite**, `(plan_id, swimlane_id) → swimlanes (plan_id, id)`, `ON UPDATE RESTRICT`, so the
+  database refuses a swimlane of another plan — unlike `calendar_id` and `parent_id`, whose
+  single-column FKs cannot. It may name a soft-deleted swimlane: that is how a deleted swimlane's
+  members return on restore, and why an activity restore onto a deleted swimlane is admitted
+  where ADR-0201 refuses one onto a deleted calendar.
+- **`plans.swimlane_source`** (`NONE`/`MANUAL`/`WBS`, default `NONE`) and **`swimlane_wbs_level`**
+  (1–3 iff `WBS`) are pinned by the fail-closed `ck_plans_swimlane_source_level`. Neither is a
+  scheduling input.
+- **`activity_swimlane_lanes`** keeps an activity's in-swimlane lane **per basis**
+  (`SwimlaneLaneBasis`: a swimlane, "No swimlane", a WBS summary, or "No WBS group" at a level),
+  pinned by the fail-closed `ck_activity_swimlane_lanes_basis_shape`. "Never placed against this
+  basis" is the absence of a row, not a sentinel (ADR-0139). Like `activity_history_entries` it
+  has no `version`, no lifecycle columns and no actor columns: rows are written only under the
+  activity's row lock inside a write that bumps `activities.version`, and live exactly as long as
+  the activity.
+- **Every new FK is `RESTRICT`**, so expiry and compensation delete lane rows before activities and
+  swimlanes after activities, and the expiry budget charges lane rows at `LANE_ROWS_PER_ACTIVITY`
+  (measured in the migration header). The level branches of both CHECKs read
+  `level IS NOT NULL AND level BETWEEN 1 AND 3`: `NULL BETWEEN 1 AND 3` is NULL, and a CHECK admits
+  NULL, so the shorter form let a level-less `WBS` row through (probed).
 
 ### ActivityHistoryEntry: an activity's change history (ADR-0174)
 
