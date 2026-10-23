@@ -1,0 +1,45 @@
+# Feature Spec: The CI browser install retries instead of stalling
+
+- **Status:** Approved (product owner, 2026-10-23: "Time limit + retry")
+- **Author(s):** Claude (for the product owner)
+- **Date:** 2026-10-23
+- **Tracking issue / epic:** none — a CI step, one milestone
+- **Roadmap link:** none (a tooling decision a planner cannot act on; ADR-0136 precedent)
+- **Related ADR(s):** ADR-0105 (a CI step change is a spec trigger), ADR-0138 (the four web shards)
+
+ADR-0105 makes a change to a CI step a trigger for a spec, however small. This is that spec.
+
+## 0. Evidence
+
+| #   | Claim                                                                    | Established by                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1  | The "Install Playwright browsers" step normally takes about two minutes. | Passing shards on PR #1113 (run 39977297138): every web job that passed went from that step to the tests in minutes.                                                                                                                               |
+| E2  | It stalled for the job's whole 30 minutes on six runs, before any test.  | `docs/HANDOFF.md` (2026-10-23) records four: shard 1 on #1109, #1110 and #1111 and shard 4 on #1112, plus one more that session; the sixth is job 120495141492 on #1113, whose step 11 ran 15:20:40–15:49:55 and was cancelled, steps 12+ skipped. |
+| E3  | A re-run of the same commit passes.                                      | Every one of those re-runs passed in about 16 minutes (HANDOFF.md).                                                                                                                                                                                |
+| E4  | It is not the fifth-shard trigger.                                       | No test was slow; no test ran.                                                                                                                                                                                                                     |
+
+## 1. What changes
+
+- **D1.** The step runs the same command under `timeout --kill-after=15 360`, up to three times, and
+  fails only if all three fail. `timeout` runs the command in its own process group and signals the
+  group, so a stalled apt or download child is killed with it.
+- **D2.** The step gets `timeout-minutes: 20` as a ceiling (3 × 6 minutes plus slack), so even a
+  retry loop that misbehaves cannot spend the job's 30-minute budget.
+- **D3.** Each failed try prints a `::warning::` annotation, so a retry is visible on the run's
+  summary instead of silent.
+
+Nothing else changes: the command, the browsers installed, the shard layout and every test step are
+as they were.
+
+## 2. Alternatives
+
+- **Cache the browsers** (`~/.cache/ms-playwright`, keyed on the Playwright version). Offered and not
+  chosen: it adds a cache key to keep in step, and `--with-deps` still runs apt, so it would not
+  remove a stall in the system packages.
+- **Do nothing and re-run.** Costs about 30 minutes per stall.
+
+## 3. Acceptance
+
+- The CI run on the PR that ships this passes, with the web shards' install step completing.
+- `pnpm check:ci-roster` and the rest of `pnpm prepush` pass (the step's name is unchanged).
+- If a try is ever killed, the run shows the warning and the next try's success.

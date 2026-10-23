@@ -545,8 +545,23 @@ jobs:
       - name: Check schema/migration drift
         run: pnpm --filter @repo/api prisma:check-drift
 
+      # A normal install takes about two minutes, but on six runs (2026-10-22/23)
+      # it stalled for the job's whole 30 minutes and no test ran; every re-run
+      # passed. So each try gets six minutes and a stalled one is killed and
+      # retried, rather than spending the shard's budget on one download
+      # (docs/specs/ci-browser-install/feature-spec.md). `timeout` signals the
+      # whole process group, so the apt and download children die with it.
       - name: Install Playwright browsers
-        run: pnpm --filter @repo/web exec playwright install --with-deps
+        timeout-minutes: 20
+        run: |
+          for attempt in 1 2 3; do
+            if timeout --kill-after=15 360 pnpm --filter @repo/web exec playwright install --with-deps; then
+              exit 0
+            fi
+            echo "::warning::Playwright browser install attempt ${attempt} failed or took over 6 minutes; retrying"
+          done
+          echo "::error::Playwright browser install failed three times"
+          exit 1
 
       # Playwright starts the API and web dev servers itself (see
       # apps/web/playwright.config.ts) and drives the full stack in a browser.
