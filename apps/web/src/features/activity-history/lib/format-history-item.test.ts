@@ -286,4 +286,25 @@ describe('formatHistoryItem — knock-on origins', () => {
       ),
     ).toEqual(['WBS parent none → Outer']);
   });
+
+  it('reads a swimlane move as a named reference, in and out', () => {
+    const into = formatHistoryEntry(
+      { swimlaneId: { from: null, to: { id: 'sw', name: 'Mechanical' } } },
+      CTX,
+    );
+    expect(into.map((l) => l.text)).toEqual(['Swimlane none → Mechanical']);
+    const out = formatHistoryEntry(
+      { swimlaneId: { from: { id: 'sw', name: 'Mechanical' }, to: null } },
+      CTX,
+    );
+    expect(out.map((l) => l.text)).toEqual(['Swimlane Mechanical → none']);
+  });
+
+  it('does not name a swimlane that has no name', () => {
+    const lines = formatHistoryEntry(
+      { swimlaneId: { from: null, to: { id: 'sw', name: '' } } },
+      CTX,
+    );
+    expect(lines.map((l) => l.text)).toEqual(['Swimlane none → unnamed']);
+  });
 });

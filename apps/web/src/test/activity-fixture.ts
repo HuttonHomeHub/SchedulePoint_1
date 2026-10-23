@@ -29,6 +29,8 @@ export function anActivity(overrides: Partial<ActivitySummary> = {}): ActivitySu
     secondaryConstraintDate: null,
     calendarId: null,
     laneIndex: 0,
+    swimlaneId: null,
+    swimlaneLanes: [],
     scheduleAsLateAsPossible: false,
     expectedFinish: null,
     status: 'NOT_STARTED',

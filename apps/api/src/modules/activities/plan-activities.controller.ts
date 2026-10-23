@@ -86,7 +86,13 @@ export class PlanActivitiesController {
     description:
       'A field-level validation failure, or `calendarId` names a calendar this activity’s project ' +
       'may not use — a PROJECT calendar owned by another project (CALENDAR_WRONG_SCOPE, ' +
-      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4).',
+      'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4). A `swimlaneId` is refused ' +
+      'while the plan’s swimlanes come from its WBS (SWIMLANE_SOURCE_IS_WBS).',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'The organisation or plan is not found, or a `swimlaneId` is unknown, deleted or another ' +
+      'plan’s (or organisation’s), never told apart.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async create(
@@ -108,13 +114,17 @@ export class PlanActivitiesController {
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description:
-      'The organisation or plan is not found, or a position names an id not in the plan.',
+      'The organisation or plan is not found, a position names an id not in the plan, or a ' +
+      '`swimlane.swimlaneId` is unknown, deleted or another plan’s.',
   })
   @ApiConflictResponse({
     description: 'A stale version (or a row changed elsewhere) — the whole batch is rejected.',
   })
   @ApiUnprocessableEntityResponse({
-    description: 'The same activity id appears more than once in the batch.',
+    description:
+      'The same activity id appears more than once in the batch; a `swimlane` lane while the plan ' +
+      'has no swimlane source (SWIMLANE_SOURCE_NONE); or a named `swimlane.swimlaneId` while the ' +
+      'swimlanes come from the WBS (SWIMLANE_SOURCE_IS_WBS).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async updatePositions(

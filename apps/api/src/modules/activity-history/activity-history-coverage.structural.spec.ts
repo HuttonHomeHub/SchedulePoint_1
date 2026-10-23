@@ -53,8 +53,12 @@ const SITES: Record<string, Site> = {
       recordedBy: [`${ACTIVITIES}::update`, `${ACTIVITIES}::updateProgress`],
     },
   'modules/activities/activity.repository.ts::updateLanePositions::activities.UPDATE': {
-    status: 'exempt',
-    reason: 'Lane only: the diagram auto-packs lanes without the planner deciding anything (CQ-4).',
+    status: 'recorded',
+    reason:
+      'A move into another swimlane records a `swimlaneId` item (scope PLACEMENT, batch). A lane ' +
+      'write — the diagram auto-packing, or a lane inside the swimlane the activity is already in — ' +
+      'changes no recorded value and makes no entry: the planner decided nothing (CQ-4).',
+    recordedBy: [`${ACTIVITIES}::updatePositions`],
   },
   'modules/activities/activity.repository.ts::updatePlacements::activities.UPDATE': {
     status: 'recorded',

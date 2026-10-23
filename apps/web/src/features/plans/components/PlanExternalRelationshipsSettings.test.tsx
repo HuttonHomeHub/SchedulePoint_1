@@ -32,6 +32,8 @@ const PLAN: PlanSummary = {
   levelResources: false,
   levelWithinFloatOnly: false,
   ignoreExternalRelationships: false,
+  swimlaneSource: 'NONE',
+  swimlaneWbsLevel: null,
   eacMethod: 'CPI',
   currencyCode: null,
   plannedStart: '2026-01-01',

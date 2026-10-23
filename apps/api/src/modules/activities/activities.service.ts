@@ -8,7 +8,9 @@ import {
   type ActivityType,
   type DurationType,
   type ResourceAssignment,
+  type SwimlaneSource,
 } from '@prisma/client';
+import type { WbsNode } from '@repo/layout';
 import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -48,6 +50,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
+import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import { batchRestoreAnchor } from './batch-restore-anchor';
@@ -71,6 +74,14 @@ import {
   loadResourceAssignmentCounts,
   type WithAssignmentCount,
 } from './resource-assignment-counts';
+import {
+  attachSwimlaneLanes,
+  deriveLaneBasis,
+  loadSwimlaneLanes,
+  SWIMLANE_SOURCE_REASON,
+  type LaneBasisKey,
+  type WithSwimlaneLanes,
+} from './swimlane-lanes';
 import {
   reexpressZeroDurationDates,
   type ReexpressedDateField,
@@ -124,8 +135,11 @@ function deriveStatus(
  * progress method (B2) so a Contributor can report progress without editing
  * logic. The CPM output columns are engine-owned and never set from input.
  */
-/** An activity as every response carries it: its day factor and its live assignment count. */
-export type DecoratedActivity = WithAssignmentCount<WithDayFactor<Activity>>;
+/**
+ * An activity as every response carries it: its day factor, its live assignment count and the lanes
+ * stored against each swimlane basis it has been placed on.
+ */
+export type DecoratedActivity = WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>>;
 
 @Injectable()
 export class ActivitiesService {
@@ -139,6 +153,7 @@ export class ActivitiesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly history: ActivityHistoryRecorder,
+    private readonly swimlanes: SwimlaneRepository,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -154,7 +169,8 @@ export class ActivitiesService {
    * from at most ONE grouped query for the whole response and none when the page holds no such task,
    * run alongside the factor lookups (spec D8, FC-9 and its remedy rung 1); every other row carries
    * `null`. This is the shared decoration every activity response passes through, which is why the
-   * count is here and not in each route.
+   * count is here and not in each route. The same goes for `swimlaneLanes`: one query for the whole
+   * page, none when it is empty (schema-design §9).
    */
   private async withDayFactors<
     T extends {
@@ -165,12 +181,13 @@ export class ActivitiesService {
       type: ActivityType;
       durationMinutes: number;
     },
-  >(rows: readonly T[]): Promise<WithAssignmentCount<WithDayFactor<T>>[]> {
-    const [decorated, assignmentCounts] = await Promise.all([
+  >(rows: readonly T[]): Promise<WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<T>>>[]> {
+    const [decorated, assignmentCounts, swimlaneLanes] = await Promise.all([
       this.withDayFactorsOnly(rows),
       loadResourceAssignmentCounts(this.prisma, rows),
+      loadSwimlaneLanes(this.prisma, rows),
     ]);
-    return attachAssignmentCounts(decorated, assignmentCounts);
+    return attachSwimlaneLanes(attachAssignmentCounts(decorated, assignmentCounts), swimlaneLanes);
   }
 
   /** The day-factor half of {@link withDayFactors}. */
@@ -207,7 +224,7 @@ export class ActivitiesService {
       type: ActivityType;
       durationMinutes: number;
     },
-  >(row: T): Promise<WithAssignmentCount<WithDayFactor<T>>> {
+  >(row: T): Promise<WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<T>>>> {
     const [decorated] = await this.withDayFactors([row]);
     return decorated!;
   }
@@ -287,6 +304,70 @@ export class ActivitiesService {
     }
   }
 
+  /**
+   * A write that would change an activity's hand-made swimlane is refused while the plan's swimlanes
+   * come from its WBS (422): membership is then the WBS tree's, and the stored `swimlane_id` is kept
+   * and ignored so switching back restores it. `swimlaneId` may therefore only be a value the
+   * request would change, never a refusal of a no-op — a form that resends the whole row in WBS mode
+   * must not be told it wrote a swimlane.
+   */
+  private assertSwimlaneIdWritable(plan: { swimlaneSource: string }): void {
+    if (plan.swimlaneSource === 'WBS') {
+      throw new ValidationError(
+        'This plan’s swimlanes come from its WBS; move the activity there.',
+        {
+          reason: SWIMLANE_SOURCE_REASON.IS_WBS,
+        },
+      );
+    }
+  }
+
+  /**
+   * The plan's swimlane source and level, read `FOR SHARE` inside the write's transaction, **after**
+   * the activity row locks. A source switch is a plan-row UPDATE, so holding the share lock means a
+   * write cannot land against a source that changed after the pre-transaction read. Taken after the
+   * activity locks and never before them: the plan cascade holds every plan activity before it
+   * stamps the plan row, so a share lock taken first would invert schema-design §5's order. (Activity
+   * create holds no activity row, so it keeps its pre-transaction read rather than take this lock
+   * out of order.)
+   */
+  private async lockPlanSwimlaneSource(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    planId: string,
+  ): Promise<{ swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }> {
+    const rows = await tx.$queryRaw<
+      { swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }[]
+    >`
+      SELECT swimlane_source::text AS "swimlaneSource", swimlane_wbs_level AS "swimlaneWbsLevel"
+      FROM plans
+      WHERE id = ${planId}::uuid AND organization_id = ${organizationId}::uuid
+        AND deleted_at IS NULL
+      FOR SHARE
+    `;
+    const plan = rows[0];
+    if (!plan) throw new NotFoundError('Plan not found.');
+    return plan;
+  }
+
+  /**
+   * `FOR SHARE` the named swimlanes (active, this plan, this organisation), after the caller holds the
+   * activity row locks (schema-design §5). A shortfall is a swimlane that is unknown, foreign or
+   * deleted, and answers 404 without saying which — not an existence oracle.
+   */
+  private async lockSwimlanesForAssignment(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    planId: string,
+    swimlaneIds: readonly string[],
+  ): Promise<void> {
+    const wanted = [...new Set(swimlaneIds)];
+    if (wanted.length === 0) return;
+    const locked = await this.swimlanes.lockActiveForShare(organizationId, planId, wanted, tx);
+    if (locked.length !== wanted.length)
+      throw new NotFoundError('Swimlane not found in this plan.');
+  }
+
   async list(
     principal: Principal,
     orgSlug: string,
@@ -353,6 +434,9 @@ export class ActivitiesService {
     const calendarId = dto.calendarId ?? null;
     // The WBS parent (ADR-0038); null/omitted is top-level.
     const parentId = dto.parentId ?? null;
+    // Hand-made swimlane (swimlanes spec §4.6); null/omitted is "No swimlane", which writes nothing.
+    const swimlaneId = dto.swimlaneId ?? null;
+    if (swimlaneId !== null) this.assertSwimlaneIdWritable(plan);
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
@@ -379,6 +463,12 @@ export class ActivitiesService {
         // Validate the WBS parent is a same-plan summary (no cycle possible on a brand-new activity).
         if (parentId !== null)
           await this.assertValidParent(tx, parentId, organization.id, plan.id, null);
+        // The swimlane is locked before the row that names it exists (schema-design §5): a new row has
+        // no activity lock to order after, and the share lock is what stops a concurrent delete of the
+        // swimlane committing between this check and the insert.
+        if (swimlaneId !== null) {
+          await this.lockSwimlanesForAssignment(tx, organization.id, plan.id, [swimlaneId]);
+        }
         // Minutes are the storage and engine unit (ADR-0036); days are a convenience over them, and
         // the conversion is the effective calendar's standard working day (ADR-0068) — NOT a
         // constant 1440, which on an 08:00–17:00 calendar would make "1 day" span 2.67 working
@@ -411,6 +501,7 @@ export class ActivitiesService {
             ...(dto.durationType ? { durationType: dto.durationType } : {}),
             calendarId,
             ...(parentId !== null ? { parentId } : {}),
+            ...(swimlaneId !== null ? { swimlaneId } : {}),
             ...(dto.constraintType ? { constraintType: dto.constraintType } : {}),
             ...(dto.constraintDate
               ? { constraintDate: parseCalendarDate(dto.constraintDate) }
@@ -616,6 +707,13 @@ export class ActivitiesService {
     // summary, no cycle) inside the transaction below.
     const parentId = dto.parentId;
     if (parentId === null) patch.parentId = null;
+    // Hand-made swimlane membership (swimlanes spec §4.6): null clears to "No swimlane"; a specific id
+    // is proven active and in this plan under `FOR SHARE` inside the transaction below. A value the
+    // activity already holds is not a write, so it is neither refused in WBS mode nor stored again.
+    const swimlaneId = dto.swimlaneId;
+    if (swimlaneId !== undefined && swimlaneId !== existing.swimlaneId) {
+      patch.swimlaneId = swimlaneId;
+    }
 
     // Keep the milestone invariant when the type changes to (or already is) a
     // milestone: a milestone always has duration 0, regardless of what was sent.
@@ -741,6 +839,21 @@ export class ActivitiesService {
               tx,
             ),
           );
+        }
+        // Filing the activity in a swimlane: the activity row first, then the swimlane `FOR SHARE`
+        // (schema-design §5's total order), so a swimlane deleted a moment ago cannot be assigned.
+        if (patch.swimlaneId !== undefined) {
+          await lockActivityRowsInIdOrder(tx, organization.id, existing.planId, [activityId]);
+          // The source is re-read under a share lock, so a switch to WBS that landed after the read
+          // above cannot let this membership write through.
+          this.assertSwimlaneIdWritable(
+            await this.lockPlanSwimlaneSource(tx, organization.id, existing.planId),
+          );
+          if (patch.swimlaneId !== null) {
+            await this.lockSwimlanesForAssignment(tx, organization.id, existing.planId, [
+              patch.swimlaneId,
+            ]);
+          }
         }
         // The before-values the history diffs, read INSIDE this transaction at the version the gated
         // update below requires — `existing` was read before it opened, and the diff must describe the
@@ -890,6 +1003,14 @@ export class ActivitiesService {
    * rejected (409) and nothing moves — the semantics a lane drag / auto-pack needs. Layout only:
    * it sets `laneIndex` (a definition edit → `activity:update`, so `version` bumps as usual) and
    * triggers no CPM recalculation (x = time is engine-owned; y = lane is stored).
+   *
+   * A row may also carry `swimlane: { swimlaneId?, laneIndex }` — the activity's lane inside its
+   * swimlane (swimlanes spec §4.4). The client names no basis: this derives it from the plan's source
+   * and the activity's membership, and upserts one row per basis, so switching source and back finds
+   * the old rows. The lock order is schema-design §5's: activity rows in id order, then the named
+   * swimlanes `FOR SHARE`, then the `UPDATE`, then the lane rows. A client that places a swimlane's
+   * unplaced members (materialise on write, §4.4) sends them in the same batch; this upserts what it
+   * is given.
    */
   async updatePositions(
     principal: Principal,
@@ -900,7 +1021,7 @@ export class ActivitiesService {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:update', organization.id);
     const canReadCost = principal.can('cost:read', organization.id);
-    await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
+    const plan = await this.loadActivePlan(planId, organization.id); // 404 if the plan is foreign/deleted
     await this.editLock.assertHoldsPen(principal, planId, organization.id);
 
     const ids = dto.positions.map((p) => p.id);
@@ -910,14 +1031,86 @@ export class ActivitiesService {
       });
     }
 
+    const swimlaneRows = dto.positions.filter((p) => p.swimlane !== undefined);
+    // Refused before any lock: both depend only on the plan's source, which the request cannot move.
+    if (swimlaneRows.length > 0) {
+      if (plan.swimlaneSource === 'NONE') {
+        throw new ValidationError('This plan has no swimlanes to place a lane in.', {
+          reason: SWIMLANE_SOURCE_REASON.IS_NONE,
+        });
+      }
+      if (swimlaneRows.some((p) => p.swimlane?.swimlaneId !== undefined)) {
+        this.assertSwimlaneIdWritable(plan);
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
+      let lanes: (LaneBasisKey & { activityId: string; laneIndex: number })[] = [];
+      let membershipBefore = new Map<string, string | null>();
+      if (swimlaneRows.length > 0) {
+        // Activity rows first, then the swimlanes (schema-design §5). The repository's own lock below
+        // re-takes what is already held.
+        await lockActivityRowsInIdOrder(tx, organization.id, planId, ids);
+        // The pre-transaction refusals above ran on a read that a source switch may have overtaken;
+        // this is the one the lanes are derived from.
+        const locked = await this.lockPlanSwimlaneSource(tx, organization.id, planId);
+        if (locked.swimlaneSource === 'NONE') {
+          throw new ValidationError('This plan has no swimlanes to place a lane in.', {
+            reason: SWIMLANE_SOURCE_REASON.IS_NONE,
+          });
+        }
+        if (swimlaneRows.some((p) => p.swimlane?.swimlaneId !== undefined)) {
+          this.assertSwimlaneIdWritable(locked);
+        }
+        const current = await tx.activity.findMany({
+          where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
+          select: { id: true, swimlaneId: true },
+        });
+        membershipBefore = new Map(current.map((a) => [a.id, a.swimlaneId]));
+        if (ids.some((id) => !membershipBefore.has(id))) {
+          throw new NotFoundError('Activity not found in this plan.');
+        }
+        // Read without a lock: a summary reparented concurrently yields a lane written against a basis
+        // that changes a moment later, which the projection reads as a mismatch (schema-design §5).
+        const wbsNodes: ReadonlyMap<string, WbsNode> =
+          locked.swimlaneSource === 'WBS'
+            ? new Map(
+                (await this.activities.findPlanWbsTree(organization.id, planId, tx)).map((n) => [
+                  n.id,
+                  n,
+                ]),
+              )
+            : new Map();
+        lanes = swimlaneRows.map((p) => {
+          const lane = p.swimlane!;
+          // The swimlane the activity is in once this write lands: the one named, else its own.
+          const effective = lane.swimlaneId ?? membershipBefore.get(p.id) ?? null;
+          return {
+            activityId: p.id,
+            laneIndex: lane.laneIndex,
+            ...deriveLaneBasis(locked, p.id, effective, wbsNodes),
+          };
+        });
+        await this.lockSwimlanesForAssignment(
+          tx,
+          organization.id,
+          planId,
+          lanes.flatMap((l) => (l.swimlaneId === null ? [] : [l.swimlaneId])),
+        );
+      }
+
       // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope: a stale
       // or cross-plan/tenant id simply doesn't match and isn't written. All-or-nothing is the
       // count check below — a shortfall rolls the whole (possibly partial) UPDATE back.
       const updated = await this.activities.updateLanePositions(
         organization.id,
         planId,
-        dto.positions,
+        dto.positions.map((p) => ({
+          id: p.id,
+          version: p.version,
+          ...(p.laneIndex !== undefined ? { laneIndex: p.laneIndex } : {}),
+          ...(p.swimlane?.swimlaneId !== undefined ? { swimlaneId: p.swimlane.swimlaneId } : {}),
+        })),
         principal.userId,
         tx,
       );
@@ -938,6 +1131,34 @@ export class ActivitiesService {
         throw new ConflictError(
           'This plan changed since you opened it — no lanes were moved. Refresh and try again.',
         );
+      }
+
+      if (lanes.length > 0) {
+        await this.activities.upsertSwimlaneLanes(organization.id, planId, lanes, tx);
+      }
+
+      // Only a move into another swimlane is a decision worth an entry; a lane written inside the
+      // swimlane the activity is already in changes no recorded value, so it makes none, exactly as a
+      // swimlane-free lane never has (CQ-4). Recorded last, in this transaction.
+      const moved = swimlaneRows.filter(
+        (p) =>
+          p.swimlane?.swimlaneId !== undefined &&
+          p.swimlane.swimlaneId !== (membershipBefore.get(p.id) ?? null),
+      );
+      if (moved.length > 0) {
+        await this.history.record(tx, {
+          actorUserId: principal.userId,
+          scope: 'PLACEMENT',
+          batch: {},
+          writes: this.history.swimlaneWrites(
+            planId,
+            moved.map((p) => ({
+              id: p.id,
+              before: membershipBefore.get(p.id) ?? null,
+              after: p.swimlane?.swimlaneId ?? null,
+            })),
+          ),
+        });
       }
     });
 

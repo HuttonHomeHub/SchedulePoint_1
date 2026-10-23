@@ -6,7 +6,12 @@ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import type { Permission, Principal } from '../../common/auth/principal';
 import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { markScheduleInputsChanged } from '../../common/schedule-inputs/mark-schedule-inputs-changed';
 import {
@@ -21,6 +26,7 @@ import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { ProjectRepository } from '../projects/project.repository';
 
 import type { CreatePlanDto } from './dto/create-plan.dto';
@@ -48,6 +54,7 @@ export class PlansService {
     private readonly lifecycle: HierarchyLifecycleService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly editLock: PlanEditLockService,
     @InjectPinoLogger(PlansService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -191,6 +198,34 @@ export class PlansService {
     // to inherit the org default. Dark until the EV read (EV2b); nothing computes EV yet.
     if (dto.eacMethod !== undefined) patch.eacMethod = dto.eacMethod;
     if (dto.currencyCode !== undefined) patch.currencyCode = dto.currencyCode;
+    // Swimlane source and level (swimlanes spec §4.6): presentation, so neither is a governance field
+    // nor a scheduling input. The pair is resolved against the stored row because the database's
+    // `ck_plans_swimlane_source_level` ties them together (WBS needs a level of 1 to 3, anything else
+    // none) and a refusal here is a 422 where the CHECK would be a 500.
+    if (dto.swimlaneSource !== undefined || dto.swimlaneWbsLevel !== undefined) {
+      // Choosing where the swimlanes come from re-draws the diagram for everyone looking at it, so it
+      // is a structural write like the swimlane routes themselves (spec §2, Permissions): the pen. A
+      // rename or a scheduling option on the same route is not, and stays ungated.
+      await this.editLock.assertHoldsPen(principal, planId, organization.id);
+      const source = dto.swimlaneSource ?? existing.swimlaneSource;
+      // A level the request did not name is kept only while the source stays WBS; leaving WBS clears it.
+      const level =
+        dto.swimlaneWbsLevel !== undefined
+          ? dto.swimlaneWbsLevel
+          : source === 'WBS'
+            ? existing.swimlaneWbsLevel
+            : null;
+      if (source === 'WBS' ? level === null : level !== null) {
+        throw new ValidationError(
+          source === 'WBS'
+            ? 'A WBS swimlane source needs a level of 1 to 3.'
+            : 'A swimlane level applies only to a WBS swimlane source.',
+          { reason: 'SWIMLANE_LEVEL_MISMATCH' },
+        );
+      }
+      patch.swimlaneSource = source;
+      patch.swimlaneWbsLevel = level;
+    }
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
     if (dto.plannedStart !== undefined) {

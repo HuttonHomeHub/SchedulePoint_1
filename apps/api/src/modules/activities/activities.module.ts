@@ -6,6 +6,7 @@ import { CalendarsModule } from '../calendars/calendars.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
+import { SwimlanesModule } from '../swimlanes/swimlanes.module';
 
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
@@ -30,6 +31,7 @@ import { PlanActivitiesController } from './plan-activities.controller';
     PlanLockModule,
     CalendarsModule,
     ActivityHistoryModule,
+    SwimlanesModule,
   ],
   controllers: [PlanActivitiesController, ActivitiesController, ActivityStepsController],
   providers: [ActivitiesService, ActivityRepository, ActivityStepsService, ActivityStepRepository],

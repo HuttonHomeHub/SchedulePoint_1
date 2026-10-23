@@ -686,7 +686,8 @@ and `edited` (true once the body has been revised).
 ### Swimlanes (swimlanes spec §4.12)
 
 A **swimlane** is a labelled, contiguous band of lanes on a plan's diagram. This section covers the
-hand-made set; the plan's `swimlaneSource` and the activity fields arrive with later routes. Reading
+hand-made set; where a plan's swimlanes come from, and how an activity is placed in one, are the
+"Swimlane placement" subsection below. Reading
 needs **`swimlane:read`** (every member); the writes need **`swimlane:create` / `update` / `delete` /
 `restore`** (**Planner and Org Admin**) and are **structural**: each also needs the plan edit-lock pen
 (**423**). A swimlane is plan content, so it is soft-deleted on its own, swept with its plan, and never
@@ -708,6 +709,43 @@ copied from the plan, and an unknown property is a 422. Anti-IDOR is uniform: an
 plan, another plan's swimlane, or a deleted one is a **404**, answered before 403 or 423. The 409
 message is fixed text and never echoes a stored name. Create, rename and reorder write no audit row
 (the row is durably attributed); delete and restore do (ADR-0073).
+
+#### Swimlane placement
+
+**The plan.** `PATCH …/plans/:planId` gains **`swimlaneSource`** (`NONE`, the default · `MANUAL` · `WBS`)
+and **`swimlaneWbsLevel`** (1 to 3). WBS needs a level; any other source has none, and the pair is
+resolved against the stored row — leaving WBS clears the level, a lone level on a WBS plan moves it,
+and a level beside a source that is not WBS, WBS without a level, or a level outside 1–3 is
+**422** (`SWIMLANE_LEVEL_MISMATCH` for the pairing). Both fields are on the plan response. They are
+presentation: changing them never makes the plan read as edited since calculated. **Structural**: a
+write that carries either field needs the pen (**423**); a rename on the same route does not.
+
+**The activity.** `POST …/plans/:planId/activities` and `PATCH …/activities/:id` accept
+**`swimlaneId`** (a swimlane id, or `null` for "No swimlane"). A swimlane that is unknown, deleted, of
+another plan or of another organisation is **404**, never told apart. While the plan's source is
+`WBS` the membership is the WBS tree's, so a `swimlaneId` that would change it is **422
+`SWIMLANE_SOURCE_IS_WBS`** — the stored value is kept and ignored, so switching back restores it; a
+`null` on create, or a value the activity already holds on update, is no write and is not refused.
+Every activity response (single, list, and every batch write's answer) carries **`swimlaneId`** and
+**`swimlaneLanes`**: `[{ basis, swimlaneId, summaryActivityId, wbsLevel, laneIndex, updatedAt }]`, one
+entry per basis the activity has ever been placed against, loaded once per page. Exactly the columns
+a basis names are set (`SWIMLANE` → `swimlaneId`; `WBS_SUMMARY` → `summaryActivityId`; `NO_WBS_SUMMARY`
+→ `wbsLevel`; `NO_SWIMLANE` → none). An absent entry means "never placed there".
+
+**The positions batch.** Each `PATCH …/plans/:planId/activities/positions` row may carry
+**`swimlane: { swimlaneId?, laneIndex }`** — the activity's lane inside its swimlane, 0 to 10,000 —
+instead of, or beside, the swimlane-free `laneIndex`. A row needs at least one of the two, so every
+body that predates swimlanes is still valid. **There is no `basis`, and one is a 422**: the server
+derives it — the swimlane the activity will be in (`SWIMLANE`, or `NO_SWIMLANE`) when the source is
+`MANUAL`, the level-L ancestor summary (`WBS_SUMMARY`) or "No WBS group" at that level
+(`NO_WBS_SUMMARY`) when it is `WBS` — and upserts one row per basis, which is why switching source
+and back finds the old rows. `swimlaneId` in a row files the activity there as well (MANUAL only); an
+omitted one leaves its membership. A lane write while the source is `NONE` is **422
+`SWIMLANE_SOURCE_NONE`**; a named swimlane in WBS mode is **422 `SWIMLANE_SOURCE_IS_WBS`**; an
+unknown, deleted or foreign swimlane is **404** and, like any failed row, nothing is written. The
+server writes exactly the rows it is sent: a client placing a swimlane's unplaced members sends them
+in the same batch. A move into another swimlane is recorded in the activity's history; a lane written
+inside the swimlane the activity is already in is not.
 
 ### Activity change history (ADR-0174)
 
@@ -1847,7 +1885,8 @@ controller's 30 / 60 s per handler.
 - A batch write uses **`PATCH`** on the collection with an array body whose items each carry
   their own `id` and optimistic-lock `version` — e.g.
   `PATCH …/plans/:planId/activities/positions` with `{ positions: [{ id, laneIndex, version }] }`.
-  No verb-in-path (`:batchMove`) and no `POST` (which reads as "create a resource").
+  No verb-in-path (`:batchMove`) and no `POST` (which reads as "create a resource"). A `positions`
+  row may instead (or also) carry a `swimlane` lane (see "Swimlane placement").
 - Batch writes are **all-or-nothing**: if any item fails its scope check (`404`) or version
   check (`409`), the whole batch is rejected and nothing is written. Cap the array server-side.
 - `PATCH …/plans/:planId/activities/parents` with `{ parents: [{ id, parentId, version }] }` is the

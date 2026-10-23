@@ -4,6 +4,7 @@ import {
   EacMethod,
   PlanStatus,
   ProgressRecalcMode,
+  SwimlaneSource,
   TotalFloatMode,
 } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
@@ -15,6 +16,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateIf,
@@ -184,6 +186,35 @@ export class UpdatePlanDto {
   @ValidateIf((_, value) => value !== null)
   @Matches(UUID_REGEX, { message: 'calendarId must be a valid UUID.' })
   calendarId?: string | null;
+
+  @ApiPropertyOptional({
+    enum: SwimlaneSource,
+    enumName: 'SwimlaneSource',
+    description:
+      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL (hand-made) or WBS ' +
+      '(the summaries at `swimlaneWbsLevel`). A presentation field: changing it never marks the plan ' +
+      'as edited since calculated. WBS needs a level (422 otherwise).',
+  })
+  @IsOptional()
+  @IsEnum(SwimlaneSource)
+  swimlaneSource?: SwimlaneSource;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: 3,
+    nullable: true,
+    description:
+      'The WBS depth whose summaries are the swimlanes: 1 to 3 when the source is WBS, and null ' +
+      'otherwise (`ck_plans_swimlane_source_level`). Moving the source off WBS clears it.',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear the level); validate the range only for a value.
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  swimlaneWbsLevel?: number | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

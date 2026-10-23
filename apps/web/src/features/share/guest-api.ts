@@ -225,6 +225,8 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     resourceAssignmentCount: null,
     parentId: null,
     laneIndex: activity.laneIndex,
+    swimlaneId: null,
+    swimlaneLanes: [],
     scheduleAsLateAsPossible: false,
     levelingPriority: null,
     status: activity.status,

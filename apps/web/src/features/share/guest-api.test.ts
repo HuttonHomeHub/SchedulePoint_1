@@ -144,3 +144,11 @@ describe('toDependencySummary — isDriving (ADR-0198)', () => {
     expect(toDependencySummary(row, 'plan-1', byId).isDriving).toBe(false);
   });
 });
+
+describe('toActivitySummary — swimlane fields', () => {
+  it('widens a guest activity with no swimlane: the guest scope carries none', () => {
+    const summary = toActivitySummary(baseActivity(), 'plan-1');
+    expect(summary.swimlaneId).toBeNull();
+    expect(summary.swimlaneLanes).toEqual([]);
+  });
+});

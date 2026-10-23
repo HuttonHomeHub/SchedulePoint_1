@@ -3,12 +3,19 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  LockedError,
+  NotFoundError,
+  ValidationError,
+} from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
+import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { ProjectRepository } from '../projects/project.repository';
 
 import type { PlanPatch, PlanRepository } from './plan.repository';
@@ -122,6 +129,8 @@ describe('PlansService', () => {
       .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
       .map((call) => call[2] as string[]);
   let audit: { record: ReturnType<typeof vi.fn> };
+  // Hoisted so a test can make the pen refuse (423) and assert the swimlane write stops there.
+  let penGuard: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let service: PlansService;
 
   beforeEach(() => {
@@ -156,6 +165,7 @@ describe('PlansService', () => {
     };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     audit = { record: vi.fn().mockResolvedValue(undefined) };
+    penGuard = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     service = new PlansService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
@@ -164,6 +174,7 @@ describe('PlansService', () => {
       lifecycle as unknown as HierarchyLifecycleService,
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
+      penGuard as unknown as PlanEditLockService,
       logger,
     );
   });
@@ -288,6 +299,101 @@ describe('PlansService', () => {
         version: 1,
       });
       expect(stampedPlanIds()).toEqual([]);
+    });
+
+    describe('swimlane source and level', () => {
+      const patchOf = (): Record<string, unknown> =>
+        plans.updateIfVersionMatches.mock.calls[0]?.[2] as Record<string, unknown>;
+
+      beforeEach(() => {
+        plans.updateIfVersionMatches.mockResolvedValue(1);
+      });
+
+      it('writes the pair together, and is not a scheduling input', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan());
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'WBS',
+          swimlaneWbsLevel: 2,
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 });
+        expect(stampedPlanIds()).toEqual([]);
+      });
+
+      it('clears the level when the source leaves WBS', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 3 }),
+        );
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'MANUAL',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({ swimlaneSource: 'MANUAL', swimlaneWbsLevel: null });
+      });
+
+      it('keeps the stored level when only the source is resent as WBS', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 3 }),
+        );
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'WBS',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({ swimlaneSource: 'WBS', swimlaneWbsLevel: 3 });
+      });
+
+      it('moves only the level of a WBS plan', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }),
+        );
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneWbsLevel: 2,
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 });
+      });
+
+      it.each([
+        ['WBS without a level', { swimlaneSource: 'WBS' as const }, 'NONE'],
+        [
+          'a level on a source that is not WBS',
+          { swimlaneSource: 'MANUAL' as const, swimlaneWbsLevel: 2 },
+          'NONE',
+        ],
+        ['a level on a plan that is not WBS', { swimlaneWbsLevel: 1 }, 'NONE'],
+        ['a cleared level on a WBS plan', { swimlaneWbsLevel: null }, 'WBS'],
+      ])('refuses %s (422), where the CHECK would be a 500', async (_name, body, held) => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan(held === 'WBS' ? { swimlaneSource: 'WBS', swimlaneWbsLevel: 1 } : {}),
+        );
+        const error = await service
+          .update(principalWith(ALL), 'acme', 'pl1', { ...body, version: 1 })
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).details).toEqual({ reason: 'SWIMLANE_LEVEL_MISMATCH' });
+        expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
+      });
+
+      it('needs the pen for a source change, but not for a rename', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan());
+        await service.update(principalWith(ALL), 'acme', 'pl1', { name: 'Renamed', version: 1 });
+        expect(penGuard.assertHoldsPen).not.toHaveBeenCalled();
+        penGuard.assertHoldsPen.mockRejectedValue(new LockedError('no pen'));
+        await expect(
+          service.update(principalWith(ALL), 'acme', 'pl1', {
+            swimlaneSource: 'MANUAL',
+            version: 1,
+          }),
+        ).rejects.toBeInstanceOf(LockedError);
+        expect(plans.updateIfVersionMatches).toHaveBeenCalledTimes(1);
+      });
+
+      it('leaves both columns alone when the request names neither', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan());
+        await service.update(principalWith(ALL), 'acme', 'pl1', { name: 'Renamed', version: 1 });
+        expect(patchOf()).not.toHaveProperty('swimlaneSource');
+        expect(patchOf()).not.toHaveProperty('swimlaneWbsLevel');
+      });
     });
 
     it('moves plannedStart to a new calendar day (mandatory: never cleared, ADR-0033 M1)', async () => {

@@ -294,6 +294,15 @@ The web's strict schemas accept the new fields first (M1-T4).`
 - **Testing:** schema tests with the fields present and absent.
 - **Development steps:**
   1. Update the Zod schemas and `@repo/types`.
+- **Corrected at build, 2026-10-23.** No web Zod schema parses a plan or an activity response: the
+  client reads both through `apiFetch<PlanSummary>` / `apiFetch<ActivitySummary>`, a type and not a
+  parse (`grep -rn "\.parse(\|safeParse(" apps/web/src`, outside tests, finds only the interchange
+  report, the import commit result and form fields). The strict parse ADR-0156 D9 describes is the
+  interchange **report**, which M1 does not touch. So a browser one release behind cannot fail on
+  the new fields, and the task reduced to `@repo/types` (which M1-T3 had to land: the history
+  vocabulary is keyed to `ActivitySummary`) plus what that forced in the web: fixtures, the clone
+  census's two `withheld` rows, the guest widening's defaults and the history label. The tests
+  added here pin those seams.
 
 #### Feature: the seed catalogue and the playbook (ADR-0066)
 

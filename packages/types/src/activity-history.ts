@@ -83,6 +83,7 @@ export const ACTIVITY_HISTORY_FIELDS = {
   visualStart: { kind: 'date' },
   laneIndex: { kind: 'integer' },
   parentId: { kind: 'reference' },
+  swimlaneId: { kind: 'reference' },
   percentComplete: { kind: 'integer' },
   actualStart: { kind: 'date' },
   actualFinish: { kind: 'date' },

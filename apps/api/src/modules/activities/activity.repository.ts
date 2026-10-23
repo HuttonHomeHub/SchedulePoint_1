@@ -8,9 +8,11 @@ import {
   type ConstraintType,
   type DurationType,
   type PercentCompleteType,
+  type SwimlaneLaneBasis,
 } from '@prisma/client';
 
 import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
+import { uuidV7 } from '../../common/db/uuid-v7';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -313,36 +315,108 @@ export class ActivityRepository {
   /**
    * Batch lane write, by `id + version`. Like {@link updatePlacements} the caller takes no plan
    * advisory lock, so the rows are locked in id order first (`docs/TECH_DEBT.md` #440).
+   *
+   * A row may carry a `laneIndex` (the swimlane-free layout), a `swimlaneId` (a move into a swimlane,
+   * swimlanes spec §4.4), or both; an absent one leaves that column alone (`COALESCE`), so a row that
+   * only wrote an in-swimlane lane still bumps `version` — the activity's version is the optimistic
+   * lock for its lane rows (schema-design §3.5). The caller has already proven every named swimlane
+   * active and in this plan, under `FOR SHARE`, after the activity locks (schema-design §5).
+   * `swimlaneId` travels as `''` for "unchanged", for the reason {@link updateParents} gives.
    */
   async updateLanePositions(
     organizationId: string,
     planId: string,
-    positions: readonly { id: string; laneIndex: number; version: number }[],
+    positions: readonly { id: string; laneIndex?: number; swimlaneId?: string; version: number }[],
     updatedBy: string,
     db: Prisma.TransactionClient,
   ): Promise<number> {
     if (positions.length === 0) return 0;
     const ids = positions.map((p) => p.id);
-    const laneIndexes = positions.map((p) => p.laneIndex);
+    const laneIndexes = positions.map((p) => p.laneIndex ?? null);
+    const swimlaneIds = positions.map((p) => p.swimlaneId ?? '');
     const versions = positions.map((p) => p.version);
 
     await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     return db.$executeRaw`
       UPDATE activities AS a
-      SET lane_index = v.lane_index,
+      SET lane_index = COALESCE(v.lane_index, a.lane_index),
+          swimlane_id = COALESCE(NULLIF(v.swimlane_id, '')::uuid, a.swimlane_id),
           version = a.version + 1,
           updated_by = ${updatedBy}::text,
           updated_at = now()
       FROM unnest(
         ${ids}::uuid[],
         ${laneIndexes}::int[],
+        ${swimlaneIds}::text[],
         ${versions}::int[]
-      ) AS v(id, lane_index, version)
+      ) AS v(id, lane_index, swimlane_id, version)
       WHERE a.id = v.id
         AND a.version = v.version
         AND a.plan_id = ${planId}::uuid
         AND a.organization_id = ${organizationId}::uuid
         AND a.deleted_at IS NULL
+    `;
+  }
+
+  /**
+   * Upsert the in-swimlane lane of each activity against the basis the SERVER derived for it
+   * (schema-design §4 Q3, §5). One row per `(activity, basis)`: the `ON CONFLICT` arbiter is the
+   * unique index that carries `NULLS NOT DISTINCT`, so the two NULL-able basis columns collide on
+   * "same basis" rather than never colliding.
+   *
+   * `organization_id` is copied from the joined activity row, never from the request, and the join
+   * re-asserts plan, organisation and not-deleted, so an id outside the plan inserts nothing. Callers
+   * hold the activity row locks (the id-order seam) — lane rows need no order of their own.
+   * `updated_at` is set on conflict because it is the tie-break when two placed members of one basis
+   * collide.
+   */
+  async upsertSwimlaneLanes(
+    organizationId: string,
+    planId: string,
+    lanes: readonly {
+      activityId: string;
+      basis: SwimlaneLaneBasis;
+      swimlaneId: string | null;
+      summaryActivityId: string | null;
+      wbsLevel: number | null;
+      laneIndex: number;
+    }[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (lanes.length === 0) return;
+    const now = new Date();
+    const rowIds = lanes.map(() => uuidV7(now));
+    const activityIds = lanes.map((l) => l.activityId);
+    const bases = lanes.map((l) => l.basis);
+    // '' for NULL in the two uuid columns: see updateParents on why an all-null array cannot be
+    // inferred as uuid[]. The levels are integers, so a null there is safe.
+    const swimlaneIds = lanes.map((l) => l.swimlaneId ?? '');
+    const summaryIds = lanes.map((l) => l.summaryActivityId ?? '');
+    const wbsLevels = lanes.map((l) => l.wbsLevel);
+    const laneIndexes = lanes.map((l) => l.laneIndex);
+
+    await db.$executeRaw`
+      INSERT INTO activity_swimlane_lanes AS t
+        (id, organization_id, activity_id, basis, swimlane_id, summary_activity_id, wbs_level,
+         lane_index, created_at, updated_at)
+      SELECT v.id, a.organization_id, a.id, v.basis::"SwimlaneLaneBasis",
+             NULLIF(v.swimlane_id, '')::uuid, NULLIF(v.summary_id, '')::uuid, v.wbs_level,
+             v.lane_index, now(), now()
+      FROM unnest(
+        ${rowIds}::uuid[],
+        ${activityIds}::uuid[],
+        ${bases}::text[],
+        ${swimlaneIds}::text[],
+        ${summaryIds}::text[],
+        ${wbsLevels}::int[],
+        ${laneIndexes}::int[]
+      ) AS v(id, activity_id, basis, swimlane_id, summary_id, wbs_level, lane_index)
+      JOIN activities a ON a.id = v.activity_id
+        AND a.plan_id = ${planId}::uuid
+        AND a.organization_id = ${organizationId}::uuid
+        AND a.deleted_at IS NULL
+      ON CONFLICT (activity_id, basis, swimlane_id, summary_activity_id, wbs_level)
+      DO UPDATE SET lane_index = EXCLUDED.lane_index, updated_at = now()
     `;
   }
 

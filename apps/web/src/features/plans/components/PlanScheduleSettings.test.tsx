@@ -31,6 +31,8 @@ const PLAN: PlanSummary = {
   totalFloatMode: 'FINISH',
   makeOpenEndsCritical: false,
   ignoreExternalRelationships: false,
+  swimlaneSource: 'NONE',
+  swimlaneWbsLevel: null,
   levelResources: false,
   levelWithinFloatOnly: false,
   eacMethod: 'CPI',

@@ -91,7 +91,13 @@ export class ActivitiesController {
       'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4). A `type` change is also ' +
       'rejected against ADR-0038: away from WBS_SUMMARY while it still parents an active child ' +
       '(PARENT_NOT_SUMMARY), or into WBS_SUMMARY while it still names an active dependency ' +
-      '(SUMMARY_HAS_NO_LOGIC).',
+      '(SUMMARY_HAS_NO_LOGIC). A changed `swimlaneId` is refused while the plan’s swimlanes come ' +
+      'from its WBS (SWIMLANE_SOURCE_IS_WBS).',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'The activity is not found, or a `swimlaneId` is unknown, deleted or another plan’s (or ' +
+      'organisation’s), never told apart.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async update(
