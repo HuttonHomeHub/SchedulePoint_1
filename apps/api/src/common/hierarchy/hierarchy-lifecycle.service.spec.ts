@@ -679,6 +679,17 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    it('issues no swimlane statement when an activity batch is restored (it holds none)', async () => {
+      tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' });
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+
+      const counts = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR);
+
+      expect(counts.swimlanes).toBe(0);
+      expect(tx.swimlane.updateMany).not.toHaveBeenCalled();
+    });
+
     it("restores the batch's activity steps with their activity (M7 rung 5, ADR-0044 §2)", async () => {
       tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
       tx.plan.findFirst.mockResolvedValue({ id: 'pl1' }); // parent plan active

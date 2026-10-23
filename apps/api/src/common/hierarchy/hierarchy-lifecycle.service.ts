@@ -787,9 +787,14 @@ export class HierarchyLifecycleService {
         // reverses, unlike a deleted calendar, which is a scheduling input (ADR-0201 D1). A swimlane
         // deleted on its own carries its own batch id and never resurrects here. A name taken
         // meanwhile raises P2002 on uq_swimlanes_plan_name, which the catch below maps.
-        counts.swimlanes = (
-          await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
+        // Skipped for an activity or dependency batch: only a plan, project or client delete stamps
+        // swimlanes, so such a batch holds none and the statement would be pure cost (it is pinned
+        // by the activity-history statement budget).
+        if (entity !== 'activity' && entity !== 'dependency') {
+          counts.swimlanes = (
+            await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+          ).count;
+        }
         // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
         // calendar has exactly ONE parent (its project) and was swept in the SAME batch as it, so
         // — like a note or a step, unlike a dependency — no endpoint guard is needed: restoring
