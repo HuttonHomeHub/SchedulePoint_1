@@ -439,6 +439,29 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       .parse(binary as never);
   }
 
+  /**
+   * Wait until the server has given back the organisation's export lock.
+   *
+   * The response ends when the last byte is written, but the lock is a transaction-scoped advisory
+   * lock and is released at COMMIT, a few milliseconds later (`organization-export.service.ts`:
+   * the pipeline finishes, then the writer stops, then the snapshot transaction commits). A client
+   * that starts its next download the instant the previous body arrives can therefore meet its own
+   * previous export and be refused 409 under load. That is a test-side race, not a defect: holding
+   * the lock to commit is the guarantee. The assertion that matters here (three succeed, the fourth
+   * is throttled) is unchanged.
+   */
+  async function exportLockReleased(): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const held = await prisma.$queryRaw<{ n: bigint }[]>`
+        SELECT count(*) AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND granted AND database = (
+          SELECT oid FROM pg_database WHERE datname = current_database())`;
+      if (Number(held[0]?.n ?? 0) === 0) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error('the export lock was never released');
+  }
+
   /** Every entry of a ZIP, by name. `yauzl` verifies each entry's CRC-32 and size while reading. */
   function unzip(buffer: Buffer): Promise<Map<string, Buffer>> {
     return new Promise((resolve, reject) => {
@@ -770,8 +793,10 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     const { admin } = await seedFixture();
     resetThrottleCounters(throttlerStorage);
 
-    for (let i = 0; i < 3; i += 1)
+    for (let i = 0; i < 3; i += 1) {
       expect((await download(admin)).status, `export ${i + 1}`).toBe(200);
+      await exportLockReleased();
+    }
 
     const refused = await admin.agent.post(EXPORT_URL);
     expect(refused.status).toBe(429);

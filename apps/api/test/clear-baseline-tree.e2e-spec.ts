@@ -28,6 +28,7 @@ describe('clearBaselineTree', () => {
     // whose omission failed 557 tests at once (ADR-0126).
     expect(baselineChildModels().sort()).toEqual([
       'BaselineActivity',
+      'BaselineActivitySwimlaneLane',
       'BaselineAssignment',
       'BaselineDependency',
     ]);
@@ -45,6 +46,7 @@ describe('clearBaselineTree', () => {
       baselineActivity: delegate('BaselineActivity'),
       baselineAssignment: delegate('BaselineAssignment'),
       baselineDependency: delegate('BaselineDependency'),
+      baselineActivitySwimlaneLane: delegate('BaselineActivitySwimlaneLane'),
       baseline: delegate('Baseline'),
     } as unknown as PrismaClient;
 
@@ -54,10 +56,11 @@ describe('clearBaselineTree', () => {
     // foreign key into it. The children's relative order is deliberately not asserted: the helper
     // proves they are independent of one another and throws if that ever stops being true, so
     // pinning an order here would fail on a harmless DMMF reordering.
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     expect(calls.at(-1)).toBe('Baseline');
-    expect(calls.slice(0, 3).sort()).toEqual([
+    expect(calls.slice(0, 4).sort()).toEqual([
       'BaselineActivity',
+      'BaselineActivitySwimlaneLane',
       'BaselineAssignment',
       'BaselineDependency',
     ]);
