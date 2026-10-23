@@ -449,13 +449,19 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
    * previous export and be refused 409 under load. That is a test-side race, not a defect: holding
    * the lock to commit is the guarantee. The assertion that matters here (three succeed, the fourth
    * is throttled) is unchanged.
+   *
+   * Only the export's own lock is counted: the two-int key's first slot is
+   * `hashtext('org-export')`, which `pg_locks` shows as `classid` (an oid, so a negative int4 reads
+   * as its unsigned value) with `objsubid = 2`. Counting every advisory lock waited forever in a full
+   * run, where other spec files hold plan locks of their own.
    */
   async function exportLockReleased(): Promise<void> {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const held = await prisma.$queryRaw<{ n: bigint }[]>`
         SELECT count(*) AS n FROM pg_locks
-        WHERE locktype = 'advisory' AND granted AND database = (
-          SELECT oid FROM pg_database WHERE datname = current_database())`;
+        WHERE locktype = 'advisory' AND granted AND objsubid = 2
+          AND classid::bigint = (hashtext('org-export')::bigint + 4294967296) % 4294967296
+          AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
       if (Number(held[0]?.n ?? 0) === 0) return;
       await new Promise((r) => setTimeout(r, 50));
     }
