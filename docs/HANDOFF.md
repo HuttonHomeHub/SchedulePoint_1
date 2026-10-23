@@ -3,48 +3,53 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-22 (morning). The owner was shown last session's shortlist and said "fix them all
-unless there is a valid reason not to". Done, in four PRs plus the release: **#326** closed (two of its
-three findings were already fixed), **#308** (`e2e-local.sh` forwards arguments to Playwright), **#306
-(b)–(c)** (tests only; the rename (a) declined), **#249** (the four docks' sizing from one hook),
-**#276** (a failing gate shows its finding), **#299** (`check:ci-roster` checks every CI command) and
-**#538** (a read-only Gantt cell shows its reason on double-click, double-tap or F2). Released as
-**`web` 0.197.0** (`api` unchanged at 0.98.0). The owner's **hard rule** still stands: nothing that
-needs them to test, measure or check anything on their server or devices (a decision question is
-fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-23 (just after midnight). The owner chose the whole shortlist in the recommended
+order, asked for a swimlanes spec and a branch tidy-up. Done: **#536**, **#540–#543**, **#349** and
+**#369** closed in three PRs; the **swimlanes spec approved** (SQ-7 "yes"); the **branch list**
+delivered (nothing deleted). Released as **`api` 0.98.1** and **`web` 0.197.1** (all patches). The owner's
+**hard rule** still stands: nothing that needs them to test, measure or check anything on their server
+or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's
+call (ADR-0190).
 
 ## The owner's 2026-10-22 answers (in `docs/DECISIONS.md`)
 
-- **Choice:** fix the whole shortlist (#538, #326, #276, #249, #299, #306, #308) unless there is a
-  valid reason not to. **Declined, with the reason:** #306 (a), renaming the focus-handoff hook (a
-  public contract change for no behaviour change). #306 stays open for it.
-- **#538:** show on press. **CQ-1:** double-click, double-tap and F2 only; a single click selects the
-  row quietly.
-- **#299:** "fix them all" is the decision its trigger named. **CQ-2:** `pnpm build` gets a written
-  CI-only reason, not a new `prepush` stage.
-- **Three specs approved with every default:** `docs/specs/gate-failure-output/` (#276),
-  `ci-command-roster/` (#299), `gantt-cell-reason-on-press/` (#538).
+- **Shortlist order:** as recommended (#536, #542, #540+#541, #543, #349, #369).
+- **#536:** a `SYSTEM` actor reads **"System"**. Default taken with it: the host preview now floors
+  days left, as the bin does.
+- **#543:** report the dropped notes only; carrying them is the BACKLOG item.
+- **#541 default (not asked):** the dry-run refuses a clashing plan name with the same 409
+  `NAME_TAKEN` as the hand-made path, rather than a new report-finding kind. Offering the next free
+  name instead is still open if the owner prefers it.
+- **#369 default:** no visual change; a test pins `LAG_HANDLE_R < LAG_HANDLE_R_ACTIVE < NODE_RADIUS`.
+- **Swimlanes (supersedes the morning's "not commissioned"):** SQ-1 "Swimlane"; SQ-2 both sources per
+  plan (by hand, or one per WBS group at a chosen level); SQ-3 off lasts until you leave the plan;
+  SQ-4 guests see them; SQ-5 a drag stops at a WBS swimlane's edge; SQ-6 faint stripes; **SQ-7 yes:
+  baselines record swimlanes** (M1-T1b in scope). Approved: "start building".
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.98.0 and `web` 0.197.0.
+- **Latest releases:** `api` 0.98.1 and `web` 0.197.1.
 - **This session's PRs, in merge order:**
-  - **#1100** the three spec approvals; #326 closed (the staff console's badges became consequence
-    lines in ADR-0178; the bundle floor was re-measured 2026-10-02; the literal-JSX limit is accepted
-    and named in both docblocks); #308 closed (`scripts/e2e-local.sh <one target> -- <args>`, pinned
-    by `scripts/e2e-local.test.mjs` in `check:e2e-roster`); #306 (b)–(c) (the focus-handoff gate
-    derives its consumers; Toolbar and Deck get behavioural wiring tests).
-  - **#1101** #249 closed: `useRightDockSize` (the row's `*EffectiveMax` symptom was already gone).
-  - **#1102** #276 + #299 closed. `prepush` prints a short failing log whole, a long one as ranked
-    failure lines (`✗`/`×`/`FAIL`/`ERR_` before `Error`) plus its last 30 lines, capped at 300
-    characters a line. `check:ci-roster` R9–R13: every `ci.yml` `run:` is a prepush stage, a root
-    `check:*`, or a `ciOnly` entry with a reason; it refuses shapes it cannot read (a continued
-    `run:`, flow steps, quoted keys, `working-directory`). ADR-0160 amended. The devops review found a
-    real hole (a `run:` continued on a second line slipped past); fixed first.
-  - **#1103** #538 closed: `useTooltip({ opensOn: 'request' })` + a stable `show()`; ADR-0204
-    amended (its premise was wrong: arrow keys move rows, a click focuses a cell). Known gap, recorded
-    in the ADR: F2 cannot reach a shut cell that sits beside a writable one.
-  - **#1104** the Version Packages release (`web-v0.197.0`).
+  - **#1107** #536: "System" in the Audit log; `clear-out-preview.ts` floors days left; the
+    switch-on guide's step 8 updated.
+  - **#1109** #540–#543: calendar names probed by prefix (clipped base near the 120-char ceiling);
+    `plans/plan-name-conflict.ts` shared by plans and import; dry-run + commit 409 `NAME_TAKEN` (in
+    OpenAPI and `docs/API.md`); XER drop no longer claims hours-per-day; one aggregate `drop` for
+    XER `TASKMEMO` / MSPDI `<Notes>`. Two e2e set-ups moved off the refused same-name re-import; the
+    FC-2 torture digest is hashed with the M0 wording put back (it reproduces the baseline exactly).
+  - **#1110** #349 + #369: `e2e-local.sh` holds `pg_try_advisory_lock(349)` in a `coproc psql` for
+    the whole run (a second run exits 1 naming the holder; tried live); the lag-handle ordering test.
+  - **#1111** the swimlanes spec, plan, `ui-architecture.md` and `schema-design.md`, approved.
+  - **#1108** the Version Packages release (`api-v0.98.1`, `web-v0.197.1`; `@repo/interchange` 0.13.1, untagged).
+- **Branch tidy-up:** of 168 branches besides `main`, **164 are safe to delete** (content on `main`,
+  checked by squash patch-id and per-file comparison; seven cite commits a PR ref keeps alive). Keep
+  four: `changeset-release/main`; `wip/history-numerator-preaggregate` (the only unmerged work, a
+  deliberately-unadopted perf rewrite whose commit `64ff45d4`
+  `docs/specs/staff-server-readings/m1-measurement.md` cites, with no PR to keep it);
+  `feat/resource-dependent-web` (on `main`, but `docs/specs/activity-editor-restructure/feature-spec.md`
+  cites `75805f0`, reachable only there); `claude/sharp-shannon-1vw28p` (another chat's, from
+  2026-10-22). The list and delete commands were given to the owner; **this environment deleted
+  nothing**. A branch created since (this session's own) can go once merged.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -97,6 +102,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   a `**Verified:**` date dates the whole row (A8a/A8b).
 - 2026-10-21: the five specs with every default.
 - 2026-10-22: the three specs with every default and the CQ answers above; #306 (a) declined.
+- 2026-10-22 (evening): the shortlist order, #536 "System", #543 report only, and the seven
+  swimlane answers above (SQ-7 yes).
 
 ## Parked by the owner — keep, do not raise
 
@@ -128,25 +135,25 @@ owner returns to one, the steps are ready:
   #509 is the off-site copy: today's copies live on the same disk as the database).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
+- **New this session, no row yet:** a CI web shard **hung on "Install Playwright browsers"** on
+  four PRs running (shard 1 on #1109, #1110 and #1111; shard 4 on #1112; 2026-10-22 22:09 to
+  2026-10-23 01:21 UTC), each cancelled at 30 minutes before any test body ran; every re-run passed
+  in ~16 minutes. Not the fifth-shard trigger (no test was slow). Worth a row if it continues: a
+  step timeout with one retry, or caching the browsers.
 
 ## Suggested next
 
-Nothing of this session's is in flight: no open PRs, no wake-ups armed. Start none until the owner
-picks. **Only #536's first half was checked against the code** (2026-10-22:
-`apps/web/src/features/audit/model/audit-copy.ts:503-506` still returns `'Unknown'` for a `SYSTEM`
-actor); check each other row's symptom first (last session, two of seven had been fixed in part; this
-session #326 was two-thirds fixed and #249's literal symptom was gone).
+**Swimlanes M0** (pure layout functions in `@repo/layout` and `features/tsld/render`, plus the node
+measurement of partitioned Tidy/Re-layout). Approved; ships dark. Then M1 (schema: database-architect
+first, always, with `schema-design.md` as its brief; M1-T1b is in because SQ-7 is yes). Switch the
+session to **Sonnet** for the building (the spec is approved).
 
-1. **#536** — the Audit log names the clear-out "Unknown" (a `SYSTEM` actor has no label in
-   `auditActorName`), and the bin and the preview round "days left" differently. Small; one copy
-   decision for the owner ("SchedulePoint" or "System").
-2. **#349** — `scripts/e2e-local.sh` refuses a busy port but not a busy database, so two runs can
-   share `app_test` and report a product defect. Small; repo tooling.
-3. **#369** — `NODE_RADIUS` and `LAG_HANDLE_R_ACTIVE` are both 5 and nothing couples them. Small.
-
-Runners-up: #495 (`SizeField` and `TextField` can drift), #371 (thirty measurement scripts repeat one
-esbuild block), #306 (a) only if the owner wants the rename after all. The next reconciliation pass
-when `check:reconcile-due` warns on a full clone (last pass 2026-10-19).
+Shortlist candidates when the owner wants a break from swimlanes (check each row against the code
+first): #539 (a finish milestone after work on another calendar is dated wrongly: an engine defect,
+needs care), #495 (`SizeField` and `TextField` can drift), #371 (thirty measurement scripts repeat one
+esbuild block), and the two BACKLOG import items (carry notes through XER/MSPDI; clean up an import's
+leftover calendars). The next reconciliation pass when `check:reconcile-due` warns on a full clone
+(last pass 2026-10-19).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -507,3 +514,26 @@ docs/TECH_DEBT.md` shows only that PR's rows.
   - **Brief builders without the database and run every e2e suite yourself, serially.** Three
     builders and two reviewers ran in parallel with the orchestrator's e2e queue; only lint once ran
     out of memory (re-run with `NODE_OPTIONS=--max-old-space-size=8192`).
+
+- **2026-10-22/23 lessons (the import batch and the swimlanes spec):**
+  - **The container restarted about every 25 minutes overnight** (20:45, 21:34, 22:28, 22:55,
+    23:22). Every long local run died with it. What worked: run each gate as its own short
+    background script under `setsid nohup`, with an `EXIT` line and an `ALLDONE` marker, and
+    re-run whatever has no marker; split `turbo run test` into `pnpm --filter @repo/web test` and
+    `--filter @repo/api test`.
+  - **A worktree can lose its generated Prisma client** after a restart and a rebase: 74 API unit
+    files then fail with `Cannot find module '.prisma/client/default'` while every test that loads
+    passes. Run `prisma generate` before believing it.
+  - **`pkill`-by-pattern's cousin bit too:** a loop that killed every process whose command line
+    held a script's name killed the shell running the loop (exit 144). Kill a saved PID's group.
+  - **A new refusal breaks journeys that used the refused case as set-up** (again, as #530 did):
+    #541's dry-run 409 broke two API e2e cases that previewed a re-import under the same name.
+  - **A "never regenerated" digest moved by a wording fix** is explained in the test, not
+    re-baselined: hash with the old wording put back and assert the new wording separately.
+  - **Squash-detection for the branch list:** a branch is on `main` when `git merge-tree` against
+    `main` changes nothing, or its whole `merge-base..branch` diff's `patch-id --stable` matches a
+    `main` commit, or every file it touched equals `main`'s. Check commits `main`'s docs cite against
+    `refs/pull/*/head` before calling a branch safe.
+  - **feature-analyst wrote into the main checkout** even when resumed from a worktree; the
+    ui-architect and database-architect passes ran in parallel safely by each writing its OWN new
+    file in the spec folder and leaving the spec to the analyst's fold.
