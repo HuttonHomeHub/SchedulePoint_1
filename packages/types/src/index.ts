@@ -202,6 +202,21 @@ export type VisualConflictReason = 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND';
 export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUAL_DATES';
 
 /**
+ * Where a plan's swimlanes come from (swimlanes spec §4.6): none, hand-made, or the plan's WBS
+ * summaries at `swimlaneWbsLevel`. MUST stay in lock-step with the API's Prisma `SwimlaneSource`
+ * enum, which `apps/api/src/modules/plans/swimlane-enums.spec.ts` checks in both directions.
+ */
+export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS';
+
+/**
+ * What an activity's in-swimlane lane was written against (swimlanes spec §4.4, schema-design
+ * §3.1): a hand-made swimlane, "No swimlane" under MANUAL, one WBS summary's group, or "No WBS
+ * group" at a level. MUST stay in lock-step with the API's Prisma `SwimlaneLaneBasis` enum, which
+ * the same spec checks.
+ */
+export type SwimlaneLaneBasis = 'SWIMLANE' | 'NO_SWIMLANE' | 'WBS_SUMMARY' | 'NO_WBS_SUMMARY';
+
+/**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
  * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.

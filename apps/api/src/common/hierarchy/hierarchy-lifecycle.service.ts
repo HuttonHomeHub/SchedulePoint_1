@@ -50,6 +50,12 @@ export interface CascadeCounts {
    */
   planShares: number;
   /**
+   * Swimlanes swept under the deleted plans (swimlanes schema-design §6). Plan-scoped only, like a
+   * share link: a single-activity delete never touches them. An activity's lane rows are not
+   * counted or stamped — they have no lifecycle columns and live exactly as long as their activity.
+   */
+  swimlanes: number;
+  /**
    * PROJECT-scoped calendars swept with their owning project (ADR-0053 §2). Counts the CALENDARS
    * only — their exceptions are stamped in the same batch but counted silently, the baselines /
    * baseline-activities precedent. ORG-scoped calendars are never swept: the predicate is
@@ -184,6 +190,7 @@ export class HierarchyLifecycleService {
       steps: 0,
       notes: 0,
       planShares: 0,
+      swimlanes: 0,
       calendars: 0,
     };
 
@@ -349,6 +356,20 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active swimlanes under a set of plans (swimlanes schema-design §6), in the same
+    // batch, so a plan restore brings exactly this batch's swimlanes back beside its members. Plan-
+    // scoped only, the share-link precedent. Taken after the plan's activities (the lock order in
+    // §5: every plan activity is locked before a swimlane is stamped) and before the plan stamp.
+    const deleteSwimlanesUnderPlans = async (planIds: string[]): Promise<number> => {
+      if (planIds.length === 0) return 0;
+      return (
+        await tx.swimlane.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Soft-delete the active PROJECT-scoped calendars of a set of projects — and their active
     // exceptions — in the same batch (ADR-0053 §2). Children (exceptions) before parents, like
     // every other sweep here; the two tables are the ONLY soft-deletable children of a calendar
@@ -437,6 +458,7 @@ export class HierarchyLifecycleService {
       counts.notes = await deleteNotesUnderPlans(planIds);
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
+      counts.swimlanes = await deleteSwimlanesUnderPlans(planIds);
       // A client delete removes its projects, so their project calendars go too — otherwise an
       // active calendar would sit under a soft-deleted ancestor, breaking the no-orphan invariant
       // this service exists to keep (ADR-0053 §2).
@@ -464,6 +486,7 @@ export class HierarchyLifecycleService {
       counts.notes = await deleteNotesUnderPlans(planIds);
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
+      counts.swimlanes = await deleteSwimlanesUnderPlans(planIds);
       counts.calendars = await deleteCalendarsUnderProjects([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
@@ -479,6 +502,7 @@ export class HierarchyLifecycleService {
       counts.notes = await deleteNotesUnderPlans([id]);
       counts.planShares = await deletePlanSharesUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
+      counts.swimlanes = await deleteSwimlanesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
@@ -558,6 +582,7 @@ export class HierarchyLifecycleService {
       steps: 0,
       notes: 0,
       planShares: 0,
+      swimlanes: 0,
       calendars: 0,
     };
     if (ids.length === 0) return counts;
@@ -660,6 +685,7 @@ export class HierarchyLifecycleService {
       steps: 0,
       notes: 0,
       planShares: 0,
+      swimlanes: 0,
       calendars: 0,
     };
 
@@ -754,6 +780,15 @@ export class HierarchyLifecycleService {
         // individually carries its own batch id and never resurrects here.
         counts.planShares = (
           await tx.planShare.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        // Restore the batch's swimlanes (swimlanes schema-design §6). One parent (the plan), swept in
+        // the SAME batch, so no endpoint guard is needed. Deliberately no refusal for an activity
+        // that names a deleted swimlane: that is the state a swimlane delete creates and its restore
+        // reverses, unlike a deleted calendar, which is a scheduling input (ADR-0201 D1). A swimlane
+        // deleted on its own carries its own batch id and never resurrects here. A name taken
+        // meanwhile raises P2002 on uq_swimlanes_plan_name, which the catch below maps.
+        counts.swimlanes = (
+          await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
         ).count;
         // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
         // calendar has exactly ONE parent (its project) and was swept in the SAME batch as it, so

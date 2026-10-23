@@ -65,6 +65,8 @@ export interface ExpiryCounts {
   activities: number;
   /** Counted so the sweep can charge them to its budget (data-model §3); see HISTORY_ROWS_PER_ACTIVITY. */
   activityHistoryEntries: number;
+  /** Counted for the same reason; see LANE_ROWS_PER_ACTIVITY. */
+  activitySwimlaneLanes: number;
 }
 
 /**
@@ -134,6 +136,13 @@ export async function deleteExpiredScope(
   const activityHistoryEntryCount = await deleteChunked(activityIds, (chunk) =>
     tx.activityHistoryEntry.deleteMany({ where: { activityId: { in: chunk } } }),
   );
+  // Lane rows reference their activity (twice: the member and the WBS summary) and their swimlane
+  // with RESTRICT, so they go before both. Keyed by the resolved activity ids, which also covers
+  // rows whose `summary_activity_id` is in scope, because the WBS tree is same-plan (ADR-0038).
+  // Counted rather than cascaded for the ADR-0174 D8 reason: the budget needs the number.
+  const activitySwimlaneLaneCount = await deleteChunked(activityIds, (chunk) =>
+    tx.activitySwimlaneLane.deleteMany({ where: { activityId: { in: chunk } } }),
+  );
   if (planIds.length > 0) {
     // ADR-0046 denormalises `plan_id` onto EVERY note, including an activity's — so one pass
     // covers both kinds and no activity-keyed pass is needed.
@@ -184,6 +193,10 @@ export async function deleteExpiredScope(
   const activityCount = await deleteChunked(planIds, (chunk) =>
     tx.activity.deleteMany({ where: { planId: { in: chunk } } }),
   );
+  // After `activity` (activities.swimlane_id is a RESTRICT key into it) and before `plan`.
+  await deleteChunked(planIds, (chunk) =>
+    tx.swimlane.deleteMany({ where: { planId: { in: chunk } } }),
+  );
   const planCount = await deleteChunked(planIds, (chunk) =>
     tx.plan.deleteMany({ where: { id: { in: chunk } } }),
   );
@@ -221,5 +234,6 @@ export async function deleteExpiredScope(
     plans: planCount,
     activities: activityCount,
     activityHistoryEntries: activityHistoryEntryCount,
+    activitySwimlaneLanes: activitySwimlaneLaneCount,
   };
 }

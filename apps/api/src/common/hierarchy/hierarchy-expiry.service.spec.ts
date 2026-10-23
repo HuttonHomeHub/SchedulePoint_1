@@ -5,7 +5,11 @@ import type { AuditService } from '../../modules/audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 
 import * as runner from './hierarchy-expiry.runner';
-import { HISTORY_ROWS_PER_ACTIVITY, HierarchyExpiryService } from './hierarchy-expiry.service';
+import {
+  HISTORY_ROWS_PER_ACTIVITY,
+  HierarchyExpiryService,
+  LANE_ROWS_PER_ACTIVITY,
+} from './hierarchy-expiry.service';
 
 /**
  * **Which subtrees the sweep picks, and when it arms.** What it actually deletes is proven against
@@ -116,6 +120,7 @@ beforeEach(() => {
     plans: 1,
     activities: 10,
     activityHistoryEntries: 4,
+    activitySwimlaneLanes: 0,
   });
 });
 
@@ -306,6 +311,7 @@ describe('the budget and the failure path', () => {
       plans: 1,
       activities: 20_000,
       activityHistoryEntries: 0,
+      activitySwimlaneLanes: 0,
     });
     const { service } = build({ clients: [client('c1'), client('c2'), client('c3')] });
     await service.sweepNow(NOW);
@@ -321,6 +327,21 @@ describe('the budget and the failure path', () => {
       plans: 1,
       activities: 100,
       activityHistoryEntries: 19_900 * HISTORY_ROWS_PER_ACTIVITY,
+      activitySwimlaneLanes: 0,
+    });
+    const { service } = build({ clients: [client('c1'), client('c2')] });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('charges swimlane lane rows to the activity budget, not only the activities', async () => {
+    deleteScope.mockResolvedValue({
+      clients: 1,
+      projects: 0,
+      plans: 1,
+      activities: 100,
+      activityHistoryEntries: 0,
+      activitySwimlaneLanes: 19_900 * LANE_ROWS_PER_ACTIVITY,
     });
     const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);
@@ -362,6 +383,7 @@ describe('the budget and the failure path', () => {
               plans: 0,
               activities: 1,
               activityHistoryEntries: 0,
+              activitySwimlaneLanes: 0,
             });
         }),
     );
@@ -390,6 +412,7 @@ describe('the budget and the failure path', () => {
       plans: 1,
       activities: 0,
       activityHistoryEntries: 0,
+      activitySwimlaneLanes: 0,
     });
     const plans = Array.from({ length: 2_100 }, (_, i) => plan(`p${i}`, `proj-${i}`));
     const { service } = build({ plans });

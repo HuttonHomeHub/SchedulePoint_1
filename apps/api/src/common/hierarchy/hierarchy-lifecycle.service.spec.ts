@@ -34,6 +34,7 @@ function makeTx() {
     baselineDependency: model(),
     note: model(),
     planShare: model(),
+    swimlane: model(),
     calendar: model(),
     calendarException: model(),
   };
@@ -71,6 +72,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
       // Activities deleted are those under the client's active plans.
@@ -165,6 +167,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
     });
@@ -187,6 +190,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -281,6 +285,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
     });
@@ -346,6 +351,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
     });
@@ -505,6 +511,24 @@ describe('HierarchyLifecycleService', () => {
       });
     });
 
+    it("sweeps a plan's swimlanes into the batch by plan_id, and not on a single-activity delete", async () => {
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.swimlane.updateMany.mockResolvedValue({ count: 4 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts.swimlanes).toBe(4);
+      expect(tx.swimlane.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR }),
+      });
+
+      tx.swimlane.updateMany.mockClear();
+      tx.activity.findMany.mockResolvedValue([]);
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      const leaf = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(leaf.counts.swimlanes).toBe(0);
+      expect(tx.swimlane.updateMany).not.toHaveBeenCalled();
+    });
+
     it('does NOT sweep share links on a single-activity delete (they are plan-scoped)', async () => {
       tx.activity.findMany.mockResolvedValue([]); // leaf subtree = { a1 }
       tx.activity.updateMany.mockResolvedValue({ count: 1 });
@@ -607,6 +631,7 @@ describe('HierarchyLifecycleService', () => {
         steps: 0,
         notes: 0,
         planShares: 0,
+        swimlanes: 0,
         calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -700,6 +725,21 @@ describe('HierarchyLifecycleService', () => {
       // Links come back purely by their batch id — no endpoint guard (a link has exactly one parent,
       // swept in the same batch), like a note/step and unlike a dependency.
       expect(tx.planShare.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-p' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+    });
+
+    it("restores the batch's swimlanes with their plan, with no deleted-swimlane refusal", async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1', clientId: 'c1' });
+      tx.$queryRaw.mockResolvedValue([{ id: 'pr1' }]);
+      tx.swimlane.updateMany.mockResolvedValue({ count: 3 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts.swimlanes).toBe(3);
+      expect(tx.swimlane.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-p' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });

@@ -2,7 +2,7 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
 import type { OrganizationRole } from '../src/common/auth/principal';
@@ -349,6 +349,10 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     await resetDatabase();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const server = () => app.getHttpServer();
   const dryRunUrl = (projectId: string) =>
     `/api/v1/organizations/acme/projects/${projectId}/interchange/dry-run`;
@@ -577,6 +581,49 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(activities.map((a) => a.laneIndex)).toEqual([0, 0]);
     // Recalculated: the engine wrote early dates onto the activities.
     expect(activities.every((a) => a.earlyStart !== null)).toBe(true);
+  });
+
+  it('removes swimlane rows when the post-commit recalculation fails (compensation)', async () => {
+    // No import writes swimlanes yet, so the recalculation is made to fail AFTER rows are placed on
+    // the new plan, which is the order that matters: `activities.swimlane_id` and the lane rows are
+    // RESTRICT keys, so a compensation that skipped them would raise 23503 and leave the plan.
+    const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+    const schedule = app.get(ScheduleService, { strict: false });
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    let seededPlanId: string | undefined;
+    vi.spyOn(schedule, 'recalculate').mockImplementation(async (_principal, _slug, planId) => {
+      seededPlanId = planId;
+      const activity = await prisma.activity.findFirstOrThrow({ where: { planId } });
+      const swimlane = await prisma.swimlane.create({
+        data: { organizationId: orgId, planId, name: 'Groundworks', position: 0 },
+      });
+      await prisma.activity.update({
+        where: { id: activity.id },
+        data: { swimlaneId: swimlane.id },
+      });
+      await prisma.activitySwimlaneLane.create({
+        data: {
+          organizationId: orgId,
+          activityId: activity.id,
+          basis: 'SWIMLANE',
+          swimlaneId: swimlane.id,
+          laneIndex: 1,
+        },
+      });
+      throw new Error('recalculation failed');
+    });
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(500);
+
+    expect(seededPlanId).toBeDefined();
+    expect(await prisma.plan.count({ where: { id: seededPlanId as string } })).toBe(0);
+    expect(await prisma.activity.count()).toBe(0);
+    expect(await prisma.swimlane.count()).toBe(0);
+    expect(await prisma.activitySwimlaneLane.count()).toBe(0);
   });
 
   it('commits a plain multi-activity XER → 201 with matching counts (no calendars)', async () => {

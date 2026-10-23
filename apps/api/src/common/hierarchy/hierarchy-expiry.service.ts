@@ -37,9 +37,27 @@ import { deleteExpiredScope, type ExpiryCounts } from './hierarchy-expiry.runner
  */
 export const HISTORY_ROWS_PER_ACTIVITY = 5;
 
-/** What one expired scope costs the run's activity budget: its activities plus its history rows. */
+/**
+ * How many swimlane lane rows cost as much, in the activity budget, as one activity.
+ *
+ * **Measured 2026-10-23 at landing** (migration `20261023120000_swimlanes` header): a lane row
+ * costs 10.9–11.9 µs against a history row's 5.6–6.4 µs, 1.7–2.1× as much, so scaling the
+ * calibrated `HISTORY_ROWS_PER_ACTIVITY` gives 2.4–2.9 and the lower, safe reading is taken. A
+ * lower constant charges more per row, and charging too little is the unsafe direction. Swimlane
+ * rows themselves (about 100 live per plan) are not charged.
+ */
+export const LANE_ROWS_PER_ACTIVITY = 2;
+
+/**
+ * What one expired scope costs the run's activity budget: its activities plus its history rows
+ * plus its swimlane lane rows.
+ */
 function budgetCharge(counts: ExpiryCounts): number {
-  return counts.activities + Math.ceil(counts.activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY);
+  return (
+    counts.activities +
+    Math.ceil(counts.activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY) +
+    Math.ceil(counts.activitySwimlaneLanes / LANE_ROWS_PER_ACTIVITY)
+  );
 }
 
 /**

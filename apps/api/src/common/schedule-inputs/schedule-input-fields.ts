@@ -33,6 +33,7 @@ export const ACTIVITY_FIELD_CLASS: Record<keyof ActivityPatch, InputClass> = {
   calendarId: 'INPUT',
   parentId: 'INPUT',
   laneIndex: 'NOT_INPUT',
+  swimlaneId: 'NOT_INPUT',
   scheduleAsLateAsPossible: 'INPUT',
   visualStart: 'INPUT',
   levelingPriority: 'INPUT',
@@ -68,6 +69,8 @@ export const PLAN_FIELD_CLASS: Record<keyof PlanPatch, InputClass> = {
   currencyCode: 'NOT_INPUT',
   plannedStart: 'INPUT',
   calendarId: 'INPUT',
+  swimlaneSource: 'NOT_INPUT',
+  swimlaneWbsLevel: 'NOT_INPUT',
 };
 
 /** The DTO's `editedField` is a control field for the triad recompute, not persisted state. */

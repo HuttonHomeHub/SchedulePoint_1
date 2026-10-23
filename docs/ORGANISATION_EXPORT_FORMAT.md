@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `2.0`
+- **Version:** `2.1`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -24,7 +24,7 @@ csv/<file>.csv          the same rows for a spreadsheet
 manifest.json           written last: every file with its rows, bytes and SHA-256, and what was left out
 ```
 
-The JSON is authoritative; the CSV is a view of it. There are 28 files of each kind, listed below. Every
+The JSON is authoritative; the CSV is a view of it. There are 30 files of each kind, listed below. Every
 file is present even when it has no rows: its JSON is `[]` and its CSV is a header row only.
 
 ## How values are written
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "2.0",
+  "formatVersion": "2.1",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,6 +145,14 @@ version.
 
 Changes since `1.0`:
 
+- **`2.1`** — swimlanes. Two new files, `swimlanes` and `activity-swimlane-lanes`, and three appended
+  columns: `plans.swimlaneSource`, `plans.swimlaneWbsLevel` and `activities.swimlaneId`. A plan's
+  swimlanes are the labelled runs of lanes drawn on its diagram: `swimlanes` holds the hand-made ones
+  (a soft-deleted one carries its `deletedAt`), and `activities.swimlaneId` says which of them an
+  activity belongs to, kept even while the plan takes its swimlanes from the WBS. `activity-swimlane-lanes`
+  holds the lane an activity was last placed on against each grouping it has been placed in, so
+  switching grouping and back returns the same lane. Nothing existing is renamed or retyped, so a
+  reader written for `2.0` reads `2.1` and ignores what it does not know.
 - **`2.0`** — three `activities` columns and one `baseline-activities` column are renamed and documented
   as **working days**: `totalFloatMinutes` → `totalFloatDays` (both files), `freeFloatMinutes` →
   `freeFloatDays` and `remainingFloatMinutes` → `remainingFloatDays`. The values are unchanged. In `1.x`
@@ -184,6 +192,7 @@ The values each enum column may hold today, by `file.column`. A newer minor vers
 - `plans.eacMethod`: CPI, REMAINING_AT_BUDGET, CPI_TIMES_SPI
 - `plans.scheduleCriticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
 - `plans.scheduleTotalFloatMode`: START, FINISH, SMALLEST
+- `plans.swimlaneSource`: NONE, MANUAL, WBS
 - `activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
 - `activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
@@ -214,6 +223,7 @@ The values each enum column may hold today, by `file.column`. A newer minor vers
 - `activity-history.scope`: DEFINITION, PROGRESS, PLACEMENT, LOGIC, RESOURCES
 - `activity-history.origin`: ACTIVITY_DELETED, ACTIVITY_RESTORED, SUMMARY_DISSOLVED
 - `notes.entityType`: PLAN, ACTIVITY
+- `activity-swimlane-lanes.basis`: SWIMLANE, NO_SWIMLANE, WBS_SUMMARY, NO_WBS_SUMMARY
 - `audit-events.outcome`: SUCCESS, DENIED, FAILURE
 - `audit-events.actorType`: USER, GUEST, SYSTEM, ANONYMOUS, STAFF
 
@@ -330,38 +340,40 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/plans.json` and `csv/plans.csv`.
 
-| Column                                  | Type    | Notes   |
-| --------------------------------------- | ------- | ------- |
-| `id`                                    | text    |         |
-| `organizationId`                        | text    |         |
-| `projectId`                             | text    |         |
-| `name`                                  | text    |         |
-| `description`                           | text    |         |
-| `status`                                | enum    |         |
-| `progressRecalcMode`                    | enum    |         |
-| `useExpectedFinishDates`                | boolean |         |
-| `criticalPathDefinition`                | enum    |         |
-| `criticalFloatThresholdMinutes`         | int     | minutes |
-| `totalFloatMode`                        | enum    |         |
-| `makeOpenEndsCritical`                  | boolean |         |
-| `levelResources`                        | boolean |         |
-| `levelWithinFloatOnly`                  | boolean |         |
-| `ignoreExternalRelationships`           | boolean |         |
-| `eacMethod`                             | enum    |         |
-| `currencyCode`                          | text    |         |
-| `plannedStart`                          | date    |         |
-| `calendarId`                            | text    |         |
-| `scheduleComputedAt`                    | instant |         |
-| `scheduleCriticalPathDefinition`        | enum    |         |
-| `scheduleCriticalFloatThresholdMinutes` | int     | minutes |
-| `scheduleTotalFloatMode`                | enum    |         |
-| `scheduleMakeOpenEndsCritical`          | boolean |         |
-| `scheduleInputsChangedAt`               | instant |         |
-| `createdAt`                             | instant |         |
-| `updatedAt`                             | instant |         |
-| `createdBy`                             | text    |         |
-| `updatedBy`                             | text    |         |
-| `deletedAt`                             | instant |         |
+| Column                                  | Type    | Notes                                                |
+| --------------------------------------- | ------- | ---------------------------------------------------- |
+| `id`                                    | text    |                                                      |
+| `organizationId`                        | text    |                                                      |
+| `projectId`                             | text    |                                                      |
+| `name`                                  | text    |                                                      |
+| `description`                           | text    |                                                      |
+| `status`                                | enum    |                                                      |
+| `progressRecalcMode`                    | enum    |                                                      |
+| `useExpectedFinishDates`                | boolean |                                                      |
+| `criticalPathDefinition`                | enum    |                                                      |
+| `criticalFloatThresholdMinutes`         | int     | minutes                                              |
+| `totalFloatMode`                        | enum    |                                                      |
+| `makeOpenEndsCritical`                  | boolean |                                                      |
+| `levelResources`                        | boolean |                                                      |
+| `levelWithinFloatOnly`                  | boolean |                                                      |
+| `ignoreExternalRelationships`           | boolean |                                                      |
+| `eacMethod`                             | enum    |                                                      |
+| `currencyCode`                          | text    |                                                      |
+| `plannedStart`                          | date    |                                                      |
+| `calendarId`                            | text    |                                                      |
+| `scheduleComputedAt`                    | instant |                                                      |
+| `scheduleCriticalPathDefinition`        | enum    |                                                      |
+| `scheduleCriticalFloatThresholdMinutes` | int     | minutes                                              |
+| `scheduleTotalFloatMode`                | enum    |                                                      |
+| `scheduleMakeOpenEndsCritical`          | boolean |                                                      |
+| `scheduleInputsChangedAt`               | instant |                                                      |
+| `createdAt`                             | instant |                                                      |
+| `updatedAt`                             | instant |                                                      |
+| `createdBy`                             | text    |                                                      |
+| `updatedBy`                             | text    |                                                      |
+| `deletedAt`                             | instant |                                                      |
+| `swimlaneSource`                        | enum    | since 2.1                                            |
+| `swimlaneWbsLevel`                      | int     | 1 to 3 when the source is WBS, else empty; since 2.1 |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -434,6 +446,7 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `updatedBy`                | text    |                                                       |
 | `deletedAt`                | instant |                                                       |
 | `derivedDurationMinutes`   | int     | minutes; summary and level-of-effort only (since 1.1) |
+| `swimlaneId`               | text    | hand-made swimlane, empty for none (since 2.1)        |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -858,6 +871,42 @@ Rows: every row of the organisation. Files `json/notes.json` and `csv/notes.csv`
 | `deletedAt`      | instant |       |
 
 Not exported: `version`, `deleteBatchId`.
+
+### `swimlanes`
+
+Rows: every row of the organisation. Files `json/swimlanes.json` and `csv/swimlanes.csv`.
+
+| Column           | Type    | Notes                            |
+| ---------------- | ------- | -------------------------------- |
+| `id`             | text    |                                  |
+| `organizationId` | text    |                                  |
+| `planId`         | text    |                                  |
+| `name`           | text    |                                  |
+| `position`       | int     | order within the plan, ascending |
+| `createdAt`      | instant |                                  |
+| `updatedAt`      | instant |                                  |
+| `createdBy`      | text    |                                  |
+| `updatedBy`      | text    |                                  |
+| `deletedAt`      | instant |                                  |
+
+Not exported: `version`, `deleteBatchId`.
+
+### `activity-swimlane-lanes`
+
+Rows: every row of the organisation. Files `json/activity-swimlane-lanes.json` and `csv/activity-swimlane-lanes.csv`.
+
+| Column              | Type    | Notes                                       |
+| ------------------- | ------- | ------------------------------------------- |
+| `id`                | text    |                                             |
+| `organizationId`    | text    |                                             |
+| `activityId`        | text    |                                             |
+| `basis`             | enum    | which grouping the lane was written against |
+| `swimlaneId`        | text    | set when `basis` is SWIMLANE                |
+| `summaryActivityId` | text    | set when `basis` is WBS_SUMMARY             |
+| `wbsLevel`          | int     | 1 to 3; set when `basis` is NO_WBS_SUMMARY  |
+| `laneIndex`         | int     | lane within that grouping, from 0           |
+| `createdAt`         | instant |                                             |
+| `updatedAt`         | instant |                                             |
 
 ### `audit-events`
 
