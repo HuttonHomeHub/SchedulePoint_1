@@ -387,6 +387,75 @@ describe('the payload contracts the real API enforces', () => {
     expect(unlaned?.body).not.toHaveProperty('laneIndex');
   });
 
+  describe('swimlanes', () => {
+    it('sets the MANUAL source, creates the swimlanes in order, files activities and writes their lanes', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      globalThis.fetch = recordingFetch(calls);
+      await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({
+          swimlanes: {
+            source: 'MANUAL',
+            lanes: [
+              { key: 'a', name: 'First band' },
+              { key: 'b', name: 'Second band' },
+            ],
+          },
+          activities: [{ ...activity('A1'), swimlaneKey: 'b', swimlaneLane: 2 }, activity('A2')],
+        }),
+      );
+
+      const options = calls.find((c) => c.body.progressRecalcMode !== undefined);
+      expect(options?.body.swimlaneSource).toBe('MANUAL');
+      expect(options?.body).not.toHaveProperty('swimlaneWbsLevel');
+
+      const lanes = calls.filter((c) => c.url.endsWith('/swimlanes'));
+      expect(lanes.map((c) => c.body.name)).toEqual(['First band', 'Second band']);
+
+      const creates = calls.filter((c) => c.url.endsWith('/activities'));
+      const filed = creates.find((c) => c.body.name === 'A1');
+      const unfiled = creates.find((c) => c.body.name === 'A2');
+      expect(filed?.body.swimlaneId).toBeTruthy();
+      expect(unfiled?.body).not.toHaveProperty('swimlaneId');
+      // The swimlanes exist before the first activity names one.
+      expect(calls.indexOf(lanes[1]!)).toBeLessThan(calls.indexOf(filed!));
+
+      const positions = calls.find((c) => c.url.endsWith('/activities/positions'));
+      expect(positions?.body.positions).toEqual([
+        expect.objectContaining({ swimlane: { laneIndex: 2 } }),
+      ]);
+    });
+
+    it('sets the WBS source with its level and creates no swimlane row', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      globalThis.fetch = recordingFetch(calls);
+      await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({ swimlanes: { source: 'WBS', wbsLevel: 1 }, activities: [activity('A1')] }),
+      );
+      const options = calls.find((c) => c.body.progressRecalcMode !== undefined);
+      expect(options?.body.swimlaneSource).toBe('WBS');
+      expect(options?.body.swimlaneWbsLevel).toBe(1);
+      expect(calls.some((c) => c.url.endsWith('/swimlanes'))).toBe(false);
+    });
+
+    it('sends nothing about swimlanes when the spec has none', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      globalThis.fetch = recordingFetch(calls);
+      await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({ activities: [activity('A1')] }),
+      );
+      const options = calls.find((c) => c.body.progressRecalcMode !== undefined);
+      expect(options?.body).not.toHaveProperty('swimlaneSource');
+      expect(calls.some((c) => c.url.endsWith('/swimlanes'))).toBe(false);
+      expect(calls.some((c) => c.url.endsWith('/activities/positions'))).toBe(false);
+    });
+  });
+
   it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;

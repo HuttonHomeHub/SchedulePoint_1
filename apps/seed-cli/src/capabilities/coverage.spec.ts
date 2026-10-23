@@ -1,4 +1,4 @@
-import { seedSpecSchema } from '@repo/seed';
+import { seedSpecSchema, seedSwimlanesSchema, type SeedSpec } from '@repo/seed';
 import { describe, expect, it } from 'vitest';
 
 import { capabilityKeys, coverageReport, UNREACHABLE, unknownTags } from './coverage.js';
@@ -75,6 +75,31 @@ describe('the capability plans themselves', () => {
       expect(spec.plan.description, spec.seedName).toBeTruthy();
       expect((spec.plan.description ?? '').length, spec.seedName).toBeGreaterThan(60);
     }
+  });
+
+  it('the swimlane pair holds the same leaf activities, one by hand and one from the WBS', () => {
+    const [byHand, byWbs] = capabilitySpecs('swimlanes');
+    expect(byHand?.swimlanes?.source).toBe('MANUAL');
+    expect(byWbs?.swimlanes).toEqual({ source: 'WBS', wbsLevel: 1 });
+    const leaves = (spec: SeedSpec | undefined) =>
+      (spec?.activities ?? []).filter((a) => a.type === 'TASK').map((a) => a.key);
+    expect(leaves(byWbs)).toEqual(leaves(byHand));
+    // Every filed leaf of the by-hand plan sits under a summary in the WBS plan, and the one
+    // unassigned leaf under none, so the two derivations place the same activities together.
+    const summaryOf = new Map((byWbs?.activities ?? []).map((a) => [a.key, a.parentKey]));
+    for (const a of byHand?.activities ?? []) {
+      expect(summaryOf.get(a.key) === null || summaryOf.get(a.key) === undefined, a.key).toBe(
+        a.swimlaneKey == null,
+      );
+    }
+  });
+
+  it('refuse a swimlane source the API would refuse', () => {
+    const lane = { key: 'a', name: 'A' };
+    expect(() => seedSwimlanesSchema.parse({ source: 'MANUAL', lanes: [lane, lane] })).toThrow();
+    expect(() => seedSwimlanesSchema.parse({ source: 'WBS' })).toThrow();
+    expect(() => seedSwimlanesSchema.parse({ source: 'WBS', wbsLevel: 4 })).toThrow();
+    expect(() => seedSwimlanesSchema.parse({ source: 'WBS', wbsLevel: 2 })).not.toThrow();
   });
 
   it('have unique seed names, so a re-seed cannot silently merge two plans', () => {

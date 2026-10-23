@@ -241,9 +241,33 @@ export async function seedPlan(
           levelWithinFloatOnly: spec.plan.options.levelWithinFloatOnly,
           ignoreExternalRelationships: spec.plan.options.ignoreExternalRelationships,
           ...(spec.plan.currencyCode === null ? {} : { currencyCode: spec.plan.currencyCode }),
+          // The swimlane source is a pen-held plan write like the options beside it. A WBS source
+          // needs its level in the same body (the API resolves the pair against the stored row), and
+          // no swimlane row is made for it: the swimlanes are the WBS summaries at that level.
+          ...(spec.swimlanes === undefined
+            ? {}
+            : spec.swimlanes.source === 'WBS'
+              ? { swimlaneSource: 'WBS', swimlaneWbsLevel: spec.swimlanes.wbsLevel }
+              : { swimlaneSource: 'MANUAL' }),
         });
       } catch (error) {
         record('plan-options', spec.seedName, error);
+      }
+
+      // 3b. Hand-made swimlanes, in order, before any activity names one. Each is appended after the
+      //     previous, so the spec's order is the band order.
+      const swimlaneIdByKey = new Map<string, string>();
+      if (spec.swimlanes?.source === 'MANUAL') {
+        for (const lane of spec.swimlanes.lanes) {
+          try {
+            const created = await client.post<Created>(`${planPath}/swimlanes`, {
+              name: lane.name,
+            });
+            swimlaneIdByKey.set(lane.key, created.id);
+          } catch (error) {
+            record('swimlane', lane.key, error);
+          }
+        }
       }
 
       // 4. Activities, parents last (a WBS parent is another activity, so all must exist first).
@@ -287,6 +311,9 @@ export async function seedPlan(
             // been true of the catalogue by construction, not by measurement.
             ...(activity.visualStart === null ? {} : { visualStart: activity.visualStart }),
             ...(activity.laneIndex === undefined ? {} : { laneIndex: activity.laneIndex }),
+            ...(activity.swimlaneKey == null || !swimlaneIdByKey.has(activity.swimlaneKey)
+              ? {}
+              : { swimlaneId: swimlaneIdByKey.get(activity.swimlaneKey) }),
             ...(activity.levelingPriority === null
               ? {}
               : { levelingPriority: activity.levelingPriority }),
@@ -500,11 +527,35 @@ export async function seedPlan(
           }
         }
       }
+
+      // 8. Lanes inside swimlanes, in one batch. After parentage (a WBS lane is derived from the
+      //    ancestor chain, which does not exist until then) and after the steps/progress writes, and
+      //    on versions read now, because the batches above bumped them.
+      const laned = spec.activities.filter(
+        (a) => a.swimlaneLane !== undefined && activityIdByKey.has(a.key),
+      );
+      if (laned.length > 0) {
+        try {
+          const positions = [];
+          for (const activity of laned) {
+            const id = activityIdByKey.get(activity.key)!;
+            const row = await client.get<{ version: number }>(`${org}/activities/${id}`);
+            positions.push({
+              id,
+              version: row.version,
+              swimlane: { laneIndex: activity.swimlaneLane },
+            });
+          }
+          await client.patch(`${planPath}/activities/positions`, { positions });
+        } catch (error) {
+          record('swimlane-lanes', spec.seedName, error);
+        }
+      }
     });
 
     const seedMs = Date.now() - started;
 
-    // 8. Recalculate — the plan is not a test bed until the engine has run over it.
+    // 9. Recalculate — the plan is not a test bed until the engine has run over it.
     let recalculateMs: number | null = null;
     try {
       const recalcStarted = Date.now();
