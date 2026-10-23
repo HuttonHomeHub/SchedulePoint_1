@@ -22,3 +22,11 @@ export {
 export { packAroundCarried } from './pack-around.js';
 export { nearestFreeRow, rowOccupancy, type RowOccupancy } from './nearest-free-row.js';
 export { packLanes, type LaneChange, type PackItem } from './pack-lanes.js';
+export {
+  deriveSwimlaneLanes,
+  wbsBasisOf,
+  type SwimlaneMember,
+  type SwimlanePlacement,
+  type WbsBasis,
+  type WbsNode,
+} from './swimlanes.js';
