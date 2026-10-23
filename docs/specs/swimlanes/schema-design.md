@@ -223,7 +223,7 @@ latter so named that `prisma format` does not realign the whole block), and `Act
 
 **Constraints (raw SQL):**
 
-- `ck_swimlanes_name_shape`: `char_length(name) BETWEEN 1 AND 80 AND name = btrim(name) AND name
+- `ck_swimlanes_name_shape`: `char_length(name) >= 1 AND char_length(name) <= 80 AND name = btrim(name) AND name
 !~ '[[:cntrl:]]'`. This backstops spec §2's validation in the database. The DTO trims first,
   so the CHECK guards rather than rejects ordinary input (the `ck_notes_body_length` shape). It
   matters because XER import (spec §4.8) writes names from hostile files.

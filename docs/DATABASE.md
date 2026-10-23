@@ -79,6 +79,12 @@
   enum ranges) — enforce invariants in the DB, not only in code.
 - **Unique** constraints for anything that must be unique (scoped where relevant,
   e.g. unique name per organisation).
+- **A CHECK's stored definition must survive a dump and restore unchanged**, because
+  `scripts/backup-restore-check.sh` compares `pg_get_constraintdef` across the round trip. Do not
+  put a `BETWEEN` as the **left** operand of an `AND`: it deparses as a nested
+  `((a >= x) AND (a <= y)) AND …`, which re-parses flattened, so the restored definition differs
+  (`ck_swimlanes_name_shape`, PR #1119). Write the two comparisons instead. A lone `BETWEEN`, or
+  one on the right of an `AND` or inside an `OR`, round-trips unchanged; the round trip is the proof.
 
 ## Relationships
 

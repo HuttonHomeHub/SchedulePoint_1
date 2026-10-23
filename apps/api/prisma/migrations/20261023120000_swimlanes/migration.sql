@@ -167,8 +167,17 @@ CREATE INDEX "idx_swimlanes_delete_batch_id" ON "swimlanes" ("delete_batch_id") 
 -- Backstops spec §2's validation. The DTO trims first, so this guards rather than rejects ordinary
 -- input (the ck_notes_body_length shape); it matters because XER import writes names from hostile
 -- files.
+--
+-- Written as two comparisons, NOT `char_length("name") BETWEEN 1 AND 80`, so that the stored
+-- definition survives pg_dump/pg_restore unchanged (scripts/backup-restore-check.sh compares
+-- pg_get_constraintdef across the round trip). BETWEEN parses to its own AND node; as the LEFT
+-- operand of the outer AND it deparses as a nested `((a >= 1) AND (a <= 80)) AND …`, and re-parsing
+-- that text flattens it into one AND list, so the restored definition differed (CI, PR #1119). The
+-- level CHECKs below keep BETWEEN because there it is the RIGHT operand, which re-parses unchanged:
+-- proven by the same round trip, constraint by constraint.
 ALTER TABLE "swimlanes" ADD CONSTRAINT "ck_swimlanes_name_shape" CHECK (
-  char_length("name") BETWEEN 1 AND 80 AND "name" = btrim("name") AND "name" !~ '[[:cntrl:]]'
+  char_length("name") >= 1 AND char_length("name") <= 80 AND "name" = btrim("name")
+  AND "name" !~ '[[:cntrl:]]'
 );
 
 -- Not unique, on purpose (schema-design §4 Q1). The cap of 100 live swimlanes per plan is a service
