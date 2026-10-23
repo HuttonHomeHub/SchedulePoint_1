@@ -10,6 +10,14 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-23 — The CI keeps the browsers' system packages between runs
+
+**Decided by the product owner** (this session), choosing the recommended option after the time limit
+and retries below hit their own limit on PR #1116: the apt mirror stayed slow for 18 minutes and three
+tries fetched only 57 of 142 MB. The downloaded packages are now restored from and saved to the
+Actions cache, so most runs download nothing. Spec D4–D6:
+[`docs/specs/ci-browser-install/feature-spec.md`](specs/ci-browser-install/feature-spec.md).
+
 ## 2026-10-23 — The CI browser install gets a time limit and retries
 
 **Decided by the product owner** (this session), choosing the recommended option: the "Install

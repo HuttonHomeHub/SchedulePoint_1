@@ -545,6 +545,24 @@ jobs:
       - name: Check schema/migration drift
         run: pnpm --filter @repo/api prisma:check-drift
 
+      # The browsers' system packages (~142 MB of .debs) are kept between runs, so
+      # a run that restores them downloads nothing from the apt mirror, whose
+      # slowness is what stalled the install below (spec D4-D6). The key carries
+      # the runner image, so a new image starts a fresh set, and the lockfile, so
+      # a Playwright upgrade does; the prefix restore still brings back most of
+      # the packages after either change.
+      - name: Name the browsers' package cache
+        id: apt-key
+        run: echo "prefix=playwright-apt-${ImageOS:-unknown}-${ImageVersion:-unknown}-" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the browsers' system packages
+        id: apt-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-key.outputs.prefix }}${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ steps.apt-key.outputs.prefix }}
+
       # A normal install takes about two minutes, but on six runs (2026-10-22/23)
       # it stalled for the job's whole 30 minutes and no test ran; every re-run
       # passed. So each try gets six minutes and a stalled one is killed and
@@ -558,6 +576,9 @@ jobs:
       - name: Install Playwright browsers
         timeout-minutes: 20
         run: |
+          if compgen -G "$HOME/apt-archives/*.deb" >/dev/null; then
+            sudo cp "$HOME"/apt-archives/*.deb /var/cache/apt/archives/
+          fi
           for attempt in 1 2 3; do
             if timeout --kill-after=15 360 pnpm --filter @repo/web exec playwright install --with-deps; then
               exit 0
@@ -572,6 +593,24 @@ jobs:
           done
           echo "::error::Playwright browser install failed three times"
           exit 1
+
+      # Saved only when the exact key missed, straight after the install, so a
+      # later red test step does not lose the packages. Parallel shards race to
+      # save the same key; the losers only log that it already exists.
+      - name: Collect the browsers' system packages
+        if: ${{ steps.apt-cache.outputs.cache-hit != 'true' }}
+        run: |
+          sudo apt-get -qq autoclean || true
+          mkdir -p "$HOME/apt-archives"
+          cp /var/cache/apt/archives/*.deb "$HOME/apt-archives/" 2>/dev/null || true
+          du -sh "$HOME/apt-archives"
+
+      - name: Save the browsers' system packages
+        if: ${{ steps.apt-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-key.outputs.prefix }}${{ hashFiles('pnpm-lock.yaml') }}
 
       # Playwright starts the API and web dev servers itself (see
       # apps/web/playwright.config.ts) and drives the full stack in a browser.
