@@ -1,5 +1,13 @@
 # @repo/interchange
 
+## 0.13.1
+
+### Patch Changes
+
+- [#1109](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1109) [`d448c52`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d448c529a4661095d15c59aeabd55e99642a7fae) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Importing an XER or Microsoft Project file whose activities carry notes now says so in the import report ("N activity notes were not imported") instead of reporting a clean import. The notes themselves are still not carried across.
+
+- [#1109](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1109) [`d448c52`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d448c529a4661095d15c59aeabd55e99642a7fae) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An XER import no longer says hours-per-day was not imported. It is imported; the calendar note now names only hours-per-week and base-calendar inheritance.
+
 ## 0.13.0
 
 ### Minor Changes
