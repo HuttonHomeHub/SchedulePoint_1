@@ -1,0 +1,6704 @@
+[
+  {
+    "name": "empty",
+    "packed": [],
+    "packedHinted": [],
+    "queries": [],
+    "cascade": [],
+    "afterMove": [],
+    "around": [],
+    "aroundUnhinted": []
+  },
+  {
+    "name": "single bar",
+    "packed": [
+      {
+        "id": "a",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "a",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [5],
+    "cascade": [5],
+    "afterMove": [],
+    "around": [
+      {
+        "id": "a",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "a",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "three concurrent then a late successor",
+    "packed": [
+      {
+        "id": "x",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "x",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [0, 1, 2, 9],
+    "cascade": [2, 9],
+    "afterMove": [0, 1],
+    "around": [
+      {
+        "id": "x",
+        "laneIndex": 2
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "x",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 1",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 3
+      },
+      {
+        "id": "i05",
+        "laneIndex": 5
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 4
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 5
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 6
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i04",
+        "laneIndex": 3
+      },
+      {
+        "id": "i05",
+        "laneIndex": 5
+      },
+      {
+        "id": "i06",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 5
+      },
+      {
+        "id": "i10",
+        "laneIndex": 4
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 4
+      },
+      {
+        "id": "i19",
+        "laneIndex": 5
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 6
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [6, 1, 1, 2, 4, 3, 0, 1, 7, 1, 5, 2, 1, 2, 5, 0, 6, 0, 7, 3, 4, 4, 5, 0, 0, 0],
+    "cascade": [2, 5, 0, 6, 0, 7, 3, 4, 0, 5, 4, 3, 0],
+    "afterMove": [7, 2, 1, 3, 2, 3, 1, 1, 7, 2, 5, 2, 1],
+    "around": [
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 6
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 6
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 7
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 5
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 4
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 5
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 2",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 5
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 3
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i26",
+        "laneIndex": 2
+      },
+      {
+        "id": "i28",
+        "laneIndex": 1
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 4
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 5
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 3
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 3
+      },
+      {
+        "id": "i27",
+        "laneIndex": 3
+      },
+      {
+        "id": "i28",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [
+      6, 5, 3, 5, 6, 2, 4, 1, 0, 8, 2, 5, 8, 6, 5, 7, 0, 6, 1, 7, 4, 2, 3, 4, 4, 2, 1, 0, 4, 3
+    ],
+    "cascade": [7, 0, 6, 1, 7, 4, 2, 3, 4, 4, 2, 1, 0, 4, 3],
+    "afterMove": [6, 5, 3, 5, 7, 1, 5, 2, 0, 8, 1, 6, 7, 5, 6],
+    "around": [
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 6
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 5
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 7
+      },
+      {
+        "id": "i22",
+        "laneIndex": 8
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 3
+      },
+      {
+        "id": "i27",
+        "laneIndex": 6
+      },
+      {
+        "id": "i28",
+        "laneIndex": 1
+      },
+      {
+        "id": "i29",
+        "laneIndex": 5
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 2
+      },
+      {
+        "id": "i28",
+        "laneIndex": 1
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 3",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 6
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 3
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 6
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 7
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 5
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 2
+      },
+      {
+        "id": "i28",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 6
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 3
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i10",
+        "laneIndex": 6
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 7
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 5
+      },
+      {
+        "id": "i26",
+        "laneIndex": 5
+      },
+      {
+        "id": "i27",
+        "laneIndex": 1
+      },
+      {
+        "id": "i28",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [
+      6, 1, 7, 7, 4, 6, 3, 6, 3, 4, 7, 3, 6, 6, 7, 2, 2, 4, 1, 5, 5, 8, 7, 8, 5, 7, 3, 5, 4
+    ],
+    "cascade": [4, 0, 2, 1, 7, 5, 5, 8, 7, 5, 5, 8, 3, 4, 4],
+    "afterMove": [6, 1, 5, 0, 4, 6, 3, 4, 3, 6, 2, 3, 3, 5],
+    "around": [
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i15",
+        "laneIndex": 6
+      },
+      {
+        "id": "i16",
+        "laneIndex": 5
+      },
+      {
+        "id": "i17",
+        "laneIndex": 7
+      },
+      {
+        "id": "i18",
+        "laneIndex": 8
+      },
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 3
+      },
+      {
+        "id": "i22",
+        "laneIndex": 5
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i26",
+        "laneIndex": 7
+      },
+      {
+        "id": "i28",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 8
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 7
+      },
+      {
+        "id": "i26",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      },
+      {
+        "id": "i28",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 4",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 5
+      },
+      {
+        "id": "i05",
+        "laneIndex": 4
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 4
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 7
+      },
+      {
+        "id": "i18",
+        "laneIndex": 6
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 4
+      },
+      {
+        "id": "i28",
+        "laneIndex": 0
+      },
+      {
+        "id": "i30",
+        "laneIndex": 2
+      },
+      {
+        "id": "i31",
+        "laneIndex": 0
+      },
+      {
+        "id": "i32",
+        "laneIndex": 0
+      },
+      {
+        "id": "i33",
+        "laneIndex": 3
+      },
+      {
+        "id": "i34",
+        "laneIndex": 3
+      },
+      {
+        "id": "i35",
+        "laneIndex": 0
+      },
+      {
+        "id": "i36",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 5
+      },
+      {
+        "id": "i05",
+        "laneIndex": 4
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 4
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 7
+      },
+      {
+        "id": "i18",
+        "laneIndex": 6
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 6
+      },
+      {
+        "id": "i27",
+        "laneIndex": 4
+      },
+      {
+        "id": "i28",
+        "laneIndex": 3
+      },
+      {
+        "id": "i29",
+        "laneIndex": 3
+      },
+      {
+        "id": "i30",
+        "laneIndex": 1
+      },
+      {
+        "id": "i31",
+        "laneIndex": 0
+      },
+      {
+        "id": "i32",
+        "laneIndex": 2
+      },
+      {
+        "id": "i33",
+        "laneIndex": 1
+      },
+      {
+        "id": "i34",
+        "laneIndex": 3
+      },
+      {
+        "id": "i35",
+        "laneIndex": 0
+      },
+      {
+        "id": "i36",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [
+      1, 6, 2, 5, 8, 6, 4, 2, 6, 1, 3, 2, 0, 3, 8, 3, 0, 8, 4, 4, 8, 1, 0, 7, 3, 4, 7, 4, 5, 1, 4,
+      7, 7, 8, 6, 3, 5
+    ],
+    "cascade": [4, 4, 8, 2, 0, 7, 3, 5, 7, 4, 5, 1, 4, 7, 6, 8, 6, 3, 5],
+    "afterMove": [1, 6, 2, 6, 7, 6, 2, 3, 6, 3, 2, 2, 0, 3, 7, 3, 1, 0],
+    "around": [
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      },
+      {
+        "id": "i21",
+        "laneIndex": 8
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 5
+      },
+      {
+        "id": "i25",
+        "laneIndex": 7
+      },
+      {
+        "id": "i26",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 4
+      },
+      {
+        "id": "i28",
+        "laneIndex": 3
+      },
+      {
+        "id": "i29",
+        "laneIndex": 1
+      },
+      {
+        "id": "i31",
+        "laneIndex": 2
+      },
+      {
+        "id": "i32",
+        "laneIndex": 3
+      },
+      {
+        "id": "i33",
+        "laneIndex": 5
+      },
+      {
+        "id": "i34",
+        "laneIndex": 1
+      },
+      {
+        "id": "i35",
+        "laneIndex": 2
+      },
+      {
+        "id": "i36",
+        "laneIndex": 5
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 4
+      },
+      {
+        "id": "i26",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      },
+      {
+        "id": "i28",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 1
+      },
+      {
+        "id": "i30",
+        "laneIndex": 1
+      },
+      {
+        "id": "i31",
+        "laneIndex": 0
+      },
+      {
+        "id": "i32",
+        "laneIndex": 3
+      },
+      {
+        "id": "i33",
+        "laneIndex": 5
+      },
+      {
+        "id": "i34",
+        "laneIndex": 0
+      },
+      {
+        "id": "i35",
+        "laneIndex": 0
+      },
+      {
+        "id": "i36",
+        "laneIndex": 5
+      }
+    ]
+  },
+  {
+    "name": "seeded 5",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 5
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 3
+      },
+      {
+        "id": "i24",
+        "laneIndex": 2
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 2
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 5
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [1, 7, 4, 7, 2, 1, 1, 3, 1, 4, 5, 4, 1, 6, 2, 1, 0, 6, 6, 3, 2, 6, 3, 1, 4, 6, 2, 3],
+    "cascade": [2, 1, 0, 5, 6, 3, 2, 6, 2, 2, 4, 6, 2, 3],
+    "afterMove": [0, 7, 5, 7, 2, 1, 1, 3, 1, 7, 5, 4, 2, 6],
+    "around": [
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 5
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 6
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 7
+      },
+      {
+        "id": "i25",
+        "laneIndex": 5
+      },
+      {
+        "id": "i26",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 5
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 6",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [4, 7, 3, 3, 3, 2, 4, 1, 1, 4, 6, 6, 4, 2, 0, 7, 3, 3, 7, 4, 4, 1],
+    "cascade": [6, 5, 2, 0, 7, 3, 3, 7, 4, 4, 1],
+    "afterMove": [4, 7, 3, 3, 3, 2, 4, 1, 1, 4, 5],
+    "around": [
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 5
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 4
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      },
+      {
+        "id": "i18",
+        "laneIndex": 4
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 7",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [4],
+    "cascade": [4],
+    "afterMove": [],
+    "around": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 8",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [4, 4, 3, 5, 0, 6, 3],
+    "cascade": [5, 0, 6, 3],
+    "afterMove": [4, 4, 4],
+    "around": [
+      {
+        "id": "i03",
+        "laneIndex": 4
+      },
+      {
+        "id": "i04",
+        "laneIndex": 4
+      },
+      {
+        "id": "i05",
+        "laneIndex": 3
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 9",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      }
+    ],
+    "queries": [6, 6, 4, 5, 6, 1, 6, 0],
+    "cascade": [6, 1, 7, 0],
+    "afterMove": [6, 7, 4, 5],
+    "around": [
+      {
+        "id": "i04",
+        "laneIndex": 6
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 7
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      }
+    ]
+  },
+  {
+    "name": "seeded 10",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 3
+      },
+      {
+        "id": "i02",
+        "laneIndex": 2
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 4
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [2, 1, 2, 2, 3, 2, 1, 1, 0, 3, 3, 5, 5, 5, 2, 3, 6, 7, 3, 6, 1],
+    "cascade": [3, 5, 4, 5, 2, 3, 7, 7, 1, 6, 0],
+    "afterMove": [2, 3, 3, 2, 3, 2, 0, 0, 0, 2],
+    "around": [
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 11",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 4
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 4
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 3
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [7, 4, 5, 2, 3, 4, 5, 1, 2, 4, 5, 0, 1, 5, 7, 0, 1, 0, 1, 7, 4],
+    "cascade": [5, 0, 1, 5, 7, 0, 3, 0, 1, 7, 4],
+    "afterMove": [8, 4, 5, 1, 3, 4, 6, 2, 2, 4],
+    "around": [
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i15",
+        "laneIndex": 5
+      },
+      {
+        "id": "i16",
+        "laneIndex": 4
+      },
+      {
+        "id": "i17",
+        "laneIndex": 5
+      },
+      {
+        "id": "i18",
+        "laneIndex": 5
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 12",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [1, 4, 7, 5, 1, 3, 3, 2, 2, 3, 4, 0],
+    "cascade": [3, 2, 2, 3, 4, 0],
+    "afterMove": [1, 3, 7, 5, 1, 3],
+    "around": [
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 5
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 13",
+    "packed": [
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 3
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 3
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [1, 0, 4, 4, 2, 1, 0, 0, 4, 5, 1, 1, 1, 1, 1, 6, 5, 3, 5, 6, 5, 3, 6],
+    "cascade": [1, 1, 1, 1, 6, 5, 3, 5, 6, 5, 3, 6],
+    "afterMove": [1, 0, 4, 4, 0, 2, 0, 0, 5, 5, 1],
+    "around": [
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 5
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      }
+    ]
+  },
+  {
+    "name": "seeded 14",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 4
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 4
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [0, 7, 6, 3, 5, 7, 1, 1, 7, 5, 0, 2, 3, 0, 6, 4, 3, 3],
+    "cascade": [5, 0, 2, 4, 0, 6, 4, 3, 3],
+    "afterMove": [1, 7, 6, 3, 5, 7, 1, 1, 7],
+    "around": [
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 7
+      },
+      {
+        "id": "i14",
+        "laneIndex": 5
+      },
+      {
+        "id": "i16",
+        "laneIndex": 7
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 4
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 15",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [1, 0, 2, 0, 2, 3, 3, 2, 1, 3],
+    "cascade": [3, 4, 2, 1, 3],
+    "afterMove": [1, 0, 0, 0, 2],
+    "around": [
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i05",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 16",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 4
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i11",
+        "laneIndex": 5
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 2
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 4
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i11",
+        "laneIndex": 5
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 2
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [4, 1, 2, 0, 5, 3, 1, 7, 4, 7, 1, 0, 5, 4, 7, 1, 7, 6, 1, 0, 2, 7, 4, 7, 4, 7],
+    "cascade": [1, 7, 3, 7, 6, 1, 0, 2, 7, 4, 7, 5, 7],
+    "afterMove": [2, 1, 2, 2, 4, 3, 1, 7, 3, 8, 1, 0, 5],
+    "around": [
+      {
+        "id": "i13",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 4
+      },
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 7
+      },
+      {
+        "id": "i24",
+        "laneIndex": 4
+      },
+      {
+        "id": "i25",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i15",
+        "laneIndex": 5
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 4
+      },
+      {
+        "id": "i19",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 4
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 17",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 4
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 5
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      },
+      {
+        "id": "i18",
+        "laneIndex": 6
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 5
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 4
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 5
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 6
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 5
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 1
+      }
+    ],
+    "queries": [1, 2, 1, 1, 4, 3, 3, 1, 6, 5, 1, 6, 6, 3, 0, 1, 2, 5, 1, 3, 3, 4, 1, 6, 1, 1, 2, 3],
+    "cascade": [0, 0, 2, 5, 1, 3, 4, 4, 1, 6, 1, 3, 2, 3],
+    "afterMove": [5, 2, 1, 2, 4, 0, 3, 1, 8, 4, 0, 7, 6, 3],
+    "around": [
+      {
+        "id": "i14",
+        "laneIndex": 5
+      },
+      {
+        "id": "i16",
+        "laneIndex": 5
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 3
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 7
+      },
+      {
+        "id": "i22",
+        "laneIndex": 5
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 3
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 4
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 3
+      },
+      {
+        "id": "i27",
+        "laneIndex": 1
+      }
+    ]
+  },
+  {
+    "name": "seeded 18",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 3
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [5, 0, 0, 6, 0, 1, 5, 7, 3, 4, 2, 6, 3, 5, 5, 2],
+    "cascade": [4, 4, 3, 6, 2, 5, 5, 2],
+    "afterMove": [5, 0, 1, 7, 0, 1, 6, 7],
+    "around": [
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 6
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 6
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 19",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [7, 4, 3],
+    "cascade": [4, 3],
+    "afterMove": [7],
+    "around": [
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 20",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 5
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 2
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i26",
+        "laneIndex": 3
+      },
+      {
+        "id": "i27",
+        "laneIndex": 3
+      },
+      {
+        "id": "i28",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 4
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 4
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 3
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 4
+      },
+      {
+        "id": "i20",
+        "laneIndex": 5
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      },
+      {
+        "id": "i25",
+        "laneIndex": 3
+      },
+      {
+        "id": "i26",
+        "laneIndex": 3
+      },
+      {
+        "id": "i27",
+        "laneIndex": 3
+      },
+      {
+        "id": "i28",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 4
+      }
+    ],
+    "queries": [
+      3, 3, 1, 6, 2, 7, 3, 1, 2, 6, 5, 3, 0, 6, 5, 1, 5, 5, 1, 2, 5, 1, 1, 6, 5, 6, 4, 7, 2, 5, 0
+    ],
+    "cascade": [0, 5, 5, 1, 2, 6, 1, 1, 6, 5, 6, 4, 7, 2, 5, 0],
+    "afterMove": [3, 3, 1, 8, 2, 7, 2, 1, 1, 6, 4, 3, 0, 7, 6],
+    "around": [
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 7
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i20",
+        "laneIndex": 5
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 4
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 1
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 1
+      },
+      {
+        "id": "i28",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 3
+      },
+      {
+        "id": "i20",
+        "laneIndex": 5
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 1
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 2
+      },
+      {
+        "id": "i29",
+        "laneIndex": 4
+      }
+    ]
+  },
+  {
+    "name": "seeded 21",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 4
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 4
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 2
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 3
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [2, 3, 4, 7, 0, 2, 7, 2, 2, 5, 5, 3, 5, 1, 0, 6, 7, 0],
+    "cascade": [6, 5, 3, 5, 1, 0, 6, 7, 0],
+    "afterMove": [2, 3, 4, 7, 0, 2, 7, 2, 3],
+    "around": [
+      {
+        "id": "i09",
+        "laneIndex": 7
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 7
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      }
+    ]
+  },
+  {
+    "name": "seeded 22",
+    "packed": [
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 3
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 2
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 2
+      },
+      {
+        "id": "i22",
+        "laneIndex": 3
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [2, 5, 1, 4, 5, 5, 0, 2, 2, 1, 0, 6, 0, 1, 7, 3, 7, 0, 3, 0, 3, 6, 7, 2, 1],
+    "cascade": [0, 1, 7, 3, 7, 0, 3, 0, 3, 6, 7, 2, 1],
+    "afterMove": [2, 5, 1, 4, 4, 5, 0, 2, 2, 1, 0, 6],
+    "around": [
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 5
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 23",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [2, 6, 0, 5],
+    "cascade": [0, 5],
+    "afterMove": [2, 6],
+    "around": [
+      {
+        "id": "i03",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i03",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 24",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 1
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 3
+      },
+      {
+        "id": "i12",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [4, 6, 1, 7, 6, 4, 6, 5, 1, 3, 4, 1, 7, 7],
+    "cascade": [5, 1, 3, 4, 1, 7, 7],
+    "afterMove": [4, 6, 0, 7, 6, 5, 7],
+    "around": [
+      {
+        "id": "i07",
+        "laneIndex": 2
+      },
+      {
+        "id": "i08",
+        "laneIndex": 7
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 6
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 4
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i07",
+        "laneIndex": 3
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      }
+    ]
+  },
+  {
+    "name": "seeded 25",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 3
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i05",
+        "laneIndex": 3
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 2
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i01",
+        "laneIndex": 3
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 2
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 4
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 3
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i21",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [3, 3, 4, 1, 7, 0, 0, 7, 1, 3, 0, 6, 1, 0, 6, 5, 1, 0, 1, 6, 0, 6, 3, 3],
+    "cascade": [1, 0, 6, 5, 1, 3, 1, 6, 0, 6, 4, 3],
+    "afterMove": [2, 2, 4, 1, 7, 0, 0, 7, 1, 3, 2, 6],
+    "around": [
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 1
+      },
+      {
+        "id": "i14",
+        "laneIndex": 5
+      },
+      {
+        "id": "i15",
+        "laneIndex": 6
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i23",
+        "laneIndex": 3
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 5
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 2
+      },
+      {
+        "id": "i21",
+        "laneIndex": 0
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      },
+      {
+        "id": "i23",
+        "laneIndex": 3
+      }
+    ]
+  },
+  {
+    "name": "seeded 26",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 2
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 2
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i04",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 2
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [6, 6, 6, 5, 4, 4, 6, 3, 3, 2, 6, 6, 2, 2, 5, 0, 0, 7, 3, 5, 3],
+    "cascade": [6, 6, 1, 0, 5, 0, 2, 7, 3, 5, 3],
+    "afterMove": [6, 6, 6, 5, 4, 4, 5, 3, 3, 2],
+    "around": [
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 7
+      },
+      {
+        "id": "i14",
+        "laneIndex": 3
+      },
+      {
+        "id": "i15",
+        "laneIndex": 3
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 6
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 2
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i10",
+        "laneIndex": 0
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 1
+      },
+      {
+        "id": "i17",
+        "laneIndex": 0
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 27",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 4
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 0
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 3
+      },
+      {
+        "id": "i09",
+        "laneIndex": 1
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 4
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [1, 0, 4, 0, 7, 2, 2, 4, 4, 3, 0, 3, 4, 6, 1, 6, 2],
+    "cascade": [1, 3, 0, 3, 4, 6, 1, 6, 2],
+    "afterMove": [1, 0, 4, 0, 7, 2, 1, 4],
+    "around": [
+      {
+        "id": "i09",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 7
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 3
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      }
+    ]
+  },
+  {
+    "name": "seeded 28",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 2
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 3
+      },
+      {
+        "id": "i17",
+        "laneIndex": 2
+      }
+    ],
+    "queries": [2, 7, 6, 7, 1, 6, 6, 2, 7, 1, 5, 3, 2, 6, 3, 5, 0, 2],
+    "cascade": [1, 5, 3, 2, 6, 3, 5, 0, 2],
+    "afterMove": [2, 7, 7, 7, 1, 6, 6, 3, 7],
+    "around": [
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 2
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 6
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i09",
+        "laneIndex": 0
+      },
+      {
+        "id": "i10",
+        "laneIndex": 1
+      },
+      {
+        "id": "i11",
+        "laneIndex": 0
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 0
+      },
+      {
+        "id": "i14",
+        "laneIndex": 0
+      },
+      {
+        "id": "i15",
+        "laneIndex": 0
+      },
+      {
+        "id": "i16",
+        "laneIndex": 2
+      },
+      {
+        "id": "i17",
+        "laneIndex": 1
+      }
+    ]
+  },
+  {
+    "name": "seeded 29",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 1
+      },
+      {
+        "id": "i01",
+        "laneIndex": 0
+      },
+      {
+        "id": "i02",
+        "laneIndex": 0
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [3, 1, 4, 4, 6, 1, 4, 1, 4],
+    "cascade": [6, 2, 4, 1, 4],
+    "afterMove": [3, 1, 4, 5],
+    "around": [
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 1
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 0
+      }
+    ]
+  },
+  {
+    "name": "seeded 30",
+    "packed": [
+      {
+        "id": "i00",
+        "laneIndex": 5
+      },
+      {
+        "id": "i01",
+        "laneIndex": 1
+      },
+      {
+        "id": "i02",
+        "laneIndex": 2
+      },
+      {
+        "id": "i03",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 1
+      },
+      {
+        "id": "i06",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 0
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 6
+      },
+      {
+        "id": "i10",
+        "laneIndex": 5
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 2
+      },
+      {
+        "id": "i14",
+        "laneIndex": 2
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 1
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      },
+      {
+        "id": "i21",
+        "laneIndex": 3
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      },
+      {
+        "id": "i24",
+        "laneIndex": 4
+      },
+      {
+        "id": "i25",
+        "laneIndex": 3
+      },
+      {
+        "id": "i26",
+        "laneIndex": 1
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      },
+      {
+        "id": "i28",
+        "laneIndex": 5
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      },
+      {
+        "id": "i30",
+        "laneIndex": 6
+      },
+      {
+        "id": "i32",
+        "laneIndex": 0
+      },
+      {
+        "id": "i33",
+        "laneIndex": 1
+      },
+      {
+        "id": "i34",
+        "laneIndex": 4
+      }
+    ],
+    "packedHinted": [
+      {
+        "id": "i00",
+        "laneIndex": 5
+      },
+      {
+        "id": "i01",
+        "laneIndex": 2
+      },
+      {
+        "id": "i02",
+        "laneIndex": 1
+      },
+      {
+        "id": "i03",
+        "laneIndex": 1
+      },
+      {
+        "id": "i04",
+        "laneIndex": 0
+      },
+      {
+        "id": "i05",
+        "laneIndex": 4
+      },
+      {
+        "id": "i06",
+        "laneIndex": 3
+      },
+      {
+        "id": "i07",
+        "laneIndex": 1
+      },
+      {
+        "id": "i08",
+        "laneIndex": 2
+      },
+      {
+        "id": "i09",
+        "laneIndex": 6
+      },
+      {
+        "id": "i10",
+        "laneIndex": 5
+      },
+      {
+        "id": "i11",
+        "laneIndex": 2
+      },
+      {
+        "id": "i12",
+        "laneIndex": 0
+      },
+      {
+        "id": "i13",
+        "laneIndex": 3
+      },
+      {
+        "id": "i14",
+        "laneIndex": 1
+      },
+      {
+        "id": "i15",
+        "laneIndex": 1
+      },
+      {
+        "id": "i16",
+        "laneIndex": 0
+      },
+      {
+        "id": "i17",
+        "laneIndex": 4
+      },
+      {
+        "id": "i18",
+        "laneIndex": 2
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      },
+      {
+        "id": "i21",
+        "laneIndex": 4
+      },
+      {
+        "id": "i22",
+        "laneIndex": 1
+      },
+      {
+        "id": "i23",
+        "laneIndex": 2
+      },
+      {
+        "id": "i24",
+        "laneIndex": 4
+      },
+      {
+        "id": "i25",
+        "laneIndex": 3
+      },
+      {
+        "id": "i26",
+        "laneIndex": 2
+      },
+      {
+        "id": "i27",
+        "laneIndex": 0
+      },
+      {
+        "id": "i28",
+        "laneIndex": 5
+      },
+      {
+        "id": "i29",
+        "laneIndex": 1
+      },
+      {
+        "id": "i30",
+        "laneIndex": 6
+      },
+      {
+        "id": "i31",
+        "laneIndex": 1
+      },
+      {
+        "id": "i32",
+        "laneIndex": 0
+      },
+      {
+        "id": "i33",
+        "laneIndex": 2
+      },
+      {
+        "id": "i34",
+        "laneIndex": 0
+      }
+    ],
+    "queries": [
+      1, 8, 5, 6, 2, 7, 8, 4, 1, 0, 0, 4, 7, 6, 4, 0, 8, 8, 3, 7, 2, 2, 3, 1, 8, 6, 6, 4, 0, 3, 6,
+      0, 4, 4, 6
+    ],
+    "cascade": [8, 3, 7, 2, 2, 3, 1, 8, 6, 6, 4, 0, 3, 6, 0, 4, 5, 8],
+    "afterMove": [1, 9, 6, 5, 2, 7, 6, 4, 1, 1, 0, 5, 7, 5, 6, 0, 7],
+    "around": [
+      {
+        "id": "i17",
+        "laneIndex": 1
+      },
+      {
+        "id": "i18",
+        "laneIndex": 8
+      },
+      {
+        "id": "i19",
+        "laneIndex": 6
+      },
+      {
+        "id": "i20",
+        "laneIndex": 3
+      },
+      {
+        "id": "i23",
+        "laneIndex": 3
+      },
+      {
+        "id": "i24",
+        "laneIndex": 3
+      },
+      {
+        "id": "i25",
+        "laneIndex": 4
+      },
+      {
+        "id": "i26",
+        "laneIndex": 6
+      },
+      {
+        "id": "i27",
+        "laneIndex": 4
+      },
+      {
+        "id": "i28",
+        "laneIndex": 0
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      },
+      {
+        "id": "i30",
+        "laneIndex": 7
+      },
+      {
+        "id": "i31",
+        "laneIndex": 3
+      },
+      {
+        "id": "i32",
+        "laneIndex": 7
+      },
+      {
+        "id": "i33",
+        "laneIndex": 5
+      },
+      {
+        "id": "i34",
+        "laneIndex": 6
+      }
+    ],
+    "aroundUnhinted": [
+      {
+        "id": "i17",
+        "laneIndex": 3
+      },
+      {
+        "id": "i18",
+        "laneIndex": 0
+      },
+      {
+        "id": "i19",
+        "laneIndex": 1
+      },
+      {
+        "id": "i20",
+        "laneIndex": 1
+      },
+      {
+        "id": "i22",
+        "laneIndex": 0
+      },
+      {
+        "id": "i24",
+        "laneIndex": 3
+      },
+      {
+        "id": "i25",
+        "laneIndex": 0
+      },
+      {
+        "id": "i26",
+        "laneIndex": 0
+      },
+      {
+        "id": "i27",
+        "laneIndex": 2
+      },
+      {
+        "id": "i28",
+        "laneIndex": 4
+      },
+      {
+        "id": "i29",
+        "laneIndex": 0
+      },
+      {
+        "id": "i30",
+        "laneIndex": 6
+      },
+      {
+        "id": "i32",
+        "laneIndex": 0
+      },
+      {
+        "id": "i33",
+        "laneIndex": 0
+      },
+      {
+        "id": "i34",
+        "laneIndex": 3
+      }
+    ]
+  }
+]

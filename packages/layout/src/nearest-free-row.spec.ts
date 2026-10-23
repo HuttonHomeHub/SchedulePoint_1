@@ -72,3 +72,45 @@ describe('rowOccupancy', () => {
     expect(occupancy.nearestFree(item('z', 0, 6, 9))).toBe(3);
   });
 });
+
+describe('nearestFreeRow and rowOccupancy with a swimlane partition', () => {
+  const split = new Map([
+    ['m', 'S1'],
+    ['near', 'S2'],
+    ['same', 'S1'],
+  ]);
+
+  it('ignores a blocker in another swimlane', () => {
+    const mover = item('m', 2, 0, 5);
+    const blocker = item('near', 2, 1, 4);
+    expect(nearestFreeRow(mover, [blocker])).toBe(1);
+    expect(nearestFreeRow(mover, [blocker], split)).toBe(2);
+  });
+
+  it('is still blocked by one in its own swimlane', () => {
+    const mover = item('m', 2, 0, 5);
+    expect(nearestFreeRow(mover, [item('same', 2, 1, 4)], split)).toBe(1);
+  });
+
+  it('a single-swimlane partition equals no partition', () => {
+    const mover = item('m', 2, 0, 5);
+    const others = [item('a', 2, 1, 4), item('b', 1, 0, 9), item('c', 3, 2, 3)];
+    const all = new Map([mover, ...others].map((i) => [i.id, 'only'] as const));
+    expect(nearestFreeRow(mover, others, all)).toBe(nearestFreeRow(mover, others));
+  });
+
+  it('keeps a cascade per swimlane: a bar added to one swimlane does not block another', () => {
+    const occupancy = rowOccupancy(
+      [],
+      new Map([
+        ['a', 'S1'],
+        ['b', 'S2'],
+      ]),
+    );
+    occupancy.add(item('a', 0, 0, 5), 0);
+    expect(occupancy.nearestFree(item('b', 0, 1, 4))).toBe(0);
+    occupancy.add(item('b', 0, 1, 4), 0);
+    occupancy.move('a', 3);
+    expect(occupancy.nearestFree(item('b', 0, 1, 4))).toBe(0);
+  });
+});

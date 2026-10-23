@@ -248,3 +248,115 @@ describe('packLanes', () => {
     }
   });
 });
+
+describe('packLanes with a swimlane partition', () => {
+  const part = (pairs: Array<[string, string]>): Map<string, string> => new Map(pairs);
+
+  it('packs each swimlane on its own, with lanes local to the swimlane', () => {
+    // a and b overlap in time but sit in different swimlanes, so each is lane 0 of its own.
+    const items: PackItem[] = [
+      { id: 'a', startDay: 0, endDay: 5, laneIndex: 0 },
+      { id: 'b', startDay: 2, endDay: 7, laneIndex: 1 },
+      { id: 'c', startDay: 3, endDay: 4, laneIndex: 0 },
+    ];
+    const split = part([
+      ['a', 'S1'],
+      ['b', 'S2'],
+      ['c', 'S2'],
+    ]);
+    // b is the earlier-starting bar of S2 so takes its lane 0, and c overlaps it so opens lane 1.
+    expect(packLanes(items, undefined, split)).toEqual([
+      { id: 'b', laneIndex: 0 },
+      { id: 'c', laneIndex: 1 },
+    ]);
+    // Packed as one, the three bars need three lanes and c lands in lane 2.
+    expect(packLanes(items)).toEqual([{ id: 'c', laneIndex: 2 }]);
+  });
+
+  it('does not let a bar in another swimlane block a lane', () => {
+    const items: PackItem[] = [
+      { id: 'a', startDay: 0, endDay: 9, laneIndex: 0 },
+      { id: 'b', startDay: 1, endDay: 2, laneIndex: 3 },
+    ];
+    expect(
+      packLanes(
+        items,
+        undefined,
+        part([
+          ['a', 'S1'],
+          ['b', 'S2'],
+        ]),
+      ),
+    ).toEqual([{ id: 'b', laneIndex: 0 }]);
+  });
+
+  it('a single-swimlane partition equals no partition', () => {
+    const items: PackItem[] = [
+      { id: 'a', startDay: 0, endDay: 4, laneIndex: 0 },
+      { id: 'b', startDay: 1, endDay: 5, laneIndex: 0 },
+      { id: 'c', startDay: 2, endDay: 6, laneIndex: 0 },
+      { id: 'x', startDay: 8, endDay: 9, laneIndex: 9 },
+    ];
+    const preds = new Map([['x', ['c']]]);
+    const all = part(items.map((i) => [i.id, 'only'] as [string, string]));
+    expect(packLanes(items, undefined, all)).toEqual(packLanes(items));
+    expect(packLanes(items, preds, all)).toEqual(packLanes(items, preds));
+  });
+
+  it('the hint reads only predecessors in the same swimlane', () => {
+    // Three concurrent bars open lanes 0..2 of S1; x starts after all finish. Its predecessor c sits
+    // in lane 2. With c in x's swimlane the hint pulls x to lane 2; with c in another swimlane the
+    // hint is ignored and x falls back to the first free lane.
+    const items: PackItem[] = [
+      { id: 'a', startDay: 0, endDay: 4, laneIndex: 0 },
+      { id: 'b', startDay: 1, endDay: 5, laneIndex: 1 },
+      { id: 'c', startDay: 2, endDay: 6, laneIndex: 2 },
+      { id: 'x', startDay: 8, endDay: 9, laneIndex: 9 },
+    ];
+    const preds = new Map([['x', ['c']]]);
+    const same = part([
+      ['a', 'S1'],
+      ['b', 'S1'],
+      ['c', 'S1'],
+      ['x', 'S1'],
+    ]);
+    const crossed = part([
+      ['a', 'S1'],
+      ['b', 'S1'],
+      ['c', 'S1'],
+      ['x', 'S2'],
+    ]);
+    expect(packLanes(items, preds, same).find((c) => c.id === 'x')).toEqual({
+      id: 'x',
+      laneIndex: 2,
+    });
+    expect(packLanes(items, preds, crossed).find((c) => c.id === 'x')).toEqual({
+      id: 'x',
+      laneIndex: 0,
+    });
+  });
+
+  it('is independent of input order and sorted by id', () => {
+    const items: PackItem[] = [
+      { id: 'q', startDay: 0, endDay: 3, laneIndex: 4 },
+      { id: 'p', startDay: 1, endDay: 3, laneIndex: 4 },
+      { id: 'r', startDay: 0, endDay: 3, laneIndex: 4 },
+    ];
+    const split = part([
+      ['q', 'B'],
+      ['p', 'A'],
+      ['r', 'A'],
+    ]);
+    const forward = packLanes(items, undefined, split);
+    expect(packLanes([...items].reverse(), undefined, split)).toEqual(forward);
+    expect(forward.map((c) => c.id)).toEqual(['p', 'q', 'r']);
+  });
+
+  it('packs ids with no entry together as one group', () => {
+    const items: PackItem[] = [
+      { id: 'a', startDay: 0, endDay: 3, laneIndex: 5 },
+      { id: 'b', startDay: 1, endDay: 3, laneIndex: 5 },
+    ];
+    expect(packLanes(items, undefined, new Map())).toEqual(packLanes(items));
+  });
+});

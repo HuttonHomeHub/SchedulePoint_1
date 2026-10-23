@@ -12,8 +12,12 @@ import type { PackItem } from './pack-lanes.js';
  * zero, so a mover that already fits stays put. One past the highest row in use is always free, so
  * a row is always returned.
  */
-export function nearestFreeRow(mover: PackItem, others: readonly PackItem[]): number {
-  return rowOccupancy(others).nearestFree(mover);
+export function nearestFreeRow(
+  mover: PackItem,
+  others: readonly PackItem[],
+  partition?: ReadonlyMap<string, string>,
+): number {
+  return rowOccupancy(others, partition).nearestFree(mover);
 }
 
 /**
@@ -21,6 +25,14 @@ export function nearestFreeRow(mover: PackItem, others: readonly PackItem[]): nu
  * next mover sees it. Resolving 47 movers at `scale-2000` by calling {@link nearestFreeRow} each time
  * re-indexed all 2,160 bars per mover; this is what keeps FC-N5b's 2 ms. One implementation — the
  * one-shot function is this with a throwaway index.
+ *
+ * ## The optional swimlane partition
+ *
+ * `partition` maps an id to its swimlane key. Absent (or `undefined`), the index is the single one
+ * above, unchanged. Present, each swimlane gets an index of its own: a mover is tested only against
+ * bars of its own swimlane (the key of `mover.id`, or of `add`/`move`'s id), and rows are **local to
+ * the swimlane** — row 0 is the swimlane's first lane, as in `packLanes` and `deriveSwimlaneLanes`.
+ * Ids with no entry share one group. One swimlane holding every item behaves as no partition does.
  */
 export interface RowOccupancy {
   nearestFree(mover: PackItem): number;
@@ -30,7 +42,39 @@ export interface RowOccupancy {
   add(item: PackItem, lane: number): void;
 }
 
-export function rowOccupancy(items: readonly PackItem[]): RowOccupancy {
+export function rowOccupancy(
+  items: readonly PackItem[],
+  partition?: ReadonlyMap<string, string>,
+): RowOccupancy {
+  if (partition === undefined) return singleOccupancy(items);
+
+  const groups = new Map<string | undefined, PackItem[]>();
+  for (const item of items) {
+    const key = partition.get(item.id);
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  const indexes = new Map<string | undefined, RowOccupancy>();
+  for (const [key, group] of groups) indexes.set(key, singleOccupancy(group));
+  // A swimlane first seen after construction (an `add` into an empty one) gets its index then.
+  const indexFor = (id: string): RowOccupancy => {
+    const key = partition.get(id);
+    let index = indexes.get(key);
+    if (index === undefined) {
+      index = singleOccupancy([]);
+      indexes.set(key, index);
+    }
+    return index;
+  };
+  return {
+    nearestFree: (mover) => indexFor(mover.id).nearestFree(mover),
+    move: (id, lane) => indexFor(id).move(id, lane),
+    add: (item, lane) => indexFor(item.id).add(item, lane),
+  };
+}
+
+function singleOccupancy(items: readonly PackItem[]): RowOccupancy {
   // Per lane: its items, and the earliest start and latest end among them. The bounds rule most lanes
   // out in O(1) — a mover wholly before or after everything in a lane fits there without looking at a
   // single item — which is what keeps a dense import's partial pack near `packLanes`' cost (the
