@@ -253,7 +253,8 @@ a product idea that has not yet earned a roadmap line:
   name). Asked for by the owner on 2026-10-22 ("is there a way to put the systems in swimlanes?"),
   who then chose, for now, to regroup the WBS by system instead (`docs/DECISIONS.md`, 2026-10-22).
   Still an open question in `docs/PROJECT_BRIEF.md` ("Default: no in v1") and ADR-0026; this is the
-  first recorded demand. Needs a spec: it is a new diagram band beside the pinned WBS band (ADR-0063).
+  first recorded demand. **Specified and approved 2026-10-22:** `docs/specs/swimlanes/` (L–XL, six
+  milestones); being built.
 
 - `S` **Tidy up the calendars an import leaves behind.** Deleting an imported plan keeps the project
   calendars its import created (`docs/API.md`: they go with the project, not the plan), so

@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-22 — Swimlanes are commissioned; the spec is approved with SQ-7 "yes"
+
+**Decided by the product owner** (this session), superseding the "not commissioned" line of the
+entry below: labelled swimlanes on the diagram are wanted, and
+[`docs/specs/swimlanes/`](specs/swimlanes/) is approved for building.
+
+- **SQ-1** "Swimlane" is the word; "lane" keeps meaning one row. **SQ-2** both sources, chosen per
+  plan (by hand, or one per WBS group at a chosen level). **SQ-3** a plan with swimlanes opens with
+  them shown; turning them off lasts until you leave the plan. **SQ-4** guests see swimlanes.
+  **SQ-5** a drag stops at a WBS swimlane's edge. **SQ-6** faint stripes on alternate swimlanes, as
+  well as the dividing line.
+- **SQ-7 "yes"** (the one change from the defaults): baselines record each activity's swimlane from
+  the start, so M1-T1b (columns on `baseline_activities`, a level on `baselines`) is in scope.
+- **Also decided this session:** a `SYSTEM` actor reads "System" in the Audit log (#536); #543 is
+  fixed by reporting dropped notes only, with carrying them left to the backlog item.
+
+---
+
 ## 2026-10-22 — The lag handle and the node stay different sizes; the ordering is pinned, not derived (#369)
 
 **Decided (default, tech debt #369):** no visual change. The row reported `NODE_RADIUS` and
