@@ -8,6 +8,7 @@ import {
   type ActivityType,
   type DurationType,
   type ResourceAssignment,
+  type SwimlaneSource,
 } from '@prisma/client';
 import type { WbsNode } from '@repo/layout';
 import type { PageMeta, ProgressWarning } from '@repo/types';
@@ -319,6 +320,34 @@ export class ActivitiesService {
         },
       );
     }
+  }
+
+  /**
+   * The plan's swimlane source and level, read `FOR SHARE` inside the write's transaction, **after**
+   * the activity row locks. A source switch is a plan-row UPDATE, so holding the share lock means a
+   * write cannot land against a source that changed after the pre-transaction read. Taken after the
+   * activity locks and never before them: the plan cascade holds every plan activity before it
+   * stamps the plan row, so a share lock taken first would invert schema-design §5's order. (Activity
+   * create holds no activity row, so it keeps its pre-transaction read rather than take this lock
+   * out of order.)
+   */
+  private async lockPlanSwimlaneSource(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    planId: string,
+  ): Promise<{ swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }> {
+    const rows = await tx.$queryRaw<
+      { swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }[]
+    >`
+      SELECT swimlane_source::text AS "swimlaneSource", swimlane_wbs_level AS "swimlaneWbsLevel"
+      FROM plans
+      WHERE id = ${planId}::uuid AND organization_id = ${organizationId}::uuid
+        AND deleted_at IS NULL
+      FOR SHARE
+    `;
+    const plan = rows[0];
+    if (!plan) throw new NotFoundError('Plan not found.');
+    return plan;
   }
 
   /**
@@ -683,7 +712,6 @@ export class ActivitiesService {
     // activity already holds is not a write, so it is neither refused in WBS mode nor stored again.
     const swimlaneId = dto.swimlaneId;
     if (swimlaneId !== undefined && swimlaneId !== existing.swimlaneId) {
-      this.assertSwimlaneIdWritable(await this.loadActivePlan(existing.planId, organization.id));
       patch.swimlaneId = swimlaneId;
     }
 
@@ -814,11 +842,18 @@ export class ActivitiesService {
         }
         // Filing the activity in a swimlane: the activity row first, then the swimlane `FOR SHARE`
         // (schema-design §5's total order), so a swimlane deleted a moment ago cannot be assigned.
-        if (patch.swimlaneId) {
+        if (patch.swimlaneId !== undefined) {
           await lockActivityRowsInIdOrder(tx, organization.id, existing.planId, [activityId]);
-          await this.lockSwimlanesForAssignment(tx, organization.id, existing.planId, [
-            patch.swimlaneId,
-          ]);
+          // The source is re-read under a share lock, so a switch to WBS that landed after the read
+          // above cannot let this membership write through.
+          this.assertSwimlaneIdWritable(
+            await this.lockPlanSwimlaneSource(tx, organization.id, existing.planId),
+          );
+          if (patch.swimlaneId !== null) {
+            await this.lockSwimlanesForAssignment(tx, organization.id, existing.planId, [
+              patch.swimlaneId,
+            ]);
+          }
         }
         // The before-values the history diffs, read INSIDE this transaction at the version the gated
         // update below requires — `existing` was read before it opened, and the diff must describe the
@@ -1016,6 +1051,17 @@ export class ActivitiesService {
         // Activity rows first, then the swimlanes (schema-design §5). The repository's own lock below
         // re-takes what is already held.
         await lockActivityRowsInIdOrder(tx, organization.id, planId, ids);
+        // The pre-transaction refusals above ran on a read that a source switch may have overtaken;
+        // this is the one the lanes are derived from.
+        const locked = await this.lockPlanSwimlaneSource(tx, organization.id, planId);
+        if (locked.swimlaneSource === 'NONE') {
+          throw new ValidationError('This plan has no swimlanes to place a lane in.', {
+            reason: SWIMLANE_SOURCE_REASON.IS_NONE,
+          });
+        }
+        if (swimlaneRows.some((p) => p.swimlane?.swimlaneId !== undefined)) {
+          this.assertSwimlaneIdWritable(locked);
+        }
         const current = await tx.activity.findMany({
           where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
           select: { id: true, swimlaneId: true },
@@ -1027,7 +1073,7 @@ export class ActivitiesService {
         // Read without a lock: a summary reparented concurrently yields a lane written against a basis
         // that changes a moment later, which the projection reads as a mismatch (schema-design §5).
         const wbsNodes: ReadonlyMap<string, WbsNode> =
-          plan.swimlaneSource === 'WBS'
+          locked.swimlaneSource === 'WBS'
             ? new Map(
                 (await this.activities.findPlanWbsTree(organization.id, planId, tx)).map((n) => [
                   n.id,
@@ -1042,7 +1088,7 @@ export class ActivitiesService {
           return {
             activityId: p.id,
             laneIndex: lane.laneIndex,
-            ...deriveLaneBasis(plan, p.id, effective, wbsNodes),
+            ...deriveLaneBasis(locked, p.id, effective, wbsNodes),
           };
         });
         await this.lockSwimlanesForAssignment(

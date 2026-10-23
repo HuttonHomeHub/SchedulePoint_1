@@ -288,7 +288,13 @@ describe('ActivitiesService', () => {
     txDrivingFindFirst = vi.fn().mockResolvedValue(null);
     txDrivingUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     txExecuteRaw = vi.fn();
-    txQueryRaw = vi.fn().mockResolvedValue([]);
+    // The id-order activity lock returns rows nobody reads; the plan's source, read under a share
+    // lock, answers with whatever the plan mock currently holds.
+    txQueryRaw = vi.fn((strings: TemplateStringsArray) =>
+      strings.join(' ').includes('FROM plans')
+        ? (plans.findActiveByIdInOrg as () => Promise<Plan>)().then((p: Plan) => [p])
+        : Promise.resolve([]),
+    );
     txParentFindFirst = vi.fn().mockResolvedValue({ name: 'Phase 1' });
     txActivityFindMany = vi.fn().mockResolvedValue([]);
     txActivityCount = vi.fn().mockResolvedValue(0);
@@ -2076,7 +2082,8 @@ describe('ActivitiesService', () => {
           version: 1,
           swimlaneId: SWIMLANE_B,
         });
-        expect(txQueryRaw).toHaveBeenCalledTimes(1);
+        // The activity row lock, then the plan's source under a share lock, then the swimlane.
+        expect(txQueryRaw).toHaveBeenCalledTimes(2);
         expect(swimlanes.lockActiveForShare).toHaveBeenCalledWith(
           ORG_ID,
           PLAN_ID,
@@ -2277,6 +2284,29 @@ describe('ActivitiesService', () => {
         ]);
         // No hand-made swimlane is involved in a WBS lane.
         expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+
+      it('derives from the source read under the lock, not the one read before the transaction', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        // The activity lock's rows are never read, so one answer serves both statements.
+        txQueryRaw.mockResolvedValue([{ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }]);
+        const error = await call([
+          { id: ACTIVITY_ID, version: 1, swimlane: { swimlaneId: SWIMLANE_A, laneIndex: 1 } },
+        ]).catch((e: unknown) => e);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_IS_WBS' });
+        expect(activities.updateLanePositions).not.toHaveBeenCalled();
+      });
+
+      it('update: a switch to WBS that lands before the lock refuses the write', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        activities.findActiveByIdInOrg.mockResolvedValue(activity());
+        // The activity lock's rows are never read, so one answer serves both statements.
+        txQueryRaw.mockResolvedValue([{ swimlaneSource: 'WBS', swimlaneWbsLevel: 1 }]);
+        const error = await service
+          .update(principalWith(ALL), 'acme', ACTIVITY_ID, { version: 1, swimlaneId: SWIMLANE_B })
+          .catch((e: unknown) => e);
+        expect(reasonOf(error)).toEqual({ reason: 'SWIMLANE_SOURCE_IS_WBS' });
+        expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
       });
 
       it('404s for an activity that is not in the plan before it derives anything', async () => {
