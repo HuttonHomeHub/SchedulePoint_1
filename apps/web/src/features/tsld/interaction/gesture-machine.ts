@@ -64,6 +64,13 @@ export interface GestureCtx {
    * control rather than a keyboard chord. Absent ⇒ `FS` (the overwhelmingly common case).
    */
   linkType?: DependencyType;
+  /**
+   * The display lanes a dragged bar may occupy (swimlanes ui-architecture C6). The ghost is held
+   * inside the range while the pointer is still moving, so a drag that a swimlane would refuse never
+   * crosses the boundary only to be refused after the drop. Absent, or `null` for a bar, is
+   * unconstrained: the drag is byte-for-byte what it was before swimlanes.
+   */
+  laneRange?: (activityId: string) => { min: number; max: number } | null;
 }
 
 /** True for the zero-duration milestone types, which place as a point rather than a span. */
@@ -544,10 +551,13 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const currentStartDay =
           state.dayLocked === true ? state.originStartDay : state.originStartDay + delta;
         const sidewaysBlocked = state.dayLocked === true && delta !== 0;
-        const currentLaneIndex = Math.max(
+        const pointerLane = Math.max(
           0,
           state.laneIndex + Math.round((event.point.y - state.grabY) / LANE_HEIGHT),
         );
+        const range = ctx.laneRange?.(state.activityId) ?? null;
+        const currentLaneIndex =
+          range === null ? pointerLane : Math.min(range.max, Math.max(range.min, pointerLane));
         if (
           currentStartDay === state.currentStartDay &&
           currentLaneIndex === state.currentLaneIndex &&
