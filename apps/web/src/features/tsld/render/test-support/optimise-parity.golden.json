@@ -1,0 +1,212 @@
+[
+  {
+    "name": "seed 1 (7)",
+    "evaluations": 28,
+    "digest": "c2161b3f"
+  },
+  {
+    "name": "seed 2 (8)",
+    "evaluations": 33,
+    "digest": "e69d5b68"
+  },
+  {
+    "name": "seed 3 (9)",
+    "evaluations": 28,
+    "digest": "08b4f80d"
+  },
+  {
+    "name": "seed 4 (10)",
+    "evaluations": 35,
+    "digest": "d2192f4d"
+  },
+  {
+    "name": "seed 5 (11)",
+    "evaluations": 30,
+    "digest": "5f180d68"
+  },
+  {
+    "name": "seed 6 (12)",
+    "evaluations": 58,
+    "digest": "153f5a64"
+  },
+  {
+    "name": "seed 7 (6)",
+    "evaluations": 24,
+    "digest": "1e0c6720"
+  },
+  {
+    "name": "seed 8 (7)",
+    "evaluations": 30,
+    "digest": "16d729ca"
+  },
+  {
+    "name": "seed 9 (8)",
+    "evaluations": 55,
+    "digest": "9a2a3423"
+  },
+  {
+    "name": "seed 10 (9)",
+    "evaluations": 38,
+    "digest": "a6db1b81"
+  },
+  {
+    "name": "seed 11 (10)",
+    "evaluations": 41,
+    "digest": "37aeebdb"
+  },
+  {
+    "name": "seed 12 (11)",
+    "evaluations": 35,
+    "digest": "dd452d1b"
+  },
+  {
+    "name": "seed 13 (12)",
+    "evaluations": 26,
+    "digest": "1635f700"
+  },
+  {
+    "name": "seed 14 (6)",
+    "evaluations": 32,
+    "digest": "7958f243"
+  },
+  {
+    "name": "seed 15 (7)",
+    "evaluations": 33,
+    "digest": "456d4778"
+  },
+  {
+    "name": "seed 16 (8)",
+    "evaluations": 49,
+    "digest": "973a75c3"
+  },
+  {
+    "name": "seed 17 (9)",
+    "evaluations": 39,
+    "digest": "e9e97015"
+  },
+  {
+    "name": "seed 18 (10)",
+    "evaluations": 65,
+    "digest": "86656f53"
+  },
+  {
+    "name": "seed 19 (11)",
+    "evaluations": 38,
+    "digest": "e4747901"
+  },
+  {
+    "name": "seed 20 (12)",
+    "evaluations": 57,
+    "digest": "28f375b9"
+  },
+  {
+    "name": "seed 21 (6)",
+    "evaluations": 11,
+    "digest": "29496cca"
+  },
+  {
+    "name": "seed 22 (7)",
+    "evaluations": 40,
+    "digest": "374e7039"
+  },
+  {
+    "name": "seed 23 (8)",
+    "evaluations": 36,
+    "digest": "dac7a470"
+  },
+  {
+    "name": "seed 24 (9)",
+    "evaluations": 52,
+    "digest": "b8451c05"
+  },
+  {
+    "name": "seed 25 (10)",
+    "evaluations": 35,
+    "digest": "45159065"
+  },
+  {
+    "name": "seed 26 (11)",
+    "evaluations": 40,
+    "digest": "fb29f4a0"
+  },
+  {
+    "name": "seed 27 (12)",
+    "evaluations": 49,
+    "digest": "d17f6360"
+  },
+  {
+    "name": "seed 28 (6)",
+    "evaluations": 26,
+    "digest": "0d113df8"
+  },
+  {
+    "name": "seed 29 (7)",
+    "evaluations": 35,
+    "digest": "af0a6482"
+  },
+  {
+    "name": "seed 30 (8)",
+    "evaluations": 56,
+    "digest": "1fb8c972"
+  },
+  {
+    "name": "seed 31 (9)",
+    "evaluations": 37,
+    "digest": "0042ebc1"
+  },
+  {
+    "name": "seed 32 (10)",
+    "evaluations": 21,
+    "digest": "38a9895e"
+  },
+  {
+    "name": "seed 33 (11)",
+    "evaluations": 49,
+    "digest": "54e9ae01"
+  },
+  {
+    "name": "seed 34 (12)",
+    "evaluations": 32,
+    "digest": "a33ab5cd"
+  },
+  {
+    "name": "seed 35 (6)",
+    "evaluations": 51,
+    "digest": "4a641faa"
+  },
+  {
+    "name": "seed 36 (7)",
+    "evaluations": 52,
+    "digest": "9b7f31c8"
+  },
+  {
+    "name": "seed 37 (8)",
+    "evaluations": 33,
+    "digest": "5e4210e6"
+  },
+  {
+    "name": "seed 38 (9)",
+    "evaluations": 53,
+    "digest": "69885404"
+  },
+  {
+    "name": "seed 39 (10)",
+    "evaluations": 60,
+    "digest": "3e134297"
+  },
+  {
+    "name": "seed 40 (11)",
+    "evaluations": 31,
+    "digest": "2711c434"
+  },
+  {
+    "name": "seed 101 (29)",
+    "evaluations": 43,
+    "digest": "34b7db30"
+  },
+  {
+    "name": "seed 102 (30)",
+    "evaluations": 77,
+    "digest": "fc5b335d"
+  }
+]

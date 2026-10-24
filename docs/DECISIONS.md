@@ -10,6 +10,16 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-24 — Tidy and Re-layout keep work inside its swimlane, and the extra height is accepted
+
+**Decided by the product owner** (this session), shown the cost in
+[`docs/specs/swimlanes/m0-reading.md`](specs/swimlanes/m0-reading.md): swimlanes cannot share a row,
+so a partitioned search ends taller. Re-layout 35 to 54 rows on the torture plan and 14 to 16 on the
+power plant, Tidy 24 to 50 on the torture plan. The owner chose **"Accept it"**: build M2-T6 as designed,
+with no height limit, and have the Arrange dialog say that Tidy and Re-layout keep each activity inside
+its swimlane. The limits `OPTIMISE_MAX_ACTIVITIES = 300` and `RELAYOUT_MULTISTART_MAX_ACTIVITIES = 150`
+stand (M0-T4's verdict). Nothing is exposed yet: the partition is passed only while swimlanes are shown.
+
 ## 2026-10-23 — The CI keeps the browsers' system packages between runs
 
 **Decided by the product owner** (this session), choosing the recommended option after the time limit
