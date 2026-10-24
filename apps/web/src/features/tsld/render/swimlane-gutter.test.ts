@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { LANE_HEIGHT } from './geometry';
 import {
   GUTTER_LINE_PX,
+  GUTTER_PAD_PX,
+  swimlaneGutterGeometry,
+  swimlaneGutterText,
+  isCollapsedGutterWidth,
   GUTTER_MIN_CONTAINER_PX,
   GUTTER_MIN_STAGE_PX,
   gutterHasRoom,
@@ -82,6 +86,28 @@ describe('swimlaneGutterModel', () => {
     expect(roomy?.cut).toBe(false);
   });
 
+  it('lets a block exactly N lines tall hold N - 1, because the label pads its top', () => {
+    // Four lanes are 240 px: exactly 15 label lines, of which the padding takes one.
+    expect((4 * LANE_HEIGHT) % GUTTER_LINE_PX).toBe(0);
+    const [text] = swimlaneGutterText({
+      ...SCENE,
+      swimlanes: [{ id: 'a', name: 'x', firstLane: 0, laneCount: 4, activityCount: 0 }],
+    });
+    expect(GUTTER_PAD_PX).toBe(8);
+    expect(text?.maxLines).toBe(14);
+  });
+
+  it('splits the static text from the per-frame geometry, and the model is their join', () => {
+    const text = swimlaneGutterText(SCENE);
+    const panned = { ...VIEW, originY: -LANE_HEIGHT };
+    expect(swimlaneGutterText(SCENE)).toEqual(text);
+    expect(swimlaneGutterGeometry(SCENE.swimlanes, panned, SIZE)[0]?.top).toBe(0);
+    expect(swimlaneGutterModel(SCENE, panned, SIZE)[0]).toMatchObject({
+      ...text[0],
+      blockTop: -LANE_HEIGHT,
+    });
+  });
+
   it('uses the caller-supplied measure for the cut judgement', () => {
     const scene: SwimlaneGutterScene = {
       ...SCENE,
@@ -101,6 +127,13 @@ describe('swimlaneGutterModel', () => {
     expect(a?.cut).toBe(false);
     expect(a?.accessibleName).toContain('Mechanical');
     expect(none?.text).toBe('–');
+  });
+});
+
+describe('isCollapsedGutterWidth', () => {
+  it('names the strip as collapsed and the expanded width as not', () => {
+    expect(isCollapsedGutterWidth(SWIMLANE_GUTTER_COLLAPSED_PX)).toBe(true);
+    expect(isCollapsedGutterWidth(SWIMLANE_GUTTER_WIDTH_PX)).toBe(false);
   });
 });
 

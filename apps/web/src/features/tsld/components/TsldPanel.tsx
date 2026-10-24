@@ -5,15 +5,7 @@ import type {
   DependencySummary,
   DependencyType,
 } from '@repo/types';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentProps,
-} from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -121,6 +113,7 @@ import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { LinkChainDialog } from './LinkChainDialog';
 import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
+import { type SwimlaneGutterProps } from './SwimlaneGutter';
 import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
@@ -619,7 +612,7 @@ export interface TsldPanelProps {
    * for the create popover's x (`sceneOrigin`). `0`, the default, is today's panel.
    */
   gutterWidthPx?: number;
-  gutter?: ComponentProps<typeof TsldCanvas>['gutter'];
+  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
   onGutterRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +

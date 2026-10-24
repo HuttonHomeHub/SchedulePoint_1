@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LANE_HEIGHT } from '../render/geometry';
 import {
+  GUTTER_LINE_PX,
   GUTTER_MIN_CONTAINER_PX,
+  GUTTER_PAD_PX,
   SWIMLANE_GUTTER_COLLAPSED_PX,
   SWIMLANE_GUTTER_WIDTH_PX,
   type GutterSwimlane,
@@ -100,11 +102,7 @@ function mount(gutterWidthPx: number): ReturnType<typeof render> {
       canEdit
       onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
       gutterWidthPx={gutterWidthPx}
-      gutter={
-        gutterWidthPx > 0
-          ? { swimlanes: SWIMLANES, collapsed: gutterWidthPx === SWIMLANE_GUTTER_COLLAPSED_PX }
-          : null
-      }
+      gutter={gutterWidthPx > 0 ? { swimlanes: SWIMLANES } : null}
     />,
   );
 }
@@ -245,7 +243,7 @@ describe('the reservation', () => {
         activities={[activity()]}
         dependencies={[]}
         dataDate="2026-01-01"
-        gutter={{ swimlanes: SWIMLANES, collapsed: false }}
+        gutter={{ swimlanes: SWIMLANES }}
       />,
     );
     expect(screen.queryByTestId('tsld-swimlane-gutter')).not.toBeInTheDocument();
@@ -280,7 +278,7 @@ describe('the room the container leaves for the expanded gutter', () => {
         dependencies={[]}
         dataDate="2026-01-01"
         gutterWidthPx={SWIMLANE_GUTTER_COLLAPSED_PX}
-        gutter={{ swimlanes: SWIMLANES, collapsed: true }}
+        gutter={{ swimlanes: SWIMLANES }}
         onGutterRoomChange={onGutterRoomChange}
       />,
     );
@@ -296,5 +294,82 @@ describe('the room the container leaves for the expanded gutter', () => {
     const reported = mountAt(GUTTER_MIN_CONTAINER_PX);
     await waitFor(() => expect(reported).toHaveBeenCalled());
     expect(reported).not.toHaveBeenCalledWith(false);
+  });
+});
+
+describe('the gutter DOM', () => {
+  it('is visual only, marks a cut name, and ties its padding and line height to the model', () => {
+    const { container } = mount(SWIMLANE_GUTTER_WIDTH_PX);
+    expect(screen.getByTestId('tsld-swimlane-gutter')).toHaveAttribute('aria-hidden', 'true');
+    const label = container.querySelector<HTMLElement>('[data-swimlane="a"]')!;
+    expect(label).toHaveAttribute('data-cut', 'false');
+    // The model reasons in px and the DOM in classes; this is the one place they are held together.
+    expect(label).toHaveClass(`px-${String(GUTTER_PAD_PX / 4)}`);
+    expect(label).toHaveClass(`py-${String(GUTTER_PAD_PX / 8)}`);
+    expect(label).toHaveClass(`leading-${String(GUTTER_LINE_PX / 4)}`);
+  });
+
+  it('sets data-cut when a long name does not fit its swimlane', () => {
+    stubLayout(SWIMLANE_GUTTER_WIDTH_PX);
+    const long = 'Mechanical, electrical and plumbing first fix and second fix, commissioning';
+    const { container } = render(
+      <TsldPanel
+        activities={[activity()]}
+        dependencies={[]}
+        dataDate="2026-01-01"
+        gutterWidthPx={SWIMLANE_GUTTER_WIDTH_PX}
+        gutter={{
+          swimlanes: [{ id: 'a', name: long, firstLane: 0, laneCount: 1, activityCount: 1 }],
+        }}
+      />,
+    );
+    expect(container.querySelector('[data-swimlane="a"]')).toHaveAttribute('data-cut', 'true');
+  });
+
+  it('re-labels a gutter that is already mounted when it collapses, and keeps it positioned', async () => {
+    stubLayout(SWIMLANE_GUTTER_WIDTH_PX);
+    const props = { activities: [activity()], dependencies: [], dataDate: '2026-01-01' };
+    const gutter = { swimlanes: SWIMLANES };
+    const { container, rerender } = render(
+      <TsldPanel {...props} gutterWidthPx={SWIMLANE_GUTTER_WIDTH_PX} gutter={gutter} />,
+    );
+    const label = (): HTMLElement => container.querySelector<HTMLElement>('[data-swimlane="a"]')!;
+    await waitFor(() => expect(label().style.display).toBe(''));
+
+    stubLayout(SWIMLANE_GUTTER_COLLAPSED_PX);
+    rerender(<TsldPanel {...props} gutterWidthPx={SWIMLANE_GUTTER_COLLAPSED_PX} gutter={gutter} />);
+    expect(label().textContent).toBe('1');
+    await waitFor(() => expect(label().style.display).toBe(''));
+    expect(Number.parseFloat(label().style.height)).toBeGreaterThan(0);
+  });
+
+  it('moves a label with a vertical pan, and hides one panned wholly out of view', async () => {
+    const { container } = mount(SWIMLANE_GUTTER_WIDTH_PX);
+    const canvas = sceneCanvas(container);
+    const origin = sceneOrigin(0, SWIMLANE_GUTTER_WIDTH_PX);
+    const a = container.querySelector<HTMLElement>('[data-swimlane="a"]')!;
+    await waitFor(() => expect(a.style.display).toBe(''));
+    const before = Number.parseFloat(a.style.top);
+    expect(before).toBeGreaterThan(0);
+
+    fireEvent.pointerDown(canvas, {
+      clientX: origin.left + 300,
+      clientY: origin.top + 300,
+      pointerId: 1,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: origin.left + 300,
+      clientY: origin.top + 300 - before,
+      pointerId: 1,
+    });
+    await waitFor(() => expect(Number.parseFloat(a.style.top)).toBeLessThan(before));
+    expect(Number.parseFloat(a.style.top)).toBe(0);
+
+    fireEvent.pointerMove(canvas, {
+      clientX: origin.left + 300,
+      clientY: origin.top - 1000,
+      pointerId: 1,
+    });
+    await waitFor(() => expect(a.style.display).toBe('none'));
   });
 });

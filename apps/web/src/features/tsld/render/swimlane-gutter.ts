@@ -38,7 +38,13 @@ export const GUTTER_MIN_STAGE_PX = 600;
 export const GUTTER_MIN_CONTAINER_PX = SWIMLANE_GUTTER_WIDTH_PX + GUTTER_MIN_STAGE_PX;
 
 /** Why the gutter's expand control is shaded when {@link gutterHasRoom} is false. */
-export const GUTTER_NO_ROOM_REASON = 'Not enough room to widen the swimlane names';
+export const GUTTER_NO_ROOM_REASON =
+  'Not enough room to expand the swimlane names. Widen the window.';
+
+/** Whether a gutter width is the collapsed strip's: the one place that says so, for every caller. */
+export function isCollapsedGutterWidth(widthPx: number): boolean {
+  return widthPx < SWIMLANE_GUTTER_WIDTH_PX;
+}
 
 /**
  * Whether the container can hold the EXPANDED gutter beside a usable stage. Measured on the
@@ -83,7 +89,8 @@ export interface SwimlaneGutterScene {
   collapsed: boolean;
 }
 
-export interface GutterLabel {
+/** What a label says. Changes with the swimlanes or the width, never with a pan. */
+export interface GutterLabelText {
   /** The swimlane id, or `'none'` for "No swimlane". Stable across frames. */
   key: string;
   id: string | null;
@@ -101,8 +108,14 @@ export interface GutterLabel {
   accessibleName: string;
   /** The name needs more lines than the swimlane is tall, so it ends in an ellipsis. */
   cut: boolean;
-  /** Lines the swimlane's height allows; the DOM clamps to this. */
+  /** Lines the swimlane's height allows, net of the label's vertical padding; the DOM clamps to it. */
   maxLines: number;
+}
+
+/** Where a label sits this frame. Changes with the lane axis, so it is derived per frame. */
+export interface GutterLabelGeometry {
+  key: string;
+  index: number;
   /** In view at all. A label outside the viewport is hidden, not clamped to an edge. */
   visible: boolean;
   /**
@@ -116,6 +129,8 @@ export interface GutterLabel {
   blockHeight: number;
 }
 
+export type GutterLabel = GutterLabelText & GutterLabelGeometry;
+
 const NO_SWIMLANE_NAME = 'No swimlane';
 
 function activities(n: number): string {
@@ -127,34 +142,31 @@ function lanes(n: number): string {
 }
 
 /**
- * Each swimlane's label for one frame. `size.height` is the scene canvas's, so `top` is
- * scene-relative and the host places the label column at the scene's origin ({@link sceneOrigin}).
+ * The static half: text, names, counts and the cut judgement. It reads no viewport, so a host
+ * memoises it on the swimlanes and the width and a pan never reaches it.
  *
  * `measure` is the text width in px (ADR-0106 `:125-127`); without it a name is estimated at
  * 7 px a character, which is why `cut` is a judgement about layout and not about glyphs.
  */
-export function swimlaneGutterModel(
+export function swimlaneGutterText(
   scene: SwimlaneGutterScene,
-  view: Viewport,
-  size: Size,
   measure: (text: string) => number = (t) => t.length * 7,
-): GutterLabel[] {
+): GutterLabelText[] {
   const named = scene.swimlanes.filter((s) => s.id !== null).length;
   const usable = Math.max(1, scene.widthPx - 2 * GUTTER_PAD_PX);
   return scene.swimlanes.map((s, index) => {
-    const key = s.id ?? 'none';
     const position = index + 1;
     const name = s.name ?? NO_SWIMLANE_NAME;
-    const blockTop = screenYOfLane(s.firstLane, view);
-    const blockHeight = s.laneCount * LANE_HEIGHT;
-    const top = Math.max(0, blockTop);
-    const bottom = Math.min(size.height, blockTop + blockHeight);
-    const visible = bottom > top;
-    const maxLines = Math.max(1, Math.floor(blockHeight / GUTTER_LINE_PX));
+    // The label's own padding takes a line's worth off the top of a short block, so a block that is
+    // exactly N lines tall holds N - 1 (the clamp would otherwise promise a line it cannot show).
+    const maxLines = Math.max(
+      1,
+      Math.floor((s.laneCount * LANE_HEIGHT - GUTTER_PAD_PX) / GUTTER_LINE_PX),
+    );
     const lines = Math.max(1, Math.ceil(measure(name) / usable));
     const where = s.id === null ? '' : `, swimlane ${String(position)} of ${String(named)}`;
     return {
-      key,
+      key: s.id ?? 'none',
       id: s.id,
       index,
       position,
@@ -165,6 +177,25 @@ export function swimlaneGutterModel(
       accessibleName: `${name}${where}, ${activities(s.activityCount)}, ${lanes(s.laneCount)}`,
       cut: !scene.collapsed && lines > maxLines,
       maxLines,
+    };
+  });
+}
+
+/** The per-frame half: each swimlane's box for this viewport. Nothing here allocates text. */
+export function swimlaneGutterGeometry(
+  swimlanes: readonly GutterSwimlane[],
+  view: Viewport,
+  size: Size,
+): GutterLabelGeometry[] {
+  return swimlanes.map((s, index) => {
+    const blockTop = screenYOfLane(s.firstLane, view);
+    const blockHeight = s.laneCount * LANE_HEIGHT;
+    const top = Math.max(0, blockTop);
+    const bottom = Math.min(size.height, blockTop + blockHeight);
+    const visible = bottom > top;
+    return {
+      key: s.id ?? 'none',
+      index,
       visible,
       top,
       height: visible ? bottom - top : 0,
@@ -172,4 +203,15 @@ export function swimlaneGutterModel(
       blockHeight,
     };
   });
+}
+
+/** Both halves joined, for the export's painted mirror, which wants one frame's whole label. */
+export function swimlaneGutterModel(
+  scene: SwimlaneGutterScene,
+  view: Viewport,
+  size: Size,
+  measure?: (text: string) => number,
+): GutterLabel[] {
+  const geometry = swimlaneGutterGeometry(scene.swimlanes, view, size);
+  return swimlaneGutterText(scene, measure).map((t, i) => ({ ...t, ...geometry[i]! }));
 }

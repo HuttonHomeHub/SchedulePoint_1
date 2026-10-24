@@ -92,13 +92,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { sceneLayers } from '../render/scene-layers';
 import { drawnSpanPlacement } from '../render/snap';
-import {
-  GUTTER_LINE_PX,
-  GUTTER_PAD_PX,
-  gutterHasRoom,
-  swimlaneGutterModel,
-  type GutterSwimlane,
-} from '../render/swimlane-gutter';
+import { gutterHasRoom, swimlaneGutterGeometry } from '../render/swimlane-gutter';
 import {
   DAY_LABEL_DEFAULT_WIDTH_PX,
   presetOf,
@@ -118,6 +112,7 @@ import {
   type WbsBandGroup,
 } from '../render/wbs-band';
 
+import { SwimlaneGutter, type SwimlaneGutterProps } from './SwimlaneGutter';
 import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
 import { useWithdrawnColumnHandoff } from './use-withdrawn-column-handoff';
 import {
@@ -519,9 +514,9 @@ export interface TsldCanvasProps {
   gutterWidthPx?: number;
   /**
    * What the gutter's labels say. Neutral on purpose: `features/tsld` imports no other feature
-   * (ADR-0026 §8), so the host maps the swimlanes onto {@link GutterSwimlane}. Ignored at width 0.
+   * (ADR-0026 §8), so the host maps the swimlanes onto `GutterSwimlane`. Ignored at width 0.
    */
-  gutter?: { swimlanes: readonly GutterSwimlane[]; collapsed: boolean } | null;
+  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
   /** Reports whether the container can hold the EXPANDED gutter, so the host's control can say
    * why it is shut. Fires on change only; the `minimapRoom` form. */
   onGutterRoomChange?: (room: boolean) => void;
@@ -531,85 +526,6 @@ export interface TsldCanvasProps {
 const POPOVER_W = 224;
 const POPOVER_H = 140;
 const POPOVER_MARGIN = 8;
-
-/**
- * The swimlane gutter's DOM (swimlanes epic M2-T3, C3/C4): a bordered corner cell over the ruler and
- * the WBS band, then one label per swimlane. **Text comes from `swimlaneGutterModel`; positions are
- * written by the canvas's frame loop** (`syncGutter`), so this renders each label hidden and lets
- * the loop place it — the model's view-dependent boxes are deliberately not read here. Names are
- * real text (WCAG 1.4.5) clamped to the swimlane's height, with the full name in the tooltip.
- */
-function SwimlaneGutter({
-  rootRef,
-  swimlanes,
-  collapsed,
-  widthPx,
-  cornerHeightPx,
-  footPx,
-}: {
-  rootRef: React.RefObject<HTMLDivElement | null>;
-  swimlanes: readonly GutterSwimlane[];
-  collapsed: boolean;
-  widthPx: number;
-  cornerHeightPx: number;
-  footPx: number;
-}): React.ReactElement {
-  // Only the view-independent fields are used (text, name, maxLines), so the view and size here
-  // are placeholders and not a second opinion about where the labels go.
-  const labels = swimlaneGutterModel(
-    { swimlanes, widthPx, collapsed },
-    { pxPerDay: 1, originX: 0, originY: 0 },
-    { width: 0, height: 0 },
-  );
-  return (
-    <div
-      data-testid="tsld-swimlane-gutter"
-      className="bg-canvas border-border absolute inset-y-0 left-0 z-10 overflow-hidden border-r"
-      style={{ width: widthPx }}
-    >
-      <div
-        data-testid="tsld-swimlane-gutter-corner"
-        className="border-border border-b"
-        style={{ height: cornerHeightPx }}
-      />
-      <div
-        ref={rootRef}
-        data-testid="tsld-swimlane-gutter-labels"
-        className="absolute inset-x-0 overflow-hidden"
-        style={{ top: cornerHeightPx, bottom: footPx }}
-      >
-        {labels.map((l) => (
-          <div
-            key={l.key}
-            data-swimlane={l.key}
-            title={l.name}
-            className={cn(
-              'border-border text-foreground absolute inset-x-0 overflow-hidden border-b text-xs',
-              collapsed && 'text-center',
-            )}
-            style={{
-              display: 'none',
-              padding: `${String(GUTTER_PAD_PX / 2)}px ${String(GUTTER_PAD_PX)}px`,
-              lineHeight: `${String(GUTTER_LINE_PX)}px`,
-            }}
-          >
-            <span
-              style={{
-                display: '-webkit-box',
-                WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: collapsed ? 1 : l.maxLines,
-                overflow: 'hidden',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              {l.text}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function getDpr(): number {
   return Math.min(globalThis.devicePixelRatio || 1, 2);
@@ -2126,11 +2042,7 @@ export function TsldCanvas({
       )
         return;
       gutterSyncRef.current = { originY: v.originY, height: s.height, model, root };
-      const labels = swimlaneGutterModel(
-        { swimlanes: model.swimlanes, widthPx: gutterWidthPx, collapsed: model.collapsed },
-        v,
-        s,
-      );
+      const labels = swimlaneGutterGeometry(model.swimlanes, v, s);
       for (const l of labels) {
         const node = root.children[l.index];
         if (!(node instanceof HTMLElement)) continue;
@@ -2855,7 +2767,6 @@ export function TsldCanvas({
         <SwimlaneGutter
           rootRef={gutterRef}
           swimlanes={gutter.swimlanes}
-          collapsed={gutter.collapsed}
           widthPx={gutterWidthPx}
           cornerHeightPx={sceneOrigin(wbsBandHeightPx, gutterWidthPx).top}
           footPx={resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0}

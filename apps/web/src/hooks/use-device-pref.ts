@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * A device preference: view state kept in `localStorage`, not on the server and not in the URL
- * (ADR-0004). The minimap panel, the legend panel and the swimlane gutter's collapsed strip all
- * share this shape, which is why it is one hook rather than a third copy of the try/catch.
+ * (ADR-0004). The minimap panel, the legend panel and (from M2-T9) the swimlane gutter's collapsed
+ * strip share this shape, which is why it is one hook rather than a third copy of the try/catch.
  *
  * `parse` receives whatever `JSON.parse` produced (or nothing usable) and must return a valid
  * `T`, so a corrupt, stale or hand-edited payload degrades to the caller's own default instead
@@ -33,6 +33,5 @@ export function useDevicePref<T>(
     }
   }, [key, value]);
 
-  const set = useCallback((next: T | ((prev: T) => T)) => setValue(next), []);
-  return [value, set] as const;
+  return [value, setValue] as const;
 }
