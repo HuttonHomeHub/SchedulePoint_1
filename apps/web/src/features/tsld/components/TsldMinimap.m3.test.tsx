@@ -99,6 +99,13 @@ describe('TsldMinimap — navigation (M3)', () => {
     expect(announce.mock.calls[0]![0]).not.toMatch(/lanes \d/);
   });
 
+  it('says "past the last swimlane", not lane numbers, when the window is beyond the stack', () => {
+    mount({ swimlaneExtents: [{ name: 'Mechanical', firstLane: 0, laneCount: 2 }] });
+    fireEvent.keyDown(screen.getByRole('group', { name: 'Diagram overview' }), { key: 'End' });
+    expect(announce.mock.calls[0]![0]).toMatch(/, past the last swimlane\.$/);
+    expect(announce.mock.calls[0]![0]).not.toMatch(/lanes \d/);
+  });
+
   it('Home and End centre the first/last dated day on the time axis only, announcing at once', () => {
     const { onCenterWorld } = mount();
     const group = screen.getByRole('group', { name: 'Diagram overview' });

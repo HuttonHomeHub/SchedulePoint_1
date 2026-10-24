@@ -7,6 +7,7 @@ import {
   minimapViewport,
   swimlanesInView,
   type MinimapBox,
+  type MinimapSwimlaneExtent,
   type MinimapMapping,
   type MinimapWindow,
 } from '../render/minimap';
@@ -77,7 +78,7 @@ export interface TsldMinimapProps {
    * because a swimlane ground would add a ground to `MINIMAP_GROUNDS`' contrast set and a tick
    * through dense bar ink does not clear it.
    */
-  swimlaneExtents?: readonly { name: string | null; firstLane: number; laneCount: number }[];
+  swimlaneExtents?: readonly MinimapSwimlaneExtent[];
 }
 
 export function TsldMinimap({
@@ -164,9 +165,9 @@ export function TsldMinimap({
   const announceWindow = useCallback(
     (window: MinimapWindow | null): void => {
       if (window === null) return;
-      const where =
-        (swimlaneExtents && swimlanesInView(swimlaneExtents, window.laneFrom, window.laneTo)) ||
-        `lanes ${String(window.laneFrom + 1)}–${String(window.laneTo + 1)}`;
+      const where = swimlaneExtents
+        ? swimlanesInView(swimlaneExtents, window.laneFrom, window.laneTo)
+        : `lanes ${String(window.laneFrom + 1)}–${String(window.laneTo + 1)}`;
       announce(
         `Viewing ${formatCalendarDate(window.startIso)} to ${formatCalendarDate(window.endIso)}, ${where}.`,
       );

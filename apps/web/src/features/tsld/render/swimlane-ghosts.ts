@@ -13,6 +13,12 @@ import type { CompareGhost } from './paint';
 export interface GhostLaneScene {
   /** Activity id → display lane, exactly the lane the bar is drawn at. */
   displayLanes: ReadonlyMap<string, number>;
+  /**
+   * What the swimlanes are made of. Only `MANUAL` can place removed work today: a WBS-grouped scene
+   * keys its rows by summary activity and needs the frozen ancestors, which arrives with M3. Until
+   * then removed work on `WBS` is counted, so it never lands in "No swimlane" by default.
+   */
+  source: 'MANUAL' | 'WBS';
   /** `id: null` is "No swimlane". */
   extents: readonly { id: string | null; firstLane: number; laneCount: number }[];
 }
@@ -66,7 +72,7 @@ export function placeCompareGhosts(
 }
 
 function removedLane(ghost: CompareGhost, scene: GhostLaneScene): number | undefined {
-  if (ghost.frozenLanes === undefined) return undefined;
+  if (scene.source !== 'MANUAL' || ghost.frozenLanes === undefined) return undefined;
   const own = ghost.frozenSwimlaneId ?? null;
   const known = own !== null && scene.extents.some((e) => e.id === own);
   const swimlaneId = known ? own : null;

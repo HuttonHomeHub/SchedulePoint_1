@@ -1271,7 +1271,13 @@ export function TsldPanel({
     [diagramSource.swimlaneScene, swimlaneGround],
   );
   // The projection, in the shape the ghosts read: absent exactly when swimlanes are not drawn.
-  const ghostLaneScene: GhostLaneScene | null = diagramSource.swimlaneScene;
+  // `source` is the hand-made one because that is the only input the host builds until M3; M3's WBS
+  // input must set it from the input, or removed work would be placed by the wrong basis.
+  const ghostLaneScene = useMemo<GhostLaneScene | null>(
+    () =>
+      diagramSource.swimlaneScene ? { ...diagramSource.swimlaneScene, source: 'MANUAL' } : null,
+    [diagramSource.swimlaneScene],
+  );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;
   const renderActivities = diagramSource.renderActivities;
@@ -1488,9 +1494,9 @@ export function TsldPanel({
     return placeCompareGhosts(compareGhosts, ghostLaneScene);
   }, [compareOverlay, hasRevisionPair, compareGhosts, ghostLaneScene]);
   const compareGhostBars = comparePlacement?.ghosts;
-  // What the server could not draw plus what the swimlanes could not place: both are counted in the
-  // one sentence, never dropped silently.
-  const compareGhostsUndrawnTotal = compareGhostsUndrawable + (comparePlacement?.counted ?? 0);
+  // Counted apart from the server's `compareGhostsUndrawable`: the two have different causes and the
+  // spoken summary words each (ADR-0127).
+  const compareGhostsUnplaced = comparePlacement?.counted ?? 0;
 
   /** The logic half, on the SAME gate — one toggle, one picture. */
   const compareLinkLines = useMemo(() => {
@@ -1526,16 +1532,18 @@ export function TsldPanel({
     () =>
       compareOverlaySummary(
         compareGhostBars ?? [],
-        compareGhostBars ? compareGhostsUndrawnTotal : 0,
+        compareGhostBars ? compareGhostsUndrawable : 0,
         {
           drawn: compareLinkLines?.length ?? 0,
           undrawable: compareLinkLines ? compareLinksUndrawable : 0,
         },
         compareUndrawableReason,
+        compareGhostBars ? compareGhostsUnplaced : 0,
       ),
     [
       compareGhostBars,
-      compareGhostsUndrawnTotal,
+      compareGhostsUndrawable,
+      compareGhostsUnplaced,
       compareLinkLines,
       compareLinksUndrawable,
       compareUndrawableReason,

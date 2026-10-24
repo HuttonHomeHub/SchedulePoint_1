@@ -1,4 +1,4 @@
-import type { ActivityType } from '@repo/types';
+import type { ActivityType, SwimlaneLaneBasis } from '@repo/types';
 
 import { canvasLabel } from './a11y';
 import { activityIndexFor } from './activity-index';
@@ -546,7 +546,7 @@ export interface CompareGhost {
    */
   readonly frozenSwimlaneId?: string | null;
   readonly frozenLanes?: readonly {
-    readonly basis: string;
+    readonly basis: SwimlaneLaneBasis;
     readonly swimlaneId: string | null;
     readonly laneIndex: number;
   }[];

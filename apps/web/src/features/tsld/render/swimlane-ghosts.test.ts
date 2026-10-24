@@ -1,3 +1,4 @@
+import type { SwimlaneLaneBasis } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import type { CompareGhost } from './paint';
@@ -5,6 +6,7 @@ import { ghostLaneOf, placeCompareGhosts, type GhostLaneScene } from './swimlane
 
 // Mechanical takes display lanes 0-1, Electrical 2, and "No swimlane" 3.
 const SCENE: GhostLaneScene = {
+  source: 'MANUAL',
   displayLanes: new Map([
     ['live', 2],
     ['other', 0],
@@ -28,7 +30,7 @@ function ghost(over: Partial<CompareGhost> = {}): CompareGhost {
     ...over,
   };
 }
-const frozen = (basis: string, swimlaneId: string | null, laneIndex: number) => ({
+const frozen = (basis: SwimlaneLaneBasis, swimlaneId: string | null, laneIndex: number) => ({
   basis,
   swimlaneId,
   laneIndex,
@@ -93,8 +95,20 @@ describe('placeCompareGhosts', () => {
   });
 
   it.each([
-    ['a NONE baseline froze nothing', {}],
-    ['no frozen row exists for the basis', { frozenSwimlaneId: 's2', frozenLanes: [] }],
+    ['a NONE baseline froze nothing (frozenLanes undefined)', {}],
+    ['frozenLanes is empty', { frozenSwimlaneId: 's2', frozenLanes: [] }],
+    [
+      'no frozen row exists for the basis',
+      { frozenSwimlaneId: 's2', frozenLanes: [frozen('SWIMLANE', 's1', 0)] },
+    ],
+    [
+      'the NO_SWIMLANE row is missing for a deleted swimlane',
+      { frozenSwimlaneId: 'deleted', frozenLanes: [frozen('SWIMLANE', 'deleted', 0)] },
+    ],
+    [
+      'the frozen lane equals the swimlane’s lane count',
+      { frozenSwimlaneId: 's1', frozenLanes: [frozen('SWIMLANE', 's1', 2)] },
+    ],
     [
       'the frozen lane lies outside the swimlane today',
       { frozenSwimlaneId: 's2', frozenLanes: [frozen('SWIMLANE', 's2', 1)] },
@@ -103,6 +117,23 @@ describe('placeCompareGhosts', () => {
     const out = placeCompareGhosts(
       [ghost({ activityId: 'gone', removed: true, ...frozenFacts })],
       SCENE,
+    );
+    expect(out).toEqual({ ghosts: [], counted: 1 });
+  });
+});
+
+describe('placeCompareGhosts on a WBS-grouped scene (M3 guard)', () => {
+  it('counts removed work rather than guessing a basis, so it never lands in "No swimlane"', () => {
+    const out = placeCompareGhosts(
+      [
+        ghost({
+          activityId: 'gone',
+          removed: true,
+          frozenSwimlaneId: null,
+          frozenLanes: [frozen('NO_SWIMLANE', null, 0)],
+        }),
+      ],
+      { ...SCENE, source: 'WBS' },
     );
     expect(out).toEqual({ ghosts: [], counted: 1 });
   });

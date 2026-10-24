@@ -955,6 +955,45 @@ describe('the comparison overlay’s spoken summary', () => {
       expect(crossPlan?.heading).toContain('1 removed');
     });
   });
+
+  describe('bars the swimlanes could not place (ADR-0127: a reason is true of its cause)', () => {
+    it('has its own clause, and does not say the old revision failed to record anything', () => {
+      const summary = compareOverlaySummary([ghost('Piling')], 0, undefined, 'NOT_RECORDED', 2);
+      expect(summary?.heading).toContain(
+        '2 not shown because their swimlane or row can no longer be matched',
+      );
+      expect(summary?.heading).not.toContain('did not record');
+      expect(summary?.undrawn).toBe(2);
+      expect(summary?.undrawnLabel).toBe(
+        '2 changes are not shown — their swimlane or row can no longer be matched.',
+      );
+    });
+
+    it('keeps the server count on its own sentence and joins both when both are non-zero', () => {
+      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_RECORDED', 1);
+      expect(summary?.heading).toContain(
+        '3 not shown because the old revision did not record where they were',
+      );
+      expect(summary?.heading).toContain(
+        '1 not shown because their swimlane or row can no longer be matched',
+      );
+      expect(summary?.undrawn).toBe(4);
+      expect(summary?.undrawnLabel).toBe(
+        '3 changes are not shown — the earlier revision did not record where they were. ' +
+          '1 change is not shown — their swimlane or row can no longer be matched.',
+      );
+    });
+
+    it('beside the cross-plan sentence it leaves that sentence alone', () => {
+      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_COMPARABLE', 1);
+      expect(summary?.heading).toContain('lay their activities out independently');
+      expect(summary?.heading).toContain('1 not shown because their swimlane or row');
+    });
+
+    it('is silent at zero, so an unchanged summary is unchanged', () => {
+      expect(compareOverlaySummary([ghost('Piling')], 0)?.heading).not.toContain('swimlane');
+    });
+  });
 });
 
 describe('the per-row compare clause', () => {

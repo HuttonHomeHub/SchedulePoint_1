@@ -87,7 +87,35 @@ const VARIANCE = ['a', 'b'].map((activityId) => ({
   floatVarianceDays: 0,
 }));
 
-function Harness({ swimlanes }: { swimlanes: SwimlaneInput | null }) {
+const COMPARE_GHOSTS = [
+  // Live, with a bar: placed. Live, with none today: counted by the swimlanes.
+  {
+    activityId: 'b',
+    name: 'Wire',
+    fromStart: '2026-01-01',
+    fromFinish: '2026-01-05',
+    laneIndex: 9,
+    type: 'TASK' as const,
+    removed: false,
+  },
+  {
+    activityId: 'nobar',
+    name: 'Lost',
+    fromStart: '2026-01-01',
+    fromFinish: '2026-01-05',
+    laneIndex: 0,
+    type: 'TASK' as const,
+    removed: false,
+  },
+];
+
+function Harness({
+  swimlanes,
+  compare = false,
+}: {
+  swimlanes: SwimlaneInput | null;
+  compare?: boolean;
+}) {
   const ui = useTsldCanvasUiState();
   useEffect(() => {
     ui.toggleBaselineOverlay();
@@ -102,6 +130,9 @@ function Harness({ swimlanes }: { swimlanes: SwimlaneInput | null }) {
       canvasUi={ui}
       varianceRows={VARIANCE}
       swimlanes={swimlanes}
+      {...(compare
+        ? { compareGhosts: COMPARE_GHOSTS, hasRevisionPair: true, compareGhostsUndrawable: 2 }
+        : {})}
     />
   );
 }
@@ -123,5 +154,22 @@ describe('TsldPanel — ghosts follow the bar into its swimlane row', () => {
     render(<Harness swimlanes={null} />);
     expect(lastLanes('baselineGhosts')).toEqual({ a: 0, b: 0 });
     expect(lastLanes('levelledGhosts')).toEqual({ a: 0, b: 0 });
+  });
+});
+
+describe('TsldPanel — the comparison overlay words each count for its own cause', () => {
+  it('places a live ghost on its display lane and says the unplaced one is a swimlane matter', () => {
+    const { container } = render(<Harness swimlanes={INPUT} compare />);
+    const last = seen.props[seen.props.length - 1]!;
+    expect(
+      (last['compareGhosts'] as { activityId: string; laneIndex: number }[]).map((g) => [
+        g.activityId,
+        g.laneIndex,
+      ]),
+    ).toEqual([['b', 1]]);
+    // The canvas is a recorder here, so the summary is read off the panel's own sr-only text.
+    const text = container.textContent ?? '';
+    expect(text).toContain('2 not shown because the old revision did not record where they were');
+    expect(text).toContain('1 not shown because their swimlane or row can no longer be matched');
   });
 });

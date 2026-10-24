@@ -498,14 +498,32 @@ describe('swimlanesInView (swimlanes C13)', () => {
     expect(swimlanesInView(EXTENTS, 2, 3)).toBe('swimlanes Mechanical and Electrical');
   });
   it('words "No swimlane" itself', () => {
-    expect(swimlanesInView(EXTENTS, 7, 7)).toBe('swimlane No swimlane');
+    expect(swimlanesInView(EXTENTS, 7, 7)).toBe('outside any swimlane');
   });
   it('shortens a long list to three and a count', () => {
     expect(swimlanesInView(EXTENTS, 0, 7)).toBe(
-      'swimlanes Mechanical, Electrical, Civil and 2 more',
+      'swimlanes Mechanical, Electrical, Civil and 2 more swimlanes',
     );
   });
-  it('is null when the window is past the stack', () => {
-    expect(swimlanesInView(EXTENTS, 20, 30)).toBeNull();
+  it('says so, with no lane number, when the window is past the stack', () => {
+    expect(swimlanesInView(EXTENTS, 20, 30)).toBe('past the last swimlane');
+  });
+  it('words "no swimlane" in lower case inside a list', () => {
+    expect(swimlanesInView(EXTENTS, 6, 7)).toBe('swimlanes Fit-out and no swimlane');
+  });
+  it('words a blank name rather than printing nothing', () => {
+    expect(swimlanesInView([{ name: '  ', firstLane: 0, laneCount: 1 }], 0, 0)).toBe(
+      'an unnamed swimlane',
+    );
+    expect(
+      swimlanesInView(
+        [
+          { name: ' ', firstLane: 0, laneCount: 1 },
+          { name: 'Civil', firstLane: 1, laneCount: 1 },
+        ],
+        0,
+        1,
+      ),
+    ).toBe('swimlanes an unnamed swimlane and Civil');
   });
 });
