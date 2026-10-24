@@ -3,55 +3,49 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-23 (late evening). The owner asked for **swimlanes M0 and M1** built from the
-approved spec, run to completion; SQ-1 to SQ-6 defaults, SQ-7 yes (M1-T1b in). **Both milestones are
-merged and released** as **`api` 0.99.0** and **`web` 0.197.2**. Everything ships dark: the
-toolbar's Swimlanes item stays `enabled: false` until **M2-T11**. Two CI hardening changes rode along
-(the owner chose "time limit + retry" and "keep the packages"). The owner's **hard rule** still stands:
-nothing that needs them to test, measure or check anything on their server or devices (a decision
-question is fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-24 (evening). The owner asked for **swimlanes M2** ("Swimlanes by hand, on the
+diagram") built from the approved spec and run to completion. **All eleven tasks are merged and
+released** as **`web` 0.198.0** and **`api` 0.99.1**. Swimlanes are now **live**: the Swimlanes row
+in `View ▾` is offered, and a planner can set them up, move work between them, and rename, reorder or
+delete them. The owner's **hard rule** still stands: nothing that needs them to test, measure or
+check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not
+cut**; that stays the owner's call (ADR-0190).
 
-## The owner's answers this session (2026-10-23)
+## The owner's answers this session (2026-10-24)
 
-- **Swimlanes M0 and M1:** build them; SQ-1 to SQ-6 take their defaults; **SQ-7 yes** (baselines
-  record swimlanes, M1-T1b in scope). Nothing user-facing before M2's last task.
-- **CI browser install hang:** "Time limit + retry" (D1), then "Keep the packages" (an apt cache).
-  Both are in `docs/specs/ci-browser-install/feature-spec.md` and `docs/DECISIONS.md` (2026-10-23).
-- The 2026-10-22 answers (shortlist order, #536 "System", #543 report only, the seven swimlane
-  answers) are in `docs/DECISIONS.md` and summarised under "Decided" below.
+- **Swimlanes M2:** build it, every task merged one at a time, the lens lit only by M2-T11.
+- **The row growth** (Re-layout 35 → 54 rows on the torture plan, from `m0-reading.md`): **accept
+  it**. Recorded in `docs/DECISIONS.md` (2026-10-24) and in ADR-0203's note by M2-T6.
+- The earlier answers (2026-10-22 and 2026-10-23) are in `docs/DECISIONS.md` and summarised under
+  "Decided" below.
 
 ## Where things stand
 
-- **Latest releases:** `api` 0.99.0 and `web` 0.197.2 (Version Packages #1120; `@repo/types` 0.44.0, untagged).
+- **Latest releases:** `web` 0.198.0 and `api` 0.99.1 (Version Packages #1130).
 - **This session's PRs, in merge order:**
-  - **#1113** M0-T1: `deriveSwimlaneLanes` and `wbsBasisOf` in `packages/layout/src/swimlanes.ts`.
-  - **#1114** CI: the "Install Playwright browsers" step has a time limit, retries, and kills a
-    leftover `apt-get` and repairs dpkg before retrying.
-  - **#1115** M0-T2: an optional `partition` on `packLanes`, `nearestFreeRow` and `rowOccupancy`, with a
-    golden parity suite proving byte-identical output when it is absent.
-  - **#1116** M0-T3: `projectSwimlanes` in `apps/web/src/features/tsld/render/project-swimlanes.ts`.
-  - **#1117** CI: an apt `.deb` cache (`actions/cache/restore@v6` and `save@v6`, keyed on the runner
-    image and the lockfile). It works: later runs restore it and the install takes seconds.
-  - **#1118** M0-T4: the node measurement (`docs/specs/swimlanes/m0-reading.md`). **The §4.5 limits
-    stand** (300 and 150). **Height grows**: swimlanes cannot share a row, so Re-layout went 35 to 54
-    rows on the torture plan and 14 to 16 on the power plant. The owner should see that before M2;
-    no cost bar is attached to it.
-  - **#1119** M1-T1: the schema (`swimlanes`, `activity_swimlane_lanes`, `activities.swimlane_id`,
-    `plans.swimlane_source` / `swimlane_wbs_level`), wired into expiry, restore, import and export
-    (org export format **2.1**). Designed by the database-architect; its name CHECK was rewritten
-    without `BETWEEN` after the backup round trip changed its text (`docs/DATABASE.md` has the rule).
-  - **#1121** M1-T2: the swimlanes module (CRUD, reorder, restore).
-  - **#1122** M1-T1b: baselines freeze swimlanes at capture (`baselines.swimlane_snapshot_level`, the
-    frozen source and level, `baseline_activities.swimlane_id`, `baseline_activity_swimlane_lanes`).
-  - **#1123** M1-T3 and M1-T4: plan `swimlaneSource` / level (behind the pen), activity `swimlaneId`,
-    in-swimlane lanes on the batch write (the server derives the basis), history names a swimlane
-    move; the web types accept the fields and use none of them.
-  - **#1124** M1-T5: the `plan:capability-swimlanes` and `plan:capability-swimlanes-wbs` seed plans
-    and their playbook rows.
-  - **#1120** the Version Packages release.
-- **Reviews:** security, backend performance and API reviewers ran on M1. Folded: a `@Max` on
-  `version`, OpenAPI errors on the plan and activity writes. Kept: `SWIMLANE_NAME_TAKEN`, because the
-  spec names it.
+  - **#1126** M2-T3: the swimlane gutter's space at the canvas's left edge.
+  - **#1127** M2-T1: the swimlane hooks, manual membership, `SwimlaneInput` and `deriveDiagramSource`
+    (one place that decides what the screen and the export draw).
+  - **#1128** M2-T2: the lens (`swimlanePictureOn`), the boundary rule and the swimlane ground.
+  - **#1129** API fix: in the positions batch, `swimlane.swimlaneId: null` now clears membership, and
+    a member of a deleted swimlane gets a "No swimlane" lane instead of a 404 (found while building T4).
+  - **#1131** M2-T8: the minimap names swimlanes; baseline and levelled ghosts sit in their display row.
+  - **#1132** M2-T7: export and print carry swimlanes, checked by a chrome roster (`EXPORT_CHROME_INPUTS`).
+  - **#1133** M2-T4: moving and creating bars inside swimlanes, one undo step per gesture.
+  - **#1134** M2-T9: the swimlane name column (gutter) as a vertical toolbar, its menus and the set-up,
+    manage and delete dialogs.
+  - **#1135** M2-T5: auto-resolve overlaps in both pictures (swimlanes off and within each swimlane).
+  - **#1136** M2-T6: Tidy and Re-layout search inside each swimlane (cost pinned to M0's 359/356
+    evaluations; unpartitioned output byte-identical).
+  - **#1137** M2-T10: Move to swimlane… on both selection bars, the listbox grouped by swimlane, the
+    editor's swimlane field, and an undo whose swimlane was deleted is set aside.
+  - **#1138** M2-T11: the lens is offered, the gate-review fold (failed-list notice with Try again,
+    arrow keys kept inside swimlane panels, lazy dialogs that hand focus back) and the
+    **`swimlanes-by-hand` Playwright journey** (17 tests, CI shard 1; suite count 49).
+  - **#1130** the Version Packages release.
+- **Reviews:** component, accessibility and UX on every UI task; the M2 gate review (accessibility,
+  component, UX, performance) passed after its fold. `plan-detail` is 122.06 kB gzip against its
+  132 KiB ceiling.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -106,11 +100,14 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-22: the three specs with every default and the CQ answers above; #306 (a) declined.
 - 2026-10-22 (evening): the shortlist order, #536 "System", #543 report only, and the seven
   swimlane answers above (SQ-7 yes).
+- 2026-10-23: swimlanes M0/M1 (SQ-1 to SQ-6 defaults, SQ-7 yes); CI install "time limit + retry"
+  and "keep the packages".
+- 2026-10-24: accept the swimlane row growth (35 → 54 rows on the torture plan).
 
 ## Parked by the owner — keep, do not raise
 
 The owner parked these (`docs/DECISIONS.md`, 2026-10-13; reaffirmed 2026-10-15, 2026-10-16, 2026-10-17,
-2026-10-18, 2026-10-19, 2026-10-20, 2026-10-21 and 2026-10-22). A session does not bring them up until the owner does. When the
+2026-10-18, 2026-10-19, 2026-10-20, 2026-10-21, 2026-10-22 and 2026-10-24). A session does not bring them up until the owner does. When the
 owner returns to one, the steps are ready:
 
 - **Set up the alerts** with `docs/guides/set-up-alerts.md` (~15 minutes on the host; do the test part at
@@ -137,20 +134,22 @@ owner returns to one, the steps are ready:
   #509 is the off-site copy: today's copies live on the same disk as the database).
 - **Decided 2026-10-19 — leave it:** better-auth 1.7.10 makes a reset atomic only when the adapter runs
   transactions; ours runs the steps in order (fail-closed; a crash mid-reset spends the link).
-- **New this session:** **#544** (a project-calendar restore racing its project's delete fails
+- **From 2026-10-23:** **#544** (a project-calendar restore racing its project's delete fails
   now and then under CPU load; not reproduced on CI) and **#545** (`e2e-local.sh api backup` refuses
   its own check because the run-lock session is connected; run the fixture and the check directly).
 - **The CI browser-install hang is fixed** (#1114, #1117); no row was needed.
+- **No new rows on 2026-10-24.** Every M2 review finding was folded into its own task's PR.
 
 ## Suggested next
 
-**Swimlanes M2** ("Swimlanes by hand, on the diagram", `docs/specs/swimlanes/implementation-plan.md`
-§M2, the first user-facing milestone). It starts at **M2-T1** (hooks, manual membership,
-`SwimlaneInput`, `deriveDiagramSource`), and everything stays unreachable until **M2-T11** turns the
-toolbar item on, so T1 to T10 can merge one at a time. Each M2 task that changes UI needs the
-component, accessibility and UX reviewers, and M2-T11 needs a journey that drives the real product
-(`CLAUDE.md` §19.11). Before M2-T6, show the owner the row growth from `m0-reading.md` as a decision
-question, not a test. Switch the session to **Sonnet** for the building (the spec is approved).
+**Swimlanes M3** ("One swimlane per WBS group", `docs/specs/swimlanes/implementation-plan.md`
+§M3, two tasks: M3-T1 membership, the setup option and the source switch; M3-T2 change handling,
+filing on create, `laneRange`, and the journey). **M4** ("Beyond the diagram": the Activities table
+column and bulk bar, then the Gantt column) depends only on M2, so it can run beside M3. **M5** (gate
+pass and records, including the M5 ADR that must record the boundary rule's ~2:1 contrast basis)
+comes after both. Each UI task needs the component, accessibility and UX reviewers; M3-T2 adds a
+journey. Until M3, a plan whose source is WBS reads as "not set up" on the lens (by design in M2).
+Switch the session to **Sonnet** for the building (the spec is approved).
 
 Shortlist candidates when the owner wants a break from swimlanes (check each row against the code
 first): #539 (a finish milestone after work on another calendar is dated wrongly: an engine defect,
@@ -168,6 +167,8 @@ Still offer only if the owner raises it: row 9 at the 1.0 cut.
   `web:workspace-fit` (`assertViewPanelFitsTheFloor`, ≤ 420 px at 1024 × 600), and widening the Gantt
   grid moved a row's centre under the divider in `command-surface.spec.ts`. Grep `apps/web/e2e*/` for
   the component or test id before choosing suites.
+- **`scripts/e2e-local.sh web:arrange` fails in this container at org creation ("Unauthorized")**
+  (seen 2026-10-24, cause not found); CI runs it green. Leave it to CI rather than chasing it locally.
 - **One local database, one DB-backed run at a time.** Builders in parallel worktrees took turns on
   Postgres by an explicit "DB free" hand-off from the orchestrator; non-DB work (code, unit tests,
   lint, reviews) ran in parallel. A builder cannot receive a message mid-run, so it stops and waits.
@@ -192,7 +193,7 @@ generate` has run and stale `.eslintcache` files are deleted. Turbo can stop oth
 - **Isolated stack for a journey:** API —
   `cd apps/api && API_PORT=<p> BETTER_AUTH_URL=http://localhost:<p> CORS_ORIGINS=http://localhost:<vite> DATABASE_URL=postgresql://app:app@localhost:5432/app_test?schema=public BETTER_AUTH_SECRET=local-e2e-secret-at-least-32-characters-long RATE_LIMIT_LIMIT=400 pnpm exec nest start`;
   web — `cd apps/web && VITE_API_URL=http://localhost:<p> pnpm exec vite --port <vite>` (**no `/api/v1`**);
-  then `PLAYWRIGHT_SKIP_WEBSERVER=1 E2E_BASE_URL=http://localhost:<vite> PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome … --project=chromium`.
+  then `PLAYWRIGHT_SKIP_WEBSERVER=1 E2E_BASE_URL=http://localhost:<vite> PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium … --project=chromium`.
   **Each Playwright config has its own `VITE_` flags and API env — copy them from the config**, and make
   sure no leftover server from a previous suite answers the next one (it cost two builders a false round).
   Run journeys **serially**; parallel runs cause sign-up timeouts.
@@ -241,8 +242,9 @@ generate` has run and stale `.eslintcache` files are deleted. Turbo can stop oth
 - **A PR title over ~93 characters fails `pr-title.yml`**; commit bodies ≤ 100 characters per line.
 - **ADR-0131's spec gate reads the first word of `Status:`**; an ADR citing a Draft spec's path fails
   `check:spec-status` S3.
-- **Playwright in the container:** Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
-  (also `chromium_headless_shell-1194`). Never run `playwright install`.
+- **Playwright in the container:** set `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium` (a link to
+  the installed build; it was `chromium-1194`, on 2026-10-24 it was `chromium-1243`, so never hard-code
+  the numbered folder). Never run `playwright install`.
 - **The Surface sheet rule:** `docs/specs/gantt-coarse-pointer/device-checklist.md` must change in the
   same PR whenever what it tests changes (touch rows, dividers, targets).
 - **A tooling auto-commit can sweep staged files into a commit titled `chore(...): wip ... (not yet
@@ -285,6 +287,8 @@ verified)`**; the squash-merge hides it, but do not be surprised by it in a bran
   - **Never wait with `while pgrep -f "<name>"`** inside a shell whose own command line contains
     `<name>`: it matches itself and loops for ever. This session lost half an hour to one, and a
     builder left two (`until ! pgrep -f "vitest run"`). Wait on a PID or a lock file instead.
+    `pkill -f <script>` has the same trap and is worse: on 2026-10-24 it killed the shell that ran
+    it. Find the PID with `ps -eo pid,args | awk` and `kill` that, or wait on a file.
   - **Builders worked in worktrees on local branches and never pushed**; the orchestrator
     cherry-picked their range onto the designated branch, ran `pnpm prepush` plus the e2e suites,
     and pushed. Brief each builder with the exact base SHA.
