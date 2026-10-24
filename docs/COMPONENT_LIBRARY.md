@@ -980,3 +980,29 @@ the same thing several times, each slightly different.
   caller outside the staff console is unaffected.
 - **`description`** is one sentence under the heading. The body sits one fixed distance beneath it
   whatever the body starts with, so a panel never adds its own gap there.
+
+## Composite: the swimlane gutter, and its dialogs (`features/tsld/components/SwimlaneGutter.tsx`, `features/swimlanes/components/`)
+
+Swimlanes M2-T9 (ADR-0111 review). Not a primitive: it is feature code, recorded here because it is a
+**keyboard composite** other work will be tempted to copy.
+
+- **A vertical toolbar on the shared roving rule, not `Toolbar`.** `role="toolbar"`,
+  `aria-orientation="vertical"`, one tab stop. Up, Down, Home and End move between swimlanes
+  (`rovingIndexFor`), including **from the container itself**, where the focus hand-off leaves a reader
+  after a delete. `ArrowRight`, Enter, Space and the context-menu gesture open the label's `Menu`
+  (ArrowDown is the roving key). It uses `useToolbarFocusHandoff`, so the roster in
+  `focus-handoff-seam.structural.test.ts` includes it.
+- **The label is the button.** Its `aria-label` is the model's "Mechanical, swimlane 2 of 5, 14
+  activities, 3 lanes"; the text inside is `aria-hidden`. There is no second copy for assistive
+  technology. A swimlane panned out of view is _parked_ (zero height, transparent), never
+  `display: none`, so it can still take focus, and focus pans the canvas to it.
+- **Shade, don't hide (ADR-0082, ADR-0204).** The corner command, the collapse toggle and every menu write
+  are `aria-disabled` with a printed or described reason. The collapse toggle has a stable name
+  ("Swimlane names") and `aria-pressed`.
+- **Dialogs** (`SwimlaneSetupDialog`, `…ManageDialog`, `…RenameDialog`, `…DeleteDialog`) use `Dialog` and
+  `ConfirmDialog`; working state lives for one opening (ADR-0169). A refusal is worded by
+  `swimlaneErrorText` and **names the action** ("Could not move Mechanical: …"). Where a delete's focus
+  goes is chosen by `focus-after-delete.ts`, because the element the dialog would restore is the one just
+  deleted.
+- **`usePopoverClose`** (`components/ui/toolbar/popover-close.ts`): lets a control inside a
+  `ToolbarPopover` close it, handing focus to the trigger, before it opens a modal dialog.

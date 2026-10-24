@@ -31,6 +31,7 @@ import {
   successorsQueryOptions,
 } from '@/features/dependencies/api/use-dependencies';
 import { assignmentsQueryOptions } from '@/features/resources/api/use-resources';
+import { swimlanesQueryOptions } from '@/features/swimlanes/api/use-swimlanes';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import {
   activityKeys,
@@ -305,6 +306,8 @@ export function usePlanUndoRedo(params: {
           crossPlanDependencyKeys.detail(orgSlug, linkId),
           `/organizations/${orgSlug}/cross-plan-dependencies/${linkId}`,
         ),
+      readSwimlanes: () =>
+        queryClient.fetchQuery({ ...swimlanesQueryOptions(orgSlug, planId), ...fresh }),
     };
   }, [queryClient, orgSlug, planId]);
 

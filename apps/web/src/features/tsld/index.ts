@@ -48,3 +48,7 @@ export {
 export type { SwimlaneInput } from './render/project-swimlanes';
 /** One row of a lane write on the swimlane layout — a lane inside a swimlane (swimlanes M2-T4). */
 export type { SwimlaneLanePlacement } from './model/swimlane-lanes';
+/** The shape of the swimlane gutter's commands, for the host that supplies them (M2-T9). The width rule
+ * is exported too; the swimlanes feature imports it BY PATH, because the workspace's tests mock this
+ * barrel wholesale and a missing export there would fail every one of them. */
+export { gutterWidthForRoom, type GutterActions } from './render/swimlane-gutter';

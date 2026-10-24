@@ -12,6 +12,9 @@ import {
   gutterHasRoom,
   gutterSwimlanesFrom,
   gutterWidthFor,
+  gutterWidthForRoom,
+  gutterSwimlanes,
+  laneToReveal,
   SWIMLANE_GUTTER_COLLAPSED_PX,
   SWIMLANE_GUTTER_WIDTH_PX,
   swimlaneGutterModel,
@@ -201,5 +204,75 @@ describe('gutterSwimlanesFrom', () => {
       ['s2', 0],
       [null, 1],
     ]);
+  });
+});
+
+describe('gutterWidthForRoom', () => {
+  it('answers exactly as gutterWidthFor does for the same room fact', () => {
+    for (const collapsed of [false, true]) {
+      for (const containerWidth of [700, 1400]) {
+        expect(gutterWidthForRoom({ collapsed, room: gutterHasRoom(containerWidth) })).toEqual(
+          gutterWidthFor({ collapsed, containerWidth }),
+        );
+      }
+    }
+  });
+
+  it('is forced collapsed when there is no room, even for a planner who left it expanded', () => {
+    expect(gutterWidthForRoom({ collapsed: false, room: false })).toMatchObject({
+      collapsed: true,
+      forcedByRoom: true,
+    });
+  });
+});
+
+describe('gutterSwimlanes', () => {
+  const extents = [
+    { id: 'a', name: 'Civil', firstLane: 0, laneCount: 1 },
+    { id: 'b', name: 'Mech', firstLane: 1, laneCount: 1 },
+    { id: null, name: null, firstLane: 2, laneCount: 1 },
+  ];
+
+  it('counts each swimlane’s members, and files an unknown or absent membership under No swimlane', () => {
+    const out = gutterSwimlanes(
+      extents,
+      ['1', '2', '3', '4', '5'],
+      new Map<string, string | null>([
+        ['1', 'a'],
+        ['2', 'a'],
+        ['3', 'gone'],
+        ['4', null],
+      ]),
+      new Set(['a', 'b']),
+    );
+    expect(out.map((s) => s.activityCount)).toEqual([2, 0, 3]);
+  });
+});
+
+describe('laneToReveal', () => {
+  const size = { width: 800, height: 4 * LANE_HEIGHT };
+  const at = (originY: number) => ({ pxPerDay: 20, originX: 0, originY });
+
+  it('does nothing when any of the swimlane is already in view', () => {
+    expect(
+      laneToReveal({ id: 'a', name: 'A', firstLane: 1, laneCount: 2 }, at(0), size),
+    ).toBeNull();
+    // Half in view counts: the label is on screen.
+    expect(
+      laneToReveal({ id: 'a', name: 'A', firstLane: 3, laneCount: 3 }, at(-LANE_HEIGHT / 2), size),
+    ).toBeNull();
+  });
+
+  it('centres a swimlane that fits when it is out of view', () => {
+    // `centerOnWorld` centres lane n at n + 0.5, so two lanes starting at 10 centre on 10.5.
+    expect(laneToReveal({ id: 'a', name: 'A', firstLane: 10, laneCount: 2 }, at(0), size)).toBe(
+      10.5,
+    );
+  });
+
+  it('frames a swimlane taller than the viewport by its top', () => {
+    // Four lanes fit; a 20-lane swimlane is framed so its first lane is near the top, not its middle.
+    const lane = laneToReveal({ id: 'a', name: 'A', firstLane: 30, laneCount: 20 }, at(0), size)!;
+    expect(lane).toBe(30 + 4 / 2 - 0.5);
   });
 });

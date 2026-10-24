@@ -109,6 +109,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { ghostLaneOf, placeCompareGhosts, type GhostLaneScene } from '../render/swimlane-ghosts';
+import { gutterSwimlanes, type GutterActions } from '../render/swimlane-gutter';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -126,7 +127,6 @@ import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './C
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { LinkChainDialog } from './LinkChainDialog';
-import { type SwimlaneGutterProps } from './SwimlaneGutter';
 import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
@@ -573,7 +573,10 @@ export interface TsldPanelProps {
    * for the create popover's x (`sceneOrigin`). `0`, the default, is today's panel.
    */
   gutterWidthPx?: number;
-  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
+  /** The gutter's commands (swimlanes M2-T9). Its labels come from the same projection that swapped
+   * in the display lanes, so the host supplies no swimlane list of its own. Memoised by the host:
+   * the canvas rewrites every label when this identity changes. Absent: a read-only gutter. */
+  gutterActions?: GutterActions | null;
   onGutterRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
@@ -703,7 +706,7 @@ export function TsldPanel({
   onViewportSlot,
   onMinimapRoomChange,
   gutterWidthPx = 0,
-  gutter = null,
+  gutterActions = null,
   onGutterRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
@@ -1227,6 +1230,24 @@ export function TsldPanel({
     () =>
       diagramSource.swimlaneScene ? { ...diagramSource.swimlaneScene, source: 'MANUAL' } : null,
     [diagramSource.swimlaneScene],
+  );
+  // What the gutter shows, off the same projection (never a list of the host's own, which could
+  // disagree with the stack). Memoised on the projection and the actions: `TsldCanvas` rewrites every
+  // label when this identity changes, so a fresh object per render would do that per render.
+  const gutter = useMemo(
+    () =>
+      diagramSource.swimlaneScene !== null && swimlanes
+        ? {
+            swimlanes: gutterSwimlanes(
+              diagramSource.swimlaneScene.extents,
+              diagramSource.sceneActivities.map((a) => a.id),
+              swimlanes.membership,
+              new Set(swimlanes.swimlanes.map((s) => s.id)),
+            ),
+            actions: gutterActions ?? undefined,
+          }
+        : null,
+    [diagramSource.swimlaneScene, diagramSource.sceneActivities, swimlanes, gutterActions],
   );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;

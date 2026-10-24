@@ -4,6 +4,7 @@ import type {
   CrossPlanDependencySummary,
   DependencySummary,
   ResourceAssignmentSummary,
+  SwimlaneSummary,
 } from '@repo/types';
 
 import { calendarDeletedDetail } from './history-result';
@@ -81,6 +82,8 @@ export interface ReplayContext {
   ) => Promise<readonly ResourceAssignmentSummary[] | undefined>;
   /** One cross-plan link by id; `undefined` when it is gone. */
   readCrossPlanLink: (linkId: string) => Promise<CrossPlanDependencySummary | undefined>;
+  /** The plan's active swimlanes in display order, read fresh. A deleted swimlane is simply absent. */
+  readSwimlanes: () => Promise<readonly SwimlaneSummary[]>;
 }
 
 /** A field's value for comparison: the API speaks `null`, so an absent field and a null are one value. */

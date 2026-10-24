@@ -53,7 +53,10 @@ describe('the Swimlanes lens', () => {
     const nothing = reason({ hasDiagram: true });
     const loading = reason({ hasDiagram: true, swimlanesSetUp: true });
     const failed = reason({ hasDiagram: true, swimlanesSetUp: true, swimlanesLoading: false });
-    expect(nothing).toBe('No swimlanes have been set up for this plan.');
+    // Names the button beneath it, so the reason points at the way out.
+    expect(nothing).toBe(
+      'No swimlanes have been set up for this plan. Choose Set up swimlanes… to add some.',
+    );
     expect(loading).toBe('Loading swimlanes…');
     // No instruction: nothing in the product offers a retry, and the list is read again on its own.
     expect(failed).toBe("Couldn't load swimlanes.");

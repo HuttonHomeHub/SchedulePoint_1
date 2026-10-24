@@ -138,6 +138,7 @@ export function makeTsldToolbarContext(
     toggleSwimlanes: vi.fn(),
     swimlanesSetUp: true,
     swimlanesLoading: false,
+    swimlanesManage: { label: 'Set up swimlanes…', open: vi.fn() },
     toggleBaselineOverlay: vi.fn(),
     hasActiveBaseline: false,
     varianceLoading: false,

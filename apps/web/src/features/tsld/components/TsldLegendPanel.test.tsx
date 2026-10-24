@@ -86,6 +86,64 @@ describe('TsldLegendPanel', () => {
     expect(panel).toHaveStyle({ left: '40px', top: '24px' });
   });
 
+  describe('beside the swimlane gutter (swimlanes M2-T9)', () => {
+    const GUTTER = 176;
+
+    it('moves its default corner right of the gutter instead of under it', () => {
+      render(
+        <TsldLegendPanel
+          open
+          position={null}
+          leftInsetPx={GUTTER}
+          onClose={vi.fn()}
+          onPositionChange={vi.fn()}
+        />,
+      );
+      const panel = screen.getByRole('group', { name: 'Diagram legend' });
+      expect(panel).toHaveStyle({ left: `${String(GUTTER + 12)}px` });
+      expect(panel).not.toHaveClass('left-3');
+    });
+
+    it('with no gutter, keeps today’s class-only corner exactly', () => {
+      render(<TsldLegendPanel open position={null} onClose={vi.fn()} onPositionChange={vi.fn()} />);
+      const panel = screen.getByRole('group', { name: 'Diagram legend' });
+      expect(panel).toHaveClass('bottom-3', 'left-3');
+      expect(panel.getAttribute('style')).toBeNull();
+    });
+
+    it('shows a saved position that is under the gutter at the gutter’s edge, and does not rewrite the saved one', () => {
+      const onPositionChange = vi.fn();
+      render(
+        <TsldLegendPanel
+          open
+          position={{ x: 10, y: 24 }}
+          leftInsetPx={GUTTER}
+          onClose={vi.fn()}
+          onPositionChange={onPositionChange}
+        />,
+      );
+      expect(screen.getByRole('group', { name: 'Diagram legend' })).toHaveStyle({
+        left: `${String(GUTTER)}px`,
+        top: '24px',
+      });
+      // Clamp on read: the planner’s own position survives the gutter closing again.
+      expect(onPositionChange).not.toHaveBeenCalled();
+    });
+
+    it('leaves a saved position already right of the gutter where it is', () => {
+      render(
+        <TsldLegendPanel
+          open
+          position={{ x: 400, y: 24 }}
+          leftInsetPx={GUTTER}
+          onClose={vi.fn()}
+          onPositionChange={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole('group', { name: 'Diagram legend' })).toHaveStyle({ left: '400px' });
+    });
+  });
+
   it('has no axe violations while open', async () => {
     const { container } = render(
       <TsldLegendPanel open position={null} onClose={vi.fn()} onPositionChange={vi.fn()} />,

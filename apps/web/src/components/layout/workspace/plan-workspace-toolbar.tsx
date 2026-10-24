@@ -117,7 +117,13 @@ import {
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
-import { SWIMLANE_GROUND, SWIMLANES_LENS_OFFERED, useSwimlaneScene } from '@/features/swimlanes';
+import {
+  SWIMLANE_GROUND,
+  SWIMLANES_LENS_OFFERED,
+  SwimlaneDialogs,
+  useSwimlaneManagement,
+  useSwimlaneScene,
+} from '@/features/swimlanes';
 import {
   HistoryResultStrip,
   LayoutResolvedStrip,
@@ -259,6 +265,23 @@ export function ToolbarPlanWorkspace({
     offered: SWIMLANES_LENS_OFFERED,
     shown: swimlanesAreShown,
   });
+  // Setting up and managing swimlanes (M2-T9): the gutter's width and commands, the lens's button, and
+  // the four dialogs, from one hook. The gutter is reserved only while a scene is drawn, so with the lens
+  // not offered the width is 0 and nothing here is reachable.
+  const swimlaneManagement = useSwimlaneManagement({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    plan,
+    shown: swimlaneScene.input !== null,
+    swimlaneCount: swimlaneScene.count,
+    activities: model.activities.data,
+    gate: { writable: model.canEditSchedule, reason: model.scheduleRefusal('change swimlanes') },
+    record: model.recordSwimlaneEdit,
+  });
+  const swimlanesManage = useMemo(
+    () => ({ label: swimlaneManagement.manageLabel, open: swimlaneManagement.openSwimlanes }),
+    [swimlaneManagement.manageLabel, swimlaneManagement.openSwimlanes],
+  );
   // The activities panel's narrowed, stable slice of the model (`docs/TECH_DEBT.md` #334, M2-F1): the
   // whole `model` is a new object every render, and this component renders on every canvas selection.
   const activityPanelModel = useActivityPanelModel(model);
@@ -845,6 +868,7 @@ export function ToolbarPlanWorkspace({
     plan,
     canvasUi,
     swimlaneScene,
+    swimlanesManage,
     swimlanesShown: swimlanesAreShown,
     swimlaneGround: SWIMLANE_GROUND,
     openDialog: setDialog,
@@ -1373,6 +1397,9 @@ export function ToolbarPlanWorkspace({
       dataDate={plan.plannedStart}
       swimlanes={swimlaneScene.input}
       swimlaneGround={SWIMLANE_GROUND}
+      gutterWidthPx={swimlaneManagement.gutterWidthPx}
+      gutterActions={swimlaneManagement.gutterActions}
+      onGutterRoomChange={swimlaneManagement.onGutterRoomChange}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).
@@ -1873,6 +1900,7 @@ export function ToolbarPlanWorkspace({
       position={legend.position}
       onClose={legend.close}
       onPositionChange={legend.setPosition}
+      leftInsetPx={swimlaneManagement.gutterWidthPx}
       {...(lensLegend ? { lens: lensLegend } : {})}
     />
   );
@@ -2787,6 +2815,7 @@ export function ToolbarPlanWorkspace({
 
         {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
         <ActivityCrudDialogs model={model} />
+        <SwimlaneDialogs {...swimlaneManagement.dialogs} />
 
         {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —
             the canvas bar, the Gantt row menu and the activities table. A fresh `key` per target,

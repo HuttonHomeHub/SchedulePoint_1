@@ -3122,6 +3122,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     recordAssignmentEdit,
     recordCrossPlanLinkAdd,
     recordCrossPlanLinkRemove,
+    // The history seam itself, for the swimlane writes (M2-T9): they build their own commands
+    // (`swimlane-commands.ts`) inside `useSwimlaneActions`, which records them as it writes. They move
+    // no drawn span and no lane, so there is no `beginLayoutEdit` to take.
+    recordSwimlaneEdit: editHistory.record,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     undoRedo,

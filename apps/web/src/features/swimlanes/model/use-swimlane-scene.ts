@@ -37,6 +37,12 @@ export interface SwimlaneScene {
   pending: boolean;
   /** The list could not be loaded (after one retry). The lens words this; the diagram draws swimlane-free. */
   failed: boolean;
+  /**
+   * How many swimlanes the plan has, once the list is known; absent before then and when the plan is
+   * not hand-made. A hand-made plan can have none (undoing a setup removes the swimlanes and leaves the
+   * source), and the lens and its command must say "none set up" then as they do for `NONE`.
+   */
+  count?: number | undefined;
   /** Try the list again. */
   refetch: () => void;
 }
@@ -82,6 +88,7 @@ export function useSwimlaneScene(args: {
     input,
     pending: drawn && list.isPending,
     failed: manual && list.isError,
+    count: manual ? swimlanes?.length : undefined,
     refetch: () => void list.refetch(),
   };
 }

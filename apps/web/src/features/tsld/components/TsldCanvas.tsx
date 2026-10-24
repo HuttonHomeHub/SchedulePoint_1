@@ -93,7 +93,12 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { sceneLayers } from '../render/scene-layers';
 import { drawnSpanPlacement } from '../render/snap';
-import { gutterHasRoom, swimlaneGutterGeometry } from '../render/swimlane-gutter';
+import {
+  gutterHasRoom,
+  laneToReveal,
+  swimlaneGutterGeometry,
+  type GutterSwimlane,
+} from '../render/swimlane-gutter';
 import {
   DAY_LABEL_DEFAULT_WIDTH_PX,
   presetOf,
@@ -527,7 +532,7 @@ export interface TsldCanvasProps {
    * What the gutter's labels say. Neutral on purpose: `features/tsld` imports no other feature
    * (ADR-0026 §8), so the host maps the swimlanes onto `GutterSwimlane`. Ignored at width 0.
    */
-  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
+  gutter?: Pick<SwimlaneGutterProps, 'swimlanes' | 'actions'> | null;
   /** Reports whether the container can hold the EXPANDED gutter, so the host's control can say
    * why it is shut. Fires on change only; the `minimapRoom` form. */
   onGutterRoomChange?: (room: boolean) => void;
@@ -1464,6 +1469,15 @@ export function TsldCanvas({
     },
     [describeMinimapWindow],
   );
+  // A swimlane's button took focus: bring the swimlane into view if none of it is (C9). Pans the lane
+  // axis only, through the minimap's one navigation primitive, so it is the same transform a drag makes.
+  const revealSwimlane = useCallback(
+    (swimlane: GutterSwimlane): void => {
+      const lane = laneToReveal(swimlane, viewRef.current, sizeRef.current);
+      if (lane !== null) minimapCenterOnWorld(null, lane);
+    },
+    [minimapCenterOnWorld],
+  );
   // The TRUE viewport centre as a world point — the drag anchor (M4 B1). A pure read off
   // the refs through the same extracted arithmetic the display rectangle uses, so the
   // anchor and the picture cannot disagree.
@@ -2063,10 +2077,14 @@ export function TsldCanvas({
         const node = root.children[l.index];
         if (!(node instanceof HTMLElement)) continue;
         if (!l.visible) {
-          node.style.display = 'none';
+          // Parked, not `display: none`: a button that is not rendered cannot take focus, and focus is
+          // how an off-screen swimlane is brought into view (`SwimlaneGutter`).
+          node.dataset['parked'] = 'true';
+          node.style.top = '0px';
+          node.style.height = '0px';
           continue;
         }
-        node.style.display = '';
+        delete node.dataset['parked'];
         node.style.top = `${String(l.top)}px`;
         node.style.height = `${String(l.height)}px`;
         // The rule under a label belongs to the swimlane's true end, not to a viewport clip.
@@ -2788,6 +2806,8 @@ export function TsldCanvas({
           widthPx={gutterWidthPx}
           cornerHeightPx={sceneOrigin(wbsBandHeightPx, gutterWidthPx).top}
           footPx={resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0}
+          actions={gutter.actions}
+          onReveal={revealSwimlane}
         />
       ) : null}
       {/* The sticky date ruler: a DOM band updated imperatively from the rAF loop (aria-hidden — the
