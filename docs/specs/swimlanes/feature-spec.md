@@ -209,7 +209,7 @@ default stated in the body.
 >
 > - `View ▾ ▸ Structure` holds a button under the toggle: **Set up swimlanes…** when none exist,
 >   **Swimlanes…** when some do. Without the pen it is shaded with "Take the pen to set up
->   swimlanes." The gutter's corner cell carries the same **Swimlanes…** command (ADR-0093).
+>   swimlanes." (As built: the house pen sentence, `scheduleRefusal` — "Start editing to change swimlanes.", or "Request control to …" when a peer holds the pen.) The gutter's corner cell carries the same **Swimlanes…** command (ADR-0093).
 > - **When** I add "Mechanical" **then** it appears as an empty swimlane one lane tall, above
 >   "No swimlane".
 > - **When** I rename it, move it up, or move it down (from its gutter menu or the manage
@@ -305,7 +305,7 @@ default stated in the body.
   whose name does not fit ends in "…". The full name is in the label's tooltip and accessible
   name. This is a stated exception to ADR-0184: a label cannot grow past the swimlane it names.
 - **Narrow stage** (the 1024 floor, ADR-0179): the gutter has two fixed widths, expanded and a
-  collapsed strip that shows each swimlane's number. Below a container width measured in M2-T3
+  collapsed strip (44 px as built, a full touch target) that shows each swimlane's number. Below a container width measured in M2-T3
   (ADR-0182), it collapses, and its expand control is shaded with the reason. That is the
   `minimapRoom` form (`tsld-toolbar-items.tsx:338-342`, `:547-552`). There is no drag divider.
 - **Gantt view**: the swimlane toggle is shaded with the no-diagram reason, and the Gantt gets a
@@ -828,7 +828,7 @@ flowchart TD
   B -- no --> C[View > Structure: checkbox shaded with reason]
   C --> S[Set up swimlanes… button]
   S --> D{Holds the pen?}
-  D -- no --> E[Button shaded: Take the pen to set up swimlanes.]
+  D -- no --> E[Button shaded: Start editing to change swimlanes.]
   D -- yes --> F[Setup dialog: By hand / One per WBS group at level N]
   F --> G[Confirm: source written, lanes materialised, view on]
   G --> H

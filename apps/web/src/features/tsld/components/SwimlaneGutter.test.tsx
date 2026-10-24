@@ -26,7 +26,7 @@ function actions(overrides: Partial<GutterActions> = {}): GutterActions {
     manage: { label: 'Swimlanes…', onOpen: vi.fn() },
     collapse: { collapsed: false, forcedByRoom: false, onToggle: vi.fn() },
     onRename: vi.fn(),
-    onMove: vi.fn(),
+    onMove: vi.fn(() => Promise.resolve(true)),
     onDelete: vi.fn(),
     ...overrides,
   };
@@ -102,12 +102,45 @@ describe('the gutter as a vertical toolbar', () => {
     expect(buttons[3]).toHaveFocus();
   });
 
-  it('leaves the horizontal arrows alone: the toolbar is vertical', () => {
+  it('leaves ArrowLeft alone: the toolbar is vertical', () => {
     mount();
     const buttons = labelButtons();
     act(() => buttons[0]?.focus());
-    fireEvent.keyDown(buttons[0]!, { key: 'ArrowRight' });
+    fireEvent.keyDown(buttons[0]!, { key: 'ArrowLeft' });
     expect(buttons[0]).toHaveFocus();
+  });
+
+  it('opens the menu with ArrowRight as well as Enter and a press, since ArrowDown is taken', () => {
+    mount();
+    const buttons = labelButtons();
+    act(() => buttons[1]?.focus());
+    fireEvent.keyDown(buttons[1]!, { key: 'ArrowRight' });
+    expect(screen.getByRole('menu', { name: 'Actions for Mechanical' })).toBeInTheDocument();
+  });
+
+  it('starts the sequence from the container, where the focus hand-off leaves a reader', () => {
+    mount();
+    const container = toolbar();
+    act(() => container.focus());
+    expect(container).toHaveFocus();
+    fireEvent.keyDown(container, { key: 'ArrowDown' });
+    expect(labelButtons()[0]).toHaveFocus();
+    act(() => container.focus());
+    fireEvent.keyDown(container, { key: 'ArrowUp' });
+    expect(labelButtons()[3]).toHaveFocus();
+    act(() => container.focus());
+    fireEvent.keyDown(container, { key: 'End' });
+    expect(labelButtons()[3]).toHaveFocus();
+  });
+
+  it('ignores a key that did not come from a label or the container (a portalled menu’s)', () => {
+    mount();
+    fireEvent.click(labelButtons()[1]!);
+    const item = screen.getAllByRole('menuitem')[0]!;
+    act(() => item.focus());
+    fireEvent.keyDown(item, { key: 'Home' });
+    // Home inside the menu goes to the menu's first item, not to the first swimlane.
+    expect(item).toHaveFocus();
   });
 
   it('brings a swimlane into view when its button takes focus', () => {
@@ -154,10 +187,58 @@ describe('the label menu', () => {
     expect(mechanical).toHaveFocus();
   });
 
-  it('opens on the context-menu gesture too', () => {
+  it('opens on the context-menu gesture too, at the pointer or — from the keyboard — at the button', () => {
     mount();
-    fireEvent.contextMenu(labelButtons()[0]!);
-    expect(screen.getByRole('menu', { name: 'Actions for Civil' })).toBeInTheDocument();
+    fireEvent.contextMenu(labelButtons()[0]!, { clientX: 90, clientY: 120 });
+    const menu = screen.getByRole('menu', { name: 'Actions for Civil' });
+    expect(menu).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // Shift+F10 reports (0, 0): the menu belongs by the label, not in the page's corner.
+    const rect = { left: 0, right: 176, top: 80, bottom: 140, width: 176, height: 60, x: 0, y: 80 };
+    const label = labelButtons()[1]!;
+    label.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) });
+    fireEvent.contextMenu(label, { clientX: 0, clientY: 0 });
+    expect(screen.getByRole('menu', { name: 'Actions for Mechanical' })).toHaveStyle({
+      top: '80px',
+    });
+  });
+
+  it('arms the refocus only for a move that landed', async () => {
+    const onMove = vi
+      .fn<GutterActions['onMove']>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const { rerender } = mount({ actions: actions({ onMove }) });
+    const reorder = (): void => {
+      rerender(
+        <SwimlaneGutter
+          rootRef={createRef<HTMLDivElement>()}
+          swimlanes={[SWIMLANES[1]!, SWIMLANES[0]!, ...SWIMLANES.slice(2)].map((s, i) => ({
+            ...s,
+            firstLane: i,
+          }))}
+          widthPx={SWIMLANE_GUTTER_WIDTH_PX}
+          cornerHeightPx={40}
+          footPx={0}
+          actions={actions({ onMove })}
+        />,
+      );
+    };
+    // Refused: a later change of the list must not pull focus anywhere.
+    fireEvent.click(labelButtons()[1]!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));
+    await act(() => Promise.resolve());
+    (document.activeElement as HTMLElement | null)?.blur();
+    reorder();
+    expect(document.body).toHaveFocus();
+
+    // Landed: the label that asked takes focus back when the order changes.
+    fireEvent.click(screen.getByRole('button', { name: /^Mechanical,/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move down' }));
+    await act(() => Promise.resolve());
+    (document.activeElement as HTMLElement | null)?.blur();
+    reorder();
+    expect(screen.getByRole('button', { name: /^Mechanical,/ })).toHaveFocus();
   });
 
   it('runs the chosen action for that swimlane and returns focus to its label', () => {
@@ -257,6 +338,18 @@ describe('the collapsed strip', () => {
 });
 
 describe('the corner cell', () => {
+  it('shows "Swimlanes…" in the narrow corner whatever the command is called, and names it in full', () => {
+    const a = actions({ manage: { label: 'Set up swimlanes…', onOpen: vi.fn() } });
+    mount({ actions: a });
+    const button = within(screen.getByTestId('tsld-swimlane-gutter-corner')).getByRole('button', {
+      name: 'Set up swimlanes…',
+    });
+    // The visible text is inside the accessible name (WCAG 2.5.3) and cannot truncate at 176 px.
+    expect(button.textContent).toBe('Swimlanes…');
+    fireEvent.click(button);
+    expect(a.manage.onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it('carries the Swimlanes… command and opens it', () => {
     const a = actions();
     mount({ actions: a });
@@ -282,7 +375,10 @@ describe('the corner cell', () => {
   it('collapses and expands, and says which', () => {
     const a = actions();
     const { rerender } = mount({ actions: a });
-    fireEvent.click(screen.getByRole('button', { name: 'Hide swimlane names' }));
+    const toggle = screen.getByRole('button', { name: 'Swimlane names' });
+    // A stable name with a pressed state, not a name that flips with what it reports.
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(toggle);
     expect(a.collapse.onToggle).toHaveBeenCalledTimes(1);
     const collapsed = actions({
       collapse: { collapsed: true, forcedByRoom: false, onToggle: vi.fn() },
@@ -297,7 +393,10 @@ describe('the corner cell', () => {
         actions={collapsed}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Show swimlane names' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Swimlane names' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     // Only the expand control fits the strip as a full target.
     expect(screen.queryByRole('button', { name: 'Swimlanes…' })).not.toBeInTheDocument();
   });
@@ -308,7 +407,7 @@ describe('the corner cell', () => {
       widthPx: SWIMLANE_GUTTER_COLLAPSED_PX,
       actions: actions({ collapse: { collapsed: true, forcedByRoom: true, onToggle: toggle } }),
     });
-    const expand = screen.getByRole('button', { name: 'Show swimlane names' });
+    const expand = screen.getByRole('button', { name: 'Swimlane names' });
     expect(expand).toHaveAttribute('aria-disabled', 'true');
     expect(expand).toHaveAccessibleDescription(GUTTER_NO_ROOM_REASON);
     fireEvent.click(expand);

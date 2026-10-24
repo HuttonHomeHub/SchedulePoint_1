@@ -1,6 +1,7 @@
-import type { SwimlaneSummary } from '@repo/types';
-import { useId, useState } from 'react';
+import type { SwimlaneSource, SwimlaneSummary } from '@repo/types';
+import { useId, useRef, useState } from 'react';
 
+import { swimlaneErrorText } from '../model/swimlane-errors';
 import { parseSwimlaneNames } from '../model/swimlane-names';
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
 
@@ -13,7 +14,7 @@ export interface SwimlaneSetupDialogProps {
   open: boolean;
   onClose: () => void;
   /** The plan, at the version last read: the source write is locked on it. */
-  plan: { id: string; version: number };
+  plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
   /** The plan's active swimlanes now, so a name that is taken is named before the server refuses it. */
   swimlanes: readonly SwimlaneSummary[];
   actions: SwimlaneActions;
@@ -61,7 +62,12 @@ function SetupForm({
   const [pending, setPending] = useState(false);
   // How many were created before a failure, so a retry does not create them twice.
   const [created, setCreated] = useState(0);
-  const sourceOnly = created > 0;
+  // Swimlanes that already exist on a plan still set to "none" are the same state reached another way:
+  // a setup that created them and then failed to switch the plan, closed, and was opened again. There
+  // is nothing left to name, only the source to write — so the form offers that and nothing else.
+  const sourceOnly = created > 0 || (swimlanes.length > 0 && plan.swimlaneSource === 'NONE');
+  const existing = created > 0 ? created : swimlanes.length;
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = async (): Promise<void> => {
     if (pending || !gate.writable) return;
@@ -73,30 +79,33 @@ function SetupForm({
     if (!sourceOnly) {
       if (parsed.names.length === 0) {
         setProblems(['Enter at least one swimlane name.']);
+        fieldRef.current?.focus();
         return;
       }
       if (parsed.problems.length > 0) {
         setProblems(parsed.problems);
+        fieldRef.current?.focus();
         return;
       }
     }
     setProblems([]);
     setPending(true);
     // Read once: state set below is not visible to this call, and the failure sentence needs the count.
-    let made = created;
+    let made = existing;
     try {
       if (!sourceOnly) {
         made = (await actions.add(parsed.names)).length;
         setCreated(made);
       }
-      await actions.setManualSource(plan);
+      // A hand-made plan that lost every swimlane is already on the right source; nothing to write.
+      if (plan.swimlaneSource !== 'MANUAL') await actions.setManualSource(plan);
       announce(`${String(made)} ${made === 1 ? 'swimlane' : 'swimlanes'} set up.`);
       onClose();
     } catch (error) {
       setFailure(
         made > 0
-          ? `The swimlanes were created, but the plan could not be switched to use them: ${message(error)} Press Set up swimlanes to try again.`
-          : message(error),
+          ? `The swimlanes exist, but the plan could not be switched to use them. ${swimlaneErrorText('finish setup', error)} Press Finish setup to try again.`
+          : swimlaneErrorText('set up swimlanes', error),
       );
     } finally {
       setPending(false);
@@ -113,9 +122,12 @@ function SetupForm({
       }}
     >
       <p className="text-muted-foreground text-sm">
-        By hand: you name them and put activities in them.
+        {sourceOnly
+          ? `${existing === 1 ? '1 swimlane is' : `${String(existing)} swimlanes are`} already made. Finish setup to switch this plan to use them.`
+          : 'By hand: you name them and put activities in them.'}
       </p>
       <TextareaField
+        ref={fieldRef}
         label="Swimlane names, one per line"
         rows={6}
         value={text}
@@ -154,13 +166,9 @@ function SetupForm({
           aria-busy={pending}
           className="aria-busy:pointer-events-none"
         >
-          {pending ? 'Setting up…' : 'Set up swimlanes'}
+          {pending ? 'Setting up…' : sourceOnly ? 'Finish setup' : 'Set up swimlanes'}
         </Button>
       </div>
     </form>
   );
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : 'Something went wrong.';
 }

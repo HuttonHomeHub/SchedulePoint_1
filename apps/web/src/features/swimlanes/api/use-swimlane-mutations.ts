@@ -9,15 +9,21 @@ import { activityKeys, planKeys, swimlaneKeys } from '@/lib/query/hierarchy-keys
  * source. Each is a thin REST call (`docs/API.md` "Swimlanes"); every write needs the pen and Planner
  * or Org Admin, which the server enforces and the callers shade for.
  *
- * **What each invalidates, and why the activity list is among them.** The swimlane list is the
- * obvious one. The activity list is too, because a swimlane is *drawn from* it: the gutter's counts,
- * the projection's lanes and the "No swimlane" swimlane are all derived from the activities'
- * `swimlaneId`, and a delete changes which swimlane every member reads as belonging to without a
- * single activity row being written.
+ * **What each invalidates.** The swimlane list always. The activity list only for a delete and a
+ * restore: a swimlane is *drawn from* the activities' `swimlaneId`, and a delete (or its undo) changes
+ * which swimlane every member reads as belonging to without a single activity row being written. A
+ * create, a rename and a reorder move no member, and a 2,000-activity refetch is not free.
  */
-function invalidateSwimlanes(queryClient: QueryClient, orgSlug: string, planId: string): void {
+function invalidateSwimlanes(
+  queryClient: QueryClient,
+  orgSlug: string,
+  planId: string,
+  options: { activities: boolean },
+): void {
   void queryClient.invalidateQueries({ queryKey: swimlaneKeys.byPlan(orgSlug, planId) });
-  void queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) });
+  if (options.activities) {
+    void queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) });
+  }
 }
 
 const base = (orgSlug: string, planId: string): string =>
@@ -37,7 +43,7 @@ export function useCreateSwimlane(orgSlug: string, planId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId),
+    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId, { activities: false }),
   });
 }
 
@@ -55,7 +61,7 @@ export function useRenameSwimlane(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify({ name, version }),
       }),
-    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId),
+    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId, { activities: false }),
   });
 }
 
@@ -72,7 +78,7 @@ export function useReorderSwimlanes(orgSlug: string, planId: string) {
         method: 'PATCH',
         body: JSON.stringify(input),
       }),
-    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId),
+    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId, { activities: false }),
   });
 }
 
@@ -90,7 +96,7 @@ export function useDeleteSwimlane(orgSlug: string, planId: string) {
         `${base(orgSlug, planId)}/${swimlaneId}${version === undefined ? '' : `?version=${String(version)}`}`,
         { method: 'DELETE' },
       ),
-    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId),
+    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId, { activities: true }),
   });
 }
 
@@ -101,7 +107,7 @@ export function useRestoreSwimlane(orgSlug: string, planId: string) {
       apiFetch<SwimlaneSummary>(`${base(orgSlug, planId)}/${swimlaneId}/restore`, {
         method: 'POST',
       }),
-    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId),
+    onSettled: () => invalidateSwimlanes(queryClient, orgSlug, planId, { activities: true }),
   });
 }
 

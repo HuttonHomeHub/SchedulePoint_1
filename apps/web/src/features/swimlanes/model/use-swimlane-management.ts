@@ -1,8 +1,10 @@
 import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { useSwimlanes } from '../api/use-swimlanes';
 
+import { focusAfterDelete, type FocusAfterDelete } from './focus-after-delete';
+import { swimlaneErrorText } from './swimlane-errors';
 import { useSwimlaneActions, type SwimlaneActions } from './use-swimlane-actions';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -26,21 +28,23 @@ function parseCollapsed(raw: unknown): { collapsed: boolean } {
 }
 
 /** Which of the swimlane dialogs are open. Independent flags: rename and delete stack over Manage. */
-interface DialogState {
+export interface SwimlaneDialogState {
   setup: boolean;
   manage: boolean;
   renameId: string | null;
   deleteId: string | null;
 }
 
-const CLOSED: DialogState = { setup: false, manage: false, renameId: null, deleteId: null };
+const CLOSED: SwimlaneDialogState = { setup: false, manage: false, renameId: null, deleteId: null };
 
 export interface SwimlaneDialogsProps {
-  state: DialogState;
-  close: (which: keyof DialogState) => void;
+  state: SwimlaneDialogState;
+  close: (which: keyof SwimlaneDialogState) => void;
   openRename: (swimlaneId: string) => void;
   openDelete: (swimlaneId: string) => void;
-  plan: { id: string; version: number };
+  plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
+  /** Told when a delete has landed, before its dialog closes: see {@link focusAfterDelete}. */
+  afterDelete: (swimlane: SwimlaneSummary) => void;
   swimlanes: readonly SwimlaneSummary[];
   activities: readonly ActivitySummary[] | undefined;
   actions: SwimlaneActions;
@@ -80,6 +84,8 @@ export function useSwimlaneManagement(args: {
   plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
   /** Swimlanes are drawn: the scene has an input. */
   shown: boolean;
+  /** How many swimlanes the plan has, once known. A hand-made plan can have none. */
+  swimlaneCount?: number | undefined;
   activities: readonly ActivitySummary[] | undefined;
   /** May the caller write swimlanes, and when not, why (the pen sentence). */
   gate: { writable: boolean; reason: string | null };
@@ -91,13 +97,13 @@ export function useSwimlaneManagement(args: {
   const announce = useAnnounce();
   const actions = useSwimlaneActions(orgSlug, planId, record);
 
-  const [state, setState] = useState<DialogState>(CLOSED);
+  const [state, setState] = useState<SwimlaneDialogState>(CLOSED);
   const anyOpen = state.setup || state.manage || state.renameId !== null || state.deleteId !== null;
   const swimlanes = useSwimlanes(orgSlug, planId, anyOpen).data ?? EMPTY;
   // The gutter's move reads the latest list at the moment of the press, so its callbacks (and with them
   // the gutter model's identity) do not change every time the list does.
   const swimlanesRef = useRef(swimlanes);
-  useEffect(() => {
+  useLayoutEffect(() => {
     swimlanesRef.current = swimlanes;
   });
 
@@ -107,7 +113,7 @@ export function useSwimlaneManagement(args: {
   const [room, setRoom] = useState(true);
   const roomRef = useRef(true);
   const preferCollapsedRef = useRef(preferCollapsed);
-  useEffect(() => {
+  useLayoutEffect(() => {
     preferCollapsedRef.current = preferCollapsed;
   });
   const onGutterRoomChange = useCallback(
@@ -129,10 +135,11 @@ export function useSwimlaneManagement(args: {
   const width = gutterWidthForRoom({ collapsed: preferCollapsed, room });
 
   const open = useCallback(
-    (patch: Partial<DialogState>) => setState((prev) => ({ ...prev, ...patch })),
+    (patch: Partial<SwimlaneDialogState>) => setState((prev) => ({ ...prev, ...patch })),
     [],
   );
-  const setUp = plan.swimlaneSource === 'NONE';
+  // "None set up" is a plan with no source AND a hand-made plan with no swimlanes (undoing a setup).
+  const setUp = plan.swimlaneSource === 'NONE' || args.swimlaneCount === 0;
   const openSwimlanes = useCallback(
     () => open(setUp ? { setup: true } : { manage: true }),
     [open, setUp],
@@ -144,6 +151,8 @@ export function useSwimlaneManagement(args: {
     [setPref],
   );
 
+  const moving = useRef(false);
+  const deleteFrom = useRef<'gutter' | 'manage'>('gutter');
   const gutterActions = useMemo<GutterActions>(
     () => ({
       write: { writable, reason },
@@ -154,23 +163,37 @@ export function useSwimlaneManagement(args: {
         onToggle: toggleCollapsed,
       },
       onRename: (swimlaneId) => open({ renameId: swimlaneId }),
-      onDelete: (swimlaneId) => open({ deleteId: swimlaneId }),
+      onDelete: (swimlaneId) => {
+        deleteFrom.current = 'gutter';
+        open({ deleteId: swimlaneId });
+      },
       onMove: (swimlaneId, delta) => {
+        // One move at a time: a second press while the first is in flight would read the same list,
+        // send the same versions and be refused as stale — a failure the planner caused by being quick.
+        if (moving.current) return Promise.resolve(false);
         const list = swimlanesRef.current;
         const moved = list.find((s) => s.id === swimlaneId);
-        void actions.move(list, swimlaneId, delta).then(
-          (done) => {
-            if (!done || !moved) return;
-            const position = list.findIndex((s) => s.id === swimlaneId) + delta + 1;
-            announce(
-              `${moved.name} moved to position ${String(position)} of ${String(list.length)}.`,
-            );
-          },
-          (error: unknown) =>
-            announce(
-              `Could not move the swimlane: ${error instanceof Error ? error.message : 'something went wrong.'}`,
-            ),
-        );
+        moving.current = true;
+        return actions
+          .move(list, swimlaneId, delta)
+          .then(
+            (done) => {
+              if (done && moved) {
+                const position = list.findIndex((s) => s.id === swimlaneId) + delta + 1;
+                announce(
+                  `${moved.name} moved to position ${String(position)} of ${String(list.length)}.`,
+                );
+              }
+              return done;
+            },
+            (error: unknown) => {
+              announce(swimlaneErrorText(`move ${moved?.name ?? 'the swimlane'}`, error));
+              return false;
+            },
+          )
+          .finally(() => {
+            moving.current = false;
+          });
       },
     }),
     [
@@ -188,7 +211,7 @@ export function useSwimlaneManagement(args: {
   );
 
   const close = useCallback(
-    (which: keyof DialogState) =>
+    (which: keyof SwimlaneDialogState) =>
       setState((prev) => ({
         ...prev,
         [which]: which === 'renameId' || which === 'deleteId' ? null : false,
@@ -196,16 +219,47 @@ export function useSwimlaneManagement(args: {
     [],
   );
   const openRename = useCallback((id: string) => open({ renameId: id }), [open]);
-  const openDelete = useCallback((id: string) => open({ deleteId: id }), [open]);
-  const planId_ = plan.id;
+  const openDelete = useCallback(
+    (id: string) => {
+      deleteFrom.current = 'manage';
+      open({ deleteId: id });
+    },
+    [open],
+  );
+
+  // Focus after a delete. The dialog returns focus to what held it — the deleted label or row, still
+  // present when it closes and gone a refetch later — so the host picks the destination itself, once
+  // the dialog has closed AND the row has left the list, and one frame later so the browser's own
+  // restore (inside the dialog's close) has run first and cannot overwrite it.
+  const pendingFocus = useRef<FocusAfterDelete | null>(null);
+  const afterDelete = useCallback((deleted: SwimlaneSummary): void => {
+    pendingFocus.current = {
+      id: deleted.id,
+      from: deleteFrom.current,
+      order: swimlanesRef.current.map((s) => s.id),
+    };
+  }, []);
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (pending === null || state.deleteId !== null) return;
+    if (swimlanes.some((s) => s.id === pending.id)) return;
+    pendingFocus.current = null;
+    requestAnimationFrame(() => {
+      focusAfterDelete(pending);
+    });
+  }, [swimlanes, state.deleteId]);
+
+  const planIdentity = plan.id;
   const planVersion = plan.version;
+  const planSource = plan.swimlaneSource;
   const dialogs = useMemo<SwimlaneDialogsProps>(
     () => ({
       state,
       close,
       openRename,
       openDelete,
-      plan: { id: planId_, version: planVersion },
+      plan: { id: planIdentity, version: planVersion, swimlaneSource: planSource },
+      afterDelete,
       swimlanes,
       activities,
       actions,
@@ -216,8 +270,10 @@ export function useSwimlaneManagement(args: {
       close,
       openRename,
       openDelete,
-      planId_,
+      planIdentity,
       planVersion,
+      planSource,
+      afterDelete,
       swimlanes,
       activities,
       actions,

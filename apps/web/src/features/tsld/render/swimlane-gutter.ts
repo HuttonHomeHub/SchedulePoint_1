@@ -108,7 +108,8 @@ export interface GutterActions {
   /** The expand/collapse control. `forcedByRoom` shades it with {@link GUTTER_NO_ROOM_REASON}. */
   collapse: { collapsed: boolean; forcedByRoom: boolean; onToggle: () => void };
   onRename: (swimlaneId: string) => void;
-  onMove: (swimlaneId: string, delta: -1 | 1) => void;
+  /** Resolves whether the swimlane actually moved, so the gutter re-arms focus only for a move that landed. */
+  onMove: (swimlaneId: string, delta: -1 | 1) => Promise<boolean>;
   onDelete: (swimlaneId: string) => void;
 }
 

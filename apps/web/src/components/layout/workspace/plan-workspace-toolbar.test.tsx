@@ -1529,12 +1529,38 @@ describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', 
     expect(screen.getByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
   });
 
+  it('closes the View panel before it opens the dialog, so the trigger is what the dialog returns to', () => {
+    lens.enabled = true;
+    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    openStructure();
+    const trigger = screen.getByRole('button', { name: /^View/ });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Set up swimlanes…' }));
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+    expect(screen.getByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
+  });
+
   it('says Swimlanes… once some exist and opens the manage dialog', () => {
     lens.enabled = true;
-    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: [], isPending: false } };
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Civil' }], isPending: false },
+    };
     openStructure();
     fireEvent.click(screen.getByRole('button', { name: 'Swimlanes…' }));
     expect(screen.getByRole('heading', { name: 'Swimlanes' })).toBeInTheDocument();
+  });
+
+  it('still says Set up for a hand-made plan whose swimlanes are all gone (undoing a setup)', () => {
+    lens.enabled = true;
+    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: [], isPending: false } };
+    openStructure();
+    expect(screen.getByRole('button', { name: 'Set up swimlanes…' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Swimlanes' }).getAttribute('aria-describedby'),
+    ).toBeTruthy();
   });
 
   it('is shaded for a reader who cannot write, saying why, and stays focusable', () => {
@@ -1545,7 +1571,7 @@ describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', 
     const button = screen.getByRole('button', { name: 'Set up swimlanes…' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toBeDisabled();
-    expect(button).toHaveAccessibleDescription('Your role cannot set up swimlanes.');
+    expect(button).toHaveAccessibleDescription('Your role cannot change swimlanes.');
     fireEvent.click(button);
     expect(screen.queryByRole('heading', { name: 'Set up swimlanes' })).not.toBeInTheDocument();
   });

@@ -273,6 +273,7 @@ export function ToolbarPlanWorkspace({
     planId: model.planId,
     plan,
     shown: swimlaneScene.input !== null,
+    swimlaneCount: swimlaneScene.count,
     activities: model.activities.data,
     gate: { writable: model.canEditSchedule, reason: model.scheduleRefusal('change swimlanes') },
     record: model.recordSwimlaneEdit,

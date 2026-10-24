@@ -613,6 +613,13 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
   - **Setup does two writes, swimlanes then the source,** and retries only the source if the second
     fails. Undo takes back the swimlanes (one step) and leaves the source at `MANUAL`, because the plan's
     source is a plan setting and plan settings stay outside undo (`coverage.ts`).
+  - **List edits are undoable in T9, not T10.** Add, rename, reorder and delete are each one undo step
+    (`swimlane-commands.ts`); T10 adds only the assignment commands.
+  - **Delete moves focus itself.** The confirmation would restore focus to the deleted label or row, which is
+    gone a refetch later, so the host moves it (next, else previous, else the corner command, else the toolbar;
+    from Manage, the next row's Rename, else the New swimlane field) once the dialog has closed and the row
+    has left the list (`focus-after-delete.ts`).
+  - **View ▾ closes before the dialog opens** (`usePopoverClose`), so the trigger is what the dialog returns to.
   - **The legend sits right of the gutter on read** (`leftInsetPx`); the minimap and zoom cluster are
     anchored to the right edge and cannot meet it.
 

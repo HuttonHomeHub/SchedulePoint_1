@@ -2,6 +2,7 @@ import type { SwimlaneSummary } from '@repo/types';
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { swimlaneErrorText } from '../model/swimlane-errors';
 import { swimlaneNameProblem } from '../model/swimlane-names';
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
 
@@ -75,29 +76,33 @@ function ManageBody({
 
   const shut = !gate.writable;
 
-  const run = async (work: () => Promise<void>): Promise<void> => {
+  const run = async (action: string, work: () => Promise<void>): Promise<void> => {
     if (busy || shut) return;
     setFailure(null);
     setBusy(true);
     try {
       await work();
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : 'Something went wrong.');
+      setFailure(swimlaneErrorText(action, error));
     } finally {
       setBusy(false);
     }
   };
 
   const add = (): Promise<void> => {
+    // Shut first: a name problem is not worth reporting to a reader who cannot add anyway.
+    if (busy || shut) return Promise.resolve();
     const trouble = swimlaneNameProblem(
       name,
       swimlanes.map((s) => s.name),
     );
     if (trouble !== null) {
       setProblem(trouble);
+      // The first invalid field takes focus, so the problem is where the caret is.
+      nameRef.current?.focus();
       return Promise.resolve();
     }
-    return run(async () => {
+    return run(`add ${name.trim()}`, async () => {
       const [created] = await actions.add([name.trim()]);
       setName('');
       setProblem(null);
@@ -107,13 +112,12 @@ function ManageBody({
   };
 
   const move = (swimlane: SwimlaneSummary, delta: -1 | 1): Promise<void> =>
-    run(async () => {
-      refocus.current = `${swimlane.id}:${delta === -1 ? 'up' : 'down'}`;
+    run(`move ${swimlane.name}`, async () => {
       const moved = await actions.move(swimlanes, swimlane.id, delta);
-      if (!moved) {
-        refocus.current = null;
-        return;
-      }
+      if (!moved) return;
+      // Asked for only once the write has landed, so a refused or no-op move leaves nothing armed to
+      // steal focus on some later, unrelated change of the list.
+      refocus.current = `${swimlane.id}:${delta === -1 ? 'up' : 'down'}`;
       const position = swimlanes.findIndex((s) => s.id === swimlane.id) + delta + 1;
       announce(
         `${swimlane.name} moved to position ${String(position)} of ${String(swimlanes.length)}.`,
@@ -143,9 +147,7 @@ function ManageBody({
             const guard = (): boolean => busy || shut;
             return (
               <li key={s.id} className="flex items-center gap-2 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm" title={s.name}>
-                  {s.name}
-                </span>
+                <span className="min-w-0 flex-1 text-sm break-words">{s.name}</span>
                 <span className="text-muted-foreground text-sm whitespace-nowrap">
                   {count === 1 ? '1 activity' : `${String(count)} activities`}
                 </span>
@@ -200,7 +202,7 @@ function ManageBody({
       )}
       <form
         noValidate
-        className="flex items-start gap-2"
+        className="flex items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void add();
@@ -210,6 +212,7 @@ function ManageBody({
           <TextField
             ref={nameRef}
             label="New swimlane"
+            data-new-swimlane
             value={name}
             onChange={(event) => {
               setProblem(null);
@@ -222,7 +225,6 @@ function ManageBody({
         </div>
         <Button
           type="submit"
-          className="mt-6"
           aria-disabled={busy || shut}
           aria-busy={busy}
           aria-describedby={shut ? reasonId : undefined}

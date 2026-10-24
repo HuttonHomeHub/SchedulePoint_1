@@ -119,13 +119,19 @@ export function SwimlaneGutter({
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // The menu is portalled but its React events still reach here; only a key pressed ON a label is ours.
     const target = event.target;
-    if (!(target instanceof HTMLElement) || !target.closest('[data-swimlane]')) return;
+    if (!(target instanceof HTMLElement)) return;
+    // On a label, or on the container itself: focus is left there by the hand-off when the swimlane it
+    // was on is deleted, and the next arrow must start the sequence (`rovingIndexFor`'s `-1`), not die.
+    const onContainer = target === event.currentTarget;
+    if (!onContainer && !target.closest('[data-swimlane]')) return;
     if (containerShouldStandDown(event)) return;
     const key = event.key;
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(key)) return;
-    const from = labels.findIndex(
-      (l) => l.key === target.closest('[data-swimlane]')?.getAttribute('data-swimlane'),
-    );
+    const from = onContainer
+      ? -1
+      : labels.findIndex(
+          (l) => l.key === target.closest('[data-swimlane]')?.getAttribute('data-swimlane'),
+        );
     const next = labels[rovingIndexFor(key, from, labels.length)];
     if (!next) return;
     event.preventDefault();
@@ -218,8 +224,12 @@ export function SwimlaneGutter({
                 ? { disabledReason: 'This swimlane is already first.' }
                 : {})}
             onSelect={() => {
-              refocusKey.current = menuLabel.key;
-              actions.onMove(menuLabel.id as string, -1);
+              // Armed only once the write has landed: a refused or no-op move must not leave focus
+              // waiting to jump on some later change of the list.
+              const key = menuLabel.key;
+              void actions.onMove(menuLabel.id as string, -1).then((moved) => {
+                if (moved) refocusKey.current = key;
+              });
             }}
           >
             Move up
@@ -232,8 +242,12 @@ export function SwimlaneGutter({
                 ? { disabledReason: 'This swimlane is already last.' }
                 : {})}
             onSelect={() => {
-              refocusKey.current = menuLabel.key;
-              actions.onMove(menuLabel.id as string, 1);
+              // Armed only once the write has landed: a refused or no-op move must not leave focus
+              // waiting to jump on some later change of the list.
+              const key = menuLabel.key;
+              void actions.onMove(menuLabel.id as string, 1).then((moved) => {
+                if (moved) refocusKey.current = key;
+              });
             }}
           >
             Move down
@@ -261,6 +275,8 @@ export function SwimlaneGutter({
  * the reason as a permanent `sr-only` description AND a `reason-echo` tooltip, so the keyboard, the
  * pointer and a finger each get it.
  */
+const CORNER_LABEL = 'Swimlanes…';
+
 function CornerControls({
   actions,
   collapsed,
@@ -272,13 +288,19 @@ function CornerControls({
   const collapseReasonId = useId();
   const manageReason = actions.write.writable ? undefined : (actions.write.reason ?? undefined);
   const collapseReason = actions.collapse.forcedByRoom ? GUTTER_NO_ROOM_REASON : undefined;
-  const manageTip = useTooltip({ content: manageReason, purpose: 'reason-echo' });
+  // 176 px cannot hold "Set up swimlanes…" beside the collapse control, so the corner always SHOWS
+  // "Swimlanes…" and the accessible name is the full command (which contains it: WCAG 2.5.3); a
+  // name-echo tooltip says the full text when it differs.
+  const manageTip = useTooltip({
+    content:
+      manageReason ?? (actions.manage.label === CORNER_LABEL ? undefined : actions.manage.label),
+    purpose: manageReason ? 'reason-echo' : 'name-echo',
+  });
   const collapseTip = useTooltip({
     content: collapseReason ?? (collapsed ? 'Show swimlane names' : 'Hide swimlane names'),
     purpose: collapseReason ? 'reason-echo' : 'name-echo',
   });
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
-  const collapseLabel = collapsed ? 'Show swimlane names' : 'Hide swimlane names';
   return (
     <>
       {collapsed ? null : (
@@ -288,14 +310,15 @@ function CornerControls({
             type="button"
             variant="outline"
             size="sm"
+            aria-label={actions.manage.label}
             aria-disabled={manageReason !== undefined || undefined}
             aria-describedby={manageReason !== undefined ? manageReasonId : undefined}
             onClick={() => {
               if (manageReason === undefined) actions.manage.onOpen();
             }}
-            className="min-w-0 truncate"
+            className="min-w-0"
           >
-            {actions.manage.label}
+            {CORNER_LABEL}
           </Button>
           {manageReason !== undefined ? (
             <span id={manageReasonId} className="sr-only">
@@ -310,7 +333,9 @@ function CornerControls({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label={collapseLabel}
+        // A stable name with a pressed state, not a name that flips with the state it reports.
+        aria-label="Swimlane names"
+        aria-pressed={!collapsed}
         aria-disabled={collapseReason !== undefined || undefined}
         aria-describedby={collapseReason !== undefined ? collapseReasonId : undefined}
         onClick={() => {
@@ -396,10 +421,19 @@ function GutterLabelButton({
         if (hasMenu) open(event.currentTarget);
         else if (collapsed) tip.show();
       }}
+      onKeyDown={(event) => {
+        // ArrowDown is the roving key here, so the menu button's usual opener is taken; ArrowRight
+        // (into a flyout) is the vertical toolbar's natural one. Enter and Space still open it.
+        if (event.key !== 'ArrowRight' || !hasMenu) return;
+        event.preventDefault();
+        open(event.currentTarget);
+      }}
       onContextMenu={(event) => {
         if (!hasMenu) return;
         event.preventDefault();
-        open(event.currentTarget, { x: event.clientX, y: event.clientY });
+        // Shift+F10 and the Menu key report no pointer position (0, 0): anchor at the button instead.
+        const keyboard = event.clientX === 0 && event.clientY === 0;
+        open(event.currentTarget, keyboard ? undefined : { x: event.clientX, y: event.clientY });
       }}
       style={{ top: 0, height: 0 }}
       className={cn(

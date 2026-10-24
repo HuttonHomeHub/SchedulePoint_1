@@ -22,6 +22,7 @@ export function SwimlaneDialogs({
   openRename,
   openDelete,
   plan,
+  afterDelete,
   swimlanes,
   activities,
   actions,
@@ -68,6 +69,7 @@ export function SwimlaneDialogs({
         swimlane={deleting}
         memberCount={deleting ? (memberCounts.get(deleting.id) ?? 0) : 0}
         actions={actions}
+        onDeleted={afterDelete}
       />
     </>
   );

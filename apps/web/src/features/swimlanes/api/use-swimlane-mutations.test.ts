@@ -90,7 +90,7 @@ describe('the swimlane writes', () => {
       { method: 'POST' },
     ],
   ] as const)(
-    '%s calls the endpoint and refreshes the list AND the activities',
+    '%s calls the endpoint and refreshes the swimlane list (and the activities only for a delete or restore)',
     async (_n, hook, input, path, init) => {
       const { invalidate, wrapper } = setup();
       const { result } = renderHook(hook as () => { mutateAsync: (i: never) => Promise<unknown> }, {
@@ -99,9 +99,15 @@ describe('the swimlane writes', () => {
       await act(() => result.current.mutateAsync(input as never));
       expect(apiFetch).toHaveBeenCalledWith(path, init);
       const keys = invalidate.mock.calls.map(([filter]) => filter?.queryKey);
-      // The activity list too: membership counts and the "No swimlane" stack are derived from it.
       expect(keys).toContainEqual(swimlaneKeys.byPlan('acme', 'p1'));
-      expect(keys).toContainEqual(activityKeys.listByPlan('acme', 'p1'));
+      // The activity list only where a member's swimlane changes under it: a delete and its restore.
+      // A create, a rename and a reorder move no member, and the list can be thousands of rows.
+      expect(keys).toHaveLength(/delete|restore/.test(_n) ? 2 : 1);
+      expect(
+        keys.some(
+          (k) => JSON.stringify(k) === JSON.stringify(activityKeys.listByPlan('acme', 'p1')),
+        ),
+      ).toBe(/delete|restore/.test(_n));
     },
   );
 

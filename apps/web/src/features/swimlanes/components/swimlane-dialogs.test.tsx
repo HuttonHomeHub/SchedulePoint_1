@@ -53,7 +53,7 @@ describe('the setup dialog', () => {
         <SwimlaneSetupDialog
           open
           onClose={onClose}
-          plan={{ id: 'p1', version: 7 }}
+          plan={{ id: 'p1', version: 7, swimlaneSource: 'NONE' }}
           swimlanes={[]}
           actions={a}
           gate={gate}
@@ -77,7 +77,11 @@ describe('the setup dialog', () => {
     submit();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(a.add).toHaveBeenCalledWith(['Civil', 'Mechanical', 'Electrical']);
-    expect(a.setManualSource).toHaveBeenCalledWith({ id: 'p1', version: 7 });
+    expect(a.setManualSource).toHaveBeenCalledWith({
+      id: 'p1',
+      version: 7,
+      swimlaneSource: 'NONE',
+    });
     // The swimlanes first: a source with nothing under it would show an empty gutter.
     expect(vi.mocked(a.add).mock.invocationCallOrder[0]!).toBeLessThan(
       vi.mocked(a.setManualSource).mock.invocationCallOrder[0]!,
@@ -114,13 +118,66 @@ describe('the setup dialog', () => {
     type('Civil');
     submit();
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      /swimlanes were created, but the plan could not be switched.*Version conflict\./,
+      /swimlanes exist, but the plan could not be switched.*Version conflict\./,
     );
     expect(onClose).not.toHaveBeenCalled();
-    submit();
+    expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(a.add).toHaveBeenCalledTimes(1);
     expect(a.setManualSource).toHaveBeenCalledTimes(2);
+  });
+
+  it('goes straight to the source when it opens on a plan that already has swimlanes but no source', async () => {
+    // A setup that made the swimlanes, failed to switch the plan, was closed and opened again.
+    const a = actions();
+    const onClose = vi.fn();
+    render(
+      withAnnouncer(
+        <SwimlaneSetupDialog
+          open
+          onClose={onClose}
+          plan={{ id: 'p1', version: 7, swimlaneSource: 'NONE' }}
+          swimlanes={LIST}
+          actions={a}
+          gate={GATE}
+        />,
+      ),
+    );
+    expect(screen.getByText(/3 swimlanes are already made/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(a.add).not.toHaveBeenCalled();
+    expect(a.setManualSource).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not rewrite a source that is already hand-made (a setup after undoing one)', async () => {
+    const a = actions();
+    const onClose = vi.fn();
+    render(
+      withAnnouncer(
+        <SwimlaneSetupDialog
+          open
+          onClose={onClose}
+          plan={{ id: 'p1', version: 7, swimlaneSource: 'MANUAL' }}
+          swimlanes={[]}
+          actions={a}
+          gate={GATE}
+        />,
+      ),
+    );
+    type('Civil');
+    submit();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(a.add).toHaveBeenCalledWith(['Civil']);
+    expect(a.setManualSource).not.toHaveBeenCalled();
+  });
+
+  it('puts focus in the field when it refuses, so the problem is where the caret is', async () => {
+    mount(actions());
+    submit();
+    await screen.findByRole('alert');
+    expect(screen.getByRole('textbox', { name: /Swimlane names/ })).toHaveFocus();
   });
 
   it('shades Set up without the pen, saying why, and writes nothing', () => {
@@ -259,7 +316,51 @@ describe('the manage dialog', () => {
     const a = actions({ move: vi.fn().mockRejectedValue(new Error('Changed elsewhere.')) });
     mount(a);
     fireEvent.click(screen.getByRole('button', { name: 'Move Mechanical up' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Changed elsewhere.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not move Mechanical: Changed elsewhere.',
+    );
+  });
+
+  it('puts focus in the New swimlane field when the name is refused', () => {
+    mount(actions());
+    fireEvent.change(screen.getByRole('textbox', { name: 'New swimlane' }), {
+      target: { value: 'civil' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add swimlane' }));
+    expect(screen.getByRole('textbox', { name: 'New swimlane' })).toHaveFocus();
+  });
+
+  it('says nothing about a name to a reader who cannot add at all', () => {
+    mount(actions(), PEN);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New swimlane' }), {
+      target: { value: 'civil' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add swimlane' }));
+    expect(screen.queryByText(/already exists/)).not.toBeInTheDocument();
+  });
+
+  it('arms no refocus for a move that did not land, so it cannot steal focus later', async () => {
+    const a = actions({ move: vi.fn().mockResolvedValue(false) });
+    const { rerender } = mount(a);
+    const button = screen.getByRole('button', { name: 'Move Mechanical up' });
+    fireEvent.click(button);
+    await waitFor(() => expect(a.move).toHaveBeenCalled());
+    (document.activeElement as HTMLElement | null)?.blur();
+    rerender(
+      withAnnouncer(
+        <SwimlaneManageDialog
+          open
+          onClose={vi.fn()}
+          swimlanes={[LIST[1]!, LIST[0]!, LIST[2]!]}
+          memberCounts={new Map()}
+          actions={a}
+          gate={GATE}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      ),
+    );
+    expect(document.body).toHaveFocus();
   });
 
   it('says so when there are none', () => {
@@ -301,6 +402,11 @@ describe('the rename dialog', () => {
     await waitFor(() => expect(announced()).toBe('Swimlane renamed to Mech & Plumbing.'));
   });
 
+  it('opens with focus in the field (focus, not just select), after the dialog has opened', async () => {
+    mount(actions());
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus());
+  });
+
   it('closes without a write when the name is unchanged', () => {
     const a = actions();
     const onClose = vi.fn();
@@ -328,7 +434,13 @@ describe('the rename dialog', () => {
 });
 
 describe('the delete confirmation', () => {
-  const mount = (a: SwimlaneActions, count: number, onClose = vi.fn()) =>
+  const onDeleted = vi.fn();
+  const mount = (
+    a: SwimlaneActions,
+    count: number,
+    onClose = vi.fn(),
+    onDeletedCb: (s: SwimlaneSummary) => void = vi.fn(),
+  ) =>
     render(
       withAnnouncer(
         <SwimlaneDeleteDialog
@@ -337,6 +449,7 @@ describe('the delete confirmation', () => {
           swimlane={LIST[1]!}
           memberCount={count}
           actions={a}
+          onDeleted={onDeletedCb}
         />,
       ),
     );
@@ -352,10 +465,15 @@ describe('the delete confirmation', () => {
   it('deletes at the swimlane’s version, announces, and closes', async () => {
     const a = actions();
     const onClose = vi.fn();
-    mount(a, 3, onClose);
+    mount(a, 3, onClose, onDeleted);
     fireEvent.click(screen.getByRole('button', { name: 'Delete swimlane' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(a.remove).toHaveBeenCalledWith(LIST[1]);
+    // Told before it closes, so the host can choose where focus goes.
+    expect(onDeleted).toHaveBeenCalledWith(LIST[1]);
+    expect(onDeleted.mock.invocationCallOrder[0]!).toBeLessThan(
+      onClose.mock.invocationCallOrder[0]!,
+    );
     await waitFor(() =>
       expect(announced()).toBe('Swimlane Mechanical deleted. Undo brings it back.'),
     );
@@ -366,7 +484,9 @@ describe('the delete confirmation', () => {
     const onClose = vi.fn();
     mount(a, 3, onClose);
     fireEvent.click(screen.getByRole('button', { name: 'Delete swimlane' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Changed elsewhere.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not delete Mechanical: Changed elsewhere.',
+    );
     expect(onClose).not.toHaveBeenCalled();
   });
 });

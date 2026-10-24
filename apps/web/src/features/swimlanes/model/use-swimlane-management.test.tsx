@@ -10,7 +10,7 @@ import { useSwimlaneManagement } from './use-swimlane-management';
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { gutterWidthForRoom } from '@/features/tsld/render/swimlane-gutter';
 import type { Command } from '@/features/undo-redo';
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { swimlaneKeys } from '@/lib/query/hierarchy-keys';
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({
@@ -43,6 +43,9 @@ function setup() {
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(apiFetch).mockReset();
+  vi.mocked(apiFetchAllPages)
+    .mockReset()
+    .mockResolvedValue([row('a', 'A'), row('b', 'B')]);
 });
 
 describe('useSwimlaneActions', () => {
@@ -246,7 +249,10 @@ describe('useSwimlaneManagement', () => {
     // The dialogs are what open the list query; a move from the gutter reads the cache the scene holds.
     act(() => result.current.openSwimlanes());
     await waitFor(() => expect(result.current.dialogs.swimlanes).toHaveLength(2));
-    act(() => result.current.gutterActions.onMove('b', -1));
+    // A block body: an arrow returning the promise would make `act` wait on it as an async act.
+    act(() => {
+      void result.current.gutterActions.onMove('b', -1);
+    });
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     const [path, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(path).toBe('/organizations/acme/plans/p1/swimlanes/order');
@@ -255,6 +261,93 @@ describe('useSwimlaneManagement', () => {
         { id: 'b', version: 1 },
         { id: 'a', version: 1 },
       ],
+    });
+  });
+
+  it('says Set up for a hand-made plan with no swimlanes left (undoing a setup leaves MANUAL)', () => {
+    const { result } = mount({ swimlaneCount: 0 });
+    expect(result.current.manageLabel).toBe('Set up swimlanes…');
+    act(() => result.current.openSwimlanes());
+    expect(result.current.dialogs.state.setup).toBe(true);
+  });
+
+  it('lets only one gutter move run at a time, and says why a refused one failed in plain words', async () => {
+    let finish: (v: unknown) => void = () => undefined;
+    vi.mocked(apiFetch).mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    const { result } = mount();
+    act(() => result.current.openSwimlanes());
+    await waitFor(() => expect(result.current.dialogs.swimlanes).toHaveLength(2));
+    let first!: Promise<boolean>;
+    let second!: Promise<boolean>;
+    act(() => {
+      first = result.current.gutterActions.onMove('b', -1);
+      second = result.current.gutterActions.onMove('b', -1);
+    });
+    expect(await second).toBe(false);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    finish([row('b', 'B'), row('a', 'A')]);
+    expect(await first).toBe(true);
+
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('Version conflict.'));
+    let third!: Promise<boolean>;
+    act(() => {
+      third = result.current.gutterActions.onMove('a', 1);
+    });
+    expect(await third).toBe(false);
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        'Could not move A: Version conflict.',
+      ),
+    );
+  });
+
+  describe('focus after a delete (the dialog would hand it to the label that has just gone)', () => {
+    function surface(): void {
+      document.body.insertAdjacentHTML(
+        'beforeend',
+        `<div data-testid="tsld-swimlane-gutter-labels" tabindex="-1">
+           <button data-swimlane="b">B</button><button data-swimlane="none">none</button>
+         </div>`,
+      );
+    }
+
+    it('moves it to the neighbouring label once the dialog has closed and the row has left', async () => {
+      surface();
+      const rafs: FrameRequestCallback[] = [];
+      const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        rafs.push(cb);
+        return rafs.length;
+      });
+      const { queryClient, wrapper } = setup();
+      queryClient.setQueryData(swimlaneKeys.byPlan('acme', 'p1'), [row('a', 'A'), row('b', 'B')]);
+      const { result } = renderHook(() => useSwimlaneManagement(args), { wrapper });
+      act(() => result.current.gutterActions.onDelete('a'));
+      // Let the list the open dialog asked for settle before the deletion lands.
+      await act(async () => {});
+      // The confirmation succeeds: told first, then it closes.
+      act(() => result.current.dialogs.afterDelete(row('a', 'A')));
+      // Still listed, so nothing yet.
+      act(() => result.current.dialogs.close('deleteId'));
+      expect(rafs).toHaveLength(0);
+      // The refetch lands without it.
+      act(() => {
+        queryClient.setQueryData(swimlaneKeys.byPlan('acme', 'p1'), [row('b', 'B')]);
+      });
+      await waitFor(() => expect(result.current.dialogs.swimlanes).toHaveLength(1));
+      expect(rafs).toHaveLength(1);
+      act(() => rafs[0]!(0));
+      expect(document.activeElement).toHaveAttribute('data-swimlane', 'b');
+      raf.mockRestore();
+      document.body.innerHTML = '';
+    });
+
+    it('does nothing for a delete that was cancelled', () => {
+      const raf = vi.spyOn(window, 'requestAnimationFrame');
+      const { result } = mount();
+      act(() => result.current.gutterActions.onDelete('a'));
+      act(() => result.current.dialogs.close('deleteId'));
+      expect(raf).not.toHaveBeenCalled();
+      raf.mockRestore();
     });
   });
 

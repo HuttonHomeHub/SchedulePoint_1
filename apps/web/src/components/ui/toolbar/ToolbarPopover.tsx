@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useId, useRef } from 'react';
 
+import { PopoverCloseContext } from './popover-close';
 import type { ToolbarItemRenderApi, ToolbarLabelState } from './toolbar-registry';
 import { toolbarControlVariants, toolbarIconClass, toolbarLabelClass } from './toolbar-styles';
 import { useCloseWhenChanged } from './use-close-when-changed';
@@ -271,7 +272,12 @@ export function ToolbarPopover({
         {tip.tooltip}
       </button>
 
-      {panel(label, children)}
+      {panel(
+        label,
+        <PopoverCloseContext.Provider value={() => close(true)}>
+          {children}
+        </PopoverCloseContext.Provider>,
+      )}
     </>
   );
 }

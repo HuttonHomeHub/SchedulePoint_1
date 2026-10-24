@@ -139,7 +139,12 @@ export function useTsldToolbarContext({
    * lens state this hook's `canvasUi` owns, and the export reads the same input the canvas does.
    * `failed` is optional: the list's failure is reported by the host once the scene carries it.
    */
-  swimlaneScene: { input: SwimlaneInput | null; pending: boolean; failed?: boolean };
+  swimlaneScene: {
+    input: SwimlaneInput | null;
+    pending: boolean;
+    failed?: boolean;
+    count?: number | undefined;
+  };
   /** The Set up / Manage swimlanes command (M2-T9): its label and what it opens. Both stable. */
   swimlanesManage?: { label: string; open: () => void };
   /** Whether swimlanes are shown, computed once by the host (`swimlanesShown`) and read by its scene too. */
@@ -722,7 +727,7 @@ export function useTsldToolbarContext({
       levelResources: plan.levelResources,
       swimlanesShown: swimlaneLensShown,
       toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
-      swimlanesSetUp: plan.swimlaneSource !== 'NONE',
+      swimlanesSetUp: plan.swimlaneSource !== 'NONE' && swimlaneScene.count !== 0,
       swimlanesLoading: swimlaneScene.pending,
       swimlanesManage,
       ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
@@ -1085,6 +1090,7 @@ export function useTsldToolbarContext({
     plan.swimlaneSource,
     swimlaneScene.pending,
     swimlaneScene.failed,
+    swimlaneScene.count,
     swimlanesManage,
     hasActiveBaseline,
     varianceLoading,

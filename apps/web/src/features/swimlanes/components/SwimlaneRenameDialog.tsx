@@ -1,6 +1,7 @@
 import type { SwimlaneSummary } from '@repo/types';
 import { useEffect, useRef, useState } from 'react';
 
+import { swimlaneErrorText } from '../model/swimlane-errors';
 import { swimlaneNameProblem } from '../model/swimlane-names';
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
 
@@ -45,15 +46,23 @@ function RenameForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const fieldRef = useRef<HTMLInputElement>(null);
-  // A one-field dialog opens with the caret in the field. Not `autoFocus`, which moves focus on every
-  // mount of the attribute; this runs once per opening, since the form mounts with the dialog.
-  useEffect(() => fieldRef.current?.select(), []);
+  // A one-field dialog opens with the caret in the field. Deferred one microtask: this child's effect
+  // runs BEFORE `Dialog`'s own (which calls `showModal()`, whose focusing steps would move focus to the
+  // first control — Close — right after). Not `autoFocus`, which would lose that race the same way.
+  useEffect(() => {
+    queueMicrotask(() => {
+      fieldRef.current?.focus();
+      // `select()` alone does not move focus.
+      fieldRef.current?.select();
+    });
+  }, []);
 
   const submit = async (): Promise<void> => {
     if (pending || !gate.writable) return;
     const problem = swimlaneNameProblem(name, otherNames);
     if (problem !== null) {
       setError(problem);
+      fieldRef.current?.focus();
       return;
     }
     if (name.trim() === swimlane.name) {
@@ -67,7 +76,8 @@ function RenameForm({
       announce(`Swimlane renamed to ${saved.name}.`);
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Something went wrong.');
+      setError(swimlaneErrorText(`rename ${swimlane.name}`, cause));
+      fieldRef.current?.focus();
     } finally {
       setPending(false);
     }

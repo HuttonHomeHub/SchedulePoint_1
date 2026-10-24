@@ -91,6 +91,7 @@ import { Disclosure } from '@/components/ui/disclosure';
 import { CheckboxField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
+import { usePopoverClose } from '@/components/ui/toolbar/popover-close';
 import {
   isPromoted,
   derivePromotedItems,
@@ -2268,8 +2269,8 @@ function ZoomStepButton({
  */
 function SwimlanesManageButton({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   const reasonId = useId();
-  const reason =
-    ctx.scheduleRefusal(ctx.swimlanesSetUp ? 'manage swimlanes' : 'set up swimlanes') ?? undefined;
+  const closePanel = usePopoverClose();
+  const reason = ctx.scheduleRefusal('change swimlanes') ?? undefined;
   return (
     <div className="flex flex-col gap-1 pl-6">
       <Button
@@ -2280,7 +2281,11 @@ function SwimlanesManageButton({ ctx }: { ctx: TsldToolbarContext }): React.Reac
         aria-disabled={reason !== undefined || undefined}
         aria-describedby={reason !== undefined ? reasonId : undefined}
         onClick={() => {
-          if (reason === undefined) ctx.swimlanesManage.open();
+          if (reason !== undefined) return;
+          // Close the panel first and synchronously: the dialog returns focus to what held it when it
+          // opened, and that must be the View ▾ trigger, not a button the panel is about to unmount.
+          closePanel?.();
+          ctx.swimlanesManage.open();
         }}
         className="justify-start"
       >

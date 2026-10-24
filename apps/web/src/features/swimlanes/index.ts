@@ -12,6 +12,7 @@ export {
 export { SwimlaneDialogs } from './components/SwimlaneDialogs';
 export {
   useSwimlaneManagement,
+  type SwimlaneDialogState,
   type SwimlaneDialogsProps,
   type SwimlaneManagement,
 } from './model/use-swimlane-management';

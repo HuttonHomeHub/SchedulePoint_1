@@ -1,6 +1,7 @@
 import type { SwimlaneSummary } from '@repo/types';
 import { useState } from 'react';
 
+import { swimlaneErrorText } from '../model/swimlane-errors';
 import { deleteConsequence } from '../model/swimlane-order';
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
 
@@ -14,6 +15,11 @@ export interface SwimlaneDeleteDialogProps {
   /** How many activities are in it now: the sentence names the number. */
   memberCount: number;
   actions: SwimlaneActions;
+  /**
+   * Told once the delete has landed and before the dialog closes, so the host can choose where focus
+   * goes: the control the dialog would restore it to is the one that was just deleted.
+   */
+  onDeleted?: (swimlane: SwimlaneSummary) => void;
 }
 
 /**
@@ -29,6 +35,7 @@ export function SwimlaneDeleteDialog({
   swimlane,
   memberCount,
   actions,
+  onDeleted,
 }: SwimlaneDeleteDialogProps): React.ReactElement {
   const announce = useAnnounce();
   const [pending, setPending] = useState(false);
@@ -56,11 +63,11 @@ export function SwimlaneDeleteDialog({
           .remove(swimlane)
           .then(
             () => {
+              onDeleted?.(swimlane);
               announce(`Swimlane ${swimlane.name} deleted. Undo brings it back.`);
               close();
             },
-            (cause: unknown) =>
-              setError(cause instanceof Error ? cause.message : 'Something went wrong.'),
+            (cause: unknown) => setError(swimlaneErrorText(`delete ${swimlane.name}`, cause)),
           )
           .finally(() => setPending(false));
       }}
