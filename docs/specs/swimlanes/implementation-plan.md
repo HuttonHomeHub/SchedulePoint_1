@@ -698,6 +698,16 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
   2. Add the journey.
   3. Add the changeset.
   4. Run the gate.
+- **As built (2026-10-24):** `SWIMLANES_LENS_OFFERED` and the lens's `enabled` flipped together (the
+  one-switch test holds them equal). The journey is `e2e-swimlanes/swimlanes-by-hand.spec.ts` in
+  `playwright.swimlanes.config.ts`, on shard 1 and in `scripts/e2e-durations.json`. **Two deviations
+  from the eleven steps above:** the seeded `plan:capability-swimlanes` is already `MANUAL` with three
+  swimlanes, so the lens's button reads **Swimlanes…** and opens the Manage dialog (the journey asks for
+  either label); and steps 4–6 select the pair `Pile caps` / `Ground-bearing slab pour`, which do not
+  overlap in time, so both land in lane 1 of Mechanical and `Alt+↓` takes one to "lane 2 of 2". The
+  legend gained its **Swimlane boundary** row (shown only while swimlanes are drawn). Separate cases
+  drive the focus claims carried forward from T9 and the 1024 × 600 floor (the View panel's height and
+  the gutter's room).
 
 **M2 gate (before M2-T11 merges):** the accessibility-, component-, ux- and performance-reviewer
 on the combined UI diff. Blocking findings are folded in, as in ADR-0063 §10.

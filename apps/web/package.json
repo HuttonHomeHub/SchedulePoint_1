@@ -61,6 +61,7 @@
     "test:e2e:arrange": "playwright test --config playwright.arrange.config.ts --pass-with-no-tests",
     "test:e2e:netpoint-grammar": "playwright test --config playwright.netpoint-grammar.config.ts",
     "test:e2e:wbs": "playwright test --config playwright.wbs.config.ts --pass-with-no-tests",
+    "test:e2e:swimlanes": "playwright test --config playwright.swimlanes.config.ts",
     "test:e2e:recently-deleted": "playwright test --config playwright.recently-deleted.config.ts --pass-with-no-tests",
     "test:e2e:audit": "playwright test --config playwright.audit.config.ts --pass-with-no-tests",
     "test:e2e:account": "playwright test --config playwright.account.config.ts --pass-with-no-tests",
