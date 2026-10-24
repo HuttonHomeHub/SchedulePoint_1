@@ -14,6 +14,7 @@ import {
   lensCheckbox,
   manageButton,
   openManageFromView,
+  openPlainPlan,
   openSeededPlan,
   openStructure,
   option,
@@ -110,6 +111,10 @@ test.describe('swimlanes by hand', () => {
       await cursorTo(page, 'Pile caps');
       await list.press('Alt+ArrowDown');
       await expect(option(page, 'Pile caps')).toContainText(/in Mechanical, lane 2 of 2/);
+      // The live region says it in the swimlane's terms, never a bare "lane 2" (the C9 form).
+      await expect(page.getByTestId('announcer')).toContainText(
+        /Moved “Pile caps”.*Mechanical, lane 2 of 2/,
+      );
     });
 
     const inSwimlanes = await optionSentences(page);
@@ -404,6 +409,192 @@ test.describe('swimlanes by hand', () => {
     await expectFocused(page, same);
     await expect(same).not.toHaveAttribute('data-parked', 'true');
   });
+
+  test('Set up swimlanes… on a plan with none: focus returns to View ▾ after Cancel, Escape and a successful setup', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await openPlainPlan(page, Date.now() + 12);
+    await ensurePen(page);
+    const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+    const names = dialog.getByLabel('Swimlane names, one per line');
+
+    const openSetup = async (): Promise<void> => {
+      const panel = await openStructure(page);
+      await panel.getByRole('button', { name: 'Set up swimlanes…', exact: true }).click();
+      await expect(dialog).toBeVisible();
+    };
+
+    await test.step('before setup the lens is shut and says why', async () => {
+      const panel = await openStructure(page);
+      const lens = lensCheckbox(panel);
+      await expect(lens).toHaveAttribute('aria-disabled', 'true');
+      await expect(lens).toHaveAccessibleDescription(/No swimlanes have been set up/);
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+    });
+
+    await test.step('Cancel returns focus to View ▾', async () => {
+      await openSetup();
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expectFocused(page, viewTrigger(page));
+    });
+
+    await test.step('Escape returns focus to View ▾', async () => {
+      await openSetup();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expectFocused(page, viewTrigger(page));
+    });
+
+    await test.step('submitting nothing names the problem and puts the caret in the field', async () => {
+      await openSetup();
+      await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('Enter at least one swimlane name.');
+      await expectFocused(page, names);
+    });
+
+    await test.step('a name per line sets the plan up, returns focus to View ▾ and makes the lens usable', async () => {
+      await names.fill('Civil\nMechanical');
+      await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expectFocused(page, viewTrigger(page));
+      await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 15_000 });
+      await expect(
+        gutterLabels(page).getByRole('button', { name: /^Civil, swimlane 1 of 2/ }),
+      ).toHaveCount(1);
+      const panel = await openStructure(page);
+      const lens = lensCheckbox(panel);
+      await expect(lens).toBeChecked();
+      await expect(lens).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(manageButton(panel)).toHaveText('Swimlanes…');
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+    });
+
+    await test.step('deleting the last named swimlane never drops focus to the page', async () => {
+      const labels = gutterLabels(page);
+      const confirm = page.getByRole('button', { name: 'Delete swimlane', exact: true });
+      for (const name of [/^Civil/, /^Mechanical/]) {
+        await labels.getByRole('button', { name }).click();
+        await page.getByRole('menuitem', { name: 'Delete…' }).click();
+        await confirm.click();
+        await expect(confirm).toBeHidden();
+      }
+      // The gutter may remain (with "No swimlane") or go with the last swimlane; either way focus is
+      // on something in the product: a gutter stop, the View ▾ trigger or the diagram's listbox.
+      await expect
+        .poll(
+          async () =>
+            page.evaluate(() => {
+              const el = document.activeElement;
+              return (
+                el !== null &&
+                el !== document.body &&
+                el.matches(
+                  [
+                    '[data-testid="tsld-swimlane-gutter-labels"] [data-swimlane]',
+                    '[data-testid="tsld-swimlane-gutter-labels"]',
+                    '[data-testid="tsld-swimlane-gutter-corner"] button',
+                    '[data-toolbar-item="view"]',
+                    '[role="listbox"][aria-label="Activities in the diagram"]',
+                  ].join(','),
+                )
+              );
+            }),
+          { message: 'focus is on a gutter stop, View ▾ or the listbox, never <body>' },
+        )
+        .toBe(true);
+    });
+  });
+
+  test('the single-activity Move to swimlane… popover keeps its arrows, closes on Escape and hands focus back', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    await openSeededPlan(page, Date.now() + 14);
+    await ensurePen(page);
+    const list = diagramList(page);
+    await list.focus();
+    await list.press('Escape');
+    await cursorTo(page, 'Pile caps');
+
+    const bar = page.getByRole('toolbar', { name: 'Actions for Pile caps' });
+    const trigger = bar.getByRole('button', { name: 'Move to swimlane…' });
+    const popover = page.getByRole('dialog', { name: 'Move to swimlane…' });
+    const select = popover.getByLabel('Move to', { exact: true });
+
+    await test.step('opening puts focus on the select', async () => {
+      await trigger.click();
+      await expect(popover).toBeVisible();
+      await expectFocused(page, select);
+    });
+
+    await test.step('the arrows stay in the select, and do not rove the toolbar', async () => {
+      for (const key of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'Home', 'End']) {
+        await page.keyboard.press(key);
+        await expectFocused(page, select);
+      }
+    });
+
+    await test.step('Escape closes the popover and returns focus to its trigger', async () => {
+      await page.keyboard.press('Escape');
+      await expect(popover).toBeHidden();
+      await expectFocused(page, trigger);
+    });
+
+    await test.step('Move lands, and focus is on the trigger afterwards', async () => {
+      await trigger.click();
+      await select.selectOption({ label: 'No swimlane' });
+      await popover.getByRole('button', { name: 'Move', exact: true }).click();
+      await expect(popover).toBeHidden();
+      await expectFocused(page, trigger);
+      await expect(
+        list.getByRole('group', { name: 'No swimlane', exact: true }).getByRole('option').filter({
+          hasText: 'Pile caps',
+        }),
+      ).toHaveCount(1);
+    });
+  });
+
+  test('the selection bar shades Move to swimlane… with the way out while swimlanes are off', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await openSeededPlan(page, Date.now() + 15);
+    await ensurePen(page);
+    await setLens(page, false);
+    const list = diagramList(page);
+    await list.focus();
+    await list.press('Escape');
+    await cursorTo(page, 'Pile caps');
+    const trigger = page
+      .getByRole('toolbar', { name: 'Actions for Pile caps' })
+      .getByRole('button', { name: 'Move to swimlane…' });
+    await expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    await expect(trigger).toHaveAccessibleDescription(
+      'Turn on Swimlanes in View to move activities between them.',
+    );
+  });
+
+  test('the minimap’s readout names the swimlanes in view, never bare lane numbers', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await openSeededPlan(page, Date.now() + 16);
+    const toggle = page
+      .getByRole('toolbar', { name: 'Diagram viewport' })
+      .getByRole('button', { name: 'Minimap' });
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+    const minimap = page.getByTestId('tsld-minimap');
+    await expect(minimap).toBeVisible();
+    await minimap.focus();
+    await page.keyboard.press('Home');
+    const announcer = page.getByTestId('announcer');
+    await expect(announcer).toContainText(/Viewing .+, .*swimlane/);
+    await expect(announcer).not.toContainText(/, lanes \d+–\d+\./);
+  });
 });
 
 /**
@@ -482,6 +673,20 @@ test.describe('the 1024 × 600 floor', () => {
       }
     }
     expect(closed.width).toBeGreaterThan(open.width);
+  });
+
+  test('a window too narrow for the names collapses the gutter and says so', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openSeededPlan(page, Date.now() + 13);
+    // Far enough below the floor that the diagram is narrower than the gutter's 776 px threshold
+    // whatever the rail is doing.
+    await page.setViewportSize({ width: 700, height: 600 });
+    await expect(page.getByTestId('announcer')).toContainText(
+      'Swimlane names collapsed: there is not enough room to show them.',
+    );
+    const toggle = page.getByRole('button', { name: 'Swimlane names' });
+    await expect(toggle).toHaveAttribute('aria-disabled', 'true');
+    expect((await page.getByTestId('tsld-swimlane-gutter').boundingBox())!.width).toBeLessThan(100);
   });
 });
 

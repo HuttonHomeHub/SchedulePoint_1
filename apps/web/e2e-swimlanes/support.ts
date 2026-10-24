@@ -62,6 +62,49 @@ async function openProject(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Riverside' }).click();
 }
 
+/**
+ * Sign up and open a plan whose swimlane source is **NONE** (the default for a new plan), with two
+ * dated activities so there is a diagram for the lens to be about. Made through the public API, like
+ * the seeded plan: drawing the bars by hand would measure the canvas, not the setup.
+ *
+ * Returns the organisation slug. The pen is NOT taken.
+ */
+export async function openPlainPlan(page: Page, stamp: number): Promise<string> {
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  const projectId = /projects\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+  if (!projectId) throw new Error(`no project id in ${page.url()}`);
+  await page.evaluate(
+    async ({ org, project }: { org: string; project: string }) => {
+      const call = async (path: string, body?: unknown): Promise<{ id: string }> => {
+        const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        if (!response.ok) {
+          throw new Error(`POST ${path} ${String(response.status)}: ${await response.text()}`);
+        }
+        return ((await response.json()) as { data: { id: string } }).data;
+      };
+      const plan = await call(`/projects/${project}/plans`, {
+        name: 'A plan with no swimlanes',
+        plannedStart: '2026-01-05',
+      });
+      await call(`/plans/${plan.id}/activities`, { name: 'Dig footings', durationDays: 10 });
+      await call(`/plans/${plan.id}/activities`, { name: 'Pour slab', durationDays: 5 });
+      await call(`/plans/${plan.id}/schedule/recalculate`);
+    },
+    { org: orgSlug, project: projectId },
+  );
+  await page.reload();
+  await page.getByRole('link', { name: 'A plan with no swimlanes' }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+  await expect(diagramList(page).getByRole('option')).toHaveCount(2, { timeout: 30_000 });
+  return orgSlug;
+}
+
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());
