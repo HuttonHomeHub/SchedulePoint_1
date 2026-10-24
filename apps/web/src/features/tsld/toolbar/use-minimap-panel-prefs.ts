@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+
+import { useDevicePref } from '@/hooks/use-device-pref';
 
 /**
  * Persisted UI state for the **minimap panel** (ADR-0100, minimap M2-T3) — open or not.
@@ -17,31 +19,20 @@ export interface UseMinimapPanelPrefs {
 
 const STORAGE_KEY = 'schedulepoint-tsld-minimap';
 
-function readOpen(): boolean {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { open?: unknown };
-      return parsed.open === true;
-    }
-  } catch {
-    // Corrupt storage (or access denied) → the default (closed).
-  }
-  return false;
+interface MinimapPrefs {
+  open: boolean;
+}
+
+// A non-boolean `open` is closed rather than truthy.
+function parsePrefs(raw: unknown): MinimapPrefs {
+  const open = typeof raw === 'object' && raw !== null && (raw as { open?: unknown }).open === true;
+  return { open };
 }
 
 export function useMinimapPanelPrefs(): UseMinimapPanelPrefs {
-  const [open, setOpen] = useState<boolean>(readOpen);
+  const [prefs, setPrefs] = useDevicePref(STORAGE_KEY, parsePrefs, { open: false });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open }));
-    } catch {
-      // Storage full or disabled — the preference simply won't persist.
-    }
-  }, [open]);
-
-  const toggle = useCallback(() => setOpen((o) => !o), []);
-  const close = useCallback(() => setOpen(false), []);
-  return { open, toggle, close };
+  const toggle = useCallback(() => setPrefs((p) => ({ open: !p.open })), [setPrefs]);
+  const close = useCallback(() => setPrefs({ open: false }), [setPrefs]);
+  return { open: prefs.open, toggle, close };
 }
