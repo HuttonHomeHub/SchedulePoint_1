@@ -91,6 +91,20 @@ export class InterchangeCountsResponseDto {
     description: 'Activities whose row was restored from a SchedulePoint XER (layout-interchange).',
   })
   lanes?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Swimlanes created from a SchedulePoint XER (swimlanes M4-T4). Absent for a file from another ' +
+      'tool and when `restoreLayout` is `IGNORE`.',
+  })
+  swimlanes?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Activities placed in one of those swimlanes (swimlanes M4-T4).',
+  })
+  swimlaneMembers?: number;
 }
 
 /** The library resource an imported one collides with, named so a planner can tell whether it is the same crew. */
@@ -246,6 +260,10 @@ export class InterchangeReportResponseDto {
           : { assignments: report.mapped.assignments }),
         ...(report.mapped.placements === undefined ? {} : { placements: report.mapped.placements }),
         ...(report.mapped.lanes === undefined ? {} : { lanes: report.mapped.lanes }),
+        ...(report.mapped.swimlanes === undefined ? {} : { swimlanes: report.mapped.swimlanes }),
+        ...(report.mapped.swimlaneMembers === undefined
+          ? {}
+          : { swimlaneMembers: report.mapped.swimlaneMembers }),
       },
       approximations: report.approximations.map(toFinding),
       repairs: report.repairs.map(toFinding),

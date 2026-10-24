@@ -13,7 +13,7 @@ import {
   type ResourceCollisionResolution,
   type RestoreLayout,
 } from '@repo/interchange';
-import { drawnSpanDays, packAroundCarried, packLanes } from '@repo/layout';
+import { drawnSpanDays, packAroundCarried, packLanes, type PackItem } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -44,6 +44,7 @@ import { ProjectRepository } from '../projects/project.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import { ResourceRepository } from '../resources/resource.repository';
 import { ScheduleService } from '../schedule/schedule.service';
+import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
@@ -146,6 +147,7 @@ export class InterchangeService {
     private readonly dependencies: DependencyRepository,
     private readonly resources: ResourceRepository,
     private readonly assignments: ResourceAssignmentRepository,
+    private readonly swimlanes: SwimlaneRepository,
     private readonly schedule: ScheduleService,
     private readonly editLock: PlanEditLockService,
     private readonly audit: AuditService,
@@ -405,6 +407,43 @@ export class InterchangeService {
       );
     }
 
+    // Phase 3c — lay each swimlane's members out in the lanes inside it (swimlanes M4-T4). Best effort
+    // for the same reason as phase 3: the plan is correct without it, because a member with no stored
+    // lane is placed on read (`deriveSwimlaneLanes`), so a failure here costs only the saved picture.
+    const carriedSwimlaneLanes = new Map<string, number>();
+    for (const activity of graph.activities) {
+      if (activity.swimlaneKey != null && activity.swimlaneLane != null) {
+        carriedSwimlaneLanes.set(activity.code, activity.swimlaneLane);
+      }
+    }
+    let swimlaneOverlaps = 0;
+    if ((graph.swimlanes?.length ?? 0) > 0) {
+      try {
+        swimlaneOverlaps = (
+          await this.packImportedSwimlaneLanes(
+            organization.id,
+            planId,
+            carriedSwimlaneLanes,
+            principal.userId,
+          )
+        ).carriedOverlaps;
+      } catch (error) {
+        this.logger.warn(
+          { organizationId: organization.id, planId, err: error },
+          'interchange commit could not lay out swimlane lanes — plan kept, lanes derived on read',
+        );
+      }
+    }
+    if (swimlaneOverlaps > 0) {
+      report.approximations.push({
+        kind: 'approximation',
+        entity: 'activity',
+        sourceRef: null,
+        detail: `${String(swimlaneOverlaps)} activit${swimlaneOverlaps === 1 ? 'y overlaps' : 'ies overlap'} another in ${swimlaneOverlaps === 1 ? 'its' : 'their'} lane inside a swimlane — Arrange can lay them out again`,
+        reason: 'the lanes inside swimlanes were kept as the file carried them',
+      });
+    }
+
     // Phase 3b — say where the restored picture and the plan now disagree (spec §4.7, M2-T6). Best
     // effort for the same reason as phase 3: the import is durable and correct, so a failed read omits
     // two sentences rather than failing a plan that exists.
@@ -556,6 +595,14 @@ export class InterchangeService {
           // The mandatory CPM data date (ADR-0033): the source data date → `plannedStart`.
           plannedStart: parseCalendarDate(graph.plan.dataDate),
           ...(defaultCalendarId ? { calendarId: defaultCalendarId } : {}),
+          // Restored from a SchedulePoint XER (swimlanes M4-T4); the pair satisfies
+          // `ck_plans_swimlane_source_level` because the reader only produces a WBS source with a level.
+          ...(graph.plan.swimlaneSource === undefined
+            ? {}
+            : {
+                swimlaneSource: graph.plan.swimlaneSource,
+                swimlaneWbsLevel: graph.plan.swimlaneWbsLevel ?? null,
+              }),
           ...stamp,
         },
         tx,
@@ -575,6 +622,27 @@ export class InterchangeService {
     for (const activity of graph.activities) {
       activityIdByKey.set(activity.key, randomUUID());
     }
+
+    // 3a. The swimlanes, before the activities that name them (`activities.swimlane_id` is a composite
+    // FK). The reader has already shaped each name to `ck_swimlanes_name_shape` and de-duplicated them
+    // ignoring case, because one `23505` on `uq_swimlanes_plan_name` would roll back the whole import.
+    // `position` is the file's order. The rows go in one batch, like everything else here.
+    const swimlaneIdByKey = new Map<string, string>();
+    const swimlaneRows: Prisma.SwimlaneCreateManyInput[] = (graph.swimlanes ?? []).map(
+      (swimlane, position) => {
+        const id = randomUUID();
+        swimlaneIdByKey.set(swimlane.key, id);
+        return {
+          id,
+          organizationId,
+          planId: plan.id,
+          name: swimlane.name,
+          position,
+          ...stamp,
+        };
+      },
+    );
+    await this.swimlanes.createManyForImport(swimlaneRows, tx);
     // Map source key → id (deterministic lane per source order), batch-insert. The pure pipeline already
     // guaranteed WBS/constraint/progress consistency (acyclic same-plan tree, paired constraints,
     // deriveStatus/N08/N18/resume≥suspend), so every field is written verbatim.
@@ -600,6 +668,11 @@ export class InterchangeService {
           // The row a SchedulePoint XER carried, else the source position — phase 3 packs every row
           // that was not carried (layout-interchange, spec §4.7).
           laneIndex: activity.laneIndex ?? laneIndex,
+          // Hand-made membership a SchedulePoint XER carried (swimlanes M4-T4). A key naming no
+          // swimlane is impossible from the mapper; if it ever happened the activity is simply unassigned.
+          ...(activity.swimlaneKey == null || activity.type === 'WBS_SUMMARY'
+            ? {}
+            : { swimlaneId: swimlaneIdByKey.get(activity.swimlaneKey) ?? null }),
           // The hand-placement a SchedulePoint XER carried (ADR-0148), written verbatim: the engine
           // decides what Pass 2 does with it, as it does for one a planner dragged.
           // Never on a WBS summary, whose dates are a rollup (ADR-0038): the reader already discards
@@ -1157,50 +1230,13 @@ export class InterchangeService {
       this.dependencies.findEdgesForPlan(organizationId, planId),
     ]);
 
-    // Day offsets about an arbitrary but FIXED origin. The packer only ever compares offsets to each
-    // other, so the origin cancels — what matters is that both ends of every span use the same one.
-    const DAY_MS = 86_400_000;
-    const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
-    const isoOf = (date: Date | null): string | null =>
-      date === null ? null : date.toISOString().slice(0, 10);
-
-    // **Keyed by CODE, not id** (layout-interchange M1). The packer breaks every tie on its item's
-    // `id` (`pack-lanes.ts`), and ids are UUIDv7 minted during this import, whose random bits decide
-    // those ties — one file imported seven times packed seven different ways
-    // (`docs/specs/layout-interchange/m0-measurement.md`, M0-T4). A code is unique within a plan and
-    // comes from the file, so the same file now lays out the same way every time.
-    // An import always sets a code (the XER `task_code`; the MSPDI fallback is its UID); a row without
-    // one keeps its id as the key, in a separate namespace so it can never collide with a code.
-    const keyOf = (a: { id: string; code: string | null }): string =>
-      a.code === null ? `id:${a.id}` : `code:${a.code}`;
-    const idOfCode = new Map(activities.map((a) => [keyOf(a), a.id] as const));
-    const codeOfId = new Map(activities.map((a) => [a.id, keyOf(a)] as const));
-
-    // **The DRAWN span, not the early one** (M1). The canvas draws a bar at its visual-effective
-    // dates, a finish milestone at the end of its day; packing on the early dates let an import open
-    // with bars overlapping in their rows on the first screen (M0-T4). `drawnSpanDays` is the rule the
-    // web draws with, shared through `@repo/layout` so the two cannot disagree.
-    const items = activities.flatMap((activity) => {
-      if (activity.visualEffectiveFinish === null) return [];
-      const span = drawnSpanDays(
-        {
-          type: activity.type,
-          start: isoOf(activity.visualEffectiveStart),
-          finish: isoOf(activity.visualEffectiveFinish),
-        },
-        dayOf,
-      );
-      return span === null
-        ? []
-        : [
-            {
-              id: keyOf(activity),
-              ...span,
-              laneIndex: activity.laneIndex,
-              carried: activity.code !== null && carriedCodes.has(activity.code),
-            },
-          ];
-    });
+    const { idOfCode, codeOfId, drawn } = layoutInputsOf(activities);
+    const items = drawn.map(({ key, span, activity }) => ({
+      id: key,
+      ...span,
+      laneIndex: activity.laneIndex,
+      carried: activity.code !== null && carriedCodes.has(activity.code),
+    }));
     if (items.length === 0) return { carriedOverlaps: 0 };
 
     // The three modes (spec §4.7). `packed`: nothing carried a row — pack everything, as a foreign file
@@ -1264,6 +1300,112 @@ export class InterchangeService {
     this.logger.info(
       { organizationId, planId, mode, activities: items.length, moved: positions.length },
       'interchange commit laid out lanes',
+    );
+    return { carriedOverlaps };
+  }
+
+  /**
+   * Lay the freshly-imported plan's swimlane members out inside their swimlanes (swimlanes M4-T4),
+   * through the same packers the diagram uses and the swimlane partition M0 gave them: a bar competes
+   * for a lane only with the bars of its own swimlane, and the numbers are local to the swimlane.
+   *
+   * - A swimlane none of whose members carried a lane is packed whole (`packLanes` with the partition).
+   * - A swimlane some members carried is packed around them (`packAroundCarried`): carried lanes are
+   *   fixed obstacles and never move, and an overlap among them is counted, not resolved (the same rule
+   *   as the swimlane-free phase).
+   *
+   * Every drawn member gets a stored lane, written against the SWIMLANE basis in one statement, so the
+   * picture does not depend on a later recalculation. Non-members get none: their "No swimlane" lane is
+   * derived on read, which is exactly what an absent row means (schema-design 3.5). Members with no
+   * computed dates are not drawn and are left to the same derivation.
+   *
+   * The plan is the importer's own, still held under its pen and unseen by anyone else, so the rows
+   * need no activity-row locks and no version bump.
+   */
+  private async packImportedSwimlaneLanes(
+    organizationId: string,
+    planId: string,
+    carriedLanes: ReadonlyMap<string, number>,
+    userId: string,
+  ): Promise<{ carriedOverlaps: number }> {
+    const [activities, dependencies] = await Promise.all([
+      this.activities.findLayoutRowsForPlan(organizationId, planId),
+      this.dependencies.findEdgesForPlan(organizationId, planId),
+    ]);
+    const { codeOfId, drawn } = layoutInputsOf(activities);
+
+    const members = drawn.filter(({ activity }) => activity.swimlaneId !== null);
+    if (members.length === 0) return { carriedOverlaps: 0 };
+    const swimlaneOf = new Map(
+      members.map(({ key, activity }) => [key, activity.swimlaneId ?? '']),
+    );
+
+    const predecessorsOf = new Map<string, string[]>();
+    for (const edge of dependencies) {
+      const successor = codeOfId.get(edge.successorId);
+      const predecessor = codeOfId.get(edge.predecessorId);
+      if (successor === undefined || predecessor === undefined) continue;
+      const existing = predecessorsOf.get(successor);
+      if (existing === undefined) predecessorsOf.set(successor, [predecessor]);
+      else existing.push(predecessor);
+    }
+    // Sorted, because the edges arrive in UUIDv7 order and the packer's hint reads each list in order.
+    for (const list of predecessorsOf.values()) list.sort();
+
+    // `laneIndex` here is the lane inside the swimlane. -1 for a bar not yet placed, so the packers
+    // report every one of them as a change.
+    const groups = new Map<string, { carried: PackItem[]; movers: PackItem[] }>();
+    for (const { key, span, activity } of members) {
+      const swimlaneId = swimlaneOf.get(key) ?? '';
+      const code = activity.code;
+      const carriedLane = code === null ? undefined : carriedLanes.get(code);
+      const group = groups.get(swimlaneId) ?? { carried: [], movers: [] };
+      if (carriedLane === undefined) group.movers.push({ id: key, ...span, laneIndex: -1 });
+      else group.carried.push({ id: key, ...span, laneIndex: carriedLane });
+      groups.set(swimlaneId, group);
+    }
+
+    const laneOf = new Map<string, number>();
+    const wholeSwimlanes: PackItem[] = [];
+    let carriedOverlaps = 0;
+    for (const group of groups.values()) {
+      for (const item of group.carried) laneOf.set(item.id, item.laneIndex);
+      carriedOverlaps += countOverlapping(group.carried);
+      if (group.carried.length === 0) wholeSwimlanes.push(...group.movers);
+      else {
+        for (const change of packAroundCarried(group.carried, group.movers, predecessorsOf)) {
+          laneOf.set(change.id, change.laneIndex);
+        }
+      }
+    }
+    for (const change of packLanes(wholeSwimlanes, predecessorsOf, swimlaneOf)) {
+      laneOf.set(change.id, change.laneIndex);
+    }
+
+    const idOfKey = new Map(members.map(({ key, activity }) => [key, activity.id]));
+    const rows = [...laneOf].flatMap(([key, laneIndex]) => {
+      const activityId = idOfKey.get(key);
+      const swimlaneId = swimlaneOf.get(key);
+      return activityId === undefined || swimlaneId === undefined
+        ? []
+        : [
+            {
+              activityId,
+              basis: 'SWIMLANE' as const,
+              swimlaneId,
+              summaryActivityId: null,
+              wbsLevel: null,
+              laneIndex,
+            },
+          ];
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await this.activities.upsertSwimlaneLanes(organizationId, planId, rows, tx);
+    });
+
+    this.logger.info(
+      { organizationId, planId, userId, members: members.length, carriedOverlaps },
+      'interchange commit laid out swimlane lanes',
     );
     return { carriedOverlaps };
   }
@@ -1489,6 +1631,67 @@ export class InterchangeService {
       throw new ForbiddenError('You do not have permission to perform this action.');
     }
   }
+}
+
+/** The columns of a plan's activity that the importer's layout phases read. */
+interface LayoutRow {
+  id: string;
+  code: string | null;
+  type: string;
+  laneIndex: number;
+  swimlaneId: string | null;
+  visualEffectiveStart: Date | null;
+  visualEffectiveFinish: Date | null;
+}
+
+/**
+ * What the lane-packing phases share: each activity's packer key and its DRAWN span.
+ *
+ * **Keyed by CODE, not id** (layout-interchange M1). The packer breaks every tie on its item's `id`
+ * (`pack-lanes.ts`), and ids are UUIDv7 minted during this import, whose random bits decide those ties
+ * - one file imported seven times packed seven different ways
+ * (`docs/specs/layout-interchange/m0-measurement.md`, M0-T4). A code is unique within a plan and comes
+ * from the file, so the same file now lays out the same way every time. An import always sets a code
+ * (the XER `task_code`; the MSPDI fallback is its UID); a row without one keeps its id as the key, in a
+ * separate namespace so it can never collide with a code.
+ *
+ * **The DRAWN span, not the early one** (M1). The canvas draws a bar at its visual-effective dates, a
+ * finish milestone at the end of its day; packing on the early dates let an import open with bars
+ * overlapping in their rows on the first screen (M0-T4). `drawnSpanDays` is the rule the web draws
+ * with, shared through `@repo/layout` so the two cannot disagree. An activity with no computed dates
+ * is not drawn and is left out.
+ */
+function layoutInputsOf(activities: readonly LayoutRow[]): {
+  idOfCode: Map<string, string>;
+  codeOfId: Map<string, string>;
+  drawn: { key: string; span: { startDay: number; endDay: number }; activity: LayoutRow }[];
+} {
+  // Day offsets about an arbitrary but FIXED origin. The packer only ever compares offsets to each
+  // other, so the origin cancels - what matters is that both ends of every span use the same one.
+  const DAY_MS = 86_400_000;
+  const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
+  const isoOf = (date: Date | null): string | null =>
+    date === null ? null : date.toISOString().slice(0, 10);
+  const keyOf = (a: { id: string; code: string | null }): string =>
+    a.code === null ? `id:${a.id}` : `code:${a.code}`;
+
+  const drawn = activities.flatMap((activity) => {
+    if (activity.visualEffectiveFinish === null) return [];
+    const span = drawnSpanDays(
+      {
+        type: activity.type,
+        start: isoOf(activity.visualEffectiveStart),
+        finish: isoOf(activity.visualEffectiveFinish),
+      },
+      dayOf,
+    );
+    return span === null ? [] : [{ key: keyOf(activity), span, activity }];
+  });
+  return {
+    idOfCode: new Map(activities.map((a) => [keyOf(a), a.id] as const)),
+    codeOfId: new Map(activities.map((a) => [a.id, keyOf(a)] as const)),
+    drawn,
+  };
 }
 
 /**

@@ -124,3 +124,27 @@ the packer breaks ties on an id and import ids are minted fresh.
   end-of-day meaning is SchedulePoint's.
 - **Resolve imported overlaps.** That would move work in a clean round trip whose source had accepted
   the overlap.
+
+## Amendment: swimlanes (2026-10-24, swimlanes M4-T4)
+
+D1's two labels become five on the same `v1` rule, and D9 is the reason this amendment lands in two
+releases. The **reader** shipped first (M4-T4); the **writer** follows in the next release (M4-T5), which
+cites this release's tag.
+
+- **On `TASK`:** `SchedulePoint layout v1: swimlane` (`FT_TEXT`, the swimlane's name) and
+  `SchedulePoint layout v1: swimlane lane` (`FT_INT`, the lane inside that swimlane).
+- **On `PROJECT`:** `SchedulePoint layout v1: swimlanes` (`FT_TEXT`), one JSON object
+  `{"source":"NONE"|"MANUAL"|"WBS","level":null|1|2|3,"names":["…"]}`. `names` is the display order
+  and is what lets an empty swimlane survive a round trip; the pair `source`/`level` is the one
+  `ck_plans_swimlane_source_level` accepts (a WBS source has a level, anything else has none).
+- **A label is read only on its own table.** A known label on any other table is a foreign field.
+- **Names are attacker text bound for a CHECK.** The reader holds each to `ck_swimlanes_name_shape`
+  (1 to 80 characters counted as code points, trimmed, no control character, well-formed UTF-16),
+  de-duplicates them ignoring case with a fold harder than the database's `lower()` so a collision
+  cannot abort the commit, keeps at most 100 (the swimlanes module's cap), and bounds the project
+  field at 64 KiB before parsing it. Every refusal is counted in one `repair` finding per kind.
+- **Restore** is under the existing `restoreLayout` choice. The swimlanes are created in file order
+  before the activities that name them, the plan's source and level are set, and phase 3 packs each
+  swimlane's members on their own through the swimlane partition, keeping any lane the file carried.
+  The report gains `mapped.swimlanes` and `mapped.swimlaneMembers` (absent when zero).
+- A file with none of these labels reads exactly as before: no key is added to its graph or report.
