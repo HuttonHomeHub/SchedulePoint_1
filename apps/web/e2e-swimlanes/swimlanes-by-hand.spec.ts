@@ -6,9 +6,11 @@ import { pickAddKind, planCommands } from '../e2e-support/toolbar';
 import {
   ACTIVITIES,
   SWIMLANE_NAMES,
+  calculateSeededPlan,
   cursorTo,
   diagramList,
   ensurePen,
+  expectFocusKept,
   expectFocused,
   gutterLabels,
   lensCheckbox,
@@ -56,8 +58,8 @@ test.describe('swimlanes by hand', () => {
     const before = await storedActivities(page, orgSlug);
     expect(Object.keys(before)).toHaveLength(ACTIVITIES.length);
 
-    await test.step('1. take the pen', async () => {
-      await ensurePen(page);
+    await test.step('1. take the pen and calculate the plan, so every bar is drawn', async () => {
+      await calculateSeededPlan(page);
     });
 
     await test.step('2–3. View ▾ ▸ Structure ▸ the lens button opens the dialog, and Mechanical is created', async () => {
@@ -221,7 +223,7 @@ test.describe('swimlanes by hand', () => {
     await expectFocused(page, viewTrigger(page));
   });
 
-  test('deleting from the gutter menu lands focus on the neighbouring label, then on "No swimlane"', async ({
+  test('deleting from the gutter menu lands focus on the neighbouring label, then somewhere in the product', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -241,9 +243,11 @@ test.describe('swimlanes by hand', () => {
     await deleteViaMenu(/^Électricité/);
     await expectFocused(page, labels.getByRole('button', { name: /^Mechanical, plumbing/ }));
 
-    // The last named swimlane goes: "No swimlane" counts as the one after the last.
+    // Then the rest, down to the last named swimlane: the plan then reads as not set up and the gutter
+    // can go with it, taking "No swimlane" too, so focus lands on the View ▾ trigger or the listbox.
     await deleteViaMenu(/^Mechanical, plumbing/);
-    await expectFocused(page, labels.getByRole('button', { name: /^No swimlane/ }));
+    await deleteViaMenu(/^Substructure/);
+    await expectFocusKept(page);
   });
 
   test('deleting in Manage lands focus on the next row’s Rename, and the New swimlane field when none is left', async ({
@@ -482,30 +486,7 @@ test.describe('swimlanes by hand', () => {
         await confirm.click();
         await expect(confirm).toBeHidden();
       }
-      // The gutter may remain (with "No swimlane") or go with the last swimlane; either way focus is
-      // on something in the product: a gutter stop, the View ▾ trigger or the diagram's listbox.
-      await expect
-        .poll(
-          async () =>
-            page.evaluate(() => {
-              const el = document.activeElement;
-              return (
-                el !== null &&
-                el !== document.body &&
-                el.matches(
-                  [
-                    '[data-testid="tsld-swimlane-gutter-labels"] [data-swimlane]',
-                    '[data-testid="tsld-swimlane-gutter-labels"]',
-                    '[data-testid="tsld-swimlane-gutter-corner"] button',
-                    '[data-toolbar-item="view"]',
-                    '[role="listbox"][aria-label="Activities in the diagram"]',
-                  ].join(','),
-                )
-              );
-            }),
-          { message: 'focus is on a gutter stop, View ▾ or the listbox, never <body>' },
-        )
-        .toBe(true);
+      await expectFocusKept(page);
     });
   });
 
@@ -514,7 +495,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(150_000);
     await openSeededPlan(page, Date.now() + 14);
-    await ensurePen(page);
+    await calculateSeededPlan(page);
     const list = diagramList(page);
     await list.focus();
     await list.press('Escape');
@@ -583,6 +564,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(120_000);
     await openSeededPlan(page, Date.now() + 16);
+    await calculateSeededPlan(page);
     const toggle = page
       .getByRole('toolbar', { name: 'Diagram viewport' })
       .getByRole('button', { name: 'Minimap' });
@@ -603,28 +585,62 @@ test.describe('swimlanes by hand', () => {
  * a real layout.
  */
 test.describe('the 1024 × 600 floor', () => {
-  test('View ▾ with Structure expanded is at most 420 px, pen not held', async ({ page }) => {
+  test('View ▾ with the lens lit holds the house bar folded, and every swimlane control is reachable unfolded', async ({
+    page,
+  }) => {
     await openSeededPlan(page, Date.now() + 9);
     await page.setViewportSize({ width: 1024, height: 600 });
     await page.waitForTimeout(500);
     // The pen is NOT held: the lens's button then carries its reason line, which is the tallest it gets.
     await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 
-    const panel = await openStructure(page);
-    await expect(lensCheckbox(panel)).toBeVisible();
-    const reading = await panel.evaluate((el) => ({
+    // SC-13 (`assertViewPanelFitsTheFloor`): at most 420 px and no inner scroll in the default, folded
+    // state. An unfolded section may scroll inside the panel, provided every control can be reached.
+    await viewTrigger(page).click();
+    const panel = page.getByRole('dialog', { name: /^View/ });
+    await expect(panel).toBeVisible();
+    const folded = await panel.evaluate((el) => ({
       height: el.getBoundingClientRect().height,
       scrollable: el.scrollHeight - el.clientHeight,
       viewport: window.innerHeight,
     }));
     test.info().annotations.push({
-      type: 'view-panel',
-      description: `${String(reading.height)} px of ${String(reading.viewport)}, inner scroll ${String(reading.scrollable)} px`,
+      type: 'view-panel-folded',
+      description: `${String(folded.height)} px of ${String(folded.viewport)}, inner scroll ${String(folded.scrollable)} px`,
     });
     expect(
-      reading.height,
-      `View ▾ is ${String(reading.height)} px of ${String(reading.viewport)} at the floor`,
+      folded.height,
+      `View ▾ is ${String(folded.height)} px of ${String(folded.viewport)} at the floor`,
     ).toBeLessThanOrEqual(420);
+    expect(
+      folded.scrollable,
+      'View ▾ scrolls inside itself in its default state',
+    ).toBeLessThanOrEqual(1);
+
+    const structure = panel.getByRole('button', { name: /^Structure/ });
+    await structure.click();
+    await expect(structure).toHaveAttribute('aria-expanded', 'true');
+    for (const control of [lensCheckbox(panel), manageButton(panel)]) {
+      await control.scrollIntoViewIfNeeded();
+      const hit = await control.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return {
+          ok:
+            top !== null &&
+            (top === el || el.contains(top) || top.closest('label')?.contains(el) === true),
+          found:
+            top === null
+              ? 'nothing'
+              : `${top.tagName.toLowerCase()} ${top.textContent ?? ''}`.slice(0, 60),
+          box: `${String(Math.round(box.top))}-${String(Math.round(box.bottom))} of ${String(window.innerHeight)}`,
+        };
+      });
+      expect(
+        hit.ok,
+        `a swimlane control cannot be reached by a pointer: ${hit.found} at ${hit.box}`,
+      ).toBe(true);
+    }
   });
 
   test('the diagram’s width at the floor, rail open and closed, decides whether the gutter is forced shut', async ({

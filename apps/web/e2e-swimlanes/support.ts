@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { planCommands } from '../e2e-support/toolbar';
+import { planCommands, recalculate } from '../e2e-support/toolbar';
 
 /**
  * Journey helpers for the **swimlanes by hand** suite (`docs/specs/swimlanes/`, M2-T11).
@@ -179,6 +179,17 @@ export async function ensurePen(page: Page): Promise<void> {
   if (await stop.isVisible()) return;
   await start.click();
   await expect(stop).toBeVisible();
+}
+
+/**
+ * Take the pen and calculate the plan. The catalogue plan arrives "Not yet calculated", so no bar has
+ * dates and nothing is drawn: Move to swimlane… would refuse every activity as not drawn yet. A case
+ * that needs drawn bars calls this once, after {@link openSeededPlan}. (Recalculate is pen-gated, so
+ * this cannot run through the API without the lock.)
+ */
+export async function calculateSeededPlan(page: Page): Promise<void> {
+  await ensurePen(page);
+  await recalculate(page);
 }
 
 /** One activity as the API stores it. */
@@ -374,6 +385,37 @@ export async function expectFocused(page: Page, locator: Locator): Promise<void>
   } catch (error) {
     throw new Error(`${(error as Error).message}\nfocus is on: ${await describeFocus(page)}`);
   }
+}
+
+/**
+ * Assert focus is on something in the product and not on `<body>`, after the last named swimlane has
+ * been deleted: the gutter may stay (with "No swimlane") or unmount with the last one, so the product
+ * lands on a gutter stop, the View ▾ trigger or the diagram's listbox, in that order of preference
+ * (`focus-after-delete.ts`).
+ */
+export async function expectFocusKept(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return (
+            el !== null &&
+            el !== document.body &&
+            el.matches(
+              [
+                '[data-testid="tsld-swimlane-gutter-labels"] [data-swimlane]',
+                '[data-testid="tsld-swimlane-gutter-labels"]',
+                '[data-testid="tsld-swimlane-gutter-corner"] button',
+                '[data-toolbar-item="view"]',
+                '[role="listbox"][aria-label="Activities in the diagram"]',
+              ].join(','),
+            )
+          );
+        }),
+      { message: 'focus is on a gutter stop, View ▾ or the listbox, never <body>' },
+    )
+    .toBe(true);
 }
 
 /** A short description of the focused element, for failure messages. */
