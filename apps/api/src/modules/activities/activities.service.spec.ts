@@ -190,7 +190,11 @@ describe('ActivitiesService', () => {
     updateLanePositions: ReturnType<typeof vi.fn>;
     upsertSwimlaneLanes: ReturnType<typeof vi.fn>;
   };
-  let swimlanes: { lockActiveForShare: ReturnType<typeof vi.fn> };
+  let swimlanes: {
+    lockActiveForShare: ReturnType<typeof vi.fn>;
+    findActiveIds: ReturnType<typeof vi.fn>;
+  };
+  let swimlaneWrites: ReturnType<typeof vi.fn>;
   let lifecycle: {
     cascadeSoftDelete: ReturnType<typeof vi.fn>;
     cascadeSoftDeleteActivityLeaves: ReturnType<typeof vi.fn>;
@@ -275,6 +279,11 @@ describe('ActivitiesService', () => {
       lockActiveForShare: vi
         .fn()
         .mockImplementation((_org: string, _plan: string, ids: string[]) => Promise.resolve(ids)),
+      findActiveIds: vi
+        .fn()
+        .mockImplementation((_org: string, _plan: string, ids: string[]) =>
+          Promise.resolve(new Set(ids)),
+        ),
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
@@ -348,6 +357,7 @@ describe('ActivitiesService', () => {
     const audit = { record: vi.fn().mockResolvedValue(undefined) };
     // The history recorder is proven against a real table by `activity-history.e2e-spec.ts`; the
     // unit specs only need it to be callable inside the transaction.
+    swimlaneWrites = vi.fn().mockReturnValue([]);
     const history = {
       record: vi.fn().mockResolvedValue(undefined),
       activityFieldChanges: vi.fn().mockReturnValue(noChanges()),
@@ -355,7 +365,7 @@ describe('ActivitiesService', () => {
       // The batch builders and the knock-on: nothing to record in a unit spec.
       placementWrites: vi.fn().mockReturnValue([]),
       parentWrites: vi.fn().mockReturnValue([]),
-      swimlaneWrites: vi.fn().mockReturnValue([]),
+      swimlaneWrites,
       recordKnockOn: vi.fn().mockResolvedValue(undefined),
     };
     service = new ActivitiesService(
@@ -2237,6 +2247,42 @@ describe('ActivitiesService', () => {
           { id: A2, version: 1 },
           { id: 'act-3', version: 1 },
         ]);
+      });
+
+      it('MANUAL: a null swimlaneId clears the membership and stores the lane as No swimlane', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        await call([{ id: A2, version: 1, swimlane: { swimlaneId: null, laneIndex: 4 } }]);
+        // `null` reaches the UPDATE as a write, which an omitted id does not.
+        expect(activities.updateLanePositions.mock.calls[0]![2]).toEqual([
+          { id: A2, version: 1, swimlaneId: null },
+        ]);
+        expect(activities.upsertSwimlaneLanes.mock.calls[0]![2]).toEqual([
+          expect.objectContaining({ activityId: A2, basis: 'NO_SWIMLANE', swimlaneId: null }),
+        ]);
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+        // The history names the move out of the swimlane.
+        expect(swimlaneWrites).toHaveBeenCalledWith(PLAN_ID, [
+          { id: A2, before: SWIMLANE_A, after: null },
+        ]);
+      });
+
+      it('MANUAL: clearing a membership that is already none records no move', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        await call([{ id: ACTIVITY_ID, version: 1, swimlane: { swimlaneId: null, laneIndex: 1 } }]);
+        expect(swimlaneWrites).not.toHaveBeenCalled();
+      });
+
+      it('MANUAL: a member of a deleted swimlane gets a No swimlane lane, keeps its id, and no 404', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan({ swimlaneSource: 'MANUAL' }));
+        swimlanes.findActiveIds.mockResolvedValue(new Set());
+        await call([{ id: A2, version: 1, swimlane: { laneIndex: 4 } }]);
+        expect(activities.upsertSwimlaneLanes.mock.calls[0]![2]).toEqual([
+          expect.objectContaining({ activityId: A2, basis: 'NO_SWIMLANE', swimlaneId: null }),
+        ]);
+        // The UPDATE is not asked to write the membership, so the remembered swimlane survives.
+        expect(activities.updateLanePositions.mock.calls[0]![2]).toEqual([{ id: A2, version: 1 }]);
+        expect(swimlanes.lockActiveForShare).not.toHaveBeenCalled();
+        expect(swimlaneWrites).not.toHaveBeenCalled();
       });
 
       it('MANUAL: 404s when a named swimlane is not an active swimlane of the plan', async () => {

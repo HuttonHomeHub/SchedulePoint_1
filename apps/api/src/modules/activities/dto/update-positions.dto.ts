@@ -24,15 +24,19 @@ import { UUID_REGEX } from '../../../common/validation/uuid';
  */
 export class ActivitySwimlaneLaneDto {
   @ApiPropertyOptional({
+    type: String,
     format: 'uuid',
     description:
       'MANUAL source only: file the activity in this swimlane (it must be an active swimlane of ' +
-      'this plan, else 404). Omit to leave its membership as it is. Refused with 422 ' +
+      'this plan, else 404). Omit to leave its membership as it is; `null` clears it ' +
+      '(“No swimlane”) and the lane is stored against that basis. Refused with 422 ' +
       'SWIMLANE_SOURCE_IS_WBS while the plan’s swimlanes come from its WBS.',
+    nullable: true,
   })
+  // `@IsOptional()` skips both undefined and null, which is the point: null is a legitimate "none".
   @IsOptional()
   @Matches(UUID_REGEX, { message: 'swimlaneId must be a valid UUID.' })
-  swimlaneId?: string;
+  swimlaneId?: string | null;
 
   @ApiProperty({
     minimum: 0,

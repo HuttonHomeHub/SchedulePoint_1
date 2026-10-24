@@ -24,6 +24,10 @@ describe('UpdatePositionsDto', () => {
     expect(valid({ id: ID, laneIndex: 2, version: 1, swimlane: { laneIndex: 4 } })).toBe(true);
   });
 
+  it('accepts a null swimlaneId: it clears the membership, unlike an omitted one', () => {
+    expect(valid({ id: ID, version: 1, swimlane: { swimlaneId: null, laneIndex: 2 } })).toBe(true);
+  });
+
   it('needs at least one of laneIndex and swimlane', () => {
     expect(valid({ id: ID, version: 1 })).toBe(false);
   });

@@ -1070,6 +1070,19 @@ export class ActivitiesService {
         if (ids.some((id) => !membershipBefore.has(id))) {
           throw new NotFoundError('Activity not found in this plan.');
         }
+        // A kept membership that names a deleted swimlane is shown under "No swimlane" (swimlanes
+        // spec US-2) and keeps its `swimlane_id` so a restore returns it; its lane belongs to that
+        // basis, so the swimlane is left out of the lock below rather than failing the batch. This read
+        // is advisory: a named swimlane is still locked, and that lock is what refuses a write.
+        const keptIds = [
+          ...new Set(
+            swimlaneRows.flatMap((p) => {
+              const kept = p.swimlane?.swimlaneId === undefined ? membershipBefore.get(p.id) : null;
+              return kept ? [kept] : [];
+            }),
+          ),
+        ];
+        const activeKept = await this.swimlanes.findActiveIds(organization.id, planId, keptIds, tx);
         // Read without a lock: a summary reparented concurrently yields a lane written against a basis
         // that changes a moment later, which the projection reads as a mismatch (schema-design §5).
         const wbsNodes: ReadonlyMap<string, WbsNode> =
@@ -1083,8 +1096,15 @@ export class ActivitiesService {
             : new Map();
         lanes = swimlaneRows.map((p) => {
           const lane = p.swimlane!;
-          // The swimlane the activity is in once this write lands: the one named, else its own.
-          const effective = lane.swimlaneId ?? membershipBefore.get(p.id) ?? null;
+          // The swimlane the activity is in once this write lands: the one named, `null` for none,
+          // else its own (which is none when that swimlane has been deleted).
+          const kept = membershipBefore.get(p.id) ?? null;
+          const effective =
+            lane.swimlaneId !== undefined
+              ? lane.swimlaneId
+              : kept !== null && activeKept.has(kept)
+                ? kept
+                : null;
           return {
             activityId: p.id,
             laneIndex: lane.laneIndex,
