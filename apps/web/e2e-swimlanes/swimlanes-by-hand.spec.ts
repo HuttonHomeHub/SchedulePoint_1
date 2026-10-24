@@ -544,7 +544,8 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(120_000);
     await openSeededPlan(page, Date.now() + 15);
-    await ensurePen(page);
+    // The lens is shut on a plan with nothing drawn, so it could not be turned off before a calculation.
+    await calculateSeededPlan(page);
     await setLens(page, false);
     const list = diagramList(page);
     await list.focus();

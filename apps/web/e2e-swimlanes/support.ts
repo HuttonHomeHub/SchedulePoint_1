@@ -92,6 +92,8 @@ export async function openPlainPlan(page: Page, stamp: number): Promise<string> 
         name: 'A plan with no swimlanes',
         plannedStart: '2026-01-05',
       });
+      // Authoring is pen-gated (ADR-0028): take the lock before writing, as the UI's Start editing does.
+      await call(`/plans/${plan.id}/edit-lock`, {});
       await call(`/plans/${plan.id}/activities`, { name: 'Dig footings', durationDays: 10 });
       await call(`/plans/${plan.id}/activities`, { name: 'Pour slab', durationDays: 5 });
       await call(`/plans/${plan.id}/schedule/recalculate`);
