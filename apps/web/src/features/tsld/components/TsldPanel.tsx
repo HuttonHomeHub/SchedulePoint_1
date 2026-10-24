@@ -46,6 +46,7 @@ import type {
   TsldRepositionInput,
   TsldRepositionOutcome,
 } from '../model/edit-types';
+import { groupListboxRows, listboxOrder, swimlaneLaneClauses } from '../model/group-listbox';
 import {
   pluralMoveAnnouncement,
   MOVE_FAILED_NOTE,
@@ -56,6 +57,7 @@ import {
   swimlanePlace,
   swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
+import type { SwimlaneAssignment } from '../model/swimlane-assignment';
 import type { SwimlaneLanePlacement } from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
@@ -584,6 +586,13 @@ export interface TsldPanelProps {
    * in the display lanes, so the host supplies no swimlane list of its own. Memoised by the host:
    * the canvas rewrites every label when this identity changes. Absent: a read-only gutter. */
   gutterActions?: GutterActions | null;
+  /**
+   * **Move to swimlane…** (swimlanes M2-T10): the host's plan for filing work in a swimlane. It lives
+   * on the host and not here because the activity editor offers the same control from outside this
+   * panel, and one plan of the write is what keeps the two from disagreeing. Absent or `null`
+   * omits the control from both selection bars (the plan has no hand-made swimlanes).
+   */
+  swimlaneAssignment?: SwimlaneAssignment | null;
   onGutterRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
@@ -714,6 +723,7 @@ export function TsldPanel({
   onMinimapRoomChange,
   gutterWidthPx = 0,
   gutterActions = null,
+  swimlaneAssignment = null,
   onGutterRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
@@ -1264,14 +1274,19 @@ export function TsldPanel({
   // `activities` only — NOT on selection or unrelated parent re-renders. Without this, any parent
   // render (e.g. every pointermove while dragging the workspace's activity-panel resizer) re-ran
   // `describeActivity` for every row, which measured ~1.3s at 2,000 activities (ADR-0030 perf).
+  const swimlaneScene = diagramSource.swimlaneScene;
   const optionDescriptions = useMemo(() => {
     // Which activities the render pass flagged as sharing a lane with a time-overlapping neighbour
     // (TECH_DEBT #24c) — computed once on the drawn dates, so the spoken cue matches the canvas badge.
     const overlap = new Map(renderActivities.map((r) => [r.id, r.laneOverlap ?? false]));
+    // With swimlanes drawn the sentence says where the bar is in the stack ("in Mechanical, lane 2 of
+    // 3") in place of its stored lane, which is the swimlane-free layout's (C9).
+    const places = swimlaneScene ? swimlaneLaneClauses(swimlaneScene) : null;
     return new Map(
       activities.map((a) => [
         a.id,
         describeActivity(a, {
+          ...(places ? { swimlane: places.get(a.id) ?? null } : {}),
           overlapsInLane: overlap.get(a.id) ?? false,
           withCodes: viewToggles.activityCodes ?? false,
           // The spoken dates must be the drawn ones: `describeActivity` no longer chooses a basis,
@@ -1280,7 +1295,7 @@ export function TsldPanel({
         }),
       ]),
     );
-  }, [activities, renderActivities, viewToggles.activityCodes, barDateSource]);
+  }, [activities, renderActivities, viewToggles.activityCodes, barDateSource, swimlaneScene]);
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
@@ -1917,8 +1932,10 @@ export function TsldPanel({
         onMakeMilestone,
         floatPathsOpen,
         onToggleFloatPaths,
+        moveToSwimlane: swimlaneAssignment,
       }),
     [
+      swimlaneAssignment,
       selectionCanvas,
       selectedId,
       selection.ids.length,
@@ -2276,6 +2293,36 @@ export function TsldPanel({
     isPointerBusy: () => pointerRepositionBusyRef.current,
   });
 
+  // **The listbox's order is its rendered order** (swimlanes M2-T10, C9): with swimlanes drawn the
+  // options sit in a `role="group"` per swimlane, so ArrowDown must walk them group after group or the
+  // cursor would jump across the groups a screen-reader user has just been told about. With none
+  // drawn this is `activities` itself.
+  const listGroups = useMemo(
+    () => groupListboxRows(activities, swimlaneScene ? swimlanes : null),
+    [activities, swimlaneScene, swimlanes],
+  );
+  const listOrder = useMemo(() => listboxOrder(listGroups), [listGroups]);
+  const renderOption = (a: ActivitySummary): React.ReactElement => (
+    // Every canvas mark this row mirrors — the dim reasons, the over-allocation flag, the
+    // WBS group and the baseline ghost — is composed in `rowTextById`, which `select()`
+    // also announces, so the two can never again say different things (WCAG 1.4.1).
+    //
+    // A marked row stays fully selectable/navigable (dim-not-hide) — so NO `aria-disabled`,
+    // which would wrongly signal an inoperable option (a11y review).
+    <li
+      key={a.id}
+      id={optionId(a.id)}
+      role="option"
+      // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
+      // screen-reader user hears as "selected", and pointing it at the active option
+      // would report exactly one member of a selection of twelve.
+      aria-selected={
+        CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
+      }
+    >
+      {rowTextById.get(a.id)}
+    </li>
+  );
   const onListKeyDown = (event: React.KeyboardEvent): void => {
     if (activities.length === 0) return;
     // LOE endpoint-pick keyboard path (Stage D) — the parallel-DOM equivalent of the pointer two-pick,
@@ -2529,15 +2576,15 @@ export function TsldPanel({
       });
       return;
     }
-    const index = activities.findIndex((a) => a.id === activeId);
+    const index = listOrder.findIndex((a) => a.id === activeId);
     let next = index;
-    if (event.key === 'ArrowDown') next = Math.min(activities.length - 1, index + 1);
+    if (event.key === 'ArrowDown') next = Math.min(listOrder.length - 1, index + 1);
     else if (event.key === 'ArrowUp') next = Math.max(0, index < 0 ? 0 : index - 1);
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = activities.length - 1;
+    else if (event.key === 'End') next = listOrder.length - 1;
     else return;
     event.preventDefault();
-    const target = activities[next];
+    const target = listOrder[next];
     if (!target) return;
     /**
      * **Shift+↑/↓ extends the selection** by one row, the APG contiguous-select binding.
@@ -3392,6 +3439,19 @@ export function TsldPanel({
             }}
             busy={bulkBusy}
             canMove={canMovePlural}
+            moveToSwimlane={
+              swimlaneAssignment
+                ? {
+                    assignment: swimlaneAssignment,
+                    ids: selectedActivities.map((a) => a.id),
+                    names: selectedActivities.map((a) => a.name),
+                    gate: {
+                      writable: bulk.gate.writable,
+                      reason: bulk.gate.writable ? null : bulk.gate.reason,
+                    },
+                  }
+                : null
+            }
           />
         ) : null}
 
@@ -3850,30 +3910,21 @@ export function TsldPanel({
                   conflictFocusPendingRef.current = false;
                   return;
                 }
-                if (!selectedId && activities[0]) select(activities[0].id);
+                if (!selectedId && listOrder[0]) select(listOrder[0].id);
               }}
             >
-              {activities.map((a) => (
-                // Every canvas mark this row mirrors — the dim reasons, the over-allocation flag, the
-                // WBS group and the baseline ghost — is composed in `rowTextById`, which `select()`
-                // also announces, so the two can never again say different things (WCAG 1.4.1).
-                //
-                // A marked row stays fully selectable/navigable (dim-not-hide) — so NO `aria-disabled`,
-                // which would wrongly signal an inoperable option (a11y review).
-                <li
-                  key={a.id}
-                  id={optionId(a.id)}
-                  role="option"
-                  // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
-                  // screen-reader user hears as "selected", and pointing it at the active option
-                  // would report exactly one member of a selection of twelve.
-                  aria-selected={
-                    CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
-                  }
-                >
-                  {rowTextById.get(a.id)}
-                </li>
-              ))}
+              {listGroups.length === 1 && listGroups[0]?.label === null
+                ? listGroups[0].rows.map(renderOption)
+                : listGroups.map((group) => (
+                    // A group is named by its swimlane, so a screen reader announces "Mechanical,
+                    // group" as the cursor crosses into it. Empty swimlanes keep their group: the
+                    // structure is the point, and the gutter lists them too.
+                    <li key={group.key} role="none">
+                      <ul role="group" aria-label={group.label ?? undefined}>
+                        {group.rows.map(renderOption)}
+                      </ul>
+                    </li>
+                  ))}
             </ul>
             {/* The canvas's bottom-right column (minimap above the "Diagram viewport" cluster) is
                 drawn here, after the list above, so Tab order is the diagram's keyboard surface,

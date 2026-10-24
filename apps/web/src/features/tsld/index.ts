@@ -52,3 +52,10 @@ export type { SwimlaneLanePlacement } from './model/swimlane-lanes';
  * is exported too; the swimlanes feature imports it BY PATH, because the workspace's tests mock this
  * barrel wholesale and a missing export there would fail every one of them. */
 export { gutterWidthForRoom, type GutterActions } from './render/swimlane-gutter';
+/** Move to swimlane…, as the surfaces that offer it see it (swimlanes M2-T10). Types only: the controls
+ * are imported by path, for the reason the gutter's width rule is above. */
+export type {
+  SwimlaneAssignment,
+  SwimlaneAssignOutcome,
+  SwimlaneChoice,
+} from './model/swimlane-assignment';

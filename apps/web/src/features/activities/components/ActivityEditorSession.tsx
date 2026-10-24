@@ -128,6 +128,7 @@ export function ActivityEditorSession({
   logic,
   notesSlot,
   historySlot,
+  swimlaneSlot,
   onAssignmentEdited,
   onReparented,
 }: ActivityEditorSessionProps): React.ReactElement {
@@ -804,6 +805,7 @@ export function ActivityEditorSession({
                         errored={planActivitiesError}
                       />
                     ) : null}
+                    {swimlaneSlot}
                     <ScopeSaveBar
                       gate={gating.general}
                       dirty={general.isDirty}

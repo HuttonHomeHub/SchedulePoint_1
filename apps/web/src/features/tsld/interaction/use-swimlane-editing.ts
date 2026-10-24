@@ -2,8 +2,8 @@ import type { ActivitySummary } from '@repo/types';
 import { useMemo } from 'react';
 
 import type { DiagramSource } from '../model/derive-diagram-source';
-import { drawnDaySpan } from '../model/drawn-span';
 import type { TsldBulkOperations, TsldEditOutcome, TsldRepositionInput } from '../model/edit-types';
+import { swimlaneEditContext } from '../model/swimlane-edit-context';
 import {
   arrangeInSwimlanes,
   arrangeSceneOf,
@@ -92,31 +92,18 @@ export function useSwimlaneEditing(args: {
     });
   }, [activities, scene]);
 
-  const ctx = useMemo<SwimlaneEditContext | null>(() => {
-    if (scene === null || swimlanes === null || dataDate === null) return null;
-    const spans = new Map<string, DaySpan>();
-    const stored = new Map<string, number>();
-    for (const a of diagramSource.sceneActivities) {
-      stored.set(a.id, a.laneIndex);
-      const span = drawnDaySpan(a, barDateSource, dataDate);
-      if (span !== null) spans.set(a.id, span);
-    }
-    const rows = new Map(activities.map((a) => [a.id, a]));
-    return {
-      scene,
-      input: swimlanes,
-      spans,
-      stored,
-      remembered: (id, swimlaneId) =>
-        rows
-          .get(id)
-          ?.swimlaneLanes.find((l) =>
-            swimlaneId === null
-              ? l.basis === 'NO_SWIMLANE'
-              : l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId,
-          )?.laneIndex,
-    };
-  }, [scene, swimlanes, dataDate, diagramSource.sceneActivities, activities, barDateSource]);
+  const ctx = useMemo<SwimlaneEditContext | null>(
+    () =>
+      swimlaneEditContext({
+        scene,
+        input: swimlanes,
+        sceneActivities: diagramSource.sceneActivities,
+        activities,
+        barDateSource,
+        dataDate,
+      }),
+    [scene, swimlanes, dataDate, diagramSource.sceneActivities, activities, barDateSource],
+  );
 
   const reposeBy = useMemo(() => {
     if (!reposition) return undefined;

@@ -646,6 +646,37 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
   4. Group the listbox.
   5. Add the tests.
 - **Dark because:** the controls are hidden while the source is `NONE`, and nothing can set it.
+- **As built (decisions the build took, each with its reason):**
+  - **One control, three places.** `MoveToSwimlaneControl` (a `SelectField`, a Move button, one
+    `role="status"` line) is the whole of C10. The single-activity bar hosts it in a `ToolbarPopover` item
+    (`move-to-swimlane`, between Dissolve and Delete, pen-gated with them); the plural bar hosts it in a
+    button that opens the same non-modal panel (`MoveToSwimlaneButton`); the editor hosts it inline. The
+    host supplies a neutral `SwimlaneAssignment` (choices, `currentOf`, `assign`), so none of the three
+    imports the swimlanes feature or plans a write.
+  - **The editor field is an immediate Move, not a field saved with its scope.** `PATCH …/activities/:id`
+    accepts `swimlaneId`, but the activity write carries no in-swimlane lane, and the assignment must remember
+    and stack lanes (US-3) in one positions batch with one undo step. A form field that saved a membership
+    without a lane would be a second path to the same change, so the section is a slot (`swimlaneSlot`)
+    holding the same control, and "Save general" does not cover it.
+  - **One plan of the write.** `useSwimlaneAssignment` builds its edit context from `deriveDiagramSource`
+    over the panel's own inputs (`swimlaneEditContext`, extracted from `useSwimlaneEditing`), so a lane
+    chosen "free" is free on the screen the planner sees, band toggle included. It writes through the
+    plural move's swimlane form (`moveMany`, zero delta, `swimlaneLanes`, and a `label`), so the batch cap,
+    the pen handling and the history record are the move's, not a copy of them.
+  - **Stacking** (`assignToSwimlane`): bars go left to right to their remembered lane in the target when
+    it is free, else the nearest free lane to it (the top, for a bar with no memory). Bars already in the
+    target are left alone; "No swimlane" is a target even when it is not drawn yet.
+  - **Undo onto a deleted swimlane is set aside** in `swimlaneLanesCommand` for every lane step that files
+    a bar in a swimlane it is not in (a drag across swimlanes included, which T4 left unguarded). It reads
+    the plan's active swimlanes, writes nothing, and says "The swimlane was deleted after your edit".
+  - **The grouped listbox** is `groupListboxRows`: a `role="group"` named by each swimlane (empty ones
+    kept), "No swimlane" last and only when it holds something, plan order inside. `onListKeyDown` walks
+    `listboxOrder`, the flattened rendered order. A bar's sentence says "in Mechanical, lane 2 of 3" in
+    place of "lane N" (`describeActivity`'s `swimlane` option); a bar the scene does not draw drops the
+    clause rather than speak its swimlane-free lane.
+  - **The copy test** reads string literals, templates and JSX text of a named roster with the TypeScript
+    parser and refuses any `lane` left after the qualified forms are masked. It found one real offender in
+    T4's copy ("it has no lane to move in"), reworded.
 
 ##### Task M2-T11: the entry point and the journey (one PR)
 

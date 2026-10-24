@@ -1152,6 +1152,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           coalesce?: boolean;
           pressedAt?: number;
           swimlaneLanes?: readonly SwimlaneLanePlacement[];
+          label?: string;
         },
       ): Promise<{ applied: boolean; conflict: string | null; refreshable?: boolean }> => {
         // On the swimlane layout the lane part arrives as each bar's lane inside its swimlane and the
@@ -1253,9 +1254,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }
         if (swimlaneLanes !== undefined) {
           const label =
-            rows.length === 1 && rows[0] !== undefined
+            options?.label ??
+            (rows.length === 1 && rows[0] !== undefined
               ? `Move \u201c${rows[0].name}\u201d`
-              : `Move ${String(rows.length)} activities`;
+              : `Move ${String(rows.length)} activities`);
           const placement = heldPlacement;
           let laned: Awaited<ReturnType<typeof writeSwimlaneLanes>> | null = null;
           try {

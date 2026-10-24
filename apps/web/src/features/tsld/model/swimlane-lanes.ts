@@ -83,7 +83,7 @@ export interface SwimlaneEditContext {
 }
 
 export const NO_SWIMLANE_LABEL = 'No swimlane';
-export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so it has no lane to move in.';
+export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so there is nowhere to move it.';
 
 /**
  * Every refusal here is a plain statement of the rule, with no "sorry" and no "couldn’t": the single

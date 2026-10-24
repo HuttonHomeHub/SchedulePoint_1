@@ -2,6 +2,9 @@ import { Link2, Trash2 } from 'lucide-react';
 import { useId } from 'react';
 
 import { pluralMoveHint } from '../model/reposition-announcement';
+import type { SwimlaneAssignment } from '../model/swimlane-assignment';
+
+import { MoveToSwimlaneButton } from './MoveToSwimlaneButton';
 
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
@@ -59,6 +62,17 @@ export interface BulkSelectionBarProps {
    * about what the keys do, and a viewer or a planner without the pen must not be told it works.
    */
   canMove?: boolean;
+  /**
+   * **Move to swimlane…** for the whole selection (swimlanes M2-T10, ADR-0080). Absent when swimlanes
+   * are not offered, which omits the button rather than leaving it lit and inert. Its gate rides the
+   * same write right as the other two actions.
+   */
+  moveToSwimlane?: {
+    assignment: SwimlaneAssignment;
+    ids: readonly string[];
+    names: readonly string[];
+    gate: { writable: boolean; reason: string | null };
+  } | null;
 }
 
 function BulkAction({
@@ -122,6 +136,7 @@ export function BulkSelectionBar({
   onClear,
   busy = false,
   canMove = false,
+  moveToSwimlane = null,
 }: BulkSelectionBarProps): React.ReactElement | null {
   const statusId = useId();
   // Below two this is not a plural selection and the floating per-object bar is the right surface.
@@ -187,6 +202,14 @@ export function BulkSelectionBar({
           icon={<Link2 aria-hidden="true" className="size-4" />}
           label="Link in sequence…"
         />
+        {moveToSwimlane ? (
+          <MoveToSwimlaneButton
+            assignment={moveToSwimlane.assignment}
+            ids={moveToSwimlane.ids}
+            names={moveToSwimlane.names}
+            gate={moveToSwimlane.gate}
+          />
+        ) : null}
         <BulkAction
           gate={remove}
           busy={busy}

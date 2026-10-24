@@ -22,3 +22,4 @@ export {
   type SwimlaneDialogsProps,
   type SwimlaneManagement,
 } from './model/use-swimlane-management';
+export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
