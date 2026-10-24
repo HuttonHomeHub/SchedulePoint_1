@@ -4,6 +4,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LENS_TOGGLES } from '@/features/tsld/toolbar/tsld-toolbar-items';
+
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
  * the real `PlanDetailScreen`. (It forced
@@ -1417,5 +1419,51 @@ describe('the host follows the lens state for swimlanes (swimlanes M2-T2)', () =
     // An unrelated state change in the same host re-renders it without touching the data.
     act(() => lensApi().setSwimlanesOverride(null));
     expect(h.tsldProps.current?.swimlanes).toBe(first);
+  });
+});
+
+/**
+ * The lens's reasons reach the row (swimlanes M2-T2): host scene -> toolbar context -> the
+ * `aria-describedby` text of the `View ▾` checkbox. The lens is not offered, so the record is switched
+ * on for the case and put back.
+ */
+describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
+  const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
+  beforeEach(() => {
+    lens.enabled = true;
+  });
+  afterEach(() => {
+    lens.enabled = false;
+  });
+
+  function rowDescription(): string {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    const structure = screen.getByRole('button', { name: /^Structure/ });
+    if (structure.getAttribute('aria-expanded') === 'false') fireEvent.click(structure);
+    const box = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    expect(box).toHaveAttribute('aria-disabled', 'true');
+    const ids = (box.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
+    return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+  }
+
+  it('a plan with nothing set up says so', () => {
+    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
+  });
+
+  it('a list still on its way says it is loading', () => {
+    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: undefined, isPending: true } };
+    h.tsldProps.current = null;
+    expect(rowDescription()).toContain('Loading swimlanes…');
+  });
+
+  it('a failed list says it could not load (recovery is tested with the scene hook)', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true },
+    };
+    expect(rowDescription()).toContain("Couldn't load swimlanes.");
   });
 });

@@ -8,4 +8,4 @@ Two pictures from one scene; only `swimlaneMarks.ground` differs. Month bands ar
 - `reference-power-plant-rule-and-ground.png`
 
 **Link runs on a boundary: 2 of 30 horizontal link runs** (70 links, 10 boundaries), counted from the painter's own
-routes. Such a run covers the rule, never the reverse (the rule paints beneath the links, ADR-0199).
+routes. That is one plan at this shot's zoom (1 px/day), not a general rate. Such a run covers the rule, never the reverse (the rule paints beneath the links, ADR-0199).

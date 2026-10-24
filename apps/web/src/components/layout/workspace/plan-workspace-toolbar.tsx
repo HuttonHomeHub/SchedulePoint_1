@@ -117,7 +117,7 @@ import {
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
-import { SWIMLANES_LENS_OFFERED, useSwimlaneScene } from '@/features/swimlanes';
+import { SWIMLANE_GROUND, SWIMLANES_LENS_OFFERED, useSwimlaneScene } from '@/features/swimlanes';
 import {
   HistoryResultStrip,
   LayoutResolvedStrip,
@@ -247,13 +247,17 @@ export function ToolbarPlanWorkspace({
   // while the lens is offered, so today it fetches nothing and `input` is `null`: the diagram is the
   // swimlane-free one, unchanged. Memoised inside the hook, so the identity is stable across renders
   // whose inputs are equal.
+  const swimlanesAreShown = swimlanesShown(
+    canvasUi.lensState.swimlanesOverride,
+    plan.swimlaneSource,
+  );
   const swimlaneScene = useSwimlaneScene({
     orgSlug: model.orgSlug,
     planId: model.planId,
     source: plan.swimlaneSource,
     activities: model.activities.data,
     offered: SWIMLANES_LENS_OFFERED,
-    shown: swimlanesShown(canvasUi.lensState.swimlanesOverride, plan.swimlaneSource),
+    shown: swimlanesAreShown,
   });
   // The activities panel's narrowed, stable slice of the model (`docs/TECH_DEBT.md` #334, M2-F1): the
   // whole `model` is a new object every render, and this component renders on every canvas selection.
@@ -841,6 +845,7 @@ export function ToolbarPlanWorkspace({
     plan,
     canvasUi,
     swimlaneScene,
+    swimlanesShown: swimlanesAreShown,
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },
@@ -1366,6 +1371,7 @@ export function ToolbarPlanWorkspace({
       historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
       swimlanes={swimlaneScene.input}
+      swimlaneGround={SWIMLANE_GROUND}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).

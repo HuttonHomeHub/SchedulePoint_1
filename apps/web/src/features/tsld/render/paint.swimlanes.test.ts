@@ -195,10 +195,12 @@ describe('swimlane marks — paint gate (swimlanes M2-T2)', () => {
     expect(bandFills(paint(undefined, asOf)).length).toBeGreaterThan(0);
   });
 
-  it('is byte-identical to the swimlane-free paint when there are no marks (SC-3)', () => {
-    const without = paint(undefined, { monthBands: true });
-    const explicit = paint(undefined, { monthBands: true, swimlaneMarks: undefined });
-    expect(explicit).toEqual(without);
-    expect(without.some((l) => l.includes(PALETTE.swimlaneRule))).toBe(false);
+  it('draws nothing in the rule ink without marks', () => {
+    // The byte-identical claim (SC-3) is held by `paint.golden.test.ts`, whose recorded log has no
+    // swimlane key in its scene; comparing a log with itself here would prove nothing. What this pins
+    // is the half the golden cannot name: the rule's ink never appears when there are no marks.
+    const log = paint(undefined, { monthBands: true });
+    expect(log.some((l) => l.includes(PALETTE.swimlaneRule))).toBe(false);
+    expect(log.some((l) => l.startsWith('fill'))).toBe(true);
   });
 });

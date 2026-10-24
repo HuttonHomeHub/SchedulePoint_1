@@ -17,6 +17,13 @@ import type { SwimlaneInput } from '@/features/tsld';
  */
 export const SWIMLANES_LENS_OFFERED = false;
 
+/**
+ * Whether alternate swimlanes carry the faint ground. The approved default of feature-spec SQ-6 is
+ * yes. It is policy and not painting, so it lives with the host's lens model and reaches the painter
+ * as `TsldPanel`'s `swimlaneGround`; reversing the answer is a one-line change and a test.
+ */
+export const SWIMLANE_GROUND = true;
+
 export interface SwimlaneScene {
   /** The input to the projection, or `null` when swimlanes are not being drawn. */
   input: SwimlaneInput | null;

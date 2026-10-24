@@ -4,6 +4,7 @@ import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { COMMAND_CLASS, type WithDiagram } from './canvas-directed-commands';
+import { NO_SWIMLANE_SCENE } from './test-helpers';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -139,6 +140,8 @@ function buildWrapped() {
     useTsldToolbarContext({
       model,
       plan: PLAN,
+      swimlaneScene: NO_SWIMLANE_SCENE,
+      swimlanesShown: false,
       canvasUi: makeCanvasUi(),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
@@ -198,6 +201,8 @@ describe('useTsldToolbarContext — canvas-directed commands', () => {
       useTsldToolbarContext({
         model,
         plan: PLAN,
+        swimlaneScene: NO_SWIMLANE_SCENE,
+        swimlanesShown: false,
         canvasUi,
         openDialog: vi.fn(),
         legend: { open: false, toggle: vi.fn() },

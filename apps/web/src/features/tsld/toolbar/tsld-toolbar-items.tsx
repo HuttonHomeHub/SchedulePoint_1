@@ -572,18 +572,20 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     checked: (ctx) => ctx.swimlanesShown,
     toggle: (ctx) => ctx.toggleSwimlanes(),
     // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,
-    // then the list is on its way, then it failed, then nothing has been set up. All of them are
-    // `aria-describedby` text on the row (`CheckboxField`'s gate) and none is a live announcement,
-    // so a list that loads while the popover is open is not read out over the planner.
+    // then nothing is set up (the plan's own source, so a plan with none never hears about a load),
+    // then the list is on its way, then it failed. All are `aria-describedby` text on the row
+    // (`CheckboxField`'s gate) and none is a live announcement, so a list that loads while the
+    // popover is open is not read out over the planner. The failed sentence promises nothing: the
+    // list is read again on focus and on remount, and the reason goes when it arrives.
     reason: (ctx) =>
       !ctx.hasDiagram
         ? LENS_NO_DIAGRAM_REASON
-        : ctx.swimlanesLoading
-          ? 'Loading swimlanes…'
-          : ctx.swimlanesFailed === true
-            ? "Couldn't load swimlanes. Try again."
-            : !ctx.swimlanesSetUp
-              ? 'No swimlanes have been set up for this plan.'
+        : !ctx.swimlanesSetUp
+          ? 'No swimlanes have been set up for this plan.'
+          : ctx.swimlanesLoading
+            ? 'Loading swimlanes…'
+            : ctx.swimlanesFailed === true
+              ? "Couldn't load swimlanes."
               : undefined,
   },
 ];

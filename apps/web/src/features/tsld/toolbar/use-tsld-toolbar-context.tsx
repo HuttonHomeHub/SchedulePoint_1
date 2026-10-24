@@ -26,7 +26,7 @@ import { COLOUR_MODE_LABELS } from './promotion-entries';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
 import type { UseMinimapPanelPrefs } from './use-minimap-panel-prefs';
-import { swimlanesShown, type TsldCanvasUiState } from './use-tsld-canvas-ui-state';
+import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
 import { deriveScheduleState } from '@/components/layout/status/schedule-state';
 import type {
@@ -84,6 +84,7 @@ export function useTsldToolbarContext({
   plan,
   canvasUi,
   swimlaneScene,
+  swimlanesShown: swimlaneLensShown,
   openDialog,
   legend,
   minimap,
@@ -130,7 +131,9 @@ export function useTsldToolbarContext({
    * lens state this hook's `canvasUi` owns, and the export reads the same input the canvas does.
    * `failed` is optional: the list's failure is reported by the host once the scene carries it.
    */
-  swimlaneScene?: { input: SwimlaneInput | null; pending: boolean; failed?: boolean } | undefined;
+  swimlaneScene: { input: SwimlaneInput | null; pending: boolean; failed?: boolean };
+  /** Whether swimlanes are shown, computed once by the host (`swimlanesShown`) and read by its scene too. */
+  swimlanesShown: boolean;
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
@@ -316,7 +319,6 @@ export function useTsldToolbarContext({
     setConflictCursorId,
     requestSelectActivity,
   } = canvasUi;
-  const swimlaneLensShown = swimlanesShown(lensState.swimlanesOverride, plan.swimlaneSource);
 
   // Canvas nav (VITE_CANVAS_NAV). Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
   // it is one of the two `canvasControlRef` readers `docs/TECH_DEBT.md` #85 named, and lifting
@@ -491,7 +493,7 @@ export function useTsldToolbarContext({
     activities,
     dependencies,
     // The same input the live canvas is handed, so the export draws the swimlanes the screen does.
-    swimlanes: swimlaneScene?.input ?? null,
+    swimlanes: swimlaneScene.input,
     viewToggles,
     // Off the workspace model, which is where the live canvas reads it too — so the exported
     // picture shades the same days the screen does rather than from a second resolution.
@@ -707,8 +709,8 @@ export function useTsldToolbarContext({
       swimlanesShown: swimlaneLensShown,
       toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
       swimlanesSetUp: plan.swimlaneSource !== 'NONE',
-      swimlanesLoading: swimlaneScene?.pending ?? false,
-      ...(swimlaneScene?.failed ? { swimlanesFailed: true } : {}),
+      swimlanesLoading: swimlaneScene.pending,
+      ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
       hasActiveBaseline,
       varianceLoading,
       varianceError,
@@ -1065,8 +1067,8 @@ export function useTsldToolbarContext({
     swimlaneLensShown,
     setSwimlanesOverride,
     plan.swimlaneSource,
-    swimlaneScene?.pending,
-    swimlaneScene?.failed,
+    swimlaneScene.pending,
+    swimlaneScene.failed,
     hasActiveBaseline,
     varianceLoading,
     varianceError,

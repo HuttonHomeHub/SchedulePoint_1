@@ -1015,3 +1015,16 @@ describe('the retired token families are gone', () => {
     expect(css).not.toMatch(new RegExp(`${prefix}[a-z-]*\\s*:`));
   });
 });
+
+/**
+ * **The swimlane rule needs no contrast-theme override** (ADR-0191 D3, swimlanes M2-T2). A canvas
+ * bitmap keeps its own palette in forced colours, and the rule is an alias of the year tier, so the
+ * forced-colours block declares no canvas token and must not start declaring this one alone.
+ */
+describe('the swimlane rule in forced colours', () => {
+  it('forced-colors declares no canvas custom property, so the rule keeps the diagram palette', () => {
+    const block = blockBody('@media (forced-colors: active)');
+    expect(block.length, 'the forced-colors block must be found').toBeGreaterThan(0);
+    expect(block).not.toMatch(/--canvas-/);
+  });
+});

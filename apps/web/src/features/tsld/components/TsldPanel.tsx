@@ -83,12 +83,7 @@ import {
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
-import {
-  SWIMLANE_GROUND,
-  type CompareGhost,
-  type CompareLink,
-  type SwimlaneMarks,
-} from '../render/paint';
+import type { CompareGhost, CompareLink, SwimlaneMarks } from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
 import type { SwimlaneInput } from '../render/project-swimlanes';
 import {
@@ -361,6 +356,8 @@ export interface TsldPanelProps {
    * (SC-3). The panel imports no swimlanes code: it hands this to `deriveDiagramSource`.
    */
   swimlanes?: SwimlaneInput | null;
+  /** Tint alternate swimlanes (feature-spec SQ-6). The host owns the answer; absent is no tint. */
+  swimlaneGround?: boolean;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
   canEdit?: boolean;
   /**
@@ -701,6 +698,7 @@ export function TsldPanel({
   dependencies,
   dataDate: dataDateProp,
   swimlanes = null,
+  swimlaneGround = false,
   canEdit = false,
   scheduleRefusal = (action) => `Start editing to ${action}.`,
   onCreate,
@@ -1267,9 +1265,9 @@ export function TsldPanel({
   const swimlaneMarks = useMemo<SwimlaneMarks | undefined>(
     () =>
       diagramSource.swimlaneScene
-        ? { extents: diagramSource.swimlaneScene.extents, ground: SWIMLANE_GROUND }
+        ? { extents: diagramSource.swimlaneScene.extents, ground: swimlaneGround }
         : undefined,
-    [diagramSource.swimlaneScene],
+    [diagramSource.swimlaneScene, swimlaneGround],
   );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;

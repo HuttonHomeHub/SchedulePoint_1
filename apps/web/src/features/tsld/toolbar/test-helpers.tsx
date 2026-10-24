@@ -187,3 +187,6 @@ export function makeTsldToolbarContext(
   }
   return context;
 }
+
+/** The host's swimlane scene when nothing is drawn: the argument every `useTsldToolbarContext` call now takes. */
+export const NO_SWIMLANE_SCENE = { input: null, pending: false } as const;

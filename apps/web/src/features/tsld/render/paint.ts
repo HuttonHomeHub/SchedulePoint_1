@@ -234,12 +234,6 @@ export interface SwimlaneMarks {
   ground: boolean;
 }
 
-/**
- * Whether alternate swimlanes carry the faint ground. The approved default of feature-spec SQ-6 is
- * yes; it is one constant so reversing the answer is a one-line change and a test, not a hunt.
- */
-export const SWIMLANE_GROUND = true;
-
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
 
 export interface TsldScene {

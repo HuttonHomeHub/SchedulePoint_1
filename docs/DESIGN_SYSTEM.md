@@ -1329,7 +1329,11 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   are aliases they inherit the year tier's contrast gates (the 2.5:1 ceiling on screen, the 3:1 floor on
   paper), and they give the legend census a key of their own. The optional alternating ground reuses
   `--canvas-band` (already a plot ground) and hides the month bands while it shows. Both are packs
-  outside the closure, like the tiers they alias.
+  outside the closure, like the tiers they alias. **WCAG 1.4.11 basis:** on screen the rule is about 2:1,
+  under the grid's 2.5:1 ceiling, and that is deliberate. It is redundant with the gutter labels and the
+  grouped listbox, which carry membership in text, so no reader depends on perceiving it. In a contrast
+  theme the diagram bitmap keeps its own palette (ADR-0191 D3), so the aliases get no override;
+  `token-architecture.test.ts` pins that the forced-colours block declares no canvas token.
 - **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F7a,
   ADR-0056)** — one new token, `--canvas-nonworking-hatch`, authored per theme block beside
   `--canvas-band` (mapped as `--color-canvas-nonworking-hatch`) and added to both palette

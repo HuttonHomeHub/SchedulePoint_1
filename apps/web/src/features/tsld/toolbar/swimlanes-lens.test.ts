@@ -40,30 +40,23 @@ describe('the Swimlanes lens', () => {
     expect(lens().reason(makeTsldToolbarContext({ hasDiagram: true }))).toBeUndefined();
   });
 
-  it('shuts with the reasons in order: no diagram, loading, failed, nothing set up', () => {
+  it('shuts with the reasons in order: no diagram, nothing set up, loading, failed', () => {
     const all = {
       hasDiagram: false,
+      swimlanesSetUp: false,
       swimlanesLoading: true,
       swimlanesFailed: true,
-      swimlanesSetUp: false,
     };
-    const noDiagram = lens().reason(makeTsldToolbarContext(all));
-    const loading = lens().reason(makeTsldToolbarContext({ ...all, hasDiagram: true }));
-    const failed = lens().reason(
-      makeTsldToolbarContext({ ...all, hasDiagram: true, swimlanesLoading: false }),
-    );
-    const nothing = lens().reason(
-      makeTsldToolbarContext({
-        ...all,
-        hasDiagram: true,
-        swimlanesLoading: false,
-        swimlanesFailed: false,
-      }),
-    );
-    expect(loading).toBe('Loading swimlanes…');
-    expect(failed).toBe("Couldn't load swimlanes. Try again.");
+    const reason = (over: Partial<typeof all>) =>
+      lens().reason(makeTsldToolbarContext({ ...all, ...over }));
+    const noDiagram = reason({});
+    const nothing = reason({ hasDiagram: true });
+    const loading = reason({ hasDiagram: true, swimlanesSetUp: true });
+    const failed = reason({ hasDiagram: true, swimlanesSetUp: true, swimlanesLoading: false });
     expect(nothing).toBe('No swimlanes have been set up for this plan.');
-    // Four distinct sentences, the first being the shared no-diagram one.
-    expect(new Set([noDiagram, loading, failed, nothing]).size).toBe(4);
+    expect(loading).toBe('Loading swimlanes…');
+    // No instruction: nothing in the product offers a retry, and the list is read again on its own.
+    expect(failed).toBe("Couldn't load swimlanes.");
+    expect(new Set([noDiagram, nothing, loading, failed]).size).toBe(4);
   });
 });
