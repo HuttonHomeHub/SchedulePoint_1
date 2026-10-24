@@ -111,12 +111,6 @@ export function useRestoreSwimlane(orgSlug: string, planId: string) {
   });
 }
 
-/**
- * Write the plan's swimlane source (the setup dialog's last step). A targeted PATCH of the one field
- * and the version, like `useSetPlanCalendar`, so it needs no plan form. Presentation only: it never
- * marks the schedule stale (API.md "Swimlane placement"), so the schedule keys are left alone. The
- * returned plan goes straight into the detail cache so the next write sees the fresh `version`.
- */
 export interface SetPlanSwimlaneSourceInput {
   planId: string;
   version: number;
@@ -128,6 +122,12 @@ export interface SetPlanSwimlaneSourceInput {
   level?: number | null;
 }
 
+/**
+ * Write the plan's swimlane source (the setup dialog's last step, and the manage dialog's switch). A
+ * targeted PATCH of the source, its level and the version, like `useSetPlanCalendar`, so it needs no plan form. Presentation only: it never
+ * marks the schedule stale (API.md "Swimlane placement"), so the schedule keys are left alone. The
+ * returned plan goes straight into the detail cache so the next write sees the fresh `version`.
+ */
 export function useSetPlanSwimlaneSource(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({

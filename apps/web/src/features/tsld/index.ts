@@ -45,7 +45,7 @@ export {
   WBS_BAND_MAX_DEPTH,
 } from './render/wbs-band';
 /** The neutral swimlane input the render layer projects (swimlanes epic C8) — composed by the host. */
-export type { SwimlaneInput } from './render/project-swimlanes';
+export { NO_SWIMLANE_LABEL, type SwimlaneInput } from './render/project-swimlanes';
 /** One row of a lane write on the swimlane layout — a lane inside a swimlane (swimlanes M2-T4). */
 export type { SwimlaneLanePlacement } from './model/swimlane-lanes';
 /** The shape of the swimlane gutter's commands, for the host that supplies them (M2-T9). The width rule

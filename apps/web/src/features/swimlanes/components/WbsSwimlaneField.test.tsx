@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
 
+import { WBS_SWIMLANES_REASON } from '../model/wbs-swimlane-copy';
+
 import { WbsSwimlaneField } from './WbsSwimlaneField';
 
 import { anActivity } from '@/test/activity-fixture';
@@ -17,33 +19,33 @@ const TREE: ActivitySummary[] = [
 describe('WbsSwimlaneField', () => {
   it('shows the swimlane the activity is in, at any depth below its summary', () => {
     render(<WbsSwimlaneField activities={TREE} level={2} activityId="slab" />);
-    expect(screen.getByRole('textbox', { name: 'Swimlane' })).toHaveValue('Structure');
+    expect(screen.getByRole('textbox', { name: 'Current swimlane' })).toHaveValue('Structure');
   });
 
   it('shows "No swimlane" for work no summary at the level holds', () => {
     render(<WbsSwimlaneField activities={TREE} level={2} activityId="shed" />);
-    expect(screen.getByRole('textbox', { name: 'Swimlane' })).toHaveValue('No swimlane');
+    expect(screen.getByRole('textbox', { name: 'Current swimlane' })).toHaveValue('No swimlane');
   });
 
   it('follows a rename of the summary, since the name is read and not stored', () => {
     const renamed = TREE.map((a) => (a.id === 'struct' ? { ...a, name: 'Substructure' } : a));
     render(<WbsSwimlaneField activities={renamed} level={2} activityId="slab" />);
-    expect(screen.getByRole('textbox', { name: 'Swimlane' })).toHaveValue('Substructure');
+    expect(screen.getByRole('textbox', { name: 'Current swimlane' })).toHaveValue('Substructure');
   });
 
   it('is read-only rather than disabled, and states its reason where it is described', () => {
     render(<WbsSwimlaneField activities={TREE} level={2} activityId="slab" />);
-    const field = screen.getByRole('textbox', { name: 'Swimlane' });
+    const field = screen.getByRole('textbox', { name: 'Current swimlane' });
     // Operable (focusable, selectable) but not editable: ADR-0083, not a native `disabled`.
     expect(field).toHaveAttribute('readonly');
     expect(field).not.toBeDisabled();
-    expect(field).toHaveAccessibleDescription('Swimlanes follow the WBS in this plan.');
-    expect(screen.getByText('Swimlanes follow the WBS in this plan.')).toBeVisible();
+    expect(field).toHaveAccessibleDescription(WBS_SWIMLANES_REASON);
+    expect(screen.getByText(WBS_SWIMLANES_REASON)).toBeVisible();
   });
 
   it('keeps its value when typed into', () => {
     render(<WbsSwimlaneField activities={TREE} level={2} activityId="slab" />);
-    const field = screen.getByRole('textbox', { name: 'Swimlane' });
+    const field = screen.getByRole('textbox', { name: 'Current swimlane' });
     fireEvent.change(field, { target: { value: 'Elsewhere' } });
     expect(field).toHaveValue('Structure');
   });

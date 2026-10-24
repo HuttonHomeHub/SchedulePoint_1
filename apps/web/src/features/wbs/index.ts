@@ -16,7 +16,9 @@ export {
   type WbsGroups,
 } from './model/wbs-groups';
 export {
+  clampWbsLevel,
   isWbsSwimlaneLevel,
+  offeredWbsLevels,
   WBS_SWIMLANE_LEVELS,
   wbsSwimlaneInput,
   wbsSwimlaneLevels,

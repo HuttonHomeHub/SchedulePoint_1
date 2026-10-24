@@ -93,9 +93,30 @@ export function wbsSwimlaneLevels(activities: readonly ActivitySummary[]): WbsSw
   return { counts, suggested: pick(2) ?? pick(1) };
 }
 
+/** The levels that hold at least one summary: the only ones worth dividing a plan at. */
+export function offeredWbsLevels(levels: WbsSwimlaneLevels): WbsSwimlaneLevel[] {
+  return WBS_SWIMLANE_LEVELS.filter((l) => (levels.counts[l - 1] ?? 0) > 0);
+}
+
+/**
+ * The level to use for a wish: `wanted` while it still holds a summary, else the suggested level, else
+ * the shallowest offered, else `null`. A level the planner picked, or the plan was saved at, can empty
+ * out under them (a summary deleted or dissolved), and a select showing a level it does not offer would
+ * say one thing and write another.
+ */
+export function clampWbsLevel(
+  wanted: number | null,
+  levels: WbsSwimlaneLevels,
+): WbsSwimlaneLevel | null {
+  const offered = offeredWbsLevels(levels);
+  const found = offered.find((l) => l === wanted);
+  return found ?? levels.suggested ?? offered[0] ?? null;
+}
+
 /**
  * The last build, keyed by the identity of its inputs: the scene, the editor's read-only field and
- * auto-resolve all hand this the cache's own array, so they share one walk per data change.
+ * auto-resolve all hand this the cache's own array, so they share one walk per data change. A copy of
+ * the array, even with the same content, just misses the cache and rebuilds the same answer.
  */
 let last: { activities: readonly ActivitySummary[]; level: number; input: SwimlaneInput } | null =
   null;

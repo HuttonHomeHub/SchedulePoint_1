@@ -171,9 +171,13 @@ export function useSwimlaneManagement(args: {
   const followsWbs = plan.swimlaneSource === 'WBS';
   const gutterActions = useMemo<GutterActions>(
     () => ({
+      // The pen gates the corner's Swimlanes… command, and only the pen: it is the way out of a WBS
+      // source, so a reason about the WBS must never shade it.
+      write: { writable, reason },
       // A WBS swimlane is a summary, not a row of its own: it is renamed and ordered where the summary
-      // is. The pen's own reason, where that is why, comes first (the planner can fix that one).
-      write:
+      // is, so its rows are shut for that reason. The pen's own reason, where that is why, comes first
+      // (the planner can fix that one).
+      rows:
         writable && followsWbs
           ? { writable: false, reason: WBS_GUTTER_REASON }
           : { writable, reason },

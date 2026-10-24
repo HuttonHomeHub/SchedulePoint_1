@@ -2,7 +2,12 @@ import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { deriveWbsBandSource } from './wbs-band-source';
-import { wbsSwimlaneInput, wbsSwimlaneLevels } from './wbs-swimlane-membership';
+import {
+  clampWbsLevel,
+  offeredWbsLevels,
+  wbsSwimlaneInput,
+  wbsSwimlaneLevels,
+} from './wbs-swimlane-membership';
 
 import { projectSwimlanes } from '@/features/tsld/render/project-swimlanes';
 import { anActivity } from '@/test/activity-fixture';
@@ -189,6 +194,15 @@ describe('wbsSwimlaneInput: stored lanes', () => {
     expect(wbsSwimlaneInput(TREE, 2)).toBe(wbsSwimlaneInput(TREE, 2));
     expect(wbsSwimlaneInput(TREE, 2)).not.toBe(wbsSwimlaneInput(TREE, 3));
   });
+
+  it('a fresh array with identical content misses the cache and rebuilds the same answer', () => {
+    const first = wbsSwimlaneInput(TREE, 2);
+    const copy = wbsSwimlaneInput([...TREE], 2);
+    expect(copy).not.toBe(first);
+    expect(copy).toEqual(first);
+    // And the cache now holds the copy, so the original array rebuilds once more, correctly.
+    expect(wbsSwimlaneInput(TREE, 2)).toEqual(first);
+  });
 });
 
 describe('wbsSwimlaneLevels', () => {
@@ -246,5 +260,29 @@ describe('the WBS band and WBS swimlanes together', () => {
       dataDate: '2026-01-01',
     });
     expect(projection.displayLanes.has('struct')).toBe(true);
+  });
+});
+
+describe('clampWbsLevel', () => {
+  const levels = wbsSwimlaneLevels(TREE); // counts [1, 2, 1], suggested 2
+
+  it('offers only levels that hold a summary', () => {
+    expect(offeredWbsLevels(levels)).toEqual([1, 2, 3]);
+    expect(offeredWbsLevels(wbsSwimlaneLevels([summary('a', null)]))).toEqual([1]);
+  });
+
+  it('keeps a level that still holds a summary', () => {
+    expect(clampWbsLevel(3, levels)).toBe(3);
+  });
+
+  it('falls back to the suggested level when the wanted one has emptied or never existed', () => {
+    expect(clampWbsLevel(null, levels)).toBe(2);
+    const shallow = wbsSwimlaneLevels([summary('a', null), summary('b', 'a')]);
+    // Level 3 holds nothing now; neither level has two groups, so the shallowest is suggested.
+    expect(clampWbsLevel(3, shallow)).toBe(1);
+  });
+
+  it('is null for a plan with no summary at all', () => {
+    expect(clampWbsLevel(2, wbsSwimlaneLevels([task('t', null)]))).toBeNull();
   });
 });

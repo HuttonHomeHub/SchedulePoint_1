@@ -2,7 +2,12 @@ import type { SwimlaneSource } from '@repo/types';
 
 import { SelectField } from '@/components/ui/form';
 import { RadioCardGroup } from '@/components/ui/radio-card-group';
-import { WBS_SWIMLANE_LEVELS, type WbsSwimlaneLevel, type WbsSwimlaneLevels } from '@/features/wbs';
+import {
+  clampWbsLevel,
+  offeredWbsLevels,
+  type WbsSwimlaneLevel,
+  type WbsSwimlaneLevels,
+} from '@/features/wbs';
 
 /** The two sources a planner can choose between. `NONE` is the absence of a choice, not a choice. */
 export type ChosenSource = Exclude<SwimlaneSource, 'NONE'>;
@@ -36,9 +41,11 @@ export function SwimlaneSourceFields({
   /** The plan's activities have arrived; before that the WBS cannot be read. */
   loaded: boolean;
 }): React.ReactElement {
-  const offered = WBS_SWIMLANE_LEVELS.filter((l) => (levels.counts[l - 1] ?? 0) > 0);
+  const offered = offeredWbsLevels(levels);
   const none = offered.length === 0;
-  const chosenLevel = level ?? levels.suggested;
+  // A level that has emptied since it was picked (or saved) is not shown: the select would name one
+  // level and the write would carry another.
+  const chosenLevel = clampWbsLevel(level, levels);
   return (
     <div className="flex flex-col gap-3">
       <RadioCardGroup<ChosenSource>
@@ -72,7 +79,7 @@ export function SwimlaneSourceFields({
       {source === 'WBS' && !none ? (
         <SelectField
           label="WBS level"
-          value={String(chosenLevel ?? offered[0])}
+          value={String(chosenLevel)}
           onChange={(event) => onLevel(Number(event.target.value) as WbsSwimlaneLevel)}
           hint="Work under a summary at this level, at any depth, is in its swimlane. The rest is in “No swimlane”."
         >

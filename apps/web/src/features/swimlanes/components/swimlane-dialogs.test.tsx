@@ -147,6 +147,14 @@ describe('the setup dialog', () => {
     );
   });
 
+  it('drops a names problem when the planner moves to the WBS, so it does not follow them', async () => {
+    mount(actions());
+    submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter at least one swimlane name.');
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('writes the suggested level when the planner does not touch the select', async () => {
     const a = actions();
     mount(a);
@@ -500,9 +508,10 @@ describe('the manage dialog', () => {
   });
 
   describe('where swimlanes come from', () => {
-    const switchButton = (): HTMLElement => screen.getByRole('button', { name: 'Switch' });
+    const switchButton = (): HTMLElement =>
+      screen.getByRole('button', { name: /^(Use WBS groups|Make by hand|Switching…)$/ });
 
-    it('starts on what the plan holds, with Switch shaded because there is nothing to change', () => {
+    it('starts on what the plan holds, with the button shaded because there is nothing to change', () => {
       const a = actions();
       mount(a);
       expect(screen.getByRole('radio', { name: 'By hand' })).toBeChecked();
@@ -570,7 +579,7 @@ describe('the manage dialog', () => {
       );
     });
 
-    it('shades Switch without the pen, saying why, and writes nothing', () => {
+    it('shades the source button without the pen, saying why, and writes nothing', () => {
       const a = actions();
       mount(a, PEN);
       fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
@@ -591,6 +600,21 @@ describe('the manage dialog', () => {
         'Could not change where swimlanes come from: Changed elsewhere.',
       );
       expect(screen.getByRole('radio', { name: /One per WBS group/ })).toBeChecked();
+    });
+
+    it('names its button for the pick, and says only the button applies a change of source', () => {
+      mount(actions());
+      expect(switchButton()).toHaveAccessibleName('Make by hand');
+      fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+      expect(switchButton()).toHaveAccessibleName('Use WBS groups');
+      expect(screen.getByText(/changes nothing until you press the button below/)).toBeVisible();
+    });
+
+    it('shows a level that still holds a summary when the plan was saved at one that has emptied', () => {
+      // Level 3 has no summary in WBS_PLAN: the select must not show it, nor would a switch write it.
+      mount(actions(), GATE, { plan: planFacts('WBS', 3) });
+      expect(screen.getByRole('combobox', { name: 'WBS level' })).toHaveValue('2');
+      expect(switchButton()).not.toHaveAttribute('aria-disabled', 'true');
     });
 
     it('has no axe violations while the WBS leads', async () => {

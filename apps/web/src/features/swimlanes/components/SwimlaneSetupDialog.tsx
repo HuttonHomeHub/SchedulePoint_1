@@ -11,7 +11,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextareaField } from '@/components/ui/form';
-import { wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
+import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
 
 export interface SwimlaneSetupDialogProps {
   open: boolean;
@@ -29,8 +29,8 @@ export interface SwimlaneSetupDialogProps {
 
 /**
  * **Set up swimlanes** (swimlanes M2-T9 and M3-T1, feature-spec US-2 and US-4): by hand — type the
- * names, one per line — or one per WBS group at a level, preselected to the shallowest level that has
- * two groups.
+ * names, one per line — or one per WBS group at a level. **By hand is the default source**; only the
+ * WBS level is preselected, to the shallowest level that has two groups, for a planner who chooses it.
  *
  * Confirming by hand does two writes in order: the swimlanes (appended in the order typed, one undo
  * step), then the plan's source. If the second fails the first stays, and the dialog says so and
@@ -68,7 +68,7 @@ function SetupForm({
   const [source, setSource] = useState<ChosenSource>('MANUAL');
   const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
   const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
-  const level = pickedLevel ?? levels.suggested;
+  const level = clampWbsLevel(pickedLevel, levels);
   const [text, setText] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -156,7 +156,11 @@ function SetupForm({
       {created === 0 ? (
         <SwimlaneSourceFields
           source={source}
-          onSource={setSource}
+          onSource={(next) => {
+            // A problem with the names belongs to the by-hand form; it must not follow the planner to the WBS.
+            setProblems([]);
+            setSource(next);
+          }}
           level={level}
           onLevel={setPickedLevel}
           levels={levels}

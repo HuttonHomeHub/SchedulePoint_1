@@ -414,12 +414,18 @@ describe('useSwimlaneManagement', () => {
   describe('a plan whose swimlanes follow the WBS', () => {
     const wbs = { id: 'p1', version: 4, swimlaneSource: 'WBS', swimlaneWbsLevel: 2 } as const;
 
-    it('shades the gutter’s writes with the WBS reason, since a swimlane is a summary', () => {
+    it('shades the gutter’s rows with the WBS reason, since a swimlane is a summary', () => {
       const { result } = mount({ plan: wbs });
-      expect(result.current.gutterActions.write).toEqual({
+      expect(result.current.gutterActions.rows).toEqual({
         writable: false,
         reason: expect.stringMatching(/^Swimlanes follow the WBS in this plan\./),
       });
+    });
+
+    it('never shades the corner’s Swimlanes… command with the WBS reason: it is the way out', () => {
+      const { result } = mount({ plan: wbs });
+      // The pen is held, so the command is open and says nothing about the WBS.
+      expect(result.current.gutterActions.write).toEqual({ writable: true, reason: null });
     });
 
     it('leads with the pen’s own reason when the pen is why, because that one can be fixed', () => {
@@ -428,6 +434,7 @@ describe('useSwimlaneManagement', () => {
         gate: { writable: false, reason: 'Start editing to change swimlanes.' },
       });
       expect(result.current.gutterActions.write.reason).toBe('Start editing to change swimlanes.');
+      expect(result.current.gutterActions.rows?.reason).toBe('Start editing to change swimlanes.');
     });
 
     it('opens Manage, not Set up: the plan is set up, and Manage is where the source is changed', () => {

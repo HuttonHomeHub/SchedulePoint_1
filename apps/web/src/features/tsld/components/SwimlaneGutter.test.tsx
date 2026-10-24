@@ -301,6 +301,26 @@ describe('the label menu', () => {
     expect(a.onDelete).not.toHaveBeenCalled();
   });
 
+  it('shuts the rows for their own reason while the corner command stays open (a WBS source)', () => {
+    const a = actions({
+      rows: { writable: false, reason: 'Swimlanes follow the WBS in this plan.' },
+    });
+    mount({ actions: a });
+    // The command is the way out of the reason, so it is not shaded by it.
+    const command = screen.getByRole('button', { name: 'Swimlanes…' });
+    expect(command).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(command);
+    expect(a.manage.onOpen).toHaveBeenCalledTimes(1);
+    fireEvent.click(labelButtons()[1]!);
+    for (const name of ['Rename…', 'Move up', 'Move down', 'Delete…']) {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item).toHaveAttribute('aria-disabled', 'true');
+      expect(item).toHaveAccessibleDescription('Swimlanes follow the WBS in this plan.');
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }));
+    expect(a.onRename).not.toHaveBeenCalled();
+  });
+
   it('gives "No swimlane" no menu: nothing about it can change', () => {
     mount();
     const none = labelButtons()[3]!;

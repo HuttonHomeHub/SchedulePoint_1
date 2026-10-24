@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/form';
 import { FormSection } from '@/components/ui/form-layout';
-import { isWbsSwimlaneLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
+import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
 
 export interface SwimlaneManageDialogProps {
   open: boolean;
@@ -105,15 +105,13 @@ function ManageBody({
   };
 
   // Where the swimlanes come from. The picker starts on what the plan holds, so an untouched dialog
-  // reads "unchanged" and Switch has nothing to do.
+  // reads "unchanged" and the button has nothing to do.
   const followsWbs = plan.swimlaneSource === 'WBS';
   const current: ChosenSource = followsWbs ? 'WBS' : 'MANUAL';
   const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
   const [source, setSource] = useState<ChosenSource>(current);
-  const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(
-    isWbsSwimlaneLevel(plan.swimlaneWbsLevel) ? plan.swimlaneWbsLevel : null,
-  );
-  const level = pickedLevel ?? levels.suggested;
+  const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
+  const level = clampWbsLevel(pickedLevel ?? plan.swimlaneWbsLevel, levels);
   const unchanged = source === current && (source === 'MANUAL' || level === plan.swimlaneWbsLevel);
   const unchangedId = useId();
 
@@ -183,6 +181,11 @@ function ManageBody({
           levels={levels}
           loaded={activities !== undefined}
         />
+        <p className="text-muted-foreground text-sm">
+          {followsWbs
+            ? 'Choosing here changes nothing until you press the button below.'
+            : 'Choosing here changes nothing until you press the button below. Adding, renaming, moving and deleting swimlanes apply as soon as you do them.'}
+        </p>
         {unchanged ? (
           <p id={unchangedId} className="text-muted-foreground text-sm">
             Swimlanes already come from this.
@@ -203,7 +206,7 @@ function ManageBody({
             }
             onClick={() => void switchSource()}
           >
-            Switch
+            {busy ? 'Switching…' : source === 'WBS' ? 'Use WBS groups' : 'Make by hand'}
           </Button>
         </div>
       </FormSection>
