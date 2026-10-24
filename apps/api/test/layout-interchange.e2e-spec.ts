@@ -5,7 +5,13 @@ import { join } from 'node:path';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { encodeLayoutFields, importSchedule, parseXer } from '@repo/interchange';
+import {
+  encodeLayoutFields,
+  foldSwimlaneName,
+  importSchedule,
+  isSwimlaneName,
+  parseXer,
+} from '@repo/interchange';
 import { drawnSpanDays } from '@repo/layout';
 import { SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
@@ -652,6 +658,49 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       expect(swimlanedClipped.report.repairs.map((f) => f.detail)).toContain(
         '1 swimlane name(s) past the limit of 100 were not imported',
       );
+    });
+  });
+
+  describe('swimlane-name-shape: the reader is never looser than the database (M4-T4)', () => {
+    /** Every BMP code point but the surrogates, in one round trip - never one insert per character. */
+    const sweep = async (): Promise<{ cp: number; shapeOk: boolean; lowered: number[] }[]> => {
+      const rows = await prisma.$queryRaw<{ cp: number; shape_ok: boolean; lowered: string }[]>`
+        SELECT cp,
+               ('a' || chr(cp) || 'a') !~ '[[:cntrl:]]' AS shape_ok,
+               lower(chr(cp)) AS lowered
+        FROM generate_series(1, 65535) AS cp
+        WHERE cp NOT BETWEEN 55296 AND 57343
+        ORDER BY cp
+      `;
+      return rows.map((r) => ({
+        cp: r.cp,
+        shapeOk: r.shape_ok,
+        lowered: [...r.lowered].map((c) => c.codePointAt(0)!),
+      }));
+    };
+
+    it('accepts no character the CHECK ck_swimlanes_name_shape would refuse', async () => {
+      const refusedByDatabase = (await sweep()).filter((r) => !r.shapeOk).map((r) => r.cp);
+      const acceptedByReader = refusedByDatabase.filter((cp) =>
+        isSwimlaneName(`a${String.fromCodePoint(cp)}a`),
+      );
+      expect(acceptedByReader.map((cp) => cp.toString(16))).toEqual([]);
+    });
+
+    it('calls two characters equal whenever the database lower() does', async () => {
+      const byLowered = new Map<string, number[]>();
+      for (const r of await sweep()) {
+        const key = r.lowered.join(',');
+        byLowered.set(key, [...(byLowered.get(key) ?? []), r.cp]);
+      }
+      const split = [...byLowered.values()]
+        .filter((group) => group.length > 1)
+        .filter(
+          (group) =>
+            new Set(group.map((cp) => foldSwimlaneName(String.fromCodePoint(cp)))).size > 1,
+        )
+        .map((group) => group.map((cp) => cp.toString(16)));
+      expect(split).toEqual([]);
     });
   });
 

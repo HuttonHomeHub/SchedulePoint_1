@@ -139,9 +139,12 @@ cites this release's tag.
   `ck_plans_swimlane_source_level` accepts (a WBS source has a level, anything else has none).
 - **A label is read only on its own table.** A known label on any other table is a foreign field.
 - **Names are attacker text bound for a CHECK.** The reader holds each to `ck_swimlanes_name_shape`
-  (1 to 80 characters counted as code points, trimmed, no control character, well-formed UTF-16),
-  de-duplicates them ignoring case with a fold harder than the database's `lower()` so a collision
-  cannot abort the commit, keeps at most 100 (the swimlanes module's cap), and bounds the project
+  (1 to 80 characters counted as code points, trimmed, well-formed UTF-16, and none in the Unicode
+  categories Cc, Zl, Zp or Cf, which covers whatever a C library's `[[:cntrl:]]` counts),
+  de-duplicates them with a per-code-point fold at least as strict as the database's per-character
+  `lower()` (U+0130 lowers to `i` there, not to `i` plus a dot), so a collision cannot abort the commit.
+  A database sweep in `layout-interchange.e2e-spec.ts` holds both predicates to that. The importer
+  re-applies them before the insert and reports anything it refuses. It keeps at most 100 (the swimlanes module's cap), and bounds the project
   field at 64 KiB before parsing it. Every refusal is counted in one `repair` finding per kind.
 - **Restore** is under the existing `restoreLayout` choice. The swimlanes are created in file order
   before the activities that name them, the plan's source and level are set, and phase 3 packs each

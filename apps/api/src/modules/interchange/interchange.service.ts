@@ -4,7 +4,9 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   containsCycle,
+  foldSwimlaneName,
   importSchedule,
+  isSwimlaneName,
   type ImportCalendarScope,
   type ImportGraph,
   type InterchangeReport,
@@ -44,6 +46,7 @@ import { ProjectRepository } from '../projects/project.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import { ResourceRepository } from '../resources/resource.repository';
 import { ScheduleService } from '../schedule/schedule.service';
+import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
@@ -250,6 +253,7 @@ export class InterchangeService {
       unarchivedResources,
       calendarFindings,
       resourceFindings,
+      swimlaneFindings,
     } = await this.prisma.$transaction(async (tx) => {
       // The read in `resolveTarget` is the 404 and the organisation check; this lock is the
       // guarantee. The calendars and plan inserted below take only `FOR KEY SHARE` on the project,
@@ -270,6 +274,7 @@ export class InterchangeService {
     // report says what the answers actually did — "reuse" silently dropped the file's own rate and
     // calendar for that resource, and "separate copy" created a row under a different name.
     report.repairs.push(...resourceFindings);
+    report.repairs.push(...swimlaneFindings);
 
     // CQ-4 (ADR-0053 §4): a source row that matched an ARCHIVED library row is matched and the row
     // auto-unarchived — never silently. Recorded as a `repair` finding, the ADR-0050 class for "a
@@ -517,6 +522,8 @@ export class InterchangeService {
     calendarFindings: ReportFinding[];
     /** Resource-name collisions the planner answered, and how — one `repair` finding each. */
     resourceFindings: ReportFinding[];
+    /** Swimlane names the persisting layer refused after the reader had passed them (normally none). */
+    swimlaneFindings: ReportFinding[];
   }> {
     const stamp = { createdBy: principal.userId, updatedBy: principal.userId };
     const organizationId = project.organizationId;
@@ -627,22 +634,54 @@ export class InterchangeService {
     // FK). The reader has already shaped each name to `ck_swimlanes_name_shape` and de-duplicated them
     // ignoring case, because one `23505` on `uq_swimlanes_plan_name` would roll back the whole import.
     // `position` is the file's order. The rows go in one batch, like everything else here.
+    //
+    // **Defence in depth.** The reader already guarantees this, but the cost of being wrong is the whole
+    // import, so the same predicate and fold are applied again here, to whatever graph arrives: a name
+    // the database could refuse (`23514`) or call equal to an earlier one (`23505`) is left out, its
+    // members stay unassigned, and one `repair` finding says so. A savepoint-and-retry per row would
+    // also survive a mismatch nobody predicted, but it would make the batch a loop inside the
+    // transaction the batching exists to avoid, so it is deliberately not built; the database sweep in
+    // `layout-interchange.e2e-spec.ts` is what keeps these two predicates honest instead.
     const swimlaneIdByKey = new Map<string, string>();
-    const swimlaneRows: Prisma.SwimlaneCreateManyInput[] = (graph.swimlanes ?? []).map(
-      (swimlane, position) => {
-        const id = randomUUID();
-        swimlaneIdByKey.set(swimlane.key, id);
-        return {
-          id,
-          organizationId,
-          planId: plan.id,
-          name: swimlane.name,
-          position,
-          ...stamp,
-        };
-      },
-    );
+    const swimlaneRows: Prisma.SwimlaneCreateManyInput[] = [];
+    const seenNames = new Set<string>();
+    let refusedSwimlanes = 0;
+    for (const swimlane of graph.swimlanes ?? []) {
+      const folded = foldSwimlaneName(swimlane.name);
+      if (
+        !isSwimlaneName(swimlane.name) ||
+        seenNames.has(folded) ||
+        swimlaneRows.length >= SWIMLANE_LIMIT
+      ) {
+        refusedSwimlanes += 1;
+        continue;
+      }
+      seenNames.add(folded);
+      const id = randomUUID();
+      swimlaneIdByKey.set(swimlane.key, id);
+      swimlaneRows.push({
+        id,
+        organizationId,
+        planId: plan.id,
+        name: swimlane.name,
+        position: swimlaneRows.length,
+        ...stamp,
+      });
+    }
     await this.swimlanes.createManyForImport(swimlaneRows, tx);
+    const swimlaneFindings: ReportFinding[] =
+      refusedSwimlanes === 0
+        ? []
+        : [
+            {
+              kind: 'repair',
+              entity: 'activity',
+              sourceRef: null,
+              detail: `${String(refusedSwimlanes)} swimlane name(s) could not be created and their activities were left in no swimlane`,
+              reason:
+                'a swimlane name must satisfy the database name rules and be unique ignoring case',
+            },
+          ];
     // Map source key → id (deterministic lane per source order), batch-insert. The pure pipeline already
     // guaranteed WBS/constraint/progress consistency (acyclic same-plan tree, paired constraints,
     // deriveStatus/N08/N18/resume≥suspend), so every field is written verbatim.
@@ -947,6 +986,7 @@ export class InterchangeService {
       unarchivedResources,
       calendarFindings,
       resourceFindings,
+      swimlaneFindings,
     };
   }
 

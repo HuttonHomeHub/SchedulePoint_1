@@ -103,29 +103,48 @@ function isCalendarDate(value: string): boolean {
   );
 }
 
-// eslint-disable-next-line no-control-regex -- matching control characters is the point.
-const CONTROL_CHARACTER = /[\u0000-\u001F\u007F-\u009F]/;
+/**
+ * Every character the database's `[[:cntrl:]]` could reject, and then some. PostgreSQL asks the C
+ * library, and musl's `iswcntrl` counts the line and paragraph separators (U+2028, U+2029) and the
+ * interlinear annotation marks (U+FFF9 to U+FFFB) beside the C0 and C1 controls. Rejecting the
+ * Unicode categories Cc, Zl, Zp and Cf covers all of them on any C library: stricter than the CHECK,
+ * never looser, so no accepted name can fail it with `23514` and roll the import back.
+ */
+const UNSAFE_CHARACTER = /[\p{Cc}\p{Zl}\p{Zp}\p{Cf}]/u;
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /**
- * Whether `name` (already trimmed) satisfies `ck_swimlanes_name_shape` - the same predicate the
- * swimlanes DTO applies, plus well-formed UTF-16 so the value survives the trip to the database.
+ * Whether `name` (already trimmed) is safe to hand to `ck_swimlanes_name_shape` - at least as strict as
+ * the CHECK (`swimlane-name-shape` in `layout-interchange.e2e-spec.ts` sweeps the whole BMP against
+ * the real database to hold it to that), and well-formed UTF-16 so the value survives the trip.
  * Length counts characters, as PostgreSQL's `char_length` does, not UTF-16 code units.
  */
-function isSwimlaneName(name: string): boolean {
+export function isSwimlaneName(name: string): boolean {
   if (name === '' || name !== name.trim()) return false;
-  if (CONTROL_CHARACTER.test(name) || LONE_SURROGATE.test(name)) return false;
+  // 80 code points are at most 160 code units: refuse a long string before spreading it.
+  if (name.length > MAX_SWIMLANE_NAME_LENGTH * 2) return false;
+  if (UNSAFE_CHARACTER.test(name) || LONE_SURROGATE.test(name)) return false;
   return [...name].length <= MAX_SWIMLANE_NAME_LENGTH;
 }
 
+const firstCodePoint = (text: string): string => String.fromCodePoint(text.codePointAt(0) ?? 0);
+
 /**
- * The key two names are compared by. The database compares `lower(name)`; this folds harder (Unicode
- * compatibility form, then lower, upper, lower) so that two names the database could ever call equal
- * are equal here too. Folding too much only merges two lanes the file meant as two, and says so; folding
- * too little aborts the whole import on a unique violation.
+ * The key two names are compared by. The unique index is on `lower(name)`, and the C library lowers
+ * one character at a time, keeping one character out of every one: U+0130 (I with a dot) becomes `i`
+ * there, where JavaScript's `toLowerCase` gives `i` plus a combining dot. So this folds per code point
+ * and keeps only the first code point of each result, then goes lower, upper, lower so a case pair
+ * the library's tables relate differently still lands together. It can only be stricter than the
+ * database: folding too much merges two swimlanes the file meant as two, and says so; folding too
+ * little aborts the whole import on a unique violation. Held to that by the same database sweep.
  */
-function foldName(name: string): string {
-  return name.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase();
+export function foldSwimlaneName(name: string): string {
+  let folded = '';
+  for (const char of name) {
+    const lower = firstCodePoint(char.toLowerCase());
+    folded += firstCodePoint(firstCodePoint(lower.toUpperCase()).toLowerCase());
+  }
+  return folded;
 }
 
 type SwimlaneSourceName = CanonicalSwimlanes['source'];
@@ -390,12 +409,22 @@ export function decodeLayoutFields(
       'the swimlanes field is bounded JSON naming a source, a level and the swimlane names',
     );
   }
+  // A WBS source takes its swimlanes from the summaries, so hand-made names would be created only to
+  // sit unseen. They are not imported, and the file is told once.
+  const dropManual = field?.source === 'WBS';
+  if (dropManual) {
+    discarded(
+      (field?.names.length ?? 0) + swimlaneNames.size,
+      'hand-made swimlane name(s) were not imported because the plan takes its swimlanes from the WBS',
+      'a WBS swimlane source ignores hand-made swimlanes',
+    );
+  }
   const canonical = new Map<string, string>(); // folded name -> the spelling the plan will use
   const order: string[] = [];
   const mergedSpellings = new Set<string>();
   let overLimit = 0;
   const admit = (name: string): string | undefined => {
-    const folded = foldName(name);
+    const folded = foldSwimlaneName(name);
     const existing = canonical.get(folded);
     if (existing !== undefined) {
       if (existing !== name) mergedSpellings.add(name);
@@ -406,7 +435,7 @@ export function decodeLayoutFields(
     order.push(name);
     return name;
   };
-  for (const entry of field?.names ?? []) {
+  for (const entry of dropManual ? [] : (field?.names ?? [])) {
     const name = typeof entry === 'string' ? entry.trim() : '';
     if (!isSwimlaneName(name)) {
       badSwimlaneNames += 1;
@@ -415,13 +444,13 @@ export function decodeLayoutFields(
     if (admit(name) === undefined) overLimit += 1;
   }
   const memberOf = new Map<string, string>(); // task id -> canonical swimlane name
-  for (const [key, name] of swimlaneNames) {
+  for (const [key, name] of dropManual ? [] : swimlaneNames) {
     const resolved = admit(name);
     if (resolved === undefined) overLimit += 1;
     else memberOf.set(key, resolved);
   }
   let orphanSwimlaneLanes = 0;
-  for (const key of swimlaneLanes.keys()) {
+  for (const key of dropManual ? [] : swimlaneLanes.keys()) {
     if (!memberOf.has(key)) orphanSwimlaneLanes += 1;
   }
 

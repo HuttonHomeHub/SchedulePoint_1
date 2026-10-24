@@ -95,14 +95,15 @@ export class InterchangeCountsResponseDto {
   @ApiProperty({
     required: false,
     description:
-      'Swimlanes created from a SchedulePoint XER (swimlanes M4-T4). Absent for a file from another ' +
-      'tool and when `restoreLayout` is `IGNORE`.',
+      'Swimlanes created from a SchedulePoint XER (swimlanes M4-T4). Absent when none were ' +
+      'restored: a file from another tool, `restoreLayout` of `IGNORE`, or a file with none.',
   })
   swimlanes?: number;
 
   @ApiProperty({
     required: false,
-    description: 'Activities placed in one of those swimlanes (swimlanes M4-T4).',
+    description:
+      'Activities placed in one of those swimlanes (swimlanes M4-T4). Absent when none were restored.',
   })
   swimlaneMembers?: number;
 }

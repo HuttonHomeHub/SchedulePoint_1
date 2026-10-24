@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { importXer } from './import-xer.js';
 import {
   decodeLayoutFields,
+  isSwimlaneName,
   LAYOUT_LABEL_SWIMLANE,
   LAYOUT_LABEL_SWIMLANE_LANE,
   LAYOUT_LABEL_SWIMLANES,
@@ -134,16 +135,33 @@ describe('swimlane labels — names are deduped ignoring case before anything is
     ]);
   });
 
-  it('folds harder than lower(): ß and SS, and a compatibility form, are one name', () => {
+  it('folds per code point, keeping one character as the C library does: İ and Kelvin K', () => {
+    // JavaScript lowers U+0130 to "i" plus a combining dot; the database's per-character lower() gives
+    // "i", so "İstanbul" and "istanbul" are one name to the unique index.
     const { swimlanes } = decode([
-      project(field('MANUAL', ['Straße', 'STRASSE', 'ＡＢＣ', 'abc'])),
+      project(field('MANUAL', ['İstanbul', 'istanbul', '\u212Aelvin', 'kelvin'])),
     ]);
-    expect(swimlanes?.names).toEqual(['Straße', 'ＡＢＣ']);
+    expect(swimlanes?.names).toEqual(['İstanbul', '\u212Aelvin']);
   });
 
   it('trims a list entry before comparing it', () => {
     expect(decode([project(field('MANUAL', ['  Core  ', 'core']))]).swimlanes?.names).toEqual([
       'Core',
+    ]);
+  });
+});
+
+describe('swimlane labels — a WBS source ignores hand-made swimlanes', () => {
+  it('imports the source and level, drops the names and members, and says so once', () => {
+    const { layout, swimlanes, findings } = decode([
+      project(field('WBS', ['Civil'], 2)),
+      name('T1', 'Civil'),
+      lane('T1', '1'),
+    ]);
+    expect(swimlanes).toEqual({ source: 'WBS', wbsLevel: 2, names: [] });
+    expect(layout.size).toBe(0);
+    expect(details(findings)).toEqual([
+      '2 hand-made swimlane name(s) were not imported because the plan takes its swimlanes from the WBS',
     ]);
   });
 });
@@ -202,6 +220,24 @@ describe('swimlane labels — hostile values are bounded and counted', () => {
     expect(details(findings)).toEqual([
       '2 swimlane name(s) were not 1 to 80 characters without control characters and were discarded',
     ]);
+  });
+
+  it.each([
+    ['a line separator', 'a\u2028b'],
+    ['a paragraph separator', 'a\u2029b'],
+    ['an interlinear annotation mark', 'a\uFFF9b'],
+    ['a zero-width space', 'a\u200Bb'],
+    ['a C1 control', 'a\u0085b'],
+    ['a DEL', 'a\u007Fb'],
+  ])('refuses a name holding %s', (_what, text) => {
+    const { swimlanes, findings } = decode([project(field('MANUAL', [text]))]);
+    expect(swimlanes?.names).toEqual([]);
+    expect(findings).toHaveLength(1);
+  });
+
+  it('refuses an overlong string without spreading it', () => {
+    expect(isSwimlaneName('y'.repeat(161))).toBe(false);
+    expect(isSwimlaneName('😀'.repeat(80))).toBe(true);
   });
 
   it('counts characters the way the database does: 80 emoji pass, 81 do not', () => {
