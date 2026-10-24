@@ -270,6 +270,7 @@ describe('gesture-machine: reposition-in-time', () => {
       currentLaneIndex: 1,
       dayLocked: false,
       sidewaysBlocked: false,
+      laneClamped: false,
     });
   });
 
@@ -376,7 +377,31 @@ describe('gesture-machine: free-2D drag (M4)', () => {
 
     it('commits the clamped lane, never the one the pointer is over', () => {
       const dropped = reduce(dragTo(grab(), 40 + 5 * LANE_HEIGHT), { type: 'pointerUp' }, ranged);
-      expect(dropped.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+      expect(dropped.intent).toEqual({
+        kind: 'reposition',
+        activityId: 'a',
+        laneIndex: 2,
+        laneClamped: true,
+      });
+    });
+
+    it('flags the ghost as held only while the pointer is past an edge', () => {
+      expect(dragTo(grab(), 40 + 5 * LANE_HEIGHT)).toMatchObject({ laneClamped: true });
+      expect(dragTo(grab(), 40 + LANE_HEIGHT)).toMatchObject({ laneClamped: false });
+    });
+
+    it('owes the reason when a drop is held at the edge and moves nothing', () => {
+      const pinned: GestureCtx = { ...ctx('select'), laneRange: () => ({ min: 1, max: 1 }) };
+      const held = reduce(
+        grab(),
+        { type: 'pointerMove', point: { x: 25, y: 40 + 5 * LANE_HEIGHT } },
+        pinned,
+      ).state;
+      expect(reduce(held, { type: 'pointerUp' }, pinned).intent).toEqual({
+        kind: 'reposition',
+        activityId: 'a',
+        laneClamped: true,
+      });
     });
 
     it('asks about the bar being dragged', () => {

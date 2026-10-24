@@ -2,12 +2,14 @@ import type { ActivitySummary } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { useWriteSwimlaneLanes } from '../api/use-swimlane-lanes';
-
-import { useUpdateActivityParents } from '@/features/activities';
+import { useAnnounce } from '@/components/ui/announcer';
+import { useUpdateActivityParents, useWriteSwimlaneLanes } from '@/features/activities';
 import { usePlan } from '@/features/plans';
 import { planReparentLanes } from '@/features/tsld/model/reparent-lanes';
 import { activityKeys } from '@/lib/query/hierarchy-keys';
+
+/** Said when the parents landed and the lanes did not, so the move is not mistaken for a failure. */
+const LANES_NOT_SAVED = 'Moved. Its position in the swimlane could not be saved.';
 
 type ParentsInput = Parameters<ReturnType<typeof useUpdateActivityParents>['mutateAsync']>[0];
 
@@ -23,7 +25,7 @@ type ParentsInput = Parameters<ReturnType<typeof useUpdateActivityParents>['muta
  * nearest. With any other source, and for a write that changes no group, it is exactly the bare write.
  *
  * **The parent write is the planner's edit; the lanes are its consequence.** A lane failure is
- * logged and never rejects the call — the parents have committed, the caller would otherwise report a
+ * logged, announced ("Moved. Its position in the swimlane could not be saved.") and never rejects the call — the parents have committed, the caller would otherwise report a
  * failure and record no undo step for work that happened, and the picture is still correct, only
  * un-stored. There is no undo step for the lanes either: undoing the parents puts the work back in a
  * group where its old lane is still stored.
@@ -36,6 +38,7 @@ export function useReparentActivities(orgSlug: string, planId: string) {
   const parents = useUpdateActivityParents(orgSlug, planId);
   const lanes = useWriteSwimlaneLanes(orgSlug, planId);
   const plan = usePlan(orgSlug, planId);
+  const announce = useAnnounce();
   const { mutateAsync: writeParents } = parents;
   const { mutateAsync: writeLanes } = lanes;
   const source = plan.data?.swimlaneSource ?? 'NONE';
@@ -49,6 +52,10 @@ export function useReparentActivities(orgSlug: string, planId: string) {
       );
       const saved = await writeParents(input);
       if (before === undefined) return saved;
+      const unsaved = (cause: unknown): void => {
+        console.error('Could not save where the moved activities sit in their swimlanes', cause);
+        announce(LANES_NOT_SAVED);
+      };
       try {
         const placements = planReparentLanes({
           activities: before,
@@ -66,13 +73,26 @@ export function useReparentActivities(orgSlug: string, planId: string) {
             ? []
             : [{ id: p.id, version, swimlane: { laneIndex: p.lane } }];
         });
-        if (positions.length === placements.length) await writeLanes({ positions });
+        // Never a smaller batch than the one planned: a bar the list no longer holds means the plan
+        // changed under the move, and the lanes are left to the projection.
+        if (positions.length < placements.length) {
+          unsaved(
+            new Error(
+              `no version for ${placements
+                .filter((p) => !versions.has(p.id))
+                .map((p) => p.id)
+                .join(', ')}`,
+            ),
+          );
+          return saved;
+        }
+        await writeLanes({ positions });
       } catch (error) {
-        console.error('Could not save where the moved activities sit in their swimlanes', error);
+        unsaved(error);
       }
       return saved;
     },
-    [queryClient, orgSlug, planId, writeParents, writeLanes, source, level, dataDate],
+    [queryClient, orgSlug, planId, writeParents, writeLanes, source, level, dataDate, announce],
   );
 
   return { mutateAsync, isPending: parents.isPending || lanes.isPending };

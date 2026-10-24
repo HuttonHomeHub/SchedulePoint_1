@@ -23,8 +23,8 @@ import { allSourceFiles, SRC_DIR, stripComments } from '@/test/source-files';
 const ALLOWED = [
   'features/activities/api/use-activities.ts',
   'features/activities/index.ts',
-  'features/swimlanes/model/use-reparent-activities.ts',
   'features/undo-redo/coverage.ts',
+  'features/wbs/model/use-reparent-activities.ts',
 ];
 
 const namesIn = (pattern: RegExp): string[] =>
@@ -41,9 +41,9 @@ describe('the parents-write census', () => {
     expect(namesIn(/\buseReparentActivities\(/)).toEqual([
       'components/layout/workspace/plan-workspace-toolbar.tsx',
       'components/layout/workspace/use-plan-workspace-model.ts',
-      'features/swimlanes/model/use-reparent-activities.ts',
       'features/wbs/components/ActivityMembersPanel.tsx',
       'features/wbs/components/WbsBulkAssignBar.tsx',
+      'features/wbs/model/use-reparent-activities.ts',
     ]);
   });
 });

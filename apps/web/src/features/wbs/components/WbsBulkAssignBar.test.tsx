@@ -13,8 +13,8 @@ import { WbsBulkAssignBar } from './WbsBulkAssignBar';
  * will refuse, is a perfectly well-formed request that loses every other row with it.
  */
 const mutateSpy = vi.fn();
-vi.mock('@/features/activities', () => ({
-  useUpdateActivityParents: () => ({ mutateAsync: mutateSpy, isPending: false }),
+vi.mock('../model/use-reparent-activities', () => ({
+  useReparentActivities: () => ({ mutateAsync: mutateSpy, isPending: false }),
 }));
 
 const announceSpy = vi.fn();

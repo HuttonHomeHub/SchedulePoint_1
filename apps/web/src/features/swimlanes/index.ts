@@ -3,7 +3,7 @@ export {
   useWriteSwimlaneLanes,
   type PlainLaneRow,
   type SwimlaneLaneRow,
-} from './api/use-swimlane-lanes';
+} from '@/features/activities';
 export { swimlanesQueryOptions, useSwimlanes } from './api/use-swimlanes';
 export { swimlaneKeys } from '@/lib/query/hierarchy-keys';
 export { manualSwimlaneInput } from './model/manual-membership';
@@ -22,5 +22,4 @@ export {
 } from './model/use-swimlane-management';
 export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
 export { SwimlaneBulkAssignBar } from './components/SwimlaneBulkAssignBar';
-export { useReparentActivities } from './model/use-reparent-activities';
 export { WbsSwimlaneField } from './components/WbsSwimlaneField';

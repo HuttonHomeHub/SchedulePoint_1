@@ -111,7 +111,6 @@ import {
   swimlanePictureOn,
   swimlaneKeys,
   useSwimlanes,
-  useReparentActivities,
   useWriteSwimlaneLanes,
   type SwimlaneLaneRow,
 } from '@/features/swimlanes';
@@ -187,6 +186,7 @@ import {
   type CheckableCommand,
   type LanePlacement,
 } from '@/features/undo-redo';
+import { useReparentActivities } from '@/features/wbs';
 import {
   canCalculateSchedule,
   canExportSchedule,

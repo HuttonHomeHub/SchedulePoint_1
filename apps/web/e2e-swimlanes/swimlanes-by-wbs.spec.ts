@@ -81,7 +81,9 @@ async function findBar(page: Page, name: string): Promise<{ x: number; y: number
       last = now;
     }
   }
-  throw new Error(`no bar for "${name}" was found under the scene`);
+  throw new Error(
+    `no bar for "${name}" was found by clicking down the scene from x=${String(left)}: the plan did not draw it, or the gutter moved`,
+  );
 }
 
 test.describe('swimlanes from the WBS', () => {
@@ -188,17 +190,32 @@ test.describe('swimlanes from the WBS', () => {
       await page.mouse.down();
       await page.mouse.move(grabbed.x, (grabbed.y + region.y + region.height) / 2, { steps: 6 });
       await page.mouse.move(grabbed.x, region.y + region.height - 6, { steps: 6 });
+      // The positive control: while the pointer is held past the edge the ghost is held at it and the
+      // cursor says so. A drag that never started (a missed bar) would show no such cursor.
+      await expect
+        .poll(
+          () =>
+            page
+              .locator('section[aria-label="Time-scaled logic diagram"] canvas')
+              .first()
+              .evaluate((el) => (el as HTMLElement).style.cursor),
+          { message: 'the cursor refuses while the pointer is past the swimlane edge' },
+        )
+        .toBe('not-allowed');
       await page.mouse.up();
-      await page.waitForLoadState('networkidle');
+      await expect(page.getByTestId('announcer')).toContainText(
+        'This swimlane follows the WBS, so the bar stays in it.',
+      );
 
       const groundworks = list.getByRole('group', { name: 'Groundworks', exact: true });
       await expect(groundworks.getByRole('option').filter({ hasText: 'Ground slab' })).toHaveCount(
         1,
       );
-      const after = await storedWbsActivities(page, orgSlug);
-      expect(after['Ground slab']!.parentId, 'a drag does not re-file').toBe(
-        before['Ground slab']!.parentId,
-      );
+      await expect
+        .poll(async () => (await storedWbsActivities(page, orgSlug))['Ground slab']!.parentId, {
+          message: 'a drag does not re-file',
+        })
+        .toBe(before['Ground slab']!.parentId);
       // The gesture ends inside the swimlane, so the server is never asked to cross: no write the
       // drag made was refused (before the clamp, the ghost crossed and the positions write was a 422).
       expect(wire.failed.slice(failedBefore), 'no write of the drag was refused').toEqual([]);

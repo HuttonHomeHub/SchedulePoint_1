@@ -186,6 +186,8 @@ export type EditIntent =
       /** Set when a started activity's drag changed lane AND went sideways: the lane is written, the
        * sideways part dropped, and the host says so politely. */
       sidewaysDiscarded?: true;
+      /** Set when the drop was held at the edge `laneRange` allows: the host owes the planner the reason. */
+      laneClamped?: true;
     }
   | {
       /**
@@ -278,6 +280,8 @@ export type GestureState =
       dayLocked?: boolean;
       /** The pointer reached a different day column while {@link dayLocked} held the bar still. */
       sidewaysBlocked?: boolean;
+      /** The pointer is past the edge `laneRange` allows, so the ghost is held at the edge (swimlanes SQ-5). */
+      laneClamped?: boolean;
     }
   | {
       /**
@@ -500,6 +504,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             currentLaneIndex: laneIndex,
             dayLocked: startFrozen === true,
             sidewaysBlocked: false,
+            laneClamped: false,
           },
         };
       }
@@ -558,11 +563,13 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         const range = ctx.laneRange?.(state.activityId) ?? null;
         const currentLaneIndex =
           range === null ? pointerLane : Math.min(range.max, Math.max(range.min, pointerLane));
+        const laneClamped = currentLaneIndex !== pointerLane;
         if (
           currentStartDay === state.currentStartDay &&
           currentLaneIndex === state.currentLaneIndex &&
           movedPastThreshold === state.movedPastThreshold &&
-          sidewaysBlocked === (state.sidewaysBlocked === true)
+          sidewaysBlocked === (state.sidewaysBlocked === true) &&
+          laneClamped === (state.laneClamped === true)
         )
           return { state };
         return {
@@ -572,6 +579,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             currentLaneIndex,
             movedPastThreshold,
             sidewaysBlocked,
+            laneClamped,
           },
         };
       }
@@ -681,6 +689,12 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             intent: { kind: 'reposition', activityId: state.activityId, sidewaysRefused: true },
           };
         }
+        if (state.laneClamped === true && state.movedPastThreshold && !dayChanged && !laneChanged) {
+          return {
+            state: IDLE,
+            intent: { kind: 'reposition', activityId: state.activityId, laneClamped: true },
+          };
+        }
         if (!state.movedPastThreshold || (!dayChanged && !laneChanged)) {
           return { state: IDLE, select: state.activityId };
         }
@@ -694,6 +708,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             ...(dayChanged ? { startDay: state.currentStartDay } : {}),
             ...(laneChanged ? { laneIndex: state.currentLaneIndex } : {}),
             ...(state.sidewaysBlocked === true && laneChanged ? { sidewaysDiscarded: true } : {}),
+            ...(state.laneClamped === true ? { laneClamped: true } : {}),
           },
         };
       }

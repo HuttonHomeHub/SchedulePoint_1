@@ -3,11 +3,11 @@ import { useId, useState } from 'react';
 
 import { bulkParentChanges } from '../model/membership-diff';
 import type { OnReparented } from '../model/reparented';
+import { useReparentActivities } from '../model/use-reparent-activities';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { SelectField } from '@/components/ui/form';
-import { useReparentActivities } from '@/features/swimlanes';
 
 /** The sentinel `<option>` value for "file these at the top level" — `null` cannot ride in a DOM value. */
 const TOP_LEVEL = '';

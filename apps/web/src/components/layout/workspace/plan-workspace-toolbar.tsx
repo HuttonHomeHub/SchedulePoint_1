@@ -120,7 +120,6 @@ import {
 } from '@/features/schedule-health';
 import {
   SWIMLANE_GROUND,
-  useReparentActivities,
   useSwimlaneAssignment,
   useSwimlaneManagement,
   useSwimlaneScene,
@@ -162,6 +161,7 @@ import {
   historyResultMessage,
   isHistoryFailure,
 } from '@/features/undo-redo';
+import { useReparentActivities } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';

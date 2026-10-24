@@ -252,6 +252,14 @@ export function laneRangeOf(
   return { min: home.firstLane, max: home.firstLane + home.laneCount - 1 };
 }
 
+/**
+ * Said, once, when a drag in a WBS swimlane is held at the swimlane's edge: the ghost stopping with no
+ * reason is indistinguishable from a bar that will not move. "Breakdown" is the editor's section name
+ * (its field is "Parent WBS summary"), and Alt+Down is the keyboard's way to add a lane.
+ */
+export const WBS_EDGE_NOTE =
+  'This swimlane follows the WBS, so the bar stays in it. Change its Breakdown to move it to another swimlane. Press Alt+Down to add a lane in the swimlane.';
+
 /** What a drop that would carry a bar into another WBS swimlane says: the WBS owns filing. */
 export const WBS_FILING_REASON =
   'Swimlanes follow the WBS in this plan. Change the activity’s Breakdown to move it to another swimlane.';

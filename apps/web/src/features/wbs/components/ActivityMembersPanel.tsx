@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { membershipDiff } from '../model/membership-diff';
 import type { OnReparented } from '../model/reparented';
+import { useReparentActivities } from '../model/use-reparent-activities';
 import { ancestorIds, subtreeSizes, wouldCloseLoop } from '../model/wbs-tree';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -11,7 +12,6 @@ import { CheckboxField } from '@/components/ui/form';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { SearchField } from '@/components/ui/search-field';
-import { useReparentActivities } from '@/features/swimlanes';
 import { ApiFetchError } from '@/lib/api/client';
 
 /**

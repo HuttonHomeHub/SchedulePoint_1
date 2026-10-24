@@ -64,13 +64,13 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
 };
 
 const NEVER_MEETS_THE_SWIMLANE_SCENE: Readonly<Record<string, string>> = {
-  'features/swimlanes/api/use-swimlane-lanes.ts':
+  'features/activities/api/use-swimlane-lanes.ts':
     'sends the lane INSIDE a swimlane (`swimlane.laneIndex`); it takes no display lane, and a swimlane-free one only from auto-resolve, which resolves that picture itself (M2-T5)',
   'features/swimlanes/model/manual-membership.ts':
     'reads the stored in-swimlane lane rows to build the projection input; it is the input, not a consumer of the result',
   'features/wbs/model/wbs-swimlane-membership.ts':
     'orders sibling summaries by their stored lane, which is the WBS order the Gantt sorts by, and reads the stored in-swimlane lane rows to build the projection input (M3); it is the input, not a consumer of the result',
-  'features/swimlanes/model/use-reparent-activities.ts':
+  'features/wbs/model/use-reparent-activities.ts':
     'sends the lane INSIDE a swimlane (`swimlane.laneIndex`) for work a WBS parent write moved, planned against the picture after the move; it never sends a swimlane-free lane (M3-T2)',
   'features/activity-copy/model/clone-graph.ts': 'a clone carries the stored lane',
   'features/activity-copy/model/clone-projection.ts': 'a clone carries the stored lane',
