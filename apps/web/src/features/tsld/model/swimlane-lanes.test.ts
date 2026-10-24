@@ -6,6 +6,7 @@ import { drawnDaySpan } from './drawn-span';
 import {
   arrangeInSwimlanes,
   arrangeSceneOf,
+  assignToSwimlane,
   createInSwimlane,
   dropInSwimlane,
   laneRangeOf,
@@ -527,5 +528,109 @@ describe('arrangeInSwimlanes', () => {
   it('writes nothing when the answer is the layout already drawn', () => {
     const ctx = context(BASE);
     expect(arrangeInSwimlanes(ctx, arrangeSceneOf(ctx).lanes)).toEqual([]);
+  });
+});
+
+describe('assignToSwimlane', () => {
+  const write = (move: ReturnType<typeof assignToSwimlane>) => {
+    if (move.kind !== 'write') throw new Error(`expected a write, got ${move.kind}`);
+    return move;
+  };
+  const byId = (move: ReturnType<typeof assignToSwimlane>) =>
+    new Map(write(move).placements.map((p) => [p.id, p] as const));
+
+  it('stacks the bars left to right in the first free lanes of the target, none overlapping', () => {
+    const ctx = context([
+      ...BASE,
+      { id: 'n2', start: 1, end: 4, swimlane: null, lane: 1 },
+      { id: 'n3', start: 8, end: 9, swimlane: null, lane: 2 },
+    ]);
+    const placed = byId(assignToSwimlane(ctx, ['n3', 'n1', 'n2'], 'B'));
+    // b1 holds lane 0 days 0-3, so n1 (0-3) and n2 (1-4) go below it; n3 (8-9) is clear of everything.
+    expect(placed.get('n1')).toMatchObject({ lane: 1, swimlaneId: 'B' });
+    expect(placed.get('n2')).toMatchObject({ lane: 2, swimlaneId: 'B' });
+    expect(placed.get('n3')).toMatchObject({ lane: 0, swimlaneId: 'B' });
+  });
+
+  it('takes the remembered lane in the target when it is free, and the nearest free one when it is not', () => {
+    const remembered = new Map([
+      ['n1', 3],
+      ['n2', 0],
+    ]);
+    const ctx = context([...BASE, { id: 'n2', start: 0, end: 3, swimlane: null, lane: 1 }], {
+      remembered: (id, swimlane) => (swimlane === 'B' ? remembered.get(id) : undefined),
+    });
+    const placed = byId(assignToSwimlane(ctx, ['n1', 'n2'], 'B'));
+    expect(placed.get('n1')).toMatchObject({ lane: 3 });
+    // Lane 0 is b1's; the nearest free to it is 1.
+    expect(placed.get('n2')).toMatchObject({ lane: 1 });
+    expect(write(assignToSwimlane(ctx, ['n1', 'n2'], 'B')).landed.how).not.toBe('stays');
+  });
+
+  it('records where each bar came from, so one undo step puts every one back', () => {
+    const ctx = context(BASE);
+    const placed = byId(assignToSwimlane(ctx, ['a2', 'n1'], 'B'));
+    expect(placed.get('a2')?.from).toEqual({ swimlaneId: 'A', lane: 1 });
+    expect(placed.get('n1')?.from).toEqual({ swimlaneId: null, lane: 0 });
+  });
+
+  it('files a bar in none with swimlaneId null, and does so even when "No swimlane" is not drawn yet', () => {
+    const ctx = context(BASE.filter((s) => s.id !== 'n1'));
+    expect(ctx.scene.extents.some((e) => e.id === null)).toBe(false);
+    const move = write(assignToSwimlane(ctx, ['a1'], null));
+    expect(move.placements.find((p) => p.id === 'a1')).toMatchObject({
+      swimlaneId: null,
+      lane: 0,
+      from: { swimlaneId: 'A', lane: 0 },
+    });
+    expect(move.landed).toMatchObject({ swimlane: 'No swimlane', changedSwimlane: true });
+  });
+
+  it('writes the unplaced members of the swimlanes it leaves and joins, but not as part of the edit', () => {
+    const ctx = context([
+      { id: 'a1', start: 0, end: 3, swimlane: 'A' },
+      { id: 'a2', start: 5, end: 8, swimlane: 'A' },
+      { id: 'n1', start: 0, end: 3, swimlane: null, lane: 0 },
+    ]);
+    const move = write(assignToSwimlane(ctx, ['a1'], 'B'));
+    const kept = move.placements.find((p) => p.id === 'a2');
+    expect(kept).toMatchObject({ materialised: true });
+    expect(kept?.from).toBeUndefined();
+  });
+
+  it('leaves a bar already in the target alone, and says nothing moved when all of them are', () => {
+    const ctx = context(BASE);
+    const mixed = write(assignToSwimlane(ctx, ['a1', 'b1'], 'B'));
+    expect(mixed.placements.map((p) => p.id)).not.toContain('b1');
+    const none = assignToSwimlane(ctx, ['b1'], 'B');
+    expect(none.kind).toBe('stay');
+  });
+
+  it('refuses a bar that is not drawn, whole', () => {
+    expect(assignToSwimlane(context(BASE), ['a1', 'ghost'], 'B')).toMatchObject({
+      kind: 'refuse',
+    });
+  });
+
+  it('refuses a swimlane the plan does not have', () => {
+    expect(assignToSwimlane(context(BASE), ['a1'], 'Z')).toMatchObject({ kind: 'refuse' });
+  });
+
+  it('keeps a batch of two thousand in one write', () => {
+    const specs: Spec[] = Array.from({ length: 2000 }, (_, i) => ({
+      id: `n${String(i)}`,
+      start: i % 5,
+      end: (i % 5) + 1,
+      swimlane: null,
+      lane: i,
+    }));
+    const move = write(
+      assignToSwimlane(
+        context(specs),
+        specs.map((s) => s.id),
+        'A',
+      ),
+    );
+    expect(move.placements.filter((p) => p.materialised !== true)).toHaveLength(2000);
   });
 });
