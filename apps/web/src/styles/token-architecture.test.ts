@@ -124,6 +124,9 @@ const OUTSIDE_THE_CLOSURE = {
     // the tiers they stand in for on paper, gated by their own ≥ 3:1 pairs on `--print`.
     '--canvas-paper-grid-month',
     '--canvas-paper-grid-year',
+    // The swimlane boundary rule and its paper twin: aliases of the year tiers above (swimlanes C5).
+    '--canvas-swimlane-rule',
+    '--canvas-paper-swimlane-rule',
     '--canvas-nonworking',
     // The lane hairline (ADR-0109 D4), on the same discriminator as the gridline tiers it runs
     // perpendicular to: a rule between two lanes has no meaning on a header and no semantic sibling
@@ -1010,5 +1013,18 @@ describe('the retired token families are gone', () => {
     // future component to reach for a name that no longer participates in any scope.
     const css = readGlobalsCss().replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).not.toMatch(new RegExp(`${prefix}[a-z-]*\\s*:`));
+  });
+});
+
+/**
+ * **The swimlane rule needs no contrast-theme override** (ADR-0191 D3, swimlanes M2-T2). A canvas
+ * bitmap keeps its own palette in forced colours, and the rule is an alias of the year tier, so the
+ * forced-colours block declares no canvas token and must not start declaring this one alone.
+ */
+describe('the swimlane rule in forced colours', () => {
+  it('forced-colors declares no canvas custom property, so the rule keeps the diagram palette', () => {
+    const block = blockBody('@media (forced-colors: active)');
+    expect(block.length, 'the forced-colors block must be found').toBeGreaterThan(0);
+    expect(block).not.toMatch(/--canvas-/);
   });
 });

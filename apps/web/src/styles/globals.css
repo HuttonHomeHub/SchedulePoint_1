@@ -766,6 +766,11 @@
      the values the screen's month and year rules held before M1. */
   --canvas-paper-grid-month: oklch(0.568 0.012 254);
   --canvas-paper-grid-year: oklch(0.48 0.014 256);
+  /* **The swimlane boundary rule is an alias, not a value** (swimlanes ui-architecture C5). It adds
+     no colour: it reads the year tier, so every contrast sweep that covers the year rule covers
+     it, and the legend census gets a key of its own. The paper twin reads the paper year rule. */
+  --canvas-swimlane-rule: var(--canvas-grid-year);
+  --canvas-paper-swimlane-rule: var(--canvas-paper-grid-year);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */

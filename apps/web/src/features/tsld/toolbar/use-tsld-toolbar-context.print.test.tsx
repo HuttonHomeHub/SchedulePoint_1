@@ -5,6 +5,7 @@ import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as diagramImageModule from './commands/use-diagram-image';
+import { NO_SWIMLANE_SCENE } from './test-helpers';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -197,6 +198,8 @@ function build(planView: 'tsld' | 'gantt' = 'tsld', { canvas = true } = {}) {
     useTsldToolbarContext({
       model: makeModel(),
       plan: PLAN,
+      swimlaneScene: NO_SWIMLANE_SCENE,
+      swimlanesShown: false,
       canvasUi,
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
@@ -390,6 +393,8 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
         useTsldToolbarContext({
           model,
           plan: PLAN,
+          swimlaneScene: NO_SWIMLANE_SCENE,
+          swimlanesShown: false,
           canvasUi,
           openDialog,
           legend,
@@ -475,6 +480,8 @@ describe('useTsldToolbarContext — context identity against a REAL query result
         return useTsldToolbarContext({
           model,
           plan: PLAN,
+          swimlaneScene: NO_SWIMLANE_SCENE,
+          swimlanesShown: false,
           canvasUi,
           openDialog,
           legend,

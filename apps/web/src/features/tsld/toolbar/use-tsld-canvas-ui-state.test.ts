@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { useTsldCanvasUiState } from './use-tsld-canvas-ui-state';
+import { swimlanesShown, useTsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
 /**
  * The canvas UI state feeds the `<Toolbar>`'s resolve → partition → measure → ResizeObserver cycle,
@@ -44,6 +44,7 @@ describe('useTsldCanvasUiState', () => {
       // chosen, so its default is nearly free; this one draws the moment it is switched on for any
       // levelled plan, so it is a real choice about the resting picture (M-E-T4).
       levelledOverlay: false,
+      swimlanesOverride: null,
     });
 
     act(() => result.current.setFilterQuery('concrete'));
@@ -236,5 +237,31 @@ describe('useTsldCanvasUiState', () => {
     expect(result.current.loeStartId).toBe('act-4');
     expect(result.current.lensState.baselineOverlay).toBe(true);
     expect(result.current.navState.isolateActive).toBe(true);
+  });
+});
+
+/** The Swimlanes lens state (swimlanes ui-architecture C11). */
+describe('swimlanes shown', () => {
+  it('follows the plan until the planner chooses: override ?? (source !== NONE)', () => {
+    expect(swimlanesShown(null, 'NONE')).toBe(false);
+    expect(swimlanesShown(null, 'MANUAL')).toBe(true);
+    expect(swimlanesShown(null, 'WBS')).toBe(true);
+    expect(swimlanesShown(false, 'MANUAL')).toBe(false);
+    expect(swimlanesShown(true, 'NONE')).toBe(true);
+  });
+
+  it('keeps the planner’s choice across a re-render, and drops it on a plan switch', () => {
+    const { result, rerender } = renderHook(({ planId }) => useTsldCanvasUiState(planId), {
+      initialProps: { planId: 'plan-a' },
+    });
+    expect(result.current.lensState.swimlanesOverride).toBeNull();
+    act(() => result.current.setSwimlanesOverride(false));
+    expect(result.current.lensState.swimlanesOverride).toBe(false);
+
+    rerender({ planId: 'plan-a' });
+    expect(result.current.lensState.swimlanesOverride).toBe(false);
+
+    rerender({ planId: 'plan-b' });
+    expect(result.current.lensState.swimlanesOverride).toBeNull();
   });
 });

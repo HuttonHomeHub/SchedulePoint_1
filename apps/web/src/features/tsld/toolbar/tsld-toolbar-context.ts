@@ -415,6 +415,18 @@ export interface TsldToolbarContext {
    */
   levelResources: boolean;
 
+  // --- Swimlanes lens (swimlanes M2-T2, ui-architecture C1) -----------------------------------------
+  /** Whether swimlanes are shown: `override ?? (source !== 'NONE')` (C11). Drives the toggle's checked state. */
+  swimlanesShown: boolean;
+  /** Set the planner's choice to the opposite of {@link swimlanesShown}. Gated by the lens's reasons. */
+  toggleSwimlanes: () => void;
+  /** The plan has swimlanes set up (its source is not `NONE`). Without it the lens says so and shuts. */
+  swimlanesSetUp: boolean;
+  /** The swimlane list is on its way. The lens shuts with a linked sentence, not a live announcement. */
+  swimlanesLoading: boolean;
+  /** The list failed to load; the lens says so and offers a retry through the sentence. Absent = fine. */
+  swimlanesFailed?: boolean;
+
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and
   // Next conflict (cycle flagged activities). Populated on every build from `canvasUi.navState` + the

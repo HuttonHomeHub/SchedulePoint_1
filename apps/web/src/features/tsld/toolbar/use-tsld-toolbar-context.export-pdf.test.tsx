@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EXPORT_STRIP_CAPTION_ROW } from '../export/export-image';
 
+import { NO_SWIMLANE_SCENE } from './test-helpers';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -162,6 +163,8 @@ function build(handle: Record<string, unknown> = {}) {
     useTsldToolbarContext({
       model: makeModel(),
       plan: PLAN,
+      swimlaneScene: NO_SWIMLANE_SCENE,
+      swimlanesShown: false,
       canvasUi: makeCanvasUi(handle),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },

@@ -14,6 +14,7 @@ import {
   type ColourMode,
 } from '../render/lenses';
 import { computeLogicPath } from '../render/logic-path';
+import type { SwimlaneInput } from '../render/project-swimlanes';
 
 import { runInPlace, type WithDiagram } from './canvas-directed-commands';
 import { useConflictNavigation } from './commands/use-conflict-navigation';
@@ -82,6 +83,8 @@ export function useTsldToolbarContext({
   penLock,
   plan,
   canvasUi,
+  swimlaneScene,
+  swimlanesShown: swimlaneLensShown,
   openDialog,
   legend,
   minimap,
@@ -123,6 +126,14 @@ export function useTsldToolbarContext({
    */
   comparedWithPlanName?: string | undefined;
   canvasUi: TsldCanvasUiState;
+  /**
+   * The host's swimlane scene (swimlanes M2-T1/T2). Passed IN because the host composes it from the
+   * lens state this hook's `canvasUi` owns, and the export reads the same input the canvas does.
+   * `failed` is optional: the list's failure is reported by the host once the scene carries it.
+   */
+  swimlaneScene: { input: SwimlaneInput | null; pending: boolean; failed?: boolean };
+  /** Whether swimlanes are shown, computed once by the host (`swimlanesShown`) and read by its scene too. */
+  swimlanesShown: boolean;
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
@@ -301,6 +312,7 @@ export function useTsldToolbarContext({
     toggleBaselineOverlay,
     toggleCompareOverlay,
     toggleLevelledOverlay,
+    setSwimlanesOverride,
     navState,
     toggleIsolate,
     setIsolateMode,
@@ -481,7 +493,7 @@ export function useTsldToolbarContext({
     activities,
     dependencies,
     // The same input the live canvas is handed, so the export draws the swimlanes the screen does.
-    swimlanes: model.swimlaneInput,
+    swimlanes: swimlaneScene.input,
     viewToggles,
     // Off the workspace model, which is where the live canvas reads it too — so the exported
     // picture shades the same days the screen does rather than from a second resolution.
@@ -694,6 +706,11 @@ export function useTsldToolbarContext({
       // M-E-T3 turns on: this says whether the PASS ran, which is what the shaded reason names; a
       // count would fold in the two states that are not refusals and shade a lens that is working.
       levelResources: plan.levelResources,
+      swimlanesShown: swimlaneLensShown,
+      toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
+      swimlanesSetUp: plan.swimlaneSource !== 'NONE',
+      swimlanesLoading: swimlaneScene.pending,
+      ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
       hasActiveBaseline,
       varianceLoading,
       varianceError,
@@ -1047,6 +1064,11 @@ export function useTsldToolbarContext({
     toggleLevelledOverlay,
     hasRevisionPair,
     plan.levelResources,
+    swimlaneLensShown,
+    setSwimlanesOverride,
+    plan.swimlaneSource,
+    swimlaneScene.pending,
+    swimlaneScene.failed,
     hasActiveBaseline,
     varianceLoading,
     varianceError,

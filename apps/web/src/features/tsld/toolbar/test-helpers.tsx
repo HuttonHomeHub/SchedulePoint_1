@@ -134,6 +134,10 @@ export function makeTsldToolbarContext(
     // has to set this deliberately. The false value is the interesting one here, unlike its
     // `compareOverlay` neighbour above, where the off value is the quiet one.
     levelResources: true,
+    swimlanesShown: false,
+    toggleSwimlanes: vi.fn(),
+    swimlanesSetUp: true,
+    swimlanesLoading: false,
     toggleBaselineOverlay: vi.fn(),
     hasActiveBaseline: false,
     varianceLoading: false,
@@ -183,3 +187,6 @@ export function makeTsldToolbarContext(
   }
   return context;
 }
+
+/** The host's swimlane scene when nothing is drawn: the argument every `useTsldToolbarContext` call now takes. */
+export const NO_SWIMLANE_SCENE = { input: null, pending: false } as const;

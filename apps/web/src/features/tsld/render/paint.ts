@@ -193,6 +193,8 @@ export interface TsldPalette {
   gridLineYear: string;
   /** The per-lane horizontal hairline (workspace redesign M4-T2). */
   laneRule: string;
+  /** The boundary between two swimlanes (swimlanes C5): solid, an alias of the year tier. */
+  swimlaneRule: string;
   /** A NON-DRIVING link (NetPoint-layout M2, `--canvas-link-minor`): 1 px solid, quieter than a
    * driving link by weight. Its own token rather than `edge`, which is the page's secondary text
    * colour (TECH_DEBT #367). */
@@ -219,6 +221,17 @@ export interface TsldPalette {
    * the mark shade, under its own key so a harness can tell a dot from a chevron.
    */
   attachDot: string;
+}
+
+/** The swimlane stack as the painter needs it: where each swimlane starts and how tall it is. */
+export interface SwimlaneMarks {
+  /** Top to bottom, contiguous, in display lanes. */
+  extents: readonly { firstLane: number; laneCount: number }[];
+  /**
+   * Tint every second swimlane with the band ground, and withhold the month bands while it shows
+   * (they are the same ground, so both would read as one muddle). The rule is drawn either way.
+   */
+  ground: boolean;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -261,6 +274,13 @@ export interface TsldScene {
    * the flag-off parity claim structural rather than a promise. The budget suite flips it.
    */
   monthBands?: boolean | undefined;
+  /**
+   * The swimlane marks (swimlanes M2-T2, ui-architecture C5): the stack's extents in display lanes,
+   * so the painter can rule each boundary and, when {@link SwimlaneMarks.ground} is set, tint the
+   * alternate swimlanes. Absent ⇒ neither layer runs ⇒ the frame is byte-for-byte today's paint
+   * (SC-3, the `monthBands` precedent). The painter reads rows only; it learns no membership.
+   */
+  swimlaneMarks?: SwimlaneMarks | undefined;
   /**
    * Draw the **data-date line** — a solid 2px `palette.dataDate` vertical at day offset 0 (day 0
    * IS the data date: `screenXOfDay(0, view) === view.originX`, `render-model.ts`) with its own
@@ -1171,6 +1191,33 @@ export interface PaintSceneOptions {
   minNonWorkingPx?: number;
 }
 
+/**
+ * Call `visit(index, top, bottom)` for each swimlane whose rows meet the canvas, in order. The first
+ * visible one is found by bisection, so the cost is O(swimlanes in view) however many there are.
+ */
+function visibleSwimlanes(
+  extents: SwimlaneMarks['extents'],
+  view: Viewport,
+  height: number,
+  visit: (index: number, top: number, bottom: number) => void,
+): void {
+  let lo = 0;
+  let hi = extents.length;
+  // The first extent whose bottom edge is below the top of the canvas.
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const e = extents[mid]!;
+    if (screenYOfLane(e.firstLane + e.laneCount, view) > 0) hi = mid;
+    else lo = mid + 1;
+  }
+  for (let i = lo; i < extents.length; i += 1) {
+    const e = extents[i]!;
+    const top = screenYOfLane(e.firstLane, view);
+    if (top > height) break;
+    visit(i, top, screenYOfLane(e.firstLane + e.laneCount, view));
+  }
+}
+
 export function paintScene(
   ctx: Ctx2D,
   scene: TsldScene,
@@ -1199,7 +1246,8 @@ export function paintScene(
   //
   // Cost: one `fillStyle` and at most `visibleMonths + 1` `fillRect`, no text. Pinned by
   // `paint.band-budget.test.ts`, because this is the tightest loop in the app.
-  if (scene.monthBands) {
+  const swimlaneGround = scene.swimlaneMarks?.ground === true;
+  if (scene.monthBands && !swimlaneGround) {
     ctx.fillStyle = palette.monthBand;
     const edges = bounds.months.filter((d) => d > firstDay);
     edges.push(lastDay + 1);
@@ -1213,6 +1261,18 @@ export function paintScene(
       segStart = edge;
       monthIndex += 1;
     }
+  }
+
+  // Layer -0.4: the alternate-swimlane ground (swimlanes C5, SQ-6): the same `--canvas-band` ground
+  // the month bands use, so it adds no ground to any contrast set, and beneath the non-working wash
+  // for the same reason the bands are. Every second swimlane, starting with the second so the first
+  // reads as the plain canvas. One fill per visible swimlane (`visibleSwimlanes`).
+  if (swimlaneGround && scene.swimlaneMarks) {
+    ctx.fillStyle = palette.monthBand;
+    const extents = scene.swimlaneMarks.extents;
+    visibleSwimlanes(extents, view, size.height, (i, top, bottom) => {
+      if (i % 2 === 1) ctx.fillRect(0, top, size.width, bottom - top);
+    });
   }
 
   // Layer 0: non-working (weekend/holiday) column wash, beneath the grid. Only when the plan has a
@@ -1337,6 +1397,25 @@ export function paintScene(
       ctx.moveTo(0, y);
       ctx.lineTo(size.width, y);
     }
+    ctx.stroke();
+  }
+
+  // Layer 1.6: the swimlane boundary rule (swimlanes C5). Beneath the links and bars on purpose: a
+  // link on a boundary covers the rule and the rule never covers a link, which is the correct order
+  // of loudness (ADR-0199). Solid, so it is not the dashed day and month rules' shape (ADR-0157 D1).
+  // One path and one stroke, with one segment per visible boundary.
+  if (scene.swimlaneMarks) {
+    ctx.strokeStyle = palette.swimlaneRule;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    visibleSwimlanes(scene.swimlaneMarks.extents, view, size.height, (i, top) => {
+      // The first swimlane's top is the diagram's edge, not a boundary between two.
+      if (i === 0) return;
+      const y = Math.round(top) + 0.5;
+      ctx.moveTo(0, y);
+      ctx.lineTo(size.width, y);
+    });
     ctx.stroke();
   }
 

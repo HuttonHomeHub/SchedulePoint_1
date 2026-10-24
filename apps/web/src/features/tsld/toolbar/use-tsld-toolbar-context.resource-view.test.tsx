@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { NO_SWIMLANE_SCENE } from './test-helpers';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -135,6 +136,8 @@ function build(activities: ActivitySummary[]) {
     useTsldToolbarContext({
       model: makeModel(activities),
       plan: PLAN,
+      swimlaneScene: NO_SWIMLANE_SCENE,
+      swimlanesShown: false,
       canvasUi: makeCanvasUi(),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },

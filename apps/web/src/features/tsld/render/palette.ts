@@ -158,6 +158,8 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     // surface, and a value chosen for a card's edge is the wrong one for it by an order of
     // magnitude of total ink.
     laneRule: token('--canvas-lane-rule', '#232833'),
+    // The swimlane boundary (swimlanes C5): an alias of the year tier, so it adds no colour value.
+    swimlaneRule: token('--canvas-swimlane-rule', '#9098ab'),
     // The non-driving link (NetPoint-layout M2). Unprefixed and resolved on the canvas element, like
     // every name here, so the canvas scope governs it (ADR-0102).
     linkMinor: token('--canvas-link-minor', '#9182be'),
@@ -269,6 +271,7 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineMonth: ['--canvas-paper-grid-month', '#72777e'],
   gridLineYear: ['--canvas-paper-grid-year', '#595e66'],
   laneRule: ['--canvas-lane-rule', '#f4f6f8'],
+  swimlaneRule: ['--canvas-paper-swimlane-rule', '#595e66'],
   linkMinor: ['--canvas-link-minor', '#9182be'],
   linkDriving: ['--canvas-link', '#947cd4'],
   linkMark: ['--canvas-link-mark', '#3d2070'],

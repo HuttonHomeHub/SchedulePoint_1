@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { NO_SWIMLANE_SCENE } from './test-helpers';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -141,6 +142,8 @@ function build({
     useTsldToolbarContext({
       model,
       plan,
+      swimlaneScene: NO_SWIMLANE_SCENE,
+      swimlanesShown: false,
       canvasUi,
       openDialog,
       legend: { open: false, toggle: vi.fn() },

@@ -243,6 +243,7 @@ export const PALETTE: TsldPalette = {
   gridLineMonth: '#d7dbe0',
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
+  swimlaneRule: '#5a5a5a',
   linkMinor: LINK_SENTINELS.linkMinor,
   linkDriving: LINK_SENTINELS.linkDriving,
   linkMark: NODE_SENTINELS.linkMark,
