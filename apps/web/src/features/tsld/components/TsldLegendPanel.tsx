@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 
+/** The default corner's margin, `left-3` / `bottom-3`. */
+const DEFAULT_MARGIN_PX = 12;
+
 export interface TsldLegendPanelProps {
   open: boolean;
   /** Committed drag position (top-left px within the canvas region), or `null` for the default corner. */
@@ -18,6 +21,13 @@ export interface TsldLegendPanelProps {
   /** The active-lens legend key (insight lenses, `docs/specs/canvas-lenses/`, flag-on) — the Colour-by
    * mode's bands + the baseline-overlay entry. Absent ⇒ today's default key. */
   lens?: LensLegendInfo;
+  /**
+   * Width of the swimlane gutter at the canvas's left edge, in px — `0` (the default) when there is
+   * none (swimlanes M2-T9, ui-architecture C3). The panel never sits under it: the default corner
+   * moves right of it, a dragged position is held at or right of it, and so is a saved one — **on
+   * read**, not by rewriting the preference, so the saved position survives the gutter closing.
+   */
+  leftInsetPx?: number;
 }
 
 /**
@@ -39,6 +49,7 @@ export function TsldLegendPanel({
   onClose,
   onPositionChange,
   lens,
+  leftInsetPx = 0,
 }: TsldLegendPanelProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(
@@ -88,7 +99,9 @@ export function TsldLegendPanel({
 
   if (!open) return null;
 
-  const active = drag ?? position;
+  const held = drag ?? position;
+  // Clamp on read: a position saved before the gutter opened is shown right of it, and saved as it was.
+  const active = held && held.x < leftInsetPx ? { ...held, x: leftInsetPx } : held;
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     // Left button only, and never start a drag from the close button.
@@ -117,7 +130,10 @@ export function TsldLegendPanel({
     const panelRect = panel.getBoundingClientRect();
     const maxX = Math.max(0, parentRect.width - panelRect.width);
     const maxY = Math.max(0, parentRect.height - panelRect.height);
-    const x = Math.min(maxX, Math.max(0, origin.x + (event.clientX - origin.pointerX)));
+    const x = Math.min(
+      Math.max(leftInsetPx, maxX),
+      Math.max(leftInsetPx, origin.x + (event.clientX - origin.pointerX)),
+    );
     const y = Math.min(maxY, Math.max(0, origin.y + (event.clientY - origin.pointerY)));
     setDrag({ x, y });
   };
@@ -140,9 +156,16 @@ export function TsldLegendPanel({
       aria-label="Diagram legend"
       className={cn(
         'bg-popover text-popover-foreground border-border absolute z-10 flex max-w-64 min-w-44 flex-col rounded-md border shadow-md',
-        active ? null : 'bottom-3 left-3',
+        active ? null : cn('bottom-3', leftInsetPx === 0 && 'left-3'),
       )}
-      style={active ? { left: active.x, top: active.y } : undefined}
+      // The default corner keeps its 12 px margin from whatever is to its left (`left-3`).
+      style={
+        active
+          ? { left: active.x, top: active.y }
+          : leftInsetPx > 0
+            ? { left: leftInsetPx + DEFAULT_MARGIN_PX }
+            : undefined
+      }
     >
       {/* Drag handle + title + close. `touch-none` so a touch-drag doesn't scroll the canvas. The
           pointer handlers are a cosmetic reposition enhancement only — the panel is fully readable and

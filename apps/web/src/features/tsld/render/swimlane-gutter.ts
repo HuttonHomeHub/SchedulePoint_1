@@ -20,8 +20,12 @@ import type { SwimlaneExtent, SwimlaneProjection } from './project-swimlanes';
 /** The expanded gutter's width. Fixed: it has no drag divider (C12), so nothing needs a third. */
 export const SWIMLANE_GUTTER_WIDTH_PX = 176;
 
-/** The collapsed strip: a bordered block holding the swimlane's number, and a 24 px target (WCAG 2.5.8). */
-export const SWIMLANE_GUTTER_COLLAPSED_PX = 40;
+/**
+ * The collapsed strip: a bordered block holding the swimlane's number. 44 px wide so each label is a
+ * full touch target under `pointer: coarse` (ADR-0118 D2), and so the 40 px icon button that expands
+ * it fits; it is also well over the 24 px minimum of WCAG 2.5.8 for a fine pointer.
+ */
+export const SWIMLANE_GUTTER_COLLAPSED_PX = 44;
 
 /** A label line, and the gutter's horizontal padding — read by the model and by the DOM, once. */
 export const GUTTER_LINE_PX = 16;
@@ -67,7 +71,22 @@ export function gutterWidthFor(options: { collapsed: boolean; containerWidth: nu
   collapsed: boolean;
   forcedByRoom: boolean;
 } {
-  const forcedByRoom = !gutterHasRoom(options.containerWidth);
+  return gutterWidthForRoom({
+    collapsed: options.collapsed,
+    room: gutterHasRoom(options.containerWidth),
+  });
+}
+
+/**
+ * {@link gutterWidthFor} for a caller that already holds the room fact rather than a width: the host
+ * learns it from the canvas (`onGutterRoomChange`), which measured the container.
+ */
+export function gutterWidthForRoom(options: { collapsed: boolean; room: boolean }): {
+  widthPx: number;
+  collapsed: boolean;
+  forcedByRoom: boolean;
+} {
+  const forcedByRoom = !options.room;
   const collapsed = options.collapsed || forcedByRoom;
   return {
     widthPx: collapsed ? SWIMLANE_GUTTER_COLLAPSED_PX : SWIMLANE_GUTTER_WIDTH_PX,
@@ -76,9 +95,46 @@ export function gutterWidthFor(options: { collapsed: boolean; containerWidth: nu
   };
 }
 
+/**
+ * What the gutter's controls do, supplied by the host so this module — and `features/tsld` — imports
+ * no other feature (ADR-0026 §8). Every callback is stable for equal inputs: the canvas rewrites the
+ * labels whenever the gutter model's identity changes.
+ */
+export interface GutterActions {
+  /** May the caller change swimlanes; when not, why. A shaded control says so rather than vanishing. */
+  write: { writable: boolean; reason: string | null };
+  /** The corner cell's command: "Set up swimlanes…" or "Swimlanes…". */
+  manage: { label: string; onOpen: () => void };
+  /** The expand/collapse control. `forcedByRoom` shades it with {@link GUTTER_NO_ROOM_REASON}. */
+  collapse: { collapsed: boolean; forcedByRoom: boolean; onToggle: () => void };
+  onRename: (swimlaneId: string) => void;
+  onMove: (swimlaneId: string, delta: -1 | 1) => void;
+  onDelete: (swimlaneId: string) => void;
+}
+
 /** One swimlane as the gutter needs it: its stack extent plus how many activities it holds. */
 export interface GutterSwimlane extends SwimlaneExtent {
   activityCount: number;
+}
+
+/**
+ * The gutter's swimlanes: the projection's extents, each with how many of the scene's activities it
+ * holds. A member whose swimlane is not in `known` is under "No swimlane", the same rule the
+ * projection applies, so the count and the stack cannot disagree.
+ */
+export function gutterSwimlanes(
+  extents: readonly SwimlaneExtent[],
+  activityIds: readonly string[],
+  membership: ReadonlyMap<string, string | null>,
+  known: ReadonlySet<string>,
+): GutterSwimlane[] {
+  const counts = new Map<string | null, number>();
+  for (const id of activityIds) {
+    const swimlane = membership.get(id) ?? null;
+    const key = swimlane !== null && known.has(swimlane) ? swimlane : null;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return extents.map((e) => ({ ...e, activityCount: counts.get(e.id) ?? 0 }));
 }
 
 export interface SwimlaneGutterScene {
@@ -203,6 +259,22 @@ export function swimlaneGutterGeometry(
       blockHeight,
     };
   });
+}
+
+/**
+ * The lane to centre on to bring a swimlane into view, or `null` when any of it already is. A swimlane
+ * taller than the viewport is framed by its top, so the label and the first bars it names appear
+ * together instead of the middle of a long band. Pure, for the focus-pans-to-swimlane rule (C9).
+ */
+export function laneToReveal(extent: SwimlaneExtent, view: Viewport, size: Size): number | null {
+  const top = screenYOfLane(extent.firstLane, view);
+  const bottom = top + extent.laneCount * LANE_HEIGHT;
+  if (bottom > 0 && top < size.height) return null;
+  const viewLanes = size.height / LANE_HEIGHT;
+  // `centerOnWorld` centres lane `n` at `n + 0.5`; this is the centre of the block, or of its top.
+  return extent.laneCount <= viewLanes
+    ? extent.firstLane + extent.laneCount / 2 - 0.5
+    : extent.firstLane + viewLanes / 2 - 0.5;
 }
 
 /** Both halves joined, for the export's painted mirror, which wants one frame's whole label. */
