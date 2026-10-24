@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 
 import type { SwimlaneInput } from '@/features/tsld';
+import { swimlaneLanesCommand } from '@/features/undo-redo';
 import { usePlanEditHistory } from '@/features/undo-redo/use-plan-edit-history';
 
 /** A row with only the fields the snapshot reads; the early/late dates are deliberately wrong. */
@@ -301,7 +302,7 @@ describe('useAutoResolveOverlaps', () => {
       });
       expect(writeLayouts).not.toHaveBeenCalled();
       expect(announce).toHaveBeenCalledWith(
-        'Moved “C” to lane 2 in the plain view so it no longer overlaps another activity.',
+        'Moved “C” to lane 2 with swimlanes off so it no longer overlaps another activity.',
       );
     });
 
@@ -320,18 +321,75 @@ describe('useAutoResolveOverlaps', () => {
       expect(batchPositions).not.toHaveBeenCalled();
       await waitFor(() => expect(view.result.current.resolve.notice).not.toBeNull());
       expect(announce).toHaveBeenCalledWith(
-        'Moved 1 activity in the swimlane view and 1 activity in the plain view so no two activities overlap.',
+        'Moved 1 activity in the swimlane view and 1 with swimlanes off so no two activities overlap.',
       );
       expect(view.result.current.history.undoLabel).toBe('Move activity clear of an overlap');
     });
 
     it('does not fold a later nudge of the moved bar into the step', async () => {
-      const { view, settle } = setup({ rows: apart, input: input({ C: 0, D: 0 }) });
+      const { view, settle, writeLayouts } = setup({ rows: apart, input: input({ C: 0, D: 0 }) });
       act(() => view.result.current.resolve.begin(['C']));
       act(() => settle({ rows: stretchedApart }));
       await waitFor(() => expect(view.result.current.resolve.notice).not.toBeNull());
-      const first = view.result.current.resolve.notice?.command;
-      expect(first?.coalescing).toBeUndefined();
+      // The same bar, immediately after: a coalescable swimlane step with the same key.
+      act(() =>
+        view.result.current.history.record(
+          swimlaneLanesCommand({
+            writeLanes: writeLayouts as never,
+            before: [{ id: 'C', swimlaneId: 'S1', lane: 1 }],
+            after: [{ id: 'C', swimlaneId: 'S1', lane: 2 }],
+            saved: [],
+            label: 'Move 1 activity',
+          }),
+        ),
+      );
+      expect(view.result.current.history.entries()).toEqual({
+        undo: ['Move 1 activity', 'Move activity clear of an overlap'],
+        redo: [],
+      });
+    });
+
+    it('a plain-only resolution on a plan with swimlanes records the plain step directly', async () => {
+      const { view, settle } = setup({
+        rows: [row('C', 0, '2026-01-01', '2026-01-05'), row('D', 0, '2026-01-10', '2026-01-15')],
+        input: input({ C: 0, D: 1 }),
+      });
+      act(() => view.result.current.resolve.begin(['C']));
+      act(() =>
+        settle({
+          rows: [row('C', 0, '2026-01-01', '2026-01-12'), row('D', 0, '2026-01-10', '2026-01-15')],
+        }),
+      );
+      await waitFor(() => expect(view.result.current.resolve.notice).not.toBeNull());
+      expect(view.result.current.history.undoLabel).toBe('Move activity clear of an overlap');
+    });
+
+    it('names an unfiled bar’s swimlane "No swimlane", never null', async () => {
+      const { view, settle, announce } = setup({
+        rows: apart,
+        input: {
+          ...input({ C: 0, D: 0 }),
+          membership: new Map([
+            ['C', null],
+            ['D', null],
+          ]),
+        },
+      });
+      act(() => view.result.current.resolve.begin(['C']));
+      act(() => settle({ rows: stretchedApart }));
+      await waitFor(() => expect(announce).toHaveBeenCalled());
+      expect(announce.mock.calls[0]?.[0]).toContain('of “No swimlane”');
+    });
+
+    it('moves a bar whose first-ever stored row appears with the edit (absent in the snapshot)', async () => {
+      const { view, settle, writeLayouts } = setup({ rows: apart, input: input({ D: 0 }) });
+      act(() => view.result.current.resolve.begin(['C']));
+      act(() => settle({ rows: stretchedApart, input: input({ C: 0, D: 0 }) }));
+      await waitFor(() => expect(writeLayouts).toHaveBeenCalledTimes(1));
+      expect(writeLayouts.mock.calls[0]?.[0].positions[0]).toMatchObject({
+        id: 'C',
+        swimlane: { laneIndex: 1 },
+      });
     });
 
     it('reports a refused write and records nothing', async () => {

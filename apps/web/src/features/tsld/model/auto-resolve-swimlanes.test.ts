@@ -159,6 +159,32 @@ describe('resolveBothLayouts', () => {
     expect(moves.swimlane).toEqual([{ id: 'C', from: 0, to: 2, swimlaneId: null }]);
   });
 
+  it('a first-ever stored row (none in s0, one in s1) is compared at the stored lane', () => {
+    const before = snapshotsOf([
+      { id: 'A', plain: 0, swimlane: 'S1', lane: 0, start: 0, finish: 3 },
+      { id: 'B', plain: 1, swimlane: 'S1', start: 6, finish: 9 },
+    ]);
+    const after = snapshotsOf([
+      { id: 'A', plain: 0, swimlane: 'S1', lane: 0, start: 0, finish: 3 },
+      { id: 'B', plain: 1, swimlane: 'S1', lane: 0, start: 2, finish: 9 },
+    ]);
+    expect(resolveBothLayouts(before, after, new Set(['B'])).swimlane).toEqual([
+      { id: 'B', from: 0, to: 1, swimlaneId: 'S1' },
+    ]);
+  });
+
+  it('a stored collision that was there before the edit is left alone, and stays stored', () => {
+    const stale: Spec[] = [
+      { id: 'A', plain: 0, swimlane: 'S1', lane: 0, start: 0, finish: 5 },
+      { id: 'B', plain: 1, swimlane: 'S1', lane: 0, start: 3, finish: 8 },
+      { id: 'C', plain: 2, swimlane: 'S1', lane: 1, start: 20, finish: 22 },
+    ];
+    const edited = stale.map((s) => (s.id === 'C' ? { ...s, start: 24, finish: 26 } : s));
+    const moves = resolveBothLayouts(snapshotsOf(stale), snapshotsOf(edited), new Set(['C']));
+    expect(moves).toEqual({ plain: [], swimlane: [] });
+    expect([...overlapsOf(snapshotsOf(edited))]).toEqual(['S1:A|B']);
+  });
+
   it('skips the swimlane picture when either side cannot read it', () => {
     const specs: Spec[] = [{ id: 'A', plain: 0, swimlane: 'S1', lane: 0, start: 0, finish: 3 }];
     const without = layoutSnapshotsOf(specs.map(rowOf), null);

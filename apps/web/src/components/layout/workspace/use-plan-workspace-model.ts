@@ -108,8 +108,9 @@ import {
   usePlanAutoRecalc,
 } from '@/features/schedule';
 import {
-  manualSwimlaneInput,
   SWIMLANES_LENS_OFFERED,
+  swimlanePictureInput,
+  swimlanePictureOn,
   swimlaneKeys,
   useSwimlanes,
   useSwimlaneScene,
@@ -695,27 +696,28 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const batchPositions = useBatchPositions(orgSlug, planId);
   const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
   const queryClient = useQueryClient();
-  // The swimlane picture auto-resolve reads, whether or not the lens shows it: the list is wanted
-  // for as long as the plan has hand-made swimlanes and the planner can write, because an edit made
-  // in one picture can overlap bars in the other (swimlanes M2-T5). The same query the scene reads,
-  // so it is one fetch. A `WBS` source has no input until M3, and resolves the plain picture only.
+  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only where the lens is
+  // offered (`swimlanePictureOn`, the same gate the scene uses), so while it is withheld nothing is
+  // fetched and auto-resolve is the plain one. Once on, the list is wanted even when the lens is
+  // not showing it, because an edit made in one picture can overlap bars in the other; it is the
+  // scene's own query, so one fetch.
   const swimlaneSource = plan.data?.swimlaneSource ?? 'NONE';
-  const swimlaneList = useSwimlanes(
-    orgSlug,
-    planId,
-    swimlaneSource === 'MANUAL' && canEditSchedule,
-  );
-  const readSwimlaneInput = (): SwimlaneInput | null => {
-    const list =
-      queryClient.getQueryData<SwimlaneSummary[]>(swimlaneKeys.byPlan(orgSlug, planId)) ??
-      swimlaneList.data;
-    const rows =
-      queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
-      activities.data;
-    return swimlaneSource === 'MANUAL' && list !== undefined && rows !== undefined
-      ? manualSwimlaneInput(rows, list)
-      : null;
-  };
+  const swimlanePicture = swimlanePictureOn({
+    offered: SWIMLANES_LENS_OFFERED,
+    source: swimlaneSource,
+    canEdit: canEditSchedule,
+  });
+  const swimlaneList = useSwimlanes(orgSlug, planId, swimlanePicture);
+  const readSwimlaneInput = (): SwimlaneInput | null =>
+    swimlanePictureInput({
+      on: swimlanePicture,
+      list:
+        queryClient.getQueryData<SwimlaneSummary[]>(swimlaneKeys.byPlan(orgSlug, planId)) ??
+        swimlaneList.data,
+      activities:
+        queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+        activities.data,
+    });
   /**
    * **An edit moves only the bar that caused it** (NetPoint-layout M3, ADR-0153). Every planner
    * command that can change a drawn span calls `autoResolve.begin(subjects)` BEFORE its write; the
@@ -1076,7 +1078,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // layout-exempt: the swimlane model places the bar on a lane that is free at its span
         // before this writes, a lane-only write never settles, and it sends no `laneIndex`, so the
         // swimlane-free picture cannot gain an overlap from it either. Both pictures are
-        // therefore clear without a resolution (swimlanes M2-T5 revisited this and kept it).
+        // therefore clear without a resolution (swimlanes M2-T5 revisited this and kept it). Evidence:
+        // `swimlane-lanes.test.ts` ("takes the dropped lane … when it is free", "goes on to the next
+        // free lane", "never carries a swimlane-free laneIndex") and `use-swimlane-lanes.test.ts`
+        // ("never a swimlane-free laneIndex (SC-1)").
         editHistory.record(
           command,
           options.pressedAt !== undefined ? { at: options.pressedAt } : undefined,

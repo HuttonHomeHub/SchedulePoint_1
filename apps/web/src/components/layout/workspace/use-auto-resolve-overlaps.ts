@@ -82,7 +82,7 @@ const activities = (count: number): string =>
 
 /**
  * The dock's sentence, which also names **which picture moved** once the plan has two (swimlanes
- * M2-T5): a bar can be cleared in the swimlane view, in the plain one the planner would see with
+ * M2-T5): a bar can be cleared in the swimlane view, in the picture the planner would see with
  * swimlanes off, or in both, and "lane 3" means a different lane in each. With no swimlane picture
  * the sentences are exactly the ones this had before swimlanes, and a swimlane lane is never named
  * as a bare "lane" — it is a lane of a named swimlane.
@@ -101,7 +101,7 @@ function sentenceFor(
     return `Moved ${plain.length} activities to free lanes so no two activities overlap.`;
   }
   if (plain.length > 0 && swimlane.length > 0) {
-    return `Moved ${activities(swimlane.length)} in the swimlane view and ${activities(plain.length)} in the plain view so no two activities overlap.`;
+    return `Moved ${activities(swimlane.length)} in the swimlane view and ${String(plain.length)} with swimlanes off so no two activities overlap.`;
   }
   if (swimlane.length === 1) {
     const [move] = swimlane as [SwimlaneResolution];
@@ -112,9 +112,9 @@ function sentenceFor(
   }
   if (plain.length === 1) {
     const [move] = plain as [LaneResolution];
-    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} in the plain view so it no longer overlaps another activity.`;
+    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} with swimlanes off so it no longer overlaps another activity.`;
   }
-  return `Moved ${plain.length} activities to free lanes in the plain view so no two activities overlap.`;
+  return `Moved ${plain.length} activities to free lanes with swimlanes off so no two activities overlap.`;
 }
 
 /**
@@ -240,16 +240,16 @@ export function useAutoResolveOverlaps(params: {
       if (row === undefined) continue;
       const lane = swimlaneFor.get(id);
       const flat = plainTo.get(id);
-      mixed.push(
-        lane === undefined
-          ? { id, version: row.version, laneIndex: flat! }
-          : {
-              id,
-              version: row.version,
-              swimlane: { laneIndex: lane.to },
-              ...(flat === undefined ? {} : { laneIndex: flat }),
-            },
-      );
+      if (lane !== undefined) {
+        mixed.push({
+          id,
+          version: row.version,
+          swimlane: { laneIndex: lane.to },
+          ...(flat === undefined ? {} : { laneIndex: flat }),
+        });
+      } else if (flat !== undefined) {
+        mixed.push({ id, version: row.version, laneIndex: flat });
+      }
     }
     if (mixed.length === 0) return;
     let saved: ActivitySummary[];
@@ -277,35 +277,52 @@ export function useAutoResolveOverlaps(params: {
       },
       pending.s0.swimlane !== null && after.swimlane !== null,
     );
-    const steps: CheckableCommand[] = [];
-    if (moves.plain.length > 0) {
-      steps.push(
-        autoArrangeCommand({
-          batchPositions,
-          before: moves.plain.map((m) => ({ id: m.id, laneIndex: m.from })),
-          after: moves.plain.map((m) => ({ id: m.id, laneIndex: m.to })),
-          saved,
-        }),
-      );
-    }
-    if (moves.swimlane.length > 0) {
-      steps.push(
-        swimlaneLanesCommand({
-          writeLanes: paramsRef.current.writeLayouts,
-          before: moves.swimlane.map((m) => ({ id: m.id, swimlaneId: m.swimlaneId, lane: m.from })),
-          after: moves.swimlane.map((m) => ({ id: m.id, swimlaneId: m.swimlaneId, lane: m.to })),
-          saved,
-        }),
-      );
-    }
+    const plainStep =
+      moves.plain.length === 0
+        ? null
+        : autoArrangeCommand({
+            batchPositions,
+            before: moves.plain.map((m) => ({ id: m.id, laneIndex: m.from })),
+            after: moves.plain.map((m) => ({ id: m.id, laneIndex: m.to })),
+            saved,
+            label:
+              moves.plain.length === 1
+                ? 'Move activity clear of an overlap'
+                : `Move ${moves.plain.length} activities clear of overlaps`,
+          });
     const total = new Set([...plainTo.keys(), ...swimlaneFor.keys()]).size;
     const label =
       total === 1
         ? 'Move activity clear of an overlap'
         : `Move ${total} activities clear of overlaps`;
-    // Always composed, even for one picture: the swimlane step coalesces by its set of bars, and a
-    // planner nudging the moved bar within 500 ms must not fold their edit into this step (CQ-2).
-    const command = composeSteps({ label, steps });
+    // Composed only when the swimlane picture moved: that step coalesces by its set of bars, and a
+    // planner nudging the moved bar within 500 ms must not fold their edit into this one (CQ-2) —
+    // composing is what drops the coalescing. A plain-only resolution is `autoArrangeCommand` as it
+    // was before swimlanes, which never coalesces.
+    const command: CheckableCommand | null =
+      moves.swimlane.length === 0
+        ? plainStep
+        : composeSteps({
+            label,
+            steps: [
+              ...(plainStep === null ? [] : [plainStep]),
+              swimlaneLanesCommand({
+                writeLanes: paramsRef.current.writeLayouts,
+                before: moves.swimlane.map((m) => ({
+                  id: m.id,
+                  swimlaneId: m.swimlaneId,
+                  lane: m.from,
+                })),
+                after: moves.swimlane.map((m) => ({
+                  id: m.id,
+                  swimlaneId: m.swimlaneId,
+                  lane: m.to,
+                })),
+                saved,
+              }),
+            ],
+          });
+    if (command === null) return;
     history.record(command);
     announce(message);
     setNotice({ message, command });

@@ -10,6 +10,8 @@ export { manualSwimlaneInput } from './model/manual-membership';
 export {
   SWIMLANE_GROUND,
   SWIMLANES_LENS_OFFERED,
+  swimlanePictureInput,
+  swimlanePictureOn,
   useSwimlaneScene,
   type SwimlaneScene,
 } from './model/use-swimlane-scene';
