@@ -226,7 +226,7 @@ export interface TsldPalette {
 /** The swimlane stack as the painter needs it: where each swimlane starts and how tall it is. */
 export interface SwimlaneMarks {
   /** Top to bottom, contiguous, in display lanes. */
-  extents: readonly { firstLane: number; laneCount: number }[];
+  extents: readonly { name: string | null; firstLane: number; laneCount: number }[];
   /**
    * Tint every second swimlane with the band ground, and withhold the month bands while it shows
    * (they are the same ground, so both would read as one muddle). The rule is drawn either way.
@@ -540,6 +540,16 @@ export interface CompareGhost {
   /** The old side's type: it places the ghost by the live bar's rule (ADR-0155, #383). */
   readonly type: ActivityType;
   readonly removed: boolean;
+  /**
+   * What the old baseline froze of the swimlanes, on a REMOVED ghost only (swimlanes SQ-7, yes). It
+   * is read by `placeCompareGhosts` and by nothing in the painter, which draws `laneIndex`.
+   */
+  readonly frozenSwimlaneId?: string | null;
+  readonly frozenLanes?: readonly {
+    readonly basis: string;
+    readonly swimlaneId: string | null;
+    readonly laneIndex: number;
+  }[];
 }
 
 /**

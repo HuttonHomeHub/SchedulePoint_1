@@ -85,6 +85,20 @@ describe('TsldMinimap — navigation (M3)', () => {
     expect(announce.mock.calls[0]![0]).toMatch(/^Viewing .*lanes 5–24\.$/);
   });
 
+  it('names the swimlanes in view instead of lane numbers while swimlanes are shown (swimlanes C13)', () => {
+    // WINDOW spans display lanes 4-23 (zero-based): Electrical ends at 5, Civil starts at 6.
+    mount({
+      swimlaneExtents: [
+        { name: 'Mechanical', firstLane: 0, laneCount: 4 },
+        { name: 'Electrical', firstLane: 4, laneCount: 2 },
+        { name: 'Civil', firstLane: 6, laneCount: 30 },
+      ],
+    });
+    fireEvent.keyDown(screen.getByRole('group', { name: 'Diagram overview' }), { key: 'End' });
+    expect(announce.mock.calls[0]![0]).toMatch(/^Viewing .*, swimlanes Electrical and Civil\.$/);
+    expect(announce.mock.calls[0]![0]).not.toMatch(/lanes \d/);
+  });
+
   it('Home and End centre the first/last dated day on the time axis only, announcing at once', () => {
     const { onCenterWorld } = mount();
     const group = screen.getByRole('group', { name: 'Diagram overview' });

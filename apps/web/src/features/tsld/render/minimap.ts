@@ -234,6 +234,33 @@ export interface MinimapWindow {
 }
 
 /**
+ * **The words for where the window is, once the diagram is divided into swimlanes** (swimlanes
+ * ui-architecture C13). With swimlanes shown a lane number is a display lane, a position in a stack
+ * nobody counts, so the readout names the swimlanes whose rows the window overlaps instead. Pure
+ * lane arithmetic, no pixel height, so the minimap keeps the allocation in lanes.
+ *
+ * `name: null` is "No swimlane", which the readout words itself. Returns `null` when no swimlane
+ * overlaps (a window panned past the stack), which the caller answers with the lane numbers it
+ * already had rather than an empty sentence.
+ */
+export function swimlanesInView(
+  extents: readonly { name: string | null; firstLane: number; laneCount: number }[],
+  laneFrom: number,
+  laneTo: number,
+): string | null {
+  const names = extents
+    .filter((e) => e.firstLane <= laneTo && e.firstLane + e.laneCount - 1 >= laneFrom)
+    .map((e) => e.name ?? 'No swimlane');
+  if (names.length === 0) return null;
+  const SHOWN = 3;
+  if (names.length === 1) return `swimlane ${names[0]!}`;
+  if (names.length <= SHOWN) {
+    return `swimlanes ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+  }
+  return `swimlanes ${names.slice(0, SHOWN).join(', ')} and ${String(names.length - SHOWN)} more`;
+}
+
+/**
  * The scene viewport expressed in minimap coordinates (M4 architecture gate, B1/S4): the
  * TRUE rectangle (exact, unclamped), the DISPLAY rectangle (clamped to the box, floored at
  * 8 px per axis so a border-only frame stays legible), and the true viewport CENTRE as a

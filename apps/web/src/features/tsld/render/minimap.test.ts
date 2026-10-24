@@ -8,6 +8,7 @@ import {
   minimapTiers,
   minimapViewport,
   type MinimapPalette,
+  swimlanesInView,
 } from './minimap';
 
 const DATA_DATE = '2026-01-01';
@@ -481,3 +482,30 @@ function countingStyleCtx(): { calls: { styles: string[] }; ctx: Ctx2D } {
   };
   return { calls, ctx };
 }
+
+describe('swimlanesInView (swimlanes C13)', () => {
+  const EXTENTS = [
+    { name: 'Mechanical', firstLane: 0, laneCount: 3 },
+    { name: 'Electrical', firstLane: 3, laneCount: 2 },
+    { name: 'Civil', firstLane: 5, laneCount: 1 },
+    { name: 'Fit-out', firstLane: 6, laneCount: 1 },
+    { name: null, firstLane: 7, laneCount: 1 },
+  ];
+  it('names the one swimlane a window sits inside', () => {
+    expect(swimlanesInView(EXTENTS, 1, 2)).toBe('swimlane Mechanical');
+  });
+  it('names every swimlane the window overlaps, including a partial overlap', () => {
+    expect(swimlanesInView(EXTENTS, 2, 3)).toBe('swimlanes Mechanical and Electrical');
+  });
+  it('words "No swimlane" itself', () => {
+    expect(swimlanesInView(EXTENTS, 7, 7)).toBe('swimlane No swimlane');
+  });
+  it('shortens a long list to three and a count', () => {
+    expect(swimlanesInView(EXTENTS, 0, 7)).toBe(
+      'swimlanes Mechanical, Electrical, Civil and 2 more',
+    );
+  });
+  it('is null when the window is past the stack', () => {
+    expect(swimlanesInView(EXTENTS, 20, 30)).toBeNull();
+  });
+});

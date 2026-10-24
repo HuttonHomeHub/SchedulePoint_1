@@ -97,6 +97,7 @@ import {
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
+import { ghostLaneOf, placeCompareGhosts, type GhostLaneScene } from '../render/swimlane-ghosts';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -1269,6 +1270,8 @@ export function TsldPanel({
         : undefined,
     [diagramSource.swimlaneScene, swimlaneGround],
   );
+  // The projection, in the shape the ghosts read: absent exactly when swimlanes are not drawn.
+  const ghostLaneScene: GhostLaneScene | null = diagramSource.swimlaneScene;
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;
   const renderActivities = diagramSource.renderActivities;
@@ -1396,12 +1399,16 @@ export function TsldPanel({
     if (!CANVAS_LENSES_ENABLED || !baselineOverlay || !varianceRows || varianceRows.length === 0) {
       return undefined;
     }
-    const laneById = new Map(
-      activities.map((a) => [a.id, { laneIndex: a.laneIndex, type: a.type }]),
-    );
+    // The lane a ghost sits at is its bar's DISPLAY lane while swimlanes are shown, so the two share
+    // a row; an activity with no bar there has no ghost. Without swimlanes this is the stored lane.
+    const laneById = new Map<string, { laneIndex: number; type: ActivityType }>();
+    for (const a of activities) {
+      const laneIndex = ghostLaneOf(ghostLaneScene, a.id, a.laneIndex);
+      if (laneIndex !== null) laneById.set(a.id, { laneIndex, type: a.type });
+    }
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
-  }, [baselineOverlay, varianceRows, activities]);
+  }, [baselineOverlay, varianceRows, activities, ghostLaneScene]);
   /**
    * The levelled-placement ghosts (one-planning-surface M-E) — where the levelling pass moved a bar
    * to, for the activities it MOVED and for nothing else.
@@ -1419,17 +1426,24 @@ export function TsldPanel({
   const levelledGhosts = useMemo(() => {
     if (!CANVAS_LENSES_ENABLED || !levelledOverlay) return undefined;
     const ghosts = buildLevelledGhosts(
-      activities.map((a) => ({
-        id: a.id,
-        laneIndex: a.laneIndex,
-        type: a.type,
-        visualEffectiveStart: a.visualEffectiveStart,
-        leveledStart: a.leveledStart,
-        leveledFinish: a.leveledFinish,
-      })),
+      activities.flatMap((a) => {
+        const laneIndex = ghostLaneOf(ghostLaneScene, a.id, a.laneIndex);
+        return laneIndex === null
+          ? []
+          : [
+              {
+                id: a.id,
+                laneIndex,
+                type: a.type,
+                visualEffectiveStart: a.visualEffectiveStart,
+                leveledStart: a.leveledStart,
+                leveledFinish: a.leveledFinish,
+              },
+            ];
+      }),
     );
     return ghosts.length > 0 ? ghosts : undefined;
-  }, [levelledOverlay, activities]);
+  }, [levelledOverlay, activities, ghostLaneScene]);
 
   /**
    * What the levelled lens is showing, or why it is showing nothing (M-E-T6).
@@ -1467,12 +1481,16 @@ export function TsldPanel({
    * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens here
    * keeps.
    */
-  const compareGhostBars = useMemo(() => {
+  const comparePlacement = useMemo(() => {
     if (!compareOverlay || !hasRevisionPair || !compareGhosts || compareGhosts.length === 0) {
       return undefined;
     }
-    return compareGhosts;
-  }, [compareOverlay, hasRevisionPair, compareGhosts]);
+    return placeCompareGhosts(compareGhosts, ghostLaneScene);
+  }, [compareOverlay, hasRevisionPair, compareGhosts, ghostLaneScene]);
+  const compareGhostBars = comparePlacement?.ghosts;
+  // What the server could not draw plus what the swimlanes could not place: both are counted in the
+  // one sentence, never dropped silently.
+  const compareGhostsUndrawnTotal = compareGhostsUndrawable + (comparePlacement?.counted ?? 0);
 
   /** The logic half, on the SAME gate — one toggle, one picture. */
   const compareLinkLines = useMemo(() => {
@@ -1508,7 +1526,7 @@ export function TsldPanel({
     () =>
       compareOverlaySummary(
         compareGhostBars ?? [],
-        compareGhostBars ? compareGhostsUndrawable : 0,
+        compareGhostBars ? compareGhostsUndrawnTotal : 0,
         {
           drawn: compareLinkLines?.length ?? 0,
           undrawable: compareLinkLines ? compareLinksUndrawable : 0,
@@ -1517,7 +1535,7 @@ export function TsldPanel({
       ),
     [
       compareGhostBars,
-      compareGhostsUndrawable,
+      compareGhostsUndrawnTotal,
       compareLinkLines,
       compareLinksUndrawable,
       compareUndrawableReason,

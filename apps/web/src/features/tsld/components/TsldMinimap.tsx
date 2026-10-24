@@ -5,6 +5,7 @@ import { dayAtScreenX, screenXOfDay, worldExtent, type RenderActivity } from '..
 import { axisDayOf } from '../render/geometry';
 import {
   minimapViewport,
+  swimlanesInView,
   type MinimapBox,
   type MinimapMapping,
   type MinimapWindow,
@@ -70,6 +71,13 @@ export interface TsldMinimapProps {
    * uses (M4 B2: the first draft re-derived it here in UTC, a whole day out west of UTC
    * every evening — the ADR-0059 shared-axis rule applies to the clock too). */
   todayDay?: number | null;
+  /**
+   * The swimlane stack, present only while swimlanes are drawn (swimlanes C13). It changes what the
+   * readout SAYS and nothing the minimap DRAWS: the picture has no grounds and no boundary ticks,
+   * because a swimlane ground would add a ground to `MINIMAP_GROUNDS`' contrast set and a tick
+   * through dense bar ink does not clear it.
+   */
+  swimlaneExtents?: readonly { name: string | null; firstLane: number; laneCount: number }[];
 }
 
 export function TsldMinimap({
@@ -84,6 +92,7 @@ export function TsldMinimap({
   onPanPages,
   readCentre,
   todayDay = null,
+  swimlaneExtents,
 }: TsldMinimapProps): React.ReactElement {
   // The control that opened the panel, captured so the panel's own Hide button returns focus
   // there instead of dropping it to <body> — the TsldLegendPanel pattern, adopted because focus
@@ -155,11 +164,14 @@ export function TsldMinimap({
   const announceWindow = useCallback(
     (window: MinimapWindow | null): void => {
       if (window === null) return;
+      const where =
+        (swimlaneExtents && swimlanesInView(swimlaneExtents, window.laneFrom, window.laneTo)) ||
+        `lanes ${String(window.laneFrom + 1)}–${String(window.laneTo + 1)}`;
       announce(
-        `Viewing ${formatCalendarDate(window.startIso)} to ${formatCalendarDate(window.endIso)}, lanes ${String(window.laneFrom + 1)}–${String(window.laneTo + 1)}.`,
+        `Viewing ${formatCalendarDate(window.startIso)} to ${formatCalendarDate(window.endIso)}, ${where}.`,
       );
     },
-    [announce],
+    [announce, swimlaneExtents],
   );
   // A held arrow key is a burst; announce the SETTLED window once (the useCoalescedNudge
   // shape, announcement-only). 400ms after the last keypress.
