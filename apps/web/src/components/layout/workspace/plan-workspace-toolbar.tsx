@@ -267,6 +267,7 @@ export function ToolbarPlanWorkspace({
     orgSlug: model.orgSlug,
     planId: model.planId,
     source: plan.swimlaneSource,
+    level: plan.swimlaneWbsLevel,
     activities: model.activities.data,
     shown: swimlanesAreShown,
   });

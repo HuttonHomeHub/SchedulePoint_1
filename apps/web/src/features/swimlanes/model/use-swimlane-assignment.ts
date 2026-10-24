@@ -50,6 +50,8 @@ export function useSwimlaneAssignment(args: {
   const { orgSlug, planId, source, activities, barDateSource, dataDate, wbsBandOn } = args;
   const { shown } = args;
   const { moveMany } = args;
+  // Hand-made only: with a WBS source (no level passed, so the gate reads it as off) membership is the
+  // summary an activity is filed under, changed through Breakdown, never through this control.
   const manual = swimlanePictureOn({ source });
   const list = useSwimlanes(orgSlug, planId, manual).data;
 

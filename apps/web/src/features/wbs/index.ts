@@ -15,3 +15,11 @@ export {
   type SummaryGroup,
   type WbsGroups,
 } from './model/wbs-groups';
+export {
+  isWbsSwimlaneLevel,
+  WBS_SWIMLANE_LEVELS,
+  wbsSwimlaneInput,
+  wbsSwimlaneLevels,
+  type WbsSwimlaneLevel,
+  type WbsSwimlaneLevels,
+} from './model/wbs-swimlane-membership';

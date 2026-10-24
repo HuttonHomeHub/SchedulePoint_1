@@ -245,9 +245,9 @@ describe('swimlanes shown', () => {
   it('follows the plan until the planner chooses: override ?? (source !== NONE)', () => {
     expect(swimlanesShown(null, 'NONE')).toBe(false);
     expect(swimlanesShown(null, 'MANUAL')).toBe(true);
-    // WBS has no input until M3: never shown, whatever the override says.
-    expect(swimlanesShown(null, 'WBS')).toBe(false);
-    expect(swimlanesShown(true, 'WBS')).toBe(false);
+    // A WBS plan is divided from the moment it is set up, like a hand-made one (M3).
+    expect(swimlanesShown(null, 'WBS')).toBe(true);
+    expect(swimlanesShown(false, 'WBS')).toBe(false);
     expect(swimlanesShown(false, 'MANUAL')).toBe(false);
     expect(swimlanesShown(true, 'NONE')).toBe(true);
   });

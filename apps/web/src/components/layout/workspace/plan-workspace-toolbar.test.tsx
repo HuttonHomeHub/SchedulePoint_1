@@ -31,6 +31,8 @@ const h = vi.hoisted<{
   // Swimlanes (M2-T1): the plan's source and the list's state, to prove the HOST's wiring.
   swimlanes: {
     source: 'NONE' | 'MANUAL' | 'WBS';
+    /** The plan's WBS level, for source `WBS`. */
+    level?: number | null;
     list: {
       data: { id: string; name: string }[] | undefined;
       isPending: boolean;
@@ -155,6 +157,7 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       status: 'ACTIVE',
       plannedStart: h.plannedStart,
       swimlaneSource: h.swimlanes.source,
+      swimlaneWbsLevel: h.swimlanes.level ?? null,
       description: null,
       version: 1,
       // Read by (real, unmocked) PlanScheduleSettings once the Calendar dialog mounts it.
@@ -1314,6 +1317,15 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
     expect(input.swimlanes.map((s) => s.id)).toEqual(['s1']);
   });
 
+  it('draws a WBS plan at once, from the activities alone: no loading state and no list', () => {
+    h.swimlanes = { source: 'WBS', level: 1, list: { data: undefined, isPending: true } };
+    renderScreen();
+    expect(screen.queryByText('Loading the plan…')).toBeNull();
+    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
+    const input = h.tsldProps.current?.swimlanes as { source: string; swimlanes: unknown[] };
+    expect(input.source).toBe('WBS');
+  });
+
   it('does not wait for a list when the plan has no swimlane source', () => {
     h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     renderScreen();
@@ -1429,9 +1441,18 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
     expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
   });
 
-  it('a WBS plan reached through the API is not set up: nothing draws for it until M3', () => {
-    h.swimlanes = { source: 'WBS', list: { data: undefined, isPending: true } };
-    expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
+  it('a WBS plan is set up: its swimlanes are the summaries, so no list can be missing', () => {
+    h.swimlanes = { source: 'WBS', level: 2, list: { data: undefined, isPending: true } };
+    renderScreen();
+    const row = openRow();
+    expect(row).toBeChecked();
+    expect(row).not.toHaveAttribute('aria-disabled', 'true');
+    expect(h.tsldProps.current?.swimlanes).not.toBeNull();
+  });
+
+  it('a WBS source with no level (which the server refuses to store) draws swimlane-free', () => {
+    h.swimlanes = { source: 'WBS', level: null, list: { data: undefined, isPending: true } };
+    renderScreen();
     expect(h.tsldProps.current?.swimlanes).toBeNull();
   });
 

@@ -5,7 +5,7 @@ import { toRenderActivities } from '../render/to-render-model';
 
 import { deriveDiagramSource } from './derive-diagram-source';
 
-import { deriveWbsBandSource } from '@/features/wbs';
+import { deriveWbsBandSource, wbsSwimlaneInput } from '@/features/wbs';
 import { anActivity } from '@/test/activity-fixture';
 
 const DATA_DATE = '2026-01-01';
@@ -137,5 +137,73 @@ describe('deriveDiagramSource, swimlanes on', () => {
       dataDate: DATA_DATE,
     } as const;
     expect(deriveDiagramSource(ACTIVITIES, args)).toEqual(deriveDiagramSource(ACTIVITIES, args));
+  });
+});
+
+describe('deriveDiagramSource, swimlanes from the WBS (M3)', () => {
+  const summary = (
+    id: string,
+    parentId: string | null,
+    name: string,
+    laneIndex = 0,
+  ): ActivitySummary =>
+    anActivity({
+      id,
+      name,
+      parentId,
+      type: 'WBS_SUMMARY',
+      laneIndex,
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-30',
+    });
+  const TREE = [
+    summary('works', null, 'The Works'),
+    summary('struct', 'works', 'Structure'),
+    summary('mep', 'works', 'Services', 3),
+    anActivity({
+      id: 'slab',
+      parentId: 'struct',
+      laneIndex: 1,
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-01-09',
+    }),
+    anActivity({
+      id: 'duct',
+      parentId: 'mep',
+      laneIndex: 2,
+      earlyStart: '2026-01-03',
+      earlyFinish: '2026-01-10',
+    }),
+  ];
+  const run = (bandOn: boolean) =>
+    deriveDiagramSource(TREE, {
+      wbsBand: { enabled: bandOn, toggleOn: bandOn },
+      swimlanes: wbsSwimlaneInput(TREE, 2),
+      source: 'early',
+      dataDate: DATA_DATE,
+    });
+
+  it('stacks one swimlane per summary at the level, in WBS order, with "No swimlane" for the rest', () => {
+    const out = run(false);
+    expect(out.swimlaneScene!.extents.map((e) => e.name)).toEqual(['Structure', 'Services', null]);
+    const lane = (id: string) => out.swimlaneScene!.displayLanes.get(id)!;
+    expect(lane('slab')).toBeLessThan(lane('duct'));
+  });
+
+  it('draws a summary once: with the band on it is in the band and holds no lane in its swimlane', () => {
+    const out = run(true);
+    const bandIds = out.bandGroups?.map((g) => g.id) ?? [];
+    expect(bandIds).toContain('struct');
+    expect(out.renderActivities.some((r) => r.id === 'struct')).toBe(false);
+    expect(out.swimlaneScene!.displayLanes.has('struct')).toBe(false);
+    // Its swimlane stays, and its members are still in it.
+    expect(out.swimlaneScene!.extents.map((e) => e.name)).toContain('Structure');
+    expect(out.swimlaneScene!.displayLanes.has('slab')).toBe(true);
+  });
+
+  it('with the band off the same summary is one bar in its own swimlane', () => {
+    const out = run(false);
+    expect(out.renderActivities.filter((r) => r.id === 'struct')).toHaveLength(1);
+    expect(out.swimlaneScene!.displayLanes.has('struct')).toBe(true);
   });
 });
