@@ -809,6 +809,7 @@ export function adaptXerToCanonical(
     relationships,
     resources,
     assignments,
+    ...(decoded.swimlanes === undefined ? {} : { swimlanes: decoded.swimlanes }),
   };
 
   return { ok: true, model, findings };

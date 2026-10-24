@@ -191,6 +191,13 @@ export const importActivitySchema = z
      */
     laneIndex: z.number().int().min(0).max(10_000).nullish(),
     /**
+     * Import key of the swimlane this activity belongs to (an {@link ImportSwimlane}'s `key`), carried
+     * by SchedulePoint's own XER (swimlanes M4-T4). Absent on a foreign import and for "No swimlane".
+     */
+    swimlaneKey: z.string().min(1).nullish(),
+    /** The lane inside that swimlane, when the file carried one; phase 3 packs the rest. */
+    swimlaneLane: z.number().int().min(0).max(10_000).nullish(),
+    /**
      * The engine-derived duration of a `WBS_SUMMARY` or `LEVEL_OF_EFFORT` (ADR-0197), in working
      * minutes. **Export only**: no parser writes it, so on import it is always absent. It reaches the
      * graph so the pure mapper can hand it to the one format that states a summary's duration.
@@ -199,6 +206,18 @@ export const importActivitySchema = z
   })
   .strict();
 export type ImportActivity = z.infer<typeof importActivitySchema>;
+
+/**
+ * A hand-made swimlane to create (swimlanes M4-T4). The name is final — trimmed, within the database's
+ * `ck_swimlanes_name_shape` and unique ignoring case — and the array order is the display order.
+ */
+export const importSwimlaneSchema = z
+  .object({
+    key: z.string().min(1),
+    name: z.string().min(1).max(80),
+  })
+  .strict();
+export type ImportSwimlane = z.infer<typeof importSwimlaneSchema>;
 
 /** A resource → a SchedulePoint `Resource` (ADR-0039). `calendarKey` resolves to an {@link ImportCalendar}. */
 export const importResourceSchema = z
@@ -271,6 +290,13 @@ export const importPlanSchema = z
     dataDate: isoDateSchema,
     /** Import key of the plan-default calendar (see {@link ImportCalendar}); null = all-days-work / no calendar. */
     defaultCalendarKey: z.string().min(1).nullable(),
+    /**
+     * Where the plan's swimlanes come from, restored from SchedulePoint's own XER (swimlanes M4-T4).
+     * Absent on a foreign import, which leaves the plan at the database default (`NONE`).
+     */
+    swimlaneSource: z.enum(['NONE', 'MANUAL', 'WBS']).optional(),
+    /** 1 to 3 when `swimlaneSource` is `WBS`, null otherwise (`ck_plans_swimlane_source_level`). */
+    swimlaneWbsLevel: z.number().int().min(1).max(3).nullish(),
   })
   .strict();
 export type ImportPlan = z.infer<typeof importPlanSchema>;
@@ -291,6 +317,8 @@ export const importGraphSchema = z
     dependencies: z.array(importDependencySchema),
     resources: z.array(importResourceSchema),
     assignments: z.array(importAssignmentSchema),
+    /** The hand-made swimlanes to create, in display order; absent on a foreign import. */
+    swimlanes: z.array(importSwimlaneSchema).max(100).optional(),
   })
   .strict();
 export type ImportGraph = z.infer<typeof importGraphSchema>;

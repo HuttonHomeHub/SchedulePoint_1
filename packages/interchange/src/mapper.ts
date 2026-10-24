@@ -14,6 +14,7 @@ import type {
   ImportDependency,
   ImportGraph,
   ImportResource,
+  ImportSwimlane,
   ImportWorkWindow,
 } from './import-graph.js';
 import type { ReportFinding } from './report.js';
@@ -192,6 +193,14 @@ export function mapCanonicalToImportGraph(
     ),
   );
 
+  // Swimlanes (M4-T4): the key is the name's position in the file's own list, so it is stable and
+  // can never collide with a name. Only a SchedulePoint file produces any.
+  const swimlanes: ImportSwimlane[] | undefined = model.swimlanes?.names.map((name, index) => ({
+    key: `swimlane:${String(index + 1)}`,
+    name,
+  }));
+  const swimlaneKeyOf = new Map(swimlanes?.map((swimlane) => [swimlane.name, swimlane.key]));
+
   const activities: ImportActivity[] = model.activities.map((activity) => ({
     key: activity.id,
     code: activity.code,
@@ -210,6 +219,14 @@ export function mapCanonicalToImportGraph(
     // foreign file's graph is exactly what it always was (FC-2).
     ...(activity.layout?.placedStart == null ? {} : { visualStart: activity.layout.placedStart }),
     ...(activity.layout?.lane == null ? {} : { laneIndex: activity.layout.lane }),
+    ...(activity.layout?.swimlane == null || !swimlaneKeyOf.has(activity.layout.swimlane)
+      ? {}
+      : {
+          swimlaneKey: swimlaneKeyOf.get(activity.layout.swimlane) ?? null,
+          ...(activity.layout.swimlaneLane == null
+            ? {}
+            : { swimlaneLane: activity.layout.swimlaneLane }),
+        }),
   }));
 
   const dependencies: ImportDependency[] = model.relationships.map((relationship) => ({
@@ -248,12 +265,16 @@ export function mapCanonicalToImportGraph(
       name: model.project.name,
       dataDate: model.project.dataDate,
       defaultCalendarKey: model.project.defaultCalendarId,
+      ...(model.swimlanes === undefined
+        ? {}
+        : { swimlaneSource: model.swimlanes.source, swimlaneWbsLevel: model.swimlanes.wbsLevel }),
     },
     calendars,
     activities,
     dependencies,
     resources,
     assignments,
+    ...(swimlanes === undefined ? {} : { swimlanes }),
   };
 
   return { graph, findings };
