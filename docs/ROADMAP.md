@@ -933,6 +933,10 @@ discriminators. Each becomes a spec/plan before build:
   plan at [`docs/specs/guest-critical-cues/`](specs/guest-critical-cues/), `docs/TECH_DEBT.md`
   #403): the guest read gains the engine's `isNearCritical` and `isDriving` flags so the guest
   canvas draws and speaks what a member sees.
+- **A share link shows the plan's swimlanes** — **built, releasing with swimlanes M4**
+  ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
+  [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list
+  and each activity's derived swimlane and lane, and the share view gains the same Swimlanes lens.
 - **A link is never louder than the work it joins** — **shipped** (ADR-0199, 2026-10-17; spec and plan at
   [`docs/specs/diagram-mark-contrast/`](specs/diagram-mark-contrast/)): the ordinary bar is slightly
   stronger and an ordinary driving link slightly quieter, so the work is never the faintest meaningful

@@ -9,6 +9,7 @@ import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { DependencyRepository } from '../dependencies/dependency.repository';
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ScheduleAggregate, ScheduleRepository } from '../schedule/schedule.repository';
+import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import type { PlanShareRepository } from './plan-share.repository';
 import { GUEST_ACCESS_TOUCH_STALE_MS, ShareGuestService } from './share-guest.service';
@@ -90,6 +91,10 @@ describe('ShareGuestService', () => {
   let activities: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let dependencies: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let schedule: { summarise: ReturnType<typeof vi.fn> };
+  let swimlanes: {
+    findAllActiveByPlan: ReturnType<typeof vi.fn>;
+    findLanesForActivities: ReturnType<typeof vi.fn>;
+  };
   let shares: { touchLastAccessedIfStale: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'warn'>;
   let service: ShareGuestService;
@@ -108,6 +113,10 @@ describe('ShareGuestService', () => {
     activities = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     dependencies = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     schedule = { summarise: vi.fn().mockResolvedValue(aggregate()) };
+    swimlanes = {
+      findAllActiveByPlan: vi.fn().mockResolvedValue([]),
+      findLanesForActivities: vi.fn().mockResolvedValue(new Map()),
+    };
     shares = { touchLastAccessedIfStale: vi.fn().mockResolvedValue(1) };
     logger = { warn: vi.fn() };
     service = new ShareGuestService(
@@ -116,6 +125,7 @@ describe('ShareGuestService', () => {
       activities as unknown as ActivityRepository,
       dependencies as unknown as DependencyRepository,
       schedule as unknown as ScheduleRepository,
+      swimlanes as unknown as SwimlaneRepository,
       shares as unknown as PlanShareRepository,
       logger as unknown as PinoLogger,
     );
@@ -207,6 +217,91 @@ describe('ShareGuestService', () => {
         take: 11,
         cursor: 'a5',
       });
+    });
+  });
+
+  describe('swimlanes (ADR-0051 §4 as amended, SQ-4)', () => {
+    const LANE_A = '00000000-0000-7000-8000-00000000000a';
+    const LANE_B = '00000000-0000-7000-8000-00000000000b';
+    const GONE = '00000000-0000-7000-8000-0000000000ee';
+
+    function manual(): void {
+      plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' } as never));
+      swimlanes.findAllActiveByPlan.mockResolvedValue([
+        { id: LANE_A, name: 'Mechanical', position: 0, version: 3, planId: PLAN_ID },
+        { id: LANE_B, name: 'Electrical', position: 1, version: 1, planId: PLAN_ID },
+      ]);
+    }
+
+    function laneRow(
+      basis: 'SWIMLANE' | 'NO_SWIMLANE',
+      swimlaneId: string | null,
+      laneIndex: number,
+    ): Record<string, unknown> {
+      return {
+        basis,
+        swimlaneId,
+        summaryActivityId: null,
+        wbsLevel: null,
+        laneIndex,
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      };
+    }
+
+    it('lists a hand-made plan’s swimlanes by id and name, in display order, and nothing else', async () => {
+      manual();
+      const view = await service.getPlanView(guest);
+      expect(view.swimlanes).toEqual([
+        { id: LANE_A, name: 'Mechanical' },
+        { id: LANE_B, name: 'Electrical' },
+      ]);
+      expect(swimlanes.findAllActiveByPlan).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+    });
+
+    it.each(['NONE', 'WBS'] as const)(
+      'lists none, and reads none, for a %s source',
+      async (source) => {
+        plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: source }));
+        const view = await service.getPlanView(guest);
+        expect(view.swimlanes).toEqual([]);
+        expect(swimlanes.findAllActiveByPlan).not.toHaveBeenCalled();
+      },
+    );
+
+    it('derives membership and the stored lane for the basis the diagram is drawn by', async () => {
+      manual();
+      activities.findManyActiveByPlan.mockResolvedValue([
+        { ...activityRow('in-a'), swimlaneId: LANE_A },
+        { ...activityRow('none'), swimlaneId: null },
+        // Filed in a swimlane since deleted: shown under "No swimlane", on that basis's lane.
+        { ...activityRow('gone'), swimlaneId: GONE },
+      ]);
+      swimlanes.findLanesForActivities.mockResolvedValue(
+        new Map([
+          ['in-a', [laneRow('NO_SWIMLANE', null, 5), laneRow('SWIMLANE', LANE_A, 2)]],
+          ['none', [laneRow('SWIMLANE', LANE_B, 4)]],
+          ['gone', [laneRow('SWIMLANE', GONE, 7), laneRow('NO_SWIMLANE', null, 1)]],
+        ]),
+      );
+      const page = await service.listActivities(guest, { limit: 20 });
+      const placed = page.items.map((i) => [i.memberOfSwimlaneId, i.swimlaneLaneIndex]);
+      expect(placed).toEqual([
+        [LANE_A, 2],
+        [null, null],
+        [null, 1],
+      ]);
+      expect(page.items[0]).not.toHaveProperty('swimlaneId');
+      expect(page.items[0]).not.toHaveProperty('swimlaneLanes');
+    });
+
+    it('reports no membership on a plan without hand-made swimlanes, however the row is filed', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'WBS' } as never));
+      activities.findManyActiveByPlan.mockResolvedValue([
+        { ...activityRow('kept'), swimlaneId: LANE_A },
+      ]);
+      const page = await service.listActivities(guest, { limit: 20 });
+      expect(page.items[0]).toMatchObject({ memberOfSwimlaneId: null, swimlaneLaneIndex: null });
+      expect(swimlanes.findLanesForActivities).not.toHaveBeenCalled();
     });
   });
 

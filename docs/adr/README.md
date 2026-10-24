@@ -228,3 +228,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0202](0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)                      | A loading state is the settled shape, and says one sentence                                | Accepted           |
 | [0203](0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)        | Re-layout starts from several places and may use the rows the diagram already has          | Accepted           |
 | [0204](0204-a-shaded-control-says-why-to-every-input.md)                                        | A shaded control says why, to every input                                                  | Accepted           |
+| [0205](0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)                              | A guest sees the swimlanes the diagram is drawn in                                         | Accepted           |

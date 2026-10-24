@@ -837,11 +837,11 @@ is `@Public()` (bypasses the session guard) and instead resolves an
 construction). Reads go through the existing org-scoped repositories, scoped **only** by
 the token's `planId` + `organizationId`, and return **field-stripped, read-only** DTOs.
 
-| Method | Path                         | Notes                                                                                                                                                                                                                                                                                                           |
-| ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts).                                                                                                                |
-| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, `isNearCritical` (ADR-0198), lane, and progress (`status`, `percentComplete`). |
-| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days and exact minutes), and `isDriving` (ADR-0198: whether the link sets its successor's early start).                                                                                                                |
+| Method | Path                         | Notes                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts) + `swimlanes` (ADR-0205: the live swimlanes as `{ id, name }` in display order; empty unless hand-made).                                                                                         |
+| GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, `isNearCritical` (ADR-0198), lane, the **derived swimlane** (`memberOfSwimlaneId`, `swimlaneLaneIndex` — ADR-0205), and progress (`status`, `percentComplete`). |
+| GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days and exact minutes), and `isDriving` (ADR-0198: whether the link sets its successor's early start).                                                                                                                                                                                                 |
 
 - **Uniform 404** — any dead / revoked / expired / soft-deleted-grant / deleted-plan
   token resolves to the same `404`, never `401/403` (no oracle).
@@ -865,6 +865,11 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   shorter-day calendars than it was before 2026-10-19, from each plan's next recalculation
   (`docs/TECH_DEBT.md` #522). `ResourceAssignment.isDriving` (which resource
   drives) is a different field and is **never** exposed.
+  **Exposed as of ADR-0205:** the plan's swimlanes (`swimlanes: { id, name }[]` on the plan view, empty
+  unless the plan's source is hand-made) and, per activity, `memberOfSwimlaneId` (an id from that list, or
+  `null` for "No swimlane") and `swimlaneLaneIndex` (the stored lane for that membership, or `null`).
+  Both are **derived** by the member diagram's own rule; the raw `swimlaneId`/`swimlaneLanes`, the plan's
+  `swimlaneSource`/`swimlaneWbsLevel`, a swimlane's `position`/`version` and the WBS `parentId` are never sent.
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
   link), fired-and-forgotten so it never blocks or fails a read.
