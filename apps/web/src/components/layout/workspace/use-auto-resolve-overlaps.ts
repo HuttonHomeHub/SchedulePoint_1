@@ -12,6 +12,7 @@ import {
 } from '@/features/tsld/model/auto-resolve-swimlanes';
 import {
   autoArrangeCommand,
+  type CheckableCommand,
   composeSteps,
   swimlaneLanesCommand,
   type BatchPositionsFn,
@@ -276,7 +277,7 @@ export function useAutoResolveOverlaps(params: {
       },
       pending.s0.swimlane !== null && after.swimlane !== null,
     );
-    const steps: Command[] = [];
+    const steps: CheckableCommand[] = [];
     if (moves.plain.length > 0) {
       steps.push(
         autoArrangeCommand({
