@@ -194,6 +194,7 @@ describe('gutterSwimlanesFrom', () => {
         { id: null, name: null, firstLane: 3, laneCount: 1 },
       ],
       laneCount: 4,
+      derivedIds: new Set<string>(),
     });
     expect(out.map((s) => [s.id, s.activityCount])).toEqual([
       ['s1', 3],

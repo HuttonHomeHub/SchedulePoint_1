@@ -106,12 +106,7 @@ import {
   useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
-import {
-  SWIMLANES_LENS_OFFERED,
-  useSwimlaneScene,
-  useWriteSwimlaneLanes,
-  type SwimlaneLaneRow,
-} from '@/features/swimlanes';
+import { useWriteSwimlaneLanes, type SwimlaneLaneRow } from '@/features/swimlanes';
 import {
   addCalendarDays,
   todayDayFraction,
