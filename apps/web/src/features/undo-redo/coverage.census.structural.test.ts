@@ -179,7 +179,7 @@ describe('undo coverage census', () => {
 
   it('every recorded entry names a command builder that exists', () => {
     const builders = new Set(
-      ['commands.ts', 'record-commands.ts'].flatMap((name) =>
+      ['commands.ts', 'record-commands.ts', 'swimlane-commands.ts'].flatMap((name) =>
         [
           ...readFileSync(join(dirname(fileURLToPath(import.meta.url)), name), 'utf8').matchAll(
             /^export function (\w+Command)\(/gm,

@@ -48,6 +48,17 @@ export {
   type RestoreDeleteBatchFn,
 } from './commands';
 export {
+  swimlaneAddCommand,
+  swimlaneDeleteCommand,
+  swimlaneRenameCommand,
+  swimlaneReorderCommand,
+  type CreateSwimlaneFn,
+  type DeleteSwimlaneFn,
+  type RenameSwimlaneFn,
+  type ReorderSwimlanesFn,
+  type RestoreSwimlaneFn,
+} from './swimlane-commands';
+export {
   assignmentAddCommand,
   assignmentChanged,
   assignmentEditCommand,
