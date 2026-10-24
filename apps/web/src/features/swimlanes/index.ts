@@ -21,3 +21,4 @@ export {
   type SwimlaneManagement,
 } from './model/use-swimlane-management';
 export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
+export { SwimlaneBulkAssignBar } from './components/SwimlaneBulkAssignBar';

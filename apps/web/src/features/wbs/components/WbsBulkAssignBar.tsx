@@ -45,6 +45,7 @@ export function WbsBulkAssignBar({
   onDone,
   onClear,
   onReparented,
+  children,
 }: {
   orgSlug: string;
   planId: string;
@@ -60,6 +61,11 @@ export function WbsBulkAssignBar({
   onClear: () => void;
   /** Told when a batch lands, for the host that records it for undo (undo-redo M3). */
   onReparented?: OnReparented;
+  /**
+   * Further rows over the same selection, inside this one container (the table's swimlane row), so
+   * the count, the live region and Clear selection are stated once for the whole bar.
+   */
+  children?: React.ReactNode;
 }): React.ReactElement | null {
   const announce = useAnnounce();
   const updateParents = useUpdateActivityParents(orgSlug, planId);
@@ -158,6 +164,8 @@ export function WbsBulkAssignBar({
           Clear selection
         </Button>
       </div>
+
+      {children}
 
       {/*
         The one status line. Whichever branch applies, the disabled Assign button is never left

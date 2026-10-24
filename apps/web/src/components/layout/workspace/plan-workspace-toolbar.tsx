@@ -66,7 +66,7 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
-import { useUpdateActivityParents } from '@/features/activities';
+import { useUpdateActivityParents, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
@@ -640,6 +640,18 @@ export function ToolbarPlanWorkspace({
     wbsBandOn: canvasUi.viewToggles.wbsBand ?? false,
     moveMany: model.bulkOperations.moveMany,
   });
+
+  // What the Activities table is told about swimlanes (M4-T1): the same plan of the write the bars and
+  // the editor use, or the WBS source's read-only column. Memoised so the panel's memo still hits.
+  const tableSwimlanes = useMemo<ActivitiesTableSwimlanes | null>(
+    () =>
+      plan.swimlaneSource === 'WBS'
+        ? { source: 'WBS' }
+        : swimlaneAssignment
+          ? { source: 'MANUAL', assignment: swimlaneAssignment }
+          : null,
+    [plan.swimlaneSource, swimlaneAssignment],
+  );
 
   /**
    * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
@@ -2827,6 +2839,7 @@ export function ToolbarPlanWorkspace({
                       hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
                       toolDisarmed={toolPutAway}
                       collapseRef={collapseButtonRef}
+                      swimlanes={tableSwimlanes}
                     />
                   </div>
                 </>

@@ -46,6 +46,7 @@ export function MoveToSwimlaneControl({
   fieldLabel = MOVE_TO_SWIMLANE_FIELD,
   hint,
   selectRef,
+  quietStatus = false,
 }: {
   assignment: SwimlaneAssignment;
   /** The activities to move. */
@@ -62,6 +63,12 @@ export function MoveToSwimlaneControl({
    */
   hint?: React.ReactNode;
   selectRef?: React.Ref<HTMLSelectElement>;
+  /**
+   * The status line stays on the page and still describes the field and the button, but is not a live
+   * region. For a host that sits beside another bar's live region over the same selection, so one
+   * region speaks at a time; the move's own announcement and any refusal alert are unaffected.
+   */
+  quietStatus?: boolean;
 }): React.ReactElement {
   const announce = useAnnounce();
   const closePopover = usePopoverClose();
@@ -168,7 +175,7 @@ export function MoveToSwimlaneControl({
       ) : null}
       <p
         id={statusId}
-        role="status"
+        {...(quietStatus ? {} : { role: 'status' })}
         // Off while it repeats what the live region has just announced (no double speech).
         aria-live={movedTo !== null ? 'off' : undefined}
         className="text-muted-foreground text-sm"
