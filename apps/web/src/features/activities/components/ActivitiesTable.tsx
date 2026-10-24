@@ -47,6 +47,11 @@ import {
   deriveMakeMilestoneGate,
 } from '@/features/plan-actions/make-milestone-gate';
 import { ActivityResourcesDialog, type OnAssignmentEdited } from '@/features/resources';
+import { SwimlaneBulkAssignBar } from '@/features/swimlanes';
+import {
+  SWIMLANES_FOLLOW_WBS_REASON,
+  type SwimlaneAssignment,
+} from '@/features/tsld/model/swimlane-assignment';
 import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
@@ -104,6 +109,16 @@ function scheduleColumn(
     cell: (activity) => formatCalendarDate(get(activity)),
   };
 }
+
+/**
+ * What the table is told about the plan's swimlanes (swimlanes M4-T1). The host composes it, so this
+ * feature learns nothing of how a swimlane is stored or written: with hand-made swimlanes it is the
+ * host's one plan of the write (the same `assignment` the selection bars and the editor use); with
+ * swimlanes that follow the WBS the column is shown read-only with its reason (US-4). Absent when the
+ * plan has no swimlanes to show, which leaves the table exactly as it was.
+ */
+export type ActivitiesTableSwimlanes =
+  { source: 'MANUAL'; assignment: SwimlaneAssignment } | { source: 'WBS' };
 
 /** The coarse sweep's hook, on the label (the hit target) rather than the 16 px input. */
 const ROW_SELECT_TARGET = { 'data-row-select': '' } as const;
@@ -281,6 +296,7 @@ export function ActivitiesTable({
   calendars = NO_CALENDARS,
   planCalendarId,
   calendarsLoading = false,
+  swimlanes,
 }: {
   orgSlug: string;
   planId: string;
@@ -392,6 +408,8 @@ export function ActivitiesTable({
    * its working-hours factor (ADR-0070). Absent leaves that field in whole working days.
    */
   planCalendarId?: string;
+  /** The plan's swimlanes, for the Swimlane column and the bulk-assign bar (swimlanes M4-T1). */
+  swimlanes?: ActivitiesTableSwimlanes | null;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -472,15 +490,18 @@ export function ActivitiesTable({
    * another is the Breakdown picker's job (spec C-1b) — a checklist has nowhere to put the cycle
    * feedback that restructuring the tree needs.
    */
+  const swimlaneAssignment = swimlanes?.source === 'MANUAL' ? swimlanes.assignment : null;
   const selectableIds = useMemo(
     () =>
-      WBS_IMPROVEMENTS_ENABLED
+      WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null
         ? new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id))
         : new Set<string>(),
-    [loadedActivities],
+    [loadedActivities, swimlaneAssignment],
   );
-  const bulkAssignActive =
+  const wbsBulkAssignActive =
     WBS_IMPROVEMENTS_ENABLED && loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
+  // The selection column serves both bars: it appears when either has somewhere to file things.
+  const bulkAssignActive = wbsBulkAssignActive || swimlaneAssignment !== null;
   /**
    * The selection as it stands **against the current list**. Derived rather than pruned by an
    * effect, so a row deleted underneath the selection cannot leave the bar counting an activity
@@ -492,6 +513,13 @@ export function ActivitiesTable({
     return live;
   }, [selectedIds, selectableIds]);
   const membersGate = editorGating?.members ?? { writable: canEditSchedule, reason: null };
+  // Moving to a swimlane is a layout write, not a members edit: it is gated on the schedule and the pen
+  // (the editor's General gate, by identity), the right the selection bars and the editor's field use.
+  const swimlaneGate = editorGating?.general ?? { writable: canEditSchedule, reason: null };
+  const selectedActivities = useMemo(
+    () => loadedActivities.filter((a) => effectiveSelection.has(a.id)),
+    [loadedActivities, effectiveSelection],
+  );
   const clearSelection = store.clearSelection;
 
   /** Open the tabbed editor on the tab this purpose belongs to (ADR-0060 §7). */
@@ -871,6 +899,36 @@ export function ActivitiesTable({
             } satisfies Column<ActivitySummary>,
           ]
         : []),
+      // The activity's swimlane (swimlanes M4-T1), only when the host says the plan has some to show.
+      // Display only: assigning is the bulk bar's job, as the other definition columns are the editor's.
+      // Under the WBS source it says so rather than naming a swimlane the table does not derive — the
+      // reason is the cell's visible text, its tooltip and its screen-reader text (ADR-0083).
+      ...(swimlanes
+        ? [
+            {
+              header: 'Swimlane',
+              headClassName: 'hidden lg:table-cell',
+              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+              cell: (activity: ActivitySummary) => {
+                if (swimlanes.source === 'WBS') {
+                  return (
+                    <span className="text-muted-foreground" title={SWIMLANES_FOLLOW_WBS_REASON}>
+                      Follows the WBS
+                      <span className="sr-only">. {SWIMLANES_FOLLOW_WBS_REASON}</span>
+                    </span>
+                  );
+                }
+                const { assignment } = swimlanes;
+                const current = assignment.choices.find(
+                  (c) => c.id === assignment.currentOf(activity.id),
+                );
+                return (
+                  <span className="text-muted-foreground">{current?.name ?? 'No swimlane'}</span>
+                );
+              },
+            } satisfies Column<ActivitySummary>,
+          ]
+        : []),
       // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
       // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
       // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
@@ -999,6 +1057,7 @@ export function ActivitiesTable({
     calendarsLoading,
     planCalendarId,
     wbsParentLabelById,
+    swimlanes,
     noteCountByActivityId,
     varianceByActivityId,
     canEditSchedule,
@@ -1060,7 +1119,7 @@ export function ActivitiesTable({
         internally. Without it the bar has no declared floor and the table's `flex-1` could squeeze
         it, which is the opposite of "stays above the scrolling rows" (spec §2 edge cases).
       */}
-      {bulkAssignActive ? (
+      {wbsBulkAssignActive ? (
         <div className="shrink-0">
           <WbsBulkAssignBar
             orgSlug={orgSlug}
@@ -1069,6 +1128,23 @@ export function ActivitiesTable({
             planActivities={loadedActivities}
             gate={membersGate}
             {...(onReparented ? { onReparented } : {})}
+            onClear={clearSelection}
+            onDone={() => {
+              flushSync(clearSelection);
+              regionRef.current?.focus();
+            }}
+          />
+        </div>
+      ) : null}
+
+      {swimlaneAssignment ? (
+        <div className="shrink-0">
+          <SwimlaneBulkAssignBar
+            assignment={swimlaneAssignment}
+            ids={selectedActivities.map((a) => a.id)}
+            names={selectedActivities.map((a) => a.name)}
+            gate={swimlaneGate}
+            companion={wbsBulkAssignActive}
             onClear={clearSelection}
             onDone={() => {
               flushSync(clearSelection);

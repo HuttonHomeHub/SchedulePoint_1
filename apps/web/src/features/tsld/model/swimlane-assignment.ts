@@ -50,6 +50,8 @@ export const MOVE_TO_SWIMLANE_LABEL = 'Move to swimlane…';
 /** Why the selection bars' Move to swimlane… is shaded while swimlanes are off (ADR-0082, ADR-0204). */
 export const SWIMLANES_OFF_MOVE_REASON =
   'Turn on Swimlanes in View to move activities between them.';
+/** Why a swimlane is not assigned by hand while the plan's swimlanes come from the WBS (US-4, ADR-0083). */
+export const SWIMLANES_FOLLOW_WBS_REASON = 'Swimlanes follow the WBS in this plan.';
 export const MOVE_TO_SWIMLANE_FIELD = 'Move to';
 export const MOVE_BUTTON_LABEL = 'Move';
 

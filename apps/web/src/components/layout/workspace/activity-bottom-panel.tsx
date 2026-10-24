@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import {
   ActivitiesTable,
+  type ActivitiesTableSwimlanes,
   CreateActivityButton,
   openActivityEditor,
   type ActivityEditorPurpose,
@@ -226,6 +227,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   hiddenView = 'diagram',
   toolDisarmed = false,
   collapseRef: collapseRefProp,
+  swimlanes = null,
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
@@ -250,6 +252,8 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
    * control focus was on (a live resize: `focusCollapseOnMount` only runs on mount).
    */
   collapseRef?: RefObject<HTMLButtonElement | null>;
+  /** The plan's swimlanes for the table's column and bulk bar (swimlanes M4-T1); stable, so the memo hits. */
+  swimlanes?: ActivitiesTableSwimlanes | null;
 }): React.ReactElement {
   const ownCollapseRef = useRef<HTMLButtonElement>(null);
   const collapseRef = collapseRefProp ?? ownCollapseRef;
@@ -373,6 +377,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
           onAssignmentEdited={model.recordAssignmentEdit}
           calendars={model.calendars}
           calendarsLoading={model.calendarsLoading}
+          {...(swimlanes ? { swimlanes } : {})}
           {...(model.planCalendarId === undefined ? {} : { planCalendarId: model.planCalendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }
