@@ -7,6 +7,8 @@ import { createContext, useContext } from 'react';
  * panel that an outside press has since unmounted, focus falls to `<body>`. Closing the panel first,
  * synchronously, makes the trigger the element the dialog returns to.
  *
+ * Provided by `ToolbarPopover` only; `ToolbarSplitButton` hosts the same panel but does not provide it.
+ *
  * `null` outside a popover, so a control can call it unconditionally with `?.()`.
  */
 export const PopoverCloseContext = createContext<(() => void) | null>(null);

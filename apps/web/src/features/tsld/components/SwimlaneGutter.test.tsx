@@ -118,6 +118,16 @@ describe('the gutter as a vertical toolbar', () => {
     expect(screen.getByRole('menu', { name: 'Actions for Mechanical' })).toBeInTheDocument();
   });
 
+  it('leaves ArrowRight chords alone: Alt, Ctrl, Meta and Shift are not the opener', () => {
+    mount();
+    const buttons = labelButtons();
+    act(() => buttons[1]?.focus());
+    for (const mod of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey']) {
+      fireEvent.keyDown(buttons[1]!, { key: 'ArrowRight', [mod]: true });
+    }
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('starts the sequence from the container, where the focus hand-off leaves a reader', () => {
     mount();
     const container = toolbar();

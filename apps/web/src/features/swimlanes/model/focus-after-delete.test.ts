@@ -66,6 +66,19 @@ describe('from the gutter', () => {
   });
 });
 
+describe('when the last swimlane takes the gutter with it', () => {
+  it('lands on the View trigger, else the diagram listbox, never <body>', () => {
+    document.body.innerHTML =
+      '<button data-toolbar-item="view">View</button><div role="listbox" aria-label="Activities in the diagram" tabindex="0"></div>';
+    expect(focusAfterDelete({ id: 'a', from: 'gutter', order: ['a'] })).toBe(true);
+    expect(document.activeElement).toHaveAttribute('data-toolbar-item', 'view');
+    document.body.innerHTML =
+      '<div role="listbox" aria-label="Activities in the diagram" tabindex="0"></div>';
+    expect(focusAfterDelete({ id: 'a', from: 'gutter', order: ['a'] })).toBe(true);
+    expect(document.activeElement).toHaveAttribute('role', 'listbox');
+  });
+});
+
 describe('from Manage', () => {
   it('goes to the next row’s Rename, else the previous, else the New swimlane field', () => {
     manage(['a', 'c']);

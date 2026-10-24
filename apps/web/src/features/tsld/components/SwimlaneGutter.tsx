@@ -296,9 +296,11 @@ function CornerControls({
       manageReason ?? (actions.manage.label === CORNER_LABEL ? undefined : actions.manage.label),
     purpose: manageReason ? 'reason-echo' : 'name-echo',
   });
+  // The name is "Swimlane names" (pressed or not); the tip says what a press DOES, which the name does
+  // not, so it is a `description` — and the shut reason where there is one.
   const collapseTip = useTooltip({
     content: collapseReason ?? (collapsed ? 'Show swimlane names' : 'Hide swimlane names'),
-    purpose: collapseReason ? 'reason-echo' : 'name-echo',
+    purpose: collapseReason ? 'reason-echo' : 'description',
   });
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
   return (
@@ -425,6 +427,8 @@ function GutterLabelButton({
         // ArrowDown is the roving key here, so the menu button's usual opener is taken; ArrowRight
         // (into a flyout) is the vertical toolbar's natural one. Enter and Space still open it.
         if (event.key !== 'ArrowRight' || !hasMenu) return;
+        // A chord (Alt+Right is Back, Ctrl+Right a word jump) is the browser's or the reader's, not ours.
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
         event.preventDefault();
         open(event.currentTarget);
       }}

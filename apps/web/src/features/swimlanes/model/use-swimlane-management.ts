@@ -152,7 +152,9 @@ export function useSwimlaneManagement(args: {
   );
 
   const moving = useRef(false);
-  const deleteFrom = useRef<'gutter' | 'manage'>('gutter');
+  // Where the delete came from and the order the list had, captured when its dialog OPENS: by the time
+  // it succeeds a refetch may already have dropped the row, and the order could not be recovered.
+  const deleteContext = useRef<Omit<FocusAfterDelete, 'id'>>({ from: 'gutter', order: [] });
   const gutterActions = useMemo<GutterActions>(
     () => ({
       write: { writable, reason },
@@ -164,7 +166,7 @@ export function useSwimlaneManagement(args: {
       },
       onRename: (swimlaneId) => open({ renameId: swimlaneId }),
       onDelete: (swimlaneId) => {
-        deleteFrom.current = 'gutter';
+        deleteContext.current = { from: 'gutter', order: swimlanesRef.current.map((s) => s.id) };
         open({ deleteId: swimlaneId });
       },
       onMove: (swimlaneId, delta) => {
@@ -221,7 +223,7 @@ export function useSwimlaneManagement(args: {
   const openRename = useCallback((id: string) => open({ renameId: id }), [open]);
   const openDelete = useCallback(
     (id: string) => {
-      deleteFrom.current = 'manage';
+      deleteContext.current = { from: 'manage', order: swimlanesRef.current.map((s) => s.id) };
       open({ deleteId: id });
     },
     [open],
@@ -233,11 +235,7 @@ export function useSwimlaneManagement(args: {
   // restore (inside the dialog's close) has run first and cannot overwrite it.
   const pendingFocus = useRef<FocusAfterDelete | null>(null);
   const afterDelete = useCallback((deleted: SwimlaneSummary): void => {
-    pendingFocus.current = {
-      id: deleted.id,
-      from: deleteFrom.current,
-      order: swimlanesRef.current.map((s) => s.id),
-    };
+    pendingFocus.current = { id: deleted.id, ...deleteContext.current };
   }, []);
   useEffect(() => {
     const pending = pendingFocus.current;

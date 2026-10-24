@@ -44,6 +44,10 @@ export function focusTargetsAfterDelete(
       ),
       ...find('[data-testid="tsld-swimlane-gutter-corner"] button'),
       ...find('[data-testid="tsld-swimlane-gutter-labels"]'),
+      // The last swimlane's delete can unmount the whole gutter (count 0): land outside it, on the
+      // View ▾ trigger and then the diagram's listbox — never on <body>.
+      ...find('[data-toolbar-item="view"]'),
+      ...find('[role="listbox"][aria-label="Activities in the diagram"]'),
     ];
   }
   const neighbours = [plan.order[at + 1], at > 0 ? plan.order[at - 1] : undefined].filter(
