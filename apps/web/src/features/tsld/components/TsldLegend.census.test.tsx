@@ -151,9 +151,9 @@ describe('the guest legend keys no constraint pin (TECH_DEBT #521)', () => {
 
 /**
  * Swimlanes M2-T2 (ui-architecture C5): the boundary rule is a mark with a key of its own, an alias
- * of the year tier so it adds no colour. The legend gains its entry with the lens (M2-T11); until
- * the lens is offered no diagram draws the mark, and a swatch for it would be the key that names a
- * mark the canvas does not draw. What is pinned now is the half that can drift silently: the
+ * of the year tier so it adds no colour. The legend gains its entry with the lens (M2-T11) and only
+ * while swimlanes are drawn, because a swatch for a mark the canvas is not painting is the key that
+ * names a mark the canvas does not draw. What is pinned is the half that can drift silently: the
  * painter reads the key, and both of its tokens are aliases of the year rule.
  */
 describe('FC-G8 — the swimlane boundary rule is its own key and adds no colour', () => {
@@ -172,5 +172,16 @@ describe('FC-G8 — the swimlane boundary rule is its own key and adds no colour
 
   it('paper resolves the rule from its own twin token', () => {
     expect(tokenOf('swimlaneRule')).toBe('--canvas-paper-swimlane-rule');
+  });
+
+  it('keys the rule only while swimlanes are drawn, in the token the painter reads', () => {
+    const { rerender } = render(<TsldLegend />);
+    expect(screen.queryByText('Swimlane boundary')).not.toBeInTheDocument();
+    rerender(<TsldLegend swimlaneBoundary />);
+    const row = screen.getByText('Swimlane boundary');
+    // The swatch is a hairline in the rule's own token, so a retoken moves key and mark together.
+    expect(row.querySelector('span[style]')?.getAttribute('style')).toContain(
+      'var(--canvas-swimlane-rule)',
+    );
   });
 });

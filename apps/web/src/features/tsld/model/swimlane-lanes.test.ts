@@ -7,6 +7,7 @@ import {
   arrangeInSwimlanes,
   arrangeSceneOf,
   assignToSwimlane,
+  NOT_DRAWN_REASON,
   createInSwimlane,
   dropInSwimlane,
   laneRangeOf,
@@ -539,6 +540,21 @@ describe('assignToSwimlane', () => {
   };
   const byId = (move: ReturnType<typeof assignToSwimlane>) =>
     new Map(write(move).placements.map((p) => [p.id, p] as const));
+
+  it('counts the activities that are not drawn instead of saying "that activity" of several', () => {
+    const ctx = context([...BASE, { id: 'n1', start: 0, end: 3, swimlane: null, lane: 0 }]);
+    const reason = (ids: string[]) => {
+      const move = assignToSwimlane(ctx, ids, 'B');
+      return move.kind === 'refuse' ? move.reason : null;
+    };
+    expect(reason(['ghost'])).toBe(NOT_DRAWN_REASON);
+    expect(reason(['ghost', 'ghost2'])).toBe(
+      'Those activities aren’t drawn yet, so there is nowhere to move them.',
+    );
+    expect(reason(['n1', 'ghost'])).toBe(
+      '1 of the 2 activities isn’t drawn yet, so there is nowhere to move them.',
+    );
+  });
 
   it('stacks the bars left to right in the first free lanes of the target, none overlapping', () => {
     const ctx = context([

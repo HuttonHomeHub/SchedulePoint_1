@@ -199,14 +199,28 @@ const baselineGhostItem = (lateOverlay: boolean): LegendItem => ({
   swatch: { border: '1px dashed var(--muted-foreground)' },
 });
 
+/**
+ * The swimlane boundary rule (swimlanes ui-architecture C5), keyed only while swimlanes are drawn: a
+ * key naming a mark the canvas is not painting is the defect ADR-0151 M6 records. A solid hairline in
+ * the rule's own token, so the swatch reads the colour the painter reads (`palette.swimlaneRule`).
+ */
+const SWIMLANE_BOUNDARY: LegendItem = {
+  label: 'Swimlane boundary',
+  line: 'solid',
+  ink: 'var(--canvas-swimlane-rule)',
+  weight: 1,
+};
+
 /** Build the legend item list for the active lenses (or today's default when no lens is provided).
  * `withoutConstraint` drops the pin row for a surface that can never draw one (TECH_DEBT #521). */
 function legendItems(
   lens: LensLegendInfo | undefined,
   withoutConstraint: boolean,
+  swimlaneBoundary: boolean,
 ): ReadonlyArray<LegendItem> {
   const all = lens ? lensItems(lens) : LEGEND;
-  return withoutConstraint ? all.filter((item) => !('pin' in item)) : all;
+  const kept = withoutConstraint ? all.filter((item) => !('pin' in item)) : all;
+  return swimlaneBoundary ? [...kept, SWIMLANE_BOUNDARY] : kept;
 }
 
 function lensItems(lens: LensLegendInfo): ReadonlyArray<LegendItem> {
@@ -236,14 +250,17 @@ export function TsldLegend({
   orientation = 'horizontal',
   lens,
   withoutConstraint = false,
+  swimlaneBoundary = false,
 }: {
   orientation?: 'horizontal' | 'vertical';
   lens?: LensLegendInfo;
+  /** Swimlanes are drawn, so the boundary rule between them is keyed (swimlanes M2-T11). */
+  swimlaneBoundary?: boolean;
   /** The share view: constraints are outside a guest's scope (ADR-0051 §4), so no guest bar can
    * wear the pin and the key must not promise one (TECH_DEBT #521). */
   withoutConstraint?: boolean;
 } = {}): React.ReactElement {
-  const items = legendItems(lens, withoutConstraint);
+  const items = legendItems(lens, withoutConstraint, swimlaneBoundary);
   return (
     // `role="list"`/`role="listitem"` are explicit: Tailwind v4's Preflight sets `list-style: none`,
     // which is a documented cause of WebKit/VoiceOver dropping the implicit roles (ADR-0122, the same

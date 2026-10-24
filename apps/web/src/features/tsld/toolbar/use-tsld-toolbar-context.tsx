@@ -727,7 +727,8 @@ export function useTsldToolbarContext({
       levelResources: plan.levelResources,
       swimlanesShown: swimlaneLensShown,
       toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
-      swimlanesSetUp: plan.swimlaneSource !== 'NONE' && swimlaneScene.count !== 0,
+      // A `WBS` source has no input until M3, so it is not "set up" for a lens that would draw nothing.
+      swimlanesSetUp: plan.swimlaneSource === 'MANUAL' && swimlaneScene.count !== 0,
       swimlanesLoading: swimlaneScene.pending,
       swimlanesManage,
       ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),

@@ -243,6 +243,21 @@ describe('useSwimlaneManagement', () => {
     expect(result.current.dialogs.state.renameId).toBeNull();
   });
 
+  it('returns focus to what held it when the dialog was requested, not where it has moved since', () => {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<button id="opener">Opener</button><button id="other">Other</button>',
+    );
+    const { result } = mount();
+    document.getElementById('opener')!.focus();
+    act(() => result.current.openSwimlanes());
+    // The lazy chunk resolves after focus has moved on.
+    document.getElementById('other')!.focus();
+    act(() => result.current.dialogs.close('manage'));
+    expect(document.activeElement).toBe(document.getElementById('opener'));
+    document.body.innerHTML = '';
+  });
+
   it('moves a swimlane from the gutter through the reorder write', async () => {
     vi.mocked(apiFetch).mockResolvedValue([row('b', 'B'), row('a', 'A')]);
     const { result } = mount();

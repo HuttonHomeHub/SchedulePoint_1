@@ -57,7 +57,7 @@ import {
   swimlanePlace,
   swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
-import type { SwimlaneAssignment } from '../model/swimlane-assignment';
+import { moveToSwimlaneGate, type SwimlaneAssignment } from '../model/swimlane-assignment';
 import type { SwimlaneLanePlacement } from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
@@ -96,9 +96,9 @@ import {
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
-import type { CompareGhost, CompareLink, SwimlaneMarks } from '../render/paint';
+import type { CompareGhost, CompareLink } from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
-import type { SwimlaneInput } from '../render/project-swimlanes';
+import { swimlaneMarksOf, type SwimlaneInput } from '../render/project-swimlanes';
 import {
   addCalendarDays,
   daysBetween,
@@ -111,7 +111,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { ghostLaneOf, placeCompareGhosts, type GhostLaneScene } from '../render/swimlane-ghosts';
-import { gutterSwimlanes, type GutterActions } from '../render/swimlane-gutter';
+import { gutterSwimlanesFrom, type GutterActions } from '../render/swimlane-gutter';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
@@ -1233,20 +1233,18 @@ export function TsldPanel({
   // The rule and ground marks for the painter (swimlanes C5), off the projection that swapped in the
   // display lanes so the two cannot disagree. Memoised on it: a fresh object per render would mark
   // the canvas scene dirty and repaint every render. SQ-6's default is the ground ON.
-  const swimlaneMarks = useMemo<SwimlaneMarks | undefined>(
-    () =>
-      diagramSource.swimlaneScene
-        ? { extents: diagramSource.swimlaneScene.extents, ground: swimlaneGround }
-        : undefined,
+  const swimlaneMarks = useMemo(
+    () => swimlaneMarksOf(diagramSource.swimlaneScene, swimlaneGround),
     [diagramSource.swimlaneScene, swimlaneGround],
   );
-  // The projection, in the shape the ghosts read: absent exactly when swimlanes are not drawn.
-  // `source` is the hand-made one because that is the only input the host builds until M3; M3's WBS
-  // input must set it from the input, or removed work would be placed by the wrong basis.
+  // The projection, in the shape the ghosts read: absent exactly when swimlanes are not drawn. The
+  // `source` is the input's own, so a WBS input (M3) is placed by its own basis and not the hand-made one.
   const ghostLaneScene = useMemo<GhostLaneScene | null>(
     () =>
-      diagramSource.swimlaneScene ? { ...diagramSource.swimlaneScene, source: 'MANUAL' } : null,
-    [diagramSource.swimlaneScene],
+      diagramSource.swimlaneScene
+        ? { ...diagramSource.swimlaneScene, source: swimlanes?.source ?? 'MANUAL' }
+        : null,
+    [diagramSource.swimlaneScene, swimlanes],
   );
   // What the gutter shows, off the same projection (never a list of the host's own, which could
   // disagree with the stack). Memoised on the projection and the actions: `TsldCanvas` rewrites every
@@ -1255,16 +1253,11 @@ export function TsldPanel({
     () =>
       diagramSource.swimlaneScene !== null && swimlanes
         ? {
-            swimlanes: gutterSwimlanes(
-              diagramSource.swimlaneScene.extents,
-              diagramSource.sceneActivities.map((a) => a.id),
-              swimlanes.membership,
-              new Set(swimlanes.swimlanes.map((s) => s.id)),
-            ),
+            swimlanes: gutterSwimlanesFrom(diagramSource.swimlaneScene),
             actions: gutterActions ?? undefined,
           }
         : null,
-    [diagramSource.swimlaneScene, diagramSource.sceneActivities, swimlanes, gutterActions],
+    [diagramSource.swimlaneScene, swimlanes, gutterActions],
   );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;
@@ -3301,7 +3294,10 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend withoutConstraint={!showConstraintKey} />
+          <TsldLegend
+            withoutConstraint={!showConstraintKey}
+            swimlaneBoundary={swimlaneScene !== null}
+          />
         </Surface>
       ) : null}
 
@@ -3445,10 +3441,7 @@ export function TsldPanel({
                     assignment: swimlaneAssignment,
                     ids: selectedActivities.map((a) => a.id),
                     names: selectedActivities.map((a) => a.name),
-                    gate: {
-                      writable: bulk.gate.writable,
-                      reason: bulk.gate.writable ? null : bulk.gate.reason,
-                    },
+                    gate: moveToSwimlaneGate(swimlaneAssignment, bulk.gate),
                   }
                 : null
             }

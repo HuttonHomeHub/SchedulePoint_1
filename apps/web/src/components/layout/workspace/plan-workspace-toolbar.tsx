@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
@@ -19,6 +19,7 @@ import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
 import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
+import { SwimlanesFailedRegion } from './swimlanes-failed-notice';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -119,8 +120,6 @@ import {
 } from '@/features/schedule-health';
 import {
   SWIMLANE_GROUND,
-  SWIMLANES_LENS_OFFERED,
-  SwimlaneDialogs,
   useSwimlaneAssignment,
   useSwimlaneManagement,
   useSwimlaneScene,
@@ -165,6 +164,13 @@ import {
 import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
+
+/** The swimlane dialogs, fetched the first time one is asked for (see `swimlaneDialogsWanted`). */
+const SwimlaneDialogs = lazy(() =>
+  import('@/features/swimlanes/components/SwimlaneDialogs').then((m) => ({
+    default: m.SwimlaneDialogs,
+  })),
+);
 
 /**
  * The height of the time-ruler band at the top of the canvas (`TsldCanvas`'s sticky date ruler), in
@@ -250,10 +256,9 @@ export function ToolbarPlanWorkspace({
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
   const canvasUi = useTsldCanvasUiState(plan.id);
   // The neutral swimlane input for the canvas and the export (swimlanes ui-architecture C8, C11). Built
-  // here and not in the model because "shown" is the lens state, which lives in `canvasUi` (C1). Only
-  // while the lens is offered, so today it fetches nothing and `input` is `null`: the diagram is the
-  // swimlane-free one, unchanged. Memoised inside the hook, so the identity is stable across renders
-  // whose inputs are equal.
+  // here and not in the model because "shown" is the lens state, which lives in `canvasUi` (C1). A plan
+  // with no hand-made swimlanes fetches nothing and `input` is `null`: the diagram is the swimlane-free
+  // one. Memoised inside the hook, so the identity is stable across renders whose inputs are equal.
   const swimlanesAreShown = swimlanesShown(
     canvasUi.lensState.swimlanesOverride,
     plan.swimlaneSource,
@@ -263,12 +268,11 @@ export function ToolbarPlanWorkspace({
     planId: model.planId,
     source: plan.swimlaneSource,
     activities: model.activities.data,
-    offered: SWIMLANES_LENS_OFFERED,
     shown: swimlanesAreShown,
   });
   // Setting up and managing swimlanes (M2-T9): the gutter's width and commands, the lens's button, and
-  // the four dialogs, from one hook. The gutter is reserved only while a scene is drawn, so with the lens
-  // not offered the width is 0 and nothing here is reachable.
+  // the four dialogs, from one hook. The gutter is reserved only while a scene is drawn, so with
+  // swimlanes hidden the width is 0.
   const swimlaneManagement = useSwimlaneManagement({
     orgSlug: model.orgSlug,
     planId: model.planId,
@@ -279,6 +283,20 @@ export function ToolbarPlanWorkspace({
     gate: { writable: model.canEditSchedule, reason: model.scheduleRefusal('change swimlanes') },
     record: model.recordSwimlaneEdit,
   });
+  // The four dialogs are loaded the first time one is asked for, and stay mounted after (they unmount
+  // their own contents on close). Almost no session ever opens one, so none of their code is paid for
+  // on the way into the plan.
+  const swimlaneDialogState = swimlaneManagement.dialogs.state;
+  const [swimlaneDialogsWanted, setSwimlaneDialogsWanted] = useState(false);
+  if (
+    !swimlaneDialogsWanted &&
+    (swimlaneDialogState.setup ||
+      swimlaneDialogState.manage ||
+      swimlaneDialogState.renameId !== null ||
+      swimlaneDialogState.deleteId !== null)
+  ) {
+    setSwimlaneDialogsWanted(true);
+  }
   const swimlanesManage = useMemo(
     () => ({ label: swimlaneManagement.manageLabel, open: swimlaneManagement.openSwimlanes }),
     [swimlaneManagement.manageLabel, swimlaneManagement.openSwimlanes],
@@ -610,12 +628,11 @@ export function ToolbarPlanWorkspace({
   useLateOverlayAnnouncement(lateOverlayActive);
   // Move to swimlane… for the selection bars and the editor (M2-T10): one plan of the write, planned
   // against the projection the canvas draws. `null` — and so absent from both — unless the plan has
-  // hand-made swimlanes; while the lens is not offered nothing is fetched.
+  // hand-made swimlanes. It works with the lens hidden (the list is the scene's own query).
   const swimlaneAssignment = useSwimlaneAssignment({
     orgSlug: model.orgSlug,
     planId: model.planId,
     source: plan.swimlaneSource,
-    offered: SWIMLANES_LENS_OFFERED,
     activities: model.activities.data,
     barDateSource,
     dataDate: plan.plannedStart,
@@ -1415,8 +1432,9 @@ export function ToolbarPlanWorkspace({
       swimlaneGround={SWIMLANE_GROUND}
       gutterWidthPx={swimlaneManagement.gutterWidthPx}
       gutterActions={swimlaneManagement.gutterActions}
-      // The selection bars offer the move only while the diagram draws swimlanes; the editor keeps it.
-      swimlaneAssignment={swimlaneAssignment?.shown ? swimlaneAssignment : null}
+      // The selection bars shade the move while swimlanes are off (`assignment.shown`); the editor
+      // keeps it with a hint.
+      swimlaneAssignment={swimlaneAssignment}
       onGutterRoomChange={swimlaneManagement.onGutterRoomChange}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -1919,6 +1937,7 @@ export function ToolbarPlanWorkspace({
       onClose={legend.close}
       onPositionChange={legend.setPosition}
       leftInsetPx={swimlaneManagement.gutterWidthPx}
+      swimlaneBoundary={swimlaneScene.input !== null}
       {...(lensLegend ? { lens: lensLegend } : {})}
     />
   );
@@ -2619,6 +2638,17 @@ export function ToolbarPlanWorkspace({
                   inert={dockSqueezed || canvasRowTooShort}
                   className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
                 >
+                  {/* The list failed while swimlanes are on: the diagram is drawn without them, and
+                    this says so with a retry (the lens row carries the same sentence). Only on the
+                    diagram, which is where the division is drawn; its live region is mounted empty
+                    on the diagram so the sentence is announced when it arrives. */}
+                  {ctx.planView !== 'gantt' ? (
+                    <SwimlanesFailedRegion
+                      failed={swimlanesAreShown && swimlaneScene.failed}
+                      onRetry={swimlaneScene.refetch}
+                      restoreFocus={focusPlanSurface}
+                    />
+                  ) : null}
                   {surface}
                   {legendPanel}
                   {resourceStripPanel}
@@ -2833,7 +2863,11 @@ export function ToolbarPlanWorkspace({
 
         {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
         <ActivityCrudDialogs model={model} swimlaneAssignment={swimlaneAssignment} />
-        <SwimlaneDialogs {...swimlaneManagement.dialogs} />
+        {swimlaneDialogsWanted ? (
+          <Suspense fallback={null}>
+            <SwimlaneDialogs {...swimlaneManagement.dialogs} />
+          </Suspense>
+        ) : null}
 
         {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —
             the canvas bar, the Gantt row menu and the activities table. A fresh `key` per target,

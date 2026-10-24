@@ -63,9 +63,10 @@ export interface BulkSelectionBarProps {
    */
   canMove?: boolean;
   /**
-   * **Move to swimlane…** for the whole selection (swimlanes M2-T10, ADR-0080). Absent when swimlanes
-   * are not offered, which omits the button rather than leaving it lit and inert. Its gate rides the
-   * same write right as the other two actions.
+   * **Move to swimlane…** for the whole selection (swimlanes M2-T10, ADR-0080). Absent when the plan
+   * has no swimlanes to move to, which omits the button rather than leaving it lit and inert; shaded
+   * with a reason while they are not drawn. Its gate rides the same write right as the other two
+   * actions.
    */
   moveToSwimlane?: {
     assignment: SwimlaneAssignment;

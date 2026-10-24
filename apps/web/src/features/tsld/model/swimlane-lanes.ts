@@ -1,8 +1,9 @@
 import type { LayoutPartition } from '../render/layout-partition';
-import type {
-  SwimlaneExtent,
-  SwimlaneInput,
-  SwimlaneProjection,
+import {
+  NO_SWIMLANE_LABEL,
+  type SwimlaneExtent,
+  type SwimlaneInput,
+  type SwimlaneProjection,
 } from '../render/project-swimlanes';
 
 import type { SwimlaneLaneFacts } from './reposition-announcement';
@@ -82,8 +83,18 @@ export interface SwimlaneEditContext {
   readonly stored: ReadonlyMap<string, number>;
 }
 
-export const NO_SWIMLANE_LABEL = 'No swimlane';
 export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so there is nowhere to move it.';
+
+/**
+ * The same refusal for a selection: singular for one, and for several it counts how many are not
+ * drawn, so "that activity" is never said of two.
+ */
+export function notDrawnReason(missing: number, total: number): string {
+  if (total === 1) return NOT_DRAWN_REASON;
+  return missing === total
+    ? 'Those activities aren’t drawn yet, so there is nowhere to move them.'
+    : `${String(missing)} of the ${String(total)} activities ${missing === 1 ? 'isn’t' : 'aren’t'} drawn yet, so there is nowhere to move them.`;
+}
 
 /**
  * Every refusal here is a plain statement of the rule, with no "sorry" and no "couldn’t": the single
@@ -399,8 +410,10 @@ export function moveManyInSwimlanes(
   const rows: Member[] = [];
   for (const id of ids) {
     const m = members.get(id);
-    if (m === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
-    rows.push(m);
+    if (m !== undefined) rows.push(m);
+  }
+  if (rows.length < ids.length) {
+    return { kind: 'refuse', reason: notDrawnReason(ids.length - rows.length, ids.length) };
   }
   const blocked = rows.filter((m) => m.lane + laneDelta < 0).length;
   if (blocked > 0)
@@ -561,8 +574,10 @@ export function assignToSwimlane(
   const rows: Member[] = [];
   for (const id of ids) {
     const m = members.get(id);
-    if (m === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
-    rows.push(m);
+    if (m !== undefined) rows.push(m);
+  }
+  if (rows.length < ids.length) {
+    return { kind: 'refuse', reason: notDrawnReason(ids.length - rows.length, ids.length) };
   }
   const found = extents.findIndex((e) => e.id === target);
   // A swimlane with no member still takes one lane, so every real target is an extent; one that is

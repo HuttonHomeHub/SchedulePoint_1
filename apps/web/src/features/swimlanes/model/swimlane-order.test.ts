@@ -57,11 +57,13 @@ describe('membersBySwimlane', () => {
 describe('deleteConsequence', () => {
   it('says where the members go and that Undo brings them back', () => {
     expect(deleteConsequence(12)).toBe(
-      '12 activities will show under No swimlane. Undo brings them back.',
+      '12 activities will show under No swimlane. Press Undo (Ctrl+Z) to bring them back.',
     );
     expect(deleteConsequence(1)).toBe(
-      '1 activity will show under No swimlane. Undo brings it back.',
+      '1 activity will show under No swimlane. Press Undo (Ctrl+Z) to bring it back.',
     );
-    expect(deleteConsequence(0)).toBe('No activities are in this swimlane. Undo brings it back.');
+    expect(deleteConsequence(0)).toBe(
+      'No activities are in this swimlane. Press Undo (Ctrl+Z) to bring it back.',
+    );
   });
 });

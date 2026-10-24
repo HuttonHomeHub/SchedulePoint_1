@@ -1,6 +1,7 @@
 import { deriveSwimlaneLanes, drawnSpanDays, type SwimlaneMember } from '@repo/layout';
 import type { ActivitySummary } from '@repo/types';
 
+import type { SwimlaneMarks } from './paint';
 import { daysBetween } from './render-model';
 
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
@@ -33,7 +34,20 @@ export interface SwimlaneInput {
    * never been placed against it (the absence of a row, ADR-0139).
    */
   storedLanes: ReadonlyMap<string, { lane: number; updatedAt: number }>;
+  /**
+   * What the swimlanes are made of, for readers that place work by it (the comparison ghosts,
+   * ADR-0126). Absent reads as `MANUAL`, the only input the host builds until M3; M3's WBS input
+   * must say `WBS`, or removed work would be placed by the wrong basis.
+   */
+  source?: 'MANUAL' | 'WBS';
 }
+
+/**
+ * What the product calls the swimlane an activity is in when it is in none. **The one spelling**: the
+ * gutter, the listbox groups, the Move-to-swimlane choices, the auto-resolve sentence and (lower-cased,
+ * mid-sentence) the minimap readout all derive from it.
+ */
+export const NO_SWIMLANE_LABEL = 'No swimlane';
 
 /** One swimlane's place in the stack, for the gutter. */
 export interface SwimlaneExtent {
@@ -122,4 +136,16 @@ export function projectSwimlanes(
     next += laneCount;
   }
   return { displayLanes, extents, laneCount: next, derivedIds };
+}
+
+/**
+ * The painter's swimlane marks for a projection: the stack's extents and whether alternate swimlanes
+ * carry the ground. **The one builder**, so the screen and the export cannot assemble the marks two
+ * ways; absent exactly when no projection is drawn.
+ */
+export function swimlaneMarksOf(
+  projection: SwimlaneProjection | null,
+  ground: boolean,
+): SwimlaneMarks | undefined {
+  return projection ? { extents: projection.extents, ground } : undefined;
 }

@@ -1,5 +1,9 @@
 import { LANE_HEIGHT, screenYOfLane, type Size, type Viewport } from './geometry';
-import type { SwimlaneExtent, SwimlaneProjection } from './project-swimlanes';
+import {
+  NO_SWIMLANE_LABEL,
+  type SwimlaneExtent,
+  type SwimlaneProjection,
+} from './project-swimlanes';
 
 /**
  * **The swimlane gutter: what its labels say and where they sit** (swimlanes epic M2-T3;
@@ -13,8 +17,6 @@ import type { SwimlaneExtent, SwimlaneProjection } from './project-swimlanes';
  *
  * Pure, and it imports no feature: the host maps the swimlanes feature's rows onto
  * {@link GutterSwimlane} (ADR-0026 §8).
- *
- * **Dark until the lens exists:** `gutterWidthPx` is 0 everywhere, so nothing here is reached.
  */
 
 /** The expanded gutter's width. Fixed: it has no drag divider (C12), so nothing needs a third. */
@@ -155,13 +157,18 @@ export interface GutterLabelText {
   index: number;
   /** 1-based; "No swimlane" takes the last number, so the strip has something to show for it. */
   position: number;
-  /** The visible text: the name, or the number on the collapsed strip. */
+  /** The visible text: the name, or on the collapsed strip the number ("No" for no swimlane). */
   text: string;
   /** The full name, whatever the strip shows. */
   name: string;
   activityCount: number;
   laneCount: number;
-  /** "Mechanical, swimlane 2 of 5, 14 activities, 3 lanes" — begins with the visible text (2.5.3). */
+  /**
+   * "Mechanical, swimlane 2 of 5, 14 activities, 3 lanes". **It begins with the visible text** (WCAG
+   * 2.5.3 Label in Name): the name when expanded, so it reads as it is drawn; on the collapsed strip,
+   * where the visible text is the number, the position leads ("2, Mechanical, swimlane 2 of 5, …"),
+   * and "No swimlane" already begins with the "No" the strip shows for it.
+   */
   accessibleName: string;
   /** The name needs more lines than the swimlane is tall, so it ends in an ellipsis. */
   cut: boolean;
@@ -188,8 +195,6 @@ export interface GutterLabelGeometry {
 
 export type GutterLabel = GutterLabelText & GutterLabelGeometry;
 
-const NO_SWIMLANE_NAME = 'No swimlane';
-
 function activities(n: number): string {
   return n === 1 ? '1 activity' : `${String(n)} activities`;
 }
@@ -213,7 +218,7 @@ export function swimlaneGutterText(
   const usable = Math.max(1, scene.widthPx - 2 * GUTTER_PAD_PX);
   return scene.swimlanes.map((s, index) => {
     const position = index + 1;
-    const name = s.name ?? NO_SWIMLANE_NAME;
+    const name = s.name ?? NO_SWIMLANE_LABEL;
     // The label's own padding takes a line's worth off the top of a short block, so a block that is
     // exactly N lines tall holds N - 1 (the clamp would otherwise promise a line it cannot show).
     const maxLines = Math.max(
@@ -222,16 +227,17 @@ export function swimlaneGutterText(
     );
     const lines = Math.max(1, Math.ceil(measure(name) / usable));
     const where = s.id === null ? '' : `, swimlane ${String(position)} of ${String(named)}`;
+    const lead = scene.collapsed && s.id !== null ? `${String(position)}, ` : '';
     return {
       key: s.id ?? 'none',
       id: s.id,
       index,
       position,
-      text: scene.collapsed ? (s.id === null ? '–' : String(position)) : name,
+      text: scene.collapsed ? (s.id === null ? 'No' : String(position)) : name,
       name,
       activityCount: s.activityCount,
       laneCount: s.laneCount,
-      accessibleName: `${name}${where}, ${activities(s.activityCount)}, ${lanes(s.laneCount)}`,
+      accessibleName: `${lead}${name}${where}, ${activities(s.activityCount)}, ${lanes(s.laneCount)}`,
       cut: !scene.collapsed && lines > maxLines,
       maxLines,
     };

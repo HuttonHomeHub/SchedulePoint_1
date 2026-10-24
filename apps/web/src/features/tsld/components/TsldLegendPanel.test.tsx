@@ -104,6 +104,23 @@ describe('TsldLegendPanel', () => {
       expect(panel).not.toHaveClass('left-3');
     });
 
+    it('keys the swimlane boundary only while swimlanes are drawn', () => {
+      const { rerender } = render(
+        <TsldLegendPanel open position={null} onClose={vi.fn()} onPositionChange={vi.fn()} />,
+      );
+      expect(screen.queryByText('Swimlane boundary')).not.toBeInTheDocument();
+      rerender(
+        <TsldLegendPanel
+          open
+          position={null}
+          swimlaneBoundary
+          onClose={vi.fn()}
+          onPositionChange={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Swimlane boundary')).toBeInTheDocument();
+    });
+
     it('with no gutter, keeps today’s class-only corner exactly', () => {
       render(<TsldLegendPanel open position={null} onClose={vi.fn()} onPositionChange={vi.fn()} />);
       const panel = screen.getByRole('group', { name: 'Diagram legend' });

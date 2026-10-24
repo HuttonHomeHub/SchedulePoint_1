@@ -8,16 +8,6 @@ import { manualSwimlaneInput } from './manual-membership';
 import type { SwimlaneInput } from '@/features/tsld';
 
 /**
- * Whether the plan workspace offers the Swimlanes lens at all. **`false` until M2-T11**, which is
- * what keeps every task before it dark: with the lens unoffered nothing is "shown", so no list is
- * fetched and no scene input is built (`implementation-plan.md` M2-T1, "Dark because").
- *
- * The lens's own toggle (`enabled: false` in the toolbar's lens roster) and this are two ends of
- * the same switch; T2 replaces this constant with the lens state, `override ?? (source !== 'NONE')`.
- */
-export const SWIMLANES_LENS_OFFERED = false;
-
-/**
  * Whether alternate swimlanes carry the faint ground. The approved default of feature-spec SQ-6 is
  * yes. It is policy and not painting, so it lives with the host's lens model and reaches the painter
  * as `TsldPanel`'s `swimlaneGround`; reversing the answer is a one-line change and a test.
@@ -25,19 +15,17 @@ export const SWIMLANES_LENS_OFFERED = false;
 export const SWIMLANE_GROUND = true;
 
 /**
- * Whether the plan's swimlane picture exists for this session: the lens is offered, the plan's
- * swimlanes are hand-made (a `WBS` source has no input until M3) and, where it matters, the planner
- * can write. **The one gate** for fetching the swimlane list, drawing it and auto-resolving in it, so
- * that nothing behind the lens runs while the lens is withheld — a plan whose source was set through
- * the API still draws and resolves swimlane-free until `SWIMLANES_LENS_OFFERED` flips.
+ * Whether the plan's swimlane picture exists for this session: the plan's swimlanes are hand-made
+ * (a `WBS` source has no input until M3, so a plan whose source was set through the API draws and
+ * resolves swimlane-free) and, where it matters, the planner can write. **The one gate** for
+ * fetching the swimlane list, drawing it, assigning to it and auto-resolving in it.
  */
 export function swimlanePictureOn(args: {
-  offered: boolean;
   source: SwimlaneSource;
   /** Only the writers of auto-resolve pass this; the read-only scene has no use for it. */
   canEdit?: boolean;
 }): boolean {
-  return args.offered && args.source === 'MANUAL' && (args.canEdit ?? true);
+  return args.source === 'MANUAL' && (args.canEdit ?? true);
 }
 
 /**
@@ -81,7 +69,7 @@ export interface SwimlaneScene {
 /**
  * Compose the scene's swimlane input, **only while swimlanes are shown**.
  *
- * The list itself is fetched whenever the lens is `offered` and the plan has hand-made swimlanes,
+ * The list itself is fetched whenever the plan has hand-made swimlanes ({@link swimlanePictureOn}),
  * independent of `shown`: a toggle made later then finds it cached and cannot cause a load that
  * would hold the diagram.
  *
@@ -96,12 +84,10 @@ export function useSwimlaneScene(args: {
   planId: string;
   source: SwimlaneSource;
   activities: readonly ActivitySummary[] | undefined;
-  /** The lens is offered at all (`SWIMLANES_LENS_OFFERED`). */
-  offered: boolean;
   shown: boolean;
 }): SwimlaneScene {
-  const { orgSlug, planId, source, activities, offered, shown } = args;
-  const manual = swimlanePictureOn({ offered, source });
+  const { orgSlug, planId, source, activities, shown } = args;
+  const manual = swimlanePictureOn({ source });
   const list = useSwimlanes(orgSlug, planId, manual);
   const swimlanes = list.data;
   const drawn = manual && shown;

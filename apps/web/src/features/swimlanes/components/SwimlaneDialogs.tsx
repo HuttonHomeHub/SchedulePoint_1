@@ -8,6 +8,8 @@ import { SwimlaneManageDialog } from './SwimlaneManageDialog';
 import { SwimlaneRenameDialog } from './SwimlaneRenameDialog';
 import { SwimlaneSetupDialog } from './SwimlaneSetupDialog';
 
+const NO_COUNTS: ReadonlyMap<string, number> = new Map();
+
 /**
  * The four swimlane dialogs, mounted once by the workspace and driven by {@link
  * SwimlaneDialogsProps} (`useSwimlaneManagement`). Rename and delete are separate dialogs because
@@ -28,10 +30,13 @@ export function SwimlaneDialogs({
   actions,
   gate,
 }: SwimlaneDialogsProps): React.ReactElement {
+  // The member counts walk every activity, and only Manage and Delete show them: nothing is counted
+  // while all four dialogs are shut, which is nearly always.
+  const anyOpen = state.setup || state.manage || state.renameId !== null || state.deleteId !== null;
   const known = useMemo(() => new Set(swimlanes.map((s) => s.id)), [swimlanes]);
   const memberCounts = useMemo(
-    () => membersBySwimlane(activities ?? [], known),
-    [activities, known],
+    () => (anyOpen ? membersBySwimlane(activities ?? [], known) : NO_COUNTS),
+    [anyOpen, activities, known],
   );
   const renaming = swimlanes.find((s) => s.id === state.renameId) ?? null;
   const deleting = swimlanes.find((s) => s.id === state.deleteId) ?? null;

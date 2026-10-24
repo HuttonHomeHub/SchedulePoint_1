@@ -108,7 +108,6 @@ import {
   usePlanAutoRecalc,
 } from '@/features/schedule';
 import {
-  SWIMLANES_LENS_OFFERED,
   swimlanePictureInput,
   swimlanePictureOn,
   swimlaneKeys,
@@ -699,14 +698,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const batchPositions = useBatchPositions(orgSlug, planId);
   const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
   const queryClient = useQueryClient();
-  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only where the lens is
-  // offered (`swimlanePictureOn`, the same gate the scene uses), so while it is withheld nothing is
+  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only for a hand-made plan
+  // the planner can write (`swimlanePictureOn`, the same gate the scene uses); otherwise nothing is
   // fetched and auto-resolve is the plain one. Once on, the list is wanted even when the lens is
   // not showing it, because an edit made in one picture can overlap bars in the other; it is the
   // scene's own query, so one fetch.
   const swimlaneSource = plan.data?.swimlaneSource ?? 'NONE';
   const swimlanePicture = swimlanePictureOn({
-    offered: SWIMLANES_LENS_OFFERED,
     source: swimlaneSource,
     canEdit: canEditSchedule,
   });

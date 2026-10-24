@@ -30,6 +30,15 @@ const swimlane = (id: string, name: string, position: number): SwimlaneSummary =
 const LIST = [swimlane('s1', 'Mechanical', 0), swimlane('s2', 'Electrical', 1)];
 
 describe('manualSwimlaneInput', () => {
+  it('builds once per data change: the same two arrays give the same object', () => {
+    const activities = [anActivity({ id: 'a', swimlaneId: 's1' })];
+    const first = manualSwimlaneInput(activities, LIST);
+    // The scene, Move to swimlane… and auto-resolve each ask with the cache's own arrays.
+    expect(manualSwimlaneInput(activities, LIST)).toBe(first);
+    expect(manualSwimlaneInput([...activities], LIST)).not.toBe(first);
+    expect(manualSwimlaneInput(activities, [...LIST])).not.toBe(first);
+  });
+
   it('lists the swimlanes in the order given, by id and name only', () => {
     expect(manualSwimlaneInput([], LIST).swimlanes).toEqual([
       { id: 's1', name: 'Mechanical' },

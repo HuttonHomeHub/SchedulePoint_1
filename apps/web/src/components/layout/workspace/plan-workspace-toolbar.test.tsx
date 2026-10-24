@@ -4,8 +4,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LENS_TOGGLES } from '@/features/tsld/toolbar/tsld-toolbar-items';
-
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
  * the real `PlanDetailScreen`. (It forced
@@ -30,10 +28,8 @@ const h = vi.hoisted<{
   search: Record<string, string>;
   // The canvas handle the stubbed panel publishes, so a viewport command's effect is observable.
   canvasControl: { goToDate: ReturnType<typeof vi.fn> };
-  // Swimlanes (M2-T1): whether the lens is offered, the plan's source, and the list's state. The
-  // lens is not offered in the product yet, so the suite switches it on to prove the HOST's wiring.
+  // Swimlanes (M2-T1): the plan's source and the list's state, to prove the HOST's wiring.
   swimlanes: {
-    offered: boolean;
     source: 'NONE' | 'MANUAL' | 'WBS';
     list: {
       data: { id: string; name: string }[] | undefined;
@@ -49,15 +45,9 @@ const h = vi.hoisted<{
   migrationCount: 0,
   search: {},
   canvasControl: { goToDate: vi.fn() },
-  swimlanes: { offered: false, source: 'NONE', list: { data: undefined, isPending: true } },
+  swimlanes: { source: 'NONE', list: { data: undefined, isPending: true } },
 }));
 
-vi.mock('@/features/swimlanes', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  get SWIMLANES_LENS_OFFERED() {
-    return h.swimlanes.offered;
-  },
-}));
 // The scene hook imports the list query by relative path, so the module it reads is stubbed here.
 vi.mock('@/features/swimlanes/api/use-swimlanes', () => ({
   useSwimlanes: () => h.swimlanes.list,
@@ -347,7 +337,7 @@ beforeEach(() => {
   h.tsldProps.current = null;
   h.migrationCount = 0;
   h.search = {};
-  h.swimlanes = { offered: false, source: 'NONE', list: { data: undefined, isPending: true } };
+  h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
 });
 
 /**
@@ -1303,19 +1293,10 @@ describe('a dock that has taken the row', () => {
   });
 });
 
-/**
- * Swimlanes in the host (M2-T1). The Swimlanes lens is not offered, so none of this is reachable by
- * a user: these cases switch the offer on to prove the wiring that T2–T11 will build on.
- */
+/** Swimlanes in the host (M2-T1): the wiring from the plan's source and the list to the canvas. */
 describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
-  it('hands the canvas no swimlane input while the lens is not offered', () => {
-    h.swimlanes = { offered: false, source: 'MANUAL', list: { data: [], isPending: false } };
-    renderScreen();
-    expect(h.tsldProps.current?.swimlanes).toBeNull();
-  });
-
   it('holds the diagram in its loading state while a shown list is still on its way (ADR-0202)', () => {
-    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: undefined, isPending: true } };
+    h.swimlanes = { source: 'MANUAL', list: { data: undefined, isPending: true } };
     renderScreen();
     // The one frame this prevents is a swimlane-free layout followed by every bar jumping.
     expect(screen.getByText('Loading the plan…')).toBeInTheDocument();
@@ -1324,7 +1305,6 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
 
   it('builds the input from the list once it has arrived, and shows the diagram', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
     };
@@ -1335,7 +1315,7 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
   });
 
   it('does not wait for a list when the plan has no swimlane source', () => {
-    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     renderScreen();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
     expect(h.tsldProps.current?.swimlanes).toBeNull();
@@ -1343,7 +1323,6 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
 
   it('never unmounts a painted panel for a list that is pending again, so focus survives', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
     };
@@ -1374,7 +1353,6 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
 
   it('passes a failed list through to the model for the lens to word', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: undefined, isPending: false, isError: true },
     };
@@ -1394,7 +1372,6 @@ describe('the host follows the lens state for swimlanes (swimlanes M2-T2)', () =
 
   it('stops building the input when the planner turns swimlanes off, and builds it again on null', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
     };
@@ -1410,7 +1387,6 @@ describe('the host follows the lens state for swimlanes (swimlanes M2-T2)', () =
 
   it('hands down the same input object across a re-render with equal inputs', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
     };
@@ -1424,18 +1400,9 @@ describe('the host follows the lens state for swimlanes (swimlanes M2-T2)', () =
 
 /**
  * The lens's reasons reach the row (swimlanes M2-T2): host scene -> toolbar context -> the
- * `aria-describedby` text of the `View ▾` checkbox. The lens is not offered, so the record is switched
- * on for the case and put back.
+ * `aria-describedby` text of the `View ▾` checkbox.
  */
 describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
-  const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
-  beforeEach(() => {
-    lens.enabled = true;
-  });
-  afterEach(() => {
-    lens.enabled = false;
-  });
-
   function openRow(): HTMLElement {
     fireEvent.click(screen.getByRole('button', { name: /^View/ }));
     const structure = screen.getByRole('button', { name: /^Structure/ });
@@ -1458,12 +1425,18 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
   }
 
   it('a plan with nothing set up says so', () => {
-    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
   });
 
+  it('a WBS plan reached through the API is not set up: nothing draws for it until M3', () => {
+    h.swimlanes = { source: 'WBS', list: { data: undefined, isPending: true } };
+    expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
+    expect(h.tsldProps.current?.swimlanes).toBeNull();
+  });
+
   it('a list still on its way does not trap a lens that is on: it can be turned off', () => {
-    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: undefined, isPending: true } };
+    h.swimlanes = { source: 'MANUAL', list: { data: undefined, isPending: true } };
     h.tsldProps.current = null;
     renderScreen();
     expect(openRow()).not.toHaveAttribute('aria-disabled', 'true');
@@ -1471,7 +1444,6 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
 
   it('a failed list says it could not load while the lens is off', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: undefined, isPending: false, isError: true },
     };
@@ -1480,7 +1452,6 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
 
   it('a failed list leaves the lens operable while it is on, and turning it off works', () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: undefined, isPending: false, isError: true },
     };
@@ -1494,16 +1465,58 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
 });
 
 /**
- * The command beside the lens (swimlanes M2-T9, ui-architecture C2): a checkbox never opens a dialog,
- * so setting up and managing get a button of their own. It lives in the lens's section, which is not
- * offered, so the record is switched on for the case and put back.
+ * A swimlane list that failed while swimlanes are on (swimlanes M2 gate review): the diagram is drawn
+ * without them, so the screen says so and offers the retry nothing else called.
  */
-describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', () => {
-  const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
-  afterEach(() => {
-    lens.enabled = false;
+describe('a failed swimlane list is said over the diagram, with a retry', () => {
+  it('shows the notice with Try again wired to the list refetch', () => {
+    const refetch = vi.fn();
+    h.swimlanes = {
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true, refetch },
+    };
+    renderScreen();
+    const notice = screen.getByTestId('swimlanes-failed-notice');
+    expect(notice).toHaveTextContent("Couldn't load swimlanes. The diagram is shown without them.");
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('is not there when the list is fine, or when swimlanes are off', () => {
+    h.swimlanes = {
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Civil' }], isPending: false },
+    };
+    renderScreen();
+    expect(screen.queryByTestId('swimlanes-failed-notice')).not.toBeInTheDocument();
+  });
+
+  it('goes when the planner turns swimlanes off, and the lens row carries the sentence while on', () => {
+    h.swimlanes = {
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true },
+    };
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    const structure = screen.getByRole('button', { name: /^Structure/ });
+    if (structure.getAttribute('aria-expanded') === 'false') fireEvent.click(structure);
+    const box = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    const described = (box.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain("Couldn't load swimlanes. The diagram is shown without them.");
+    fireEvent.click(box);
+    expect(screen.queryByTestId('swimlanes-failed-notice')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The command beside the lens (swimlanes M2-T9, ui-architecture C2): a checkbox never opens a dialog,
+ * so setting up and managing get a button of their own. It lives in the lens's section.
+ */
+describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', () => {
   function openStructure(): void {
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /^View/ }));
@@ -1511,51 +1524,41 @@ describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', 
     if (structure.getAttribute('aria-expanded') === 'false') fireEvent.click(structure);
   }
 
-  it('is not on the screen while the lens is not offered', () => {
-    lens.enabled = false;
-    openStructure();
-    expect(screen.queryByRole('button', { name: /swimlanes…$/i })).not.toBeInTheDocument();
-  });
-
-  it('says Set up swimlanes… when none exist and opens the setup dialog, not the checkbox', () => {
-    lens.enabled = true;
-    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+  it('says Set up swimlanes… when none exist and opens the setup dialog, not the checkbox', async () => {
+    h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     openStructure();
     const checkbox = screen.getByRole('checkbox', { name: 'Swimlanes' });
     // Pressing the checkbox's row never opens a dialog (WCAG 3.2.2).
     fireEvent.click(checkbox);
     expect(screen.queryByRole('heading', { name: 'Set up swimlanes' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Set up swimlanes…' }));
-    expect(screen.getByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
+    // The dialogs are fetched the first time one is asked for.
+    expect(await screen.findByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
   });
 
-  it('closes the View panel before it opens the dialog, so the trigger is what the dialog returns to', () => {
-    lens.enabled = true;
-    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+  it('closes the View panel before it opens the dialog, so the trigger is what the dialog returns to', async () => {
+    h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     openStructure();
     const trigger = screen.getByRole('button', { name: /^View/ });
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Set up swimlanes…' }));
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(trigger).toHaveFocus();
-    expect(screen.getByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
   });
 
-  it('says Swimlanes… once some exist and opens the manage dialog', () => {
-    lens.enabled = true;
+  it('says Swimlanes… once some exist and opens the manage dialog', async () => {
     h.swimlanes = {
-      offered: true,
       source: 'MANUAL',
       list: { data: [{ id: 's1', name: 'Civil' }], isPending: false },
     };
     openStructure();
     fireEvent.click(screen.getByRole('button', { name: 'Swimlanes…' }));
-    expect(screen.getByRole('heading', { name: 'Swimlanes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Swimlanes' })).toBeInTheDocument();
   });
 
   it('still says Set up for a hand-made plan whose swimlanes are all gone (undoing a setup)', () => {
-    lens.enabled = true;
-    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: [], isPending: false } };
+    h.swimlanes = { source: 'MANUAL', list: { data: [], isPending: false } };
     openStructure();
     expect(screen.getByRole('button', { name: 'Set up swimlanes…' })).toBeInTheDocument();
     expect(
@@ -1564,9 +1567,8 @@ describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', 
   });
 
   it('is shaded for a reader who cannot write, saying why, and stays focusable', () => {
-    lens.enabled = true;
     h.role = 'VIEWER';
-    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
     openStructure();
     const button = screen.getByRole('button', { name: 'Set up swimlanes…' });
     expect(button).toHaveAttribute('aria-disabled', 'true');

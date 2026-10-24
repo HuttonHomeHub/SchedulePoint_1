@@ -245,7 +245,9 @@ describe('swimlanes shown', () => {
   it('follows the plan until the planner chooses: override ?? (source !== NONE)', () => {
     expect(swimlanesShown(null, 'NONE')).toBe(false);
     expect(swimlanesShown(null, 'MANUAL')).toBe(true);
-    expect(swimlanesShown(null, 'WBS')).toBe(true);
+    // WBS has no input until M3: never shown, whatever the override says.
+    expect(swimlanesShown(null, 'WBS')).toBe(false);
+    expect(swimlanesShown(true, 'WBS')).toBe(false);
     expect(swimlanesShown(false, 'MANUAL')).toBe(false);
     expect(swimlanesShown(true, 'NONE')).toBe(true);
   });

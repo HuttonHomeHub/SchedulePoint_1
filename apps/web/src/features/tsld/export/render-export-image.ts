@@ -220,6 +220,8 @@ type LegendEntry = {
     | 'today'
     | 'dataDate'
     | 'overAllocation'
+    // The swimlane boundary: a solid hairline, as the painter draws it and the screen's key shows it.
+    | 'swimlaneRule'
     // Words only: a count of what the picture did not draw in full, with no mark to key.
     | 'note';
   colour: (palette: PrintPalette) => string;
@@ -263,6 +265,15 @@ const OVER_ALLOCATION_ENTRY: LegendEntry = {
   colour: (p) => p.conflict,
 };
 
+/** The entry for the swimlane boundary, appended only when the picture draws swimlanes — a key never
+ * names a mark the page lacks, the both-ways rule `OVER_ALLOCATION_ENTRY` follows (the screen's key
+ * words it identically: `SWIMLANE_BOUNDARY` in `TsldLegend.tsx`). */
+const SWIMLANE_BOUNDARY_ENTRY: LegendEntry = {
+  label: 'Swimlane boundary',
+  kind: 'swimlaneRule',
+  colour: (p) => p.swimlaneRule,
+};
+
 /** The three ascending mini-bars' heights, as the DOM legend draws them. */
 const OVER_ALLOCATION_SWATCH_HEIGHTS = [3, 6, 9] as const;
 /** Where the first mini-bar starts inside the swatch, each bar's width and the step between bars. */
@@ -292,7 +303,12 @@ function cutNamesEntry(count: number): LegendEntry {
 /** The legend rows this picture's scene calls for. */
 function legendFor(scene: TsldScene, cutNames: number): readonly LegendEntry[] {
   const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
-  const rows = drawsBadge ? [...EXPORT_LEGEND, OVER_ALLOCATION_ENTRY] : EXPORT_LEGEND;
+  const drawsSwimlanes = scene.swimlaneMarks !== undefined;
+  const rows = [
+    ...EXPORT_LEGEND,
+    ...(drawsBadge ? [OVER_ALLOCATION_ENTRY] : []),
+    ...(drawsSwimlanes ? [SWIMLANE_BOUNDARY_ENTRY] : []),
+  ];
   if (cutNames === 0) return rows;
   // Straight after the criticality key, ahead of every optional row: a narrow crop's "+N more"
   // takes entries from the tail, and the count of names the picture could not show is not the
@@ -770,6 +786,14 @@ function drawLegend(
       ctx.lineTo(x + SWATCH_W, swatchTop + SWATCH_H / 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    } else if (entry.kind === 'swimlaneRule') {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x, swatchTop + SWATCH_H / 2 + 0.5);
+      ctx.lineTo(x + SWATCH_W, swatchTop + SWATCH_H / 2 + 0.5);
+      ctx.stroke();
     } else if (entry.kind === 'overAllocation') {
       // Rising bars on the swatch's baseline, each outlined — the painter's badge in miniature.
       ctx.fillStyle = colour;

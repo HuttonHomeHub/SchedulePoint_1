@@ -4,17 +4,15 @@ import { useCallback, useMemo } from 'react';
 import { useSwimlanes } from '../api/use-swimlanes';
 
 import { manualSwimlaneInput } from './manual-membership';
+import { swimlanePictureOn } from './use-swimlane-scene';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { SwimlaneAssignment, SwimlaneAssignOutcome } from '@/features/tsld';
 import { deriveDiagramSource } from '@/features/tsld/model/derive-diagram-source';
 import type { TsldBulkOperations } from '@/features/tsld/model/edit-types';
 import { swimlaneEditContext } from '@/features/tsld/model/swimlane-edit-context';
-import {
-  assignToSwimlane,
-  NO_SWIMLANE_LABEL,
-  ROWS_GONE_REASON,
-} from '@/features/tsld/model/swimlane-lanes';
+import { assignToSwimlane, ROWS_GONE_REASON } from '@/features/tsld/model/swimlane-lanes';
+import { NO_SWIMLANE_LABEL } from '@/features/tsld/render/project-swimlanes';
 import type { BarDateSource } from '@/lib/bar-dates';
 
 const CANNOT_PLAN_REASON = 'Swimlanes can’t be changed just now. Try again in a moment.';
@@ -32,15 +30,13 @@ const CANNOT_PLAN_REASON = 'Swimlanes can’t be changed just now. Try again in 
  * the host records with the ADR-0176 checks (`swimlaneLanesCommand`).
  *
  * `null` — which omits the control everywhere — unless the plan has hand-made swimlanes to move to:
- * source `MANUAL` and at least one swimlane, with a data date to measure spans from. While the lens
- * is not offered nothing is fetched, which is what keeps this dark until M2-T11.
+ * source `MANUAL` and at least one swimlane, with a data date to measure spans from. It works with
+ * the lens hidden: the list is the scene's own query, so showing or hiding swimlanes costs no fetch.
  */
 export function useSwimlaneAssignment(args: {
   orgSlug: string;
   planId: string;
   source: SwimlaneSource;
-  /** The lens is offered at all (`SWIMLANES_LENS_OFFERED`). */
-  offered: boolean;
   activities: readonly ActivitySummary[] | undefined;
   barDateSource: BarDateSource;
   dataDate: string | null;
@@ -51,10 +47,10 @@ export function useSwimlaneAssignment(args: {
   /** The host's plural move, which owns the write and the history. */
   moveMany: TsldBulkOperations['moveMany'] | undefined;
 }): SwimlaneAssignment | null {
-  const { orgSlug, planId, source, offered, activities, barDateSource, dataDate, wbsBandOn } = args;
+  const { orgSlug, planId, source, activities, barDateSource, dataDate, wbsBandOn } = args;
   const { shown } = args;
   const { moveMany } = args;
-  const manual = offered && source === 'MANUAL';
+  const manual = swimlanePictureOn({ source });
   const list = useSwimlanes(orgSlug, planId, manual).data;
 
   const input = useMemo(() => {

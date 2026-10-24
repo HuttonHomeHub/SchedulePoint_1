@@ -35,15 +35,21 @@ export interface PlainLaneRow {
   laneIndex: number;
 }
 
+/** Whether any row files its activity in a swimlane (or in none), rather than only placing it. */
+function changesMembership(positions: readonly (SwimlaneLaneRow | PlainLaneRow)[]): boolean {
+  return positions.some((p) => 'swimlane' in p && p.swimlane.swimlaneId !== undefined);
+}
+
 /**
  * The batch lane write for the swimlane layout (swimlanes M2-T4): `PATCH …/activities/positions`
  * with `swimlane` rows and **no `laneIndex`**, so it cannot touch the swimlane-free layout (SC-1).
  * All-or-nothing, like `useBatchPositions`, and layout only — no recalculation.
  *
- * It settles into the activities list **and** the plan's swimlane list. The list carries each
- * member's stored lanes and its membership, which this write changes; the swimlane list is what the
- * diagram's scene input is built from, and a write that left either stale would redraw the bars
- * where they were until something else happened to refetch.
+ * It settles into the activities list, which carries each member's stored lanes and its membership;
+ * a write that left it stale would redraw the bars where they were until something else happened to
+ * refetch. The plan's swimlane list is settled too, **but only when a row changed a bar's
+ * membership**: a lane-only write (every drag, nudge and auto-resolve) cannot change which swimlanes
+ * the plan has, and refetching the list for each one was a request per gesture that fed nothing.
  */
 export function useWriteSwimlaneLanes(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -53,10 +59,12 @@ export function useWriteSwimlaneLanes(orgSlug: string, planId: string) {
         `/organizations/${orgSlug}/plans/${planId}/activities/positions`,
         { method: 'PATCH', body: JSON.stringify(input) },
       ),
-    onSettled: () =>
+    onSettled: (_data, _error, input) =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
-        queryClient.invalidateQueries({ queryKey: swimlaneKeys.byPlan(orgSlug, planId) }),
+        ...(changesMembership(input.positions)
+          ? [queryClient.invalidateQueries({ queryKey: swimlaneKeys.byPlan(orgSlug, planId) })]
+          : []),
       ]),
   });
 }

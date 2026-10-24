@@ -47,8 +47,8 @@ export interface SwimlaneGutterProps {
  * ## One voice for assistive technology
  *
  * Each label IS the button: its accessible name is "Mechanical, swimlane 2 of 5, 14 activities, 3
- * lanes" (`aria-label`, which starts with the visible text — WCAG 2.5.3) and the text inside is
- * visual. There is no second, hidden copy of the names, so nothing is announced twice.
+ * lanes" (`aria-label`, which starts with the visible text — WCAG 2.5.3; on the collapsed strip the
+ * position leads: "2, Mechanical, swimlane 2 of 5, …") and the text inside is visual. There is no second, hidden copy of the names, so nothing is announced twice.
  *
  * **Every swimlane has a button, in view or not.** A swimlane panned out of view is *parked* — zero
  * height and transparent, written by the canvas's frame loop (`syncGutter`) — rather than
@@ -303,35 +303,28 @@ function CornerControls({
     purpose: collapseReason ? 'reason-echo' : 'description',
   });
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const { ref: collapseTipRef, ...collapseTipTrigger } = collapseTip.triggerProps;
+  // The strip can collapse under the reader (a narrow window forces it) while "Swimlanes…" holds
+  // focus; the command is not in the strip, so focus goes to the control that is (WCAG 2.4.3).
+  const focusCollapse = useCallback(() => collapseRef.current?.focus(), []);
   return (
     <>
       {collapsed ? null : (
-        <>
-          <Button
-            {...manageTip.triggerProps}
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label={actions.manage.label}
-            aria-disabled={manageReason !== undefined || undefined}
-            aria-describedby={manageReason !== undefined ? manageReasonId : undefined}
-            onClick={() => {
-              if (manageReason === undefined) actions.manage.onOpen();
-            }}
-            className="min-w-0"
-          >
-            {CORNER_LABEL}
-          </Button>
-          {manageReason !== undefined ? (
-            <span id={manageReasonId} className="sr-only">
-              {manageReason}
-            </span>
-          ) : null}
-          {manageTip.tooltip}
-        </>
+        <ManageButton
+          tip={manageTip}
+          actions={actions}
+          reason={manageReason}
+          reasonId={manageReasonId}
+          onLoseFocus={focusCollapse}
+        />
       )}
       <Button
-        {...collapseTip.triggerProps}
+        {...collapseTipTrigger}
+        ref={(node) => {
+          collapseTipRef(node);
+          collapseRef.current = node;
+        }}
         type="button"
         variant="ghost"
         size="icon"
@@ -353,6 +346,67 @@ function CornerControls({
         </span>
       ) : null}
       {collapseTip.tooltip}
+    </>
+  );
+}
+
+/**
+ * The corner's **Swimlanes…** command. Its own component so that its unmount can see whether it held
+ * focus: a layout-effect cleanup runs before the DOM node is removed, which a parent's effect after
+ * the commit cannot do (by then focus is already on `<body>`).
+ */
+function ManageButton({
+  tip,
+  actions,
+  reason,
+  reasonId,
+  onLoseFocus,
+}: {
+  tip: ReturnType<typeof useTooltip>;
+  actions: GutterActions;
+  reason: string | undefined;
+  reasonId: string;
+  onLoseFocus: () => void;
+}): React.ReactElement {
+  const ref = useRef<HTMLButtonElement>(null);
+  const loseFocusRef = useRef(onLoseFocus);
+  useLayoutEffect(() => {
+    loseFocusRef.current = onLoseFocus;
+  });
+  useLayoutEffect(() => {
+    const node = ref.current;
+    return () => {
+      if (node !== null && document.activeElement === node) loseFocusRef.current();
+    };
+  }, []);
+  const { ref: tipRef, ...tipTrigger } = tip.triggerProps;
+  return (
+    <>
+      <Button
+        {...tipTrigger}
+        ref={(node) => {
+          tipRef(node);
+          ref.current = node;
+        }}
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={actions.manage.label}
+        aria-disabled={reason !== undefined || undefined}
+        aria-describedby={reason !== undefined ? reasonId : undefined}
+        onClick={() => {
+          if (reason === undefined) actions.manage.onOpen();
+        }}
+        className="min-w-0"
+      >
+        {CORNER_LABEL}
+      </Button>
+      {reason !== undefined ? (
+        <span id={reasonId} className="sr-only">
+          {reason}
+        </span>
+      ) : null}
+      {tip.tooltip}
     </>
   );
 }

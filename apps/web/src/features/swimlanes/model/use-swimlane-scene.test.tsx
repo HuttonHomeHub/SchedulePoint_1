@@ -4,12 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  SWIMLANES_LENS_OFFERED,
-  swimlanePictureInput,
-  swimlanePictureOn,
-  useSwimlaneScene,
-} from './use-swimlane-scene';
+import { swimlanePictureInput, swimlanePictureOn, useSwimlaneScene } from './use-swimlane-scene';
 
 import { anActivity } from '@/test/activity-fixture';
 
@@ -39,7 +34,6 @@ const LIST: SwimlaneSummary[] = [
 function render(args: {
   source: SwimlaneSource;
   shown: boolean;
-  offered?: boolean;
   activities?: readonly ActivitySummary[] | undefined;
 }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -51,7 +45,6 @@ function render(args: {
         orgSlug: 'acme',
         planId: 'p1',
         ...props,
-        offered: props.offered ?? true,
         activities: props.activities,
       }),
     { wrapper, initialProps: { activities: [anActivity({ swimlaneId: 's1' })], ...args } },
@@ -64,17 +57,7 @@ describe('useSwimlaneScene', () => {
     h.impl = () => Promise.resolve(LIST);
   });
 
-  it('is dark: the lens is not offered, so nothing can be shown', () => {
-    expect(SWIMLANES_LENS_OFFERED).toBe(false);
-  });
-
-  it('builds nothing and fetches nothing while swimlanes are not shown', () => {
-    const { result } = render({ source: 'MANUAL', shown: false, offered: false });
-    expect(result.current).toMatchObject({ input: null, pending: false, failed: false });
-    expect(h.calls).toBe(0);
-  });
-
-  it('fetches the list as soon as the lens is offered, shown or not, but builds no input', async () => {
+  it('fetches the list for a hand-made plan, shown or not, but builds no input while hidden', async () => {
     const { result } = render({ source: 'MANUAL', shown: false });
     await waitFor(() => expect(h.calls).toBe(1));
     expect(result.current).toMatchObject({ input: null, pending: false });
@@ -145,16 +128,12 @@ describe('useSwimlaneScene', () => {
   });
 });
 
-describe('swimlanePictureOn / swimlanePictureInput (M2-T5: nothing behind the lens runs while it is withheld)', () => {
-  it('is off while the lens is not offered, whatever the plan says', () => {
-    expect(swimlanePictureOn({ offered: false, source: 'MANUAL', canEdit: true })).toBe(false);
-  });
-
-  it('is on for a hand-made source once offered, and only for a writer when asked', () => {
-    expect(swimlanePictureOn({ offered: true, source: 'MANUAL' })).toBe(true);
-    expect(swimlanePictureOn({ offered: true, source: 'MANUAL', canEdit: false })).toBe(false);
-    expect(swimlanePictureOn({ offered: true, source: 'NONE' })).toBe(false);
-    expect(swimlanePictureOn({ offered: true, source: 'WBS' })).toBe(false);
+describe('swimlanePictureOn / swimlanePictureInput (M2-T5: the one gate)', () => {
+  it('is on for a hand-made source, and only for a writer when asked; NONE and WBS have none', () => {
+    expect(swimlanePictureOn({ source: 'MANUAL' })).toBe(true);
+    expect(swimlanePictureOn({ source: 'MANUAL', canEdit: false })).toBe(false);
+    expect(swimlanePictureOn({ source: 'NONE' })).toBe(false);
+    expect(swimlanePictureOn({ source: 'WBS' })).toBe(false);
   });
 
   it('yields no input unless the picture is on and both lists are loaded', () => {

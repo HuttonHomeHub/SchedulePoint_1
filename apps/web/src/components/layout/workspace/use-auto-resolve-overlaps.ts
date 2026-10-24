@@ -10,6 +10,7 @@ import {
   type LayoutSnapshots,
   type SwimlaneResolution,
 } from '@/features/tsld/model/auto-resolve-swimlanes';
+import { NO_SWIMLANE_LABEL } from '@/features/tsld/render/project-swimlanes';
 import {
   autoArrangeCommand,
   type CheckableCommand,
@@ -82,7 +83,7 @@ const activities = (count: number): string =>
 
 /**
  * The dock's sentence, which also names **which picture moved** once the plan has two (swimlanes
- * M2-T5): a bar can be cleared in the swimlane view, in the picture the planner would see with
+ * M2-T5): a bar can be cleared within its swimlane, in the picture the planner would see with
  * swimlanes off, or in both, and "lane 3" means a different lane in each. With no swimlane picture
  * the sentences are exactly the ones this had before swimlanes, and a swimlane lane is never named
  * as a bare "lane" — it is a lane of a named swimlane.
@@ -101,14 +102,15 @@ function sentenceFor(
     return `Moved ${plain.length} activities to free lanes so no two activities overlap.`;
   }
   if (plain.length > 0 && swimlane.length > 0) {
-    return `Moved ${activities(swimlane.length)} in the swimlane view and ${String(plain.length)} with swimlanes off so no two activities overlap.`;
+    const within = swimlane.length === 1 ? 'its swimlane' : 'their swimlanes';
+    return `Moved ${activities(swimlane.length)} to free lanes within ${within} and ${String(plain.length)} with swimlanes off so no two activities overlap.`;
   }
   if (swimlane.length === 1) {
     const [move] = swimlane as [SwimlaneResolution];
-    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} of “${names.swimlane(move.swimlaneId)}” in the swimlane view so it no longer overlaps another activity.`;
+    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} of “${names.swimlane(move.swimlaneId)}”, within its swimlane, so it no longer overlaps another activity.`;
   }
   if (swimlane.length > 1) {
-    return `Moved ${swimlane.length} activities to free lanes in the swimlane view so no two activities overlap.`;
+    return `Moved ${swimlane.length} activities to free lanes within their swimlanes so no two activities overlap.`;
   }
   if (plain.length === 1) {
     const [move] = plain as [LaneResolution];
@@ -273,7 +275,8 @@ export function useAutoResolveOverlaps(params: {
       moves,
       {
         activity: (id) => byId.get(id)?.name ?? 'Activity',
-        swimlane: (id) => (id === null ? 'No swimlane' : (swimlaneNames.get(id) ?? 'No swimlane')),
+        swimlane: (id) =>
+          id === null ? NO_SWIMLANE_LABEL : (swimlaneNames.get(id) ?? NO_SWIMLANE_LABEL),
       },
       pending.s0.swimlane !== null && after.swimlane !== null,
     );

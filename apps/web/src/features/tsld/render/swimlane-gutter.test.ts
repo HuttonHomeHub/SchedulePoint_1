@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LANE_HEIGHT } from './geometry';
+import { projectSwimlanes } from './project-swimlanes';
 import {
   GUTTER_LINE_PX,
   GUTTER_PAD_PX,
@@ -13,7 +14,6 @@ import {
   gutterSwimlanesFrom,
   gutterWidthFor,
   gutterWidthForRoom,
-  gutterSwimlanes,
   laneToReveal,
   SWIMLANE_GUTTER_COLLAPSED_PX,
   SWIMLANE_GUTTER_WIDTH_PX,
@@ -22,6 +22,7 @@ import {
 } from './swimlane-gutter';
 
 import { MINIMAP_BOX } from '@/features/tsld/components/TsldMinimap';
+import { anActivity } from '@/test/activity-fixture';
 
 const VIEW = { pxPerDay: 20, originX: 0, originY: 0 };
 const SIZE = { width: 800, height: 6 * LANE_HEIGHT };
@@ -129,8 +130,10 @@ describe('swimlaneGutterModel', () => {
     );
     expect(a?.text).toBe('1');
     expect(a?.cut).toBe(false);
-    expect(a?.accessibleName).toContain('Mechanical');
-    expect(none?.text).toBe('–');
+    // WCAG 2.5.3: the accessible name begins with the number the strip shows.
+    expect(a?.accessibleName).toBe('1, Mechanical, swimlane 1 of 2, 14 activities, 3 lanes');
+    expect(none?.text).toBe('No');
+    expect(none?.accessibleName.startsWith(none?.text ?? '')).toBe(true);
   });
 });
 
@@ -205,6 +208,39 @@ describe('gutterSwimlanesFrom', () => {
       [null, 1],
     ]);
   });
+
+  it('counts a member of a deleted (unknown) swimlane, or of none, under No swimlane', () => {
+    const iso = (d: number) => `2026-01-${String(d + 1).padStart(2, '0')}`;
+    const bar = (id: string, startDay: number) =>
+      anActivity({
+        id,
+        laneIndex: 0,
+        visualEffectiveStart: iso(startDay),
+        visualEffectiveFinish: iso(startDay + 1),
+      });
+    const projection = projectSwimlanes(
+      [bar('1', 0), bar('2', 3), bar('3', 6), bar('4', 9), bar('5', 12)],
+      {
+        swimlanes: [
+          { id: 'a', name: 'Civil' },
+          { id: 'b', name: 'Mech' },
+        ],
+        membership: new Map<string, string | null>([
+          ['1', 'a'],
+          ['2', 'a'],
+          ['3', 'gone'],
+          ['4', null],
+        ]),
+        storedLanes: new Map(),
+      },
+      { source: 'visual', dataDate: '2026-01-01' },
+    );
+    expect(gutterSwimlanesFrom(projection).map((s) => [s.id, s.activityCount])).toEqual([
+      ['a', 2],
+      ['b', 0],
+      [null, 3],
+    ]);
+  });
 });
 
 describe('gutterWidthForRoom', () => {
@@ -223,29 +259,6 @@ describe('gutterWidthForRoom', () => {
       collapsed: true,
       forcedByRoom: true,
     });
-  });
-});
-
-describe('gutterSwimlanes', () => {
-  const extents = [
-    { id: 'a', name: 'Civil', firstLane: 0, laneCount: 1 },
-    { id: 'b', name: 'Mech', firstLane: 1, laneCount: 1 },
-    { id: null, name: null, firstLane: 2, laneCount: 1 },
-  ];
-
-  it('counts each swimlane’s members, and files an unknown or absent membership under No swimlane', () => {
-    const out = gutterSwimlanes(
-      extents,
-      ['1', '2', '3', '4', '5'],
-      new Map<string, string | null>([
-        ['1', 'a'],
-        ['2', 'a'],
-        ['3', 'gone'],
-        ['4', null],
-      ]),
-      new Set(['a', 'b']),
-    );
-    expect(out.map((s) => s.activityCount)).toEqual([2, 0, 3]);
   });
 });
 

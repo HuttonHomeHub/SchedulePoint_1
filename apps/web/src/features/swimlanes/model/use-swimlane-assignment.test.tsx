@@ -44,7 +44,6 @@ const ACTIVITIES: ActivitySummary[] = [
 function render(
   over: Partial<{
     source: SwimlaneSource;
-    offered: boolean;
     dataDate: string | null;
     moveMany: ReturnType<typeof vi.fn> | undefined;
     shown: boolean;
@@ -63,7 +62,6 @@ function render(
         orgSlug: 'acme',
         planId: 'p1',
         source: over.source ?? 'MANUAL',
-        offered: over.offered ?? true,
         activities: ACTIVITIES,
         barDateSource: 'visual',
         dataDate: over.dataDate === undefined ? '2026-01-01' : over.dataDate,
@@ -77,10 +75,10 @@ function render(
 }
 
 describe('useSwimlaneAssignment', () => {
-  it('offers nothing while the source is NONE, or the lens is not offered, or there is no data date', async () => {
+  it('offers nothing while the source is NONE or WBS (no input until M3), or there is no data date', async () => {
     h.list = [swimlane('S1', 'Civil', 0)];
     expect(render({ source: 'NONE' }).result.current).toBeNull();
-    expect(render({ offered: false }).result.current).toBeNull();
+    expect(render({ source: 'WBS' }).result.current).toBeNull();
     const noDate = render({ dataDate: null });
     await new Promise((r) => setTimeout(r, 20));
     expect(noDate.result.current).toBeNull();

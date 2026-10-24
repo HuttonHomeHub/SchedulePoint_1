@@ -147,6 +147,25 @@ describe('renderExportImage, the swimlane gutter mirror', () => {
     expect(chipX(withGutter)).toBe(chipX(plain) + EXPORT_GUTTER_WIDTH);
   });
 
+  it('keys the swimlane boundary in the legend only when the picture draws swimlanes', async () => {
+    const withMarks = input({ swimlaneGutter: gutter });
+    withMarks.scene = {
+      ...withMarks.scene,
+      swimlaneMarks: {
+        extents: [
+          { name: 'Mechanical', firstLane: 0, laneCount: 1 },
+          { name: 'Electrical', firstLane: 1, laneCount: 1 },
+        ],
+        ground: true,
+      },
+    };
+    const { canvas, calls } = recordingCanvas();
+    await renderExportImage(withMarks, { createCanvas: () => canvas, paint: vi.fn() });
+    expect(texts(calls)).toContain('Swimlane boundary');
+
+    expect(texts(await render({})).join('|')).not.toMatch(/Swimlane boundary/);
+  });
+
   it('counts a name it had to shorten in the legend, and says nothing when none was', async () => {
     const long = {
       swimlanes: [swimlane('s1', LONG_NAME, 0)],

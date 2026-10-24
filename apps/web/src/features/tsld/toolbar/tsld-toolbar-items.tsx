@@ -234,8 +234,11 @@ interface LensToggleBase {
    * assertion depends on it; a revealed panel a keyboard user cannot reach is the worse defect, and
    * this section is `tabIndex={-1}` precisely so the reveal can hand focus over. So the row says what
    * it is about to do, and the surprise goes rather than the behaviour.
+   *
+   * A function is a note that holds only in some states (the Swimlanes lens, checked and failed, says
+   * the diagram is drawn without them — a state that does not shut the row, so no `reason` carries it).
    */
-  note?: string;
+  note?: string | ((ctx: TsldToolbarContext) => string | undefined);
 }
 
 /**
@@ -341,6 +344,9 @@ function minimapShutReason(ctx: TsldToolbarContext): string | undefined {
   if (!ctx.hasDiagram) return LENS_NO_DIAGRAM_REASON;
   return ctx.minimapRoom ? undefined : MINIMAP_NO_ROOM_REASON;
 }
+
+/** What a checked Swimlanes lens says once its list failed: the lens row and the canvas notice agree. */
+export const SWIMLANES_FAILED_NOTE = "Couldn't load swimlanes. The diagram is shown without them.";
 
 /**
  * Exported for the compare-overlay refusal gate, which asserts that a cross-plan pair triggers NO
@@ -565,13 +571,16 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     id: 'swimlanes',
     group: 'structure',
     label: 'Swimlanes',
-    // **Not offered, and that is the whole of M2's darkness** (swimlanes ui-architecture C1; the plan's
-    // M2-T2 "Dark because"). Nothing reaches this row until M2-T11 flips it, in step with
-    // `SWIMLANES_LENS_OFFERED` in the swimlanes feature, which holds the host's end of the same switch.
-    // A literal and not that constant because `features/swimlanes` imports this feature's types.
-    enabled: false,
+    // **Offered since M2-T11**, which lit the lens; there is no operator switch (ADR-0088), so this
+    // is a literal and the record's other gates are its `reason`s (swimlanes ui-architecture C1).
+    enabled: true,
     checked: (ctx) => ctx.swimlanesShown,
     toggle: (ctx) => ctx.toggleSwimlanes(),
+    // Checked and failed is the one state the reasons below leave open (the planner can always turn
+    // the lens off), so the failure is stated here as a standing note on the row, `aria-describedby`-
+    // linked and not live. The canvas says it too, with a retry (`SwimlanesFailedNotice`).
+    note: (ctx) =>
+      ctx.swimlanesShown && ctx.swimlanesFailed === true ? SWIMLANES_FAILED_NOTE : undefined,
     // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,
     // then nothing is set up (the plan's own source, so a plan with none never hears about a load),
     // then the list is on its way, then it failed. All are `aria-describedby` text on the row
@@ -587,7 +596,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
       !ctx.hasDiagram
         ? LENS_NO_DIAGRAM_REASON
         : !ctx.swimlanesSetUp
-          ? 'No swimlanes have been set up for this plan. Choose Set up swimlanes… to add some.'
+          ? noSwimlanesReason(ctx)
           : ctx.swimlanesShown
             ? undefined
             : ctx.swimlanesLoading
@@ -597,6 +606,18 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
                 : undefined,
   },
 ];
+
+/**
+ * The "nothing is set up" sentence. It points at **Set up swimlanes…** only for a reader who can
+ * press it: the button is shaded without the pen, and a sentence sending a reader to a control that
+ * refuses them is a dead end that also contradicts the button's own printed reason (ADR-0204).
+ */
+function noSwimlanesReason(ctx: TsldToolbarContext): string {
+  const base = 'No swimlanes have been set up for this plan.';
+  return ctx.scheduleRefusal('change swimlanes') === null
+    ? `${base} Choose Set up swimlanes… to add some.`
+    : base;
+}
 
 function lensTogglesIn(group: ViewToggleGroupId, ctx: TsldToolbarContext): readonly LensToggle[] {
   // The on-the-row-or-in-the-popover invariant, held in one place: a control on the bar leaves
@@ -2452,6 +2473,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
     const lensRows = lenses.map((lens) => {
       const reason = lens.reason(ctx);
       const shut = reason !== undefined;
+      const note = typeof lens.note === 'function' ? lens.note(ctx) : lens.note;
       // The ids and the hand-built `aria-describedby` are gone: `CheckboxField` owns both, and its
       // `mergeDescribedBy` already carries a hint AND a gate reason together — which is what the
       // removed line was doing by hand, one component down. Keeping a second implementation of that
@@ -2467,7 +2489,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
           // shut with a LINKED reason rather than a native `disabled`, which would take the control
           // out of the tab order and drop its explanation with it.
           gate={{ writable: !shut, reason: reason ?? null }}
-          {...(lens.note ? { hint: lens.note } : {})}
+          {...(note ? { hint: note } : {})}
           onChange={() => {
             if (!shut) lens.toggle(ctx);
           }}
