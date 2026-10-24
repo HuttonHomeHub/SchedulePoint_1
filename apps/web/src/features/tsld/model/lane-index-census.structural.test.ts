@@ -56,6 +56,9 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
   'features/tsld/model/edit-types.ts': 'display-lane-intent',
   // The inverse of the projection (M2-T4): turns a display lane into the lane inside a swimlane.
   'features/tsld/model/swimlane-lanes.ts': 'display-lane-intent',
+  // The context every swimlane write is planned against (M2-T10): the scene's stored lanes, which only
+  // a create reads, kept beside the display lanes the projection drew.
+  'features/tsld/model/swimlane-edit-context.ts': 'stored-lane',
   'features/tsld/toolbar/use-tsld-toolbar-context.tsx': 'stored-lane',
   'features/undo-redo/commands.ts': 'stored-lane',
 };

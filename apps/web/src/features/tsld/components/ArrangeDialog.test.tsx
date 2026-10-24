@@ -258,7 +258,7 @@ describe('ArrangeDialog', () => {
     const relayout = screen.getByRole('radio', { name: 'Re-layout' });
     expect(tidy).not.toHaveAccessibleDescription(/never adds/);
     expect(tidy).toHaveAccessibleDescription(/remove overlaps/);
-    expect(relayout).toHaveAccessibleDescription(/may add lanes within a swimlane/);
+    expect(relayout).toHaveAccessibleDescription(/may add lanes inside a swimlane/);
     expect(relayout).not.toHaveAccessibleDescription(/as many lanes as the diagram has now/);
     expect(screen.getAllByText('Rows').length).toBeGreaterThan(0);
     expect(screen.queryByText('Lanes')).not.toBeInTheDocument();

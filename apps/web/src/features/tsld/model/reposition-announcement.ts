@@ -70,7 +70,7 @@ function swimlaneRepositionAnnouncement(f: RepositionOutcomeFacts, s: SwimlaneLa
       const lead = s.changedSwimlane ? (f.snappedDate ? ', into' : ' to') : ', in';
       sentence += `${lead} ${place}`;
       if (s.how === 'next-free') sentence += ', the next free lane';
-      if (s.how === 'remembered') sentence += ', back in its lane';
+      if (s.how === 'remembered') sentence += ', back in its remembered lane';
     }
   }
   if (f.timeChanged && !f.snappedDate) sentence += '; dates will update';

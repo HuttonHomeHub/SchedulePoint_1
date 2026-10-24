@@ -187,6 +187,38 @@ describe('describeActivity (Tier 1)', () => {
     );
   });
 
+  it('with swimlanes says only WHERE differently: the lane clause is replaced and nothing else moves (swimlanes C9)', () => {
+    // The sentence is compared with the swimlane clause put back to "lane N", so every other
+    // clause is proved identical rather than merely present, across the shapes that add clauses.
+    const shapes: Partial<ActivitySummary>[] = [
+      { code: 'A100', laneIndex: 2 },
+      { isCritical: true, laneIndex: 0 },
+      { isNearCritical: true, remainingFloat: 2, laneIndex: 1 },
+      { constraintType: 'SNET', constraintDate: '2026-01-02', laneIndex: 3 },
+      { type: 'WBS_SUMMARY', laneIndex: 4 },
+    ];
+    for (const shape of shapes) {
+      const a = activity(shape);
+      const plain = describeActivity(a, { overlapsInLane: true });
+      const placed = describeActivity(a, {
+        overlapsInLane: true,
+        swimlane: 'in Mechanical, lane 2 of 3',
+      });
+      expect(plain).toContain(`, lane ${String(a.laneIndex + 1)}`);
+      expect(placed).toContain(', in Mechanical, lane 2 of 3');
+      expect(
+        placed.replace(', in Mechanical, lane 2 of 3', `, lane ${String(a.laneIndex + 1)}`),
+      ).toBe(plain);
+    }
+  });
+
+  it('drops the lane clause for a bar with no place in the stack, and a bare stored lane is never spoken then', () => {
+    const a = activity({ laneIndex: 2 });
+    const spoken = describeActivity(a, { swimlane: null });
+    expect(spoken).not.toMatch(/lane/);
+    expect(spoken).toBe(describeActivity(a).replace(', lane 3', ''));
+  });
+
   it('speaks the working-day duration (singular for one day) and omits it for a zero-duration milestone', () => {
     expect(describeActivity(activity({ durationDays: 1 }))).toContain('Excavate, 1 working day,');
     expect(describeActivity(activity({ type: 'FINISH_MILESTONE', durationDays: 0 }))).not.toContain(

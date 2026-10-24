@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { ToolbarPopover } from './ToolbarPopover';
@@ -187,5 +188,29 @@ describe('ToolbarPopover — the count badge', () => {
   it('draws nothing for zero', () => {
     const trigger = renderBadge(0);
     expect(trigger.querySelector('span[aria-hidden] > span')).toBeNull();
+  });
+});
+
+describe('ToolbarPopover — what takes focus on open', () => {
+  it('focuses the element named by initialFocus', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(
+      <ToolbarPopover label="Pick" itemProps={ITEM_PROPS} initialFocus={ref}>
+        <input ref={ref} aria-label="Field" />
+      </ToolbarPopover>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pick' }));
+    expect(screen.getByLabelText('Field')).toHaveFocus();
+  });
+
+  it('focuses the panel itself without it (every existing caller)', () => {
+    render(
+      <ToolbarPopover label="Pick" itemProps={ITEM_PROPS}>
+        <input aria-label="Field" />
+      </ToolbarPopover>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pick' }));
+    expect(screen.getByLabelText('Field')).not.toHaveFocus();
+    expect(screen.getByRole('dialog')).toHaveFocus();
   });
 });

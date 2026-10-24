@@ -127,7 +127,19 @@ export function centreItemText(
  */
 export function describeActivity(
   a: ActivitySummary,
-  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource; withCodes?: boolean },
+  opts?: {
+    overlapsInLane?: boolean;
+    barDateSource?: BarDateSource;
+    withCodes?: boolean;
+    /**
+     * Where the bar sits while swimlanes are drawn — "in Mechanical, lane 2 of 3" (swimlanes
+     * ui-architecture C9) — which **replaces** the "lane N" clause and nothing else. `null` drops the
+     * clause for a bar that has no place in the stack (a summary the WBS band draws): the stored
+     * `laneIndex` is the swimlane-free layout's and means nothing in a stack of swimlanes. Absent is
+     * the swimlane-free sentence, character for character.
+     */
+    swimlane?: string | null;
+  },
 ): string {
   const name = activityLabel(a, opts?.withCodes ?? false);
   // The stated duration (ADR-0197): a summary's and a level-of-effort's is the engine-derived span, not
@@ -258,7 +270,13 @@ export function describeActivity(
     !a.visualConflict && a.visualDriftDays !== null && a.visualDriftDays > 0
       ? `, drift ${plainDays(a.visualDriftDays)} later than its earliest start`
       : '';
-  return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
+  const lanePart =
+    opts?.swimlane === undefined
+      ? `, lane ${a.laneIndex + 1}`
+      : opts.swimlane === null
+        ? ''
+        : `, ${opts.swimlane}`;
+  return `${name}${duration}, ${dates}${lanePart}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
 }
 
 // ── Lens marks: the listbox row's text equivalents for what the canvas is currently drawing ──────

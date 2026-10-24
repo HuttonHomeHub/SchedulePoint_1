@@ -34,6 +34,7 @@ export function ToolbarPopover({
   quietIcons = false,
   closeOnChangeOf,
   badge,
+  initialFocus,
   children,
 }: {
   label: string;
@@ -122,6 +123,11 @@ export function ToolbarPopover({
    * this says how much, in the same place for a sighted reader. Absent or zero ⇒ nothing is drawn.
    */
   badge?: { count: number; description: string };
+  /**
+   * What takes focus when the panel opens — see {@link usePopoverPanel}. Absent ⇒ the panel itself,
+   * right for static content; a panel whose purpose is one field names it.
+   */
+  initialFocus?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
 }): React.ReactElement {
   const reasonId = useId();
@@ -143,6 +149,7 @@ export function ToolbarPopover({
     triggerRef,
     align,
     panelWidth,
+    ...(initialFocus ? { initialFocus } : {}),
   });
   useCloseWhenChanged(closeOnChangeOf, open, () => close(false), triggerRef);
   // Purpose is derived exactly as `ToolbarButton` derives it: a tip carrying a `description` says

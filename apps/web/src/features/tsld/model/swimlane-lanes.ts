@@ -83,7 +83,7 @@ export interface SwimlaneEditContext {
 }
 
 export const NO_SWIMLANE_LABEL = 'No swimlane';
-export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so it has no lane to move in.';
+export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so there is nowhere to move it.';
 
 /**
  * Every refusal here is a plain statement of the rule, with no "sorry" and no "couldn’t": the single
@@ -534,4 +534,106 @@ export function arrangeInSwimlanes(
     written.add(id);
   }
   return moved.length === 0 ? [] : [...moved, ...materialise(ctx, members, touched, written)];
+}
+
+export const SWIMLANE_GONE_REASON =
+  'That swimlane is no longer in the plan, so nothing was moved. Refresh to see the latest.';
+
+/**
+ * **Move to swimlane…** (US-3): file every bar of `ids` in `target` (`null`: "No swimlane"), keeping
+ * its drawn dates. The bars are taken **left to right** and each goes to its remembered lane there when
+ * that lane is free, otherwise the nearest free lane to it (to the top, for a bar with no memory), so a
+ * batch stacks without overlapping and keeps its horizontal order. Bars already in the target stay
+ * where they are and are written nothing; a bar placed earlier in the batch is an obstacle to the next,
+ * the others are not (each is leaving its lane).
+ *
+ * The answer is the whole write, like every function here: the moved bars (each with where it came
+ * from, for the one undo step) and the unplaced members of every swimlane it touches, at the lanes they
+ * are drawn in. `stay` is "nothing to do": every bar is in the target already.
+ */
+export function assignToSwimlane(
+  ctx: SwimlaneEditContext,
+  ids: readonly string[],
+  target: string | null,
+): SwimlaneMove {
+  const { extents } = ctx.scene;
+  const members = membersOf(ctx);
+  const rows: Member[] = [];
+  for (const id of ids) {
+    const m = members.get(id);
+    if (m === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
+    rows.push(m);
+  }
+  const found = extents.findIndex((e) => e.id === target);
+  // A swimlane with no member still takes one lane, so every real target is an extent; one that is
+  // not has been deleted since the list was read (its id may still be on members, kept for a restore).
+  if (target !== null && found < 0) return { kind: 'refuse', reason: SWIMLANE_GONE_REASON };
+  // "No swimlane" is drawn only when something is in it, so moving the first bar into none targets an
+  // extent that does not exist yet; it sits below the last one.
+  const extent = found < 0 ? extents.length : found;
+  const to = extents[extent];
+  const moving = rows
+    .filter((m) => m.extent !== extent)
+    .sort(
+      (a, b) =>
+        a.span.startDay - b.span.startDay ||
+        a.span.endDay - b.span.endDay ||
+        (a.id < b.id ? -1 : 1),
+    );
+  if (moving.length === 0) {
+    const first = rows[0];
+    return {
+      kind: 'stay',
+      landed: first
+        ? landedOf(ctx, extent, first.lane, false, 'stays')
+        : {
+            swimlane: NO_SWIMLANE_LABEL,
+            lane: 0,
+            count: 1,
+            changedSwimlane: false,
+            displayLane: 0,
+            how: 'stays',
+          },
+    };
+  }
+
+  const occupancy = new Occupancy(members.values(), new Set(moving.map((m) => m.id)));
+  const placements: SwimlaneLanePlacement[] = [];
+  let firstHow: SwimlaneLaneFacts['how'] = 'asked';
+  let firstLane = 0;
+  for (const m of moving) {
+    const remembered = ctx.remembered(m.id, target);
+    const lane = occupancy.nearest(extent, remembered ?? 0, m.span);
+    occupancy.add(extent, lane, m.span);
+    if (placements.length === 0) {
+      firstLane = lane;
+      firstHow = remembered !== undefined && lane === remembered ? 'remembered' : 'next-free';
+    }
+    placements.push({
+      id: m.id,
+      lane,
+      swimlaneId: target,
+      from: { swimlaneId: ctx.scene.extents[m.extent]!.id, lane: m.lane },
+    });
+  }
+  const touched = new Set([extent, ...moving.map((m) => m.extent)]);
+  const landedLane = Math.max(...placements.map((p) => p.lane)) + 1;
+  const landed: SwimlaneLaneFacts =
+    to !== undefined
+      ? landedOf(ctx, extent, firstLane, true, firstHow)
+      : {
+          swimlane: NO_SWIMLANE_LABEL,
+          lane: firstLane,
+          count: landedLane,
+          changedSwimlane: true,
+          displayLane: ctx.scene.laneCount + firstLane,
+          how: firstHow,
+        };
+  return {
+    kind: 'write',
+    placements: [...placements, ...materialise(ctx, members, touched, new Set(ids))],
+    landed: to !== undefined ? { ...landed, count: Math.max(landed.count, landedLane) } : landed,
+    requested: firstLane,
+    original: moving[0]!.lane,
+  };
 }

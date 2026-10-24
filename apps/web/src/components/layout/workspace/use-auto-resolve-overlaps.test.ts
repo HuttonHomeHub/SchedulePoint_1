@@ -302,7 +302,7 @@ describe('useAutoResolveOverlaps', () => {
       });
       expect(writeLayouts).not.toHaveBeenCalled();
       expect(announce).toHaveBeenCalledWith(
-        'Moved “C” to lane 2 with swimlanes off so it no longer overlaps another activity.',
+        'Moved “C” to lane 2 of the diagram with swimlanes off so it no longer overlaps another activity.',
       );
     });
 

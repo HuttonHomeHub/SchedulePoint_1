@@ -30,7 +30,7 @@ import { RadioCardGroup, type RadioCardFigure } from '@/components/ui/radio-card
  * search input's `swimlanes`) the description adds {@link WITHIN_SWIMLANES}: both options keep every
  * activity in its own swimlane (swimlanes M2-T6, owner decision 2026-10-24) and the diagram can get
  * taller, because swimlanes cannot share a row. The two cards stop promising what is false there —
- * Tidy no longer says it "never adds lanes" and Re-layout says it may add lanes within a swimlane — and
+ * Tidy no longer says it "never adds lanes" and Re-layout says it may add lanes inside a swimlane — and
  * the figure that counts display rows is labelled "Rows", not "Lanes".
  *
  * Confirm is `aria-disabled` with its reason linked, never native `disabled` (ADR-0145). Focus is
@@ -184,7 +184,7 @@ export function ArrangeDialog({
               title: 'Re-layout',
               description: bounded
                 ? 'Pack the lanes again by time, so no two activities overlap in a lane.'
-                : `Tries several fresh starting layouts and keeps the best, improving each in the same order as Tidy. ${withinSwimlanes ? 'It may add lanes within a swimlane.' : 'It may use as many lanes as the diagram has now.'} On a large plan it can take noticeably longer than Tidy.`,
+                : `Tries several fresh starting layouts and keeps the best, improving each in the same order as Tidy. ${withinSwimlanes ? 'It may add lanes inside a swimlane.' : 'It may use as many lanes as the diagram has now.'} On a large plan it can take noticeably longer than Tidy.`,
               figures: ready ? arrangeFigures(ready.relayout, withinSwimlanes) : null,
             },
           ]}

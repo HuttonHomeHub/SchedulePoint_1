@@ -4,6 +4,7 @@ import { deriveMakeMilestoneGate } from './make-milestone-gate';
 import type { SelectionBarContext, SelectionCanvasContext } from './selection-actions';
 
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
+import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
 import { matchingConflictFlags } from '@/features/tsld/render/conflicts';
 
 /**
@@ -80,6 +81,8 @@ export interface SelectionContextInput {
    * no panel and the action is omitted, never lit and inert.
    */
   onToggleFloatPaths?: ((activity: ActivitySummary) => void) | undefined;
+  /** Move to swimlane… — absent where swimlanes are not offered, which omits the item. */
+  moveToSwimlane?: SwimlaneAssignment | null | undefined;
 }
 
 /**
@@ -148,5 +151,8 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     floatPathsOpen: input.floatPathsOpen ?? false,
     toggleFloatPaths:
       input.onToggleFloatPaths === undefined ? null : () => input.onToggleFloatPaths?.(activity),
+    moveToSwimlane: input.moveToSwimlane
+      ? { assignment: input.moveToSwimlane, ids: [activity.id], names: [activity.name] }
+      : null,
   };
 }

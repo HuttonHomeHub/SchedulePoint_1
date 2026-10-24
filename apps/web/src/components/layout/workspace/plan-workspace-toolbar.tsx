@@ -121,6 +121,7 @@ import {
   SWIMLANE_GROUND,
   SWIMLANES_LENS_OFFERED,
   SwimlaneDialogs,
+  useSwimlaneAssignment,
   useSwimlaneManagement,
   useSwimlaneScene,
 } from '@/features/swimlanes';
@@ -607,6 +608,21 @@ export function ToolbarPlanWorkspace({
    */
   const barDateSource = barDateSourceFor(lateOverlayActive);
   useLateOverlayAnnouncement(lateOverlayActive);
+  // Move to swimlane… for the selection bars and the editor (M2-T10): one plan of the write, planned
+  // against the projection the canvas draws. `null` — and so absent from both — unless the plan has
+  // hand-made swimlanes; while the lens is not offered nothing is fetched.
+  const swimlaneAssignment = useSwimlaneAssignment({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    source: plan.swimlaneSource,
+    offered: SWIMLANES_LENS_OFFERED,
+    activities: model.activities.data,
+    barDateSource,
+    dataDate: plan.plannedStart,
+    shown: swimlanesAreShown,
+    wbsBandOn: canvasUi.viewToggles.wbsBand ?? false,
+    moveMany: model.bulkOperations.moveMany,
+  });
 
   /**
    * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
@@ -1399,6 +1415,8 @@ export function ToolbarPlanWorkspace({
       swimlaneGround={SWIMLANE_GROUND}
       gutterWidthPx={swimlaneManagement.gutterWidthPx}
       gutterActions={swimlaneManagement.gutterActions}
+      // The selection bars offer the move only while the diagram draws swimlanes; the editor keeps it.
+      swimlaneAssignment={swimlaneAssignment?.shown ? swimlaneAssignment : null}
       onGutterRoomChange={swimlaneManagement.onGutterRoomChange}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -2814,7 +2832,7 @@ export function ToolbarPlanWorkspace({
         </ChromePortal>
 
         {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
-        <ActivityCrudDialogs model={model} />
+        <ActivityCrudDialogs model={model} swimlaneAssignment={swimlaneAssignment} />
         <SwimlaneDialogs {...swimlaneManagement.dialogs} />
 
         {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —

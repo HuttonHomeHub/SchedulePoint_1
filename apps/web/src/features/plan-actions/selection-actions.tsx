@@ -6,6 +6,7 @@ import {
   Crosshair,
   Diamond,
   Eraser,
+  Layers,
   Route,
   Split,
   SquarePen,
@@ -25,6 +26,7 @@ import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-g
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
+import { TOOLBAR_NAV_KEYS } from '@/components/ui/toolbar/toolbar-keyboard';
 import {
   defineToolbar,
   type ToolbarGroupId,
@@ -36,6 +38,7 @@ import {
   toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
+import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { useTooltip } from '@/components/ui/tooltip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 import {
@@ -51,6 +54,11 @@ import {
 } from '@/config/env';
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
+import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
+import {
+  MOVE_TO_SWIMLANE_LABEL,
+  type SwimlaneAssignment,
+} from '@/features/tsld/model/swimlane-assignment';
 import {
   CONFLICT_FLAGS,
   joinConflictReasons,
@@ -142,6 +150,16 @@ export interface SelectionActionContext {
    * they announce, and one entry point is how they end up sharing one sentence.
    */
   onDuplicateBand: () => void;
+  /**
+   * **Move to swimlane…** for the selected activity, or `null`/absent when swimlanes are not offered
+   * here (the plan has none, the lens is not drawn, the host cannot plan the write). Omitted rather
+   * than lit and inert, like every other item whose precondition is the plan's (ADR-0082).
+   */
+  moveToSwimlane?: {
+    assignment: SwimlaneAssignment;
+    ids: readonly string[];
+    names: readonly string[];
+  } | null;
   /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
    * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
   onResources: () => void;
@@ -515,6 +533,51 @@ function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.R
  * Viewer looking at a flagged bar with no way to see what is wrong with it — which is the dead end
  * ADR-0082 exists to prevent, not an application of it.
  */
+/**
+ * The popover behind **Move to swimlane…** on the single-activity bar. A component and not inline in
+ * `render` because the panel takes focus on the select, which needs a ref; and the panel is portalled
+ * out of the toolbar but not out of its React tree, so an arrow key pressed in the select would
+ * otherwise bubble to the toolbar's roving handler and walk focus off the field the reader is on.
+ */
+function MoveToSwimlaneItem({
+  ctx,
+  api,
+}: {
+  ctx: SelectionBarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement | null {
+  const selectRef = useRef<HTMLSelectElement>(null);
+  if (!ctx.moveToSwimlane) return null;
+  return (
+    <ToolbarPopover
+      label={MOVE_TO_SWIMLANE_LABEL}
+      icon={<Layers className="size-4" />}
+      itemProps={api.itemProps}
+      labelState={api.labelState}
+      initialFocus={selectRef}
+      {...(api.disabled ? { disabled: true } : {})}
+      {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
+    >
+      <div
+        role="presentation"
+        onKeyDown={(event) => {
+          if (TOOLBAR_NAV_KEYS.includes(event.key)) {
+            event.stopPropagation();
+          }
+        }}
+      >
+        <MoveToSwimlaneControl
+          assignment={ctx.moveToSwimlane.assignment}
+          ids={ctx.moveToSwimlane.ids}
+          names={ctx.moveToSwimlane.names}
+          gate={{ writable: ctx.canEditSchedule, reason: penRefusal(ctx) ?? null }}
+          selectRef={selectRef}
+        />
+      </div>
+    </ToolbarPopover>
+  );
+}
+
 function ConflictRemedyControl({
   ctx,
   api,
@@ -899,6 +962,26 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
+    // ── Move to swimlane… (swimlanes M2-T10, ui-architecture C10) ───────────────────────────
+    //
+    // A popover with the `SelectField` and a Move button, not a submenu: `Menu` has none and no
+    // typeahead, and a plan may hold a hundred swimlanes. Registered for every selection and VISIBLE
+    // only where the host offers swimlanes — omitted, not shaded, while the plan has none (the source
+    // is `NONE`) or they are not drawn. Pen-gated as a set with Edit and Delete, so a reader without
+    // the pen is told once, here, and the panel is never opened onto a control that cannot act.
+    {
+      id: 'move-to-swimlane',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 5.7,
+      label: MOVE_TO_SWIMLANE_LABEL,
+      icon: <Layers className="size-4" />,
+      penGated: true,
+      disabledReason: (ctx) => penRefusal(ctx),
+      isVisible: (ctx: SelectionActionContext) => ctx.moveToSwimlane != null,
+      lostReason: 'Not available here: swimlanes are off or the plan has none.',
+      render: (ctx, api) => <MoveToSwimlaneItem ctx={ctx} api={api} />,
+    },
     {
       id: 'delete',
       group: 'object',

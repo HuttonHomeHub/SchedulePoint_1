@@ -103,6 +103,8 @@ export interface TsldBulkOperations {
        * inside its own swimlane, written through the positions endpoint (swimlanes M2-T4).
        */
       swimlaneLanes?: readonly SwimlaneLanePlacement[];
+      /** The undo step's name, when the move is not a plain "Move N activities" (an assignment). */
+      label?: string;
     },
   ) => Promise<{
     /** False when nothing was written (a pen rejection, a stale version, a no-op). */

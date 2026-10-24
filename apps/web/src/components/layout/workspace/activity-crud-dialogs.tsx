@@ -5,6 +5,7 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FormSection } from '@/components/ui/form-layout';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -22,6 +23,11 @@ import {
 import { ActivityHistoryPanel } from '@/features/activity-history';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
+import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
+import {
+  NO_SWIMLANE_CHOICE_LABEL,
+  type SwimlaneAssignment,
+} from '@/features/tsld/model/swimlane-assignment';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
@@ -39,7 +45,14 @@ import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
  * open. It is a modal dialog (ADR-0101): an editor's chrome is the dialog and nothing else, so there
  * is no host-chosen shell and no subject change to guard while it is open (ADR-0169 D5).
  */
-export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
+export function ActivityCrudDialogs({
+  model,
+  swimlaneAssignment = null,
+}: {
+  model: PlanWorkspaceModel;
+  /** Move to swimlane… as an editor field (swimlanes M2-T10); absent omits the section. */
+  swimlaneAssignment?: SwimlaneAssignment | null;
+}): React.ReactElement {
   const { orgSlug, planId } = model;
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   const dissolveSummary = useDissolveSummary(orgSlug, planId);
@@ -158,6 +171,48 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planActivitiesLoading={model.activities.isPending}
         planActivitiesError={model.activities.isError}
         activity={intended}
+        {...(intended && swimlaneAssignment
+          ? {
+              swimlaneSlot: ({ generalDirty }: { generalDirty: boolean }) => (
+                <FormSection title="Swimlane">
+                  <p className="text-muted-foreground text-sm">
+                    {`Now in ${
+                      swimlaneAssignment.choices.find(
+                        (c) => c.id === swimlaneAssignment.currentOf(intended.id),
+                      )?.name ?? NO_SWIMLANE_CHOICE_LABEL
+                    }.`}
+                  </p>
+                  <MoveToSwimlaneControl
+                    key={intended.id}
+                    assignment={swimlaneAssignment}
+                    ids={[intended.id]}
+                    names={[intended.name]}
+                    // The same right the selection bars use: this is a layout write of its own, not
+                    // part of any editor scope, so it is gated on the schedule and the pen.
+                    gate={{
+                      writable: model.canEditSchedule,
+                      reason: model.scheduleRefusal('change swimlanes'),
+                    }}
+                    buttonLabel="Move to swimlane"
+                    hint={
+                      <>
+                        <p>Moves the activity now. It isn’t part of Save general.</p>
+                        {generalDirty ? (
+                          <p>Your unsaved changes to this tab aren’t affected.</p>
+                        ) : null}
+                        {swimlaneAssignment.shown ? null : (
+                          <p>
+                            Swimlanes aren’t shown on the diagram. Turn on Swimlanes in View to see
+                            it.
+                          </p>
+                        )}
+                      </>
+                    }
+                  />
+                </FormSection>
+              ),
+            }
+          : {})}
         {...(model.editorIntent ? { intent: model.editorIntent } : {})}
         {...(intended
           ? {

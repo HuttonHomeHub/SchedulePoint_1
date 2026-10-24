@@ -418,6 +418,7 @@ the row mark and the closing ring it also shipped were deleted by toolbar-grid M
 A shut `ToolbarSplitButton` caret is `cursor-default` with no hover wash (a live one has `hover:bg-muted`), not
 `opacity-50`. `ToolbarPopover` gains `badge: { count, description }`, a count on the glyph's corner (capped at `9+`) whose
 sentence rides `aria-describedby` (Filter ▾ shows how many attributes are on).
+`ToolbarPopover` gains `initialFocus` (a ref to the element that takes focus when the panel opens; absent keeps the panel itself, so every existing caller is unchanged), used by Move to swimlane… to land on its select (swimlanes M2-T10).
 
 **`Deck` draws dividers, not boxes** (toolbar-grid M1). `toolbar-styles.ts` exports `DECK_GROUP_DIVIDER` (a 1 px
 `before:` border in the gap before a group, half the gap to the left: 4 px of 8, 12 px of 24 from the roomy floor)

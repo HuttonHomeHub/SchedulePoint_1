@@ -134,7 +134,7 @@ describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () 
           }),
         }),
       ),
-    ).toBe('Moved “Clad” to Electrical, lane 4 of 4, back in its lane.');
+    ).toBe('Moved “Clad” to Electrical, lane 4 of 4, back in its remembered lane.');
   });
 
   it('says the lane it landed on was the next free one, in the same form', () => {
