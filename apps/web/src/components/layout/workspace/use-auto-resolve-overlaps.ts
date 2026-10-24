@@ -112,7 +112,7 @@ function sentenceFor(
   }
   if (plain.length === 1) {
     const [move] = plain as [LaneResolution];
-    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} with swimlanes off so it no longer overlaps another activity.`;
+    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} of the diagram with swimlanes off so it no longer overlaps another activity.`;
   }
   return `Moved ${plain.length} activities to free lanes with swimlanes off so no two activities overlap.`;
 }
