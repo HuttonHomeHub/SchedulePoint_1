@@ -113,7 +113,6 @@ import {
   swimlanePictureOn,
   swimlaneKeys,
   useSwimlanes,
-  useSwimlaneScene,
   useWriteSwimlaneLanes,
   type SwimlaneLaneRow,
 } from '@/features/swimlanes';
