@@ -72,7 +72,9 @@ describe('auto-resolve census', () => {
     // (no placement is sent), a re-parenting (a parent is not a lane), a steps save (feeds a % and no
     // date), and a cross-plan link add and remove (move nothing until a programme recalculation).
     // Then a dissolve (undo-redo M6): it re-parents, and a restored summary lands where it was.
-    expect(exempt).toHaveLength(8);
+    // Then a lane move on the swimlane layout (swimlanes M2-T4), placed on a free lane before it
+    // writes; auto-resolve across both layouts is M2-T5's.
+    expect(exempt).toHaveLength(9);
   });
 
   it('pinned positive case: a record with neither is reported', () => {

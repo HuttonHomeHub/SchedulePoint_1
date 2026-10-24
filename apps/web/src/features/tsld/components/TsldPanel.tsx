@@ -45,7 +45,20 @@ import {
   pluralMoveHint,
   repositionAnnouncement,
   STILL_SAVING_NOTE,
+  stayInSwimlaneAnnouncement,
+  type SwimlaneLaneFacts,
 } from '../model/reposition-announcement';
+import {
+  createInSwimlane,
+  dropInSwimlane,
+  keyboardMoveInSwimlane,
+  laneRangeOf,
+  moveManyInSwimlanes,
+  swimlaneTopOf,
+  topLanePluralInSwimlanes,
+  type SwimlaneEditContext,
+  type SwimlaneLanePlacement,
+} from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
@@ -152,7 +165,21 @@ export interface TsldCreateInput {
   type: ActivityType;
   startDay: number;
   endDay: number;
+  /**
+   * The lane in the swimlane-free layout. With swimlanes shown it is the first free lane at the
+   * span — the new bar's place when swimlanes are turned off — and `swimlane` carries where it sits
+   * in the picture the planner drew it on.
+   */
   laneIndex: number;
+  /** Present only while swimlanes are shown (swimlanes M2-T4). */
+  swimlane?: {
+    /** The swimlane to file the activity in; `null` for "No swimlane", where nothing is sent. */
+    swimlaneId: string | null;
+    /** Its lane inside the swimlane. */
+    lane: number;
+    /** The swimlane's unplaced members, written in the same batch (materialise on write). */
+    materialised: readonly SwimlaneLanePlacement[];
+  };
 }
 
 /**
@@ -181,7 +208,17 @@ export interface TsldCreateOutcome {
 export interface TsldRepositionInput {
   activityId: string;
   startDay?: number;
+  /**
+   * The new lane in the swimlane-free layout. **Never present while swimlanes are shown** (SC-1):
+   * a move then carries {@link swimlaneLanes} instead, because a display lane is derived and
+   * writing one into `laneIndex` would make turning swimlanes off lose the planner's arrangement.
+   */
   laneIndex?: number;
+  /**
+   * The lane write for a move made on the swimlane layout: the bar's lane inside its (possibly new)
+   * swimlane, and the swimlane's unplaced members at their drawn lanes (swimlanes M2-T4).
+   */
+  swimlaneLanes?: readonly SwimlaneLanePlacement[];
 }
 
 /**
@@ -194,6 +231,10 @@ export interface TsldRepositionInput {
 export interface TsldEditOutcome {
   applied: boolean;
   conflict: string | null;
+  /** False when the conflict is a rule rather than stale data, so the banner offers no Refresh. */
+  refreshable?: boolean;
+  /** With swimlanes shown: where the bar landed, so the announcement can speak the C9 form. */
+  swimlane?: SwimlaneLaneFacts;
   /**
    * The lane the bar actually landed in, when that is not the lane the gesture asked for — a drop
    * onto an occupied lane goes on to the next free one (NetPoint-layout M3, `resolveLaneDrop`).
@@ -289,7 +330,15 @@ export interface TsldBulkOperations {
      * `coalesce` folds moves of the same set into one undo step when their keypresses were within
      * the history's window; `pressedAt` (epoch ms) is when the last of them happened (the keyboard).
      */
-    options?: { coalesce?: boolean; pressedAt?: number },
+    options?: {
+      coalesce?: boolean;
+      pressedAt?: number;
+      /**
+       * Set instead of a lane delta while swimlanes are shown (the delta is then `0`): each bar's lane
+       * inside its own swimlane, written through the positions endpoint (swimlanes M2-T4).
+       */
+      swimlaneLanes?: readonly SwimlaneLanePlacement[];
+    },
   ) => Promise<{
     /** False when nothing was written (a pen rejection, a stale version, a no-op). */
     applied: boolean;
@@ -1278,6 +1327,54 @@ export function TsldPanel({
       diagramSource.swimlaneScene ? { ...diagramSource.swimlaneScene, source: 'MANUAL' } : null,
     [diagramSource.swimlaneScene],
   );
+  /*
+   * **The lane the gestures and the nudges reason in.** With swimlanes drawn, the canvas, the ghosts
+   * and every intent speak display lanes while `activities` carries stored ones; mixing the two
+   * (`intent.laneIndex - activity.laneIndex`, a nudge seeded from `activity.laneIndex`) moved a bar
+   * by the difference between two coordinate systems. This is the same list in display lanes, and
+   * with no swimlanes it IS `activities`, so every caller below is byte-for-byte unchanged (SC-3).
+   * It is read for geometry and wording only: nothing written is ever built from it (SC-1) — a
+   * write takes the stored row, or the swimlane lane the model below converts a display lane to.
+   */
+  const laneActivities = useMemo(() => {
+    const scene = diagramSource.swimlaneScene;
+    if (scene === null) return activities;
+    return activities.map((a) => {
+      const lane = scene.displayLanes.get(a.id);
+      return lane === undefined ? a : { ...a, laneIndex: lane };
+    });
+  }, [activities, diagramSource.swimlaneScene]);
+  const swimlaneCtx = useMemo<SwimlaneEditContext | null>(() => {
+    const scene = diagramSource.swimlaneScene;
+    if (scene === null || swimlanes === null || dataDate === null) return null;
+    const spans = new Map<string, { startDay: number; endDay: number }>();
+    const stored = new Map<string, number>();
+    for (const a of diagramSource.sceneActivities) {
+      stored.set(a.id, a.laneIndex);
+      const span = drawnDaySpan(a, barDateSource, dataDate);
+      if (span !== null) spans.set(a.id, span);
+    }
+    const rows = new Map(activities.map((a) => [a.id, a]));
+    return {
+      scene,
+      input: swimlanes,
+      spans,
+      stored,
+      remembered: (id, swimlaneId) =>
+        rows
+          .get(id)
+          ?.swimlaneLanes.find((l) =>
+            swimlaneId === null
+              ? l.basis === 'NO_SWIMLANE'
+              : l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId,
+          )?.laneIndex,
+    };
+  }, [diagramSource, swimlanes, activities, barDateSource, dataDate]);
+  // Clamps a drag while it is in progress (C6); absent off the swimlane layout, which is parity.
+  const laneRange = useMemo(
+    () => (swimlaneCtx ? (id: string) => laneRangeOf(swimlaneCtx, id) : undefined),
+    [swimlaneCtx],
+  );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;
   const renderActivities = diagramSource.renderActivities;
@@ -2203,6 +2300,89 @@ export function TsldPanel({
         : undefined,
     [onReposition, noteEdit],
   );
+  /*
+   * **Lane moves on the swimlane layout** (swimlanes M2-T4, ui-architecture C6). The canvas, the
+   * nudge hooks and the drag all speak display lanes; this is where one becomes a write. A move
+   * that changes a lane is re-expressed as the bar's lane inside its swimlane (and the swimlane,
+   * when the move changed it) plus the swimlane's unplaced members — and its `laneIndex` is dropped,
+   * so no lane write while swimlanes are shown can touch the swimlane-free layout (SC-1). A move in
+   * time alone, or any move off the swimlane layout, goes straight through.
+   *
+   * Two readings of the same display lane, because they are two different gestures: a pointer is
+   * over a swimlane, and crossing into another one files the bar there; a key press is relative to
+   * the bar's own swimlane, where one past the bottom is that swimlane growing.
+   */
+  const laneAwareReposition = useMemo(() => {
+    if (!notedReposition) return undefined;
+    const make =
+      (mode: 'pointer' | 'keyboard') =>
+      async (input: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+        if (!swimlaneCtx || input.laneIndex === undefined) return notedReposition(input);
+        const move =
+          mode === 'pointer'
+            ? dropInSwimlane(swimlaneCtx, input.activityId, input.laneIndex)
+            : keyboardMoveInSwimlane(swimlaneCtx, input.activityId, input.laneIndex);
+        if (move.kind === 'refuse') {
+          return { applied: false, conflict: move.reason, refreshable: false };
+        }
+        const landed = move.landed;
+        // Same swimlane only: a bar sent to another swimlane's remembered lane did not "go on to the
+        // next free lane", it went where it belongs, and the swimlane facts say where.
+        const onward =
+          !landed.changedSwimlane && landed.displayLane !== input.laneIndex
+            ? { laneIndex: landed.displayLane }
+            : {};
+        const facts = { swimlane: landed as SwimlaneLaneFacts };
+        if (move.kind === 'stay') {
+          if (input.startDay === undefined) {
+            return { applied: false, conflict: null, ...facts, laneIndex: landed.displayLane };
+          }
+          const timeOnly = await notedReposition({
+            activityId: input.activityId,
+            startDay: input.startDay,
+          });
+          return { ...timeOnly, ...facts, laneIndex: landed.displayLane };
+        }
+        const outcome = await notedReposition({
+          activityId: input.activityId,
+          ...(input.startDay !== undefined ? { startDay: input.startDay } : {}),
+          swimlaneLanes: move.placements,
+        });
+        return { ...outcome, ...facts, ...onward };
+      };
+    return { pointer: make('pointer'), keyboard: make('keyboard') };
+  }, [notedReposition, swimlaneCtx]);
+  // The plural move, on the same terms: a lane delta becomes each bar's lane inside its OWN swimlane
+  // (the selection never changes swimlane) and `moveMany` is handed no lane delta at all. The rows
+  // arrive in display lanes, as the gestures see them; the write takes the stored rows.
+  const moveMany = useMemo<TsldBulkOperations['moveMany'] | undefined>(() => {
+    const write = bulk?.moveMany;
+    if (!write || !swimlaneCtx) return write;
+    const stored = new Map(activities.map((a) => [a.id, a]));
+    return async (rows, delta, options) => {
+      const writeRows = rows.flatMap((r) => stored.get(r.id) ?? []);
+      if (delta.laneDelta === 0) return write(writeRows, delta, options);
+      const move = moveManyInSwimlanes(
+        swimlaneCtx,
+        rows.map((r) => r.id),
+        delta.laneDelta,
+      );
+      if (move.kind === 'refuse')
+        return { applied: false, conflict: move.reason, refreshable: false };
+      if (move.kind === 'stay') {
+        return {
+          applied: false,
+          conflict: 'There is no free lane that way, so nothing moved.',
+          refreshable: false,
+        };
+      }
+      return write(
+        writeRows,
+        { dayDelta: delta.dayDelta, laneDelta: 0 },
+        { ...options, swimlaneLanes: move.placements },
+      );
+    };
+  }, [bulk?.moveMany, swimlaneCtx, activities]);
   // A resize always changes a duration, so it always recalculates — note it unconditionally.
   const notedResize = useMemo(
     () =>
@@ -2227,8 +2407,10 @@ export function TsldPanel({
   const singleNudgeBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
     barDateSource,
-    onReposition: notedReposition,
-    activities,
+    onReposition: laneAwareReposition?.keyboard ?? notedReposition,
+    activities: laneActivities,
+    // The top lane is the top of the bar's own swimlane, and the sentence names it (C9).
+    topLane: swimlaneCtx ? (id) => swimlaneTopOf(swimlaneCtx, id) : undefined,
     dataDate,
     // The single hook sets a ghost when it accepts a press and clears it when its write settles,
     // which is exactly its busy window, so the ref tracks the ghost without editing that hook.
@@ -2253,8 +2435,10 @@ export function TsldPanel({
   // not a mode of it; the two see each other through the busy refs so they never write at once.
   const pluralNudge = useCoalescedPluralNudge({
     barDateSource,
-    moveMany: bulk?.moveMany,
-    activities,
+    moveMany,
+    activities: laneActivities,
+    laneFloor: swimlaneCtx ? (id) => swimlaneTopOf(swimlaneCtx, id)?.min ?? 0 : undefined,
+    topLaneReason: swimlaneCtx ? topLanePluralInSwimlanes : undefined,
     dataDate,
     setGhost: setPendingReposition,
     setConflict: (message, refreshable) =>
@@ -2269,7 +2453,7 @@ export function TsldPanel({
   const durationNudge = useCoalescedDurationNudge({
     barDateSource,
     onResize: notedResize,
-    activities,
+    activities: laneActivities,
     dataDate,
     setGhost: setPendingReposition,
     setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
@@ -2491,7 +2675,7 @@ export function TsldPanel({
         event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === activeId);
+      const current = laneActivities.find((a) => a.id === activeId);
       if (!current) return;
       const axis = event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'lane' : 'time';
       const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
@@ -2514,7 +2698,7 @@ export function TsldPanel({
     // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
     if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === activeId);
+      const current = laneActivities.find((a) => a.id === activeId);
       const startDay =
         current && dataDate ? (drawnDaySpan(current, barDateSource, dataDate)?.startDay ?? 0) : 0;
       clearConflict();
@@ -2729,7 +2913,8 @@ export function TsldPanel({
       return;
     }
     if (intent.kind === 'reposition') {
-      const activity = activities.find((a) => a.id === intent.activityId);
+      // In display lanes while swimlanes are drawn, because the intent is: see `laneActivities`.
+      const activity = laneActivities.find((a) => a.id === intent.activityId);
       if (!activity || !notedReposition) return;
       // A started activity's drag never carries a day (the gesture holds its ghost in its column);
       // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
@@ -2756,8 +2941,8 @@ export function TsldPanel({
       // dragged bar, or the host supplied no `moveMany` — so every existing caller is unchanged.
       const pluralIds =
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
-      if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
-        const rows = activities.filter((a) => pluralIds.includes(a.id));
+      if (moveMany && pluralIds.includes(intent.activityId)) {
+        const rows = laneActivities.filter((a) => pluralIds.includes(a.id));
         // A WBS summary can be in the selection (Ctrl+A takes every row), and the server refuses a
         // batch that holds one — say which part of the selection stopped it before writing.
         const summaryCount = rows.filter((a) => a.type === 'WBS_SUMMARY').length;
@@ -2785,7 +2970,9 @@ export function TsldPanel({
         // topmost selected bar can take, the same answer the keyboard's Alt+Up gives by refusing.
         // A drag that was ONLY upward and is clamped to nothing says why, rather than reporting a
         // failed write that never happened.
-        const delta = clampLaneDelta(rows, requested);
+        // On the swimlane layout the set's top is each bar's own swimlane's, which the write path
+        // checks (and refuses aloud) rather than this lane-0 clamp.
+        const delta = swimlaneCtx ? requested : clampLaneDelta(rows, requested);
         if (isNoOp(delta) && !isNoOp(requested)) {
           // The count is of rows at lane 0 — the only rows that can have stopped an upward clamp,
           // since the set-level clamp is bounded by the topmost row alone.
@@ -2816,8 +3003,7 @@ export function TsldPanel({
           laneIndex: activity.laneIndex + delta.laneDelta,
         });
         pointerRepositionBusyRef.current = true;
-        void bulk
-          .moveMany(rows, delta)
+        void moveMany(rows, delta)
           .then((outcome) => {
             setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
@@ -2872,7 +3058,7 @@ export function TsldPanel({
       // callback — were silently missing it.
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
-      void notedReposition({
+      void (laneAwareReposition?.pointer ?? notedReposition)({
         activityId: intent.activityId,
         // The RAW dropped day: the server owns the roll, on the activity's own calendar at
         // minute granularity, which the client's plan-calendar day predicate cannot reproduce.
@@ -2881,7 +3067,10 @@ export function TsldPanel({
       })
         .then((outcome) => {
           setPendingReposition(null);
-          if (outcome.conflict) showConflict(outcome.conflict);
+          if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
+          else if (!outcome.applied && outcome.swimlane) {
+            announce(stayInSwimlaneAnnouncement(activity.name, outcome.swimlane));
+          }
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
           // for any time change (placement + recalc), that the dates will update — matching the keyboard
@@ -2916,6 +3105,7 @@ export function TsldPanel({
               requested: laneIndex,
               landed: outcome.laneIndex ?? laneIndex,
               original: activity.laneIndex,
+              ...(outcome.swimlane ? { swimlane: outcome.swimlane } : {}),
             });
             announce(intent.sidewaysDiscarded ? `${moved} ${START_NOT_CHANGED_NOTE}` : moved);
           }
@@ -2935,7 +3125,7 @@ export function TsldPanel({
       // pins the finish (the ghost's left edge tracks the new start, which the route hand-places as
       // a `visualStart` — ADR-0052 §3's mode-aware fork went with the mode at M-F). The route owns
       // the PATCH + recalc; a stale-version refusal banners.
-      const activity = activities.find((a) => a.id === intent.activityId);
+      const activity = laneActivities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       // The start edge of a started activity writes an inert placement and moves the finish
       // (ADR-0170 D3). The grab zone is withheld, so this is the backstop: refuse out loud. Not
@@ -3103,7 +3293,28 @@ export function TsldPanel({
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
     // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
     // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
-    void onCreate({ name, type, startDay, endDay, laneIndex })
+    // On the swimlane layout the click's lane is a display lane: the new bar joins the swimlane under
+    // it, and its `laneIndex` is the first free lane of the swimlane-free layout (feature-spec,
+    // "Create on the canvas"). Nothing else about the create changes.
+    const placed = swimlaneCtx
+      ? createInSwimlane(swimlaneCtx, laneIndex, { startDay, endDay })
+      : null;
+    void onCreate({
+      name,
+      type,
+      startDay,
+      endDay,
+      laneIndex: placed?.laneIndex ?? laneIndex,
+      ...(placed
+        ? {
+            swimlane: {
+              swimlaneId: placed.swimlaneId,
+              lane: placed.lane,
+              materialised: placed.materialised,
+            },
+          }
+        : {}),
+    })
       .then((outcome) => {
         closeCreate();
         announce(`Activity “${name}” added.`);
@@ -3523,6 +3734,7 @@ export function TsldPanel({
               linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
               swimlaneMarks={swimlaneMarks}
+              laneRange={laneRange}
               edges={renderEdges}
               dataDate={dataDate}
               selectedId={selectedId}
