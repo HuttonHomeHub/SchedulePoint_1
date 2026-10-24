@@ -124,6 +124,9 @@ const OUTSIDE_THE_CLOSURE = {
     // the tiers they stand in for on paper, gated by their own ≥ 3:1 pairs on `--print`.
     '--canvas-paper-grid-month',
     '--canvas-paper-grid-year',
+    // The swimlane boundary rule and its paper twin: aliases of the year tiers above (swimlanes C5).
+    '--canvas-swimlane-rule',
+    '--canvas-paper-swimlane-rule',
     '--canvas-nonworking',
     // The lane hairline (ADR-0109 D4), on the same discriminator as the gridline tiers it runs
     // perpendicular to: a rule between two lanes has no meaning on a header and no semantic sibling

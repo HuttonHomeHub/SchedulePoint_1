@@ -148,3 +148,29 @@ describe('the guest legend keys no constraint pin (TECH_DEBT #521)', () => {
     expect(screen.getByText('Lane overlap')).toBeInTheDocument();
   });
 });
+
+/**
+ * Swimlanes M2-T2 (ui-architecture C5): the boundary rule is a mark with a key of its own, an alias
+ * of the year tier so it adds no colour. The legend gains its entry with the lens (M2-T11); until
+ * the lens is offered no diagram draws the mark, and a swatch for it would be the key that names a
+ * mark the canvas does not draw. What is pinned now is the half that can drift silently: the
+ * painter reads the key, and both of its tokens are aliases of the year rule.
+ */
+describe('FC-G8 — the swimlane boundary rule is its own key and adds no colour', () => {
+  const css = readFileSync(join(HERE, '../../../styles/globals.css'), 'utf8');
+
+  it('the painter reads palette.swimlaneRule', () => {
+    expect(painter).toMatch(/palette\.swimlaneRule\b/);
+  });
+
+  it.each([
+    ['--canvas-swimlane-rule', '--canvas-grid-year'],
+    ['--canvas-paper-swimlane-rule', '--canvas-paper-grid-year'],
+  ])('%s is declared as an alias of %s', (token, year) => {
+    expect(css).toMatch(new RegExp(String.raw`${token}:\s*var\(${year}\)`));
+  });
+
+  it('paper resolves the rule from its own twin token', () => {
+    expect(tokenOf('swimlaneRule')).toBe('--canvas-paper-swimlane-rule');
+  });
+});

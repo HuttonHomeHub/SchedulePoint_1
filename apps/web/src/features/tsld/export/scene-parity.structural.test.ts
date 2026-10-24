@@ -69,6 +69,18 @@ const SCREEN_ONLY: Record<string, string> = {
 };
 
 /**
+ * Keys the export does not compose YET, each naming the task that owes it. **Not a reason — a debt**
+ * (ADR-0200's precedent: the gate ships one commit ahead of the fix and the entry is deleted with
+ * it). `swimlaneMarks` is the boundary rule and the alternate ground (swimlanes M2-T2); the export
+ * composes them in M2-T7, which deletes this entry. Until then an exported programme draws display
+ * lanes without the rules, and the swimlane lens is not offered (`enabled: false`), so no one can
+ * produce such a picture.
+ */
+const KNOWN_GAPS: Record<string, string> = {
+  swimlaneMarks: 'swimlanes M2-T7 composes the rule and the ground in the export',
+};
+
+/**
  * A source file with its comments removed and its line numbers kept (each block comment is replaced
  * by the newlines it contained), so a finding can name a real line. Shared by both halves of this
  * gate because the ordering rule is the same for both: strip BEFORE matching anything.
@@ -159,7 +171,9 @@ describe('the exported diagram composes the same scene as the screen (structural
   });
 
   it('every key the canvas composes is either exported or named screen-only, with a reason', () => {
-    const missing = canvasKeys.filter((k) => !exportKeys.includes(k) && !(k in SCREEN_ONLY));
+    const missing = canvasKeys.filter(
+      (k) => !exportKeys.includes(k) && !(k in SCREEN_ONLY) && !(k in KNOWN_GAPS),
+    );
     expect(
       missing,
       `these scene keys are on the screen and absent from the export, and nobody has said why: ` +
@@ -182,6 +196,14 @@ describe('the exported diagram composes the same scene as the screen (structural
       { missingFromResync, missingFromInit },
       "the canvas's ref initialiser and its resync effect compose different scene keys",
     ).toEqual({ missingFromResync: [], missingFromInit: [] });
+  });
+
+  it('KNOWN_GAPS names only keys that are still missing from the export', () => {
+    // A gap the export has since closed is a stale entry that would excuse a regression.
+    const closed = Object.keys(KNOWN_GAPS).filter((k) => exportKeys.includes(k));
+    expect(closed, `these gaps are closed; delete their entries: ${closed.join(', ')}`).toEqual([]);
+    const stale = Object.keys(KNOWN_GAPS).filter((k) => !canvasKeys.includes(k));
+    expect(stale, `KNOWN_GAPS names keys the canvas no longer composes`).toEqual([]);
   });
 
   it('SCREEN_ONLY names nothing the canvas has stopped composing', () => {

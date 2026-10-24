@@ -955,13 +955,14 @@ describe('the diagram grid is readable on both of its grounds', () => {
   // Paper's month and year rules keep the floor: the exported raster has no ruler, so they are the
   // position channel there (NetPoint grammar M0-T4 ruling). The screen's rules are under a ceiling,
   // gated in the NetPoint block at the end of this file.
-  it.each(['--canvas-paper-grid-month', '--canvas-paper-grid-year'] as const)(
-    'the paper rule %s is perceivable on paper (≥ 3:1)',
-    (rule) => {
-      const value = ratio(tokens, '--print', rule);
-      expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
-    },
-  );
+  it.each([
+    '--canvas-paper-grid-month',
+    '--canvas-paper-grid-year',
+    '--canvas-paper-swimlane-rule',
+  ] as const)('the paper rule %s is perceivable on paper (≥ 3:1)', (rule) => {
+    const value = ratio(tokens, '--print', rule);
+    expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
 
   it.each(PLOT_GROUNDS)('a NON-DRIVING link is perceivable on %s (≥ 3:1)', (_name, ground) => {
     // NetPoint-layout M2 (spec §4.7): a non-driving link is a 1 px solid line that carries a
@@ -1211,6 +1212,8 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
     ['--canvas-grid-day', 1.8],
     ['--canvas-grid-month', 1.8],
     ['--canvas-grid-year', 2.5],
+    // The swimlane boundary rule is an alias of the year tier (C5), so it inherits its ceiling.
+    ['--canvas-swimlane-rule', 2.5],
   ] as const)('the grid tier %s stays quiet (≤ %s:1)', (rule, ceiling) => {
     for (const ground of ['--canvas', '--canvas-band'] as const) {
       const value = ratio(tokens, ground, rule);
@@ -1222,13 +1225,14 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
   // Paper's grid stays a position channel: the export has no ruler, so the month and year rules are
   // how a reader of a printed programme finds a date (M0-T4 ruling). Its own tokens, so paper can
   // never silently inherit the screen's quiet value.
-  it.each(['--canvas-paper-grid-month', '--canvas-paper-grid-year'] as const)(
-    'the paper grid tier %s stays a position channel on paper (≥ 3:1)',
-    (rule) => {
-      const value = ratio(tokens, '--print', rule);
-      expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
-    },
-  );
+  it.each([
+    '--canvas-paper-grid-month',
+    '--canvas-paper-grid-year',
+    '--canvas-paper-swimlane-rule',
+  ] as const)('the paper grid tier %s stays a position channel on paper (≥ 3:1)', (rule) => {
+    const value = ratio(tokens, '--print', rule);
+    expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
 
   it('the grid tiers stay ordered, so a coarser boundary wins at a coincident x (ADR-0056 §2)', () => {
     const [day, month, year] = (

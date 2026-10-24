@@ -106,7 +106,6 @@ import {
   useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
-import { SWIMLANES_LENS_OFFERED, useSwimlaneScene } from '@/features/swimlanes';
 import {
   addCalendarDays,
   todayDayFraction,
@@ -499,17 +498,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const activities = useActivities(orgSlug, planId);
   // The plan's dependency edges — drawn as logic lines on the TSLD canvas.
   const dependencies = usePlanDependencies(orgSlug, planId);
-  // The neutral swimlane input for the canvas and the export (swimlanes ui-architecture C8). Built
-  // only while swimlanes are shown, and the lens is not offered yet, so today this fetches nothing
-  // and `input` is `null` — the diagram is the swimlane-free one, unchanged.
-  const swimlaneScene = useSwimlaneScene({
-    orgSlug,
-    planId,
-    source: plan.data?.swimlaneSource ?? 'NONE',
-    activities: activities.data,
-    offered: SWIMLANES_LENS_OFFERED,
-    shown: SWIMLANES_LENS_OFFERED,
-  });
   // The calendars offered by the plan and activity calendar pickers (read for every member): the
   // set usable in this plan's PROJECT — its own calendars plus every organisation one (ADR-0053
   // §1), which is precisely what the API's write guard accepts here. That resolution lives in the
@@ -2719,10 +2707,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     calendars,
     variance,
     // Derived
-    swimlaneInput: swimlaneScene.input,
-    swimlanesPending: swimlaneScene.pending,
-    swimlanesFailed: swimlaneScene.failed,
-    refetchSwimlanes: swimlaneScene.refetch,
     tsldCalendar,
     todayIso,
     todayFraction,

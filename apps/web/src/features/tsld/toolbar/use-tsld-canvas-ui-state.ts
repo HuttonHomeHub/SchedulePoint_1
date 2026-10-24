@@ -1,4 +1,4 @@
-import type { ActivityType, DependencyType } from '@repo/types';
+import type { ActivityType, DependencyType, SwimlaneSource } from '@repo/types';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TsldCanvasHandle } from '../components/TsldCanvas';
@@ -75,6 +75,11 @@ export interface TsldCanvasUiState {
   toggleCompareOverlay: () => void;
   /** Toggle the levelled-placement ghosts (one-planning-surface M-E). */
   toggleLevelledOverlay: () => void;
+  /**
+   * Set the planner's choice about showing swimlanes, or `null` to follow the plan's data
+   * ({@link swimlanesShown}). Written by the Swimlanes lens toggle; reset on a plan switch.
+   */
+  setSwimlanesOverride: (override: boolean | null) => void;
   /**
    * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
    * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
@@ -156,6 +161,13 @@ export interface LensState {
    */
   levelledOverlay: boolean;
   /**
+   * The planner's explicit choice to show or hide swimlanes, or `null` for "follow the plan"
+   * (swimlanes ui-architecture C11). What is SHOWN is `override ?? (source !== 'NONE')` — see
+   * {@link swimlanesShown} — so a plan that has been set up opens divided, and a planner who turns
+   * that off keeps it off until they leave the plan. Per plan, so it resets on a plan switch.
+   */
+  swimlanesOverride: boolean | null;
+  /**
    * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
    * Enter. It lives here rather than beside `conflictCursorId` in `NavState` because it is **reset by
    * the two filter setters below** — a cursor into a match set the planner has just changed is not a
@@ -179,6 +191,7 @@ const DEFAULT_LENS_STATE: LensState = {
   baselineOverlay: false,
   compareOverlay: true,
   levelledOverlay: false,
+  swimlanesOverride: null,
   searchCursorId: null,
 };
 
@@ -189,6 +202,14 @@ const DEFAULT_NAV_STATE: NavState = {
   conflictCursorId: null,
   selectSignal: null,
 };
+
+/**
+ * Whether swimlanes are shown: the planner's choice when they have made one, else whether the plan
+ * has been set up for them (swimlanes ui-architecture C11).
+ */
+export function swimlanesShown(override: boolean | null, source: SwimlaneSource): boolean {
+  return override ?? source !== 'NONE';
+}
 
 /**
  * @param planId the plan the canvas is showing. Plan-specific state is **per plan**
@@ -222,6 +243,7 @@ export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
       ...s,
       baselineOverlay: DEFAULT_LENS_STATE.baselineOverlay,
       levelledOverlay: DEFAULT_LENS_STATE.levelledOverlay,
+      swimlanesOverride: DEFAULT_LENS_STATE.swimlanesOverride,
       searchCursorId: DEFAULT_LENS_STATE.searchCursorId,
     }));
     setNavState((s) => ({
@@ -282,6 +304,10 @@ export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
   );
   const toggleLevelledOverlay = useCallback(
     (): void => setLensState((s) => ({ ...s, levelledOverlay: !s.levelledOverlay })),
+    [],
+  );
+  const setSwimlanesOverride = useCallback(
+    (swimlanesOverride: boolean | null): void => setLensState((s) => ({ ...s, swimlanesOverride })),
     [],
   );
   const toggleIsolate = useCallback(
@@ -354,6 +380,7 @@ export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
       toggleBaselineOverlay,
       toggleCompareOverlay,
       toggleLevelledOverlay,
+      setSwimlanesOverride,
       navState,
       toggleIsolate,
       setIsolateMode,
@@ -382,6 +409,7 @@ export function useTsldCanvasUiState(planId?: string): TsldCanvasUiState {
       toggleBaselineOverlay,
       toggleCompareOverlay,
       toggleLevelledOverlay,
+      setSwimlanesOverride,
       navState,
       toggleIsolate,
       setIsolateMode,

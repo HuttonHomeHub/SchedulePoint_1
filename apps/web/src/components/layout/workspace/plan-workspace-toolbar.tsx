@@ -117,6 +117,7 @@ import {
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
+import { SWIMLANES_LENS_OFFERED, useSwimlaneScene } from '@/features/swimlanes';
 import {
   HistoryResultStrip,
   LayoutResolvedStrip,
@@ -140,7 +141,10 @@ import {
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
 import { usePromotionFocusFollow } from '@/features/tsld/toolbar/use-promotion-focus';
-import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
+import {
+  swimlanesShown,
+  useTsldCanvasUiState,
+} from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
   type PlanDialogKind,
@@ -238,6 +242,19 @@ export function ToolbarPlanWorkspace({
 }): React.ReactElement {
   // One shared canvas UI state drives both the chromeless canvas and the toolbar (ADR-0031).
   const canvasUi = useTsldCanvasUiState(plan.id);
+  // The neutral swimlane input for the canvas and the export (swimlanes ui-architecture C8, C11). Built
+  // here and not in the model because "shown" is the lens state, which lives in `canvasUi` (C1). Only
+  // while the lens is offered, so today it fetches nothing and `input` is `null`: the diagram is the
+  // swimlane-free one, unchanged. Memoised inside the hook, so the identity is stable across renders
+  // whose inputs are equal.
+  const swimlaneScene = useSwimlaneScene({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    source: plan.swimlaneSource,
+    activities: model.activities.data,
+    offered: SWIMLANES_LENS_OFFERED,
+    shown: swimlanesShown(canvasUi.lensState.swimlanesOverride, plan.swimlaneSource),
+  });
   // The activities panel's narrowed, stable slice of the model (`docs/TECH_DEBT.md` #334, M2-F1): the
   // whole `model` is a new object every render, and this component renders on every canvas selection.
   const activityPanelModel = useActivityPanelModel(model);
@@ -823,6 +840,7 @@ export function ToolbarPlanWorkspace({
     penLock,
     plan,
     canvasUi,
+    swimlaneScene,
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },
@@ -1102,8 +1120,7 @@ export function ToolbarPlanWorkspace({
   const loadingBeforeSwimlanes =
     CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
   const [panelPainted, setPanelPainted] = useState(false);
-  const canvasLoading =
-    loadingBeforeSwimlanes || (model.swimlanesPending === true && !panelPainted);
+  const canvasLoading = loadingBeforeSwimlanes || (swimlaneScene.pending && !panelPainted);
   if (!canvasLoading && !panelPainted) setPanelPainted(true);
 
   // The project finish, for the canvas's recalculation-settle announcement. The SAME query the
@@ -1348,7 +1365,7 @@ export function ToolbarPlanWorkspace({
       layoutResolvedNotice={layoutResolvedNotice}
       historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
-      swimlanes={model.swimlaneInput}
+      swimlanes={swimlaneScene.input}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
       // The Late overlay is read-only analysis — suppress editing while it's on (ADR-0033 M4).

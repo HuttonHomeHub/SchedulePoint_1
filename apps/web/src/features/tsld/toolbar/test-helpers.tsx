@@ -134,6 +134,10 @@ export function makeTsldToolbarContext(
     // has to set this deliberately. The false value is the interesting one here, unlike its
     // `compareOverlay` neighbour above, where the off value is the quiet one.
     levelResources: true,
+    swimlanesShown: false,
+    toggleSwimlanes: vi.fn(),
+    swimlanesSetUp: true,
+    swimlanesLoading: false,
     toggleBaselineOverlay: vi.fn(),
     hasActiveBaseline: false,
     varianceLoading: false,

@@ -24,6 +24,7 @@ const PALETTE = {
   canvasGround: '#111',
   gridLine: '#222',
   laneRule: '#333',
+  swimlaneRule: '#5a5a5a',
   edge: '#444',
   bar: '#555',
   nodeRim: '#555',

@@ -83,7 +83,12 @@ import {
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
-import type { CompareGhost, CompareLink } from '../render/paint';
+import {
+  SWIMLANE_GROUND,
+  type CompareGhost,
+  type CompareLink,
+  type SwimlaneMarks,
+} from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
 import type { SwimlaneInput } from '../render/project-swimlanes';
 import {
@@ -1255,6 +1260,16 @@ export function TsldPanel({
         dataDate,
       }),
     [activities, viewToggles.wbsBand, barDateSource, swimlanes, dataDate],
+  );
+  // The rule and ground marks for the painter (swimlanes C5), off the projection that swapped in the
+  // display lanes so the two cannot disagree. Memoised on it: a fresh object per render would mark
+  // the canvas scene dirty and repaint every render. SQ-6's default is the ground ON.
+  const swimlaneMarks = useMemo<SwimlaneMarks | undefined>(
+    () =>
+      diagramSource.swimlaneScene
+        ? { extents: diagramSource.swimlaneScene.extents, ground: SWIMLANE_GROUND }
+        : undefined,
+    [diagramSource.swimlaneScene],
   );
   const wbsBandGroupRows = diagramSource.bandGroups;
   const wbsBandHeightPx = diagramSource.bandHeight;
@@ -3483,6 +3498,7 @@ export function TsldPanel({
               dropLinkPickSignal={dropLinkPickSignal}
               linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
+              swimlaneMarks={swimlaneMarks}
               edges={renderEdges}
               dataDate={dataDate}
               selectedId={selectedId}

@@ -1382,3 +1382,40 @@ describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
     expect(h.tsldProps.current?.swimlanes).toBeNull();
   });
 });
+
+/** The lens state decides what is shown (swimlanes M2-T2, C11): `override ?? (source !== 'NONE')`. */
+describe('the host follows the lens state for swimlanes (swimlanes M2-T2)', () => {
+  const lensApi = () =>
+    h.tsldProps.current?.['canvasUi'] as {
+      setSwimlanesOverride: (v: boolean | null) => void;
+    };
+
+  it('stops building the input when the planner turns swimlanes off, and builds it again on null', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
+    };
+    renderScreen();
+    expect(h.tsldProps.current?.swimlanes).not.toBeNull();
+
+    act(() => lensApi().setSwimlanesOverride(false));
+    expect(h.tsldProps.current?.swimlanes).toBeNull();
+
+    act(() => lensApi().setSwimlanesOverride(null));
+    expect(h.tsldProps.current?.swimlanes).not.toBeNull();
+  });
+
+  it('hands down the same input object across a re-render with equal inputs', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
+    };
+    renderScreen();
+    const first = h.tsldProps.current?.swimlanes;
+    // An unrelated state change in the same host re-renders it without touching the data.
+    act(() => lensApi().setSwimlanesOverride(null));
+    expect(h.tsldProps.current?.swimlanes).toBe(first);
+  });
+});

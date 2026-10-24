@@ -103,6 +103,7 @@ export const COMMAND_CLASS: Record<CommandKey, CommandClass> = {
   toggleBaselineOverlay: 'unaffected',
   toggleCompareOverlay: 'unaffected',
   toggleLevelledOverlay: 'unaffected',
+  toggleSwimlanes: 'unaffected',
   toggleIsolate: 'unaffected',
   setIsolateMode: 'unaffected',
   exportScheduleCsv: 'unaffected',

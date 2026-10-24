@@ -560,6 +560,32 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
       description: 'Show an overview of the whole plan beside the diagram',
     },
   },
+  {
+    id: 'swimlanes',
+    group: 'structure',
+    label: 'Swimlanes',
+    // **Not offered, and that is the whole of M2's darkness** (swimlanes ui-architecture C1; the plan's
+    // M2-T2 "Dark because"). Nothing reaches this row until M2-T11 flips it, in step with
+    // `SWIMLANES_LENS_OFFERED` in the swimlanes feature, which holds the host's end of the same switch.
+    // A literal and not that constant because `features/swimlanes` imports this feature's types.
+    enabled: false,
+    checked: (ctx) => ctx.swimlanesShown,
+    toggle: (ctx) => ctx.toggleSwimlanes(),
+    // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,
+    // then the list is on its way, then it failed, then nothing has been set up. All of them are
+    // `aria-describedby` text on the row (`CheckboxField`'s gate) and none is a live announcement,
+    // so a list that loads while the popover is open is not read out over the planner.
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : ctx.swimlanesLoading
+          ? 'Loading swimlanes…'
+          : ctx.swimlanesFailed === true
+            ? "Couldn't load swimlanes. Try again."
+            : !ctx.swimlanesSetUp
+              ? 'No swimlanes have been set up for this plan.'
+              : undefined,
+  },
 ];
 
 function lensTogglesIn(group: ViewToggleGroupId, ctx: TsldToolbarContext): readonly LensToggle[] {

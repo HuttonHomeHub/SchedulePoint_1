@@ -41,6 +41,7 @@ import {
   type LinkOverlay,
   type ResizeOverlay,
   type ResourceStripPalette,
+  type SwimlaneMarks,
   type TsldPalette,
   type WbsBandPalette,
   type TsldScene,
@@ -435,6 +436,10 @@ export interface TsldCanvasProps {
    * the highlight is off / nothing is over-allocated ⇒ byte-for-byte today's paint. `TsldPanel` derives
    * it (memoised). */
   flaggedIds?: ReadonlySet<string> | undefined;
+  /** The swimlane stack the painter rules and (optionally) tints (swimlanes C5). `TsldPanel` derives it
+   * from the same projection that swapped in the display lanes (memoised). Absent ⇒ no swimlanes ⇒
+   * byte-for-byte today's paint (SC-3). */
+  swimlaneMarks?: SwimlaneMarks | undefined;
   // ── Resource strip (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`) ──────────────────
   // Both default-absent ⇒ byte-for-byte today's `measure()` + paint (the parity gate): no band is
   // reserved and the rAF loop does no strip work when the strip is inactive.
@@ -971,6 +976,7 @@ export function TsldCanvas({
   compareGhosts,
   compareLinks,
   flaggedIds,
+  swimlaneMarks,
   resourceStripActive = false,
   minimapActive = false,
   onMinimapClose,
@@ -1219,6 +1225,7 @@ export function TsldCanvas({
     compareGhosts,
     compareLinks,
     flaggedIds,
+    swimlaneMarks,
     // Time-true link anchoring + arrowheads (ADR-0052 M1). A build-time constant, so it never
     // re-triggers the scene effect; flag-off the painter keeps today's routing byte-for-byte.
     timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -1355,6 +1362,7 @@ export function TsldCanvas({
       compareGhosts,
       compareLinks,
       flaggedIds,
+      swimlaneMarks,
       timeTrueLinks,
       visualRefresh,
       linkRouting,
@@ -1402,6 +1410,7 @@ export function TsldCanvas({
     compareGhosts,
     compareLinks,
     flaggedIds,
+    swimlaneMarks,
   ]);
 
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
