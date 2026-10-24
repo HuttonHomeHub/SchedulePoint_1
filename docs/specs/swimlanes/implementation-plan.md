@@ -766,6 +766,30 @@ gutter's corner cell.
   1. Write membership.
   2. Add the dialog option.
   3. Add the undoable source switch.
+- **As built (2026-10-24):**
+  - **Membership** is `features/wbs/model/wbs-swimlane-membership.ts` (`wbsSwimlaneInput`,
+    `wbsSwimlaneLevels`). Swimlanes are the summaries at exactly level N in WBS order (depth-first,
+    siblings by `laneIndex` then id, the Gantt's own sort); the stored lane is the row for the
+    activity's WBS group, or "No WBS group" at the level. It returns a `SwimlaneInput` with
+    `source: 'WBS'`. `deriveDiagramSource` is unchanged: it projects over the band's scene, so a lifted
+    summary takes no lane and is drawn once (tested there, with the band on and off).
+  - **The WBS picture needs no list.** `swimlanePictureOn` takes the level and reads a WBS source with a
+    valid level as on; `useSwimlaneScene` builds the input from the loaded activities, so `pending` is
+    never true and no frame paints the swimlane-free layout first. `swimlanesShown` no longer special-cases
+    `WBS`, and the lens counts a WBS plan as set up.
+  - **The source switch is an undo step** (`swimlaneSourceCommand`, `useSetPlanSwimlaneSource` is now
+    `recorded` in `coverage.ts`). It writes the plan's source and level and nothing else, and undo and redo
+    each check the plan still holds the pair the step left (`ReplayContext.readPlan`). A hand-made setup's own
+    source write is still not a step (plan settings stay outside undo for that one); a setup **from the WBS**
+    is, because it writes nothing else. The manage dialog gained "Where swimlanes come from" with a Switch
+    button; while the WBS leads it hides the hand-made list and says those swimlanes are kept.
+  - **The editor's Swimlane field** is `WbsSwimlaneField`: a read-only (ADR-0083) text field showing the
+    swimlane and "Swimlanes follow the WBS in this plan.". Move to swimlane… stays hand-made only.
+  - **Open for M3-T2 / the owner:** the gutter's rename, move and delete are shaded as a whole under a WBS
+    source, which also shades the corner's **Swimlanes…** command (the gutter has one write gate). The way
+    back is `View ▾ ▸ Structure ▸ Swimlanes…`, and the reason says so. Shading only the rows would add an
+    optional field to `GutterActions`, a component contract (ADR-0105), so it was not done here. Until
+    M3-T2's `laneRange`, a vertical drag across a WBS swimlane edge reaches the server, which refuses it.
 
 ##### Task M3-T2: change handling, filing on create, `laneRange`, and the journey (one PR)
 

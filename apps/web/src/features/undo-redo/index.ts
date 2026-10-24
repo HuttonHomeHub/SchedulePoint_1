@@ -52,6 +52,8 @@ export {
   swimlaneDeleteCommand,
   swimlaneRenameCommand,
   swimlaneReorderCommand,
+  swimlaneSourceCommand,
+  type SwimlaneBasisChoice,
   type CreateSwimlaneFn,
   type DeleteSwimlaneFn,
   type RenameSwimlaneFn,

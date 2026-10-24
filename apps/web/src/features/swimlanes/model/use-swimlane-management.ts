@@ -1,11 +1,16 @@
-import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
+import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { useSwimlanes } from '../api/use-swimlanes';
 
 import { focusAfterDelete, type FocusAfterDelete } from './focus-after-delete';
 import { swimlaneErrorText } from './swimlane-errors';
-import { useSwimlaneActions, type SwimlaneActions } from './use-swimlane-actions';
+import {
+  useSwimlaneActions,
+  type SwimlaneActions,
+  type SwimlanePlanFacts,
+} from './use-swimlane-actions';
+import { WBS_GUTTER_REASON } from './wbs-swimlane-copy';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import type { GutterActions } from '@/features/tsld';
@@ -42,7 +47,7 @@ export interface SwimlaneDialogsProps {
   close: (which: keyof SwimlaneDialogState) => void;
   openRename: (swimlaneId: string) => void;
   openDelete: (swimlaneId: string) => void;
-  plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
+  plan: SwimlanePlanFacts;
   /** Told when a delete has landed, before its dialog closes: see {@link focusAfterDelete}. */
   afterDelete: (swimlane: SwimlaneSummary) => void;
   swimlanes: readonly SwimlaneSummary[];
@@ -81,7 +86,7 @@ export interface SwimlaneManagement {
 export function useSwimlaneManagement(args: {
   orgSlug: string;
   planId: string;
-  plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
+  plan: SwimlanePlanFacts;
   /** Swimlanes are drawn: the scene has an input. */
   shown: boolean;
   /** How many swimlanes the plan has, once known. A hand-made plan can have none. */
@@ -163,9 +168,15 @@ export function useSwimlaneManagement(args: {
   // Where the delete came from and the order the list had, captured when its dialog OPENS: by the time
   // it succeeds a refetch may already have dropped the row, and the order could not be recovered.
   const deleteContext = useRef<Omit<FocusAfterDelete, 'id'>>({ from: 'gutter', order: [] });
+  const followsWbs = plan.swimlaneSource === 'WBS';
   const gutterActions = useMemo<GutterActions>(
     () => ({
-      write: { writable, reason },
+      // A WBS swimlane is a summary, not a row of its own: it is renamed and ordered where the summary
+      // is. The pen's own reason, where that is why, comes first (the planner can fix that one).
+      write:
+        writable && followsWbs
+          ? { writable: false, reason: WBS_GUTTER_REASON }
+          : { writable, reason },
       manage: { label: manageLabel, onOpen: openSwimlanes },
       collapse: {
         collapsed: width.collapsed,
@@ -209,6 +220,7 @@ export function useSwimlaneManagement(args: {
     [
       writable,
       reason,
+      followsWbs,
       manageLabel,
       openSwimlanes,
       width.collapsed,
@@ -268,13 +280,19 @@ export function useSwimlaneManagement(args: {
   const planIdentity = plan.id;
   const planVersion = plan.version;
   const planSource = plan.swimlaneSource;
+  const planLevel = plan.swimlaneWbsLevel;
   const dialogs = useMemo<SwimlaneDialogsProps>(
     () => ({
       state,
       close,
       openRename,
       openDelete,
-      plan: { id: planIdentity, version: planVersion, swimlaneSource: planSource },
+      plan: {
+        id: planIdentity,
+        version: planVersion,
+        swimlaneSource: planSource,
+        swimlaneWbsLevel: planLevel,
+      },
       afterDelete,
       swimlanes,
       activities,
@@ -289,6 +307,7 @@ export function useSwimlaneManagement(args: {
       planIdentity,
       planVersion,
       planSource,
+      planLevel,
       afterDelete,
       swimlanes,
       activities,

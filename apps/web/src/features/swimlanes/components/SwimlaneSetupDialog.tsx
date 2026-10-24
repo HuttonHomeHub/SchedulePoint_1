@@ -1,35 +1,42 @@
-import type { SwimlaneSource, SwimlaneSummary } from '@repo/types';
-import { useId, useRef, useState } from 'react';
+import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { swimlaneErrorText } from '../model/swimlane-errors';
 import { parseSwimlaneNames } from '../model/swimlane-names';
-import type { SwimlaneActions } from '../model/use-swimlane-actions';
+import type { SwimlaneActions, SwimlanePlanFacts } from '../model/use-swimlane-actions';
+
+import { SwimlaneSourceFields, type ChosenSource } from './SwimlaneSourceFields';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextareaField } from '@/components/ui/form';
+import { wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
 
 export interface SwimlaneSetupDialogProps {
   open: boolean;
   onClose: () => void;
   /** The plan, at the version last read: the source write is locked on it. */
-  plan: { id: string; version: number; swimlaneSource: SwimlaneSource };
+  plan: SwimlanePlanFacts;
   /** The plan's active swimlanes now, so a name that is taken is named before the server refuses it. */
   swimlanes: readonly SwimlaneSummary[];
+  /** The plan's activities, which the WBS option reads its levels from; `undefined` while they load. */
+  activities: readonly ActivitySummary[] | undefined;
   actions: SwimlaneActions;
   /** May the caller write, and when not, why. The entry point shades itself, but the pen can be lost while this is open. */
   gate: { writable: boolean; reason: string | null };
 }
 
 /**
- * **Set up swimlanes** (swimlanes M2-T9, feature-spec US-2): by hand — type the names, one per line.
- * The WBS option joins this dialog in M3, so it is a fixed sentence here and not a one-option radio.
+ * **Set up swimlanes** (swimlanes M2-T9 and M3-T1, feature-spec US-2 and US-4): by hand — type the
+ * names, one per line — or one per WBS group at a level, preselected to the shallowest level that has
+ * two groups.
  *
- * Confirming does two writes in order: the swimlanes (appended in the order typed, one undo step),
- * then the plan's source. If the second fails the first stays, and the dialog says so and retries
- * **only** the source — pressing Set up again must not meet the swimlanes it just made as "already
- * exists".
+ * Confirming by hand does two writes in order: the swimlanes (appended in the order typed, one undo
+ * step), then the plan's source. If the second fails the first stays, and the dialog says so and
+ * retries **only** the source — pressing Set up again must not meet the swimlanes it just made as
+ * "already exists". Confirming from the WBS is one write, the source and level, and is one undo step:
+ * there are no swimlanes to make, they are the summaries.
  *
  * Working state (the text, the error, how far a confirm got) lives for one opening (ADR-0169): the
  * form is the dialog's child, which `Dialog` mounts only while open.
@@ -51,11 +58,17 @@ function SetupForm({
   onClose,
   plan,
   swimlanes,
+  activities,
   actions,
   gate,
 }: SwimlaneSetupDialogProps): React.ReactElement {
   const announce = useAnnounce();
   const errorId = useId();
+  const reasonId = useId();
+  const [source, setSource] = useState<ChosenSource>('MANUAL');
+  const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
+  const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
+  const level = pickedLevel ?? levels.suggested;
   const [text, setText] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -72,6 +85,24 @@ function SetupForm({
   const submit = async (): Promise<void> => {
     if (pending || !gate.writable) return;
     setFailure(null);
+    if (source === 'WBS') {
+      if (level === null) {
+        setFailure('This plan has no WBS summaries to make swimlanes from.');
+        return;
+      }
+      setProblems([]);
+      setPending(true);
+      try {
+        await actions.switchSource(plan, { source: 'WBS', level });
+        announce(`Swimlanes set up: one per WBS group at level ${String(level)}.`);
+        onClose();
+      } catch (error) {
+        setFailure(swimlaneErrorText('set up swimlanes', error));
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
     const parsed = parseSwimlaneNames(
       text,
       swimlanes.map((s) => s.name),
@@ -121,27 +152,50 @@ function SetupForm({
         void submit();
       }}
     >
-      <p className="text-muted-foreground text-sm">
-        {sourceOnly
-          ? `${existing === 1 ? '1 swimlane is' : `${String(existing)} swimlanes are`} already made. Finish setup to switch this plan to use them.`
-          : 'By hand: you name them and put activities in them.'}
-      </p>
-      <TextareaField
-        ref={fieldRef}
-        label="Swimlane names, one per line"
-        rows={6}
-        value={text}
-        readOnly={sourceOnly}
-        onChange={(event) => {
-          setProblems([]);
-          setText(event.target.value);
-        }}
-        // The problems are one paragraph below, linked here; the field's own `error` slot takes one string.
-        aria-describedby={problems.length > 0 ? errorId : undefined}
-        aria-invalid={problems.length > 0 ? true : undefined}
-        hint="They stack top to bottom in this order, above “No swimlane”."
-        gate={{ writable: gate.writable, reason: gate.reason }}
-      />
+      {/* Once the swimlanes of a hand-made setup exist the choice is made: a retry finishes that one. */}
+      {created === 0 ? (
+        <SwimlaneSourceFields
+          source={source}
+          onSource={setSource}
+          level={level}
+          onLevel={setPickedLevel}
+          levels={levels}
+          loaded={activities !== undefined}
+        />
+      ) : null}
+      {source === 'MANUAL' ? (
+        <>
+          {sourceOnly ? (
+            <p className="text-muted-foreground text-sm">
+              {`${existing === 1 ? '1 swimlane is' : `${String(existing)} swimlanes are`} already made. Finish setup to switch this plan to use them.`}
+            </p>
+          ) : null}
+          <TextareaField
+            ref={fieldRef}
+            label="Swimlane names, one per line"
+            rows={6}
+            value={text}
+            readOnly={sourceOnly}
+            onChange={(event) => {
+              setProblems([]);
+              setText(event.target.value);
+            }}
+            // The problems are one paragraph below, linked here; the field's own `error` slot takes one string.
+            aria-describedby={problems.length > 0 ? errorId : undefined}
+            aria-invalid={problems.length > 0 ? true : undefined}
+            hint="They stack top to bottom in this order, above “No swimlane”."
+            gate={{ writable: gate.writable, reason: gate.reason }}
+          />
+        </>
+      ) : (
+        // By hand, the pen's reason is on the names field; there is no field to carry it from the WBS.
+        !gate.writable &&
+        gate.reason !== null && (
+          <p id={reasonId} className="text-muted-foreground text-sm">
+            {gate.reason}
+          </p>
+        )
+      )}
       {problems.length > 0 ? (
         <ul id={errorId} role="alert" className="text-destructive-text list-disc pl-5 text-sm">
           {problems.map((problem) => (
@@ -164,9 +218,14 @@ function SetupForm({
           type="submit"
           aria-disabled={pending || !gate.writable}
           aria-busy={pending}
+          aria-describedby={source === 'WBS' && !gate.writable ? reasonId : undefined}
           className="aria-busy:pointer-events-none"
         >
-          {pending ? 'Setting up…' : sourceOnly ? 'Finish setup' : 'Set up swimlanes'}
+          {pending
+            ? 'Setting up…'
+            : sourceOnly && source === 'MANUAL'
+              ? 'Finish setup'
+              : 'Set up swimlanes'}
         </Button>
       </div>
     </form>

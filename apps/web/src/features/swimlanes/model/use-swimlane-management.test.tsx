@@ -131,6 +131,49 @@ describe('useSwimlaneActions', () => {
     ]);
   });
 
+  it('records a change of source as one step, and writes the plan record and nothing else', async () => {
+    vi.mocked(apiFetch).mockClear();
+    vi.mocked(apiFetch).mockResolvedValueOnce({ id: 'p1', version: 5 });
+    const record = vi.fn<(c: Command) => void>();
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useSwimlaneActions('acme', 'p1', record), { wrapper });
+    await act(async () => {
+      await result.current.switchSource(
+        { id: 'p1', version: 4, swimlaneSource: 'MANUAL', swimlaneWbsLevel: null },
+        { source: 'WBS', level: 2 },
+      );
+    });
+    // One request, to the plan: no lane row, no swimlane and no activity is written, which is what
+    // lets switching back return the old picture untouched.
+    expect(vi.mocked(apiFetch).mock.calls).toEqual([
+      [
+        '/organizations/acme/plans/p1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2, version: 4 }),
+        },
+      ],
+    ]);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0]![0].label).toBe('Make swimlanes one per WBS group at level 2');
+  });
+
+  it('records no step for a change of source that was refused', async () => {
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('Version conflict.'));
+    const record = vi.fn<(c: Command) => void>();
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useSwimlaneActions('acme', 'p1', record), { wrapper });
+    await act(async () => {
+      await expect(
+        result.current.switchSource(
+          { id: 'p1', version: 4, swimlaneSource: 'WBS', swimlaneWbsLevel: 1 },
+          { source: 'MANUAL', level: null },
+        ),
+      ).rejects.toThrow('Version conflict.');
+    });
+    expect(record).not.toHaveBeenCalled();
+  });
+
   it('answers false, writing nothing, for a move off either end', async () => {
     const record = vi.fn<(c: Command) => void>();
     const { wrapper } = setup();
@@ -158,7 +201,7 @@ describe('useSwimlaneManagement', () => {
   const args: Parameters<typeof useSwimlaneManagement>[0] = {
     orgSlug: 'acme',
     planId: 'p1',
-    plan: { id: 'p1', version: 4, swimlaneSource: 'MANUAL' },
+    plan: { id: 'p1', version: 4, swimlaneSource: 'MANUAL', swimlaneWbsLevel: null },
     shown: true,
     activities: [],
     gate: { writable: true, reason: null },
@@ -223,7 +266,9 @@ describe('useSwimlaneManagement', () => {
   });
 
   it('opens Set up for a plan with none and Manage once it has some, with the matching label', () => {
-    const none = mount({ plan: { id: 'p1', version: 4, swimlaneSource: 'NONE' } });
+    const none = mount({
+      plan: { id: 'p1', version: 4, swimlaneSource: 'NONE', swimlaneWbsLevel: null },
+    });
     expect(none.result.current.manageLabel).toBe('Set up swimlanes…');
     act(() => none.result.current.openSwimlanes());
     expect(none.result.current.dialogs.state).toMatchObject({ setup: true, manage: false });
@@ -363,6 +408,34 @@ describe('useSwimlaneManagement', () => {
       act(() => result.current.dialogs.close('deleteId'));
       expect(raf).not.toHaveBeenCalled();
       raf.mockRestore();
+    });
+  });
+
+  describe('a plan whose swimlanes follow the WBS', () => {
+    const wbs = { id: 'p1', version: 4, swimlaneSource: 'WBS', swimlaneWbsLevel: 2 } as const;
+
+    it('shades the gutter’s writes with the WBS reason, since a swimlane is a summary', () => {
+      const { result } = mount({ plan: wbs });
+      expect(result.current.gutterActions.write).toEqual({
+        writable: false,
+        reason: expect.stringMatching(/^Swimlanes follow the WBS in this plan\./),
+      });
+    });
+
+    it('leads with the pen’s own reason when the pen is why, because that one can be fixed', () => {
+      const { result } = mount({
+        plan: wbs,
+        gate: { writable: false, reason: 'Start editing to change swimlanes.' },
+      });
+      expect(result.current.gutterActions.write.reason).toBe('Start editing to change swimlanes.');
+    });
+
+    it('opens Manage, not Set up: the plan is set up, and Manage is where the source is changed', () => {
+      const { result } = mount({ plan: wbs });
+      expect(result.current.manageLabel).toBe('Swimlanes…');
+      act(() => result.current.openSwimlanes());
+      expect(result.current.dialogs.state).toMatchObject({ setup: false, manage: true });
+      expect(result.current.dialogs.plan).toEqual(wbs);
     });
   });
 

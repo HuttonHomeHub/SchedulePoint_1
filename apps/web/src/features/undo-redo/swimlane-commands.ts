@@ -1,4 +1,4 @@
-import type { SwimlaneSummary } from '@repo/types';
+import type { SwimlaneSource, SwimlaneSummary } from '@repo/types';
 
 import type { Command } from './commands';
 import {
@@ -14,11 +14,16 @@ import {
  * once, as one undo step"). Same contract as `commands.ts` (ADR-0176): read fresh, compare the fields
  * the step wrote, and write with the row's CURRENT version — or write nothing and say why.
  *
- * What is NOT here, deliberately: assigning an activity to a swimlane (M2-T10), and the plan's
- * `swimlaneSource` write. The source is a plan setting, and the product owner decided plan settings
- * stay outside undo (`coverage.ts` `planSettings`). So undoing a setup removes the swimlanes it
- * created and leaves the source at `MANUAL`: the plan then shows an empty set (just "No swimlane"),
+ * What is NOT here, deliberately: assigning an activity to a swimlane (M2-T10), and the source write
+ * of a **hand-made setup**. The source is a plan setting, and the product owner decided plan settings
+ * stay outside undo (`coverage.ts` `planSettings`). So undoing a hand-made setup removes the swimlanes
+ * it created and leaves the source at `MANUAL`: the plan then shows an empty set (just "No swimlane"),
  * which is what a hand-made plan with nothing in it is.
+ *
+ * **Choosing where swimlanes come from IS a step** ({@link swimlaneSourceCommand}, M3-T1): feature-spec
+ * §4.7 lists "switch source" among the new commands, and a setup from the WBS writes nothing else, so
+ * without it Undo would have nothing to take back. It reverses the source and level only. Every lane
+ * is stored per basis, so neither direction writes a lane and switching back returns the old picture.
  *
  * Members are never written by these steps. A soft-deleted swimlane keeps its members' `swimlaneId`
  * and their remembered lanes, which is why a delete's undo is one id-stable restore and not a
@@ -211,5 +216,65 @@ export function swimlaneDeleteCommand(params: {
         remove({ swimlaneId: deleted.id, version: row.version }),
       );
     },
+  };
+}
+
+/** Where a plan's swimlanes come from, as the plan record states it. */
+export interface SwimlaneBasisChoice {
+  source: SwimlaneSource;
+  /** 1 to 3 with source `WBS`, `null` otherwise (`ck_plans_swimlane_source_level`). */
+  level: number | null;
+}
+export type SetSwimlaneSourceFn = (input: {
+  planId: string;
+  version: number;
+  source: SwimlaneSource;
+  level: number | null;
+}) => Promise<unknown>;
+
+const choiceWords = (to: SwimlaneBasisChoice): string =>
+  to.source === 'WBS'
+    ? `one per WBS group at level ${String(to.level ?? 1)}`
+    : to.source === 'MANUAL'
+      ? 'by hand'
+      : 'off';
+
+/**
+ * Reverse a **change of where swimlanes come from** (by hand, or one per WBS group at a level). The
+ * step writes the plan's source and level and nothing else: every lane is stored against the basis it
+ * was written for (`schema-design.md` §2), so neither direction touches a lane, and switching back
+ * brings the old picture back exactly.
+ *
+ * Undo and redo each check that the plan still holds the pair the step left, and write with the plan's
+ * CURRENT version, so an unrelated plan edit in between is not a reason to refuse. A colleague who has
+ * chosen another source has made it theirs: the step is set aside rather than overwriting them.
+ */
+export function swimlaneSourceCommand(params: {
+  planId: string;
+  before: SwimlaneBasisChoice;
+  after: SwimlaneBasisChoice;
+  setSource: SetSwimlaneSourceFn;
+}): Command {
+  const { planId, before, after, setSource } = params;
+  const replay = async (
+    ctx: ReplayContext,
+    from: SwimlaneBasisChoice,
+    to: SwimlaneBasisChoice,
+  ): Promise<ReplayResult> => {
+    const plan = await ctx.readPlan();
+    if (plan === undefined) return notApplicable('gone', 'The plan');
+    if (plan.swimlaneSource !== from.source || (plan.swimlaneWbsLevel ?? null) !== from.level) {
+      return notApplicable('changed', 'The swimlane source');
+    }
+    return writeOrSetAside('The swimlane source', () =>
+      setSource({ planId, version: plan.version, source: to.source, level: to.level }),
+    );
+  };
+  return {
+    label: `Make swimlanes ${choiceWords(after)}`,
+    subjects: [],
+    affectsSchedule: false,
+    undo: (ctx) => replay(ctx, after, before),
+    redo: (ctx) => replay(ctx, before, after),
   };
 }

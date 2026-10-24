@@ -1,4 +1,4 @@
-import type { PlanSummary, SwimlaneSummary } from '@repo/types';
+import type { PlanSummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
@@ -117,13 +117,30 @@ export function useRestoreSwimlane(orgSlug: string, planId: string) {
  * marks the schedule stale (API.md "Swimlane placement"), so the schedule keys are left alone. The
  * returned plan goes straight into the detail cache so the next write sees the fresh `version`.
  */
+export interface SetPlanSwimlaneSourceInput {
+  planId: string;
+  version: number;
+  source: SwimlaneSource;
+  /**
+   * The WBS level, 1 to 3, sent only with source `WBS`. The server clears it when the source leaves
+   * `WBS`, so a switch back to hand-made names no level.
+   */
+  level?: number | null;
+}
+
 export function useSetPlanSwimlaneSource(orgSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { planId: string; version: number; source: 'MANUAL' }) =>
+    mutationFn: (input: SetPlanSwimlaneSourceInput) =>
       apiFetch<PlanSummary>(`/organizations/${orgSlug}/plans/${input.planId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ swimlaneSource: input.source, version: input.version }),
+        body: JSON.stringify({
+          swimlaneSource: input.source,
+          ...(input.source === 'WBS' && input.level != null
+            ? { swimlaneWbsLevel: input.level }
+            : {}),
+          version: input.version,
+        }),
       }),
     onSuccess: (updated, input) => {
       queryClient.setQueryData(planKeys.detail(orgSlug, input.planId), updated);

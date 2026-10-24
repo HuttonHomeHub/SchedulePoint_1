@@ -1,4 +1,4 @@
-import type { SwimlaneSummary } from '@repo/types';
+import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
@@ -12,6 +12,7 @@ import { SwimlaneRenameDialog } from './SwimlaneRenameDialog';
 import { SwimlaneSetupDialog } from './SwimlaneSetupDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { anActivity } from '@/test/activity-fixture';
 
 const row = (id: string, name: string, version = 1): SwimlaneSummary => ({
   id,
@@ -27,6 +28,22 @@ const LIST = [row('a', 'Civil'), row('b', 'Mechanical', 3), row('c', 'Electrical
 const GATE: { writable: boolean; reason: string | null } = { writable: true, reason: null };
 const PEN = { writable: false, reason: 'Start editing to change swimlanes.' };
 
+const planFacts = (
+  swimlaneSource: 'NONE' | 'MANUAL' | 'WBS',
+  swimlaneWbsLevel: number | null = null,
+  version = 7,
+) => ({ id: 'p1', version, swimlaneSource, swimlaneWbsLevel });
+
+/** A tree with one summary at level 1 and two at level 2, so level 2 is the suggested one. */
+const summary = (id: string, parentId: string | null, name = id): ActivitySummary =>
+  anActivity({ id, name, parentId, type: 'WBS_SUMMARY' });
+const WBS_PLAN: ActivitySummary[] = [
+  summary('works', null, 'The Works'),
+  summary('struct', 'works', 'Structure'),
+  summary('mep', 'works', 'Services'),
+  anActivity({ id: 't1', parentId: 'struct' }),
+];
+
 function actions(overrides: Partial<SwimlaneActions> = {}): SwimlaneActions {
   return {
     add: vi.fn((names: readonly string[]) =>
@@ -37,6 +54,7 @@ function actions(overrides: Partial<SwimlaneActions> = {}): SwimlaneActions {
     move: vi.fn(() => Promise.resolve(true)),
     remove: vi.fn(() => Promise.resolve()),
     setManualSource: vi.fn(() => Promise.resolve()),
+    switchSource: vi.fn(() => Promise.resolve()),
     ...overrides,
   };
 }
@@ -54,8 +72,9 @@ describe('the setup dialog', () => {
         <SwimlaneSetupDialog
           open
           onClose={onClose}
-          plan={{ id: 'p1', version: 7, swimlaneSource: 'NONE' }}
+          plan={planFacts('NONE')}
           swimlanes={[]}
+          activities={WBS_PLAN}
           actions={a}
           gate={gate}
         />,
@@ -78,11 +97,7 @@ describe('the setup dialog', () => {
     submit();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(a.add).toHaveBeenCalledWith(['Civil', 'Mechanical', 'Electrical']);
-    expect(a.setManualSource).toHaveBeenCalledWith({
-      id: 'p1',
-      version: 7,
-      swimlaneSource: 'NONE',
-    });
+    expect(a.setManualSource).toHaveBeenCalledWith(planFacts('NONE'));
     // The swimlanes first: a source with nothing under it would show an empty gutter.
     expect(vi.mocked(a.add).mock.invocationCallOrder[0]!).toBeLessThan(
       vi.mocked(a.setManualSource).mock.invocationCallOrder[0]!,
@@ -90,10 +105,119 @@ describe('the setup dialog', () => {
     await waitFor(() => expect(announced()).toBe('3 swimlanes set up.'));
   });
 
-  it('offers by-hand only: the WBS option arrives with M3', () => {
+  it('offers by hand and one per WBS group, by hand first', () => {
     mount(actions());
-    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-    expect(screen.getByText(/By hand/)).toBeInTheDocument();
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(2);
+    expect(radios[0]).toHaveAccessibleName('By hand');
+    expect(radios[0]).toBeChecked();
+    expect(radios[1]).toHaveAccessibleName('One per WBS group at level 2');
+  });
+
+  it('preselects the shallowest level with two groups, not a lone "The Works"', () => {
+    mount(actions());
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    const level = screen.getByRole('combobox', { name: 'WBS level' });
+    expect(level).toHaveValue('2');
+    expect(
+      within(level)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Level 1: 1 group', 'Level 2: 2 groups (suggested)']);
+    // The names field belongs to the hand-made option only.
+    expect(screen.queryByRole('textbox', { name: /Swimlane names/ })).not.toBeInTheDocument();
+  });
+
+  it('sets up from the WBS in one write at the chosen level, announces and closes', async () => {
+    const a = actions();
+    const onClose = vi.fn();
+    mount(a, GATE, onClose);
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'WBS level' }), {
+      target: { value: '1' },
+    });
+    submit();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), { source: 'WBS', level: 1 });
+    // No swimlane is made, and the by-hand source write is not the one used.
+    expect(a.add).not.toHaveBeenCalled();
+    expect(a.setManualSource).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(announced()).toBe('Swimlanes set up: one per WBS group at level 1.'),
+    );
+  });
+
+  it('writes the suggested level when the planner does not touch the select', async () => {
+    const a = actions();
+    mount(a);
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    submit();
+    await waitFor(() =>
+      expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), { source: 'WBS', level: 2 }),
+    );
+  });
+
+  it('shades the WBS option, with its reason, when the plan has no summary', () => {
+    render(
+      withAnnouncer(
+        <SwimlaneSetupDialog
+          open
+          onClose={vi.fn()}
+          plan={planFacts('NONE')}
+          swimlanes={[]}
+          activities={[anActivity({ id: 'only' })]}
+          actions={actions()}
+          gate={GATE}
+        />,
+      ),
+    );
+    const option = screen.getByRole('radio', { name: 'One per WBS group' });
+    expect(option).toHaveAttribute('aria-disabled', 'true');
+    expect(option).toHaveAccessibleDescription(/no WBS summaries to make swimlanes from/);
+    fireEvent.click(option);
+    expect(screen.getByRole('radio', { name: 'By hand' })).toBeChecked();
+  });
+
+  it('says why while the activities are still loading', () => {
+    render(
+      withAnnouncer(
+        <SwimlaneSetupDialog
+          open
+          onClose={vi.fn()}
+          plan={planFacts('NONE')}
+          swimlanes={[]}
+          activities={undefined}
+          actions={actions()}
+          gate={GATE}
+        />,
+      ),
+    );
+    expect(screen.getByRole('radio', { name: 'One per WBS group' })).toHaveAccessibleDescription(
+      /have not loaded yet/,
+    );
+  });
+
+  it('shows a refused WBS setup and stays open, writing nothing else', async () => {
+    const a = actions({ switchSource: vi.fn().mockRejectedValue(new Error('Version conflict.')) });
+    const onClose = vi.fn();
+    mount(a, GATE, onClose);
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    submit();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not set up swimlanes: Version conflict.',
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shades a WBS setup without the pen, saying why, and writes nothing', () => {
+    const a = actions();
+    mount(a, PEN);
+    fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+    const button = screen.getByRole('button', { name: 'Set up swimlanes' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleDescription('Start editing to change swimlanes.');
+    submit();
+    expect(a.switchSource).not.toHaveBeenCalled();
   });
 
   it('writes nothing and names the problem when a name repeats or none is typed', async () => {
@@ -138,8 +262,9 @@ describe('the setup dialog', () => {
         <SwimlaneSetupDialog
           open
           onClose={onClose}
-          plan={{ id: 'p1', version: 7, swimlaneSource: 'NONE' }}
+          plan={planFacts('NONE')}
           swimlanes={LIST}
+          activities={WBS_PLAN}
           actions={a}
           gate={GATE}
         />,
@@ -160,8 +285,9 @@ describe('the setup dialog', () => {
         <SwimlaneSetupDialog
           open
           onClose={onClose}
-          plan={{ id: 'p1', version: 7, swimlaneSource: 'MANUAL' }}
+          plan={planFacts('MANUAL')}
           swimlanes={[]}
+          activities={WBS_PLAN}
           actions={a}
           gate={GATE}
         />,
@@ -213,6 +339,8 @@ describe('the manage dialog', () => {
         <SwimlaneManageDialog
           open
           onClose={vi.fn()}
+          plan={planFacts('MANUAL')}
+          activities={WBS_PLAN}
           swimlanes={LIST}
           memberCounts={
             new Map([
@@ -352,6 +480,8 @@ describe('the manage dialog', () => {
         <SwimlaneManageDialog
           open
           onClose={vi.fn()}
+          plan={planFacts('MANUAL')}
+          activities={WBS_PLAN}
           swimlanes={[LIST[1]!, LIST[0]!, LIST[2]!]}
           memberCounts={new Map()}
           actions={a}
@@ -367,6 +497,106 @@ describe('the manage dialog', () => {
   it('says so when there are none', () => {
     mount(actions(), GATE, { swimlanes: [] });
     expect(screen.getByText(/No swimlanes yet/)).toBeInTheDocument();
+  });
+
+  describe('where swimlanes come from', () => {
+    const switchButton = (): HTMLElement => screen.getByRole('button', { name: 'Switch' });
+
+    it('starts on what the plan holds, with Switch shaded because there is nothing to change', () => {
+      const a = actions();
+      mount(a);
+      expect(screen.getByRole('radio', { name: 'By hand' })).toBeChecked();
+      expect(switchButton()).toHaveAttribute('aria-disabled', 'true');
+      expect(switchButton()).toHaveAccessibleDescription('Swimlanes already come from this.');
+      fireEvent.click(switchButton());
+      expect(a.switchSource).not.toHaveBeenCalled();
+    });
+
+    it('switches to the WBS in one write at the plan’s version, as one undo step, and announces', async () => {
+      const a = actions();
+      mount(a);
+      fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+      expect(switchButton()).not.toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(switchButton());
+      await waitFor(() =>
+        expect(a.switchSource).toHaveBeenCalledWith(planFacts('MANUAL'), {
+          source: 'WBS',
+          level: 2,
+        }),
+      );
+      await waitFor(() => expect(announced()).toBe('Swimlanes now follow the WBS at level 2.'));
+      // Nothing of the hand-made list is touched: it is kept for the way back.
+      expect(a.remove).not.toHaveBeenCalled();
+      expect(a.add).not.toHaveBeenCalled();
+    });
+
+    it('while the WBS leads, hides the hand-made list and says what is kept', () => {
+      mount(actions(), GATE, { plan: planFacts('WBS', 2) });
+      expect(screen.getByRole('radio', { name: /One per WBS group at level 2/ })).toBeChecked();
+      expect(screen.queryByRole('list', { name: 'Swimlanes' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: 'New swimlane' })).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/follow the WBS at level 2.*you made by hand \(3\) are kept/),
+      ).toBeInTheDocument();
+    });
+
+    it('switches back to by hand in one write that names no level', async () => {
+      const a = actions();
+      mount(a, GATE, { plan: planFacts('WBS', 2) });
+      fireEvent.click(screen.getByRole('radio', { name: 'By hand' }));
+      fireEvent.click(switchButton());
+      await waitFor(() =>
+        expect(a.switchSource).toHaveBeenCalledWith(planFacts('WBS', 2), {
+          source: 'MANUAL',
+          level: null,
+        }),
+      );
+      await waitFor(() => expect(announced()).toBe('Swimlanes are now made by hand.'));
+    });
+
+    it('changes the level of a WBS plan as a switch of its own', async () => {
+      const a = actions();
+      mount(a, GATE, { plan: planFacts('WBS', 2) });
+      expect(switchButton()).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.change(screen.getByRole('combobox', { name: 'WBS level' }), {
+        target: { value: '1' },
+      });
+      fireEvent.click(switchButton());
+      await waitFor(() =>
+        expect(a.switchSource).toHaveBeenCalledWith(planFacts('WBS', 2), {
+          source: 'WBS',
+          level: 1,
+        }),
+      );
+    });
+
+    it('shades Switch without the pen, saying why, and writes nothing', () => {
+      const a = actions();
+      mount(a, PEN);
+      fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+      expect(switchButton()).toHaveAttribute('aria-disabled', 'true');
+      expect(switchButton()).toHaveAccessibleDescription(/Start editing to change swimlanes\./);
+      fireEvent.click(switchButton());
+      expect(a.switchSource).not.toHaveBeenCalled();
+    });
+
+    it('shows a refusal and leaves the picker where the planner put it', async () => {
+      const a = actions({
+        switchSource: vi.fn().mockRejectedValue(new Error('Changed elsewhere.')),
+      });
+      mount(a);
+      fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
+      fireEvent.click(switchButton());
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not change where swimlanes come from: Changed elsewhere.',
+      );
+      expect(screen.getByRole('radio', { name: /One per WBS group/ })).toBeChecked();
+    });
+
+    it('has no axe violations while the WBS leads', async () => {
+      const { baseElement } = mount(actions(), GATE, { plan: planFacts('WBS', 2) });
+      expect((await axe(baseElement)).violations).toEqual([]);
+    });
   });
 
   it('has no axe violations', async () => {
@@ -516,7 +746,7 @@ describe('SwimlaneDialogs counts members only while a dialog is open', () => {
     close: vi.fn(),
     openRename: vi.fn(),
     openDelete: vi.fn(),
-    plan: { id: 'p1', version: 1, swimlaneSource: 'MANUAL' as const },
+    plan: planFacts('MANUAL', null, 1),
     afterDelete: vi.fn(),
     swimlanes: LIST,
     activities,
@@ -524,11 +754,15 @@ describe('SwimlaneDialogs counts members only while a dialog is open', () => {
     gate: GATE,
   });
 
-  it('walks nothing while every dialog is shut, and once when one opens', () => {
+  it('walks nothing while every dialog is shut, and not again on a re-render once one is open', () => {
     const { walks, counted } = countingActivities();
     const { rerender } = render(withAnnouncer(<SwimlaneDialogs {...props(counted, false)} />));
     expect(walks.n).toBe(0);
+    // Opening walks the list for the member counts and for the WBS levels the picker offers.
     rerender(withAnnouncer(<SwimlaneDialogs {...props(counted, true)} />));
-    expect(walks.n).toBe(1);
+    const opened = walks.n;
+    expect(opened).toBeGreaterThan(0);
+    rerender(withAnnouncer(<SwimlaneDialogs {...props(counted, true)} />));
+    expect(walks.n).toBe(opened);
   });
 });
