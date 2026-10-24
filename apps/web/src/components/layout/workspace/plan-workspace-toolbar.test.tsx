@@ -1492,3 +1492,61 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
     expect(screen.getByRole('checkbox', { name: 'Swimlanes' })).not.toBeChecked();
   });
 });
+
+/**
+ * The command beside the lens (swimlanes M2-T9, ui-architecture C2): a checkbox never opens a dialog,
+ * so setting up and managing get a button of their own. It lives in the lens's section, which is not
+ * offered, so the record is switched on for the case and put back.
+ */
+describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', () => {
+  const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
+  afterEach(() => {
+    lens.enabled = false;
+  });
+
+  function openStructure(): void {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    const structure = screen.getByRole('button', { name: /^Structure/ });
+    if (structure.getAttribute('aria-expanded') === 'false') fireEvent.click(structure);
+  }
+
+  it('is not on the screen while the lens is not offered', () => {
+    lens.enabled = false;
+    openStructure();
+    expect(screen.queryByRole('button', { name: /swimlanes…$/i })).not.toBeInTheDocument();
+  });
+
+  it('says Set up swimlanes… when none exist and opens the setup dialog, not the checkbox', () => {
+    lens.enabled = true;
+    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    openStructure();
+    const checkbox = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    // Pressing the checkbox's row never opens a dialog (WCAG 3.2.2).
+    fireEvent.click(checkbox);
+    expect(screen.queryByRole('heading', { name: 'Set up swimlanes' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up swimlanes…' }));
+    expect(screen.getByRole('heading', { name: 'Set up swimlanes' })).toBeInTheDocument();
+  });
+
+  it('says Swimlanes… once some exist and opens the manage dialog', () => {
+    lens.enabled = true;
+    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: [], isPending: false } };
+    openStructure();
+    fireEvent.click(screen.getByRole('button', { name: 'Swimlanes…' }));
+    expect(screen.getByRole('heading', { name: 'Swimlanes' })).toBeInTheDocument();
+  });
+
+  it('is shaded for a reader who cannot write, saying why, and stays focusable', () => {
+    lens.enabled = true;
+    h.role = 'VIEWER';
+    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    openStructure();
+    const button = screen.getByRole('button', { name: 'Set up swimlanes…' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAccessibleDescription('Your role cannot set up swimlanes.');
+    fireEvent.click(button);
+    expect(screen.queryByRole('heading', { name: 'Set up swimlanes' })).not.toBeInTheDocument();
+  });
+});

@@ -72,6 +72,12 @@ export type PlanDialogKind =
   | 'share';
 
 /**
+ * A host that has not wired the swimlane command: the label is what a plan with none says, and
+ * opening does nothing. One module constant, so its identity never moves the toolbar-context memo.
+ */
+const NO_SWIMLANES_MANAGE = { label: 'Set up swimlanes…', open: (): void => undefined };
+
+/**
  * Assemble the {@link TsldToolbarContext} the TSLD registry drives (ADR-0031), from the route model,
  * the shared canvas UI state, and the workspace's dialog opener. This is the M2-deferred builder: it
  * wires each command to an existing seam (the canvas control handle, `setMode`, the recalc mutation,
@@ -84,6 +90,7 @@ export function useTsldToolbarContext({
   plan,
   canvasUi,
   swimlaneScene,
+  swimlanesManage = NO_SWIMLANES_MANAGE,
   swimlanesShown: swimlaneLensShown,
   swimlaneGround,
   openDialog,
@@ -133,6 +140,8 @@ export function useTsldToolbarContext({
    * `failed` is optional: the list's failure is reported by the host once the scene carries it.
    */
   swimlaneScene: { input: SwimlaneInput | null; pending: boolean; failed?: boolean };
+  /** The Set up / Manage swimlanes command (M2-T9): its label and what it opens. Both stable. */
+  swimlanesManage?: { label: string; open: () => void };
   /** Whether swimlanes are shown, computed once by the host (`swimlanesShown`) and read by its scene too. */
   swimlanesShown: boolean;
   /** The ground answer (SQ-6) the host hands the canvas, so the export tints the same swimlanes. */
@@ -715,6 +724,7 @@ export function useTsldToolbarContext({
       toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
       swimlanesSetUp: plan.swimlaneSource !== 'NONE',
       swimlanesLoading: swimlaneScene.pending,
+      swimlanesManage,
       ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
       hasActiveBaseline,
       varianceLoading,
@@ -1075,6 +1085,7 @@ export function useTsldToolbarContext({
     plan.swimlaneSource,
     swimlaneScene.pending,
     swimlaneScene.failed,
+    swimlanesManage,
     hasActiveBaseline,
     varianceLoading,
     varianceError,

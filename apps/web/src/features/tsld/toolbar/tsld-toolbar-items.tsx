@@ -586,7 +586,7 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
       !ctx.hasDiagram
         ? LENS_NO_DIAGRAM_REASON
         : !ctx.swimlanesSetUp
-          ? 'No swimlanes have been set up for this plan.'
+          ? 'No swimlanes have been set up for this plan. Choose Set up swimlanes… to add some.'
           : ctx.swimlanesShown
             ? undefined
             : ctx.swimlanesLoading
@@ -2259,6 +2259,42 @@ function ZoomStepButton({
   );
 }
 
+/**
+ * **Set up swimlanes… / Swimlanes…**, beneath the lens (swimlanes M2-T9, ui-architecture C2). The
+ * label follows whether any exist. Without the pen it is shaded, never hidden (ADR-0082): `aria-disabled`
+ * and a guard, with the reason printed beneath and linked by `aria-describedby`, because this panel
+ * has no tooltip to fall back on and a sighted reader needs it as much as a screen-reader one — the
+ * "Fit to plan" button's pattern, a few rows up.
+ */
+function SwimlanesManageButton({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
+  const reasonId = useId();
+  const reason =
+    ctx.scheduleRefusal(ctx.swimlanesSetUp ? 'manage swimlanes' : 'set up swimlanes') ?? undefined;
+  return (
+    <div className="flex flex-col gap-1 pl-6">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-view-command="swimlanes-manage"
+        aria-disabled={reason !== undefined || undefined}
+        aria-describedby={reason !== undefined ? reasonId : undefined}
+        onClick={() => {
+          if (reason === undefined) ctx.swimlanesManage.open();
+        }}
+        className="justify-start"
+      >
+        {ctx.swimlanesManage.label}
+      </Button>
+      {reason !== undefined ? (
+        <p id={reasonId} className="text-muted-foreground text-xs">
+          {reason}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   const zoomReasonId = useId();
   const renderSection = (id: ViewToggleGroupId, label: string): React.ReactElement | null => {
@@ -2415,7 +2451,7 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
       // `mergeDescribedBy` already carries a hint AND a gate reason together — which is what the
       // removed line was doing by hand, one component down. Keeping a second implementation of that
       // merge is how the two drift.
-      return (
+      const checkbox = (
         <CheckboxField
           key={lens.id}
           label={lens.label}
@@ -2431,6 +2467,16 @@ function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElem
             if (!shut) lens.toggle(ctx);
           }}
         />
+      );
+      // The swimlanes lens carries its command beneath it (ui-architecture C2): a checkbox never
+      // opens a dialog, so setting up and managing get a button of their own.
+      return lens.id === 'swimlanes' ? (
+        <div key={lens.id} className="flex flex-col gap-1.5">
+          {checkbox}
+          <SwimlanesManageButton ctx={ctx} />
+        </div>
+      ) : (
+        checkbox
       );
     });
 

@@ -424,6 +424,13 @@ export interface TsldToolbarContext {
   swimlanesSetUp: boolean;
   /** The swimlane list is on its way. The lens shuts with a linked sentence, not a live announcement. */
   swimlanesLoading: boolean;
+  /**
+   * The command beside the lens (swimlanes M2-T9, ui-architecture C2): **Set up swimlanes…** when
+   * none exist, **Swimlanes…** when some do. A checkbox never opens a dialog (WCAG 3.2.2), so the
+   * dialogs get a button of their own. Its pen reason is `scheduleRefusal`, as every pen-gated
+   * command's is.
+   */
+  swimlanesManage: { label: string; open: () => void };
   /** The list failed to load; the lens says so and offers a retry through the sentence. Absent = fine. */
   swimlanesFailed?: boolean;
 

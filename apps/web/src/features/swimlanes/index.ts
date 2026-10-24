@@ -9,3 +9,9 @@ export {
   useSwimlaneScene,
   type SwimlaneScene,
 } from './model/use-swimlane-scene';
+export { SwimlaneDialogs } from './components/SwimlaneDialogs';
+export {
+  useSwimlaneManagement,
+  type SwimlaneDialogsProps,
+  type SwimlaneManagement,
+} from './model/use-swimlane-management';

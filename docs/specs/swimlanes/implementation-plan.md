@@ -589,6 +589,32 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
   4. Fold in the findings.
 - **Dark because:** the gutter is unmounted while its width is 0, and the button lives in the
   lens's section, which is not offered.
+- **As built (decisions the build took, each with its reason):**
+  - **The gutter is the buttons.** Each label is the toolbar's button (`aria-label` from
+    `swimlaneGutterText`), and the visible text inside is `aria-hidden`; there is no second copy for
+    assistive technology. A swimlane panned out of view is _parked_ (zero height, transparent), never
+    `display: none`, because a button that is not rendered cannot take focus and focus is how an
+    off-screen swimlane is brought into view (`laneToReveal`, then the minimap's `centerOnWorld`).
+  - **Opening the menu is Enter, Space or a press; ArrowDown is the roving key.** In a vertical toolbar
+    the APG's "ArrowDown opens" cannot hold, so the menu opens on activation and on the context-menu
+    gesture. "No swimlane" has no menu.
+  - **Collapsed strip is 44 px** (was 40), so each label is a full target under `pointer: coarse`
+    (ADR-0118 D2). In it only the expand control fits the corner cell as a full target; the
+    **Swimlanes…** command is reached from `View ▾ ▸ Structure` there. The full name is the accessible
+    name, a `name-echo` tooltip on focus, and the menu's `aria-label`; a tap on "No swimlane", which has
+    no menu, shows the tooltip.
+  - **Label sizing relies on the accessible name**, not on deriving the line height from rendered text:
+    the visible text clamps to `maxLines` (px), and the full name never depends on it.
+  - **The wheel over the gutter does nothing, deliberately.** The canvas's wheel is a zoom about the time
+    axis, and the gutter has none. The lane axis pans by dragging the ground, the minimap, and focus.
+  - **The pen sentence is `scheduleRefusal`'s** ("Start editing to set up swimlanes." / "Request control
+    to …" when a peer holds the pen), not the spec's "Take the pen to set up swimlanes.": the house helper
+    names a control the reader actually has (`pen-reason.ts`).
+  - **Setup does two writes, swimlanes then the source,** and retries only the source if the second
+    fails. Undo takes back the swimlanes (one step) and leaves the source at `MANUAL`, because the plan's
+    source is a plan setting and plan settings stay outside undo (`coverage.ts`).
+  - **The legend sits right of the gutter on read** (`leftInsetPx`); the minimap and zoom cluster are
+    anchored to the right edge and cannot meet it.
 
 ##### Task M2-T10: assignment, undo, the grouped listbox and the copy test (one PR)
 
