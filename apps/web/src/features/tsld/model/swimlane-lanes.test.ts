@@ -5,12 +5,11 @@ import { projectSwimlanes } from '../render/project-swimlanes';
 import { drawnDaySpan } from './drawn-span';
 import {
   createInSwimlane,
-  DELETED_SWIMLANE_REASON,
   dropInSwimlane,
   laneRangeOf,
   moveManyInSwimlanes,
   moveWithinSwimlane,
-  NO_SWIMLANE_BOUNDARY_REASON,
+  NO_FREE_LANE_PLURAL,
   nudgeInSwimlane,
   type DaySpan,
   type SwimlaneEditContext,
@@ -78,17 +77,10 @@ const BASE: Spec[] = [
 ];
 
 describe('laneRangeOf', () => {
-  it('lets a bar in a hand-made swimlane reach every hand-made swimlane and stops short of "No swimlane"', () => {
-    expect(laneRangeOf(context(BASE), 'a1')).toEqual({ min: 0, max: 2 });
-  });
-
-  it('is open at the bottom when the last swimlane is hand-made', () => {
-    const range = laneRangeOf(context(BASE.filter((s) => s.id !== 'n1')), 'a1');
-    expect(range).toEqual({ min: 0, max: Number.POSITIVE_INFINITY });
-  });
-
-  it('keeps a bar in "No swimlane" inside it', () => {
-    expect(laneRangeOf(context(BASE), 'n1')).toEqual({ min: 3, max: Number.POSITIVE_INFINITY });
+  it('puts no edge in the way of a hand-made swimlane, "No swimlane" included', () => {
+    for (const id of ['a1', 'b1', 'n1']) {
+      expect(laneRangeOf(context(BASE), id)).toEqual({ min: 0, max: Number.POSITIVE_INFINITY });
+    }
   });
 
   it('has nothing to say about a bar that is not drawn', () => {
@@ -102,13 +94,14 @@ describe('dropInSwimlane', () => {
     const move = dropInSwimlane(context(BASE), 'a1', 1);
     expect(move).toMatchObject({ kind: 'write', requested: 1 });
     if (move.kind !== 'write') return;
-    expect(move.placements).toEqual([{ id: 'a1', lane: 1, from: 0 }]);
+    expect(move.placements).toEqual([{ id: 'a1', lane: 1, from: { swimlaneId: 'A', lane: 0 } }]);
     expect(move.landed).toEqual({
       swimlane: 'Alpha',
       lane: 1,
       count: 2,
       changedSwimlane: false,
       displayLane: 1,
+      how: 'asked',
     });
   });
 
@@ -121,7 +114,7 @@ describe('dropInSwimlane', () => {
     const move = dropInSwimlane(context(specs), 'a1', 1);
     expect(move.kind).toBe('write');
     if (move.kind !== 'write') return;
-    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: 0 }]);
+    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: { swimlaneId: 'A', lane: 0 } }]);
     expect(move.landed).toMatchObject({ swimlane: 'Alpha', lane: 2, count: 3 });
   });
 
@@ -138,13 +131,19 @@ describe('dropInSwimlane', () => {
     const move = dropInSwimlane(context(BASE, { remembered: () => 3 }), 'a1', 2);
     expect(move).toMatchObject({ kind: 'write' });
     if (move.kind !== 'write') return;
-    expect(move.placements[0]).toEqual({ id: 'a1', lane: 3, swimlaneId: 'B', from: 0 });
+    expect(move.placements[0]).toEqual({
+      id: 'a1',
+      lane: 3,
+      swimlaneId: 'B',
+      from: { swimlaneId: 'A', lane: 0 },
+    });
     expect(move.landed).toEqual({
       swimlane: 'Beta',
       lane: 3,
       count: 4,
       changedSwimlane: true,
       displayLane: 5,
+      how: 'remembered',
     });
   });
 
@@ -152,23 +151,45 @@ describe('dropInSwimlane', () => {
     // b1 holds Beta lane 0 over the same days; the remembered lane is 0.
     const move = dropInSwimlane(context(BASE, { remembered: () => 0 }), 'a1', 2);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements[0]).toEqual({ id: 'a1', lane: 1, swimlaneId: 'B', from: 0 });
+    expect(move.placements[0]).toEqual({
+      id: 'a1',
+      lane: 1,
+      swimlaneId: 'B',
+      from: { swimlaneId: 'A', lane: 0 },
+    });
   });
 
   it('files it at the nearest free lane to the drop when it has no remembered lane', () => {
     const move = dropInSwimlane(context(BASE), 'a1', 2);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements[0]).toEqual({ id: 'a1', lane: 1, swimlaneId: 'B', from: 0 });
+    expect(move.placements[0]).toEqual({
+      id: 'a1',
+      lane: 1,
+      swimlaneId: 'B',
+      from: { swimlaneId: 'A', lane: 0 },
+    });
   });
 
-  it('refuses a drop into, or out of, "No swimlane"', () => {
-    expect(dropInSwimlane(context(BASE), 'a1', 3)).toEqual({
-      kind: 'refuse',
-      reason: NO_SWIMLANE_BOUNDARY_REASON,
+  it('files a bar in no swimlane when it is dropped into "No swimlane" (swimlaneId: null)', () => {
+    const move = dropInSwimlane(context(BASE), 'a1', 3);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    expect(move.placements[0]).toEqual({
+      id: 'a1',
+      lane: 1,
+      swimlaneId: null,
+      from: { swimlaneId: 'A', lane: 0 },
     });
-    expect(dropInSwimlane(context(BASE), 'n1', 0)).toEqual({
-      kind: 'refuse',
-      reason: NO_SWIMLANE_BOUNDARY_REASON,
+    expect(move.landed).toMatchObject({ swimlane: 'No swimlane', changedSwimlane: true });
+  });
+
+  it('files a bar from "No swimlane" in a swimlane when it is dropped in one', () => {
+    const move = dropInSwimlane(context(BASE), 'n1', 0);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    expect(move.placements[0]).toEqual({
+      id: 'n1',
+      lane: 1,
+      swimlaneId: 'A',
+      from: { swimlaneId: null, lane: 0 },
     });
   });
 
@@ -179,7 +200,7 @@ describe('dropInSwimlane', () => {
       4,
     );
     if (free.kind !== 'write') throw new Error('expected a write');
-    expect(free.placements).toEqual([{ id: 'n1', lane: 1, from: 0 }]);
+    expect(free.placements).toEqual([{ id: 'n1', lane: 1, from: { swimlaneId: null, lane: 0 } }]);
     // Where the dropped lane is taken it goes on down, growing the bucket.
     const taken = dropInSwimlane(
       context([...BASE, { id: 'n2', start: 0, end: 3, swimlane: null, lane: 1 }]),
@@ -187,16 +208,56 @@ describe('dropInSwimlane', () => {
       4,
     );
     if (taken.kind !== 'write') throw new Error('expected a write');
-    expect(taken.placements).toEqual([{ id: 'n1', lane: 2, from: 0 }]);
+    expect(taken.placements).toEqual([{ id: 'n1', lane: 2, from: { swimlaneId: null, lane: 0 } }]);
   });
 
-  it('refuses a member whose swimlane was deleted, which the endpoint cannot place', () => {
+  it('moves a member whose swimlane was deleted, drawn under "No swimlane", without naming a swimlane', () => {
     const specs: Spec[] = [
       { id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 },
       { id: 'z1', start: 0, end: 3, swimlane: 'gone', lane: 0 },
     ];
-    const move = dropInSwimlane(context(specs), 'z1', 1);
-    expect(move).toEqual({ kind: 'refuse', reason: DELETED_SWIMLANE_REASON });
+    const move = dropInSwimlane(context(specs), 'z1', 3);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    // Its kept id is left alone for a restore, and an undo puts it back under none.
+    expect(move.placements).toEqual([{ id: 'z1', lane: 1, from: { swimlaneId: null, lane: 0 } }]);
+  });
+
+  it('writes a deleted-swimlane member beside a move, at the lane it is drawn in', () => {
+    const specs: Spec[] = [
+      { id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 },
+      { id: 'z1', start: 0, end: 3, swimlane: 'gone' },
+      { id: 'n1', start: 0, end: 3, swimlane: null, lane: 5 },
+    ];
+    const ctx = context(specs);
+    const move = dropInSwimlane(ctx, 'n1', 0);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    const z = move.placements.find((p) => p.id === 'z1');
+    expect(z).toEqual({ id: 'z1', lane: expect.any(Number), materialised: true });
+    expect(z).not.toHaveProperty('swimlaneId');
+  });
+
+  it('never grows a swimlane by more than one lane, however far below the pointer is', () => {
+    const move = dropInSwimlane(context(BASE.filter((s) => s.id !== 'n1')), 'a1', 40);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    // Beta has one lane, so the farthest a drop may ask for is its second.
+    expect(move.landed).toMatchObject({ swimlane: 'Beta', lane: 1, count: 2 });
+  });
+
+  it('says how the bar came to be where it is: asked, next free, or back in its lane', () => {
+    const asked = dropInSwimlane(context(BASE), 'a1', 1);
+    expect(asked.kind === 'write' && asked.landed.how).toBe('asked');
+    const crowded = context([
+      { id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 },
+      { id: 'a2', start: 0, end: 3, swimlane: 'A', lane: 1 },
+    ]);
+    const next = dropInSwimlane(crowded, 'a1', 1);
+    expect(next.kind === 'write' && next.landed.how).toBe('next-free');
+    const back = dropInSwimlane(context(BASE, { remembered: () => 3 }), 'a1', 2);
+    expect(back.kind === 'write' && back.landed.how).toBe('remembered');
+    const taken = dropInSwimlane(context(BASE, { remembered: () => 0 }), 'a1', 2);
+    expect(taken.kind === 'write' && taken.landed.how).toBe('next-free');
+    const stays = dropInSwimlane(crowded, 'a2', 0);
+    expect(stays.kind === 'stay' && stays.landed.how).toBe('stays');
   });
 
   it('writes the swimlane’s unplaced members at their drawn lanes in the same batch (materialise on write)', () => {
@@ -249,13 +310,14 @@ describe('nudgeInSwimlane', () => {
   it('grows the swimlane when Alt+Down is pressed on its bottom lane', () => {
     const move = nudgeInSwimlane(context(BASE), 'a2', 1);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements).toEqual([{ id: 'a2', lane: 2, from: 1 }]);
+    expect(move.placements).toEqual([{ id: 'a2', lane: 2, from: { swimlaneId: 'A', lane: 1 } }]);
     expect(move.landed).toEqual({
       swimlane: 'Alpha',
       lane: 2,
       count: 3,
       changedSwimlane: false,
       displayLane: 2,
+      how: 'asked',
     });
   });
 
@@ -272,17 +334,26 @@ describe('nudgeInSwimlane', () => {
     ];
     const move = nudgeInSwimlane(context(specs), 'a1', 1);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: 0 }]);
+    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: { swimlaneId: 'A', lane: 0 } }]);
     expect(move.requested).toBe(1);
   });
 });
 
 describe('moveWithinSwimlane', () => {
-  it('lands a bar aimed past the last lane on a new one, growing the swimlane', () => {
-    const move = moveWithinSwimlane(context(BASE), 'a1', 4, 1);
+  it('grows a swimlane by one lane at most, however far a held key aimed', () => {
+    // Alpha has two lanes (0-1); a2 is on the bottom one and the key aimed five lanes on.
+    const move = moveWithinSwimlane(context(BASE), 'a2', 6, 1);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements).toEqual([{ id: 'a1', lane: 4, from: 0 }]);
-    expect(move.landed).toMatchObject({ lane: 4, count: 5, displayLane: 4 });
+    expect(move.placements[0]).toMatchObject({ id: 'a2', lane: 2 });
+    expect(move.landed).toMatchObject({ lane: 2, count: 3, how: 'asked' });
+    expect(move.requested).toBe(2);
+  });
+
+  it('lands a bar aimed one past the last lane on a new one, growing the swimlane', () => {
+    const move = moveWithinSwimlane(context(BASE), 'a1', 2, 1);
+    if (move.kind !== 'write') throw new Error('expected a write');
+    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: { swimlaneId: 'A', lane: 0 } }]);
+    expect(move.landed).toMatchObject({ lane: 2, count: 3, displayLane: 2 });
   });
 
   it('does not write when the bar is aimed at the lane it is in', () => {
@@ -299,8 +370,8 @@ describe('moveManyInSwimlanes', () => {
     const move = moveManyInSwimlanes(context(specs), ['a1', 'b1'], 1);
     if (move.kind !== 'write') throw new Error('expected a write');
     expect(move.placements).toEqual([
-      { id: 'a1', lane: 1, from: 0 },
-      { id: 'b1', lane: 1, from: 0 },
+      { id: 'a1', lane: 1, from: { swimlaneId: 'A', lane: 0 } },
+      { id: 'b1', lane: 1, from: { swimlaneId: 'B', lane: 0 } },
     ]);
   });
 
@@ -323,8 +394,8 @@ describe('moveManyInSwimlanes', () => {
     const move = moveManyInSwimlanes(context(specs), ['a1', 'a2'], 1);
     if (move.kind !== 'write') throw new Error('expected a write');
     expect(move.placements).toEqual([
-      { id: 'a1', lane: 1, from: 0 },
-      { id: 'a2', lane: 2, from: 1 },
+      { id: 'a1', lane: 1, from: { swimlaneId: 'A', lane: 0 } },
+      { id: 'a2', lane: 2, from: { swimlaneId: 'A', lane: 1 } },
     ]);
   });
 
@@ -335,7 +406,15 @@ describe('moveManyInSwimlanes', () => {
     ];
     const move = moveManyInSwimlanes(context(specs), ['a1'], 1);
     if (move.kind !== 'write') throw new Error('expected a write');
-    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: 0 }]);
+    expect(move.placements).toEqual([{ id: 'a1', lane: 2, from: { swimlaneId: 'A', lane: 0 } }]);
+  });
+});
+
+describe('the plural refusal', () => {
+  it('has a plain, swimlane-aware sentence', () => {
+    expect(NO_FREE_LANE_PLURAL).toBe(
+      'None of the selected activities has a free lane that way in its swimlane, so none moved.',
+    );
   });
 });
 

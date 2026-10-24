@@ -22,6 +22,7 @@ import {
   replayActivity,
   replayDependency,
   writeOrSetAside,
+  type Checked,
   type ReplayContext,
   type ReplayResult,
 } from './replay';
@@ -92,6 +93,14 @@ export interface Command {
    * a lane index is not a scheduling input, so recalculating after one is wasted work.
    */
   readonly affectsSchedule?: boolean;
+  /**
+   * A **dry replay**: read the rows the step touches and compare the fields it wrote, writing
+   * nothing, and answer what a replay in that direction would answer before its write. It exists so
+   * a step made of several (see {@link composeSteps}) can check every part before the first part
+   * writes — ADR-0176 D2's "a multi-row step succeeds or fails as a whole", for a step that is two
+   * writes. Absent means the step cannot be checked ahead, and its own replay is the only check.
+   */
+  readonly check?: (direction: 'undo' | 'redo', ctx: ReplayContext) => Promise<ReplayResult>;
 }
 
 /** How a coalescable command folds into the previous same-key step. */
@@ -206,7 +215,7 @@ function fieldStep<K extends keyof ActivitySummary>(params: {
   after: Pick<ActivitySummary, K>;
   saved: Pick<ActivitySummary, K>;
   write: (target: Pick<ActivitySummary, K>, row: ActivitySummary) => Promise<ActivitySummary>;
-}): Pick<Command, 'undo' | 'redo'> {
+}): Pick<Command, 'undo' | 'redo' | 'check'> {
   const { id, name, fields, before, after, write } = params;
   let atUndo: Pick<ActivitySummary, K> = pick(params.saved, fields);
   let atRedo: Pick<ActivitySummary, K> = pick(before, fields);
@@ -230,6 +239,13 @@ function fieldStep<K extends keyof ActivitySummary>(params: {
       replay(ctx, atRedo, after, (saved) => {
         atUndo = saved;
       }),
+    check: async (direction, ctx) => {
+      if (fields.length === 0) return APPLIED;
+      const checked = await checkActivities(ctx, [
+        { id, name, expect: direction === 'undo' ? atUndo : atRedo },
+      ]);
+      return checked.ok ? APPLIED : checked.result;
+    },
   };
 }
 
@@ -1572,6 +1588,9 @@ export function autoArrangeCommand(params: {
   };
 }
 
+/** What a multi-row step says when it has no remembered name for the row. */
+const UNNAMED = 'An activity in this step';
+
 /** `useWriteSwimlaneLanes().mutateAsync` — an all-or-nothing batch of in-swimlane lanes. */
 export type WriteSwimlaneLanesFn = (input: {
   positions: SwimlaneLaneRow[];
@@ -1629,8 +1648,10 @@ export function swimlaneLanesCommand(params: {
           row
             ? {
                 id: state.id,
-                swimlaneId: row.swimlaneId,
-                lane: storedSwimlaneLane(row, row.swimlaneId) ?? state.lane,
+                // A bar in "No swimlane" may still carry the id of a swimlane that was deleted (kept
+                // for a restore), so `null` here is "drawn under none", not "the column is null".
+                swimlaneId: state.swimlaneId === null ? null : row.swimlaneId,
+                lane: storedSwimlaneLane(row, state.swimlaneId) ?? state.lane,
               }
             : state,
         ];
@@ -1638,51 +1659,62 @@ export function swimlaneLanesCommand(params: {
     );
   let atUndo = expectation(params.after, savedById);
   let atRedo = expectation(params.before);
+  /** Read and compare, write nothing: the rows, or the reason the step cannot apply. */
+  const checkOf = async (
+    ctx: ReplayContext,
+    expect: ReadonlyMap<string, SwimlaneLaneState>,
+  ): Promise<Checked<ActivitySummary>> => {
+    // A state in "No swimlane" does not compare the column: see `expectation`.
+    const checked = await checkActivities(
+      ctx,
+      [...expect.values()].map((s) => ({
+        id: s.id,
+        expect: s.swimlaneId === null ? {} : { swimlaneId: s.swimlaneId },
+      })),
+    );
+    if (!checked.ok) return checked;
+    for (const state of expect.values()) {
+      const row = checked.rows.get(state.id);
+      if (row === undefined) return { ok: false, result: notApplicable('gone', UNNAMED) };
+      if (storedSwimlaneLane(row, state.swimlaneId) !== state.lane) {
+        return { ok: false, result: notApplicable('changed', row.name) };
+      }
+    }
+    return checked;
+  };
   const replay = async (
     ctx: ReplayContext,
     expect: ReadonlyMap<string, SwimlaneLaneState>,
     target: readonly SwimlaneLaneState[],
     settle: (next: Map<string, SwimlaneLaneState>) => void,
   ): Promise<ReplayResult> => {
-    const checked = await checkActivities(
-      ctx,
-      [...expect.values()].map((s) => ({ id: s.id, expect: { swimlaneId: s.swimlaneId } })),
-    );
+    const checked = await checkOf(ctx, expect);
     if (!checked.ok) return checked.result;
-    for (const state of expect.values()) {
-      const row = checked.rows.get(state.id);
-      if (row === undefined) return notApplicable('gone', 'An activity in this step');
-      if (storedSwimlaneLane(row, state.swimlaneId) !== state.lane) {
-        return notApplicable('changed', row.name);
-      }
-    }
     const positions: SwimlaneLaneRow[] = [];
     for (const t of target) {
       const row = checked.rows.get(t.id);
-      if (row === undefined) return notApplicable('gone', 'An activity in this step');
-      // The endpoint can file an activity in a swimlane and cannot yet file it in none: a step whose
-      // inverse would is set aside, not half-applied.
-      if (t.swimlaneId === null && row.swimlaneId !== null) {
-        return notApplicable('changed', row.name);
-      }
+      if (row === undefined) return notApplicable('gone', UNNAMED);
+      // The swimlane is named only when this step changed it: a lane inside the swimlane a bar is
+      // already in is no membership change, and naming one on a WBS plan is a 422.
+      const changesSwimlane = expect.get(t.id)?.swimlaneId !== t.swimlaneId;
       positions.push({
         id: t.id,
         version: row.version,
         swimlane: {
-          ...(t.swimlaneId !== null && t.swimlaneId !== row.swimlaneId
-            ? { swimlaneId: t.swimlaneId }
-            : {}),
+          ...(changesSwimlane ? { swimlaneId: t.swimlaneId } : {}),
           laneIndex: t.lane,
         },
       });
     }
-    return writeOrSetAside('An activity in this step', async () => {
+    return writeOrSetAside(UNNAMED, async () => {
       const result = await writeLanes({ positions });
       settle(expectation(target, new Map(result.map((row) => [row.id, row]))));
     });
   };
   const command: Command = {
-    label: params.label ?? `Move ${params.after.length} activities`,
+    label:
+      params.label ??
+      (params.after.length === 1 ? 'Move 1 activity' : `Move ${params.after.length} activities`),
     subjects: params.after.map((s) => s.id),
     undo: (ctx) =>
       replay(ctx, atUndo, params.before, (next) => {
@@ -1692,6 +1724,10 @@ export function swimlaneLanesCommand(params: {
       replay(ctx, atRedo, params.after, (next) => {
         atUndo = next;
       }),
+    check: async (direction, ctx) => {
+      const checked = await checkOf(ctx, direction === 'undo' ? atUndo : atRedo);
+      return checked.ok ? APPLIED : checked.result;
+    },
     affectsSchedule: false,
   };
   return coalescable(command, {
@@ -1703,6 +1739,54 @@ export function swimlaneLanesCommand(params: {
     after: params.after,
     rebuild: (b, a) => swimlaneLanesCommand({ ...params, before: b, after: a }),
   });
+}
+
+/**
+ * One undo step made of several (**one gesture, one undo step**): a drag that moves a bar in time
+ * and in lane on the swimlane layout is two writes — the placement endpoints cannot carry an
+ * in-swimlane lane — but it is one thing the planner did, so Ctrl+Z takes it back as one.
+ *
+ * Undo runs the steps in reverse, redo forward. **Every step that can be checked is checked before
+ * any of them writes** (see {@link Command.check}), so a colleague's edit to either half sets the
+ * whole step aside rather than undoing half of the drag; a step with no `check` is the only part
+ * that can still fail after another has written, which is why every builder a caller composes here
+ * has one. Not coalescable: the pieces would merge with the wrong neighbours.
+ */
+export function composeSteps(params: { label: string; steps: readonly Command[] }): Command {
+  const { steps } = params;
+  const run = async (
+    direction: 'undo' | 'redo',
+    order: readonly Command[],
+    ctx: ReplayContext,
+  ): Promise<ReplayResult> => {
+    for (const step of order) {
+      const checked = await step.check?.(direction, ctx);
+      if (checked !== undefined && checked.kind !== 'applied') return checked;
+    }
+    for (const step of order) {
+      const result = await step[direction](ctx);
+      if (result.kind !== 'applied') return result;
+    }
+    return APPLIED;
+  };
+  const composed: Command = {
+    label: params.label,
+    subjects: [...new Set(steps.flatMap((step) => step.subjects))],
+    undo: (ctx) => run('undo', [...steps].reverse(), ctx),
+    redo: (ctx) => run('redo', steps, ctx),
+    check: async (direction, ctx) => {
+      for (const step of direction === 'undo' ? [...steps].reverse() : steps) {
+        const checked = await step.check?.(direction, ctx);
+        if (checked !== undefined && checked.kind !== 'applied') return checked;
+      }
+      return APPLIED;
+    },
+  };
+  // A step that can change what the engine computes makes the whole one recalculate; only when none
+  // can is it layout-only. (`affectsSchedule` defaults to true when omitted.)
+  return steps.every((step) => step.affectsSchedule === false)
+    ? { ...composed, affectsSchedule: false }
+    : composed;
 }
 
 /** `useBatchPlacements().mutateAsync` — an all-or-nothing time+lane batch; resolves to the rows. */
@@ -1818,6 +1902,16 @@ export function bulkPlacementCommand(params: {
       replay(ctx, atRedo, params.after, (next) => {
         atUndo = next;
       }),
+    check: async (direction, ctx) => {
+      const checked = await checkActivities(
+        ctx,
+        [...(direction === 'undo' ? atUndo : atRedo)].map(([id, fields]) => ({
+          id,
+          expect: fields,
+        })),
+      );
+      return checked.ok ? APPLIED : checked.result;
+    },
   };
   if (params.coalesceKey === undefined) return command;
   const { coalesceKey } = params;

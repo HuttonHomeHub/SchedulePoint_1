@@ -163,7 +163,7 @@ beforeEach(() => {
 });
 
 const MOVE_ONE = [
-  { id: 'a1', lane: 2, from: 0 },
+  { id: 'a1', lane: 2, from: { swimlaneId: 'S1', lane: 0 } },
   { id: 'a2', lane: 1, materialised: true as const },
 ];
 
@@ -212,7 +212,9 @@ describe('onTsldReposition with swimlaneLanes (a single bar on the swimlane layo
     await act(async () => {
       await result.current.onTsldReposition({
         activityId: 'a1',
-        swimlaneLanes: [{ id: 'a1', lane: 0, from: 0, swimlaneId: 'S2' }],
+        swimlaneLanes: [
+          { id: 'a1', lane: 0, from: { swimlaneId: 'S1', lane: 0 }, swimlaneId: 'S2' },
+        ],
       });
     });
     expect(h.writeLanes.mock.calls[0]![0].positions).toEqual([
@@ -230,14 +232,90 @@ describe('onTsldReposition with swimlaneLanes (a single bar on the swimlane layo
       });
     });
     expect(h.setVisualStart).toHaveBeenCalledTimes(1);
-    const timeWrite = h.setVisualStart.mock.calls[0]![0];
-    expect(timeWrite).not.toHaveProperty('laneIndex');
+    expect(h.setVisualStart.mock.calls[0]![0]).not.toHaveProperty('laneIndex');
     expect(h.writeLanes).toHaveBeenCalledTimes(1);
-    // The time write came first, and the lane write is the planner's second undo step.
     expect(h.setVisualStart.mock.invocationCallOrder[0]!).toBeLessThan(
       h.writeLanes.mock.invocationCallOrder[0]!,
     );
-    expect(h.record).toHaveBeenCalledTimes(2);
+  });
+
+  it('records a diagonal drag as ONE undo step, labelled for the bar and never "1 activities"', async () => {
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldReposition({
+        activityId: 'a1',
+        startDay: 12,
+        swimlaneLanes: MOVE_ONE,
+      });
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    const command = h.record.mock.calls[0]![0];
+    expect(command.label).toBe('Move “Excavate”');
+    expect(command.subjects).toEqual(['a1']);
+  });
+
+  it('writes the lane at the version the time write returned, not the one the cache still shows', async () => {
+    // The cache holds version 7 for a1; the placement write bumped it to 8 and said so.
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldReposition({
+        activityId: 'a1',
+        startDay: 12,
+        swimlaneLanes: MOVE_ONE,
+      });
+    });
+    expect(outcome).toEqual({ applied: true, conflict: null });
+    const a1 = h.writeLanes.mock.calls[0]![0].positions.find((p: { id: string }) => p.id === 'a1');
+    expect(a1.version).toBe(8);
+  });
+
+  it('a diagonal drag whose lane write is refused still records the day, which did land', async () => {
+    h.writeLanes.mockRejectedValue(apiError(409));
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldReposition({
+        activityId: 'a1',
+        startDay: 12,
+        swimlaneLanes: MOVE_ONE,
+      });
+    });
+    expect(outcome).toMatchObject({ applied: true, conflict: expect.stringContaining('changed') });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Move “Excavate”');
+  });
+
+  it('reports a bar the plan no longer has instead of writing a smaller batch', async () => {
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldReposition({
+        activityId: 'a1',
+        swimlaneLanes: [...MOVE_ONE, { id: 'ghost', lane: 0, materialised: true as const }],
+      });
+    });
+    expect(outcome).toMatchObject({
+      applied: false,
+      conflict: expect.stringContaining('no longer in the plan'),
+    });
+    expect(h.writeLanes).not.toHaveBeenCalled();
+  });
+
+  it('files a bar in no swimlane with swimlaneId: null and records the swimlane it left', async () => {
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldReposition({
+        activityId: 'a1',
+        swimlaneLanes: [
+          { id: 'a1', lane: 0, swimlaneId: null, from: { swimlaneId: 'S1', lane: 0 } },
+        ],
+      });
+    });
+    expect(h.writeLanes.mock.calls[0]![0].positions).toEqual([
+      { id: 'a1', version: 7, swimlane: { swimlaneId: null, laneIndex: 0 } },
+    ]);
+    expect(h.record).toHaveBeenCalledTimes(1);
   });
 
   it('a stale version is the ordinary conflict, and records nothing', async () => {
@@ -282,8 +360,8 @@ describe('onTsldReposition with swimlaneLanes (a single bar on the swimlane layo
 
 describe('moveMany with swimlaneLanes (a plural move on the swimlane layout)', () => {
   const PLACEMENTS = [
-    { id: 'a1', lane: 1, from: 0 },
-    { id: 'a2', lane: 3, from: 2 },
+    { id: 'a1', lane: 1, from: { swimlaneId: 'S1', lane: 0 } },
+    { id: 'a2', lane: 3, from: { swimlaneId: 'S1', lane: 2 } },
   ];
 
   it('a lane-only move writes the lanes and touches no placement', async () => {
@@ -325,11 +403,31 @@ describe('moveMany with swimlaneLanes (a plural move on the swimlane layout)', (
     expect(h.notify).toHaveBeenCalledTimes(1);
     expect(h.hold).toHaveBeenCalledTimes(1);
     expect(h.release).toHaveBeenCalledTimes(1);
-    // Two steps: the placements and the lanes.
-    expect(h.record).toHaveBeenCalledTimes(2);
+    // One gesture, one step: the placements and the lanes are recorded as one.
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Move 2 activities');
+    // The lanes were written at the versions the placements returned (8 and 5), not the cache's.
+    expect(
+      h.writeLanes.mock.calls[0]![0].positions.map((p: { version: number }) => p.version),
+    ).toEqual([8, 5]);
   });
 
-  it('the undo of the time part does not write a lane either', async () => {
+  it('the undo of the time part does not write a swimlane-free lane either', async () => {
+    const lane = (laneIndex: number): ActivitySummary['swimlaneLanes'] => [
+      {
+        basis: 'SWIMLANE',
+        swimlaneId: 'S1',
+        summaryActivityId: null,
+        wbsLevel: null,
+        laneIndex,
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ];
+    // What the two writes returned, so the step knows the state an undo should find.
+    h.writeLanes.mockResolvedValue([
+      { ...A1, version: 9, swimlaneLanes: lane(1) },
+      { ...A2, version: 6, swimlaneLanes: lane(3) },
+    ]);
     const { result } = setup();
     await act(async () => {
       await result.current.bulkOperations.moveMany(
@@ -340,18 +438,20 @@ describe('moveMany with swimlaneLanes (a plural move on the swimlane layout)', (
     });
     const command = h.record.mock.calls[0]![0];
     expect(command.subjects).toEqual(['a1', 'a2']);
-    // `before` is what an undo writes; it carries the same null.
     h.batchPlacements.mockClear();
+    h.writeLanes.mockClear();
     const ctx = {
       readActivities: () =>
         Promise.resolve(
           new Map([
-            ['a1', { ...A1, version: 8 }],
-            ['a2', { ...A2, version: 5 }],
+            ['a1', { ...A1, version: 9, swimlaneLanes: lane(1) }],
+            ['a2', { ...A2, version: 6, swimlaneLanes: lane(3) }],
           ]),
         ),
     };
-    await command.undo(ctx);
+    expect(await command.undo(ctx)).toEqual({ kind: 'applied' });
+    // The lanes first, then the placements, which carry a NULL lane (SC-1).
+    expect(h.writeLanes).toHaveBeenCalledTimes(1);
     for (const row of h.batchPlacements.mock.calls[0]![0].placements as { laneIndex: unknown }[]) {
       expect(row.laneIndex).toBeNull();
     }
@@ -362,7 +462,7 @@ describe('moveMany with swimlaneLanes (a plural move on the swimlane layout)', (
     const many = Array.from({ length: PLACEMENTS_BATCH_MAX + 1 }, (_, i) => ({
       id: `x${String(i)}`,
       lane: 0,
-      from: 0,
+      from: { swimlaneId: 'S1', lane: 0 },
     }));
     let outcome;
     await act(async () => {

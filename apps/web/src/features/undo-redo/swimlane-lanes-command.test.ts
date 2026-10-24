@@ -1,7 +1,13 @@
 import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { swimlaneLanesCommand, type SwimlaneLaneState } from './commands';
+import {
+  composeSteps,
+  swimlaneLanesCommand,
+  visualStartCommand,
+  type Command,
+  type SwimlaneLaneState,
+} from './commands';
 import type { ReplayContext } from './replay';
 
 import type { SwimlaneLaneRow } from '@/features/swimlanes';
@@ -27,15 +33,16 @@ function server(rows: ActivitySummary[]) {
       }
       const written = input.positions.map((p) => {
         const row = store.get(p.id)!;
-        const swimlaneId = p.swimlane.swimlaneId ?? row.swimlaneId;
+        // Omitted keeps the membership; `null` files the bar in none.
+        const swimlaneId =
+          p.swimlane.swimlaneId === undefined ? row.swimlaneId : p.swimlane.swimlaneId;
         row.swimlaneId = swimlaneId;
         row.version += 1;
+        const basis = swimlaneId === null ? 'NO_SWIMLANE' : 'SWIMLANE';
         row.swimlaneLanes = [
-          ...row.swimlaneLanes.filter(
-            (l) => !(l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId),
-          ),
+          ...row.swimlaneLanes.filter((l) => !(l.basis === basis && l.swimlaneId === swimlaneId)),
           {
-            basis: 'SWIMLANE',
+            basis,
             swimlaneId,
             summaryActivityId: null,
             wbsLevel: null,
@@ -76,7 +83,7 @@ const placed = (id: string, swimlaneId: string, lane: number, name = id): Activi
     ],
   });
 
-const state = (id: string, swimlaneId: string, lane: number): SwimlaneLaneState => ({
+const state = (id: string, swimlaneId: string | null, lane: number): SwimlaneLaneState => ({
   id,
   swimlaneId,
   lane,
@@ -92,10 +99,7 @@ async function moved(
     positions: after.map((t) => ({
       id: t.id,
       version: s.store.get(t.id)!.version,
-      swimlane: {
-        ...(t.swimlaneId !== null ? { swimlaneId: t.swimlaneId } : {}),
-        laneIndex: t.lane,
-      },
+      swimlane: { swimlaneId: t.swimlaneId, laneIndex: t.lane },
     })),
   });
   s.writeLanes.mockClear();
@@ -195,16 +199,61 @@ describe('swimlaneLanesCommand', () => {
     expect(await command.undo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'gone' });
   });
 
-  it('refuses an inverse it cannot write rather than half-applying it', async () => {
-    const s = server([placed('a', 'S1', 0)]);
+  it('undoes a move into "No swimlane" by filing the bar back in the swimlane it came from', async () => {
+    const s = server([placed('a', 'S1', 1)]);
+    const command = await moved(s, [state('a', 'S1', 1)], [state('a', null, 0)]);
+    expect(s.store.get('a')?.swimlaneId).toBeNull();
+
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(s.writeLanes.mock.calls[0]?.[0].positions[0]?.swimlane).toEqual({
+      swimlaneId: 'S1',
+      laneIndex: 1,
+    });
+    expect(s.store.get('a')?.swimlaneId).toBe('S1');
+    expect(await command.redo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(s.store.get('a')?.swimlaneId).toBeNull();
+  });
+
+  it('undoes a move out of "No swimlane" by filing the bar in none again (swimlaneId: null)', async () => {
+    const s = server([anActivity({ id: 'a', name: 'a', swimlaneId: null, swimlaneLanes: [] })]);
+    const command = await moved(s, [state('a', null, 0)], [state('a', 'S1', 2)]);
+    expect(s.store.get('a')?.swimlaneId).toBe('S1');
+
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(s.writeLanes.mock.calls[0]?.[0].positions[0]?.swimlane).toEqual({
+      swimlaneId: null,
+      laneIndex: 0,
+    });
+    expect(s.store.get('a')?.swimlaneId).toBeNull();
+  });
+
+  it('undoes a move of a bar kept on a deleted swimlane without naming one, leaving its kept id', async () => {
+    const kept = anActivity({
+      id: 'a',
+      name: 'a',
+      swimlaneId: 'gone',
+      swimlaneLanes: [
+        {
+          basis: 'NO_SWIMLANE',
+          swimlaneId: null,
+          summaryActivityId: null,
+          wbsLevel: null,
+          laneIndex: 3,
+          updatedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const s = server([kept]);
+    // Drawn under none, so both ends of the step say none; the column still holds the deleted id.
     const command = swimlaneLanesCommand({
       writeLanes: s.writeLanes,
-      before: [{ id: 'a', swimlaneId: null, lane: 0 }],
-      after: [state('a', 'S1', 0)],
-      saved: [s.store.get('a')!],
+      before: [state('a', null, 0)],
+      after: [state('a', null, 3)],
+      saved: [kept],
     });
-    expect(await command.undo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
-    expect(s.writeLanes).not.toHaveBeenCalled();
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(s.writeLanes.mock.calls[0]?.[0].positions[0]?.swimlane).toEqual({ laneIndex: 0 });
+    expect(s.store.get('a')?.swimlaneId).toBe('gone');
   });
 
   it('does not ask for a recalculation, which a lane move cannot change', async () => {
@@ -222,5 +271,119 @@ describe('swimlaneLanesCommand', () => {
 
     await merged.undo(s.ctx);
     expect(s.store.get('a')?.swimlaneLanes[0]?.laneIndex).toBe(0);
+  });
+});
+
+describe('composeSteps — a diagonal drag is one undo step', () => {
+  /** A bar that moved in time (visualStart) and in lane inside its swimlane, as two writes. */
+  async function diagonal() {
+    const s = server([{ ...placed('a', 'S1', 0, 'Pour'), visualStart: '2026-02-02' }]);
+    const order: string[] = [];
+    const setVisualStart = vi.fn(
+      (input: { activityId: string; visualStart: string | null; version: number }) => {
+        const row = s.store.get(input.activityId)!;
+        if (row.version !== input.version) {
+          return Promise.reject(
+            new ApiFetchError(409, { code: 'STALE_VERSION', message: 'Stale.' }),
+          );
+        }
+        order.push('time');
+        row.visualStart = input.visualStart;
+        row.version += 1;
+        return Promise.resolve(structuredClone(row));
+      },
+    );
+    const writeLanes = vi.fn((input: { positions: SwimlaneLaneRow[] }) => {
+      order.push('lane');
+      return s.writeLanes(input);
+    });
+    const before = structuredClone(s.store.get('a')!);
+    const savedTime = await setVisualStart({
+      activityId: 'a',
+      visualStart: '2026-02-09',
+      version: before.version,
+    });
+    const savedLane = await s.writeLanes({
+      positions: [{ id: 'a', version: savedTime.version, swimlane: { laneIndex: 2 } }],
+    });
+    order.length = 0;
+    s.writeLanes.mockClear();
+    const time = visualStartCommand({
+      setVisualStart,
+      activityId: 'a',
+      before: { visualStart: '2026-02-02', laneIndex: before.laneIndex },
+      after: { visualStart: '2026-02-09', laneIndex: before.laneIndex },
+      saved: savedTime,
+      activityName: 'Pour',
+    });
+    const lane = swimlaneLanesCommand({
+      writeLanes,
+      before: [state('a', 'S1', 0)],
+      after: [state('a', 'S1', 2)],
+      saved: savedLane,
+    });
+    const command = composeSteps({ label: 'Move “Pour”', steps: [time, lane] });
+    return { s, order, command, setVisualStart, writeLanes };
+  }
+
+  it('undoes the lane first and the time second, and redoes them the other way round', async () => {
+    const { s, order, command } = await diagonal();
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(order).toEqual(['lane', 'time']);
+    expect(s.store.get('a')?.visualStart).toBe('2026-02-02');
+    expect(s.store.get('a')?.swimlaneLanes[0]?.laneIndex).toBe(0);
+
+    order.length = 0;
+    expect(await command.redo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(order).toEqual(['time', 'lane']);
+    expect(s.store.get('a')?.visualStart).toBe('2026-02-09');
+    expect(s.store.get('a')?.swimlaneLanes[0]?.laneIndex).toBe(2);
+  });
+
+  it('reads each half at the version the other half left, so there is no stale-version 409', async () => {
+    const { s, command } = await diagonal();
+    await command.undo(s.ctx);
+    await command.redo(s.ctx);
+    // The fake refuses any other version; reaching here with `applied` twice is the assertion.
+    expect(s.store.get('a')?.version).toBeGreaterThan(3);
+  });
+
+  it('checks both halves before writing either: a changed lane leaves the time untouched', async () => {
+    const { s, order, command, setVisualStart } = await diagonal();
+    s.store.get('a')!.swimlaneLanes[0]!.laneIndex = 5;
+    expect(await command.undo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
+    expect(order).toEqual([]);
+    expect(setVisualStart).toHaveBeenCalledTimes(1);
+    expect(s.store.get('a')?.visualStart).toBe('2026-02-09');
+  });
+
+  it('checks both halves before writing either: a changed day leaves the lane untouched', async () => {
+    const { s, order, command } = await diagonal();
+    s.store.get('a')!.visualStart = '2026-03-01';
+    expect(await command.undo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
+    expect(order).toEqual([]);
+    expect(s.store.get('a')?.swimlaneLanes[0]?.laneIndex).toBe(2);
+  });
+
+  it('names its subjects once and keeps the label it was given', async () => {
+    const { command } = await diagonal();
+    expect(command.subjects).toEqual(['a']);
+    expect(command.label).toBe('Move “Pour”');
+    expect(command).not.toHaveProperty('coalescing');
+  });
+
+  it('recalculates when either half can change the schedule, and not otherwise', async () => {
+    const { command } = await diagonal();
+    expect(command.affectsSchedule).toBeUndefined();
+    const layoutOnly = (): Command => ({
+      label: 'x',
+      subjects: [],
+      undo: () => Promise.resolve({ kind: 'applied' }),
+      redo: () => Promise.resolve({ kind: 'applied' }),
+      affectsSchedule: false,
+    });
+    expect(composeSteps({ label: 'y', steps: [layoutOnly(), layoutOnly()] }).affectsSchedule).toBe(
+      false,
+    );
   });
 });

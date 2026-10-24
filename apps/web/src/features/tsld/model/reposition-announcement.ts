@@ -31,17 +31,32 @@ export interface RepositionOutcomeFacts {
   readonly original: number;
 }
 
-/** A lane inside a swimlane, 0-based, and how many lanes the swimlane has once the move has landed. */
+/**
+ * Where a bar is on the swimlane layout, in the words the announcements use (C9), and how it got
+ * there. One shape for the model that decides it, the outcome that carries it and the sentences
+ * that speak it.
+ */
 export interface SwimlaneLaneFacts {
+  /** The swimlane's name, or "No swimlane". */
   readonly swimlane: string;
+  /** 0-based within the swimlane. */
   readonly lane: number;
+  /** How many lanes the swimlane has once the move has landed. */
   readonly count: number;
   /** True when the move put the bar in a different swimlane. */
   readonly changedSwimlane: boolean;
+  /** The display lane that is, in the stack as it stands before the write. */
+  readonly displayLane: number;
+  /**
+   * How it came to be there, which the sentence must not guess from lane numbers: `asked` is where
+   * it was aimed, `next-free` is past an occupied lane, `remembered` is back in the lane it last
+   * held in that swimlane, and `stays` is that no lane was free that way.
+   */
+  readonly how: 'asked' | 'next-free' | 'remembered' | 'stays';
 }
 
-/** "in Mechanical, lane 2 of 3" — the C9 form. */
-const swimlanePlace = (f: SwimlaneLaneFacts): string =>
+/** "Mechanical, lane 2 of 3" — the C9 form. */
+export const swimlanePlace = (f: SwimlaneLaneFacts): string =>
   `${f.swimlane}, lane ${String(f.lane + 1)} of ${String(f.count)}`;
 
 function swimlaneRepositionAnnouncement(f: RepositionOutcomeFacts, s: SwimlaneLaneFacts): string {
@@ -49,12 +64,13 @@ function swimlaneRepositionAnnouncement(f: RepositionOutcomeFacts, s: SwimlaneLa
   if (f.snappedDate) sentence += ` to ${f.snappedDate}, the next working day`;
   if (f.laneChanged) {
     const place = swimlanePlace(s);
-    if (f.landed === f.original && f.requested !== f.original && !s.changedSwimlane) {
-      sentence += `; no free lane above, so it stays in ${place}`;
+    if (s.how === 'stays') {
+      sentence += `; no free lane that way, so it stays in ${place}`;
     } else {
       const lead = s.changedSwimlane ? (f.snappedDate ? ', into' : ' to') : ', in';
       sentence += `${lead} ${place}`;
-      if (f.landed !== f.requested) sentence += ', the next free lane';
+      if (s.how === 'next-free') sentence += ', the next free lane';
+      if (s.how === 'remembered') sentence += ', back in its lane';
     }
   }
   if (f.timeChanged && !f.snappedDate) sentence += '; dates will update';
@@ -87,6 +103,26 @@ export function repositionAnnouncement(f: RepositionOutcomeFacts): string {
  */
 export function stayInSwimlaneAnnouncement(name: string, s: SwimlaneLaneFacts): string {
   return `No free lane that way for “${name}”; it stays in ${swimlanePlace(s)}.`;
+}
+
+/**
+ * What a **plural** move on the swimlane layout says: what actually moved, never the delta that was
+ * asked for (a bar with no free lane stays, so "down 2 lanes" can be untrue of some of them) and never
+ * a bare "lane", since each bar moved inside its own swimlane. A move in time adds the dates note.
+ */
+export function swimlanePluralAnnouncement(f: {
+  readonly moved: number;
+  readonly total: number;
+  readonly direction: 'up' | 'down';
+  readonly timeChanged: boolean;
+}): string {
+  const subject = (n: number): string => (n === 1 ? '1 activity' : `${String(n)} activities`);
+  const stuck = f.total - f.moved;
+  const lead =
+    stuck === 0
+      ? `${subject(f.moved)} moved ${f.direction} in ${f.moved === 1 ? 'its' : 'their'} swimlane${f.moved === 1 ? '' : 's'}`
+      : `${String(f.moved)} of ${subject(f.total)} moved ${f.direction} in their swimlanes; ${String(stuck)} had no free lane`;
+  return `${lead}${f.timeChanged ? '; dates will update' : ''}.`;
 }
 
 const plural = (n: number, unit: string): string => `${String(n)} ${unit}${n === 1 ? '' : 's'}`;

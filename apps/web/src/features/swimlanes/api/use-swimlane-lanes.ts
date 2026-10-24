@@ -13,8 +13,11 @@ export interface SwimlaneLaneRow {
   id: string;
   version: number;
   swimlane: {
-    /** File the activity in this swimlane too. Only when the move changes it; refused on a WBS plan. */
-    swimlaneId?: string;
+    /**
+     * File the activity in this swimlane, or `null` to file it in none. Omitted keeps its
+     * membership; sent only when the move changes it, and refused on a WBS plan.
+     */
+    swimlaneId?: string | null;
     laneIndex: number;
   };
 }

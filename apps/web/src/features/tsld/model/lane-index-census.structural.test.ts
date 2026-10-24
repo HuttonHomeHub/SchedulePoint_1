@@ -44,6 +44,8 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
   'features/tsld/interaction/use-coalesced-duration-nudge.ts': 'display-lane-intent',
   'features/tsld/interaction/use-coalesced-nudge.ts': 'display-lane-intent',
   'features/tsld/interaction/use-coalesced-plural-nudge.ts': 'display-lane-intent',
+  // The panel's display-to-lane translation while swimlanes are drawn (M2-T4).
+  'features/tsld/interaction/use-swimlane-editing.ts': 'display-lane-intent',
   'features/tsld/model/arrange-lanes.ts': 'stored-lane',
   'features/tsld/model/auto-resolve.ts': 'display-lane-intent',
   'features/tsld/model/bulk-move.ts': 'display-lane-intent',

@@ -34,7 +34,6 @@ vi.mock(
   () => import('../render/test-support/in-process-optimise'),
 );
 
-import { NO_SWIMLANE_BOUNDARY_REASON } from '../model/swimlane-lanes';
 import type { SwimlaneInput } from '../render/project-swimlanes';
 import { BAR_HEIGHT, BAR_PAD, DEFAULT_VIEWPORT, LANE_HEIGHT } from '../render/render-model';
 
@@ -178,7 +177,7 @@ describe('a pointer drag on the swimlane layout', () => {
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     expect(onReposition).toHaveBeenCalledWith({
       activityId: 'pour',
-      swimlaneLanes: [{ id: 'pour', lane: 1, from: 0 }],
+      swimlaneLanes: [{ id: 'pour', lane: 1, from: { swimlaneId: 's1', lane: 0 } }],
     });
     neverCarriesALaneIndex(onReposition);
   });
@@ -205,7 +204,7 @@ describe('a pointer drag on the swimlane layout', () => {
     expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
       id: 'pour',
       lane: 2,
-      from: 0,
+      from: { swimlaneId: 's1', lane: 0 },
     });
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(
@@ -221,11 +220,15 @@ describe('a pointer drag on the swimlane layout', () => {
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     expect(onReposition).toHaveBeenCalledWith({
       activityId: 'pour',
-      swimlaneLanes: [{ id: 'pour', lane: 1, from: 0, swimlaneId: 's2' }],
+      swimlaneLanes: [
+        { id: 'pour', lane: 1, from: { swimlaneId: 's1', lane: 0 }, swimlaneId: 's2' },
+      ],
     });
     neverCarriesALaneIndex(onReposition);
     await waitFor(() =>
-      expect(announceSpy).toHaveBeenCalledWith('Moved “Pour” to Electrical, lane 2 of 2.'),
+      expect(announceSpy).toHaveBeenCalledWith(
+        'Moved “Pour” to Electrical, lane 2 of 2, the next free lane.',
+      ),
     );
   });
 
@@ -249,29 +252,60 @@ describe('a pointer drag on the swimlane layout', () => {
     expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
       id: 'pour',
       lane: 3,
-      from: 0,
+      from: { swimlaneId: 's1', lane: 0 },
       swimlaneId: 's2',
+    });
+    // Back in its lane — not "the next free lane", which it did not go on to.
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(
+        'Moved “Pour” to Electrical, lane 4 of 4, back in its lane.',
+      ),
+    );
+  });
+
+  it('files a bar in no swimlane (swimlaneId: null) when it is dropped into "No swimlane"', async () => {
+    const { canvas, onReposition } = renderPanel();
+    drag(canvas, 0, 3);
+    await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
+    expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
+      id: 'pour',
+      lane: 1,
+      swimlaneId: null,
+      from: { swimlaneId: 's1', lane: 0 },
+    });
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith(
+        'Moved “Pour” to No swimlane, lane 2 of 2, the next free lane.',
+      ),
+    );
+  });
+
+  it('files a bar from "No swimlane" in a swimlane when it is dropped in one', async () => {
+    const { canvas, onReposition } = renderPanel();
+    drag(canvas, 3, 2);
+    await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
+    expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toMatchObject({
+      id: 'snag',
+      swimlaneId: 's2',
+      from: { swimlaneId: null, lane: 0 },
     });
   });
 
-  it('holds the ghost short of "No swimlane": a drag far below lands in the last swimlane', async () => {
+  it('a drag far below grows the last swimlane by one lane, not by as many as the pointer travelled', async () => {
     const { canvas, onReposition } = renderPanel();
     drag(canvas, 0, 9);
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
-    expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toMatchObject({ swimlaneId: 's2' });
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toMatchObject({
+      swimlaneId: null,
+      lane: 1,
+    });
   });
 
-  it('keeps a bar in "No swimlane" in it: dragging up is held at its own top and writes nothing', async () => {
+  it('holds a bar in "No swimlane" still when dragged within its own lane: nothing to write', async () => {
     const { canvas, onReposition } = renderPanel();
-    drag(canvas, 3, 0);
+    drag(canvas, 3, 3);
     await new Promise((r) => setTimeout(r, 30));
     expect(onReposition).not.toHaveBeenCalled();
-  });
-
-  it('refuses aloud, with the reason, a drop into "No swimlane" that the range could not hold', () => {
-    // The range holds the ghost, so this is the backstop for a drop that arrives anyway.
-    expect(NO_SWIMLANE_BOUNDARY_REASON).toMatch(/No swimlane/);
   });
 
   it('says it stayed, and writes nothing, when no lane above is free', async () => {
@@ -298,7 +332,9 @@ describe('a pointer drag on the swimlane layout', () => {
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     const call = onReposition.mock.calls[0]![0];
     expect(call.startDay).toBeDefined();
-    expect(call.swimlaneLanes).toEqual([{ id: 'pour', lane: 1, from: 0 }]);
+    expect(call.swimlaneLanes).toEqual([
+      { id: 'pour', lane: 1, from: { swimlaneId: 's1', lane: 0 } },
+    ]);
     neverCarriesALaneIndex(onReposition);
   });
 
@@ -323,7 +359,7 @@ describe('Alt+↑/↓ on the swimlane layout', () => {
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     expect(onReposition).toHaveBeenCalledWith({
       activityId: 'wire',
-      swimlaneLanes: [{ id: 'wire', lane: 2, from: 1 }],
+      swimlaneLanes: [{ id: 'wire', lane: 2, from: { swimlaneId: 's1', lane: 1 } }],
     });
     neverCarriesALaneIndex(onReposition);
     await waitFor(() =>
@@ -363,11 +399,11 @@ describe('Alt+↑/↓ on the swimlane layout', () => {
     expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
       id: 'test',
       lane: 1,
-      from: 0,
+      from: { swimlaneId: 's2', lane: 0 },
     });
   });
 
-  it('folds a held key into one write and says where the bar ended', async () => {
+  it('folds a held key into one write and grows the swimlane by one lane, not by the presses', async () => {
     const { listbox, onReposition } = renderPanel();
     focusRow(listbox, 1);
     fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true });
@@ -375,11 +411,11 @@ describe('Alt+↑/↓ on the swimlane layout', () => {
     await waitFor(() => expect(onReposition).toHaveBeenCalledTimes(1));
     expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
       id: 'wire',
-      lane: 3,
-      from: 1,
+      lane: 2,
+      from: { swimlaneId: 's1', lane: 1 },
     });
     await waitFor(() =>
-      expect(announceSpy).toHaveBeenCalledWith('Moved “Wire”, in Mechanical, lane 4 of 4.'),
+      expect(announceSpy).toHaveBeenCalledWith('Moved “Wire”, in Mechanical, lane 3 of 3.'),
     );
   });
 
@@ -397,7 +433,7 @@ describe('Alt+↑/↓ on the swimlane layout', () => {
     expect(onReposition.mock.calls[0]![0].swimlaneLanes![0]).toEqual({
       id: 'pour',
       lane: 2,
-      from: 0,
+      from: { swimlaneId: 's1', lane: 0 },
     });
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(
@@ -432,8 +468,8 @@ describe('a plural move on the swimlane layout', () => {
     const [rows, delta, options] = (moveMany as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(delta).toEqual({ dayDelta: 0, laneDelta: 0 });
     expect(options.swimlaneLanes).toEqual([
-      { id: 'pour', lane: 1, from: 0 },
-      { id: 'wire', lane: 2, from: 1 },
+      { id: 'pour', lane: 1, from: { swimlaneId: 's1', lane: 0 } },
+      { id: 'wire', lane: 2, from: { swimlaneId: 's1', lane: 1 } },
     ]);
     // The rows are the STORED ones, which is all the write may be built from.
     expect((rows as ActivitySummary[]).map((r) => r.laneIndex)).toEqual([0, 0]);
@@ -446,8 +482,8 @@ describe('a plural move on the swimlane layout', () => {
     await waitFor(() => expect(moveMany).toHaveBeenCalledTimes(1));
     const options = (moveMany as ReturnType<typeof vi.fn>).mock.calls[0]![2];
     expect(options.swimlaneLanes).toEqual([
-      { id: 'wire', lane: 2, from: 1 },
-      { id: 'test', lane: 1, from: 0 },
+      { id: 'wire', lane: 2, from: { swimlaneId: 's1', lane: 1 } },
+      { id: 'test', lane: 1, from: { swimlaneId: 's2', lane: 0 } },
     ]);
     for (const row of options.swimlaneLanes) expect(row).not.toHaveProperty('swimlaneId');
   });
@@ -473,9 +509,31 @@ describe('a plural move on the swimlane layout', () => {
     const [, delta, options] = (moveMany as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(delta).toEqual({ dayDelta: 0, laneDelta: 0 });
     expect(options.swimlaneLanes).toEqual([
-      { id: 'pour', lane: 1, from: 0 },
-      { id: 'wire', lane: 2, from: 1 },
+      { id: 'pour', lane: 1, from: { swimlaneId: 's1', lane: 0 } },
+      { id: 'wire', lane: 2, from: { swimlaneId: 's1', lane: 1 } },
     ]);
+  });
+
+  it('says what actually moved, on the swimlane layout, and never the delta or a bare lane', async () => {
+    const { listbox } = renderPanel();
+    select(listbox, 0, 1);
+    fireEvent.keyDown(listbox, { key: 'ArrowDown', altKey: true });
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith('2 activities moved down in their swimlanes.'),
+    );
+    // The move's own sentence is the last thing said: no delta, no bare lane.
+    expect(announceSpy.mock.calls.at(-1)).toEqual(['2 activities moved down in their swimlanes.']);
+  });
+
+  it('says it for a plural drag too', async () => {
+    const { canvas, listbox } = renderPanel();
+    select(listbox, 0, 1);
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: laneMid(0), pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: laneMid(1), pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: laneMid(1), pointerId: 1 });
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith('2 activities moved down in their swimlanes.'),
+    );
   });
 
   it('says what a refusal from the write path says, without offering Refresh', async () => {
@@ -508,6 +566,14 @@ describe('create on the swimlane layout', () => {
     const created = onCreate.mock.calls[0]![0];
     expect(created.swimlane).toEqual({ swimlaneId: 's2', lane: 0, materialised: [] });
     expect(created.name).toBe('Fix');
+  });
+
+  it('says which swimlane and lane the new activity went to', async () => {
+    const { canvas } = renderPanel();
+    await drawAt(canvas, 2);
+    await waitFor(() =>
+      expect(announceSpy).toHaveBeenCalledWith('Activity “Fix” added, in Electrical, lane 1 of 1.'),
+    );
   });
 
   it('takes the first free lane of the swimlane-free layout, not the lane it was drawn on', async () => {

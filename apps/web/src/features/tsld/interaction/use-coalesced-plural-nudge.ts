@@ -8,6 +8,7 @@ import {
   MOVE_FAILED_NOTE,
   pluralMoveAnnouncement,
   STILL_SAVING_NOTE,
+  swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
 import {
   isStartEdgeFrozen,
@@ -163,12 +164,19 @@ export function useCoalescedPluralNudge(
       const { setConflict, announce, setGhost } = depsRef.current;
       if (outcome.conflict) setConflict(outcome.conflict, outcome.refreshable ?? true);
       else if (outcome.applied) {
+        // On the swimlane layout the host reports what actually moved; the delta asked for is not
+        // a fact about bars that found no free lane.
         announce(
-          pluralMoveAnnouncement({
-            count: rows.length,
-            dayDelta: burst.dayDelta,
-            laneDelta: burst.laneDelta,
-          }),
+          outcome.swimlaneMoved
+            ? swimlanePluralAnnouncement({
+                ...outcome.swimlaneMoved,
+                timeChanged: burst.dayDelta !== 0,
+              })
+            : pluralMoveAnnouncement({
+                count: rows.length,
+                dayDelta: burst.dayDelta,
+                laneDelta: burst.laneDelta,
+              }),
         );
       } else {
         // The ghost was shown and nothing was written (a lost pen, most often). The pen UI says why;

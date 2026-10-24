@@ -73,8 +73,9 @@ describe('auto-resolve census', () => {
     // date), and a cross-plan link add and remove (move nothing until a programme recalculation).
     // Then a dissolve (undo-redo M6): it re-parents, and a restored summary lands where it was.
     // Then a lane move on the swimlane layout (swimlanes M2-T4), placed on a free lane before it
-    // writes; auto-resolve across both layouts is M2-T5's.
-    expect(exempt).toHaveLength(9);
+    // writes; auto-resolve across both layouts is M2-T5's. Then the single bar's diagonal drag, whose
+    // time half snapshotted already and which only records the two halves as one step.
+    expect(exempt).toHaveLength(10);
   });
 
   it('pinned positive case: a record with neither is reported', () => {

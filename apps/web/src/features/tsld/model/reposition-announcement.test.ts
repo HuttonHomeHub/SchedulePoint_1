@@ -4,7 +4,10 @@ import {
   pluralMoveAnnouncement,
   pluralMoveHint,
   repositionAnnouncement,
+  stayInSwimlaneAnnouncement,
+  swimlanePluralAnnouncement,
   type RepositionOutcomeFacts,
+  type SwimlaneLaneFacts,
 } from './reposition-announcement';
 
 const facts = (over: Partial<RepositionOutcomeFacts>): RepositionOutcomeFacts => ({
@@ -88,23 +91,18 @@ describe('pluralMoveHint', () => {
 });
 
 describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () => {
-  const inMechanical = (lane: number, count: number, changedSwimlane = false) => ({
+  const place = (over: Partial<SwimlaneLaneFacts> = {}): SwimlaneLaneFacts => ({
     swimlane: 'Mechanical',
-    lane,
-    count,
-    changedSwimlane,
+    lane: 1,
+    count: 3,
+    changedSwimlane: false,
+    displayLane: 1,
+    how: 'asked',
+    ...over,
   });
 
   it('names the swimlane and the lane inside it, never a bare lane number', () => {
-    const said = repositionAnnouncement(
-      facts({
-        laneChanged: true,
-        requested: 1,
-        landed: 1,
-        original: 0,
-        swimlane: inMechanical(1, 3),
-      }),
-    );
+    const said = repositionAnnouncement(facts({ laneChanged: true, swimlane: place() }));
     expect(said).toBe('Moved “Clad”, in Mechanical, lane 2 of 3.');
     expect(said).not.toMatch(/ to lane \d/);
   });
@@ -114,41 +112,45 @@ describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () 
       repositionAnnouncement(
         facts({
           laneChanged: true,
-          requested: 0,
-          landed: 0,
-          original: 0,
-          swimlane: { swimlane: 'Electrical', lane: 0, count: 2, changedSwimlane: true },
+          swimlane: place({ swimlane: 'Electrical', lane: 0, count: 2, changedSwimlane: true }),
         }),
       ),
     ).toBe('Moved “Clad” to Electrical, lane 1 of 2.');
   });
 
-  it('says the lane it landed on was the next free one, in the same form', () => {
-    expect(
-      repositionAnnouncement(
-        facts({
-          laneChanged: true,
-          requested: 1,
-          landed: 2,
-          original: 0,
-          swimlane: inMechanical(2, 3),
-        }),
-      ),
-    ).toBe('Moved “Clad”, in Mechanical, lane 3 of 3, the next free lane.');
-  });
-
-  it('says it stayed when there was no free lane, naming the swimlane', () => {
+  it('says a bar is back in its lane, and not that it was the next free one', () => {
     expect(
       repositionAnnouncement(
         facts({
           laneChanged: true,
           requested: 0,
-          landed: 1,
-          original: 1,
-          swimlane: inMechanical(1, 2),
+          landed: 3,
+          swimlane: place({
+            swimlane: 'Electrical',
+            lane: 3,
+            count: 4,
+            changedSwimlane: true,
+            how: 'remembered',
+          }),
         }),
       ),
-    ).toBe('Moved “Clad”; no free lane above, so it stays in Mechanical, lane 2 of 2.');
+    ).toBe('Moved “Clad” to Electrical, lane 4 of 4, back in its lane.');
+  });
+
+  it('says the lane it landed on was the next free one, in the same form', () => {
+    expect(
+      repositionAnnouncement(
+        facts({ laneChanged: true, swimlane: place({ lane: 2, how: 'next-free' }) }),
+      ),
+    ).toBe('Moved “Clad”, in Mechanical, lane 3 of 3, the next free lane.');
+  });
+
+  it('says it stayed when there was no free lane that way, naming the swimlane', () => {
+    expect(
+      repositionAnnouncement(
+        facts({ laneChanged: true, swimlane: place({ lane: 1, count: 2, how: 'stays' }) }),
+      ),
+    ).toBe('Moved “Clad”; no free lane that way, so it stays in Mechanical, lane 2 of 2.');
   });
 
   it('keeps the date sentence for a diagonal move', () => {
@@ -158,10 +160,7 @@ describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () 
           laneChanged: true,
           timeChanged: true,
           snappedDate: 'Mon 3 Feb',
-          requested: 1,
-          landed: 1,
-          original: 0,
-          swimlane: inMechanical(1, 2),
+          swimlane: place({ count: 2 }),
         }),
       ),
     ).toBe('Moved “Clad” to Mon 3 Feb, the next working day, in Mechanical, lane 2 of 2.');
@@ -171,5 +170,48 @@ describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () 
     expect(repositionAnnouncement(facts({ laneChanged: true, requested: 2, landed: 2 }))).toBe(
       'Moved “Clad” to lane 3.',
     );
+  });
+});
+
+describe('stayInSwimlaneAnnouncement and swimlanePluralAnnouncement', () => {
+  const where: SwimlaneLaneFacts = {
+    swimlane: 'Mechanical',
+    lane: 1,
+    count: 2,
+    changedSwimlane: false,
+    displayLane: 1,
+    how: 'stays',
+  };
+
+  it('says a single bar stayed, in the same words the move uses', () => {
+    expect(stayInSwimlaneAnnouncement('Wire', where)).toBe(
+      'No free lane that way for “Wire”; it stays in Mechanical, lane 2 of 2.',
+    );
+  });
+
+  it('says what a selection actually did: all of it moved', () => {
+    expect(
+      swimlanePluralAnnouncement({ moved: 3, total: 3, direction: 'up', timeChanged: false }),
+    ).toBe('3 activities moved up in their swimlanes.');
+    expect(
+      swimlanePluralAnnouncement({ moved: 1, total: 1, direction: 'down', timeChanged: false }),
+    ).toBe('1 activity moved down in its swimlane.');
+  });
+
+  it('says what a selection actually did: some had no free lane', () => {
+    expect(
+      swimlanePluralAnnouncement({ moved: 2, total: 3, direction: 'up', timeChanged: false }),
+    ).toBe('2 of 3 activities moved up in their swimlanes; 1 had no free lane.');
+  });
+
+  it('adds the dates note for a move in time, and never names the delta or a bare lane', () => {
+    const said = swimlanePluralAnnouncement({
+      moved: 2,
+      total: 2,
+      direction: 'down',
+      timeChanged: true,
+    });
+    expect(said).toBe('2 activities moved down in their swimlanes; dates will update.');
+    expect(said).not.toMatch(/\blane \d|by \d/);
   });
 });

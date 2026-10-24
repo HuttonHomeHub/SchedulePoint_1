@@ -4,6 +4,8 @@ import type {
   SwimlaneProjection,
 } from '../render/project-swimlanes';
 
+import type { SwimlaneLaneFacts } from './reposition-announcement';
+
 /**
  * **The inverse of the projection: from where a bar is DRAWN to what gets WRITTEN** (swimlanes epic
  * M2-T4; `docs/specs/swimlanes/ui-architecture.md` C6).
@@ -35,16 +37,17 @@ export interface SwimlaneLanePlacement {
   /** 0-based, inside the swimlane. */
   readonly lane: number;
   /**
-   * The swimlane to file the activity in. Present **only** when the move changes it: the endpoint
-   * refuses a swimlane while the plan's swimlanes come from its WBS, and a lane written inside the
-   * swimlane an activity is already in is not a membership change.
+   * The swimlane to file the activity in, or `null` for "No swimlane". Present **only** when the
+   * move changes it: the endpoint refuses a swimlane while the plan's swimlanes come from its WBS,
+   * and a lane written inside the swimlane an activity is already in is not a membership change.
    */
-  readonly swimlaneId?: string;
+  readonly swimlaneId?: string | null;
   /**
-   * The lane the bar was drawn in before this move, inside the swimlane it was in — what an undo
-   * puts back. Absent on a placement that is only {@link materialised}.
+   * Where the bar was before this move — the swimlane it was drawn in (`null`: "No swimlane") and
+   * its lane inside it — which is what an undo puts back. Absent on a placement that is only
+   * {@link materialised}.
    */
-  readonly from?: number;
+  readonly from?: { readonly swimlaneId: string | null; readonly lane: number };
   /**
    * True for an unplaced member written at the lane it is already drawn in. It is part of the same
    * batch and no part of the planner's edit, so the undo step leaves it alone.
@@ -52,32 +55,18 @@ export interface SwimlaneLanePlacement {
   readonly materialised?: true;
 }
 
-/** Where a bar lands, in the words the announcements use (C9). */
-export interface LandedLane {
-  /** The swimlane's name, or "No swimlane". */
-  readonly swimlane: string;
-  /** 0-based within the swimlane. */
-  readonly lane: number;
-  /** How many lanes the swimlane has once the move has landed. */
-  readonly count: number;
-  /** True when the move put the bar in a different swimlane. */
-  readonly changedSwimlane: boolean;
-  /** The display lane that is, in the stack as it stands before the write. */
-  readonly displayLane: number;
-}
-
 export type SwimlaneMove =
   /** A write to make. `requested` is the in-swimlane lane that was aimed at. */
   | {
       kind: 'write';
       placements: readonly SwimlaneLanePlacement[];
-      landed: LandedLane;
+      landed: SwimlaneLaneFacts;
       requested: number;
       /** The in-swimlane lane the first bar was in, so "went on past an occupied lane" can be told. */
       original: number;
     }
   /** The bar could not move: there is no free lane in that direction. Nothing is written. */
-  | { kind: 'stay'; landed: LandedLane }
+  | { kind: 'stay'; landed: SwimlaneLaneFacts }
   /** Refused, with the sentence that says why. Nothing is written. */
   | { kind: 'refuse'; reason: string };
 
@@ -94,10 +83,17 @@ export interface SwimlaneEditContext {
 
 export const NO_SWIMLANE_LABEL = 'No swimlane';
 export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so it has no lane to move in.';
-export const NO_SWIMLANE_BOUNDARY_REASON =
-  'A bar can’t be dragged into or out of No swimlane. Assign it to a swimlane first.';
-export const DELETED_SWIMLANE_REASON =
-  'This activity belongs to a swimlane that was deleted, so its lane can’t be changed until it is assigned to a swimlane.';
+
+/**
+ * Every refusal here is a plain statement of the rule, with no "sorry" and no "couldn’t": the single
+ * bar and the selection read in one voice, and the sentence says what is true rather than what was
+ * attempted.
+ */
+/** A move that names a bar the plan no longer has: refused whole, never written smaller. */
+export const ROWS_GONE_REASON =
+  'Some of these activities are no longer in the plan, so the move wasn’t applied. Refresh to see the latest.';
+export const NO_FREE_LANE_PLURAL =
+  'None of the selected activities has a free lane that way in its swimlane, so none moved.';
 
 export const topLaneOf = (swimlane: string): string => `Already in the top lane of ${swimlane}.`;
 
@@ -182,19 +178,11 @@ class Occupancy {
   }
 }
 
-/** Can this activity's lane be written at all? See {@link DELETED_SWIMLANE_REASON}. */
-function writableMembers(ctx: SwimlaneEditContext): (id: string) => boolean {
-  const known = new Set(ctx.input.swimlanes.map((s) => s.id));
-  return (id) => {
-    const raw = ctx.input.membership.get(id);
-    return raw == null || known.has(raw);
-  };
-}
-
 /**
  * The unplaced members of the swimlanes a write touches, at the lanes they are drawn in — the same
- * batch as the subject's, so the first write into a swimlane places everything in it. A member that
- * names a deleted swimlane is left out: the endpoint resolves its basis from that id and refuses it.
+ * batch as the subject's, so the first write into a swimlane places everything in it. A member whose
+ * kept swimlane was deleted is drawn under "No swimlane" and is written there, with no swimlane named,
+ * so its kept id is left for a restore.
  */
 function materialise(
   ctx: SwimlaneEditContext,
@@ -202,11 +190,10 @@ function materialise(
   extents: ReadonlySet<number>,
   written: ReadonlySet<string>,
 ): SwimlaneLanePlacement[] {
-  const writable = writableMembers(ctx);
   const out: SwimlaneLanePlacement[] = [];
   for (const id of ctx.scene.derivedIds) {
     const m = members.get(id);
-    if (m === undefined || written.has(id) || !extents.has(m.extent) || !writable(id)) continue;
+    if (m === undefined || written.has(id) || !extents.has(m.extent)) continue;
     out.push({ id, lane: m.lane, materialised: true });
   }
   return out.sort((a, b) => (a.id < b.id ? -1 : 1));
@@ -217,7 +204,8 @@ function landedOf(
   extent: number,
   lane: number,
   changedSwimlane: boolean,
-): LandedLane {
+  how: SwimlaneLaneFacts['how'],
+): SwimlaneLaneFacts {
   const e = ctx.scene.extents[extent]!;
   return {
     swimlane: label(e),
@@ -225,35 +213,24 @@ function landedOf(
     count: Math.max(e.laneCount, lane + 1),
     changedSwimlane,
     displayLane: e.firstLane + lane,
+    how,
   };
 }
 
 /**
  * The display lanes a bar may be dragged over — what `laneRange` hands the gesture machine so the
- * ghost stops at the edge instead of being refused after it has crossed (C6).
+ * ghost stops at an edge instead of crossing it and being refused after (C6).
  *
- * A bar in a hand-made swimlane may cross into any other hand-made swimlane; one in "No swimlane"
- * stays there. The endpoint cannot yet take a membership of "none" in a lane write, so a drag into
- * or out of that region is withheld rather than offered and then refused. The bottom is open only
- * where the last extent can take another lane.
+ * Hand-made swimlanes put no edge in the way: a bar may cross into any swimlane, "No swimlane"
+ * included, and the bottom is open because the last swimlane can take another lane. The seam is
+ * here so a WBS source (M3), where a drag stops at its swimlane's edge, narrows it in one place.
+ * `null` for a bar that is not drawn.
  */
 export function laneRangeOf(
   ctx: SwimlaneEditContext,
   activityId: string,
 ): { min: number; max: number } | null {
-  const display = ctx.scene.displayLanes.get(activityId);
-  if (display === undefined) return null;
-  const { extents } = ctx.scene;
-  const home = extents[extentIndexAt(ctx.scene, display)];
-  if (home === undefined) return null;
-  const last = extents[extents.length - 1]!;
-  if (home.id === null) return { min: home.firstLane, max: Number.POSITIVE_INFINITY };
-  const handMade = extents.filter((e) => e.id !== null);
-  const bottom = handMade[handMade.length - 1]!;
-  return {
-    min: handMade[0]!.firstLane,
-    max: bottom === last ? Number.POSITIVE_INFINITY : bottom.firstLane + bottom.laneCount - 1,
-  };
+  return ctx.scene.displayLanes.has(activityId) ? { min: 0, max: Number.POSITIVE_INFINITY } : null;
 }
 
 /**
@@ -272,7 +249,7 @@ export function swimlaneTopOf(
 
 /**
  * A bar dropped at `displayLane` by a pointer. Within its own swimlane it takes the dropped lane or
- * the next free one in the direction of travel; in another hand-made swimlane it takes its
+ * the next free one in the direction of travel; in another swimlane (or "No swimlane") it takes its
  * **remembered** lane there when that is free and otherwise the nearest free lane to it (US-3).
  */
 export function dropInSwimlane(
@@ -283,45 +260,49 @@ export function dropInSwimlane(
   const members = membersOf(ctx);
   const subject = members.get(activityId);
   if (subject === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
-  if (!writableMembers(ctx)(activityId)) return { kind: 'refuse', reason: DELETED_SWIMLANE_REASON };
   const { extents } = ctx.scene;
   const at = extentIndexAt(ctx.scene, Math.max(0, displayLane));
-  // Below the last extent is that extent growing by a lane.
+  // Below the last extent is that extent growing, by one lane at most.
   const target = at < 0 ? extents.length - 1 : at;
   const home = extents[subject.extent]!;
   const to = extents[target]!;
-  if (target !== subject.extent && (home.id === null || to.id === null)) {
-    return { kind: 'refuse', reason: NO_SWIMLANE_BOUNDARY_REASON };
-  }
 
   const occupancy = new Occupancy(members.values(), new Set([activityId]));
-  const dropped = Math.max(0, displayLane) - to.firstLane;
+  const dropped = Math.min(Math.max(0, displayLane) - to.firstLane, to.laneCount);
+  const changedSwimlane = target !== subject.extent;
   let lane: number;
-  if (target === subject.extent) {
+  let how: SwimlaneLaneFacts['how'];
+  if (!changedSwimlane) {
     const step = dropped >= subject.lane ? 1 : -1;
     const found = occupancy.inDirection(target, dropped, step, subject.span);
     if (found === null || found === subject.lane) {
-      return { kind: 'stay', landed: landedOf(ctx, target, subject.lane, false) };
+      return { kind: 'stay', landed: landedOf(ctx, target, subject.lane, false, 'stays') };
     }
     lane = found;
+    how = found === dropped ? 'asked' : 'next-free';
   } else {
-    const aim = ctx.remembered(activityId, to.id) ?? dropped;
-    lane = occupancy.nearest(target, aim, subject.span);
+    const remembered = ctx.remembered(activityId, to.id);
+    lane = occupancy.nearest(target, remembered ?? dropped, subject.span);
+    how =
+      remembered !== undefined && lane === remembered
+        ? 'remembered'
+        : lane === dropped
+          ? 'asked'
+          : 'next-free';
   }
 
-  const changedSwimlane = target !== subject.extent;
   return {
     kind: 'write',
     placements: [
       {
         id: activityId,
         lane,
-        from: subject.lane,
-        ...(changedSwimlane && to.id !== null ? { swimlaneId: to.id } : {}),
+        from: { swimlaneId: home.id, lane: subject.lane },
+        ...(changedSwimlane ? { swimlaneId: to.id } : {}),
       },
       ...materialise(ctx, members, new Set([subject.extent, target]), new Set([activityId])),
     ],
-    landed: landedOf(ctx, target, lane, changedSwimlane),
+    landed: landedOf(ctx, target, lane, changedSwimlane, how),
     requested: dropped,
     original: subject.lane,
   };
@@ -341,23 +322,25 @@ export function moveWithinSwimlane(
   const members = membersOf(ctx);
   const subject = members.get(activityId);
   if (subject === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
-  if (!writableMembers(ctx)(activityId)) return { kind: 'refuse', reason: DELETED_SWIMLANE_REASON };
   const home = ctx.scene.extents[subject.extent]!;
   if (aimed < 0) return { kind: 'refuse', reason: topLaneOf(label(home)) };
+  // A held key aims further each press, but the swimlane grows by one lane at a time: one past the
+  // last lane is the most a single move may ask for.
+  const target = Math.min(aimed, home.laneCount);
 
   const occupancy = new Occupancy(members.values(), new Set([activityId]));
-  const lane = occupancy.inDirection(subject.extent, aimed, step, subject.span);
+  const lane = occupancy.inDirection(subject.extent, target, step, subject.span);
   if (lane === null || lane === subject.lane) {
-    return { kind: 'stay', landed: landedOf(ctx, subject.extent, subject.lane, false) };
+    return { kind: 'stay', landed: landedOf(ctx, subject.extent, subject.lane, false, 'stays') };
   }
   return {
     kind: 'write',
     placements: [
-      { id: activityId, lane, from: subject.lane },
+      { id: activityId, lane, from: { swimlaneId: home.id, lane: subject.lane } },
       ...materialise(ctx, members, new Set([subject.extent]), new Set([activityId])),
     ],
-    landed: landedOf(ctx, subject.extent, lane, false),
-    requested: aimed,
+    landed: landedOf(ctx, subject.extent, lane, false, lane === target ? 'asked' : 'next-free'),
+    requested: target,
     original: subject.lane,
   };
 }
@@ -412,12 +395,10 @@ export function moveManyInSwimlanes(
   laneDelta: number,
 ): SwimlaneMove {
   const members = membersOf(ctx);
-  const writable = writableMembers(ctx);
   const rows: Member[] = [];
   for (const id of ids) {
     const m = members.get(id);
     if (m === undefined) return { kind: 'refuse', reason: NOT_DRAWN_REASON };
-    if (!writable(id)) return { kind: 'refuse', reason: DELETED_SWIMLANE_REASON };
     rows.push(m);
   }
   const blocked = rows.filter((m) => m.lane + laneDelta < 0).length;
@@ -433,23 +414,27 @@ export function moveManyInSwimlanes(
   )) {
     // In the direction of travel, like a single bar: the lane it came from is always free to it, so
     // "nearest" would answer with where it started and the press would do nothing.
-    const lane =
-      occupancy.inDirection(m.extent, m.lane + laneDelta, laneDelta > 0 ? 1 : -1, m.span) ?? m.lane;
+    const aimed = Math.min(m.lane + laneDelta, ctx.scene.extents[m.extent]!.laneCount);
+    const lane = occupancy.inDirection(m.extent, aimed, laneDelta > 0 ? 1 : -1, m.span) ?? m.lane;
     occupancy.add(m.extent, lane, m.span);
     if (lane !== m.lane) {
-      placements.push({ id: m.id, lane, from: m.lane });
+      placements.push({
+        id: m.id,
+        lane,
+        from: { swimlaneId: ctx.scene.extents[m.extent]!.id, lane: m.lane },
+      });
       touched.add(m.extent);
     }
   }
   if (placements.length === 0) {
     const first = rows[0]!;
-    return { kind: 'stay', landed: landedOf(ctx, first.extent, first.lane, false) };
+    return { kind: 'stay', landed: landedOf(ctx, first.extent, first.lane, false, 'stays') };
   }
   const first = rows[0]!;
   return {
     kind: 'write',
     placements: [...placements, ...materialise(ctx, members, touched, new Set(ids))],
-    landed: landedOf(ctx, first.extent, first.lane + laneDelta, false),
+    landed: landedOf(ctx, first.extent, first.lane + laneDelta, false, 'asked'),
     requested: first.lane + laneDelta,
     original: first.lane,
   };
@@ -465,7 +450,7 @@ export interface SwimlaneCreate {
   laneIndex: number;
   /** The swimlane's unplaced members, to be written beside it. */
   materialised: readonly SwimlaneLanePlacement[];
-  landed: LandedLane;
+  landed: SwimlaneLaneFacts;
 }
 
 /**
@@ -496,6 +481,6 @@ export function createInSwimlane(
     lane,
     laneIndex: flat.nearest(0, 0, span),
     materialised: materialise(ctx, members, new Set([target]), new Set()),
-    landed: landedOf(ctx, target, lane, true),
+    landed: landedOf(ctx, target, lane, true, 'asked'),
   };
 }

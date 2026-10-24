@@ -18,6 +18,7 @@ export {
   visualStartCommand,
   autoArrangeCommand,
   swimlaneLanesCommand,
+  composeSteps,
   bulkPlacementCommand,
   bulkMoveCoalesceKey,
   bulkDeleteCommand,

@@ -317,7 +317,14 @@ describe('useCoalescedNudge on the swimlane layout (swimlanes M2-T4)', () => {
   });
 
   it('announces the swimlane the write reports, in the C9 form', async () => {
-    const swimlane = { swimlane: 'Mechanical', lane: 1, count: 3, changedSwimlane: false };
+    const swimlane = {
+      swimlane: 'Mechanical',
+      lane: 1,
+      count: 3,
+      changedSwimlane: false,
+      displayLane: 6,
+      how: 'asked' as const,
+    };
     const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null, swimlane });
     const deps = makeDeps({ activities: [drawn], onReposition });
     const { result } = renderHook(() => useCoalescedNudge(deps));
@@ -327,7 +334,14 @@ describe('useCoalescedNudge on the swimlane layout (swimlanes M2-T4)', () => {
   });
 
   it('says it stayed when the write reports no free lane that way, instead of going silent', async () => {
-    const swimlane = { swimlane: 'Mechanical', lane: 1, count: 2, changedSwimlane: false };
+    const swimlane = {
+      swimlane: 'Mechanical',
+      lane: 1,
+      count: 2,
+      changedSwimlane: false,
+      displayLane: 6,
+      how: 'stays' as const,
+    };
     const onReposition = vi.fn().mockResolvedValue({ applied: false, conflict: null, swimlane });
     const deps = makeDeps({ activities: [drawn], onReposition });
     const { result } = renderHook(() => useCoalescedNudge(deps));
