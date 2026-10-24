@@ -900,8 +900,9 @@ or `{ error }`. Every write needs organisation scope, Planner or Org Admin, and 
 - `DELETE …/swimlanes/:id` → `204`. `POST …/swimlanes/:id/restore` → `200`.
 - `PATCH …/plans/:planId` gains `swimlaneSource` and `swimlaneWbsLevel`.
 - `PATCH …/activities/positions` (`update-positions.dto.ts:14-49`): each row gains an optional
-  `swimlane: { swimlaneId?, laneIndex }`, with **no `basis`**. `laneIndex` becomes optional, but
-  each row needs at least one of the two. This is a relaxation: every existing body stays valid.
+  `swimlane: { swimlaneId?: uuid | null, laneIndex }`, with **no `basis`**: `null` means "No
+  swimlane" and clears the membership, an omitted `swimlaneId` keeps it. `laneIndex` becomes optional,
+  but each row needs at least one of the two. This is a relaxation: every existing body stays valid.
 - `POST …/activities` and `PATCH …/activities/:id` accept `swimlaneId`.
 - Activity responses gain `swimlaneId` and `swimlaneLanes: { basis, swimlaneId,
 summaryActivityId, wbsLevel, laneIndex, updatedAt }[]`. These load per page with no N+1.

@@ -591,6 +591,12 @@ describe.skipIf(!hasDatabase)('Swimlane placement (e2e, pen enforced)', () => {
       expect(last?.changes).toMatchObject({
         swimlaneId: { from: { id: civil, name: 'Civil' }, to: null },
       });
+      // And through the route a reader uses, where `to: null` must survive serialisation.
+      const read = await actor.agent.get(`${base()}/activities/${a.id}/history`).expect(200);
+      expect(read.body.data[0].changes.swimlaneId).toEqual({
+        from: { id: civil, name: 'Civil' },
+        to: null,
+      });
     });
 
     it('writes a No swimlane lane for a member of a deleted swimlane and keeps its swimlane_id', async () => {
@@ -651,6 +657,25 @@ describe.skipIf(!hasDatabase)('Swimlane placement (e2e, pen enforced)', () => {
         position(b, { swimlaneId: null, laneIndex: 1 }),
       ]).expect(200);
       expect((cleared.body.data[0] as ActivityBody).version).toBe(b.version + 1);
+    });
+
+    it('refuses a foreign swimlane beside a kept-deleted member (404) and rolls the batch back', async () => {
+      const { actor, planId, civil, a, b } = await manualPlan();
+      await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200);
+      await actor.agent.delete(`${lanesUrl(planId)}/${civil}`).expect(204);
+      const member = await getActivity(actor, a.id);
+      const otherPlan = await makePlan(actor, 'acme', 'Other plan');
+      const foreign = await createSwimlane(actor, otherPlan, 'Foreign');
+      const lanesBefore = await prisma.activitySwimlaneLane.count();
+      await send(actor, planId, [
+        position(member, { laneIndex: 7 }),
+        position(b, { swimlaneId: foreign, laneIndex: 1 }),
+      ]).expect(404);
+      expect(await prisma.activitySwimlaneLane.count()).toBe(lanesBefore);
+      const after = await getActivity(actor, a.id);
+      expect(after.version).toBe(member.version);
+      expect(after.swimlaneId).toBe(civil);
+      expect((await getActivity(actor, b.id)).swimlaneId).toBeNull();
     });
 
     it('still refuses an explicit deleted swimlaneId for a member of a deleted swimlane (404)', async () => {

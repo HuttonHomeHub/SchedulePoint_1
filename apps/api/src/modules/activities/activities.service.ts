@@ -1072,7 +1072,8 @@ export class ActivitiesService {
         }
         // A kept membership that names a deleted swimlane is shown under "No swimlane" (swimlanes
         // spec US-2) and keeps its `swimlane_id` so a restore returns it; its lane belongs to that
-        // basis, not to the deleted swimlane's, so it is not a swimlane to lock (which would 404).
+        // basis, so the swimlane is left out of the lock below rather than failing the batch. This read
+        // is advisory: a named swimlane is still locked, and that lock is what refuses a write.
         const keptIds = [
           ...new Set(
             swimlaneRows.flatMap((p) => {

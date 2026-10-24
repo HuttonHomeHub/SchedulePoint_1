@@ -24,6 +24,7 @@ import { UUID_REGEX } from '../../../common/validation/uuid';
  */
 export class ActivitySwimlaneLaneDto {
   @ApiPropertyOptional({
+    type: String,
     format: 'uuid',
     description:
       'MANUAL source only: file the activity in this swimlane (it must be an active swimlane of ' +

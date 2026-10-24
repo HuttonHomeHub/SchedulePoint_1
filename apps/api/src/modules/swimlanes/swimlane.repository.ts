@@ -215,7 +215,8 @@ export class SwimlaneRepository {
   }
 
   /**
-   * Which of these swimlanes are active in this plan and organisation — a plain read, no lock. For a
+   * Which of these swimlanes are active in this plan and organisation — a plain read, no lock, so it is
+   * advisory only and must never gate a write (that is {@link lockActiveForShare}'s job). For a
    * caller that must tell a deleted swimlane from a live one without refusing the deleted one (a
    * member's kept membership, swimlanes spec US-2); a swimlane it then names to write is still locked
    * by {@link lockActiveForShare}.
