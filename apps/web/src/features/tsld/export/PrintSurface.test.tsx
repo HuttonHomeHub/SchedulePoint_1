@@ -49,7 +49,70 @@ describe('printAlt — claims only what the picture holds (ADR-0122)', () => {
     ['empty', 'Diagram of North Tower, resource load section was empty'],
     [undefined, 'Diagram of North Tower'],
   ] as const)('strip %s', (status, expected) => {
-    expect(printAlt('North Tower', status)).toBe(expected);
+    expect(printAlt('North Tower', { strip: status })).toBe(expected);
+  });
+
+  it('says how many swimlanes the diagram is divided into', () => {
+    expect(printAlt('North Tower', { swimlaneCount: 4 })).toBe(
+      'Diagram of North Tower, divided into 4 swimlanes',
+    );
+    expect(printAlt('North Tower', { swimlaneCount: 1 })).toBe(
+      'Diagram of North Tower, divided into 1 swimlane',
+    );
+  });
+
+  it('carries the count and the strip together, count first', () => {
+    expect(printAlt('North Tower', { strip: 'ready', swimlaneCount: 4 })).toBe(
+      'Diagram of North Tower, divided into 4 swimlanes, with resource load',
+    );
+  });
+
+  it('is the prior sentence with no swimlanes', () => {
+    expect(printAlt('North Tower', { strip: 'ready', swimlaneCount: 0 })).toBe(
+      printAlt('North Tower', { strip: 'ready' }),
+    );
+  });
+});
+
+describe('printDiagramImage carries the swimlanes into the printed picture', () => {
+  const blob = new Blob(['png'], { type: 'image/png' });
+
+  beforeEach(() => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => MOCK_URL),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(URL, 'createObjectURL');
+    Reflect.deleteProperty(URL, 'revokeObjectURL');
+    document.querySelector('.tsld-print-container')?.remove();
+  });
+
+  it.each([
+    [4, 'Diagram of North Tower, divided into 4 swimlanes'],
+    [0, 'Diagram of North Tower'],
+    [undefined, 'Diagram of North Tower'],
+  ])('swimlaneCount %s words the image’s alt as "%s"', (swimlaneCount, alt) => {
+    act(() => {
+      printDiagramImage(
+        {
+          blob,
+          title: 'North Tower',
+          subtitle: 'As of 2026-01-01',
+          ...(swimlaneCount === undefined ? {} : { swimlaneCount }),
+        },
+        { print: vi.fn() },
+      );
+    });
+    expect(document.querySelector('.tsld-print-container img')).toHaveAttribute('alt', alt);
   });
 });
 

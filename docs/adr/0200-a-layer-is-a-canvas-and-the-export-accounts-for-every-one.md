@@ -54,7 +54,10 @@ paper contrast sweep.
 ## Consequences
 
 - **Not decided, and not claimed covered:** DOM chrome (the ruler, the legend panel, the strip's panel) is not a layer.
-  Its export equivalents are painted rows that remain hand mirrors (ADR-0106).
+  Its export equivalents are painted rows that remain hand mirrors (ADR-0106). **Narrowed by swimlanes M2-T7:** the
+  ruler and the swimlane gutter now carry a literal `data-chrome` and have a roster, `EXPORT_CHROME_INPUTS`, with the
+  same floor (the two names) and the same staleness check in both directions; verified red by removing the
+  composer's `swimlaneGutter` input. The legend and the strip's panel still have no roster and are still not claimed.
 - The gate shipped one commit ahead of the fix, with the strip in a `KNOWN_GAPS` record naming `docs/TECH_DEBT.md`
   #223 rather than in the screen-only record, whose reasons say "by design". Verified red on that tree (removing the
   entry names `resource-strip`); the entry failed the build once the composer named the strip, and the record was

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { EXPORT_LAYER_INPUTS } from './render-export-image';
+import { EXPORT_CHROME_INPUTS, EXPORT_LAYER_INPUTS } from './render-export-image';
 
 const SRC = join(__dirname, '..', '..', '..');
 
@@ -71,14 +71,10 @@ const SCREEN_ONLY: Record<string, string> = {
 /**
  * Keys the export does not compose YET, each naming the task that owes it. **Not a reason — a debt**
  * (ADR-0200's precedent: the gate ships one commit ahead of the fix and the entry is deleted with
- * it). `swimlaneMarks` is the boundary rule and the alternate ground (swimlanes M2-T2); the export
- * composes them in M2-T7, which deletes this entry. Until then an exported programme draws display
- * lanes without the rules, and the swimlane lens is not offered (`enabled: false`), so no one can
- * produce such a picture.
+ * it). Empty since swimlanes M2-T7 composed `swimlaneMarks`; kept, with the staleness check below,
+ * so the next gate that ships ahead of its fix has somewhere to say so rather than a bare absence.
  */
-const KNOWN_GAPS: Record<string, string> = {
-  swimlaneMarks: 'swimlanes M2-T7 composes the rule and the ground in the export',
-};
+const KNOWN_GAPS: Record<string, string> = {};
 
 /**
  * A source file with its comments removed and its line numbers kept (each block comment is replaced
@@ -228,9 +224,11 @@ describe('the exported diagram composes the same scene as the screen (structural
  * canvases (not from a ref name, which the next layer would not share), each named by a literal
  * `data-layer`, and each must be composed by the export or listed screen-only with a reason.
  *
- * **What this cannot see, stated rather than implied:** DOM chrome (the ruler, the legend, the
+ * **What this half cannot see, stated rather than implied:** DOM chrome (the ruler, the legend, the
  * strip's panel). Those are not layers; their export equivalents are painted rows that are hand
- * mirrors (ADR-0106), and that residue is recorded in ADR-0198 rather than claimed covered.
+ * mirrors (ADR-0106), and that residue is recorded in ADR-0198 rather than claimed covered. The
+ * chrome that has a roster of its own is gated by the third half of this file (swimlanes M2-T7);
+ * the legend and the strip's panel still have none.
  */
 const CANVAS_ROOTS = [
   join(SRC, 'features/tsld'),
@@ -371,5 +369,116 @@ describe('the exported diagram accounts for every canvas layer the screen render
   it('no layer sits in two records at once', () => {
     const all = [...Object.keys(EXPORT_LAYER_INPUTS), ...Object.keys(SCREEN_ONLY_LAYERS)];
     expect(all.filter((n, i) => all.indexOf(n) !== i)).toEqual([]);
+  });
+});
+
+/**
+ * **The CHROME half of the gate** (ADR-0200 D2, swimlanes M2-T7). The layer half finds `<canvas
+ * data-layer>` and the scene-key half finds `TsldScene` keys, so a DOM element passed both whether
+ * or not the export drew it — the swimlane gutter's labels are DOM text (WCAG 1.4.5), and the file
+ * above said outright that it "cannot see … DOM chrome". Swimlanes' SC-5 leaned on exactly that hole.
+ *
+ * So chrome is declared the way a layer is: a literal `data-chrome="…"` on the element, found in the
+ * same files, and each must be a key of {@link EXPORT_CHROME_INPUTS} whose input the composer names.
+ * Scoped to what has a roster — the ruler and the gutter — and says so: a chrome element with no
+ * `data-chrome` is still invisible here, which the floor below pins by NAME rather than by count.
+ *
+ * Unlike layers there is no screen-only record: the two pieces of chrome are both read by whoever
+ * receives the picture, and a piece that is not is a decision for a spec, not for a list.
+ */
+interface ChromeElement {
+  chrome: string;
+  file: string;
+  line: number;
+}
+
+/**
+ * Every `data-chrome` in `text`. **Scans for the attribute NAME, then demands the strict literal
+ * form right after it**, and throws on anything else: a pattern that only matched the literal form
+ * would silently skip `data-chrome={'x'}`, `{name}` and a template literal, so the one way to hide a
+ * piece of chrome from this roster would be to write it in a slightly different way. A default
+ * would read as parity.
+ */
+export function chromeNamesIn(text: string, file: string): ChromeElement[] {
+  const found: ChromeElement[] = [];
+  for (const match of text.matchAll(/\bdata-chrome\b/g)) {
+    const line = text.slice(0, match.index).split('\n').length;
+    const literal = /^="([a-z][a-z-]*)"/.exec(text.slice(match.index + match[0].length));
+    if (!literal) {
+      throw new Error(
+        `${file}:${line} has a data-chrome that is not the literal data-chrome="lower-case-name". ` +
+          `A computed or braced value cannot be classified, and a default would read as parity.`,
+      );
+    }
+    found.push({ chrome: literal[1]!, file, line });
+  }
+  return found;
+}
+
+function chromeElements(): ChromeElement[] {
+  const files = CANVAS_ROOTS.flatMap((root) =>
+    (readdirSync(root, { recursive: true }) as string[])
+      .filter((f) => f.endsWith('.tsx') && !f.includes('.test.'))
+      .map((f) => join(root, f)),
+  );
+  return files.flatMap((file) => chromeNamesIn(readStripped(file), file));
+}
+
+describe('the chrome detector refuses what it cannot classify', () => {
+  it('reads the literal form', () => {
+    expect(chromeNamesIn('<div data-chrome="swimlane-gutter" />', 'x.tsx')).toEqual([
+      { chrome: 'swimlane-gutter', file: 'x.tsx', line: 1 },
+    ]);
+  });
+
+  it.each([
+    ['a braced literal', "<div data-chrome={'ruler'} />"],
+    ['a computed value', '<div data-chrome={name} />'],
+    ['a template literal', '<div data-chrome={`ruler`} />'],
+    ['an upper-case name', '<div data-chrome="Ruler" />'],
+    ['a bare attribute', '<div data-chrome />'],
+  ])('throws on %s, naming the file and line', (_name, source) => {
+    expect(() => chromeNamesIn(`\n${source}`, 'x.tsx')).toThrow(/x\.tsx:2 .*data-chrome/);
+  });
+});
+
+describe('the exported diagram accounts for every piece of DOM chrome the screen names (structural)', () => {
+  const found = chromeElements();
+  const names = found.map((c) => c.chrome);
+  const call = composerCall();
+  const composes = (input: string): boolean =>
+    new RegExp(`(?:^|[\\s{,])${input}\\s*(?::|,|\\})`).test(call);
+
+  it('the roster is exactly the two known pieces, so a truncated parse cannot read as parity', () => {
+    // ADR-0093's second assertion, by NAME: a count passes when one element vanishes and another
+    // appears, and a new piece of chrome should be a conscious edit here.
+    expect([...names].sort()).toEqual(['ruler', 'swimlane-gutter']);
+  });
+
+  it('every named piece is composed: a key of EXPORT_CHROME_INPUTS', () => {
+    const unaccounted = names.filter((n) => !(n in EXPORT_CHROME_INPUTS));
+    expect(
+      unaccounted,
+      `these DOM chrome elements are on the screen and the export has not been told about them: ` +
+        `${unaccounted.join(', ')}.\nCompose them and add them to EXPORT_CHROME_INPUTS.`,
+    ).toEqual([]);
+  });
+
+  it('every composed piece is named in the composer, as a literal key', () => {
+    const silent = Object.entries(EXPORT_CHROME_INPUTS)
+      .filter(([, input]) => !composes(input))
+      .map(([chrome, input]) => `${chrome} (${input})`);
+    expect(
+      silent,
+      `EXPORT_CHROME_INPUTS says these are composed, and the composer's renderExportImage call ` +
+        `does not name their input: ${silent.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('the record names nothing the screen has stopped marking, and nothing twice', () => {
+    // The other direction (ADR-0200 D2): a stale entry would excuse a deletion.
+    const stale = Object.keys(EXPORT_CHROME_INPUTS).filter((n) => !names.includes(n));
+    expect(stale, `no element carries data-chrome for: ${stale.join(', ')}`).toEqual([]);
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
   });
 });

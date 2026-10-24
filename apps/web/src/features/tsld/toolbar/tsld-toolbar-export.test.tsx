@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
-import { buildTsldToolbarItems } from './tsld-toolbar-items';
+import { buildTsldToolbarItems, LENS_TOGGLES } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
@@ -191,6 +191,102 @@ describe('TSLD toolbar — export & print (flag on)', () => {
     expect(print).toHaveAccessibleDescription('Add an activity first');
     fireEvent.click(print);
     expect(spies.printDiagram).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * **An export never silently omits swimlanes** (swimlanes M2-T7, ADR-0204). While the list the
+ * screen is waiting for is pending, or failed with swimlanes shown, the picture would be
+ * swimlane-free — so every item that makes one is shaded with the reason, to every input, and the
+ * schedule (CSV), which carries no picture, stays open.
+ */
+describe('Share & export — swimlanes not yet drawable (swimlanes M2-T7)', () => {
+  const PICTURES = [
+    'Diagram — whole plan (PNG)',
+    'Diagram — current view (PNG)',
+    'Diagram — whole plan (PDF)',
+    'Diagram — current view (PDF)',
+    'Print…',
+  ];
+
+  it.each([
+    ['still loading', { swimlanesLoading: true }, /^Swimlanes are still loading$/],
+    ['failed to load', { swimlanesFailed: true }, /couldn’t load/],
+  ])('shades every picture while swimlanes are shown and %s', (_name, over, reason) => {
+    renderRows(ctx({ swimlanesShown: true, ...over }));
+    openDeliver();
+    for (const name of PICTURES) {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item, name).toHaveAttribute('aria-disabled', 'true');
+      expect(item, name).toHaveAccessibleDescription(reason);
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Print…' }));
+    expect(spies.exportDiagramPng).not.toHaveBeenCalled();
+    expect(spies.printDiagram).not.toHaveBeenCalled();
+    expect(screen.getByRole('menuitem', { name: 'Schedule (CSV)' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it.each([
+    ['loading', { swimlanesLoading: true }],
+    ['failed', { swimlanesFailed: true }],
+  ])(
+    'lifts when the lens is off, because the picture is then the one the screen shows (%s)',
+    (_n, over) => {
+      renderRows(ctx({ swimlanesShown: false, ...over }));
+      openDeliver();
+      for (const name of PICTURES) {
+        expect(screen.getByRole('menuitem', { name }), name).not.toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+      }
+    },
+  );
+
+  it('has a remedy that works: checked and failed, the lens is operable and turning it off lifts the shading', () => {
+    const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
+    let shown = true;
+    const make = () =>
+      ctx({
+        hasDiagram: true,
+        swimlanesShown: shown,
+        swimlanesFailed: true,
+        toggleSwimlanes: () => {
+          shown = !shown;
+        },
+      });
+    const before = make();
+    expect(lens.reason(before)).toBeUndefined();
+    lens.toggle(before);
+
+    renderRows(make());
+    openDeliver();
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('uses the vocabulary of the lens row: a fragment, then the remedy', () => {
+    renderRows(ctx({ swimlanesShown: true, swimlanesFailed: true }));
+    openDeliver();
+    expect(screen.getByRole('menuitem', { name: 'Print…' })).toHaveAccessibleDescription(
+      'Swimlanes couldn’t load. Turn Swimlanes off to export without them.',
+    );
+  });
+
+  it('is the prior menu when the list has arrived', () => {
+    renderRows(ctx({ swimlanesShown: true }));
+    openDeliver();
+    for (const name of PICTURES) {
+      expect(screen.getByRole('menuitem', { name }), name).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    }
   });
 });
 

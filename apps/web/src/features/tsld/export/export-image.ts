@@ -111,6 +111,13 @@ export interface BuildExportViewportOptions {
    * the byte-for-byte prior geometry.
    */
   bottomBand?: number;
+  /**
+   * Extra reserved width (CSS px) at the **left** for the swimlane gutter's painted mirror
+   * (swimlanes M2-T7). The screen reserves it as a column the stage starts after (`sceneOrigin`), so
+   * the export does the same: the diagram's x origin moves right by it and the raster grows by it,
+   * and nothing about the time axis changes. `0` (the default) is the byte-for-byte prior geometry.
+   */
+  gutterWidth?: number;
 }
 
 export interface ExportViewport {
@@ -150,6 +157,7 @@ export function buildExportViewport(
   const reserved =
     topBand + (options.markerRow ?? EXPORT_MARKER_ROW) + (options.wbsBandHeight ?? 0);
   const bottomBand = options.bottomBand ?? 0;
+  const gutter = options.gutterWidth ?? 0;
   const { view: liveView, size: liveSize } = options.liveViewport;
 
   let viewport: Viewport;
@@ -163,24 +171,24 @@ export function buildExportViewport(
     const contentW = (extent.maxDay - extent.minDay) * pxPerDay;
     const contentH = (extent.maxLane + 1) * LANE_HEIGHT;
     size = {
-      width: contentW + padding * 2,
+      width: gutter + contentW + padding * 2,
       height: reserved + contentH + padding * 2 + bottomBand,
     };
     viewport = {
       pxPerDay,
-      originX: padding - extent.minDay * pxPerDay,
+      originX: gutter + padding - extent.minDay * pxPerDay,
       originY: reserved + padding,
     };
   } else {
     // VIEW (and the degenerate WHOLE-with-nothing-placeable case): crop to the live viewport, with
     // everything reserved above it (the diagram shifts down by `reserved`, preserving the framing).
     size = {
-      width: Math.max(1, liveSize.width),
+      width: gutter + Math.max(1, liveSize.width),
       height: reserved + Math.max(1, liveSize.height) + bottomBand,
     };
     viewport = {
       pxPerDay: liveView.pxPerDay,
-      originX: liveView.originX,
+      originX: gutter + liveView.originX,
       originY: liveView.originY + reserved,
     };
   }

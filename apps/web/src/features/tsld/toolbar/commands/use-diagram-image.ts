@@ -3,15 +3,17 @@ import { useCallback } from 'react';
 
 import {
   buildExportViewport,
+  EXPORT_MARKER_ROW,
   EXPORT_PRINT_TOP_BAND,
   EXPORT_STRIP_CAPTION_ROW,
   EXPORT_TOP_BAND,
   type ExportExtent,
 } from '../../export/export-image';
+import { EXPORT_GUTTER_WIDTH } from '../../export/export-swimlane-gutter';
 import { renderExportImage } from '../../export/render-export-image';
 import { deriveDiagramSource } from '../../model/derive-diagram-source';
 import { useCanvasSurface } from '../../render/canvas-surface';
-import type { TsldViewToggles } from '../../render/paint';
+import type { SwimlaneMarks, TsldViewToggles } from '../../render/paint';
 import {
   resolvePrintPalette,
   resolvePrintResourceStripPalette,
@@ -20,6 +22,7 @@ import {
 import type { SwimlaneInput } from '../../render/project-swimlanes';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
+import { gutterSwimlanesFrom, type GutterSwimlane } from '../../render/swimlane-gutter';
 import { makeWorkingDayPredicate } from '../../render/time-scale';
 import type { WorkingDayCalendar } from '../../render/time-scale';
 import { barDateSourceFor, toRenderEdges } from '../../render/to-render-model';
@@ -62,6 +65,20 @@ export function useDiagramImage(args: {
   dependencies: readonly DependencySummary[];
   /** The host's swimlane input, or absent for the swimlane-free picture (the screen's own). */
   swimlanes?: SwimlaneInput | null | undefined;
+  /**
+   * Whether alternate swimlanes carry the faint ground — the SAME answer the live canvas is handed
+   * (`TsldPanel`'s `swimlaneGround`, SQ-6), so the picture tints the swimlanes the screen does.
+   * Irrelevant without {@link swimlanes}.
+   */
+  swimlaneGround?: boolean | undefined;
+  /**
+   * Swimlanes are shown on screen but cannot be drawn yet (their list is pending, or failed). The
+   * build then returns `null` rather than a swimlane-free picture, so no entry point — present or
+   * future — can hand over a deliverable that silently omits the division the planner is looking
+   * at. The menu items are shaded for the same reason (`swimlaneExportReason`); this is the
+   * structural half that does not depend on a caller remembering to shade.
+   */
+  swimlanesBlocked?: boolean | undefined;
   viewToggles: TsldViewToggles;
   /**
    * The plan's working-day calendar. Taken as an argument rather than resolved here so it is the
@@ -103,12 +120,16 @@ export function useDiagramImage(args: {
   imageHeight: number;
   /** The strip's state in the picture, `null` when it is not open (the printed diagram's `alt`). */
   resourceStripStatus: 'ready' | 'loading' | 'error' | 'empty' | null;
+  /** How many swimlanes the picture is divided into, `0` when it is not (the printed `alt`). */
+  swimlaneCount: number;
 } | null {
   const {
     plan,
     activities,
     dependencies,
     swimlanes,
+    swimlaneGround = false,
+    swimlanesBlocked = false,
     viewToggles,
     tsldCalendar,
     todayIso,
@@ -137,6 +158,7 @@ export function useDiagramImage(args: {
       // **`'legend-only'` is the printed diagram's band** (`docs/TECH_DEBT.md` #217). Defaulted, so
       // the PNG and PDF deliverables — which are standalone files and must name themselves — are
       // byte-for-byte what they were.
+      if (swimlanesBlocked) return null;
       const bandContent = options.bandContent ?? 'full';
       const topBand = bandContent === 'full' ? EXPORT_TOP_BAND : EXPORT_PRINT_TOP_BAND;
       const dataDate = plan.plannedStart;
@@ -174,6 +196,15 @@ export function useDiagramImage(args: {
         dataDate,
       });
       const renderActivities = diagram.renderActivities;
+      // The rule and the ground are scene marks, the gutter's names are chrome: both come off the one
+      // projection that swapped in the display lanes, so the picture cannot disagree with itself.
+      const projection = diagram.swimlaneScene;
+      const swimlaneMarks: SwimlaneMarks | undefined = projection
+        ? { extents: projection.extents, ground: swimlaneGround }
+        : undefined;
+      const gutterSwimlanes: readonly GutterSwimlane[] | null = projection
+        ? gutterSwimlanesFrom(projection)
+        : null;
       const layers = sceneLayers(viewToggles);
       const scene = {
         activities: renderActivities,
@@ -232,6 +263,9 @@ export function useDiagramImage(args: {
         compareGhosts: lenses.compareGhosts,
         compareLinks: lenses.compareLinks,
         flaggedIds: lenses.flaggedIds,
+        // **The swimlane rule and ground** (swimlanes M2-T2/T7). Absent while swimlanes are not
+        // drawn, which leaves the paint log byte-for-byte what it was (SC-3).
+        swimlaneMarks,
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
         extent,
@@ -241,6 +275,9 @@ export function useDiagramImage(args: {
         wbsBandHeight: diagram.bandHeight,
         // Below the diagram, where the strip is on screen: the caption row, then the band.
         bottomBand: strip ? EXPORT_STRIP_CAPTION_ROW + stripBand : 0,
+        // The screen reserves the gutter at the left of the stage; so does the picture.
+        gutterWidth: gutterSwimlanes ? EXPORT_GUTTER_WIDTH : 0,
+        markerRow: EXPORT_MARKER_ROW,
       });
       const promise = renderExportImage({
         scene,
@@ -248,6 +285,9 @@ export function useDiagramImage(args: {
         size,
         dpr,
         topBand,
+        // Named at both seams (the geometry above and the drawing here) so the chrome roster in
+        // `scene-parity.structural.test.ts` can see the ruler's row being composed.
+        markerRow: EXPORT_MARKER_ROW,
         bandContent,
         palette: resolvePrintPalette(canvasSurface),
         scaledToFit,
@@ -272,6 +312,7 @@ export function useDiagramImage(args: {
               },
             }
           : {}),
+        ...(gutterSwimlanes ? { swimlaneGutter: { swimlanes: gutterSwimlanes } } : {}),
         ...(strip
           ? {
               resourceStrip: {
@@ -287,6 +328,7 @@ export function useDiagramImage(args: {
         // What the strip contributed, so the printed diagram's `alt` claims only what is there
         // (ADR-0122): a snapshot with no caption predates the field and is a drawn strip.
         resourceStripStatus: strip ? (strip.caption?.status ?? 'ready') : null,
+        swimlaneCount: gutterSwimlanes?.length ?? 0,
         imageWidth: Math.max(1, Math.round(size.width * dpr)),
         imageHeight: Math.max(1, Math.round(size.height * dpr)),
       };
@@ -311,6 +353,8 @@ export function useDiagramImage(args: {
       activities,
       dependencies,
       swimlanes,
+      swimlaneGround,
+      swimlanesBlocked,
       viewToggles,
       todayIso,
       lateOverlayActive,

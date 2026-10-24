@@ -48,6 +48,7 @@ export function SwimlaneGutter({
     <div
       aria-hidden="true"
       data-testid="tsld-swimlane-gutter"
+      data-chrome="swimlane-gutter"
       className="bg-canvas border-border absolute inset-y-0 left-0 z-10 overflow-hidden border-r"
       style={{ width: widthPx }}
     >

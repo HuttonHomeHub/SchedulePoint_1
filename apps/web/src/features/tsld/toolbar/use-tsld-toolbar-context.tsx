@@ -85,6 +85,7 @@ export function useTsldToolbarContext({
   canvasUi,
   swimlaneScene,
   swimlanesShown: swimlaneLensShown,
+  swimlaneGround,
   openDialog,
   legend,
   minimap,
@@ -134,6 +135,8 @@ export function useTsldToolbarContext({
   swimlaneScene: { input: SwimlaneInput | null; pending: boolean; failed?: boolean };
   /** Whether swimlanes are shown, computed once by the host (`swimlanesShown`) and read by its scene too. */
   swimlanesShown: boolean;
+  /** The ground answer (SQ-6) the host hands the canvas, so the export tints the same swimlanes. */
+  swimlaneGround?: boolean;
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
@@ -494,6 +497,8 @@ export function useTsldToolbarContext({
     dependencies,
     // The same input the live canvas is handed, so the export draws the swimlanes the screen does.
     swimlanes: swimlaneScene.input,
+    swimlaneGround,
+    swimlanesBlocked: swimlaneLensShown && (swimlaneScene.pending || swimlaneScene.failed === true),
     viewToggles,
     // Off the workspace model, which is where the live canvas reads it too — so the exported
     // picture shades the same days the screen does rather than from a second resolution.
@@ -901,6 +906,7 @@ export function useTsldToolbarContext({
               blob,
               title: plan.name,
               resourceStripStatus: built.resourceStripStatus,
+              swimlaneCount: built.swimlaneCount,
               // Both dates, in ONE place and one format. The band used to print "As of
               // <iso> · Generated <iso>" under a repeat of the plan name; the document is the
               // better home for them because it is real, selectable text a reader can copy, and

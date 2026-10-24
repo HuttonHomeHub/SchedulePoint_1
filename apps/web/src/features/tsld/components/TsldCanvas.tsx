@@ -2787,6 +2787,7 @@ export function TsldCanvas({
       <div
         aria-hidden="true"
         data-testid="tsld-ruler"
+        data-chrome="ruler"
         className="bg-canvas text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
         // RULER_HEIGHT is a raw px value (not a Tailwind class) because the canvas-sizing math in
         // measure() needs the exact same number — one source of truth for the CSS + JS.

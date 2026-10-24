@@ -846,6 +846,7 @@ export function ToolbarPlanWorkspace({
     canvasUi,
     swimlaneScene,
     swimlanesShown: swimlanesAreShown,
+    swimlaneGround: SWIMLANE_GROUND,
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },

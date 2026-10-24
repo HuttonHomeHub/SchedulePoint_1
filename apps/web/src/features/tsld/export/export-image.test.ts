@@ -306,6 +306,44 @@ describe('buildExportViewport — WBS band reservation', () => {
   });
 });
 
+describe('buildExportViewport — the swimlane gutter column (swimlanes M2-T7)', () => {
+  const LIVE = {
+    view: { pxPerDay: 8, originX: 40, originY: 12 },
+    size: { width: 900, height: 500 },
+  };
+  const activities = [
+    { id: 'a', name: 'A', laneIndex: 0, drawnStart: '2026-01-01', drawnFinish: '2026-01-10' },
+  ] as unknown as Parameters<typeof buildExportViewport>[0];
+
+  it.each(['view', 'whole'] as const)(
+    'moves the diagram right by the column and widens the surface by it (%s)',
+    (extent) => {
+      const without = buildExportViewport(activities, '2026-01-01', { extent, liveViewport: LIVE });
+      const with_ = buildExportViewport(activities, '2026-01-01', {
+        extent,
+        liveViewport: LIVE,
+        gutterWidth: 176,
+      });
+      expect(with_.viewport.originX).toBe(without.viewport.originX + 176);
+      expect(with_.size.width).toBe(without.size.width + 176);
+      // A horizontal reservation only: nothing vertical or in scale moves.
+      expect(with_.viewport.originY).toBe(without.viewport.originY);
+      expect(with_.viewport.pxPerDay).toBe(without.viewport.pxPerDay);
+      expect(with_.size.height).toBe(without.size.height);
+    },
+  );
+
+  it.each(['view', 'whole'] as const)('reserves nothing by default (%s)', (extent) => {
+    const omitted = buildExportViewport(activities, '2026-01-01', { extent, liveViewport: LIVE });
+    const zero = buildExportViewport(activities, '2026-01-01', {
+      extent,
+      liveViewport: LIVE,
+      gutterWidth: 0,
+    });
+    expect(omitted).toEqual(zero);
+  });
+});
+
 describe('buildExportViewport — the axis-marker row (fix-slice M-F, #175)', () => {
   const LIVE = live({ pxPerDay: 10, originX: 5, originY: 7 }, 300, 200);
 

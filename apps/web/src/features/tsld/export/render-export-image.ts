@@ -16,9 +16,17 @@ import type { PrintPalette } from '../render/palette';
 // review noticed the code did not follow its own stated rationale.
 import { FONT_STACK, type Size, type Viewport } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
+import type { GutterSwimlane } from '../render/swimlane-gutter';
 import type { WbsBandBar } from '../render/wbs-band';
 
 import { EXPORT_MARKER_ROW, EXPORT_STRIP_CAPTION_ROW } from './export-image';
+import {
+  EXPORT_GUTTER_FONT,
+  EXPORT_GUTTER_WIDTH,
+  layoutExportGutter,
+  paintExportGutter,
+  type ExportGutterFrame,
+} from './export-swimlane-gutter';
 
 import { CANVAS_DATA_DATE_ENABLED, CANVAS_RESOURCE_VIEW_ENABLED } from '@/config/env';
 
@@ -152,6 +160,13 @@ export interface RenderExportImageInput {
     palette: ResourceStripPalette;
     height: number;
   };
+  /**
+   * The **swimlane gutter's mirror** (swimlanes M2-T7), when swimlanes are drawn. The swimlanes in
+   * display order, as the screen's gutter is handed them; the painter reserves
+   * {@link EXPORT_GUTTER_WIDTH} at the left, which `buildExportViewport` already moved the diagram
+   * clear of. Absent (the default) is the byte-for-byte prior export.
+   */
+  swimlaneGutter?: { swimlanes: readonly GutterSwimlane[] };
 }
 
 /**
@@ -165,6 +180,26 @@ export const EXPORT_LAYER_INPUTS = {
   scene: 'scene',
   'wbs-band': 'wbsBand',
   'resource-strip': 'resourceStrip',
+} as const satisfies Record<string, keyof RenderExportImageInput>;
+
+/**
+ * **Which renderer input composes each piece of DOM chrome** (ADR-0200 D2, swimlanes M2-T7). A
+ * layer is a `<canvas>` and the roster above finds them; chrome is the text and rules the screen
+ * draws in the DOM beside the canvases, which the layer gate structurally cannot see. Each is named
+ * on the screen by a literal `data-chrome="…"` and `scene-parity.structural.test.ts` demands that
+ * every one is a key here and that the composer names its input.
+ *
+ * The ruler's labels are painted by {@link drawAxisMarkerRow} into the row `markerRow` reserves;
+ * the gutter's by {@link paintExportGutter}.
+ *
+ * **What the gate proves, and what it does not:** that the composer was TOLD about each input — the
+ * key is named in the `renderExportImage` call — not that pixels exist. The pixels are asserted by
+ * `render-export-image.swimlanes.test.ts` (the ruler's chips and the gutter's names), because a
+ * literal key is satisfied equally by an input the renderer then ignores.
+ */
+export const EXPORT_CHROME_INPUTS = {
+  ruler: 'markerRow',
+  'swimlane-gutter': 'swimlaneGutter',
 } as const satisfies Record<string, keyof RenderExportImageInput>;
 
 /** Injectable seams so the off-screen render is testable without a real 2D context. */
@@ -184,7 +219,9 @@ type LegendEntry = {
     | 'lineDashed'
     | 'today'
     | 'dataDate'
-    | 'overAllocation';
+    | 'overAllocation'
+    // Words only: a count of what the picture did not draw in full, with no mark to key.
+    | 'note';
   colour: (palette: PrintPalette) => string;
 };
 
@@ -214,6 +251,9 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
 ];
 
+/** How many leading {@link EXPORT_LEGEND} rows are the criticality key. */
+const CRITICALITY_ENTRIES = 3;
+
 /** The entry for the over-allocation badge, last as on the screen's key (`TsldLegend.tsx`). It is
  * appended only when the picture draws a badge, so a key never names a mark the page lacks
  * (TECH_DEBT #524) — the same both-ways rule the DOM legend's census holds. */
@@ -237,10 +277,31 @@ function measuredWidth(ctx: CanvasRenderingContext2D, text: string): number {
   return (measured && measured.width) || text.length * 6.5;
 }
 
+/**
+ * The swimlane names the gutter had to shorten, said in the legend (ADR-0127 D3: what the picture
+ * does not draw in full is counted, not silently clipped). Placed by {@link legendFor}.
+ */
+function cutNamesEntry(count: number): LegendEntry {
+  return {
+    label: `${String(count)} swimlane ${count === 1 ? 'name' : 'names'} shortened`,
+    kind: 'note',
+    colour: (p) => p.mutedInk,
+  };
+}
+
 /** The legend rows this picture's scene calls for. */
-function legendFor(scene: TsldScene): readonly LegendEntry[] {
+function legendFor(scene: TsldScene, cutNames: number): readonly LegendEntry[] {
   const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
-  return drawsBadge ? [...EXPORT_LEGEND, OVER_ALLOCATION_ENTRY] : EXPORT_LEGEND;
+  const rows = drawsBadge ? [...EXPORT_LEGEND, OVER_ALLOCATION_ENTRY] : EXPORT_LEGEND;
+  if (cutNames === 0) return rows;
+  // Straight after the criticality key, ahead of every optional row: a narrow crop's "+N more"
+  // takes entries from the tail, and the count of names the picture could not show is not the
+  // thing to lose first (ADR-0127 D3).
+  return [
+    ...rows.slice(0, CRITICALITY_ENTRIES),
+    cutNamesEntry(cutNames),
+    ...rows.slice(CRITICALITY_ENTRIES),
+  ];
 }
 
 /**
@@ -262,6 +323,7 @@ export async function renderExportImage(
     meta,
     wbsBand,
     resourceStrip,
+    swimlaneGutter,
   } = input;
   const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;
   const bandContent = input.bandContent ?? 'full';
@@ -334,8 +396,51 @@ export async function renderExportImage(
   ctx.fillRect(0, 0, size.width, size.height);
   ctx.globalCompositeOperation = 'source-over';
 
-  drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta, bandContent, legendFor(scene));
-  drawAxisMarkerRow(ctx, viewport, size, topBand, markerRow, palette, scene);
+  // The gutter's names are fitted BEFORE the title band is drawn, because how many were cut is a
+  // line of the legend. The frame is the screen's: the column under the title band, the labels
+  // from under the marker row and the WBS band down to where the strip's caption begins.
+  let gutter: { frame: ExportGutterFrame; layout: ReturnType<typeof layoutExportGutter> } | null =
+    null;
+  if (swimlaneGutter) {
+    const frame: ExportGutterFrame = {
+      columnTop: topBand,
+      labelsTop: topBand + markerRow + (wbsBand?.height ?? 0),
+      labelsBottom:
+        size.height -
+        (resourceStrip && resourceStrip.height > 0
+          ? resourceStrip.height + EXPORT_STRIP_CAPTION_ROW
+          : 0),
+    };
+    ctx.font = EXPORT_GUTTER_FONT;
+    gutter = {
+      frame,
+      layout: layoutExportGutter(swimlaneGutter.swimlanes, viewport, size, frame, (text) =>
+        measuredWidth(ctx, text),
+      ),
+    };
+  }
+
+  drawTitleBand(
+    ctx,
+    size,
+    topBand,
+    palette,
+    scaledToFit,
+    meta,
+    bandContent,
+    legendFor(scene, gutter?.layout.cutCount ?? 0),
+  );
+  drawAxisMarkerRow(
+    ctx,
+    viewport,
+    size,
+    topBand,
+    markerRow,
+    palette,
+    scene,
+    gutter ? EXPORT_GUTTER_WIDTH : 0,
+  );
+  if (gutter) paintExportGutter(ctx, gutter.layout, gutter.frame, size, palette);
   if (resourceStrip && resourceStrip.height > 0) {
     drawStripCaption(ctx, resourceStrip.snapshot, size, resourceStrip.height, palette);
   }
@@ -558,6 +663,7 @@ function drawAxisMarkerRow(
   markerRow: number,
   palette: PrintPalette,
   scene: TsldScene,
+  gutterWidth: number,
 ): void {
   if (markerRow <= 0) return;
   // Opaque row ground (the title band's own treatment, one strip down).
@@ -571,9 +677,12 @@ function drawAxisMarkerRow(
 
   // The same facts the painter derived its lines from (`paint.ts` layer 3.5) — the model is the
   // single answer to "where are the rules and which labels survive".
+  // With a gutter the ruler is the STAGE's, as on screen: it starts at the gutter's right edge, so
+  // its marks are placed and clamped against the stage's own frame and then shifted into the picture.
+  // Zero is the identity, which is what keeps the gutter-free row byte-for-byte what it was.
   const model = axisMarkers(
-    viewport,
-    size,
+    { ...viewport, originX: viewport.originX - gutterWidth },
+    { ...size, width: size.width - gutterWidth },
     {
       dataDateLine: scene.dataDateLine,
       todayOffset: scene.todayOffset,
@@ -586,7 +695,9 @@ function drawAxisMarkerRow(
   const chipTop = topBand + (markerRow - MARKER_CHIP_H) / 2;
   for (const mark of model.marks) {
     const width = mark.width ?? measure(mark.label);
-    const left = mark.left ?? Math.max(0, Math.min(mark.x - width / 2, size.width - width));
+    const left =
+      gutterWidth +
+      (mark.left ?? Math.max(0, Math.min(mark.x - width / 2, size.width - gutterWidth - width)));
     const fill = mark.kind === 'dataDate' ? palette.dataDate : palette.today;
     const ink = mark.kind === 'dataDate' ? palette.dataDateInk : palette.todayInk;
     // A plain rect rather than `roundRect` — the 2 px radius the screen's chips wear is not worth
@@ -617,7 +728,10 @@ function drawLegend(
   let x = BAND_PAD;
   for (let i = 0; i < legend.length; i += 1) {
     const entry = legend[i]!;
-    const entryWidth = SWATCH_W + LEGEND_LABEL_GAP + measure(entry.label);
+    const entryWidth =
+      entry.kind === 'note'
+        ? measure(entry.label)
+        : SWATCH_W + LEGEND_LABEL_GAP + measure(entry.label);
     const left = legend.length - i - 1;
     // Reserve room for the "+N more" the NEXT entry would need if this one is the last that fits, so
     // the count itself can never be the thing that overflows. A narrow crop used to drop the
@@ -630,6 +744,12 @@ function drawLegend(
       return;
     }
     const colour = entry.colour(palette);
+    if (entry.kind === 'note') {
+      ctx.fillStyle = colour;
+      ctx.fillText(entry.label, x, y + SWATCH_H);
+      x += entryWidth + LEGEND_ENTRY_GAP;
+      continue;
+    }
     if (entry.kind === 'fill') {
       ctx.fillStyle = colour;
       ctx.fillRect(x, swatchTop, SWATCH_W, SWATCH_H);

@@ -1436,12 +1436,22 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
     lens.enabled = false;
   });
 
-  function rowDescription(): string {
-    renderScreen();
+  function openRow(): HTMLElement {
     fireEvent.click(screen.getByRole('button', { name: /^View/ }));
     const structure = screen.getByRole('button', { name: /^Structure/ });
     if (structure.getAttribute('aria-expanded') === 'false') fireEvent.click(structure);
-    const box = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    return screen.getByRole('checkbox', { name: 'Swimlanes' });
+  }
+
+  /** The reason text of the shut row; `unchecked` turns the lens off first, as only that shuts it. */
+  function rowDescription({ unchecked = false } = {}): string {
+    renderScreen();
+    let box = openRow();
+    // Only an unchecked row is shut by the list, so the planner's own click gets it there.
+    if (unchecked) {
+      fireEvent.click(box);
+      box = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    }
     expect(box).toHaveAttribute('aria-disabled', 'true');
     const ids = (box.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean);
     return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
@@ -1452,18 +1462,33 @@ describe('the Swimlanes lens row says why it is shut (swimlanes M2-T2)', () => {
     expect(rowDescription()).toContain('No swimlanes have been set up for this plan.');
   });
 
-  it('a list still on its way says it is loading', () => {
+  it('a list still on its way does not trap a lens that is on: it can be turned off', () => {
     h.swimlanes = { offered: true, source: 'MANUAL', list: { data: undefined, isPending: true } };
     h.tsldProps.current = null;
-    expect(rowDescription()).toContain('Loading swimlanes…');
+    renderScreen();
+    expect(openRow()).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('a failed list says it could not load (recovery is tested with the scene hook)', () => {
+  it('a failed list says it could not load while the lens is off', () => {
     h.swimlanes = {
       offered: true,
       source: 'MANUAL',
       list: { data: undefined, isPending: false, isError: true },
     };
-    expect(rowDescription()).toContain("Couldn't load swimlanes.");
+    expect(rowDescription({ unchecked: true })).toContain("Couldn't load swimlanes.");
+  });
+
+  it('a failed list leaves the lens operable while it is on, and turning it off works', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true },
+    };
+    renderScreen();
+    const box = openRow();
+    expect(box).toBeChecked();
+    expect(box).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(box);
+    expect(screen.getByRole('checkbox', { name: 'Swimlanes' })).not.toBeChecked();
   });
 });
