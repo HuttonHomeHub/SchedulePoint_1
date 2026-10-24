@@ -233,6 +233,45 @@ export interface MinimapWindow {
   laneTo: number;
 }
 
+/** One swimlane's place in the stack, as the readout needs it. `name: null` is "No swimlane". */
+export interface MinimapSwimlaneExtent {
+  name: string | null;
+  firstLane: number;
+  laneCount: number;
+}
+
+/**
+ * **The words for where the window is, once the diagram is divided into swimlanes** (swimlanes
+ * ui-architecture C13). With swimlanes shown a lane number is a display lane, a position in a stack
+ * nobody counts, so the readout never gives one: it names the swimlanes whose rows the window
+ * overlaps, and says so when the window is past the stack. Pure lane arithmetic, no pixel height, so
+ * the minimap keeps the allocation in lanes.
+ */
+export function swimlanesInView(
+  extents: readonly MinimapSwimlaneExtent[],
+  laneFrom: number,
+  laneTo: number,
+): string {
+  const inView = extents.filter(
+    (e) => e.firstLane <= laneTo && e.firstLane + e.laneCount - 1 >= laneFrom,
+  );
+  if (inView.length === 0) return 'past the last swimlane';
+  // A blank name is a name somebody typed, not "No swimlane", so it is worded rather than hidden.
+  const nameOf = (e: MinimapSwimlaneExtent): string =>
+    e.name === null ? 'no swimlane' : e.name.trim() || 'an unnamed swimlane';
+  if (inView.length === 1) {
+    const only = inView[0]!;
+    if (only.name === null) return 'outside any swimlane';
+    return only.name.trim() ? `swimlane ${only.name.trim()}` : 'an unnamed swimlane';
+  }
+  const SHOWN = 3;
+  const names = inView.map(nameOf);
+  if (names.length <= SHOWN) {
+    return `swimlanes ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+  }
+  return `swimlanes ${names.slice(0, SHOWN).join(', ')} and ${String(names.length - SHOWN)} more swimlanes`;
+}
+
 /**
  * The scene viewport expressed in minimap coordinates (M4 architecture gate, B1/S4): the
  * TRUE rectangle (exact, unclamped), the DISPLAY rectangle (clamped to the box, floored at

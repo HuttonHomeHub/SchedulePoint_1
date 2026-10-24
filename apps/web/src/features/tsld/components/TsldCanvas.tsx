@@ -2750,6 +2750,7 @@ export function TsldCanvas({
           onPanPages={minimapPanPages}
           readCentre={minimapViewportCentre}
           todayDay={todayOffset === null ? null : todayOffset + (todayFraction ?? 0)}
+          {...(swimlaneMarks ? { swimlaneExtents: swimlaneMarks.extents } : {})}
           {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
         />
       ) : null}

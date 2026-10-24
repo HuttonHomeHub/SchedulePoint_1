@@ -8,6 +8,7 @@ import {
   minimapTiers,
   minimapViewport,
   type MinimapPalette,
+  swimlanesInView,
 } from './minimap';
 
 const DATA_DATE = '2026-01-01';
@@ -481,3 +482,48 @@ function countingStyleCtx(): { calls: { styles: string[] }; ctx: Ctx2D } {
   };
   return { calls, ctx };
 }
+
+describe('swimlanesInView (swimlanes C13)', () => {
+  const EXTENTS = [
+    { name: 'Mechanical', firstLane: 0, laneCount: 3 },
+    { name: 'Electrical', firstLane: 3, laneCount: 2 },
+    { name: 'Civil', firstLane: 5, laneCount: 1 },
+    { name: 'Fit-out', firstLane: 6, laneCount: 1 },
+    { name: null, firstLane: 7, laneCount: 1 },
+  ];
+  it('names the one swimlane a window sits inside', () => {
+    expect(swimlanesInView(EXTENTS, 1, 2)).toBe('swimlane Mechanical');
+  });
+  it('names every swimlane the window overlaps, including a partial overlap', () => {
+    expect(swimlanesInView(EXTENTS, 2, 3)).toBe('swimlanes Mechanical and Electrical');
+  });
+  it('words "No swimlane" itself', () => {
+    expect(swimlanesInView(EXTENTS, 7, 7)).toBe('outside any swimlane');
+  });
+  it('shortens a long list to three and a count', () => {
+    expect(swimlanesInView(EXTENTS, 0, 7)).toBe(
+      'swimlanes Mechanical, Electrical, Civil and 2 more swimlanes',
+    );
+  });
+  it('says so, with no lane number, when the window is past the stack', () => {
+    expect(swimlanesInView(EXTENTS, 20, 30)).toBe('past the last swimlane');
+  });
+  it('words "no swimlane" in lower case inside a list', () => {
+    expect(swimlanesInView(EXTENTS, 6, 7)).toBe('swimlanes Fit-out and no swimlane');
+  });
+  it('words a blank name rather than printing nothing', () => {
+    expect(swimlanesInView([{ name: '  ', firstLane: 0, laneCount: 1 }], 0, 0)).toBe(
+      'an unnamed swimlane',
+    );
+    expect(
+      swimlanesInView(
+        [
+          { name: ' ', firstLane: 0, laneCount: 1 },
+          { name: 'Civil', firstLane: 1, laneCount: 1 },
+        ],
+        0,
+        1,
+      ),
+    ).toBe('swimlanes an unnamed swimlane and Civil');
+  });
+});

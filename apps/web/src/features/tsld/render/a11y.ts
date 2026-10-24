@@ -369,6 +369,15 @@ export function compareOverlaySummary(
    * how one comes to be edited and the other not.
    */
   undrawableReason: 'NOT_RECORDED' | 'NOT_COMPARABLE' = 'NOT_RECORDED',
+  /**
+   * **Changed bars the SWIMLANES could not place**, counted apart from `undrawable` (ADR-0127). That
+   * one is a fact about what the old revision recorded; this one is a fact about today's swimlanes,
+   * and the three causes (a live activity with no bar today, a frozen lane outside the swimlane's
+   * rows today, no frozen row for the basis today's source resolves to) share one honest sentence.
+   * Folding it into `undrawable` told the reader the old revision failed to record something it
+   * had recorded.
+   */
+  unplaced = 0,
 ): {
   readonly heading: string;
   /**
@@ -420,11 +429,17 @@ export function compareOverlaySummary(
         `because an activity they joined is no longer in the plan`,
     );
   }
+  if (unplaced > 0) {
+    parts.push(
+      `${String(unplaced)} not shown because their swimlane or row can no longer be matched`,
+    );
+  }
   const logic =
     links.drawn > 0 || links.undrawable > 0
       ? ' Logic changes are listed in words under Changes.'
       : '';
-  const undrawn = undrawable + links.undrawable;
+  const unrecorded = undrawable + links.undrawable;
+  const undrawn = unrecorded + unplaced;
   return {
     heading: `Comparison overlay: ${parts.join(', ')}.${logic}`,
     removed,
@@ -432,11 +447,18 @@ export function compareOverlaySummary(
     // One sentence for both kinds, because the reader's question is "is this picture complete?"
     // and the answer is no for the same reason in both cases: the old side did not record enough
     // to place the thing. Never rendered as "0 not shown" — see the caller's guard.
-    undrawnLabel:
-      undrawn === 0
+    undrawnLabel: [
+      unrecorded === 0
         ? ''
-        : `${String(undrawn)} ${undrawn === 1 ? 'change is' : 'changes are'} not shown — the ` +
+        : `${String(unrecorded)} ${unrecorded === 1 ? 'change is' : 'changes are'} not shown — the ` +
           `earlier revision did not record where they were.`,
+      unplaced === 0
+        ? ''
+        : `${String(unplaced)} ${unplaced === 1 ? 'change is' : 'changes are'} not shown — their ` +
+          `swimlane or row can no longer be matched.`,
+    ]
+      .filter((sentence) => sentence !== '')
+      .join(' '),
   };
 }
 
