@@ -25,6 +25,7 @@ export {
   linkChainCommand,
   pasteActivitiesCommand,
   typeChangeCommand,
+  type CheckableCommand,
   type Command,
   type CommandCoalescing,
   type RepositionLaneFn,

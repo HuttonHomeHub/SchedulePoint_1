@@ -50,7 +50,7 @@ export function notApplicable(reason: NotApplicableReason, subjectName: string):
 }
 
 /** What a multi-row step says when it has no remembered name for a row that is gone. */
-const UNNAMED_SUBJECT = 'An activity in this step';
+export const UNNAMED_SUBJECT = 'An activity in this step';
 
 /**
  * How many rows a replay reads one by one. A step naming this many rows or fewer is checked through

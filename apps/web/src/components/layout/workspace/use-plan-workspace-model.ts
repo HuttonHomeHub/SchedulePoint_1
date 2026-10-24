@@ -180,7 +180,7 @@ import {
   usePlanEditHistory,
   usePlanUndoRedo,
   useHistoryResult,
-  type Command,
+  type CheckableCommand,
   type LanePlacement,
 } from '@/features/undo-redo';
 import {
@@ -989,7 +989,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       applied: boolean;
       conflict: string | null;
       refreshable?: boolean;
-      command?: Command;
+      command?: CheckableCommand;
     }> => {
       if (placements.length > PLACEMENTS_BATCH_MAX) {
         return {
@@ -1149,7 +1149,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         const writesTime = delta.dayDelta !== 0 || swimlaneLanes === undefined;
         // On the swimlane layout the placement's undo step is held until the lanes are written, so the
         // two are recorded as the one step the planner thinks of (`composeSteps`).
-        let heldPlacement: { command: Command; saved: readonly ActivitySummary[] } | null = null;
+        let heldPlacement: { command: CheckableCommand; saved: readonly ActivitySummary[] } | null =
+          null;
         if (writesTime) {
           // Hold the coalesced recalculation across the write so the bars cannot move under the
           // planner mid-batch, released in `finally` — a leaked hold stalls every later
@@ -1219,26 +1220,35 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               ? `Move \u201c${rows[0].name}\u201d`
               : `Move ${String(rows.length)} activities`;
           const placement = heldPlacement;
-          const laned = await writeSwimlaneLanes(swimlaneLanes, {
-            label,
-            hold: placement !== null,
-            // The placements batch has just bumped these rows; the cache may not show it yet.
-            ...(placement
-              ? { versions: new Map(placement.saved.map((r) => [r.id, r.version])) }
-              : {}),
-            ...(options?.coalesce && options.pressedAt !== undefined
-              ? { pressedAt: options.pressedAt }
-              : {}),
-          });
-          if (placement !== null) {
-            editHistory.record(
-              laned.command
-                ? composeSteps({ label, steps: [placement.command, laned.command] })
-                : placement.command,
-            );
+          let laned: Awaited<ReturnType<typeof writeSwimlaneLanes>> | null = null;
+          try {
+            laned = await writeSwimlaneLanes(swimlaneLanes, {
+              label,
+              hold: placement !== null,
+              // The placements batch has just bumped these rows; the cache may not show it yet.
+              ...(placement
+                ? { versions: new Map(placement.saved.map((r) => [r.id, r.version])) }
+                : {}),
+              ...(options?.coalesce && options.pressedAt !== undefined
+                ? { pressedAt: options.pressedAt }
+                : {}),
+            });
+          } finally {
+            // The placements have landed whatever the lane write did — even when it THROWS (a 5xx, a
+            // dropped connection, a lost pen) — so their undo step is recorded either way: composed
+            // with the lanes when both landed, alone otherwise. A step lost here is a drag the planner
+            // cannot undo. A burst that mixes day and lane presses is one step per burst and does not
+            // fold into the next: composed steps are not coalescable (see `composeSteps`).
+            if (placement !== null) {
+              editHistory.record(
+                laned?.command
+                  ? composeSteps({ label, steps: [placement.command, laned.command] })
+                  : placement.command,
+              );
+            }
+            // The time part, if there was one, has landed; its recalculation is owed either way.
+            if (writesTime) autoRecalc.notify();
           }
-          // The time part, if there was one, has landed; its recalculation is owed either way.
-          if (writesTime) autoRecalc.notify();
           if (!laned.applied) {
             return {
               applied: writesTime,
@@ -1751,7 +1761,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
      * step and the row the write returned are left here instead of being recorded, so the two halves
      * can be recorded as one.
      */
-    held?: { command: Command | null; saved: ActivitySummary | null },
+    held?: { command: CheckableCommand | null; saved: ActivitySummary | null },
   ): Promise<TsldRepositionOutcome> => {
     const activity = (activities.data ?? []).find((a) => a.id === activityId);
     if (!activity) return { applied: false, conflict: null };
@@ -1771,24 +1781,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         timeConflict = timed.conflict;
       }
       const timeCommand = timeHalf.command;
-      const laned = await writeSwimlaneLanes(swimlaneLanes, {
-        label: `Move \u201c${activity.name}\u201d to lane`,
-        hold: timeCommand !== null,
-        ...(timeHalf.saved
-          ? { versions: new Map([[timeHalf.saved.id, timeHalf.saved.version]]) }
-          : {}),
-      });
-      if (timeCommand !== null) {
-        // layout-exempt: the time half snapshotted with `beginLayoutEdit` in its own write above;
-        // this only records the two halves as one step.
-        editHistory.record(
-          laned.command
-            ? composeSteps({
-                label: `Move \u201c${activity.name}\u201d`,
-                steps: [timeCommand, laned.command],
-              })
-            : timeCommand,
-        );
+      let laned: Awaited<ReturnType<typeof writeSwimlaneLanes>> | null = null;
+      try {
+        laned = await writeSwimlaneLanes(swimlaneLanes, {
+          label: `Move \u201c${activity.name}\u201d to lane`,
+          hold: timeCommand !== null,
+          ...(timeHalf.saved
+            ? { versions: new Map([[timeHalf.saved.id, timeHalf.saved.version]]) }
+            : {}),
+        });
+      } finally {
+        // The time half has landed even if the lane write THROWS (5xx, network, a lost pen), so its
+        // step is recorded either way: composed with the lane when both landed, alone otherwise.
+        if (timeCommand !== null) {
+          // layout-exempt: the time half snapshotted with `beginLayoutEdit` in its own write above;
+          // this only records the halves.
+          editHistory.record(
+            laned?.command
+              ? composeSteps({
+                  label: `Move \u201c${activity.name}\u201d`,
+                  steps: [timeCommand, laned.command],
+                })
+              : timeCommand,
+          );
+        }
       }
       return {
         applied: laned.applied || startDay !== undefined,

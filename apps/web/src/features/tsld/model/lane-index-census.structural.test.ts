@@ -49,6 +49,8 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
   'features/tsld/model/arrange-lanes.ts': 'stored-lane',
   'features/tsld/model/auto-resolve.ts': 'display-lane-intent',
   'features/tsld/model/bulk-move.ts': 'display-lane-intent',
+  // The edit contract's types: a reposition intent arrives in display lanes (M2-T4).
+  'features/tsld/model/edit-types.ts': 'display-lane-intent',
   // The inverse of the projection (M2-T4): turns a display lane into the lane inside a swimlane.
   'features/tsld/model/swimlane-lanes.ts': 'display-lane-intent',
   'features/tsld/toolbar/use-tsld-toolbar-context.tsx': 'stored-lane',

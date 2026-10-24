@@ -2,10 +2,12 @@ import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  bulkPlacementCommand,
   composeSteps,
+  relaneCommand,
   swimlaneLanesCommand,
   visualStartCommand,
-  type Command,
+  type CheckableCommand,
   type SwimlaneLaneState,
 } from './commands';
 import type { ReplayContext } from './replay';
@@ -308,6 +310,7 @@ describe('composeSteps — a diagonal drag is one undo step', () => {
     });
     order.length = 0;
     s.writeLanes.mockClear();
+    setVisualStart.mockClear();
     const time = visualStartCommand({
       setVisualStart,
       activityId: 'a',
@@ -323,7 +326,7 @@ describe('composeSteps — a diagonal drag is one undo step', () => {
       saved: savedLane,
     });
     const command = composeSteps({ label: 'Move “Pour”', steps: [time, lane] });
-    return { s, order, command, setVisualStart, writeLanes };
+    return { s, order, command, setVisualStart, writeLanes, time, lane };
   }
 
   it('undoes the lane first and the time second, and redoes them the other way round', async () => {
@@ -341,11 +344,38 @@ describe('composeSteps — a diagonal drag is one undo step', () => {
   });
 
   it('reads each half at the version the other half left, so there is no stale-version 409', async () => {
-    const { s, command } = await diagonal();
-    await command.undo(s.ctx);
-    await command.redo(s.ctx);
-    // The fake refuses any other version; reaching here with `applied` twice is the assertion.
-    expect(s.store.get('a')?.version).toBeGreaterThan(3);
+    const { s, command, setVisualStart, writeLanes } = await diagonal();
+    // Forward: the placement took version 1 to 2 and the lane write 2 to 3.
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    expect(await command.redo(s.ctx)).toEqual({ kind: 'applied' });
+    // Undo: lane at 3 (leaves 4), then the placement at 4 (leaves 5). Redo: placement at 5 (leaves 6),
+    // then lane at 6 (leaves 7). The fake refuses any other version.
+    expect(writeLanes.mock.calls.map(([input]) => input.positions[0]?.version)).toEqual([3, 6]);
+    expect(setVisualStart.mock.calls.map(([input]) => input.version)).toEqual([4, 5]);
+    expect(s.store.get('a')?.version).toBe(7);
+  });
+
+  it('is not atomic: a write refused after the checks passed leaves the first half written, throws nothing', async () => {
+    const { s, command, setVisualStart } = await diagonal();
+    // A colleague's edit lands between the checks and the second write: the placement is refused.
+    setVisualStart.mockImplementationOnce(() =>
+      Promise.reject(new ApiFetchError(409, { code: 'STALE_VERSION', message: 'Stale.' })),
+    );
+    const result = await command.undo(s.ctx);
+    expect(result).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
+    // The lane half (undone first) stays undone; the day half was set aside.
+    expect(s.store.get('a')?.swimlaneLanes[0]?.laneIndex).toBe(0);
+    expect(s.store.get('a')?.visualStart).toBe('2026-02-09');
+  });
+
+  it('answers a dry check of both halves without writing, and the check of a composed step is the same', async () => {
+    const { s, command, setVisualStart, writeLanes } = await diagonal();
+    expect(await command.check('undo', s.ctx)).toEqual({ kind: 'applied' });
+    expect(await command.check('redo', s.ctx)).toMatchObject({ kind: 'not-applicable' });
+    s.store.get('a')!.swimlaneLanes[0]!.laneIndex = 9;
+    expect(await command.check('undo', s.ctx)).toMatchObject({ kind: 'not-applicable' });
+    expect(setVisualStart).not.toHaveBeenCalled();
+    expect(writeLanes).not.toHaveBeenCalled();
   });
 
   it('checks both halves before writing either: a changed lane leaves the time untouched', async () => {
@@ -353,7 +383,7 @@ describe('composeSteps — a diagonal drag is one undo step', () => {
     s.store.get('a')!.swimlaneLanes[0]!.laneIndex = 5;
     expect(await command.undo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
     expect(order).toEqual([]);
-    expect(setVisualStart).toHaveBeenCalledTimes(1);
+    expect(setVisualStart).not.toHaveBeenCalled();
     expect(s.store.get('a')?.visualStart).toBe('2026-02-09');
   });
 
@@ -375,15 +405,116 @@ describe('composeSteps — a diagonal drag is one undo step', () => {
   it('recalculates when either half can change the schedule, and not otherwise', async () => {
     const { command } = await diagonal();
     expect(command.affectsSchedule).toBeUndefined();
-    const layoutOnly = (): Command => ({
+    const layoutOnly = (): CheckableCommand => ({
       label: 'x',
       subjects: [],
       undo: () => Promise.resolve({ kind: 'applied' }),
       redo: () => Promise.resolve({ kind: 'applied' }),
+      check: () => Promise.resolve({ kind: 'applied' }),
       affectsSchedule: false,
     });
     expect(composeSteps({ label: 'y', steps: [layoutOnly(), layoutOnly()] }).affectsSchedule).toBe(
       false,
     );
+  });
+});
+
+describe('Command.check — a dry replay that writes nothing', () => {
+  const rowWith = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
+    anActivity({ id: 'a', name: 'Pour', visualStart: '2026-02-09', laneIndex: 2, ...over });
+  const ctxOf = (row: ActivitySummary) => {
+    const readActivities = vi.fn((ids: readonly string[]) =>
+      Promise.resolve(new Map(ids.flatMap((id) => (id === row.id ? [[id, row] as const] : [])))),
+    );
+    return { readActivities, ctx: { readActivities } as unknown as ReplayContext };
+  };
+
+  it('fieldStep (visualStart): applied when the row still holds what the step left, else changed', async () => {
+    const setVisualStart = vi.fn();
+    const saved = rowWith();
+    const command = visualStartCommand({
+      setVisualStart,
+      activityId: 'a',
+      before: { visualStart: '2026-02-02', laneIndex: 2 },
+      after: { visualStart: '2026-02-09', laneIndex: 2 },
+      saved,
+      activityName: 'Pour',
+    });
+    expect(await command.check('undo', ctxOf(saved).ctx)).toEqual({ kind: 'applied' });
+    expect(await command.check('undo', ctxOf(rowWith({ visualStart: '2026-03-01' })).ctx)).toEqual({
+      kind: 'not-applicable',
+      reason: 'changed',
+      subjectName: 'Pour',
+    });
+    // Redo expects the state BEFORE the step, which the row does not hold.
+    expect(await command.check('redo', ctxOf(saved).ctx)).toMatchObject({ reason: 'changed' });
+    expect(setVisualStart).not.toHaveBeenCalled();
+  });
+
+  it('bulkPlacementCommand: applied when every row holds the placement, else changed, writing nothing', async () => {
+    const batchPlacements = vi.fn();
+    const placement = (visualStart: string) => ({
+      id: 'a',
+      constraintType: null,
+      constraintDate: null,
+      visualStart,
+      laneIndex: null,
+    });
+    const saved = rowWith();
+    const command = bulkPlacementCommand({
+      batchPlacements,
+      before: [placement('2026-02-02')],
+      after: [placement('2026-02-09')],
+      saved: [saved],
+    });
+    expect(await command.check('undo', ctxOf(saved).ctx)).toEqual({ kind: 'applied' });
+    expect(
+      await command.check('undo', ctxOf(rowWith({ visualStart: '2026-03-01' })).ctx),
+    ).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
+    expect(batchPlacements).not.toHaveBeenCalled();
+  });
+
+  it('swimlaneLanesCommand: reports a bar that has gone', async () => {
+    const s = server([]);
+    const command = swimlaneLanesCommand({
+      writeLanes: s.writeLanes,
+      before: [state('a', 'S1', 0)],
+      after: [state('a', 'S1', 2)],
+      saved: [placed('a', 'S1', 2)],
+    });
+    expect(await command.check('undo', s.ctx)).toMatchObject({
+      kind: 'not-applicable',
+      reason: 'gone',
+    });
+  });
+
+  it('adds no read to a replay that has a check: relane and visualStart undo read the row once', async () => {
+    const saved = rowWith();
+    const reads = ctxOf(saved);
+    const setVisualStart = vi.fn(() => Promise.resolve(saved));
+    const visual = visualStartCommand({
+      setVisualStart,
+      activityId: 'a',
+      before: { visualStart: '2026-02-02', laneIndex: 2 },
+      after: { visualStart: '2026-02-09', laneIndex: 2 },
+      saved,
+      activityName: 'Pour',
+    });
+    expect(visual.check).toBeDefined();
+    await visual.undo(reads.ctx);
+    expect(reads.readActivities).toHaveBeenCalledTimes(1);
+
+    const relaneReads = ctxOf(rowWith({ laneIndex: 3 }));
+    const relane = relaneCommand({
+      repositionLane: vi.fn(() => Promise.resolve(rowWith())),
+      activityId: 'a',
+      fromLaneIndex: 2,
+      toLaneIndex: 3,
+      saved: rowWith({ laneIndex: 3 }),
+      activityName: 'Pour',
+    });
+    expect(relane.check).toBeDefined();
+    await relane.undo(relaneReads.ctx);
+    expect(relaneReads.readActivities).toHaveBeenCalledTimes(1);
   });
 });

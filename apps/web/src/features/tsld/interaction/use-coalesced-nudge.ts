@@ -2,8 +2,8 @@ import type { ActivitySummary } from '@repo/types';
 import { useEffect, useRef } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
-import type { TsldEditOutcome, TsldRepositionInput } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
+import type { TsldEditOutcome, TsldRepositionInput } from '../model/edit-types';
 import {
   repositionAnnouncement,
   stayInSwimlaneAnnouncement,

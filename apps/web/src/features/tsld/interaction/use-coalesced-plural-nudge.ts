@@ -2,8 +2,8 @@ import type { ActivitySummary } from '@repo/types';
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
-import type { TsldBulkOperations } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
+import type { TsldBulkOperations } from '../model/edit-types';
 import {
   MOVE_FAILED_NOTE,
   pluralMoveAnnouncement,

@@ -286,6 +286,25 @@ describe('onTsldReposition with swimlaneLanes (a single bar on the swimlane layo
     expect(h.record.mock.calls[0]![0].label).toBe('Move “Excavate”');
   });
 
+  it('keeps the day’s undo step when the lane write THROWS (a 5xx) after the day landed', async () => {
+    h.writeLanes.mockRejectedValue(apiError(500));
+    const { result } = setup();
+    await act(async () => {
+      await expect(
+        result.current.onTsldReposition({
+          activityId: 'a1',
+          startDay: 12,
+          swimlaneLanes: MOVE_ONE,
+        }),
+      ).rejects.toThrow();
+    });
+    expect(h.setVisualStart).toHaveBeenCalledTimes(1);
+    // The placement is on the server, so it is on the undo stack — alone, as its own step.
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Move “Excavate”');
+    expect(h.record.mock.calls[0]![0].subjects).toEqual(['a1']);
+  });
+
   it('reports a bar the plan no longer has instead of writing a smaller batch', async () => {
     const { result } = setup();
     let outcome;
@@ -455,6 +474,48 @@ describe('moveMany with swimlaneLanes (a plural move on the swimlane layout)', (
     for (const row of h.batchPlacements.mock.calls[0]![0].placements as { laneIndex: unknown }[]) {
       expect(row.laneIndex).toBeNull();
     }
+  });
+
+  it('a keyboard burst folds while it is lane-only, and does not once it mixes in a day', async () => {
+    const { result } = setup();
+    await act(async () => {
+      await result.current.bulkOperations.moveMany(
+        [A1, A2],
+        { dayDelta: 0, laneDelta: 0 },
+        { swimlaneLanes: PLACEMENTS, coalesce: true, pressedAt: 1 },
+      );
+    });
+    expect(h.record.mock.calls[0]![0].coalescing).toBeDefined();
+    h.record.mockClear();
+    await act(async () => {
+      await result.current.bulkOperations.moveMany(
+        [A1, A2],
+        { dayDelta: 2, laneDelta: 0 },
+        { swimlaneLanes: PLACEMENTS, coalesce: true, pressedAt: 2 },
+      );
+    });
+    // One composed step for the burst; composed steps carry no coalescing descriptor.
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].coalescing).toBeUndefined();
+  });
+
+  it('keeps the placements’ undo step, and the recalculation, when the lane write THROWS', async () => {
+    h.writeLanes.mockRejectedValue(apiError(500));
+    const { result } = setup();
+    await act(async () => {
+      await expect(
+        result.current.bulkOperations.moveMany(
+          [A1, A2],
+          { dayDelta: 3, laneDelta: 0 },
+          { swimlaneLanes: PLACEMENTS },
+        ),
+      ).rejects.toThrow();
+    });
+    expect(h.batchPlacements).toHaveBeenCalledTimes(1);
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]![0].label).toBe('Move 2 activities');
+    expect(h.notify).toHaveBeenCalledTimes(1);
+    expect(h.release).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a batch the endpoint would refuse, naming the cap and offering no Refresh', async () => {

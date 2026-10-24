@@ -1,13 +1,9 @@
 import type { ActivitySummary } from '@repo/types';
 import { useMemo } from 'react';
 
-import type {
-  TsldBulkOperations,
-  TsldEditOutcome,
-  TsldRepositionInput,
-} from '../components/TsldPanel';
 import type { DiagramSource } from '../model/derive-diagram-source';
 import { drawnDaySpan } from '../model/drawn-span';
+import type { TsldBulkOperations, TsldEditOutcome, TsldRepositionInput } from '../model/edit-types';
 import {
   createInSwimlane,
   dropInSwimlane,

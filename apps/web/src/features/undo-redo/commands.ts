@@ -17,6 +17,7 @@ import {
   linkName,
   notApplicable,
   pick,
+  UNNAMED_SUBJECT,
   ReplayFailure,
   replayActivities,
   replayActivity,
@@ -103,6 +104,13 @@ export interface Command {
   readonly check?: (direction: 'undo' | 'redo', ctx: ReplayContext) => Promise<ReplayResult>;
 }
 
+/**
+ * A command that can be checked without writing (see {@link Command.check}) — what a step needs to
+ * be to take part in {@link composeSteps}. A type rather than a convention, so a half that cannot be
+ * checked ahead is a compile error and not a half-undone drag.
+ */
+export type CheckableCommand = Command & { check: NonNullable<Command['check']> };
+
 /** How a coalescable command folds into the previous same-key step. */
 export interface CommandCoalescing {
   /** Same-key consecutive commands recorded within one interaction collapse to a single undo step. */
@@ -128,10 +136,10 @@ interface CoalesceState<P> {
  * a chain of N intermediate writes always collapses to one step spanning the first pre-edit and last
  * post-edit state, regardless of how many merges happened along the way.
  */
-function coalescable<P>(
-  command: Command,
+function coalescable<P, C extends Command>(
+  command: C,
   spec: { key: string; before: P; after: P; rebuild: (before: P, after: P) => Command },
-): Command {
+): C {
   const coalescing: CommandCoalescing & CoalesceState<P> = {
     key: spec.key,
     before: spec.before,
@@ -215,7 +223,7 @@ function fieldStep<K extends keyof ActivitySummary>(params: {
   after: Pick<ActivitySummary, K>;
   saved: Pick<ActivitySummary, K>;
   write: (target: Pick<ActivitySummary, K>, row: ActivitySummary) => Promise<ActivitySummary>;
-}): Pick<Command, 'undo' | 'redo' | 'check'> {
+}): Pick<Command, 'undo' | 'redo'> & { check: NonNullable<Command['check']> } {
   const { id, name, fields, before, after, write } = params;
   let atUndo: Pick<ActivitySummary, K> = pick(params.saved, fields);
   let atRedo: Pick<ActivitySummary, K> = pick(before, fields);
@@ -1222,7 +1230,7 @@ export function visualStartCommand(params: {
   /** The placed activity's name, so the default label names its subject (M1-T1). */
   activityName: string;
   label?: string;
-}): Command {
+}): CheckableCommand {
   const { setVisualStart, activityId, before, after, saved } = params;
   const step = fieldStep({
     id: activityId,
@@ -1239,7 +1247,7 @@ export function visualStartCommand(params: {
         version: row.version,
       }),
   });
-  const command: Command = {
+  const command: CheckableCommand = {
     label: params.label ?? `Move “${params.activityName}”`,
     subjects: [activityId],
     ...step,
@@ -1588,9 +1596,6 @@ export function autoArrangeCommand(params: {
   };
 }
 
-/** What a multi-row step says when it has no remembered name for the row. */
-const UNNAMED = 'An activity in this step';
-
 /** `useWriteSwimlaneLanes().mutateAsync` — an all-or-nothing batch of in-swimlane lanes. */
 export type WriteSwimlaneLanesFn = (input: {
   positions: SwimlaneLaneRow[];
@@ -1633,7 +1638,7 @@ export function swimlaneLanesCommand(params: {
   /** The rows the forward batch returned — the state an undo expects to find. */
   saved: readonly ActivitySummary[];
   label?: string;
-}): Command {
+}): CheckableCommand {
   const { writeLanes } = params;
   const savedById = new Map(params.saved.map((row) => [row.id, row]));
   const expectation = (
@@ -1675,7 +1680,7 @@ export function swimlaneLanesCommand(params: {
     if (!checked.ok) return checked;
     for (const state of expect.values()) {
       const row = checked.rows.get(state.id);
-      if (row === undefined) return { ok: false, result: notApplicable('gone', UNNAMED) };
+      if (row === undefined) return { ok: false, result: notApplicable('gone', UNNAMED_SUBJECT) };
       if (storedSwimlaneLane(row, state.swimlaneId) !== state.lane) {
         return { ok: false, result: notApplicable('changed', row.name) };
       }
@@ -1693,7 +1698,7 @@ export function swimlaneLanesCommand(params: {
     const positions: SwimlaneLaneRow[] = [];
     for (const t of target) {
       const row = checked.rows.get(t.id);
-      if (row === undefined) return notApplicable('gone', UNNAMED);
+      if (row === undefined) return notApplicable('gone', UNNAMED_SUBJECT);
       // The swimlane is named only when this step changed it: a lane inside the swimlane a bar is
       // already in is no membership change, and naming one on a WBS plan is a 422.
       const changesSwimlane = expect.get(t.id)?.swimlaneId !== t.swimlaneId;
@@ -1706,12 +1711,12 @@ export function swimlaneLanesCommand(params: {
         },
       });
     }
-    return writeOrSetAside(UNNAMED, async () => {
+    return writeOrSetAside(UNNAMED_SUBJECT, async () => {
       const result = await writeLanes({ positions });
       settle(expectation(target, new Map(result.map((row) => [row.id, row]))));
     });
   };
-  const command: Command = {
+  const command: CheckableCommand = {
     label:
       params.label ??
       (params.after.length === 1 ? 'Move 1 activity' : `Move ${params.after.length} activities`),
@@ -1746,13 +1751,25 @@ export function swimlaneLanesCommand(params: {
  * and in lane on the swimlane layout is two writes — the placement endpoints cannot carry an
  * in-swimlane lane — but it is one thing the planner did, so Ctrl+Z takes it back as one.
  *
- * Undo runs the steps in reverse, redo forward. **Every step that can be checked is checked before
- * any of them writes** (see {@link Command.check}), so a colleague's edit to either half sets the
- * whole step aside rather than undoing half of the drag; a step with no `check` is the only part
- * that can still fail after another has written, which is why every builder a caller composes here
- * has one. Not coalescable: the pieces would merge with the wrong neighbours.
+ * Undo runs the steps in reverse, redo forward. **Every step is checked before any of them writes**
+ * (see {@link Command.check}; the type demands one), so a colleague's edit to either half that is
+ * already on the server sets the whole step aside rather than undoing half of the drag.
+ *
+ * **That is not atomic, and it does not claim to be.** Between the checks and the writes a colleague
+ * can still edit a row, and a write can still be refused (a 409 on a version that moved): the first
+ * half has then been written and the second is set aside, so the answer is `not-applicable` for the
+ * second half with the first left written. Nothing throws and nothing is rolled back — a rollback is
+ * a third write that could fail the same way — and the history reports the half that was refused.
+ *
+ * Not coalescable: the pieces would merge with the wrong neighbours. So a held-key burst on the
+ * swimlane layout is one step only while it is lane-only (which does fold); once a burst mixes day
+ * and lane presses, each burst — the debounced write, not each press — is its own step and does not
+ * fold into the next, where off the layout a burst on one selection folds into one.
  */
-export function composeSteps(params: { label: string; steps: readonly Command[] }): Command {
+export function composeSteps(params: {
+  label: string;
+  steps: readonly CheckableCommand[];
+}): CheckableCommand {
   const { steps } = params;
   const run = async (
     direction: 'undo' | 'redo',
@@ -1769,7 +1786,7 @@ export function composeSteps(params: { label: string; steps: readonly Command[] 
     }
     return APPLIED;
   };
-  const composed: Command = {
+  const composed: CheckableCommand = {
     label: params.label,
     subjects: [...new Set(steps.flatMap((step) => step.subjects))],
     undo: (ctx) => run('undo', [...steps].reverse(), ctx),
@@ -1862,7 +1879,7 @@ export function bulkPlacementCommand(params: {
   label?: string;
   /** Opt-in merge key — `bulkMoveCoalesceKey(ids)`. Absent for the drag and apply-levelling. */
   coalesceKey?: string;
-}): Command {
+}): CheckableCommand {
   const { batchPlacements } = params;
   const savedById = new Map(params.saved.map((row) => [row.id, row]));
   const expectations = (
@@ -1891,7 +1908,7 @@ export function bulkPlacementCommand(params: {
         settle(expectations(target, new Map(result.map((row) => [row.id, row]))));
       },
     );
-  const command: Command = {
+  const command: CheckableCommand = {
     label: params.label ?? `Move ${params.after.length} activities`,
     subjects: params.after.map((p) => p.id),
     undo: (ctx) =>
