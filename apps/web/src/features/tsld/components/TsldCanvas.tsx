@@ -92,6 +92,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { sceneLayers } from '../render/scene-layers';
 import { drawnSpanPlacement } from '../render/snap';
+import { gutterHasRoom, swimlaneGutterGeometry } from '../render/swimlane-gutter';
 import {
   DAY_LABEL_DEFAULT_WIDTH_PX,
   presetOf,
@@ -111,6 +112,7 @@ import {
   type WbsBandGroup,
 } from '../render/wbs-band';
 
+import { SwimlaneGutter, type SwimlaneGutterProps } from './SwimlaneGutter';
 import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
 import { useWithdrawnColumnHandoff } from './use-withdrawn-column-handoff';
 import {
@@ -230,17 +232,32 @@ const CLUSTER_WITHDRAWN_MESSAGE =
   'Diagram viewport controls hidden: not enough room. Use View, Zoom.';
 
 /**
- * The scene canvas's top offset inside the container — **the one definition** (ADR-0063 §5).
+ * Where the scene canvas starts inside the container — **the one definition** (ADR-0063 §5, and
+ * `docs/specs/swimlanes/ui-architecture.md` C3). `top` is the ruler plus the WBS band; `left` is the
+ * swimlane gutter's reservation.
  *
  * It used to be `RULER_HEIGHT` written out at each call site, which was correct only while the
  * ruler was the sole thing above the scene. The WBS band breaks that assumption, and it breaks it
  * quietly: the band renders, the canvas looks right, and the create popover opens forty pixels
- * above where the user clicked. So every conversion from a canvas-relative y to a container y now
- * goes through here, and `wbsBandHeightPx` is `0` whenever the band is off — which makes the
- * flag-off path byte-for-byte `RULER_HEIGHT`, the parity gate.
+ * above where the user clicked. The gutter is the same failure in x. So every conversion between a
+ * canvas-relative point and a container point goes through here, and both inputs are `0` whenever
+ * their layer is off — which makes the layers-off origin `{ left: 0, top: RULER_HEIGHT }`, the
+ * parity gate.
  */
-export function sceneTopOffset(wbsBandHeightPx: number): number {
-  return RULER_HEIGHT + wbsBandHeightPx;
+export function sceneOrigin(
+  wbsBandHeightPx: number,
+  gutterWidthPx: number,
+): { left: number; top: number } {
+  return { left: gutterWidthPx, top: RULER_HEIGHT + wbsBandHeightPx };
+}
+
+/**
+ * The inline position of a layer that starts at the scene's origin. `left` is written only when a
+ * gutter exists, so the layers-off DOM is attribute-for-attribute today's.
+ */
+function originStyle(wbsBandHeightPx: number, gutterWidthPx: number): React.CSSProperties {
+  const { left, top } = sceneOrigin(wbsBandHeightPx, gutterWidthPx);
+  return left > 0 ? { top, left } : { top };
 }
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
@@ -488,6 +505,21 @@ export interface TsldCanvasProps {
   wbsBandHeightPx?: number;
   /** Selecting a summary from a band bar. Never called for the derived bucket, which has no id. */
   onSelectBandSummary?: (activityId: string) => void;
+  /**
+   * The swimlane gutter's reservation at the left, in px — **`0` when it is off**, which is what
+   * makes `measure()` subtract nothing and no gutter mount: the canvas is then exactly today's.
+   * The host picks one of two fixed widths (`gutterWidthFor`) and passes the same number to
+   * the create popover's x through {@link sceneOrigin}.
+   */
+  gutterWidthPx?: number;
+  /**
+   * What the gutter's labels say. Neutral on purpose: `features/tsld` imports no other feature
+   * (ADR-0026 §8), so the host maps the swimlanes onto `GutterSwimlane`. Ignored at width 0.
+   */
+  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
+  /** Reports whether the container can hold the EXPANDED gutter, so the host's control can say
+   * why it is shut. Fires on change only; the `minimapRoom` form. */
+  onGutterRoomChange?: (room: boolean) => void;
 }
 
 /** Approximate popover footprint (w-56 + fields) used to keep it inside the canvas. */
@@ -953,6 +985,9 @@ export function TsldCanvas({
   wbsBandGroups = null,
   wbsBandHeightPx = 0,
   onSelectBandSummary,
+  gutterWidthPx = 0,
+  gutter = null,
+  onGutterRoomChange,
 }: TsldCanvasProps): React.ReactElement {
   // The painter draws from concrete resolved token colours (Canvas 2D `fillStyle` can't take a `var()`),
   // so the palette must re-resolve on a theme switch. `useThemeVersion` (the shared theme-mutation
@@ -1005,6 +1040,17 @@ export function TsldCanvas({
   // surface (jsdom, first frame) never suppresses the panel; only a real measure (> 1px wide)
   // may withdraw it.
   const [minimapRoom, setMinimapRoom] = useState(true);
+  // The expanded gutter's room, from the CONTAINER's width (not the stage's, which the gutter itself
+  // changes). Defaults TRUE for the same unmeasured-surface reason as `minimapRoom`.
+  const [gutterRoom, setGutterRoom] = useState(true);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const gutterModelRef = useRef(gutter);
+  const gutterSyncRef = useRef<{
+    originY: number;
+    height: number;
+    model: unknown;
+    root: Element | null;
+  }>({ originY: Number.NaN, height: -1, model: null, root: null });
   // Whether the visible stage can hold the cluster at all. When it cannot (a short stage under a tall
   // foot row) the column is withdrawn rather than drawn clipped, because clipped is invisible and
   // still focusable — a Tab stop nobody can see (WCAG 2.4.7). Zoom and Fit stay one press away in
@@ -1616,6 +1662,10 @@ export function TsldCanvas({
     onMinimapRoomChange?.(minimapRoom);
   }, [minimapRoom, onMinimapRoomChange]);
 
+  useEffect(() => {
+    onGutterRoomChange?.(gutterRoom);
+  }, [gutterRoom, onGutterRoomChange]);
+
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
   // navigation or chain-nav to an off-screen bar — pan the minimum distance so the selected bar's
   // ring is fully on-screen, kept off the edges by a margin so nothing obscures it. A no-op when
@@ -1662,11 +1712,12 @@ export function TsldCanvas({
     if (column && container && !bandBar && clusterRoomRef.current) {
       const c = column.getBoundingClientRect();
       const o = container.getBoundingClientRect();
+      const origin = sceneOrigin(wbsBandHeightPx, gutterWidthPx);
       const extra = clearOfObstacle(
         { x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h },
         {
-          x: c.left - o.left,
-          y: c.top - o.top - sceneTopOffset(wbsBandHeightPx),
+          x: c.left - o.left - origin.left,
+          y: c.top - o.top - origin.top,
           w: c.width,
           h: c.height,
         },
@@ -1682,7 +1733,7 @@ export function TsldCanvas({
     }
     // `stageTick` is a trigger and not a read: a selection docks its bar in the same commit that
     // selects, and the stage shrinks a frame later, so the first run sees the old, taller stage.
-  }, [selectedId, activities, dataDate, wbsBandHeightPx, stageTick]);
+  }, [selectedId, activities, dataDate, wbsBandHeightPx, gutterWidthPx, stageTick]);
 
   // Publish the held ghost to the loop. The create ghost and the write ghost share the one overlay
   // slot (they are mutually exclusive — see the prop docs), so the in-flight write keeps its
@@ -1704,6 +1755,13 @@ export function TsldCanvas({
     stripActiveRef.current = resourceStripActive;
     stripDirtyRef.current = true;
   }, [resourceStrip, resourceStripActive]);
+
+  // Publish the gutter's swimlanes to the loop. Resetting the sync memo makes the next frame rewrite
+  // every label, since the cache below is keyed on the view and would otherwise miss a rename.
+  useEffect(() => {
+    gutterModelRef.current = gutter;
+    gutterSyncRef.current = { originY: Number.NaN, height: -1, model: null, root: null };
+  }, [gutter]);
 
   // Publish the band's groups to the loop, marking ONLY the band dirty — the two-dirty-flag
   // decoupling the strip established, for the same reason: a membership change must not cost the
@@ -1910,12 +1968,17 @@ export function TsldCanvas({
       // exactly as the ruler is subtracted from the top. Inactive ⇒ `stripBand` is 0, so the height
       // expression is byte-for-byte today's `rect.height - RULER_HEIGHT` (the parity gate).
       const stripBand = resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0;
-      // The WBS band (ADR-0063) reserves at the TOP, so it joins the ruler in `sceneTopOffset` —
+      // The WBS band (ADR-0063) reserves at the TOP, so it joins the ruler in `sceneOrigin` —
       // `wbsBandHeightPx` is 0 when the band is off, which is what keeps this expression
       // byte-for-byte the pre-band `rect.height - RULER_HEIGHT - stripBand`.
+      // The gutter reserves at the LEFT, so it is subtracted from the width the same way
+      // (`gutterWidthPx` is 0 when it is off, so the width is byte-for-byte `rect.width`).
+      const origin = sceneOrigin(wbsBandHeightPx, gutterWidthPx);
+      // Measured on the container: the stage is what the gutter's own width changes.
+      setGutterRoom(gutterHasRoom(rect.width));
       const size = {
-        width: Math.max(1, rect.width),
-        height: Math.max(1, rect.height - sceneTopOffset(wbsBandHeightPx) - stripBand),
+        width: Math.max(1, rect.width - origin.left),
+        height: Math.max(1, rect.height - origin.top - stripBand),
       };
       if (size.width !== applied.width || size.height !== applied.height) {
         applied = size;
@@ -1955,6 +2018,43 @@ export function TsldCanvas({
         // mount fits once because `fittedRef` starts false.
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
+      }
+    };
+
+    // **The gutter's sticky labels** (C3): DOM, positioned from `viewRef` in the frame the scene is
+    // painted, the way the ruler is — a label that read the viewport from React state would trail the
+    // bars by a frame on every pan. Not mounted while the width is 0, so the ref is null then and
+    // this costs one null check. A label depends on the lane axis only, so the horizontal pan and
+    // zoom frames return at the memo.
+    const syncGutter = (): void => {
+      const root = gutterRef.current;
+      const model = gutterModelRef.current;
+      if (!root || !model) return;
+      const v = viewRef.current;
+      const s = sizeRef.current;
+      const last = gutterSyncRef.current;
+      // `root` is in the memo because the labels mount when the width leaves 0, with `model` unchanged.
+      if (
+        v.originY === last.originY &&
+        s.height === last.height &&
+        model === last.model &&
+        root === last.root
+      )
+        return;
+      gutterSyncRef.current = { originY: v.originY, height: s.height, model, root };
+      const labels = swimlaneGutterGeometry(model.swimlanes, v, s);
+      for (const l of labels) {
+        const node = root.children[l.index];
+        if (!(node instanceof HTMLElement)) continue;
+        if (!l.visible) {
+          node.style.display = 'none';
+          continue;
+        }
+        node.style.display = '';
+        node.style.top = `${String(l.top)}px`;
+        node.style.height = `${String(l.height)}px`;
+        // The rule under a label belongs to the swimlane's true end, not to a viewport clip.
+        node.style.borderBottomWidth = l.blockTop + l.blockHeight <= s.height ? '' : '0px';
       }
     };
 
@@ -2160,6 +2260,7 @@ export function TsldCanvas({
       // labels and the bars can never disagree. Early-returns unless the viewport actually moved.
       syncRuler();
       syncAxisMarkers();
+      syncGutter();
       const ictx = interactionLayerMounted ? interactionCanvasRef.current?.getContext('2d') : null;
       if (ictx && interactionDirtyRef.current) {
         const p = pendingRef.current;
@@ -2514,7 +2615,14 @@ export function TsldCanvas({
     // over the value from the render that first mounted the layer.
     // `minimapActive` for the interaction-canvas reason above it: the panel mounts after the last
     // measure, and the loop's own backing-store check needs the re-inited loop to run at all.
-  }, [interactionLayerMounted, editing, resourceStripActive, wbsBandHeightPx, minimapActive]);
+  }, [
+    interactionLayerMounted,
+    editing,
+    resourceStripActive,
+    wbsBandHeightPx,
+    gutterWidthPx,
+    minimapActive,
+  ]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
@@ -2655,6 +2763,15 @@ export function TsldCanvas({
       aria-busy={writeBusy || undefined}
       className="bg-canvas relative h-full w-full overflow-hidden"
     >
+      {gutterWidthPx > 0 && gutter ? (
+        <SwimlaneGutter
+          rootRef={gutterRef}
+          swimlanes={gutter.swimlanes}
+          widthPx={gutterWidthPx}
+          cornerHeightPx={sceneOrigin(wbsBandHeightPx, gutterWidthPx).top}
+          footPx={resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0}
+        />
+      ) : null}
       {/* The sticky date ruler: a DOM band updated imperatively from the rAF loop (aria-hidden — the
           canvas already has the parallel a11y listbox; pointer-events-none so pan/zoom fall through). */}
       <div
@@ -2663,7 +2780,7 @@ export function TsldCanvas({
         className="bg-canvas text-muted-foreground border-border pointer-events-none absolute inset-x-0 top-0 z-10 overflow-hidden border-b text-xs leading-none"
         // RULER_HEIGHT is a raw px value (not a Tailwind class) because the canvas-sizing math in
         // measure() needs the exact same number — one source of truth for the CSS + JS.
-        style={{ height: RULER_HEIGHT }}
+        style={{ height: RULER_HEIGHT, ...(gutterWidthPx > 0 ? { left: gutterWidthPx } : {}) }}
       >
         <div
           ref={rulerYearsRef}
@@ -2725,7 +2842,11 @@ export function TsldCanvas({
           aria-hidden="true"
           data-layer="wbs-band"
           data-testid="tsld-wbs-band"
-          style={{ top: RULER_HEIGHT, height: wbsBandHeightPx }}
+          style={{
+            top: RULER_HEIGHT,
+            height: wbsBandHeightPx,
+            ...(gutterWidthPx > 0 ? { left: gutterWidthPx } : {}),
+          }}
           className="absolute inset-x-0 block cursor-pointer"
           onClick={(e) => {
             const box = e.currentTarget.getBoundingClientRect();
@@ -2745,7 +2866,7 @@ export function TsldCanvas({
         ref={canvasRef}
         aria-hidden="true"
         data-layer="scene"
-        style={{ top: sceneTopOffset(wbsBandHeightPx) }}
+        style={originStyle(wbsBandHeightPx, gutterWidthPx)}
         className={`absolute inset-x-0 block touch-none ${
           editing && writeBusy
             ? // A write is in flight: `progress` (busy but still interactive) rather than `wait` —
@@ -3068,7 +3189,7 @@ export function TsldCanvas({
           ref={interactionCanvasRef}
           aria-hidden="true"
           data-layer="interaction"
-          style={{ top: sceneTopOffset(wbsBandHeightPx) }}
+          style={originStyle(wbsBandHeightPx, gutterWidthPx)}
           className="pointer-events-none absolute inset-x-0"
         />
       ) : null}
@@ -3082,7 +3203,10 @@ export function TsldCanvas({
           aria-hidden="true"
           data-layer="resource-strip"
           data-testid="tsld-resource-strip"
-          style={{ height: RESOURCE_STRIP_HEIGHT }}
+          style={{
+            height: RESOURCE_STRIP_HEIGHT,
+            ...(gutterWidthPx > 0 ? { left: gutterWidthPx } : {}),
+          }}
           className="pointer-events-none absolute inset-x-0 bottom-0 block"
         />
       ) : null}

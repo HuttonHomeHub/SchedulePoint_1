@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
  * 2. **The a11y count is invariant across the toggle.** Summaries leave the *scene* when the band
  *    is on; if they left the parallel listbox with it, an AT user would lose rows while the picture
  *    still looked right. This is the epic's quietest possible regression.
- * 3. **`sceneTopOffset` is the one definition of the scene's top.** Every canvas layer moves down
+ * 3. **`sceneOrigin` is the one definition of where the scene starts.** Every canvas layer moves down
  *    by the band's height together; a layer left on the bare `RULER_HEIGHT` would sit a band's
  *    height out of place, which looks like nothing at all until a pointer lands in the wrong row.
  */
@@ -22,7 +22,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 
-import { RULER_HEIGHT, sceneTopOffset } from './TsldCanvas';
+import { RULER_HEIGHT, sceneOrigin } from './TsldCanvas';
 import { TsldPanel } from './TsldPanel';
 
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
@@ -110,15 +110,15 @@ describe('TsldPanel — the pinned WBS band (flag on)', () => {
     // …and the scene starts below both, at the ONE derived offset.
     const scene = document.querySelector('canvas[style*="top"]:not([data-testid])');
     expect(scene).not.toBeNull();
-    expect((scene as HTMLElement).style.top).toBe(`${String(sceneTopOffset(bandHeight))}px`);
+    expect((scene as HTMLElement).style.top).toBe(`${String(sceneOrigin(bandHeight, 0).top)}px`);
   });
 
   it('leaves the scene at the ruler alone when the band is off', () => {
     render(<Harness band={false} />);
     const scene = document.querySelector('canvas[style*="top"]:not([data-testid])');
     expect((scene as HTMLElement).style.top).toBe(`${String(RULER_HEIGHT)}px`);
-    // Which is exactly `sceneTopOffset(0)` — the flag-off path is the same expression, not a
+    // Which is exactly `sceneOrigin(0, 0).top` — the flag-off path is the same expression, not a
     // second one that happens to agree today.
-    expect(sceneTopOffset(0)).toBe(RULER_HEIGHT);
+    expect(sceneOrigin(0, 0).top).toBe(RULER_HEIGHT);
   });
 });

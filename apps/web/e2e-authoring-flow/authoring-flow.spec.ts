@@ -217,7 +217,7 @@ test.describe('a link pick survives losing the pen, and the write does not', () 
     // And the plan is still usable: taking the pen back and linking properly still works, so the
     // refused attempt left no wedged state behind. The bars are re-measured rather than reused —
     // the mode band takes height above the scene, so a coordinate from before it appeared points
-    // at the wrong row (the `sceneTopOffset` lesson of ADR-0063, from the test's side).
+    // at the wrong row (the `sceneOrigin` lesson of ADR-0063, from the test's side).
     await ensurePen(page);
     // The refused attempt left the tool armed and the pick open — which is the point — so disarm
     // before measuring: `mapBars` probes by clicking in `select` mode, and with Link still armed

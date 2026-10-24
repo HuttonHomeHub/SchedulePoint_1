@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+
+import { useDevicePref } from '@/hooks/use-device-pref';
 
 /**
  * Persisted UI state for the on-canvas **floating Legend panel** (ADR-0031 amendment) — whether it is
@@ -29,46 +31,31 @@ interface LegendPrefs {
 
 const STORAGE_KEY = 'schedulepoint-tsld-legend';
 
-function readPrefs(): LegendPrefs {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<LegendPrefs>;
-      const p = parsed.position;
-      const position =
-        p &&
-        typeof p.x === 'number' &&
-        typeof p.y === 'number' &&
-        Number.isFinite(p.x) &&
-        Number.isFinite(p.y)
-          ? { x: p.x, y: p.y }
-          : null;
-      return { open: parsed.open === true, position };
-    }
-  } catch {
-    // Corrupt storage (or access denied) → fall back to the default (closed, default corner).
-  }
-  return { open: false, position: null };
+function parsePrefs(raw: unknown): LegendPrefs {
+  const parsed = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<LegendPrefs>;
+  const p = parsed.position;
+  const position =
+    p &&
+    typeof p.x === 'number' &&
+    typeof p.y === 'number' &&
+    Number.isFinite(p.x) &&
+    Number.isFinite(p.y)
+      ? { x: p.x, y: p.y }
+      : null;
+  return { open: parsed.open === true, position };
 }
 
 export function useLegendPanelPrefs(): UseLegendPanelPrefs {
-  // `readPrefs` is wrapped in try/catch, so a missing/blocked `localStorage` falls back to defaults —
-  // no separate SSR guard needed (matches the shared `useResizablePanelPrefs`).
-  const [prefs, setPrefs] = useState<LegendPrefs>(readPrefs);
+  const [prefs, setPrefs] = useDevicePref<LegendPrefs>(STORAGE_KEY, parsePrefs, {
+    open: false,
+    position: null,
+  });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-    } catch {
-      // Storage full or disabled — the preference simply won't persist.
-    }
-  }, [prefs]);
-
-  const toggle = useCallback(() => setPrefs((p) => ({ ...p, open: !p.open })), []);
-  const close = useCallback(() => setPrefs((p) => ({ ...p, open: false })), []);
+  const toggle = useCallback(() => setPrefs((p) => ({ ...p, open: !p.open })), [setPrefs]);
+  const close = useCallback(() => setPrefs((p) => ({ ...p, open: false })), [setPrefs]);
   const setPosition = useCallback(
     (position: LegendPanelPosition) => setPrefs((p) => ({ ...p, position })),
-    [],
+    [setPrefs],
   );
 
   return { open: prefs.open, position: prefs.position, toggle, close, setPosition };

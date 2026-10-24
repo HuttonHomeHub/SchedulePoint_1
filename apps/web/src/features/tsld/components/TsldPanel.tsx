@@ -112,7 +112,8 @@ import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './C
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { LinkChainDialog } from './LinkChainDialog';
-import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
+import { type SwimlaneGutterProps } from './SwimlaneGutter';
+import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
@@ -605,6 +606,14 @@ export interface TsldPanelProps {
   /** The "Diagram viewport" cluster's slot and the minimap-room fact — see `TsldCanvas`. */
   onViewportSlot?: (node: HTMLDivElement | null) => void;
   onMinimapRoomChange?: (room: boolean) => void;
+  /**
+   * The swimlane gutter's reservation in px, the labels it shows, and the room fact the canvas
+   * publishes — all passed to `TsldCanvas`, which documents them. The panel needs the width itself
+   * for the create popover's x (`sceneOrigin`). `0`, the default, is today's panel.
+   */
+  gutterWidthPx?: number;
+  gutter?: Pick<SwimlaneGutterProps, 'swimlanes'> | null;
+  onGutterRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
@@ -730,6 +739,9 @@ export function TsldPanel({
   onMinimapClose,
   onViewportSlot,
   onMinimapRoomChange,
+  gutterWidthPx = 0,
+  gutter = null,
+  onGutterRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
   selectionCanvas,
@@ -1114,7 +1126,7 @@ export function TsldPanel({
    * `wbsBandHeightPx` 0, `measure()` subtract nothing and no band canvas mount.
    *
    * `wbsBandHeightPx` is derived once and used by BOTH the canvas (its reservation) and the create
-   * popover (its container-y conversion, via the shared `sceneTopOffset`). Two derivations of the
+   * popover (its container conversion, via the shared `sceneOrigin`). Two derivations of the
    * same number is exactly how the popover would come to open above where the user clicked.
    *
    * The derivation itself is shared with the image export (`deriveWbsBandSource`), so the printed
@@ -3504,6 +3516,9 @@ export function TsldPanel({
               visibleBoxRef={visibleBoxRef}
               {...(onViewportSlot ? { onViewportSlot } : {})}
               {...(onMinimapRoomChange ? { onMinimapRoomChange } : {})}
+              gutterWidthPx={gutterWidthPx}
+              gutter={gutter}
+              {...(onGutterRoomChange ? { onGutterRoomChange } : {})}
               minimapDismissFocusRef={listboxRef}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
@@ -3529,14 +3544,14 @@ export function TsldPanel({
 
             {pendingCreate ? (
               <CreateActivityPopover
-                x={pendingCreate.anchor.x}
+                x={pendingCreate.anchor.x + sceneOrigin(wbsBandHeightPx, gutterWidthPx).left}
                 // The anchor is canvas-relative; the popover is positioned against the outer
-                // container. `sceneTopOffset` is the ONE definition of how far down the scene
-                // starts (ADR-0063 §5) — the ruler, plus the WBS band when it is on. Writing
-                // `RULER_HEIGHT` here was correct only while the ruler was the sole thing above
+                // container. `sceneOrigin` is the ONE definition of where the scene starts
+                // (ADR-0063 §5) — the ruler plus the WBS band down, the swimlane gutter across.
+                // Writing `RULER_HEIGHT` here was correct only while the ruler was the sole thing above
                 // the scene, and its failure mode is quiet: the popover opens above the drop point
                 // and everything else still looks right.
-                y={pendingCreate.anchor.y + sceneTopOffset(wbsBandHeightPx)}
+                y={pendingCreate.anchor.y + sceneOrigin(wbsBandHeightPx, gutterWidthPx).top}
                 saving={pendingCreate.saving}
                 error={pendingCreate.error}
                 onCommit={commitCreate}
