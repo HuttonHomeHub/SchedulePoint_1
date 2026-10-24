@@ -48,6 +48,9 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
   'features/tsld/interaction/use-swimlane-editing.ts': 'display-lane-intent',
   'features/tsld/model/arrange-lanes.ts': 'stored-lane',
   'features/tsld/model/auto-resolve.ts': 'display-lane-intent',
+  // Both pictures' STORED lanes, kept apart: the plain `laneIndex` and the lane inside a swimlane
+  // (M2-T5). It never reads a display lane except to place a member that has no stored row.
+  'features/tsld/model/auto-resolve-swimlanes.ts': 'stored-lane',
   'features/tsld/model/bulk-move.ts': 'display-lane-intent',
   // The edit contract's types: a reposition intent arrives in display lanes (M2-T4).
   'features/tsld/model/edit-types.ts': 'display-lane-intent',
@@ -59,7 +62,7 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
 
 const NEVER_MEETS_THE_SWIMLANE_SCENE: Readonly<Record<string, string>> = {
   'features/swimlanes/api/use-swimlane-lanes.ts':
-    'sends the lane INSIDE a swimlane (`swimlane.laneIndex`); it takes no display lane and writes no swimlane-free one',
+    'sends the lane INSIDE a swimlane (`swimlane.laneIndex`); it takes no display lane, and a swimlane-free one only from auto-resolve, which resolves that picture itself (M2-T5)',
   'features/swimlanes/model/manual-membership.ts':
     'reads the stored in-swimlane lane rows to build the projection input; it is the input, not a consumer of the result',
   'features/activity-copy/model/clone-graph.ts': 'a clone carries the stored lane',

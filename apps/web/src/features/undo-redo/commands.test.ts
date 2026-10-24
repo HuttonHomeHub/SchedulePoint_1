@@ -606,6 +606,15 @@ describe('autoArrangeCommand', () => {
     expect(await command.undo(server.ctx)).toEqual(APPLIED);
   });
 
+  it('check reads and compares without writing, so a composed step can ask before it writes', async () => {
+    const { server, command } = await arranged();
+    expect(await command.check('undo', server.ctx)).toEqual(APPLIED);
+    expect(server.mutations.batchPositions).not.toHaveBeenCalled();
+    server.edit('a2', { laneIndex: 7 });
+    expect(await command.check('undo', server.ctx)).toEqual(notApplicable('changed', 'Two'));
+    expect(server.mutations.batchPositions).not.toHaveBeenCalled();
+  });
+
   it('counts what it moved in its label, singular and plural', () => {
     const one = [{ id: 'a1', laneIndex: 0 }];
     const batchPositions = vi.fn();

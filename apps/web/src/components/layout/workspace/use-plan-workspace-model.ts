@@ -5,6 +5,7 @@ import type {
   CrossPlanDependencySummary,
   DependencySummary,
   LevellingApplication,
+  SwimlaneSummary,
 } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -106,7 +107,15 @@ import {
   useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
-import { useWriteSwimlaneLanes, type SwimlaneLaneRow } from '@/features/swimlanes';
+import {
+  SWIMLANES_LENS_OFFERED,
+  swimlanePictureInput,
+  swimlanePictureOn,
+  swimlaneKeys,
+  useSwimlanes,
+  useWriteSwimlaneLanes,
+  type SwimlaneLaneRow,
+} from '@/features/swimlanes';
 import {
   addCalendarDays,
   todayDayFraction,
@@ -119,6 +128,7 @@ import {
   type TsldLoeSpanInput,
   type TsldLoeSpanOutcome,
   type TsldLagInput,
+  type SwimlaneInput,
   type SwimlaneLanePlacement,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
@@ -683,7 +693,30 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
   });
   const batchPositions = useBatchPositions(orgSlug, planId);
+  const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
   const queryClient = useQueryClient();
+  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only where the lens is
+  // offered (`swimlanePictureOn`, the same gate the scene uses), so while it is withheld nothing is
+  // fetched and auto-resolve is the plain one. Once on, the list is wanted even when the lens is
+  // not showing it, because an edit made in one picture can overlap bars in the other; it is the
+  // scene's own query, so one fetch.
+  const swimlaneSource = plan.data?.swimlaneSource ?? 'NONE';
+  const swimlanePicture = swimlanePictureOn({
+    offered: SWIMLANES_LENS_OFFERED,
+    source: swimlaneSource,
+    canEdit: canEditSchedule,
+  });
+  const swimlaneList = useSwimlanes(orgSlug, planId, swimlanePicture);
+  const readSwimlaneInput = (): SwimlaneInput | null =>
+    swimlanePictureInput({
+      on: swimlanePicture,
+      list:
+        queryClient.getQueryData<SwimlaneSummary[]>(swimlaneKeys.byPlan(orgSlug, planId)) ??
+        swimlaneList.data,
+      activities:
+        queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+        activities.data,
+    });
   /**
    * **An edit moves only the bar that caused it** (NetPoint-layout M3, ADR-0153). Every planner
    * command that can change a drawn span calls `autoResolve.begin(subjects)` BEFORE its write; the
@@ -703,6 +736,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       activities.data,
     isWriting: () => queryClient.isMutating() > 0,
     batchPositions: batchPositions.mutateAsync,
+    readSwimlaneInput,
+    writeLayouts: writeSwimlaneLanesMutation.mutateAsync,
     history: editHistory,
     announce,
     onWriteRejected: pen.onWriteRejected,
@@ -942,7 +977,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const createLink = createDependency.mutateAsync;
   // Taken as a plain function for the same `exhaustive-deps` reason as its siblings above.
   const batchPlacements = batchPlacementsMutation.mutateAsync;
-  const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
   const writeLanes = writeSwimlaneLanesMutation.mutateAsync;
   const removeLink = deleteDependency.mutateAsync;
   // Destructured, not reached through `pen`, so the memo depends on the stable `useCallback` rather
@@ -1041,8 +1075,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         });
         if (options.hold) return { applied: true, conflict: null, command };
         // layout-exempt: the swimlane model places the bar on a lane that is free at its span
-        // before this writes, and a lane-only write never settles. Auto-resolve on this layout is
-        // its own task (swimlanes M2-T5).
+        // before this writes, a lane-only write never settles, and it sends no `laneIndex`, so the
+        // swimlane-free picture cannot gain an overlap from it either. Both pictures are
+        // therefore clear without a resolution (swimlanes M2-T5 revisited this and kept it). Evidence:
+        // `swimlane-lanes.test.ts` ("takes the dropped lane … when it is free", "goes on to the next
+        // free lane", "never carries a swimlane-free laneIndex") and `use-swimlane-lanes.test.ts`
+        // ("never a swimlane-free laneIndex (SC-1)").
         editHistory.record(
           command,
           options.pressedAt !== undefined ? { at: options.pressedAt } : undefined,

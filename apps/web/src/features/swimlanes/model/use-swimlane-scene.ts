@@ -1,4 +1,4 @@
-import type { ActivitySummary, SwimlaneSource } from '@repo/types';
+import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
 import { useMemo } from 'react';
 
 import { useSwimlanes } from '../api/use-swimlanes';
@@ -23,6 +23,37 @@ export const SWIMLANES_LENS_OFFERED = false;
  * as `TsldPanel`'s `swimlaneGround`; reversing the answer is a one-line change and a test.
  */
 export const SWIMLANE_GROUND = true;
+
+/**
+ * Whether the plan's swimlane picture exists for this session: the lens is offered, the plan's
+ * swimlanes are hand-made (a `WBS` source has no input until M3) and, where it matters, the planner
+ * can write. **The one gate** for fetching the swimlane list, drawing it and auto-resolving in it, so
+ * that nothing behind the lens runs while the lens is withheld — a plan whose source was set through
+ * the API still draws and resolves swimlane-free until `SWIMLANES_LENS_OFFERED` flips.
+ */
+export function swimlanePictureOn(args: {
+  offered: boolean;
+  source: SwimlaneSource;
+  /** Only the writers of auto-resolve pass this; the read-only scene has no use for it. */
+  canEdit?: boolean;
+}): boolean {
+  return args.offered && args.source === 'MANUAL' && (args.canEdit ?? true);
+}
+
+/**
+ * The swimlane input auto-resolve reads from the caches: `null` unless the picture is on and both
+ * the activities and the list are loaded.
+ */
+export function swimlanePictureInput(args: {
+  on: boolean;
+  activities: readonly ActivitySummary[] | undefined;
+  list: readonly SwimlaneSummary[] | undefined;
+}): SwimlaneInput | null {
+  const { on, activities, list } = args;
+  return on && activities !== undefined && list !== undefined
+    ? manualSwimlaneInput(activities, list)
+    : null;
+}
 
 export interface SwimlaneScene {
   /** The input to the projection, or `null` when swimlanes are not being drawn. */
@@ -70,7 +101,7 @@ export function useSwimlaneScene(args: {
   shown: boolean;
 }): SwimlaneScene {
   const { orgSlug, planId, source, activities, offered, shown } = args;
-  const manual = offered && source === 'MANUAL';
+  const manual = swimlanePictureOn({ offered, source });
   const list = useSwimlanes(orgSlug, planId, manual);
   const swimlanes = list.data;
   const drawn = manual && shown;

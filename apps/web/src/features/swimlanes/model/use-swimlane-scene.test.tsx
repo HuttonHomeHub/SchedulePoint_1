@@ -4,7 +4,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SWIMLANES_LENS_OFFERED, useSwimlaneScene } from './use-swimlane-scene';
+import {
+  SWIMLANES_LENS_OFFERED,
+  swimlanePictureInput,
+  swimlanePictureOn,
+  useSwimlaneScene,
+} from './use-swimlane-scene';
 
 import { anActivity } from '@/test/activity-fixture';
 
@@ -137,5 +142,26 @@ describe('useSwimlaneScene', () => {
 
     rerender({ source: 'MANUAL', shown: true, activities: [...activities] });
     expect(result.current.input).not.toBe(first);
+  });
+});
+
+describe('swimlanePictureOn / swimlanePictureInput (M2-T5: nothing behind the lens runs while it is withheld)', () => {
+  it('is off while the lens is not offered, whatever the plan says', () => {
+    expect(swimlanePictureOn({ offered: false, source: 'MANUAL', canEdit: true })).toBe(false);
+  });
+
+  it('is on for a hand-made source once offered, and only for a writer when asked', () => {
+    expect(swimlanePictureOn({ offered: true, source: 'MANUAL' })).toBe(true);
+    expect(swimlanePictureOn({ offered: true, source: 'MANUAL', canEdit: false })).toBe(false);
+    expect(swimlanePictureOn({ offered: true, source: 'NONE' })).toBe(false);
+    expect(swimlanePictureOn({ offered: true, source: 'WBS' })).toBe(false);
+  });
+
+  it('yields no input unless the picture is on and both lists are loaded', () => {
+    const rows: never[] = [];
+    expect(swimlanePictureInput({ on: false, activities: rows, list: [] })).toBeNull();
+    expect(swimlanePictureInput({ on: true, activities: undefined, list: [] })).toBeNull();
+    expect(swimlanePictureInput({ on: true, activities: rows, list: undefined })).toBeNull();
+    expect(swimlanePictureInput({ on: true, activities: rows, list: [] })).not.toBeNull();
   });
 });

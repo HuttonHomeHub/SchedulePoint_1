@@ -1549,7 +1549,7 @@ export function autoArrangeCommand(params: {
   /** The rows the forward batch returned — the lanes an undo expects to find. */
   saved: readonly ActivitySummary[];
   label?: string;
-}): Command {
+}): CheckableCommand {
   const { batchPositions } = params;
   const lanes = (placements: readonly LanePlacement[]): Map<string, number> =>
     new Map(placements.map((p) => [p.id, p.laneIndex]));
@@ -1558,27 +1558,25 @@ export function autoArrangeCommand(params: {
     params.after.map((p) => ({ ...p, laneIndex: savedLanes.get(p.id) ?? p.laneIndex })),
   );
   let atRedo = lanes(params.before);
+  const expectations = (expect: ReadonlyMap<string, number>) =>
+    [...expect].map(([id, laneIndex]) => ({ id, expect: { laneIndex } }));
   const replay = (
     ctx: ReplayContext,
     expect: ReadonlyMap<string, number>,
     target: readonly LanePlacement[],
     settle: (next: Map<string, number>) => void,
   ): Promise<ReplayResult> =>
-    replayActivities(
-      ctx,
-      [...expect].map(([id, laneIndex]) => ({ id, expect: { laneIndex } })),
-      async (rows) => {
-        const positions = target.flatMap((p) => {
-          const row = rows.get(p.id);
-          return row === undefined
-            ? []
-            : [{ id: p.id, laneIndex: p.laneIndex, version: row.version }];
-        });
-        if (positions.length === 0) return;
-        const result = await batchPositions({ positions });
-        settle(new Map(result.map((row) => [row.id, row.laneIndex])));
-      },
-    );
+    replayActivities(ctx, expectations(expect), async (rows) => {
+      const positions = target.flatMap((p) => {
+        const row = rows.get(p.id);
+        return row === undefined
+          ? []
+          : [{ id: p.id, laneIndex: p.laneIndex, version: row.version }];
+      });
+      if (positions.length === 0) return;
+      const result = await batchPositions({ positions });
+      settle(new Map(result.map((row) => [row.id, row.laneIndex])));
+    });
   return {
     label:
       params.label ??
@@ -1592,6 +1590,14 @@ export function autoArrangeCommand(params: {
       replay(ctx, atRedo, params.after, (next) => {
         atUndo = next;
       }),
+    // A dry replay, so this can be one part of a composed step (auto-resolve on both layouts).
+    check: async (direction, ctx) => {
+      const checked = await checkActivities(
+        ctx,
+        expectations(direction === 'undo' ? atUndo : atRedo),
+      );
+      return checked.ok ? APPLIED : checked.result;
+    },
     affectsSchedule: false,
   };
 }
