@@ -265,6 +265,11 @@ export interface PlacedActivityInput {
   /** Visual-Planning placement (ADR-0033): set instead of an SNET constraint when a bar is drawn in
    * VISUAL mode — the drop hand-places the start, no implicit constraint. */
   visualStart?: string;
+  /**
+   * File the new activity in this hand-made swimlane (swimlanes M2-T4). Absent for "No swimlane" and
+   * on a plan whose swimlanes come from its WBS, where the endpoint refuses it.
+   */
+  swimlaneId?: string;
 }
 
 export function useCreatePlacedActivity(orgSlug: string, planId: string) {

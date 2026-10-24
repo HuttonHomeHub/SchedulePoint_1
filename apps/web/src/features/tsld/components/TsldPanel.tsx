@@ -23,6 +23,7 @@ import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-m
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
 import { useCoalescedPluralNudge } from '../interaction/use-coalesced-plural-nudge';
+import { useSwimlaneEditing } from '../interaction/use-swimlane-editing';
 import { arrangeOfferMessage, computeLaneArrangement } from '../model/arrange-lanes';
 import { clampLaneDelta, isNoOp } from '../model/bulk-move';
 import {
@@ -39,13 +40,23 @@ import { planChain } from '../model/chain-order';
 import { deriveDiagramSource } from '../model/derive-diagram-source';
 import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
+import type {
+  TsldBulkOperations,
+  TsldEditOutcome,
+  TsldRepositionInput,
+  TsldRepositionOutcome,
+} from '../model/edit-types';
 import {
   pluralMoveAnnouncement,
   MOVE_FAILED_NOTE,
   pluralMoveHint,
   repositionAnnouncement,
   STILL_SAVING_NOTE,
+  stayInSwimlaneAnnouncement,
+  swimlanePlace,
+  swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
+import type { SwimlaneLanePlacement } from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
@@ -145,6 +156,13 @@ import { cn } from '@/lib/utils';
  * keyboard invocation has no pointer position (the drag/toolbar paths pass the real anchor). */
 const KEYBOARD_CREATE_ANCHOR: Point = { x: 24, y: 24 };
 
+export type {
+  TsldBulkOperations,
+  TsldEditOutcome,
+  TsldRepositionInput,
+  TsldRepositionOutcome,
+} from '../model/edit-types';
+
 /** A committed create from the canvas; the route maps it to `POST /activities` + recalc. */
 export interface TsldCreateInput {
   name: string;
@@ -152,7 +170,21 @@ export interface TsldCreateInput {
   type: ActivityType;
   startDay: number;
   endDay: number;
+  /**
+   * The lane in the swimlane-free layout. With swimlanes shown it is the first free lane at the
+   * span — the new bar's place when swimlanes are turned off — and `swimlane` carries where it sits
+   * in the picture the planner drew it on.
+   */
   laneIndex: number;
+  /** Present only while swimlanes are shown (swimlanes M2-T4). */
+  swimlane?: {
+    /** The swimlane to file the activity in; `null` for "No swimlane", where nothing is sent. */
+    swimlaneId: string | null;
+    /** Its lane inside the swimlane. */
+    lane: number;
+    /** The swimlane's unplaced members, written in the same batch (materialise on write). */
+    materialised: readonly SwimlaneLanePlacement[];
+  };
 }
 
 /**
@@ -165,45 +197,6 @@ export interface TsldCreateInput {
 export interface TsldCreateOutcome {
   recalcConflict: string | null;
 }
-
-/**
- * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to a
- * hand-placed `visualStart` + recalc; `laneIndex` (present iff the lane changed) is layout only (no
- * recalc).
-
- * **It wrote an `SNET` constraint until the collapse** (one-planning-surface M-F-T3), and this
- * block still said so at the M-J gate pass. A drop is a placement, not a commitment somebody
- * recorded, and the difference is what the whole epic is about — so a docblock describing the
- * drop as a constraint is the most misleading sentence a reader of this file could meet. The route issues the minimal PATCH for whichever axes are present. **At least one axis
- * is always present** — the gesture machine emits a `reposition` only when a whole cell changed,
- * and the route treats the all-absent case as a no-op — though the type can't enforce that.
- */
-export interface TsldRepositionInput {
-  activityId: string;
-  startDay?: number;
-  laneIndex?: number;
-}
-
-/**
- * The shared outcome of an optimistic edit (reposition or link). It **resolves** for both
- * success and a domain conflict (stale `version`, a cycle, a duplicate — ADR-0021/0022); a
- * genuine failure rejects. `applied` says whether the write actually landed — false when it was
- * refused (nothing changed), true when it landed (even if the follow-up recalc then failed) — so
- * the success status is announced only when it's true. `conflict` is the banner message.
- */
-export interface TsldEditOutcome {
-  applied: boolean;
-  conflict: string | null;
-  /**
-   * The lane the bar actually landed in, when that is not the lane the gesture asked for — a drop
-   * onto an occupied lane goes on to the next free one (NetPoint-layout M3, `resolveLaneDrop`).
-   * Absent means "where you asked". The announcements read this rather than the request, or they
-   * would name a lane the bar is not in.
-   */
-  laneIndex?: number;
-}
-
-export type TsldRepositionOutcome = TsldEditOutcome;
 
 /**
  * A committed bar-end resize (ADR-0052 M2 finish edge, M3 start edge) — the new whole-day
@@ -256,49 +249,6 @@ export interface TsldLoeSpanInput {
 }
 
 export type TsldLoeSpanOutcome = TsldEditOutcome;
-
-/**
- * What a host must be able to do for the bulk selection bar to appear
- * (`docs/specs/canvas-multi-select/` M4).
- *
- * Every field is required. An optional operation would let a host wire two of three and ship a bar
- * with a button that silently does nothing — the exact shape the epic's own enablement passes keep
- * finding, so the type refuses to express it.
- */
-export interface TsldBulkOperations {
-  /** May the caller write to this plan at all (role + pen), and — when not — why. */
-  gate: { writable: boolean; reason: string | null };
-  /** Delete the given activities as ONE batch; resolves when the write and its command have landed. */
-  deleteMany: (activities: readonly ActivitySummary[]) => Promise<void>;
-  /** Create the chain, in the given order. Rejects with a message; a failure leaves ZERO edges. */
-  linkChain: (edges: readonly { predecessorId: string; successorId: string }[]) => Promise<void>;
-  /**
-   * Move every selected activity by one day/lane delta, as ONE batch and ONE undoable step
-   * (`docs/TECH_DEBT.md` #108).
-   *
-   * On this contract rather than inside the panel because the host owns the mutation and the
-   * ADR-0048 command stack — the same reason `deleteMany` and `linkChain` are here. ADR-0080 built
-   * every piece below it (`movedPlacement`, `bulkMoveSnapshots`, `bulkPlacementCommand`,
-   * `useBatchPlacements`, `PATCH …/activities/placements` with its API e2e) and left **nothing
-   * calling them**: the gesture kept moving one bar. This is the call that was missing.
-   */
-  moveMany: (
-    rows: readonly ActivitySummary[],
-    delta: { dayDelta: number; laneDelta: number },
-    /**
-     * `coalesce` folds moves of the same set into one undo step when their keypresses were within
-     * the history's window; `pressedAt` (epoch ms) is when the last of them happened (the keyboard).
-     */
-    options?: { coalesce?: boolean; pressedAt?: number },
-  ) => Promise<{
-    /** False when nothing was written (a pen rejection, a stale version, a no-op). */
-    applied: boolean;
-    conflict: string | null;
-    /** False when the conflict is a rule (the batch cap) rather than stale data, so the banner
-     * offers no Refresh. Absent means refreshable, like every other conflict. */
-    refreshable?: boolean;
-  }>;
-}
 
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
@@ -2203,6 +2153,23 @@ export function TsldPanel({
         : undefined,
     [onReposition, noteEdit],
   );
+  /*
+   * **Everything that differs while swimlanes are drawn** lives in `useSwimlaneEditing`: the activity
+   * list in display lanes (`laneActivities`, for geometry and wording only — a write never takes a
+   * lane from it, SC-1), the reposition and plural-move wrappers that turn a display lane into a lane
+   * inside a swimlane, and the boundaries the drag and the nudges stop at. With no swimlanes each is
+   * the identity or absent and this panel is what it was (SC-3).
+   */
+  const swimlaneEditing = useSwimlaneEditing({
+    activities,
+    diagramSource,
+    swimlanes,
+    barDateSource,
+    dataDate,
+    reposition: notedReposition,
+    bulkMoveMany: bulk?.moveMany,
+  });
+  const { laneActivities, laneRange, moveMany } = swimlaneEditing;
   // A resize always changes a duration, so it always recalculates — note it unconditionally.
   const notedResize = useMemo(
     () =>
@@ -2227,8 +2194,10 @@ export function TsldPanel({
   const singleNudgeBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
     barDateSource,
-    onReposition: notedReposition,
-    activities,
+    onReposition: swimlaneEditing.repositionByKeyboard,
+    activities: laneActivities,
+    // The top lane is the top of the bar's own swimlane, and the sentence names it (C9).
+    topLane: swimlaneEditing.topLane,
     dataDate,
     // The single hook sets a ghost when it accepts a press and clears it when its write settles,
     // which is exactly its busy window, so the ref tracks the ghost without editing that hook.
@@ -2253,8 +2222,10 @@ export function TsldPanel({
   // not a mode of it; the two see each other through the busy refs so they never write at once.
   const pluralNudge = useCoalescedPluralNudge({
     barDateSource,
-    moveMany: bulk?.moveMany,
-    activities,
+    moveMany,
+    activities: laneActivities,
+    laneFloor: swimlaneEditing.laneFloor,
+    topLaneReason: swimlaneEditing.topLaneReason,
     dataDate,
     setGhost: setPendingReposition,
     setConflict: (message, refreshable) =>
@@ -2269,7 +2240,7 @@ export function TsldPanel({
   const durationNudge = useCoalescedDurationNudge({
     barDateSource,
     onResize: notedResize,
-    activities,
+    activities: laneActivities,
     dataDate,
     setGhost: setPendingReposition,
     setConflict: (message) => (message === null ? clearConflict() : showConflict(message)),
@@ -2491,7 +2462,7 @@ export function TsldPanel({
         event.key === 'ArrowRight')
     ) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === activeId);
+      const current = laneActivities.find((a) => a.id === activeId);
       if (!current) return;
       const axis = event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'lane' : 'time';
       const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
@@ -2514,7 +2485,7 @@ export function TsldPanel({
     // in-canvas keyboard parity for create (the activities-table dialog is the 2.1.1 alternative).
     if (editingEnabled && (event.key === 'n' || event.key === 'N')) {
       event.preventDefault();
-      const current = activities.find((a) => a.id === activeId);
+      const current = laneActivities.find((a) => a.id === activeId);
       const startDay =
         current && dataDate ? (drawnDaySpan(current, barDateSource, dataDate)?.startDay ?? 0) : 0;
       clearConflict();
@@ -2729,7 +2700,8 @@ export function TsldPanel({
       return;
     }
     if (intent.kind === 'reposition') {
-      const activity = activities.find((a) => a.id === intent.activityId);
+      // In display lanes while swimlanes are drawn, because the intent is: see `laneActivities`.
+      const activity = laneActivities.find((a) => a.id === intent.activityId);
       if (!activity || !notedReposition) return;
       // A started activity's drag never carries a day (the gesture holds its ghost in its column);
       // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
@@ -2756,8 +2728,8 @@ export function TsldPanel({
       // dragged bar, or the host supplied no `moveMany` — so every existing caller is unchanged.
       const pluralIds =
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
-      if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
-        const rows = activities.filter((a) => pluralIds.includes(a.id));
+      if (moveMany && pluralIds.includes(intent.activityId)) {
+        const rows = laneActivities.filter((a) => pluralIds.includes(a.id));
         // A WBS summary can be in the selection (Ctrl+A takes every row), and the server refuses a
         // batch that holds one — say which part of the selection stopped it before writing.
         const summaryCount = rows.filter((a) => a.type === 'WBS_SUMMARY').length;
@@ -2785,7 +2757,9 @@ export function TsldPanel({
         // topmost selected bar can take, the same answer the keyboard's Alt+Up gives by refusing.
         // A drag that was ONLY upward and is clamped to nothing says why, rather than reporting a
         // failed write that never happened.
-        const delta = clampLaneDelta(rows, requested);
+        // On the swimlane layout the set's top is each bar's own swimlane's, which the write path
+        // checks (and refuses aloud) rather than this lane-0 clamp.
+        const delta = swimlaneEditing.active ? requested : clampLaneDelta(rows, requested);
         if (isNoOp(delta) && !isNoOp(requested)) {
           // The count is of rows at lane 0 — the only rows that can have stopped an upward clamp,
           // since the set-level clamp is bounded by the topmost row alone.
@@ -2816,8 +2790,7 @@ export function TsldPanel({
           laneIndex: activity.laneIndex + delta.laneDelta,
         });
         pointerRepositionBusyRef.current = true;
-        void bulk
-          .moveMany(rows, delta)
+        void moveMany(rows, delta)
           .then((outcome) => {
             setPendingReposition(null);
             if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
@@ -2825,9 +2798,14 @@ export function TsldPanel({
             // and without having moved anything.
             else if (outcome.applied)
               announce(
-                `${pluralMoveAnnouncement({ count: rows.length, ...delta })}${
-                  intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''
-                }`,
+                `${
+                  outcome.swimlaneMoved
+                    ? swimlanePluralAnnouncement({
+                        ...outcome.swimlaneMoved,
+                        timeChanged: delta.dayDelta !== 0,
+                      })
+                    : pluralMoveAnnouncement({ count: rows.length, ...delta })
+                }${intent.sidewaysDiscarded ? ` ${STARTS_NOT_CHANGED_NOTE}` : ''}`,
               );
             else announce(MOVE_FAILED_NOTE);
           })
@@ -2872,7 +2850,7 @@ export function TsldPanel({
       // callback — were silently missing it.
       // Flag the pointer write in flight so a keyboard nudge can't race it (M5 5.2).
       pointerRepositionBusyRef.current = true;
-      void notedReposition({
+      void (swimlaneEditing.repositionByPointer ?? notedReposition)({
         activityId: intent.activityId,
         // The RAW dropped day: the server owns the roll, on the activity's own calendar at
         // minute granularity, which the client's plan-calendar day predicate cannot reproduce.
@@ -2881,7 +2859,10 @@ export function TsldPanel({
       })
         .then((outcome) => {
           setPendingReposition(null);
-          if (outcome.conflict) showConflict(outcome.conflict);
+          if (outcome.conflict) showConflict(outcome.conflict, outcome.refreshable ?? true);
+          else if (!outcome.applied && outcome.swimlane) {
+            announce(stayInSwimlaneAnnouncement(activity.name, outcome.swimlane));
+          }
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
           // for any time change (placement + recalc), that the dates will update — matching the keyboard
@@ -2916,6 +2897,7 @@ export function TsldPanel({
               requested: laneIndex,
               landed: outcome.laneIndex ?? laneIndex,
               original: activity.laneIndex,
+              ...(outcome.swimlane ? { swimlane: outcome.swimlane } : {}),
             });
             announce(intent.sidewaysDiscarded ? `${moved} ${START_NOT_CHANGED_NOTE}` : moved);
           }
@@ -2935,7 +2917,7 @@ export function TsldPanel({
       // pins the finish (the ghost's left edge tracks the new start, which the route hand-places as
       // a `visualStart` — ADR-0052 §3's mode-aware fork went with the mode at M-F). The route owns
       // the PATCH + recalc; a stale-version refusal banners.
-      const activity = activities.find((a) => a.id === intent.activityId);
+      const activity = laneActivities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       // The start edge of a started activity writes an inert placement and moves the finish
       // (ADR-0170 D3). The grab zone is withheld, so this is the backstop: refuse out loud. Not
@@ -3103,10 +3085,33 @@ export function TsldPanel({
     setPendingCreate((p) => (p ? { ...p, saving: true, error: null } : p));
     // onCreate resolves iff the row persisted → close and never re-POST. A recalc conflict is
     // non-fatal (row kept) and shown in the banner; only a create failure keeps the popover.
-    void onCreate({ name, type, startDay, endDay, laneIndex })
+    // On the swimlane layout the click's lane is a display lane: the new bar joins the swimlane under
+    // it, and its `laneIndex` is the first free lane of the swimlane-free layout (feature-spec,
+    // "Create on the canvas"). Nothing else about the create changes.
+    const placed = swimlaneEditing.placeCreate(laneIndex, { startDay, endDay });
+    void onCreate({
+      name,
+      type,
+      startDay,
+      endDay,
+      laneIndex: placed?.laneIndex ?? laneIndex,
+      ...(placed
+        ? {
+            swimlane: {
+              swimlaneId: placed.swimlaneId,
+              lane: placed.lane,
+              materialised: placed.materialised,
+            },
+          }
+        : {}),
+    })
       .then((outcome) => {
         closeCreate();
-        announce(`Activity “${name}” added.`);
+        announce(
+          placed
+            ? `Activity “${name}” added, in ${swimlanePlace(placed.landed)}.`
+            : `Activity “${name}” added.`,
+        );
         if (outcome.recalcConflict) showConflict(outcome.recalcConflict);
       })
       .catch((err: unknown) => {
@@ -3523,6 +3528,7 @@ export function TsldPanel({
               linkPickPredecessorId={linkPickedId}
               activities={renderActivities}
               swimlaneMarks={swimlaneMarks}
+              laneRange={laneRange}
               edges={renderEdges}
               dataDate={dataDate}
               selectedId={selectedId}

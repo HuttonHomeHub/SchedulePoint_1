@@ -329,6 +329,12 @@ export interface TsldCanvasProps {
   createType?: ActivityType;
   /** The dependency type the two-click `link` tool creates (ADR-0032 M5); absent ⇒ FS. */
   linkType?: DependencyType;
+  /**
+   * The display lanes a dragged bar may occupy, or `null` for no limit (swimlanes ui-architecture
+   * C6). It clamps a drag **while it is in progress**, so the ghost stops at a swimlane's edge
+   * instead of crossing it and being refused on release. Absent is unconstrained.
+   */
+  laneRange?: ((activityId: string) => { min: number; max: number } | null) | undefined;
   /** Whether a body-grab in select mode may start a reposition (i.e. a handler is wired). When
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
@@ -950,6 +956,7 @@ export function TsldCanvas({
   mode = 'select',
   createType,
   linkType,
+  laneRange,
   canReposition = false,
   canResize = false,
   canLag = false,
@@ -2676,6 +2683,7 @@ export function TsldCanvas({
     dataDate,
     ...(createType ? { createType } : {}),
     ...(linkType ? { linkType } : {}),
+    ...(laneRange ? { laneRange } : {}),
   });
   // `ctrl` folds Ctrl and Cmd into one field on purpose (M2-T1): they are the same intent on two
   // platforms, and a downstream consumer that had to check both would eventually check one.

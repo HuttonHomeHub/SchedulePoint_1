@@ -2,9 +2,13 @@ import type { ActivitySummary } from '@repo/types';
 import { useEffect, useRef } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
-import type { TsldEditOutcome, TsldRepositionInput } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
-import { repositionAnnouncement } from '../model/reposition-announcement';
+import type { TsldEditOutcome, TsldRepositionInput } from '../model/edit-types';
+import {
+  repositionAnnouncement,
+  stayInSwimlaneAnnouncement,
+} from '../model/reposition-announcement';
+import { topLaneOf } from '../model/swimlane-lanes';
 import { isStartEdgeFrozen, START_EDGE_FROZEN_REASON } from '../render/hit-test';
 
 import type { BarDateSource } from '@/lib/bar-dates';
@@ -64,6 +68,14 @@ export interface CoalescedNudgeDeps {
    * because the default that shipped (the early start) is the defect it exists to prevent.
    */
   barDateSource: BarDateSource;
+  /**
+   * With swimlanes shown: the top of the bar's own swimlane, as a display lane, and its name
+   * (swimlanes M2-T4). `Alt+↑` stops there and says "Already in the top lane of Mechanical."; the
+   * bottom is never a boundary, since pressing down on the last lane adds one. Absent means lane 0
+   * and the swimlane-free sentence, byte for byte. `activities` and the activity passed to the
+   * returned handler are then in display lanes, and `onReposition` is given a display lane.
+   */
+  topLane?: ((activityId: string) => { min: number; swimlane: string } | null) | undefined;
 }
 
 /**
@@ -162,7 +174,7 @@ export function useCoalescedNudge(
         if (!mountedRef.current) return;
         setGhost(null);
         if (outcome.conflict) {
-          setConflict(outcome.conflict);
+          setConflict(outcome.conflict, outcome.refreshable ?? true);
           targetRef.current = null; // truth wins — re-seed from props on the next nudge
         }
         // The bar went on past an occupied lane (NetPoint-layout M3), or could not move at all:
@@ -170,6 +182,11 @@ export function useCoalescedNudge(
         const landed = outcome.laneIndex ?? finalLane;
         if (outcome.laneIndex !== undefined && targetRef.current?.activityId === input.activityId) {
           targetRef.current = { ...targetRef.current, laneIndex: outcome.laneIndex };
+        }
+        if (!outcome.applied && !outcome.conflict && outcome.swimlane) {
+          // The swimlane layout writes nothing when no lane is free that way, and says so itself
+          // (off it, the host's reposition already did).
+          announce(stayInSwimlaneAnnouncement(name, outcome.swimlane));
         }
         if (outcome.applied) {
           // NB: deliberately do NOT null targetRef here. It's the absolute target and must survive
@@ -186,6 +203,7 @@ export function useCoalescedNudge(
               requested: finalLane,
               landed,
               original: originalLane,
+              ...(outcome.swimlane ? { swimlane: outcome.swimlane } : {}),
             }),
           );
         }
@@ -265,11 +283,13 @@ export function useCoalescedNudge(
       targetRef.current = t;
     }
     if (axis === 'lane') {
-      // Only lane 0 is a hard boundary; downward is unbounded (a planner may spread activities into
-      // new lanes). `Alt+↑` at the top announces and no-ops; there is no artificial bottom cap.
-      const next = Math.max(0, t.laneIndex + delta);
+      // Only the top is a hard boundary; downward is unbounded (a planner may spread activities into
+      // new lanes). `Alt+↑` at the top announces and no-ops; there is no artificial bottom cap. On
+      // the swimlane layout the top is the top of the bar's own swimlane.
+      const top = depsRef.current.topLane?.(activity.id) ?? null;
+      const next = Math.max(top?.min ?? 0, t.laneIndex + delta);
       if (next === t.laneIndex) {
-        announce('Already in the top lane.');
+        announce(top ? topLaneOf(top.swimlane) : 'Already in the top lane.');
         return;
       }
       t = { ...t, laneIndex: next };

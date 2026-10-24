@@ -106,6 +106,7 @@ import {
   useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
+import { useWriteSwimlaneLanes, type SwimlaneLaneRow } from '@/features/swimlanes';
 import {
   addCalendarDays,
   todayDayFraction,
@@ -118,6 +119,7 @@ import {
   type TsldLoeSpanInput,
   type TsldLoeSpanOutcome,
   type TsldLagInput,
+  type SwimlaneLanePlacement,
   type TsldRepositionInput,
   type TsldRepositionOutcome,
   type TsldResizeInput,
@@ -132,6 +134,7 @@ import {
   PLACEMENTS_BATCH_MAX,
   tooManyToMoveReason,
 } from '@/features/tsld/model/bulk-move';
+import { ROWS_GONE_REASON } from '@/features/tsld/model/swimlane-lanes';
 import { formatCanvasDate } from '@/features/tsld/render/geometry';
 import {
   activityDefinitionInput,
@@ -163,6 +166,8 @@ import {
   reparentLabel,
   stepsChanged,
   stepsReplaceCommand,
+  swimlaneLanesCommand,
+  composeSteps,
   typeChangeCommand,
   updateCommand,
   visualResizeCommand,
@@ -170,6 +175,7 @@ import {
   usePlanEditHistory,
   usePlanUndoRedo,
   useHistoryResult,
+  type CheckableCommand,
   type LanePlacement,
 } from '@/features/undo-redo';
 import {
@@ -200,6 +206,10 @@ import { activityKeys } from '@/lib/query/hierarchy-keys';
  */
 const MOVE_CONFLICT =
   'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.';
+
+/** A create on the swimlane layout whose row persisted but whose lane inside the swimlane did not. */
+const NEW_BAR_LANE_NOTE =
+  'Activity added, but its lane in the swimlane couldn’t be saved, so it sits where the swimlane places it.';
 
 export interface DuplicateOutcome {
   readonly applied: boolean;
@@ -839,6 +849,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
       visualStart: dropDate,
+      // Drawn in a swimlane: it joins that swimlane (by hand; nothing to send for "No swimlane").
+      ...(input.swimlane?.swimlaneId ? { swimlaneId: input.swimlane.swimlaneId } : {}),
     };
     // Before the write, so the new bar is "not in S0" and rule 1 can move it (ADR-0153).
     beginLayoutEdit([]);
@@ -854,16 +866,33 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         restoreBatch: restoreDeleteBatch.mutateAsync,
       }),
     );
+    // Drawn on the swimlane layout: the activity has joined its swimlane (the create carried it), and
+    // its lane inside it is written now, with the swimlane's unplaced members, so nothing on screen
+    // moves but the new bar. Not a second undo step — undoing the create deletes the row and its lane
+    // rows go with it. Non-fatal like the recalc: the row persisted, and until the lane lands the
+    // swimlane places it where its span fits.
+    let laneConflict: string | null = null;
+    if (input.swimlane) {
+      try {
+        const laned = await writeSwimlaneLanes(
+          [{ id: created.id, lane: input.swimlane.lane }, ...input.swimlane.materialised],
+          { label: `Add \u201c${created.name}\u201d` },
+        );
+        if (!laned.applied) laneConflict = NEW_BAR_LANE_NOTE;
+      } catch {
+        laneConflict = NEW_BAR_LANE_NOTE;
+      }
+    }
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
     // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
     // await + recalc-conflict semantics byte-for-byte.
     if (CANVAS_AUTHORING_ENABLED) {
       autoRecalc.notify();
-      return { recalcConflict: null };
+      return { recalcConflict: laneConflict };
     }
     try {
       await recalculate.mutateAsync();
-      return { recalcConflict: null };
+      return { recalcConflict: laneConflict };
     } catch {
       return {
         recalcConflict:
@@ -913,11 +942,124 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const createLink = createDependency.mutateAsync;
   // Taken as a plain function for the same `exhaustive-deps` reason as its siblings above.
   const batchPlacements = batchPlacementsMutation.mutateAsync;
+  const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
+  const writeLanes = writeSwimlaneLanesMutation.mutateAsync;
   const removeLink = deleteDependency.mutateAsync;
   // Destructured, not reached through `pen`, so the memo depends on the stable `useCallback` rather
   // than on the pen object — which is rebuilt on every 15-second status poll and would otherwise
   // rebuild every callback the canvas holds, four times a minute, for nothing.
   const { onWriteRejected } = pen;
+  /**
+   * **The one write for a lane move on the swimlane layout** (swimlanes M2-T4): the bars' lanes
+   * inside their swimlanes — plus the swimlane when a bar crosses into another, and the swimlane's
+   * unplaced members at the lanes they are drawn in (materialise on write) — as one all-or-nothing
+   * batch and, for the bars the planner moved, one undo step. It sends **no `laneIndex`**: the
+   * swimlane-free layout is not this write's to touch (SC-1), which is what makes turning swimlanes
+   * off lossless.
+   *
+   * Versions are read from the query cache at the moment of the write, not from `activities.data`: a
+   * drag that also moved the bar in time has just written it, and the closure still holds the version
+   * before that.
+   */
+  // What the screen last drew, for the moment the cache has nothing (a plan whose list was evicted).
+  const renderedActivities = useRef(activities.data);
+  useEffect(() => {
+    renderedActivities.current = activities.data;
+  });
+  const writeSwimlaneLanes = useCallback(
+    async (
+      placements: readonly SwimlaneLanePlacement[],
+      options: {
+        label: string;
+        pressedAt?: number;
+        /**
+         * Return the undo step instead of recording it, so the caller can fold it with the time
+         * write of the same gesture into one (`composeSteps`).
+         */
+        hold?: boolean;
+        /** Versions the caller has just been handed by a write, which the cache may not show yet. */
+        versions?: ReadonlyMap<string, number>;
+      },
+    ): Promise<{
+      applied: boolean;
+      conflict: string | null;
+      refreshable?: boolean;
+      command?: CheckableCommand;
+    }> => {
+      if (placements.length > PLACEMENTS_BATCH_MAX) {
+        return {
+          applied: false,
+          conflict: tooManyToMoveReason(placements.length),
+          refreshable: false,
+        };
+      }
+      const rows =
+        queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+        renderedActivities.current ??
+        [];
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      const positions: SwimlaneLaneRow[] = placements.flatMap((p) => {
+        const version = options.versions?.get(p.id) ?? byId.get(p.id)?.version;
+        return version === undefined
+          ? []
+          : [
+              {
+                id: p.id,
+                version,
+                swimlane: {
+                  ...(p.swimlaneId !== undefined ? { swimlaneId: p.swimlaneId } : {}),
+                  laneIndex: p.lane,
+                },
+              },
+            ];
+      });
+      // Never write a smaller batch than the one asked for: a bar missing from the list is a plan that
+      // has changed under the move, and the planner is told so rather than shown a partial one.
+      if (positions.length < placements.length) {
+        return { applied: false, conflict: ROWS_GONE_REASON };
+      }
+      try {
+        const saved = await writeLanes({ positions });
+        const moved = placements.flatMap((p) =>
+          p.from === undefined ? [] : [{ p, from: p.from }],
+        );
+        if (moved.length === 0) return { applied: true, conflict: null };
+        const command = swimlaneLanesCommand({
+          writeLanes,
+          before: moved.map(({ p, from }) => ({
+            id: p.id,
+            swimlaneId: from.swimlaneId,
+            lane: from.lane,
+          })),
+          after: moved.map(({ p, from }) => ({
+            id: p.id,
+            swimlaneId: p.swimlaneId !== undefined ? p.swimlaneId : from.swimlaneId,
+            lane: p.lane,
+          })),
+          saved,
+          label: options.label,
+        });
+        if (options.hold) return { applied: true, conflict: null, command };
+        // layout-exempt: the swimlane model places the bar on a lane that is free at its span
+        // before this writes, and a lane-only write never settles. Auto-resolve on this layout is
+        // its own task (swimlanes M2-T5).
+        editHistory.record(
+          command,
+          options.pressedAt !== undefined ? { at: options.pressedAt } : undefined,
+        );
+        return { applied: true, conflict: null };
+      } catch (err) {
+        // The refusals every other lane write already handles, for the same reasons: a peer taking
+        // the pen is not a conflict to banner, and a stale version means nothing was written.
+        if (onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+        if (err instanceof ApiFetchError && err.status === 409) {
+          return { applied: false, conflict: MOVE_CONFLICT };
+        }
+        throw err;
+      }
+    },
+    [queryClient, orgSlug, planId, writeLanes, editHistory, onWriteRejected],
+  );
   const bulkOperations = useMemo(
     () => ({
       gate: {
@@ -964,37 +1106,61 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       moveMany: async (
         rows: readonly ActivitySummary[],
         requested: { dayDelta: number; laneDelta: number },
-        options?: { coalesce?: boolean; pressedAt?: number },
+        options?: {
+          coalesce?: boolean;
+          pressedAt?: number;
+          swimlaneLanes?: readonly SwimlaneLanePlacement[];
+        },
       ): Promise<{ applied: boolean; conflict: string | null; refreshable?: boolean }> => {
+        // On the swimlane layout the lane part arrives as each bar's lane inside its swimlane and the
+        // delta carries none (swimlanes M2-T4): this writes the time part exactly as it always has,
+        // with no lane, and the lanes through their own endpoint — never a `laneIndex` (SC-1).
+        const swimlaneLanes = options?.swimlaneLanes;
         // The ONE authoritative set-level lane clamp on the write path (the drag and the keyboard
         // both arrive here): a move that clamps down to nothing sends nothing, and the routing
         // below reads the delta that is written. `bulkMoveSnapshots` takes it pre-clamped.
         const delta = clampLaneDelta(rows, requested);
-        if (rows.length === 0 || isNoOp(delta)) return { applied: false, conflict: null };
+        if (rows.length === 0 || (isNoOp(delta) && swimlaneLanes === undefined)) {
+          return { applied: false, conflict: null };
+        }
         // Refused before anything is written or held, here rather than in either gesture so the
         // drag and the keyboard share it (TECH_DEBT #528).
         if (rows.length > PLACEMENTS_BATCH_MAX)
           // A rule, not stale data: Refresh cannot change the size of the selection.
           return { applied: false, conflict: tooManyToMoveReason(rows.length), refreshable: false };
-        const { before, after, versions } = bulkMoveSnapshots({
+        const snapshots = bulkMoveSnapshots({
           activities: rows,
           delta,
         });
-        // Hold the coalesced recalculation across the write so the bars cannot move under the
-        // planner mid-batch, released in `finally` — a leaked hold stalls every later
-        // recalculation for the session with no error and no surface (ADR-0064).
-        const holdToken = Symbol('bulk-move');
-        autoRecalc.hold(holdToken);
-        beginLayoutEdit(rows.map((a) => a.id));
-        try {
-          const saved = await batchPlacements({
-            placements: after.flatMap((placement) => {
-              const version = versions.get(placement.id);
-              return version === undefined ? [] : [{ ...placement, version }];
-            }),
-          });
-          editHistory.record(
-            bulkPlacementCommand({
+        // `null` is "leave the lane": the row still travels complete, and the swimlane layout's
+        // bars are never given a swimlane-free lane by arithmetic on a display one.
+        const laneless = (placements: typeof snapshots.after): typeof snapshots.after =>
+          swimlaneLanes === undefined
+            ? placements
+            : placements.map((placement) => ({ ...placement, laneIndex: null }));
+        const before = laneless(snapshots.before);
+        const after = laneless(snapshots.after);
+        const { versions } = snapshots;
+        const writesTime = delta.dayDelta !== 0 || swimlaneLanes === undefined;
+        // On the swimlane layout the placement's undo step is held until the lanes are written, so the
+        // two are recorded as the one step the planner thinks of (`composeSteps`).
+        let heldPlacement: { command: CheckableCommand; saved: readonly ActivitySummary[] } | null =
+          null;
+        if (writesTime) {
+          // Hold the coalesced recalculation across the write so the bars cannot move under the
+          // planner mid-batch, released in `finally` — a leaked hold stalls every later
+          // recalculation for the session with no error and no surface (ADR-0064).
+          const holdToken = Symbol('bulk-move');
+          autoRecalc.hold(holdToken);
+          beginLayoutEdit(rows.map((a) => a.id));
+          try {
+            const saved = await batchPlacements({
+              placements: after.flatMap((placement) => {
+                const version = versions.get(placement.id);
+                return version === undefined ? [] : [{ ...placement, version }];
+              }),
+            });
+            const placement = bulkPlacementCommand({
               batchPlacements,
               before,
               after,
@@ -1005,36 +1171,87 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                   : `Move ${String(rows.length)} activities`,
               // Opt-in, and keyed by the set actually written: the keyboard nudge folds a burst of
               // presses on one selection into one step, the drag never does.
-              ...(options?.coalesce
+              ...(options?.coalesce && swimlaneLanes === undefined
                 ? { coalesceKey: bulkMoveCoalesceKey(rows.map((a) => a.id)) }
                 : {}),
-            }),
-            // The window is measured between keypresses: this write lands after a debounce and a
-            // wait for the previous write's refetch, so by completion time two taps 200 ms apart
-            // would look seconds apart and never fold.
-            options?.coalesce && options.pressedAt !== undefined
-              ? { at: options.pressedAt }
-              : undefined,
-          );
-        } catch (err) {
-          // **The same refusals the single-bar drag already handles**, and for the same reasons.
-          // This block replaced a comment claiming pen handling was impossible here "because both
-          // are declared after this memo". Half of that was false and it was the load-bearing
-          // half: `pen` is declared at the top of this hook, hundreds of lines ABOVE this memo —
-          // only the sentence was below, and a string constant hoists. Skipping `onWriteRejected`
-          // meant a peer taking the pen mid-drag left the client's pen state stale until the next
-          // 15-second poll, on the one gesture that moves a dozen bars at once. Checked, not
-          // reasoned about (ADR-0076): the declaration order is the first thing this file shows.
-          // Nothing was written, so `applied` is false — a caller that announced "moved" on a
-          // pen rejection told a listener about a move that never happened.
-          if (onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
-          if (err instanceof ApiFetchError && err.status === 409)
-            return { applied: false, conflict: MOVE_CONFLICT };
-          throw err;
-        } finally {
-          // Released on every path including a throw — a leaked hold stalls every later
-          // recalculation for the session, with no error and no surface (ADR-0064).
-          autoRecalc.release(holdToken);
+            });
+            if (swimlaneLanes !== undefined) {
+              heldPlacement = { command: placement, saved };
+            } else {
+              editHistory.record(
+                placement,
+                // The window is measured between keypresses: this write lands after a debounce and a
+                // wait for the previous write's refetch, so by completion time two taps 200 ms apart
+                // would look seconds apart and never fold.
+                options?.coalesce && options.pressedAt !== undefined
+                  ? { at: options.pressedAt }
+                  : undefined,
+              );
+            }
+          } catch (err) {
+            // **The same refusals the single-bar drag already handles**, and for the same reasons.
+            // This block replaced a comment claiming pen handling was impossible here "because both
+            // are declared after this memo". Half of that was false and it was the load-bearing
+            // half: `pen` is declared at the top of this hook, hundreds of lines ABOVE this memo —
+            // only the sentence was below, and a string constant hoists. Skipping `onWriteRejected`
+            // meant a peer taking the pen mid-drag left the client's pen state stale until the next
+            // 15-second poll, on the one gesture that moves a dozen bars at once. Checked, not
+            // reasoned about (ADR-0076): the declaration order is the first thing this file shows.
+            // Nothing was written, so `applied` is false — a caller that announced "moved" on a
+            // pen rejection told a listener about a move that never happened.
+            if (onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
+            if (err instanceof ApiFetchError && err.status === 409)
+              return { applied: false, conflict: MOVE_CONFLICT };
+            throw err;
+          } finally {
+            // Released on every path including a throw — a leaked hold stalls every later
+            // recalculation for the session, with no error and no surface (ADR-0064).
+            autoRecalc.release(holdToken);
+          }
+        }
+        if (swimlaneLanes !== undefined) {
+          const label =
+            rows.length === 1 && rows[0] !== undefined
+              ? `Move \u201c${rows[0].name}\u201d`
+              : `Move ${String(rows.length)} activities`;
+          const placement = heldPlacement;
+          let laned: Awaited<ReturnType<typeof writeSwimlaneLanes>> | null = null;
+          try {
+            laned = await writeSwimlaneLanes(swimlaneLanes, {
+              label,
+              hold: placement !== null,
+              // The placements batch has just bumped these rows; the cache may not show it yet.
+              ...(placement
+                ? { versions: new Map(placement.saved.map((r) => [r.id, r.version])) }
+                : {}),
+              ...(options?.coalesce && options.pressedAt !== undefined
+                ? { pressedAt: options.pressedAt }
+                : {}),
+            });
+          } finally {
+            // The placements have landed whatever the lane write did — even when it THROWS (a 5xx, a
+            // dropped connection, a lost pen) — so their undo step is recorded either way: composed
+            // with the lanes when both landed, alone otherwise. A step lost here is a drag the planner
+            // cannot undo. A burst that mixes day and lane presses is one step per burst and does not
+            // fold into the next: composed steps are not coalescable (see `composeSteps`).
+            if (placement !== null) {
+              editHistory.record(
+                laned?.command
+                  ? composeSteps({ label, steps: [placement.command, laned.command] })
+                  : placement.command,
+              );
+            }
+            // The time part, if there was one, has landed; its recalculation is owed either way.
+            if (writesTime) autoRecalc.notify();
+          }
+          if (!laned.applied) {
+            return {
+              applied: writesTime,
+              conflict: laned.conflict,
+              ...(laned.refreshable !== undefined ? { refreshable: laned.refreshable } : {}),
+            };
+          }
+          return { applied: true, conflict: null };
         }
         // A lane-only move changes no date, so it needs no recalculation — the same minimal-write
         // rule the single-bar drag already follows. It will therefore never SETTLE either, so an
@@ -1111,6 +1328,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // `[acknowledgeLost, queryClient, orgSlug, planId]`, checked rather than assumed.
       batchPlacements,
       onWriteRejected,
+      writeSwimlaneLanes,
     ],
   );
 
@@ -1531,13 +1749,64 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // otherwise find the product's own drag handler claiming it still writes them. The sibling
   // docblock inside `onTsldResize`'s `else` WAS updated by M-F and its parent was not, which is
   // the one-neighbour-and-not-the-other shape rather than an oversight about the code itself.
-  const onTsldReposition = async ({
-    activityId,
-    startDay,
-    laneIndex,
-  }: TsldRepositionInput): Promise<TsldRepositionOutcome> => {
+  const onTsldReposition = async (
+    { activityId, startDay, laneIndex, swimlaneLanes }: TsldRepositionInput,
+    /**
+     * Set by the swimlane branch below when it calls this for the time half of one gesture: the undo
+     * step and the row the write returned are left here instead of being recorded, so the two halves
+     * can be recorded as one.
+     */
+    held?: { command: CheckableCommand | null; saved: ActivitySummary | null },
+  ): Promise<TsldRepositionOutcome> => {
     const activity = (activities.data ?? []).find((a) => a.id === activityId);
     if (!activity) return { applied: false, conflict: null };
+
+    // A move made on the swimlane layout (swimlanes M2-T4). Its lane part is the bar's lane inside
+    // its swimlane, written through its own endpoint with no `laneIndex` (SC-1); its time part, if
+    // any, is the ordinary hand-placed `visualStart` below, written first and carrying no lane. Two
+    // writes — the placement endpoints cannot take an in-swimlane lane — but one gesture, so ONE undo
+    // step: the time write's step is held, the lane write is made at the version the time write
+    // returned (the cache may not show it yet), and the two are recorded as one composed step.
+    if (swimlaneLanes !== undefined) {
+      const timeHalf: NonNullable<typeof held> = { command: null, saved: null };
+      let timeConflict: string | null = null;
+      if (startDay !== undefined) {
+        const timed = await onTsldReposition({ activityId, startDay }, timeHalf);
+        if (!timed.applied) return timed;
+        timeConflict = timed.conflict;
+      }
+      const timeCommand = timeHalf.command;
+      let laned: Awaited<ReturnType<typeof writeSwimlaneLanes>> | null = null;
+      try {
+        laned = await writeSwimlaneLanes(swimlaneLanes, {
+          label: `Move \u201c${activity.name}\u201d to lane`,
+          hold: timeCommand !== null,
+          ...(timeHalf.saved
+            ? { versions: new Map([[timeHalf.saved.id, timeHalf.saved.version]]) }
+            : {}),
+        });
+      } finally {
+        // The time half has landed even if the lane write THROWS (5xx, network, a lost pen), so its
+        // step is recorded either way: composed with the lane when both landed, alone otherwise.
+        if (timeCommand !== null) {
+          // layout-exempt: the time half snapshotted with `beginLayoutEdit` in its own write above;
+          // this only records the halves.
+          editHistory.record(
+            laned?.command
+              ? composeSteps({
+                  label: `Move \u201c${activity.name}\u201d`,
+                  steps: [timeCommand, laned.command],
+                })
+              : timeCommand,
+          );
+        }
+      }
+      return {
+        applied: laned.applied || startDay !== undefined,
+        conflict: laned.conflict ?? timeConflict,
+        ...(laned.refreshable !== undefined ? { refreshable: laned.refreshable } : {}),
+      };
+    }
 
     // Pure lane move: the cheap, layout-only PATCH — no constraint change, no recalc.
     if (startDay === undefined) {
@@ -1632,16 +1901,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
       // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
       // burst coalesces to one step (the command carries a coalescing key).
-      editHistory.record(
-        visualStartCommand({
-          setVisualStart: setVisualStart.mutateAsync,
-          activityId,
-          before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
-          after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
-          saved,
-          activityName: activity.name,
-        }),
-      );
+      const placement = visualStartCommand({
+        setVisualStart: setVisualStart.mutateAsync,
+        activityId,
+        before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
+        after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
+        saved,
+        activityName: activity.name,
+      });
+      if (held) {
+        held.command = placement;
+        held.saved = saved;
+      } else {
+        editHistory.record(placement);
+      }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && err.status === 409) {

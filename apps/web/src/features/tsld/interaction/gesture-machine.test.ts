@@ -360,6 +360,49 @@ describe('gesture-machine: free-2D drag (M4)', () => {
     expect(up.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
   });
 
+  describe('laneRange (swimlanes C6)', () => {
+    // The bar is on lane 1; the range holds it to lanes 1-2, as a swimlane two lanes tall would.
+    const ranged: GestureCtx = { ...ctx('select'), laneRange: () => ({ min: 1, max: 2 }) };
+    const dragTo = (state: GestureState, y: number): GestureState =>
+      reduce(state, { type: 'pointerMove', point: { x: 25, y } }, ranged).state;
+
+    it('stops the ghost at the bottom edge while the pointer keeps going', () => {
+      expect(dragTo(grab(), 40 + 5 * LANE_HEIGHT)).toMatchObject({ currentLaneIndex: 2 });
+    });
+
+    it('stops the ghost at the top edge', () => {
+      expect(dragTo(grab(), 40 - 1 * LANE_HEIGHT)).toMatchObject({ currentLaneIndex: 1 });
+    });
+
+    it('commits the clamped lane, never the one the pointer is over', () => {
+      const dropped = reduce(dragTo(grab(), 40 + 5 * LANE_HEIGHT), { type: 'pointerUp' }, ranged);
+      expect(dropped.intent).toEqual({ kind: 'reposition', activityId: 'a', laneIndex: 2 });
+    });
+
+    it('asks about the bar being dragged', () => {
+      const asked: string[] = [];
+      const spy: GestureCtx = {
+        ...ctx('select'),
+        laneRange: (id) => {
+          asked.push(id);
+          return null;
+        },
+      };
+      reduce(grab(), { type: 'pointerMove', point: { x: 25, y: 40 + LANE_HEIGHT } }, spy);
+      expect(asked).toEqual(['a']);
+    });
+
+    it('treats a null range as no limit', () => {
+      const open: GestureCtx = { ...ctx('select'), laneRange: () => null };
+      const state = reduce(
+        grab(),
+        { type: 'pointerMove', point: { x: 25, y: 40 + 5 * LANE_HEIGHT } },
+        open,
+      ).state;
+      expect(state).toMatchObject({ currentLaneIndex: 6 });
+    });
+  });
+
   describe('a started activity (docs/TECH_DEBT.md #431)', () => {
     const frozen = (): GestureState =>
       reduce(

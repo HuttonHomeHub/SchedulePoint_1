@@ -2,12 +2,13 @@ import type { ActivitySummary } from '@repo/types';
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
-import type { TsldBulkOperations } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
+import type { TsldBulkOperations } from '../model/edit-types';
 import {
   MOVE_FAILED_NOTE,
   pluralMoveAnnouncement,
   STILL_SAVING_NOTE,
+  swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
 import {
   isStartEdgeFrozen,
@@ -67,6 +68,14 @@ export interface CoalescedPluralNudgeDeps {
   busyRef: MutableRefObject<boolean>;
   /** Which dates the canvas is drawing bars from — the nudge moves the bar as DRAWN. */
   barDateSource: BarDateSource;
+  /**
+   * With swimlanes shown (`activities` are then in display lanes): the top of each bar's own
+   * swimlane, as a display lane. The set stops there, the way it stops at lane 0 without swimlanes.
+   * Absent means lane 0.
+   */
+  laneFloor?: ((activityId: string) => number) | undefined;
+  /** The sentence for a set held at the top; absent is `topLanePluralReason`. */
+  topLaneReason?: ((count: number, total: number) => string) | undefined;
 }
 
 const keyOf = (ids: readonly string[]): string => [...ids].sort().join(',');
@@ -155,12 +164,19 @@ export function useCoalescedPluralNudge(
       const { setConflict, announce, setGhost } = depsRef.current;
       if (outcome.conflict) setConflict(outcome.conflict, outcome.refreshable ?? true);
       else if (outcome.applied) {
+        // On the swimlane layout the host reports what actually moved; the delta asked for is not
+        // a fact about bars that found no free lane.
         announce(
-          pluralMoveAnnouncement({
-            count: rows.length,
-            dayDelta: burst.dayDelta,
-            laneDelta: burst.laneDelta,
-          }),
+          outcome.swimlaneMoved
+            ? swimlanePluralAnnouncement({
+                ...outcome.swimlaneMoved,
+                timeChanged: burst.dayDelta !== 0,
+              })
+            : pluralMoveAnnouncement({
+                count: rows.length,
+                dayDelta: burst.dayDelta,
+                laneDelta: burst.laneDelta,
+              }),
         );
       } else {
         // The ghost was shown and nothing was written (a lost pen, most often). The pen UI says why;
@@ -236,8 +252,17 @@ export function useCoalescedPluralNudge(
   }, []);
 
   return (ids, anchor, axis, delta) => {
-    const { moveMany, dataDate, setGhost, setConflict, announce, isOtherWriteBusy, barDateSource } =
-      depsRef.current;
+    const {
+      moveMany,
+      dataDate,
+      setGhost,
+      setConflict,
+      announce,
+      isOtherWriteBusy,
+      barDateSource,
+      laneFloor,
+      topLaneReason,
+    } = depsRef.current;
     if (!moveMany || dataDate === null) return;
     if (isOtherWriteBusy()) {
       // Don't race a pointer drag or a single-bar nudge — and don't drop the press silently.
@@ -284,9 +309,11 @@ export function useCoalescedPluralNudge(
       // own and collapse the lanes between them (the per-row clamp in `movedPlacement`), so refuse
       // the whole press aloud rather than hand that to the server.
       const { laneOffset, laneDelta } = burst;
-      const blocked = rows.filter((r) => r.laneIndex + laneOffset + laneDelta + delta < 0).length;
+      const blocked = rows.filter(
+        (r) => r.laneIndex + laneOffset + laneDelta + delta < (laneFloor?.(r.id) ?? 0),
+      ).length;
       if (blocked > 0) {
-        setConflict(topLanePluralReason(blocked, rows.length), false);
+        setConflict((topLaneReason ?? topLanePluralReason)(blocked, rows.length), false);
         return;
       }
       burst = { ...burst, laneDelta: laneDelta + delta };

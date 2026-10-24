@@ -329,3 +329,33 @@ describe('useCoalescedPluralNudge', () => {
     expect(deps.setGhost).not.toHaveBeenCalled();
   });
 });
+
+describe('useCoalescedPluralNudge on the swimlane layout (swimlanes M2-T4)', () => {
+  // Lanes 1, 2, 3 are DISPLAY lanes: a is on its swimlane's top lane (1), b and c are below.
+  const floorOf = (id: string): number => (id === 'a' ? 1 : id === 'b' ? 2 : 0);
+
+  it('holds the set at the top of each bar’s own swimlane, not at lane 0', async () => {
+    const deps = makeDeps({
+      laneFloor: floorOf,
+      topLaneReason: (count, total) => `${String(count)} of ${String(total)} at the top`,
+    });
+    const { result } = renderHook(() => useCoalescedPluralNudge(deps));
+    act(() => result.current(IDS, A, 'lane', -1));
+    // a (1 → 0) and b (2 → 1) both fall short of their floors; c (3 → 2) would be fine.
+    expect(deps.setConflict).toHaveBeenCalledWith('2 of 3 at the top', false);
+    await settle();
+    expect(deps.moveMany).not.toHaveBeenCalled();
+  });
+
+  it('with no floor it is the lane-0 check it always was', async () => {
+    const deps = makeDeps();
+    const { result } = renderHook(() => useCoalescedPluralNudge(deps));
+    act(() => result.current(IDS, A, 'lane', -1));
+    await settle();
+    expect(deps.moveMany).toHaveBeenCalledWith(
+      ROWS,
+      { dayDelta: 0, laneDelta: -1 },
+      expect.anything(),
+    );
+  });
+});

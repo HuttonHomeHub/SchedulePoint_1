@@ -280,3 +280,86 @@ describe('useCoalescedNudge', () => {
     });
   });
 });
+
+describe('useCoalescedNudge on the swimlane layout (swimlanes M2-T4)', () => {
+  // The bar is DRAWN on display lane 5 — the top lane (min 5) of a swimlane called Mechanical.
+  const drawn = activity({ laneIndex: 5 });
+
+  it('stops at the top of the bar’s own swimlane, not at lane 0, and names it', async () => {
+    const deps = makeDeps({
+      activities: [drawn],
+      topLane: () => ({ min: 5, swimlane: 'Mechanical' }),
+    });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(drawn, 'lane', -1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS * 2));
+    expect(deps.announce).toHaveBeenCalledWith('Already in the top lane of Mechanical.');
+    expect(deps.onReposition).not.toHaveBeenCalled();
+  });
+
+  it('still moves down from the top, with no bottom boundary', async () => {
+    const deps = makeDeps({
+      activities: [drawn],
+      topLane: () => ({ min: 5, swimlane: 'Mechanical' }),
+    });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(drawn, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.onReposition).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 6 });
+  });
+
+  it('without a swimlane the boundary is lane 0 and the sentence is the old one', () => {
+    const deps = makeDeps();
+    const a = deps.activities[0]!;
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(a, 'lane', -1));
+    expect(deps.announce).toHaveBeenCalledWith('Already in the top lane.');
+  });
+
+  it('announces the swimlane the write reports, in the C9 form', async () => {
+    const swimlane = {
+      swimlane: 'Mechanical',
+      lane: 1,
+      count: 3,
+      changedSwimlane: false,
+      displayLane: 6,
+      how: 'asked' as const,
+    };
+    const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null, swimlane });
+    const deps = makeDeps({ activities: [drawn], onReposition });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(drawn, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.announce).toHaveBeenCalledWith('Moved “Excavate”, in Mechanical, lane 2 of 3.');
+  });
+
+  it('says it stayed when the write reports no free lane that way, instead of going silent', async () => {
+    const swimlane = {
+      swimlane: 'Mechanical',
+      lane: 1,
+      count: 2,
+      changedSwimlane: false,
+      displayLane: 6,
+      how: 'stays' as const,
+    };
+    const onReposition = vi.fn().mockResolvedValue({ applied: false, conflict: null, swimlane });
+    const deps = makeDeps({ activities: [drawn], onReposition });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(drawn, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.announce).toHaveBeenCalledWith(
+      'No free lane that way for “Excavate”; it stays in Mechanical, lane 2 of 2.',
+    );
+  });
+
+  it('shows a rule refusal without a Refresh', async () => {
+    const onReposition = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'A rule.', refreshable: false });
+    const deps = makeDeps({ activities: [drawn], onReposition });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(drawn, 'lane', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.setConflict).toHaveBeenCalledWith('A rule.', false);
+  });
+});
