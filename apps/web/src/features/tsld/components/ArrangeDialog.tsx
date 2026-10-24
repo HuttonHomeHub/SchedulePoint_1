@@ -26,6 +26,13 @@ import { RadioCardGroup, type RadioCardFigure } from '@/components/ui/radio-card
  * already its best, and **bounded** when the plan is over the size the search is offered at, where
  * Tidy is shaded with the reason and Re-layout is preselected instead.
  *
+ * **While swimlanes are shown** (`withinSwimlanes`, derived by {@link ArrangeSearchDialog} from the
+ * search input's `swimlanes`) the description adds {@link WITHIN_SWIMLANES}: both options keep every
+ * activity in its own swimlane (swimlanes M2-T6, owner decision 2026-10-24) and the diagram can get
+ * taller, because swimlanes cannot share a row. The two cards stop promising what is false there —
+ * Tidy no longer says it "never adds lanes" and Re-layout says it may add lanes within a swimlane — and
+ * the figure that counts display rows is labelled "Rows", not "Lanes".
+ *
  * Confirm is `aria-disabled` with its reason linked, never native `disabled` (ADR-0145). Focus is
  * the caller's to return (ADR-0149 D8). The caller mounts it with a fresh `key` per opening, so the
  * planner's pick never carries over from a previous run.
@@ -37,7 +44,13 @@ export interface ArrangeDialogProps {
   onConfirm: (choice: ArrangeChoice, outcome: ArrangeOutcome) => void;
   pending: boolean;
   error: string | null;
+  /** True while swimlanes are shown: both options work inside each swimlane. */
+  withinSwimlanes?: boolean;
 }
+
+/** What Tidy and Re-layout promise while swimlanes are shown (feature-spec §4.5). */
+export const WITHIN_SWIMLANES =
+  'Both options work within each swimlane, and no activity changes swimlane. Swimlanes cannot share a row, so the diagram can get taller.';
 
 /**
  * The positions batch accepts at most this many rows in one write
@@ -53,12 +66,15 @@ function change(before: number, after: number): string {
   return before === after ? String(after) : `${String(before)} → ${String(after)}`;
 }
 
-export function arrangeFigures(outcome: ArrangeOutcome): RadioCardFigure[] {
+export function arrangeFigures(
+  outcome: ArrangeOutcome,
+  withinSwimlanes = false,
+): RadioCardFigure[] {
   const b: LayoutObjective = outcome.before;
   const a: LayoutObjective = outcome.after;
   return [
     { label: 'Activities moved', value: String(outcome.changes.length) },
-    { label: 'Lanes', value: change(b.rows, a.rows) },
+    { label: withinSwimlanes ? 'Rows' : 'Lanes', value: change(b.rows, a.rows) },
     { label: 'Overlaps', value: change(b.overlaps, a.overlaps) },
     { label: 'Links behind bars', value: change(b.occluded, a.occluded) },
     { label: 'Crossings', value: change(b.crossings, a.crossings) },
@@ -72,6 +88,7 @@ export function ArrangeDialog({
   onConfirm,
   pending,
   error,
+  withinSwimlanes = false,
 }: ArrangeDialogProps): React.ReactElement {
   // Only an explicit pick is held; the caller remounts the dialog per opening, so it starts empty.
   const [picked, setPicked] = useState<ArrangeChoice | null>(null);
@@ -111,7 +128,7 @@ export function ArrangeDialog({
       open={open}
       onClose={onClose}
       title="Arrange the diagram"
-      description="Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in."
+      description={`Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in.${withinSwimlanes ? ` ${WITHIN_SWIMLANES}` : ''}`}
     >
       <div className="flex flex-col gap-4">
         {search.kind === 'error' ? (
@@ -153,9 +170,10 @@ export function ArrangeDialog({
             {
               value: 'tidy',
               title: 'Tidy',
-              description:
-                'Improve the lanes you have, in this order: remove overlaps, then links hidden behind bars, then crossings. It never adds lanes.',
-              figures: ready?.tidy ? arrangeFigures(ready.tidy) : null,
+              description: withinSwimlanes
+                ? 'Improve the lanes you have, in this order: remove overlaps, then links hidden behind bars, then crossings.'
+                : 'Improve the lanes you have, in this order: remove overlaps, then links hidden behind bars, then crossings. It never adds lanes.',
+              figures: ready?.tidy ? arrangeFigures(ready.tidy, withinSwimlanes) : null,
               disabled: bounded !== null,
               disabledReason: bounded
                 ? `This plan draws ${String(bounded.drawn)} activities. Tidy is offered on plans of up to ${String(bounded.limit)}, because above that it takes too long to work out. Re-layout still packs the lanes.`
@@ -166,8 +184,8 @@ export function ArrangeDialog({
               title: 'Re-layout',
               description: bounded
                 ? 'Pack the lanes again by time, so no two activities overlap in a lane.'
-                : 'Tries several fresh starting layouts and keeps the best, improving each in the same order as Tidy. It may use as many lanes as the diagram has now. On a large plan it can take noticeably longer than Tidy.',
-              figures: ready ? arrangeFigures(ready.relayout) : null,
+                : `Tries several fresh starting layouts and keeps the best, improving each in the same order as Tidy. ${withinSwimlanes ? 'It may add lanes within a swimlane.' : 'It may use as many lanes as the diagram has now.'} On a large plan it can take noticeably longer than Tidy.`,
+              figures: ready ? arrangeFigures(ready.relayout, withinSwimlanes) : null,
             },
           ]}
         />
@@ -219,5 +237,12 @@ export function ArrangeSearchDialog({
   input: ArrangeSearchInput | null;
 }): React.ReactElement {
   const search = useArrangeSearch(input !== null, input);
-  return <ArrangeDialog open={input !== null} search={search} {...rest} />;
+  return (
+    <ArrangeDialog
+      open={input !== null}
+      search={search}
+      withinSwimlanes={input?.swimlanes !== undefined}
+      {...rest}
+    />
+  );
 }

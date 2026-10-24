@@ -7,6 +7,14 @@ import {
   type LayoutObjective,
   type LayoutScene,
 } from './layout-objective';
+import {
+  bandRowsOf,
+  displayLanesOf,
+  offsetsOf,
+  stackOf,
+  swimlaneKeyOf,
+  type LayoutPartition,
+} from './layout-partition';
 import { axisDayOf, type RenderActivity, type RenderEdge } from './render-model';
 import type { PlacedText } from './row-text-layout';
 
@@ -43,12 +51,37 @@ import type { PlacedText } from './row-text-layout';
  * That is why this file lives in `render/` beside the objective and not in `model/`, where
  * `drawn-span.structural.test.ts` holds files to `ActivitySummary`'s meaning of the same field names.
  *
+ * **With a swimlane partition** (swimlanes M2-T6, feature-spec §4.5) the same four phases run with
+ * the swimlane restrictions added, and the lanes in and out are **local to a swimlane**:
+ *
+ * - swaps exchange two rows of one swimlane;
+ * - alignment candidates come from the bar's own swimlane, and "one new row" is a row at the bottom
+ *   of it, allowed while the whole diagram is under the budget;
+ * - compaction deletes empty rows inside a swimlane and keeps at least one row for each;
+ * - repair is `nearestFreeRow` with the partition;
+ * - the objective is scored on display lanes ({@link LayoutPartition}), so links between swimlanes
+ *   count, and the budget is the diagram's height in rows.
+ *
+ * No bar ever leaves its swimlane: a lane is only ever read against the swimlane it was written for.
+ * Only drawn bars take part, so an undrawn activity's stored lane is deliberately left alone (the
+ * unpartitioned search renumbers it when it compacts; that lane is on no row here).
+ * Absent, every branch below reduces to the unpartitioned search, byte for byte (ADR-0203 FC-R8; the
+ * golden record in `test-support/optimise-parity.golden.json`).
+ *
  * Pure: no clock, no randomness, no engine, no DOM. Input order does not affect the result, because
  * activities and edges are sorted by id before anything is evaluated.
  */
 export interface OptimiseLayoutOptions {
-  /** The row cap. Defaults to the seed's row count (CQ-1); Re-layout passes its own. */
+  /**
+   * The row cap. Defaults to the seed's row count (CQ-1); Re-layout passes its own. With a
+   * {@link partition} it counts display rows: the swimlanes' heights added together.
+   */
   budget?: number;
+  /**
+   * The swimlanes to search inside. Present only while swimlanes are shown; the input's
+   * `laneIndex` and the result's `lanes` are then lanes local to each activity's swimlane.
+   */
+  partition?: LayoutPartition | undefined;
   /** Pass cap P. */
   passes?: number;
   /** Evaluation cap E per pass. */
@@ -134,7 +167,39 @@ export function optimiseLayout(
   const barOf = new Map(bars.map((b) => [b.id, b]));
 
   const seedLanes = new Map(activities.map((a) => [a.id, a.laneIndex]));
-  const budget = options.budget ?? rowsOf(seedLanes);
+
+  // The partition's geometry. Without one `shown` is `lanes` itself and every helper below is the
+  // unpartitioned rule, which is what keeps the absent case byte-identical.
+  const partition = options.partition;
+  const barIds = bars.map((b) => b.id);
+  const stack = partition ? stackOf(partition, barIds) : [];
+  const keyOf = (id: string): string => (partition ? swimlaneKeyOf(partition, id) : '');
+  const heightsOf = (lanes: ReadonlyMap<string, number>): Map<string, number> =>
+    bandRowsOf(partition!, stack, lanes, barIds);
+  const totalRowsOf = (lanes: ReadonlyMap<string, number>): number => {
+    if (!partition) return rowsOf(lanes);
+    let total = 0;
+    for (const rows of heightsOf(lanes).values()) total += rows;
+    return total;
+  };
+  // The bands of the layout last asked about. Phase 2 asks once per bar, and `lanes` is replaced (never
+  // edited) when a move is accepted, so the answer is reused until then.
+  let bandsFor: {
+    lanes: ReadonlyMap<string, number>;
+    heights: Map<string, number>;
+    total: number;
+    offsets: Map<string, number>;
+  } | null = null;
+  const bandsOf = (lanes: ReadonlyMap<string, number>) => {
+    if (bandsFor?.lanes !== lanes) {
+      const heights = heightsOf(lanes);
+      let total = 0;
+      for (const h of heights.values()) total += h;
+      bandsFor = { lanes, heights, total, offsets: offsetsOf(stack, heights) };
+    }
+    return bandsFor;
+  };
+  const budget = options.budget ?? totalRowsOf(seedLanes);
 
   let evaluations = 0;
   // One text memo per search (spec §4.9): the view, widths and toggles are fixed here and only
@@ -143,9 +208,10 @@ export function optimiseLayout(
   const evaluate = (lanes: ReadonlyMap<string, number>): LayoutObjective => {
     evaluations += 1;
     options.onProgress?.(evaluations);
+    const shown = partition ? displayLanesOf(partition, stack, lanes, barIds) : lanes;
     return evaluateLayout(
       {
-        activities: activities.map((a) => ({ ...a, laneIndex: lanes.get(a.id) ?? a.laneIndex })),
+        activities: activities.map((a) => ({ ...a, laneIndex: shown.get(a.id) ?? a.laneIndex })),
         edges,
         dataDate: input.dataDate,
         isWorkingDay: input.isWorkingDay,
@@ -156,10 +222,10 @@ export function optimiseLayout(
   };
 
   const seed = evaluate(seedLanes);
-  let lanes = repair(seedLanes, order);
+  let lanes = repair(seedLanes, order, partition?.swimlaneOf);
   let current = evaluate(lanes);
   const repaired = current;
-  const overBudget = rowsOf(lanes) > budget;
+  const overBudget = totalRowsOf(lanes) > budget;
 
   const neighbours = new Map<string, string[]>();
   for (const e of edges) {
@@ -187,25 +253,52 @@ export function optimiseLayout(
       return true;
     };
 
-    // Phase 1: adjacent-row swaps.
-    for (let r = 0; r + 1 < rowsOf(lanes) && budgetLeft(); r += 1) {
-      tryAdopt(swapRows(lanes, r));
+    // Phase 1: adjacent-row swaps, inside one swimlane when there are swimlanes.
+    if (partition) {
+      for (const key of stack) {
+        const inSwimlane = (id: string): boolean => barOf.has(id) && keyOf(id) === key;
+        for (let r = 0; r + 1 < heightsOf(lanes).get(key)! && budgetLeft(); r += 1) {
+          tryAdopt(swapRows(lanes, r, inSwimlane));
+        }
+      }
+    } else {
+      for (let r = 0; r + 1 < rowsOf(lanes) && budgetLeft(); r += 1) {
+        tryAdopt(swapRows(lanes, r, () => true));
+      }
     }
 
     // Phase 2: single-bar moves, best of each bar's candidates.
     for (const bar of order) {
       if (!budgetLeft()) break;
       const cur = lanes.get(bar.id)!;
-      const rows = rowsOf(lanes);
+      const key = keyOf(bar.id);
+      // The bar's own band: its rows, where it starts in the diagram, and the diagram's height. With
+      // no partition the band is the whole diagram.
+      let rows: number;
+      let total: number;
+      let offset = 0;
+      if (partition) {
+        const bands = bandsOf(lanes);
+        rows = bands.heights.get(key)!;
+        total = bands.total;
+        offset = bands.offsets.get(key)!;
+      } else {
+        rows = total = rowsOf(lanes);
+      }
       const want = new Set([cur - 2, cur - 1, cur + 1, cur + 2]);
       for (const n of neighbours.get(bar.id) ?? []) {
+        // A link into another swimlane says nothing about a lane here: its number means a lane there.
+        if (partition && (!barOf.has(n) || keyOf(n) !== key)) continue;
         const lane = lanes.get(n);
         if (lane !== undefined) want.add(lane);
       }
-      if (rows < budget) want.add(rows);
+      if (total < budget) want.add(rows);
       const candidates = [...want]
-        .filter((lane) => lane >= 0 && lane !== cur && lane < budget && lane <= rows)
-        .filter((lane) => fits(lanes, barOf, bar, lane))
+        // A row that exists is open while it lies inside the budget; the new row at the bottom of the
+        // band, while the whole diagram is under it.
+        .filter((lane) => lane >= 0 && lane !== cur && lane <= rows)
+        .filter((lane) => (lane < rows ? offset + lane < budget : total < budget))
+        .filter((lane) => fits(lanes, barOf, bar, lane, partition ? keyOf : null))
         .sort((a, b) => a - b);
       let best: { lanes: Map<string, number>; objective: LayoutObjective } | null = null;
       for (const lane of candidates) {
@@ -224,7 +317,7 @@ export function optimiseLayout(
     }
 
     // Phase 3: compaction.
-    const packed = compacted(lanes);
+    const packed = partition ? compactedInSwimlanes(lanes, barOf, stack, keyOf) : compacted(lanes);
     if (packed && budgetLeft()) tryAdopt(packed);
 
     if (accepted === 0) break;
@@ -245,36 +338,55 @@ export function optimiseLayout(
 }
 
 /** Phase 0: settle bars in drawn-start order, each in the nearest free row to where it is. */
-function repair(seed: ReadonlyMap<string, number>, order: readonly Bar[]): Map<string, number> {
+function repair(
+  seed: ReadonlyMap<string, number>,
+  order: readonly Bar[],
+  partition: ReadonlyMap<string, string> | undefined,
+): Map<string, number> {
   const lanes = new Map(seed);
   const settled: PackItem[] = [];
   for (const bar of order) {
     const item: PackItem = { ...bar, laneIndex: lanes.get(bar.id) ?? 0 };
-    const lane = nearestFreeRow(item, settled);
+    const lane = nearestFreeRow(item, settled, partition);
     lanes.set(bar.id, lane);
     settled.push({ ...item, laneIndex: lane });
   }
   return lanes;
 }
 
-/** Does `bar` fit in `lane` beside every other bar there (inclusive finish, as `packLanes`)? */
+/**
+ * Does `bar` fit in `lane` beside every other bar there (inclusive finish, as `packLanes`)? With
+ * swimlanes (`keyOf` given) only the bar's own swimlane's bars are beside it: a lane number in
+ * another swimlane is a different row.
+ */
 function fits(
   lanes: ReadonlyMap<string, number>,
   barOf: ReadonlyMap<string, Bar>,
   bar: Bar,
   lane: number,
+  keyOf: ((id: string) => string) | null,
 ): boolean {
+  const key = keyOf?.(bar.id);
   for (const [id, l] of lanes) {
     if (l !== lane || id === bar.id) continue;
+    if (keyOf && keyOf(id) !== key) continue;
     const other = barOf.get(id);
     if (other && !(other.endDay < bar.startDay || bar.endDay < other.startDay)) return false;
   }
   return true;
 }
 
-function swapRows(lanes: ReadonlyMap<string, number>, r: number): Map<string, number> {
+/** Rows `r` and `r + 1` exchanged for every activity `inScope` names (the whole diagram, or one swimlane). */
+function swapRows(
+  lanes: ReadonlyMap<string, number>,
+  r: number,
+  inScope: (id: string) => boolean,
+): Map<string, number> {
   return new Map(
-    [...lanes].map(([id, lane]) => [id, lane === r ? r + 1 : lane === r + 1 ? r : lane]),
+    [...lanes].map(([id, lane]) => [
+      id,
+      !inScope(id) ? lane : lane === r ? r + 1 : lane === r + 1 ? r : lane,
+    ]),
   );
 }
 
@@ -284,6 +396,30 @@ function compacted(lanes: ReadonlyMap<string, number>): Map<string, number> | nu
   if (used.every((lane, i) => lane === i)) return null;
   const to = new Map(used.map((lane, i) => [lane, i]));
   return new Map([...lanes].map(([id, lane]) => [id, to.get(lane)!]));
+}
+
+/**
+ * The layout with each swimlane's empty rows deleted (a swimlane's rows start at 0 and stay at least
+ * one), or null when there are none. Only drawn bars count: an undrawn activity's lane is not a row.
+ */
+function compactedInSwimlanes(
+  lanes: ReadonlyMap<string, number>,
+  barOf: ReadonlyMap<string, Bar>,
+  stack: readonly string[],
+  keyOf: (id: string) => string,
+): Map<string, number> | null {
+  const members = new Map<string, string[]>(stack.map((key) => [key, []]));
+  for (const id of lanes.keys()) if (barOf.has(id)) members.get(keyOf(id))!.push(id);
+  const out = new Map(lanes);
+  let changed = false;
+  for (const ids of members.values()) {
+    const used = [...new Set(ids.map((id) => lanes.get(id)!))].sort((a, b) => a - b);
+    if (used.every((lane, i) => lane === i)) continue;
+    changed = true;
+    const to = new Map(used.map((lane, i) => [lane, i]));
+    for (const id of ids) out.set(id, to.get(lanes.get(id)!)!);
+  }
+  return changed ? out : null;
 }
 
 function rowsOf(lanes: ReadonlyMap<string, number>): number {

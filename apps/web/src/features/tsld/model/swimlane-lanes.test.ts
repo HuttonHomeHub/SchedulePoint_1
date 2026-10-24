@@ -4,12 +4,15 @@ import { projectSwimlanes } from '../render/project-swimlanes';
 
 import { drawnDaySpan } from './drawn-span';
 import {
+  arrangeInSwimlanes,
+  arrangeSceneOf,
   createInSwimlane,
   dropInSwimlane,
   laneRangeOf,
   moveManyInSwimlanes,
   moveWithinSwimlane,
   NO_FREE_LANE_PLURAL,
+  NO_SWIMLANE_KEY,
   nudgeInSwimlane,
   type DaySpan,
   type SwimlaneEditContext,
@@ -442,5 +445,87 @@ describe('createInSwimlane', () => {
     expect(
       createInSwimlane(context(BASE), 40, { startDay: 20, endDay: 21 })?.swimlaneId,
     ).toBeNull();
+  });
+});
+
+describe('arrangeSceneOf', () => {
+  it('reads each drawn bar as a lane inside its swimlane, with the swimlanes in order', () => {
+    const scene = arrangeSceneOf(context(BASE));
+    expect([...scene.lanes]).toEqual([
+      ['a1', 0],
+      ['a2', 1],
+      ['b1', 0],
+      ['n1', 0],
+    ]);
+    expect(Object.fromEntries(scene.partition.swimlaneOf)).toEqual({
+      a1: 'A',
+      a2: 'A',
+      b1: 'B',
+      n1: NO_SWIMLANE_KEY,
+    });
+    expect(scene.partition.order).toEqual(['A', 'B', NO_SWIMLANE_KEY]);
+  });
+
+  it('keeps a swimlane with nothing drawn in it in the order, so it keeps its row', () => {
+    const scene = arrangeSceneOf(context([{ id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 }]));
+    expect(scene.partition.order).toEqual(['A', 'B']);
+  });
+});
+
+describe('arrangeInSwimlanes', () => {
+  it('writes only the bars whose lane inside their swimlane changed, from where they were', () => {
+    const placements = arrangeInSwimlanes(
+      context(BASE),
+      new Map([
+        ['a1', 0],
+        ['a2', 0],
+        ['b1', 0],
+      ]),
+    );
+    expect(placements).toEqual([{ id: 'a2', lane: 0, from: { swimlaneId: 'A', lane: 1 } }]);
+  });
+
+  it('never names a swimlane, so no bar changes swimlane', () => {
+    const placements = arrangeInSwimlanes(
+      context(BASE),
+      new Map([
+        ['a1', 1],
+        ['a2', 0],
+        ['b1', 1],
+        ['n1', 1],
+      ]),
+    );
+    expect(placements.length).toBeGreaterThan(0);
+    for (const p of placements) expect(p).not.toHaveProperty('swimlaneId');
+  });
+
+  it('writes the unplaced members of a swimlane it touched, at the lane they are drawn in', () => {
+    const specs: Spec[] = [
+      { id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 },
+      { id: 'a2', start: 5, end: 8, swimlane: 'A' },
+      { id: 'b1', start: 0, end: 3, swimlane: 'B' },
+    ];
+    const ctx = context(specs);
+    const placements = arrangeInSwimlanes(
+      ctx,
+      new Map([
+        ['a1', 1],
+        ['a2', 0],
+        ['b1', 0],
+      ]),
+    );
+    // a1 moved; a2 is drawn at its derived lane (0, free beside a1 once a1 has gone) and is written
+    // there too, in the same batch. b1 is in a swimlane nothing moved in, so it stays unplaced.
+    expect(placements.map((p) => p.id).sort()).toEqual(['a1', 'a2']);
+    expect(placements.find((p) => p.id === 'a2')).toEqual({
+      id: 'a2',
+      lane: 0,
+      materialised: true,
+    });
+  });
+
+  it('writes nothing when the answer is the layout already drawn', () => {
+    const ctx = context(BASE);
+    expect(arrangeInSwimlanes(ctx, arrangeSceneOf(ctx).lanes)).toEqual([]);
   });
 });

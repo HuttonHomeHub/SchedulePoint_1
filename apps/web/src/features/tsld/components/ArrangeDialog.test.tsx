@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LayoutObjective } from '../render/layout-objective';
 
-import { ArrangeDialog } from './ArrangeDialog';
+import { ArrangeDialog, WITHIN_SWIMLANES } from './ArrangeDialog';
 import type { ArrangeOutcome, ArrangeSearchState } from './use-arrange-search';
 
 /**
@@ -36,7 +36,12 @@ const RELAYOUT: ArrangeOutcome = {
 };
 const READY: ArrangeSearchState = { kind: 'ready', tidy: TIDY, relayout: RELAYOUT, bounded: null };
 
-function renderDialog(search: ArrangeSearchState, onConfirm = vi.fn(), pending = false) {
+function renderDialog(
+  search: ArrangeSearchState,
+  onConfirm = vi.fn(),
+  pending = false,
+  withinSwimlanes?: boolean,
+) {
   render(
     <ArrangeDialog
       open
@@ -45,6 +50,7 @@ function renderDialog(search: ArrangeSearchState, onConfirm = vi.fn(), pending =
       onConfirm={onConfirm}
       pending={pending}
       error={null}
+      {...(withinSwimlanes !== undefined ? { withinSwimlanes } : {})}
     />,
   );
   return onConfirm;
@@ -235,6 +241,44 @@ describe('ArrangeDialog', () => {
     const relayout = screen.getByRole('radio', { name: 'Re-layout' });
     expect(relayout).toHaveAccessibleDescription(/^Pack the lanes again by time/);
     expect(relayout).not.toHaveAccessibleDescription(/as many lanes/);
+  });
+
+  it('says both options keep work inside its swimlane, and that the diagram can get taller', () => {
+    renderDialog(READY, vi.fn(), false, true);
+    expect(WITHIN_SWIMLANES).toContain('no activity changes swimlane');
+    expect(WITHIN_SWIMLANES).toContain('the diagram can get taller');
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      `Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in. ${WITHIN_SWIMLANES}`,
+    );
+  });
+
+  it('on swimlanes never promises "never adds lanes", and counts Rows rather than Lanes', () => {
+    renderDialog(READY, vi.fn(), false, true);
+    const tidy = screen.getByRole('radio', { name: 'Tidy' });
+    const relayout = screen.getByRole('radio', { name: 'Re-layout' });
+    expect(tidy).not.toHaveAccessibleDescription(/never adds/);
+    expect(tidy).toHaveAccessibleDescription(/remove overlaps/);
+    expect(relayout).toHaveAccessibleDescription(/may add lanes within a swimlane/);
+    expect(relayout).not.toHaveAccessibleDescription(/as many lanes as the diagram has now/);
+    expect(screen.getAllByText('Rows').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Lanes')).not.toBeInTheDocument();
+  });
+
+  it('off swimlanes keeps the lane wording and the figure called Lanes', () => {
+    renderDialog(READY);
+    expect(screen.getByRole('radio', { name: 'Tidy' })).toHaveAccessibleDescription(
+      /It never adds lanes/,
+    );
+    expect(screen.getAllByText('Lanes').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Rows')).not.toBeInTheDocument();
+  });
+
+  it('says nothing about swimlanes when they are not shown', () => {
+    renderDialog(READY);
+    expect(screen.getByRole('dialog')).not.toHaveAccessibleDescription(/swimlane/i);
+    cleanup();
+    renderDialog(READY, vi.fn(), false, false);
+    expect(screen.getByRole('dialog')).not.toHaveAccessibleDescription(/swimlane/i);
   });
 
   it('reports a failed search as an alert, with Confirm shaded', () => {

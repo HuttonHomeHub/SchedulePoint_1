@@ -74,6 +74,53 @@ describe('handleOptimiseRequest', () => {
     expect(done.result.final).toEqual(direct.final);
   });
 
+  it('carries a swimlane partition across the boundary, and answers as a direct partitioned call', () => {
+    const partition = {
+      swimlaneOf: new Map([
+        ['A', 'north'],
+        ['B', 'north'],
+        ['C', 'south'],
+        ['D', 'south'],
+      ]),
+      order: ['north', 'south'],
+    };
+    // The request crosses `postMessage`, which structured-clones it: a Map and an array must survive.
+    const request = structuredClone({
+      activities: ACTIVITIES,
+      edges: EDGES,
+      dataDate: '2026-01-01',
+      textWidths: TEXT_WIDTHS,
+      textToggles: DEFAULT_VIEW_TOGGLES,
+      workingDays: null,
+      options: { partition },
+    });
+    expect(request.options.partition?.swimlaneOf).toBeInstanceOf(Map);
+
+    const messages: OptimiseMessage[] = [];
+    handleOptimiseRequest(request, (m) => messages.push(structuredClone(m)));
+    const done = messages.at(-1);
+    if (done?.type !== 'done') throw new Error('no result');
+    const direct = optimiseLayout(
+      {
+        activities: ACTIVITIES,
+        edges: EDGES,
+        dataDate: '2026-01-01',
+        text: FIXED_WIDTH_TEXT,
+      },
+      { partition },
+    );
+    expect([...done.result.lanes]).toEqual([...direct.lanes]);
+    expect(done.result.final).toEqual(direct.final);
+    // The partition took effect: without it the same request answers differently.
+    const plain = optimiseLayout({
+      activities: ACTIVITIES,
+      edges: EDGES,
+      dataDate: '2026-01-01',
+      text: FIXED_WIDTH_TEXT,
+    });
+    expect(done.result.final).not.toEqual(plain.final);
+  });
+
   it('posts progress every PROGRESS_EVERY evaluations', () => {
     const messages: OptimiseMessage[] = [];
     handleOptimiseRequest(

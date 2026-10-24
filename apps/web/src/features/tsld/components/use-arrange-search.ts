@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 
 import type { LayoutObjective } from '../render/layout-objective';
+import { displayRowsOf, type LayoutPartition } from '../render/layout-partition';
 import { OPTIMISE_MAX_ACTIVITIES } from '../render/optimise-layout';
 import { workingDaySpanOf, type OptimiseRequest } from '../render/optimise-layout-protocol';
 import {
+  partitionedPackStart,
   relayoutSeeds,
   relayoutStartIds,
   pickBestStart,
@@ -33,6 +35,12 @@ import type { TsldViewToggles } from '../render/view-toggles';
  * places for the same strict-improvement search to begin. They run at once in a small worker pool; the
  * pick is by `compareObjectives` over the results in start order, so it does not depend on which
  * search finishes first or how many cores there are. The dialog shows nothing until all have finished.
+ *
+ * **While swimlanes are shown** (swimlanes M2-T6, feature-spec §4.5) the input carries a
+ * {@link ArrangeSearchInput.swimlanes partition}, and everything above happens inside each swimlane:
+ * the activities' lanes are lanes within their swimlane, the starts are built one swimlane at a time,
+ * the row budget counts the diagram's height, and what comes back is written as in-swimlane lanes. The
+ * partition is absent otherwise, and then none of this exists.
  *
  * **Above {@link OPTIMISE_MAX_ACTIVITIES} drawn activities the search is not offered**, because a
  * whole Tidy there is measured past 10 s. Re-layout is then evaluated but not searched, so its
@@ -69,8 +77,16 @@ export interface ArrangeSearchInput {
   edges: readonly RenderEdge[];
   dataDate: string;
   isWorkingDay: ((dayOffset: number) => boolean) | null | undefined;
-  /** Today's pack (`arrangeSummary.changes`), the seed Re-layout starts from. */
+  /**
+   * Today's pack (`arrangeSummary.changes`), the seed Re-layout starts from. Ignored while
+   * {@link swimlanes} is set: the pack is then partitioned and worked out from `activities`.
+   */
   packChanges: readonly { id: string; laneIndex: number }[];
+  /**
+   * Present only while swimlanes are shown. `activities`' `laneIndex` is then the lane **inside the
+   * activity's swimlane**, and Tidy and Re-layout keep every activity in its own swimlane.
+   */
+  swimlanes?: LayoutPartition | undefined;
   /**
    * The text toggles the canvas is drawing with (links-and-labels M2, spec D-7): the search routes
    * around the names and dates the planner can see.
@@ -105,8 +121,21 @@ export function arrangeRequest(
       : null,
     textWidths,
     textToggles: input.textToggles,
-    options,
+    options: input.swimlanes ? { ...options, partition: input.swimlanes } : options,
   };
+}
+
+/**
+ * The activities as the search reads them while swimlanes are shown: each drawn one carries its lane
+ * **inside its swimlane**. An activity with no lane there (not drawn, so on no row) gets 0 and never
+ * its stored or display lane — handing the search a lane in the wrong coordinate system would move a
+ * bar by the difference.
+ */
+export function inSwimlaneLanes(
+  activities: readonly RenderActivity[],
+  lanes: ReadonlyMap<string, number>,
+): RenderActivity[] {
+  return activities.map((a) => ({ ...a, laneIndex: lanes.get(a.id) ?? 0 }));
 }
 
 /** The moves from `current` to `lanes`, in a fixed order. */
@@ -129,12 +158,23 @@ export function changesBetween(
 export function relayoutBudget(
   current: ReadonlyMap<string, number>,
   packed: ReadonlyMap<string, number>,
+  heightOf: (lanes: ReadonlyMap<string, number>) => number = rowsOfLanes,
 ): number {
+  return Math.max(heightOf(current), heightOf(packed));
+}
+
+function rowsOfLanes(lanes: ReadonlyMap<string, number>): number {
   let rows = 0;
-  for (const lanes of [current, packed]) {
-    for (const lane of lanes.values()) rows = Math.max(rows, lane + 1);
-  }
+  for (const lane of lanes.values()) rows = Math.max(rows, lane + 1);
   return rows;
+}
+
+/** The rows a layout occupies: the highest lane, or while swimlanes are shown the swimlanes' heights added. */
+function heightFn(input: ArrangeSearchInput): (lanes: ReadonlyMap<string, number>) => number {
+  const { swimlanes } = input;
+  if (!swimlanes) return rowsOfLanes;
+  const drawn = input.activities.filter((a) => a.drawnStart !== null).map((a) => a.id);
+  return (lanes) => displayRowsOf(swimlanes, lanes, drawn);
 }
 
 /**
@@ -153,16 +193,23 @@ export function relayoutRuns(
     return { starts, requests: [arrangeRequest(input, packed, { passes: 0 }, textWidths)] };
   }
   const starts = relayoutSeeds(
-    { activities: input.activities, edges: input.edges, dataDate: input.dataDate, packed },
+    {
+      activities: input.activities,
+      edges: input.edges,
+      dataDate: input.dataDate,
+      packed,
+      ...(input.swimlanes ? { partition: input.swimlanes.swimlaneOf } : {}),
+    },
     relayoutStartIds(drawn),
   );
+  const heightOf = heightFn(input);
   return {
     starts,
     requests: starts.map((start) =>
       arrangeRequest(
         input,
         start.lanes,
-        { budget: relayoutBudget(current, start.lanes) },
+        { budget: relayoutBudget(current, start.lanes, heightOf) },
         textWidths,
       ),
     ),
@@ -191,8 +238,15 @@ export function useArrangeSearch(
     const setState = (state: ArrangeSearchState): void => setResult({ input, state });
 
     const current = new Map(input.activities.map((a) => [a.id, a.laneIndex]));
-    const packed = new Map(current);
-    for (const c of input.packChanges) packed.set(c.id, c.laneIndex);
+    const packed = input.swimlanes
+      ? partitionedPackStart(
+          input.activities,
+          input.edges,
+          input.dataDate,
+          input.swimlanes.swimlaneOf,
+        )
+      : new Map(current);
+    if (!input.swimlanes) for (const c of input.packChanges) packed.set(c.id, c.laneIndex);
     const drawn = drawnCount(input.activities);
     const bounded = drawn > OPTIMISE_MAX_ACTIVITIES;
 

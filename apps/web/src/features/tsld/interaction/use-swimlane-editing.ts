@@ -5,6 +5,8 @@ import type { DiagramSource } from '../model/derive-diagram-source';
 import { drawnDaySpan } from '../model/drawn-span';
 import type { TsldBulkOperations, TsldEditOutcome, TsldRepositionInput } from '../model/edit-types';
 import {
+  arrangeInSwimlanes,
+  arrangeSceneOf,
   createInSwimlane,
   dropInSwimlane,
   keyboardMoveInSwimlane,
@@ -15,8 +17,10 @@ import {
   swimlaneTopOf,
   topLanePluralInSwimlanes,
   type DaySpan,
+  type SwimlaneArrangeScene,
   type SwimlaneCreate,
   type SwimlaneEditContext,
+  type SwimlaneLanePlacement,
 } from '../model/swimlane-lanes';
 import type { SwimlaneInput } from '../render/project-swimlanes';
 
@@ -58,6 +62,11 @@ export interface SwimlaneEditing {
   readonly topLaneReason: ((count: number, total: number) => string) | undefined;
   /** Where a bar drawn at a display lane goes, or `null` off the swimlane layout. */
   readonly placeCreate: (displayLane: number, span: DaySpan) => SwimlaneCreate | null;
+  /** What Tidy and Re-layout search while swimlanes are drawn: lanes inside swimlanes, and the partition. */
+  readonly arrangeScene: () => SwimlaneArrangeScene | null;
+  /** An arrangement's answer as the lane write for the swimlane layout, or `null` off it. */
+  readonly arrangePlacements:
+    ((lanes: ReadonlyMap<string, number>) => readonly SwimlaneLanePlacement[]) | null;
 }
 
 export function useSwimlaneEditing(args: {
@@ -205,5 +214,7 @@ export function useSwimlaneEditing(args: {
     laneFloor,
     topLaneReason: ctx ? topLanePluralInSwimlanes : undefined,
     placeCreate: (displayLane, span) => (ctx ? createInSwimlane(ctx, displayLane, span) : null),
+    arrangeScene: () => (ctx ? arrangeSceneOf(ctx) : null),
+    arrangePlacements: ctx ? (lanes) => arrangeInSwimlanes(ctx, lanes) : null,
   };
 }

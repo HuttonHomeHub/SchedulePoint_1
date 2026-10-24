@@ -1,3 +1,4 @@
+import type { LayoutPartition } from '../render/layout-partition';
 import type {
   SwimlaneExtent,
   SwimlaneInput,
@@ -483,4 +484,54 @@ export function createInSwimlane(
     materialised: materialise(ctx, members, new Set([target]), new Set()),
     landed: landedOf(ctx, target, lane, true, 'asked'),
   };
+}
+
+/** The partition key of "No swimlane", which has no id. */
+export const NO_SWIMLANE_KEY = '\u0000none';
+
+const keyOfExtent = (extent: SwimlaneExtent): string => extent.id ?? NO_SWIMLANE_KEY;
+
+/**
+ * What Tidy and Re-layout search (swimlanes M2-T6, feature-spec §4.5): every drawn bar's lane
+ * **inside its swimlane**, and the partition that keeps each bar there. The search scores on display
+ * lanes by stacking the swimlanes in `order`, so a swimlane with nothing drawn in it keeps its row.
+ */
+export interface SwimlaneArrangeScene {
+  /** Drawn activity id → its lane inside its swimlane. */
+  readonly lanes: ReadonlyMap<string, number>;
+  readonly partition: LayoutPartition;
+}
+
+export function arrangeSceneOf(ctx: SwimlaneEditContext): SwimlaneArrangeScene {
+  const lanes = new Map<string, number>();
+  const swimlaneOf = new Map<string, string>();
+  for (const m of membersOf(ctx).values()) {
+    lanes.set(m.id, m.lane);
+    swimlaneOf.set(m.id, keyOfExtent(ctx.scene.extents[m.extent]!));
+  }
+  return { lanes, partition: { swimlaneOf, order: ctx.scene.extents.map(keyOfExtent) } };
+}
+
+/**
+ * The write for an arrangement: `lanes` is the search's answer (a lane inside each bar's swimlane),
+ * and the placements are the bars whose lane changed plus the unplaced members of every swimlane that
+ * changed (materialise on write, §4.4). **No placement names a swimlane or a `laneIndex`**: Arrange
+ * never moves work between swimlanes, and the swimlane-free layout is not its to touch (SC-1).
+ */
+export function arrangeInSwimlanes(
+  ctx: SwimlaneEditContext,
+  lanes: ReadonlyMap<string, number>,
+): SwimlaneLanePlacement[] {
+  const members = membersOf(ctx);
+  const moved: SwimlaneLanePlacement[] = [];
+  const touched = new Set<number>();
+  const written = new Set<string>();
+  for (const [id, lane] of [...lanes].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const m = members.get(id);
+    if (m === undefined || m.lane === lane) continue;
+    moved.push({ id, lane, from: { swimlaneId: ctx.scene.extents[m.extent]!.id, lane: m.lane } });
+    touched.add(m.extent);
+    written.add(id);
+  }
+  return moved.length === 0 ? [] : [...moved, ...materialise(ctx, members, touched, written)];
 }
