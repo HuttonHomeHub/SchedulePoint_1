@@ -64,8 +64,8 @@ describe('useSwimlaneScene', () => {
     h.impl = () => Promise.resolve(LIST);
   });
 
-  it('is dark: the lens is not offered, so nothing can be shown', () => {
-    expect(SWIMLANES_LENS_OFFERED).toBe(false);
+  it('is lit: the lens is offered', () => {
+    expect(SWIMLANES_LENS_OFFERED).toBe(true);
   });
 
   it('builds nothing and fetches nothing while swimlanes are not shown', () => {

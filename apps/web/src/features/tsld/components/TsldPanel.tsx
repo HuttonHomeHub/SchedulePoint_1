@@ -3301,7 +3301,10 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend withoutConstraint={!showConstraintKey} />
+          <TsldLegend
+            withoutConstraint={!showConstraintKey}
+            swimlaneBoundary={swimlaneScene !== null}
+          />
         </Surface>
       ) : null}
 

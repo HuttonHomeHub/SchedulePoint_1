@@ -1919,6 +1919,7 @@ export function ToolbarPlanWorkspace({
       onClose={legend.close}
       onPositionChange={legend.setPosition}
       leftInsetPx={swimlaneManagement.gutterWidthPx}
+      swimlaneBoundary={swimlaneScene.input !== null}
       {...(lensLegend ? { lens: lensLegend } : {})}
     />
   );

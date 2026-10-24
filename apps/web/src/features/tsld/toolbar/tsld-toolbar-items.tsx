@@ -565,11 +565,10 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     id: 'swimlanes',
     group: 'structure',
     label: 'Swimlanes',
-    // **Not offered, and that is the whole of M2's darkness** (swimlanes ui-architecture C1; the plan's
-    // M2-T2 "Dark because"). Nothing reaches this row until M2-T11 flips it, in step with
-    // `SWIMLANES_LENS_OFFERED` in the swimlanes feature, which holds the host's end of the same switch.
+    // **Offered since M2-T11**, which flipped it in step with `SWIMLANES_LENS_OFFERED` in the
+    // swimlanes feature, which holds the host's end of the same switch (swimlanes ui-architecture C1).
     // A literal and not that constant because `features/swimlanes` imports this feature's types.
-    enabled: false,
+    enabled: true,
     checked: (ctx) => ctx.swimlanesShown,
     toggle: (ctx) => ctx.toggleSwimlanes(),
     // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,

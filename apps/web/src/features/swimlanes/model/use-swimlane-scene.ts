@@ -8,14 +8,15 @@ import { manualSwimlaneInput } from './manual-membership';
 import type { SwimlaneInput } from '@/features/tsld';
 
 /**
- * Whether the plan workspace offers the Swimlanes lens at all. **`false` until M2-T11**, which is
- * what keeps every task before it dark: with the lens unoffered nothing is "shown", so no list is
- * fetched and no scene input is built (`implementation-plan.md` M2-T1, "Dark because").
+ * Whether the plan workspace offers the Swimlanes lens at all. **`true` since M2-T11**, which lit
+ * the lens; before it the constant was `false`, which kept every task dark: with the lens
+ * unoffered nothing is "shown", so no list is fetched and no scene input is built
+ * (`implementation-plan.md` M2-T1, "Dark because").
  *
- * The lens's own toggle (`enabled: false` in the toolbar's lens roster) and this are two ends of
- * the same switch; T2 replaces this constant with the lens state, `override ?? (source !== 'NONE')`.
+ * The lens's own toggle (`enabled` in the toolbar's lens roster) and this are two ends of the same
+ * switch, held equal by `one-switch.test.ts`.
  */
-export const SWIMLANES_LENS_OFFERED = false;
+export const SWIMLANES_LENS_OFFERED = true;
 
 /**
  * Whether alternate swimlanes carry the faint ground. The approved default of feature-spec SQ-6 is

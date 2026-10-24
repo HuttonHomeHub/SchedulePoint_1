@@ -28,6 +28,8 @@ export interface TsldLegendPanelProps {
    * read**, not by rewriting the preference, so the saved position survives the gutter closing.
    */
   leftInsetPx?: number;
+  /** Swimlanes are drawn, so the key gains the boundary rule between them (swimlanes M2-T11). */
+  swimlaneBoundary?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export function TsldLegendPanel({
   onPositionChange,
   lens,
   leftInsetPx = 0,
+  swimlaneBoundary = false,
 }: TsldLegendPanelProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const dragOrigin = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(
@@ -204,7 +207,11 @@ export function TsldLegendPanel({
             `className="contents"` generates no box: colour correction only, and the card's own
             chrome (popover ground, heading, close) deliberately stays page-scoped. */}
         <Surface tone="canvas" className="contents">
-          <TsldLegend orientation="vertical" {...(lens ? { lens } : {})} />
+          <TsldLegend
+            orientation="vertical"
+            swimlaneBoundary={swimlaneBoundary}
+            {...(lens ? { lens } : {})}
+          />
         </Surface>
       </div>
     </div>

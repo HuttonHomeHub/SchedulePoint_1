@@ -5,9 +5,8 @@ import { buildTsldToolbarItems, LENS_TOGGLES } from './tsld-toolbar-items';
 import { makeTsldToolbarContext } from '@/features/tsld/toolbar/test-helpers';
 
 /**
- * **The Swimlanes lens is registered, shut by reason, and offered to nobody** (swimlanes M2-T2,
- * ui-architecture C1). It is dark until M2-T11: `enabled: false` keeps it out of every built
- * registry and out of `View ▾`, which is what lets the paint and the state land first.
+ * **The Swimlanes lens is registered, shut by reason, and offered in `View ▾`** (swimlanes
+ * M2-T2, ui-architecture C1). It was dark until M2-T11 lit it with `enabled: true`.
  */
 const lens = () => {
   const item = LENS_TOGGLES.find((i) => i.id === 'swimlanes');
@@ -17,9 +16,10 @@ const lens = () => {
 };
 
 describe('the Swimlanes lens', () => {
-  it('lives in the Structure section and is not offered', () => {
+  it('lives in the Structure section, is offered, and is never a bar item', () => {
     expect(lens().group).toBe('structure');
-    expect(lens().enabled).toBe(false);
+    expect(lens().enabled).toBe(true);
+    // It carries no `promotion`, so it is a View ▾ row and never a button of its own on the bar.
     expect(buildTsldToolbarItems().some((i) => i.id.includes('swimlanes'))).toBe(false);
   });
 
