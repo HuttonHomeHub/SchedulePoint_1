@@ -1602,6 +1602,9 @@ export function autoArrangeCommand(params: {
   };
 }
 
+/** What the strip names when the swimlane a step needs has been deleted: "… was deleted after your edit". */
+const DELETED_SWIMLANE_SUBJECT = 'The swimlane';
+
 /** `useWriteSwimlaneLanes().mutateAsync` — an all-or-nothing batch of in-swimlane lanes. */
 export type WriteSwimlaneLanesFn = (input: {
   positions: SwimlaneLaneRow[];
@@ -1693,6 +1696,30 @@ export function swimlaneLanesCommand(params: {
     }
     return checked;
   };
+  /**
+   * A step that files a bar in a swimlane it is not in refuses a swimlane deleted since (`404`), so
+   * the replay asks first and sets the step aside rather than sending a batch the server will refuse
+   * (ADR-0176, feature-spec §4.7). "No swimlane" and the swimlane a bar is already in are never asked
+   * about: neither is a membership the write has to be admitted to.
+   */
+  const targetGone = async (
+    ctx: ReplayContext,
+    expect: ReadonlyMap<string, SwimlaneLaneState>,
+    target: readonly SwimlaneLaneState[],
+  ): Promise<ReplayResult | null> => {
+    const wanted = new Set(
+      target.flatMap((t) =>
+        t.swimlaneId !== null && expect.get(t.id)?.swimlaneId !== t.swimlaneId
+          ? [t.swimlaneId]
+          : [],
+      ),
+    );
+    if (wanted.size === 0) return null;
+    const active = new Set((await ctx.readSwimlanes()).map((swimlane) => swimlane.id));
+    return [...wanted].every((id) => active.has(id))
+      ? null
+      : notApplicable('gone', DELETED_SWIMLANE_SUBJECT);
+  };
   const replay = async (
     ctx: ReplayContext,
     expect: ReadonlyMap<string, SwimlaneLaneState>,
@@ -1701,6 +1728,8 @@ export function swimlaneLanesCommand(params: {
   ): Promise<ReplayResult> => {
     const checked = await checkOf(ctx, expect);
     if (!checked.ok) return checked.result;
+    const gone = await targetGone(ctx, expect, target);
+    if (gone !== null) return gone;
     const positions: SwimlaneLaneRow[] = [];
     for (const t of target) {
       const row = checked.rows.get(t.id);
@@ -1736,8 +1765,13 @@ export function swimlaneLanesCommand(params: {
         atUndo = next;
       }),
     check: async (direction, ctx) => {
-      const checked = await checkOf(ctx, direction === 'undo' ? atUndo : atRedo);
-      return checked.ok ? APPLIED : checked.result;
+      const expect = direction === 'undo' ? atUndo : atRedo;
+      const checked = await checkOf(ctx, expect);
+      if (!checked.ok) return checked.result;
+      return (
+        (await targetGone(ctx, expect, direction === 'undo' ? params.before : params.after)) ??
+        APPLIED
+      );
     },
     affectsSchedule: false,
   };

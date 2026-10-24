@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -65,7 +65,14 @@ function server(rows: ActivitySummary[]) {
         ),
       ),
   } as unknown as ReplayContext;
-  return { store, writeLanes, ctx };
+  const live = new Set(['S1', 'S2', 'S3']);
+  const withSwimlanes = {
+    ...ctx,
+    // The plan's active swimlanes, read fresh: a deleted one is simply absent.
+    readSwimlanes: () =>
+      Promise.resolve([...live].map((id) => ({ id, name: id }) as unknown as SwimlaneSummary)),
+  } as unknown as ReplayContext;
+  return { store, writeLanes, ctx: withSwimlanes, deleteSwimlane: (id: string) => live.delete(id) };
 }
 
 const placed = (id: string, swimlaneId: string, lane: number, name = id): ActivitySummary =>
@@ -129,6 +136,49 @@ describe('swimlaneLanesCommand', () => {
     const row = s.writeLanes.mock.calls[0]?.[0].positions[0];
     expect(row).toMatchObject({ id: 'a', swimlane: { swimlaneId: 'S1', laneIndex: 1 } });
     expect(s.store.get('a')?.swimlaneId).toBe('S1');
+  });
+
+  it('sets an undo aside, writing nothing, when the swimlane it would go back to has been deleted (ADR-0176)', async () => {
+    const s = server([placed('a', 'S1', 1)]);
+    const command = await moved(s, [state('a', 'S1', 1)], [state('a', 'S2', 0)]);
+    s.deleteSwimlane('S1');
+
+    expect(await command.undo(s.ctx)).toMatchObject({
+      kind: 'not-applicable',
+      reason: 'gone',
+      subjectName: 'The swimlane',
+    });
+    expect(s.writeLanes).not.toHaveBeenCalled();
+    expect(await command.check?.('undo', s.ctx)).toMatchObject({ kind: 'not-applicable' });
+    // The bar stays where it is; nothing was half done.
+    expect(s.store.get('a')?.swimlaneId).toBe('S2');
+  });
+
+  it('sets a redo aside when the swimlane it would assign to has been deleted', async () => {
+    const s = server([placed('a', 'S1', 1)]);
+    const command = await moved(s, [state('a', 'S1', 1)], [state('a', 'S2', 0)]);
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    s.writeLanes.mockClear();
+    s.deleteSwimlane('S2');
+
+    expect(await command.redo(s.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'gone' });
+    expect(s.writeLanes).not.toHaveBeenCalled();
+  });
+
+  it('does not ask whether a swimlane exists for a step that does not change the bar’s swimlane', async () => {
+    const s = server([placed('a', 'S1', 1)]);
+    const command = await moved(s, [state('a', 'S1', 1)], [state('a', 'S1', 2)]);
+    s.deleteSwimlane('S1');
+    // A lane inside the swimlane it is already in changes no membership, so there is nothing to refuse.
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+  });
+
+  it('goes to "No swimlane" whatever has happened to the swimlanes', async () => {
+    const s = server([placed('a', 'S1', 1)]);
+    const command = await moved(s, [state('a', 'S1', 1)], [state('a', null, 0)]);
+    expect(await command.undo(s.ctx)).toEqual({ kind: 'applied' });
+    s.deleteSwimlane('S1');
+    expect(await command.redo(s.ctx)).toEqual({ kind: 'applied' });
   });
 
   it('names no swimlane when the bar is already in the swimlane it goes back to', async () => {
