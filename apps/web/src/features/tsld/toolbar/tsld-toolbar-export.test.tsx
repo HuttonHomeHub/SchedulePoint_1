@@ -195,6 +195,71 @@ describe('TSLD toolbar — export & print (flag on)', () => {
 });
 
 /**
+ * **An export never silently omits swimlanes** (swimlanes M2-T7, ADR-0204). While the list the
+ * screen is waiting for is pending, or failed with swimlanes shown, the picture would be
+ * swimlane-free — so every item that makes one is shaded with the reason, to every input, and the
+ * schedule (CSV), which carries no picture, stays open.
+ */
+describe('Share & export — swimlanes not yet drawable (swimlanes M2-T7)', () => {
+  const PICTURES = [
+    'Diagram — whole plan (PNG)',
+    'Diagram — current view (PNG)',
+    'Diagram — whole plan (PDF)',
+    'Diagram — current view (PDF)',
+    'Print…',
+  ];
+
+  it.each([
+    ['still loading', { swimlanesLoading: true }, /still loading/],
+    ['failed to load', { swimlanesFailed: true }, /couldn't load/],
+  ])('shades every picture while swimlanes are shown and %s', (_name, over, reason) => {
+    renderRows(ctx({ swimlanesShown: true, ...over }));
+    openDeliver();
+    for (const name of PICTURES) {
+      const item = screen.getByRole('menuitem', { name });
+      expect(item, name).toHaveAttribute('aria-disabled', 'true');
+      expect(item, name).toHaveAccessibleDescription(reason);
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Print…' }));
+    expect(spies.exportDiagramPng).not.toHaveBeenCalled();
+    expect(spies.printDiagram).not.toHaveBeenCalled();
+    expect(screen.getByRole('menuitem', { name: 'Schedule (CSV)' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it.each([
+    ['loading', { swimlanesLoading: true }],
+    ['failed', { swimlanesFailed: true }],
+  ])(
+    'lifts when the lens is off, because the picture is then the one the screen shows (%s)',
+    (_n, over) => {
+      renderRows(ctx({ swimlanesShown: false, ...over }));
+      openDeliver();
+      for (const name of PICTURES) {
+        expect(screen.getByRole('menuitem', { name }), name).not.toHaveAttribute(
+          'aria-disabled',
+          'true',
+        );
+      }
+    },
+  );
+
+  it('is the prior menu when the list has arrived', () => {
+    renderRows(ctx({ swimlanesShown: true }));
+    openDeliver();
+    for (const name of PICTURES) {
+      expect(screen.getByRole('menuitem', { name }), name).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    }
+  });
+});
+
+/**
  * **The all-shaded case** (ADR-0090 M2-T7, ADR-0082) — a Viewer on a freshly created plan, where
  * every row behind `Share & export` is shut: the exports need a computed diagram and Share needs a
  * permission this caller lacks.

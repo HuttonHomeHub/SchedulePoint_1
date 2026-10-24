@@ -1844,6 +1844,24 @@ const ANALYSIS_LABEL = 'Analysis';
 const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
 
 /**
+ * Why the DIAGRAM exports and Print are shaded while the swimlanes the screen shows have not
+ * arrived (swimlanes M2-T7, ADR-0204). With the list pending the picture would be swimlane-free,
+ * and with it failed the screen draws swimlane-free too — either way a deliverable that silently
+ * left out the division the planner is looking at, to the one reader who cannot ask. The schedule
+ * (CSV) and interchange exports carry no picture and stay open. Lifts the moment the list arrives
+ * or the planner turns the lens off; `undefined` is the open state.
+ */
+function swimlaneExportReason(ctx: TsldToolbarContext): string | undefined {
+  if (!ctx.swimlanesShown) return undefined;
+  if (ctx.swimlanesLoading)
+    return 'Swimlanes are still loading. Wait, so the export includes them.';
+  if (ctx.swimlanesFailed === true) {
+    return "Swimlanes couldn't load, so the export would leave them out. Turn Swimlanes off to export without them.";
+  }
+  return undefined;
+}
+
+/**
  * The **Export ▾ menu-button** (export & print, `docs/specs/export-print/`, flag-on) — an APG
  * menu-button (mirroring {@link ColourByControl}) listing the plan's client-side deliverables. M1 ships
  * **Schedule (CSV)** plus a conditional **Matching activities only (N)** item shown only while a filter /
@@ -1880,6 +1898,7 @@ function ExportMenuControl({
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   useCloseOnPromotionChange(ctx.promotion, open, close, triggerRef);
   const disabled = api.disabled;
+  const swimlaneBlock = swimlaneExportReason(ctx);
   const labelClass = toolbarLabelClass(api.labelState);
   return (
     <>
@@ -1948,11 +1967,19 @@ function ExportMenuControl({
         {/* Diagram PNG (M2, CQ-1: offer BOTH extents). The whole-plan render re-frames an off-screen
             canvas to the full activity extent (raster-capped, scale-to-fit); the current-view render
             crops to the live viewport. Both paint off-screen with the light print palette + legend. */}
-        <MenuItem onSelect={() => ctx.exportDiagramPng('whole')}>
+        <MenuItem
+          disabled={swimlaneBlock !== undefined}
+          {...(swimlaneBlock === undefined ? {} : { disabledReason: swimlaneBlock })}
+          onSelect={() => ctx.exportDiagramPng('whole')}
+        >
           <ImageDown aria-hidden="true" className="size-4" />
           Diagram — whole plan (PNG)
         </MenuItem>
-        <MenuItem onSelect={() => ctx.exportDiagramPng('view')}>
+        <MenuItem
+          disabled={swimlaneBlock !== undefined}
+          {...(swimlaneBlock === undefined ? {} : { disabledReason: swimlaneBlock })}
+          onSelect={() => ctx.exportDiagramPng('view')}
+        >
           <Crop aria-hidden="true" className="size-4" />
           Diagram — current view (PNG)
         </MenuItem>
@@ -1960,7 +1987,11 @@ function ExportMenuControl({
             it on a landscape page via the LAZILY-imported jsPDF (first-use fetch, code-split). Both items
             show a loading state and are disabled while a PDF is in flight (`pdfExporting`), which also
             guards against a double-click; a load failure surfaces a user-safe error, PNG/CSV unaffected. */}
-        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('whole')}>
+        <MenuItem
+          disabled={ctx.pdfExporting || swimlaneBlock !== undefined}
+          {...(swimlaneBlock === undefined ? {} : { disabledReason: swimlaneBlock })}
+          onSelect={() => ctx.exportDiagramPdf('whole')}
+        >
           {ctx.pdfExporting ? (
             <Loader2 aria-hidden="true" className="size-4 animate-spin" />
           ) : (
@@ -1968,7 +1999,11 @@ function ExportMenuControl({
           )}
           Diagram — whole plan (PDF)
         </MenuItem>
-        <MenuItem disabled={ctx.pdfExporting} onSelect={() => ctx.exportDiagramPdf('view')}>
+        <MenuItem
+          disabled={ctx.pdfExporting || swimlaneBlock !== undefined}
+          {...(swimlaneBlock === undefined ? {} : { disabledReason: swimlaneBlock })}
+          onSelect={() => ctx.exportDiagramPdf('view')}
+        >
           {ctx.pdfExporting ? (
             <Loader2 aria-hidden="true" className="size-4 animate-spin" />
           ) : (
@@ -2022,8 +2057,12 @@ function ExportMenuControl({
           cannot (ADR-0082). */}
         <MenuSection divider label="Deliver" />
         <MenuItem
-          disabled={!ctx.hasDiagram}
-          {...(ctx.hasDiagram ? {} : { disabledReason: EXPORT_NO_DIAGRAM_REASON })}
+          disabled={!ctx.hasDiagram || swimlaneBlock !== undefined}
+          {...(!ctx.hasDiagram
+            ? { disabledReason: EXPORT_NO_DIAGRAM_REASON }
+            : swimlaneBlock === undefined
+              ? {}
+              : { disabledReason: swimlaneBlock })}
           onSelect={() => ctx.printDiagram()}
         >
           <Printer aria-hidden="true" className="size-4" />

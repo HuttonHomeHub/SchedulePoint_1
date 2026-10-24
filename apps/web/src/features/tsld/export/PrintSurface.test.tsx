@@ -51,6 +51,61 @@ describe('printAlt — claims only what the picture holds (ADR-0122)', () => {
   ] as const)('strip %s', (status, expected) => {
     expect(printAlt('North Tower', status)).toBe(expected);
   });
+
+  it('says the diagram is divided when swimlane names are painted into it', () => {
+    expect(printAlt('North Tower', undefined, true)).toBe(
+      'Diagram of North Tower, divided into swimlanes',
+    );
+    expect(printAlt('North Tower', 'ready', true)).toBe(
+      'Diagram of North Tower, divided into swimlanes, with resource load',
+    );
+  });
+
+  it('is the prior sentence without swimlanes', () => {
+    expect(printAlt('North Tower', 'ready', false)).toBe(printAlt('North Tower', 'ready'));
+  });
+});
+
+describe('printDiagramImage carries the swimlanes into the printed picture', () => {
+  const blob = new Blob(['png'], { type: 'image/png' });
+
+  beforeEach(() => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => MOCK_URL),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(URL, 'createObjectURL');
+    Reflect.deleteProperty(URL, 'revokeObjectURL');
+    document.querySelector('.tsld-print-container')?.remove();
+  });
+
+  it.each([
+    [true, 'Diagram of North Tower, divided into swimlanes'],
+    [false, 'Diagram of North Tower'],
+    [undefined, 'Diagram of North Tower'],
+  ])('swimlanesDrawn %s words the image’s alt as "%s"', (swimlanesDrawn, alt) => {
+    act(() => {
+      printDiagramImage(
+        {
+          blob,
+          title: 'North Tower',
+          subtitle: 'As of 2026-01-01',
+          ...(swimlanesDrawn === undefined ? {} : { swimlanesDrawn }),
+        },
+        { print: vi.fn() },
+      );
+    });
+    expect(document.querySelector('.tsld-print-container img')).toHaveAttribute('alt', alt);
+  });
 });
 
 describe('printDiagramImage (mount / teardown lifecycle)', () => {

@@ -67,8 +67,14 @@ const STRIP_ALT_SUFFIX = {
 } as const;
 
 /** The printed diagram's alt text, worded by what the strip actually contributed (ADR-0122). */
-export function printAlt(title: string, status: PrintSurfaceStripStatus | undefined): string {
-  return `Diagram of ${title}${status ? STRIP_ALT_SUFFIX[status] : ''}`;
+export function printAlt(
+  title: string,
+  status: PrintSurfaceStripStatus | undefined,
+  swimlanes = false,
+): string {
+  // The swimlane names are painted into the picture, so the alt says the diagram is divided
+  // (ADR-0122: it states what the picture holds, and only that).
+  return `Diagram of ${title}${swimlanes ? ', divided into swimlanes' : ''}${status ? STRIP_ALT_SUFFIX[status] : ''}`;
 }
 
 export interface PrintDiagramImageInput {
@@ -85,6 +91,8 @@ export interface PrintDiagramImageInput {
    * or was empty is named as exactly that, never as content the picture does not have.
    */
   resourceStripStatus?: PrintSurfaceStripStatus | null;
+  /** Whether the picture is divided into swimlanes, so the `alt` can say so. */
+  swimlanesDrawn?: boolean;
 }
 
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
@@ -110,7 +118,7 @@ export function printDiagramImage(
       imageUrl={url}
       title={input.title}
       subtitle={input.subtitle}
-      alt={printAlt(input.title, input.resourceStripStatus ?? undefined)}
+      alt={printAlt(input.title, input.resourceStripStatus ?? undefined, input.swimlanesDrawn)}
     />,
     { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
   );
