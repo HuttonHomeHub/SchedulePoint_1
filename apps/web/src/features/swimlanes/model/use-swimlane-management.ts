@@ -134,10 +134,18 @@ export function useSwimlaneManagement(args: {
   );
   const width = gutterWidthForRoom({ collapsed: preferCollapsed, room });
 
-  const open = useCallback(
-    (patch: Partial<SwimlaneDialogState>) => setState((prev) => ({ ...prev, ...patch })),
-    [],
-  );
+  // Where focus goes back to when the last dialog closes. The dialogs are code-split and load on the
+  // first request, so by the time the native `<dialog>` calls `showModal()` focus may already have
+  // moved, and its own restore would return to the wrong element: the opener is taken at the request.
+  // Only the first request of a stack is kept (Rename over Manage returns to Manage's opener).
+  const openerRef = useRef<HTMLElement | null>(null);
+  const open = useCallback((patch: Partial<SwimlaneDialogState>) => {
+    const held = document.activeElement;
+    if (openerRef.current === null && held instanceof HTMLElement && held !== document.body) {
+      openerRef.current = held;
+    }
+    setState((prev) => ({ ...prev, ...patch }));
+  }, []);
   // "None set up" is a plan with no source AND a hand-made plan with no swimlanes (undoing a setup).
   const setUp = plan.swimlaneSource === 'NONE' || args.swimlaneCount === 0;
   const openSwimlanes = useCallback(
@@ -246,6 +254,16 @@ export function useSwimlaneManagement(args: {
       focusAfterDelete(pending);
     });
   }, [swimlanes, state.deleteId]);
+
+  // The parent's effect runs after the dialog's own close (children first), so this has the last word
+  // over the native restore. A delete picks its own destination above, and an opener that has left
+  // the page (a menu item) is not a place to return to.
+  useEffect(() => {
+    if (anyOpen) return;
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (opener?.isConnected && pendingFocus.current === null) opener.focus();
+  }, [anyOpen]);
 
   const planIdentity = plan.id;
   const planVersion = plan.version;

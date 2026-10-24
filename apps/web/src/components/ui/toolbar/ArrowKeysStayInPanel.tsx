@@ -12,6 +12,11 @@ import { TOOLBAR_NAV_KEYS } from './toolbar-keyboard';
  * `toolbar-keyboard.ts` for the per-control rule the containers themselves use. Escape, Tab and
  * Enter are untouched, so the panel still closes and submits as its own contract says.
  *
+ * **Do not wrap a panel whose content is itself a roving widget** (a `Menu`, a listbox) whose arrow
+ * handler sits on a container ABOVE this wrapper and relies on the key bubbling up to it: stopping
+ * propagation here would starve that handler and the widget would stop responding. Such a panel
+ * applies the per-control rule of `toolbar-keyboard.ts` itself instead.
+ *
  * `role="presentation"`: it adds no semantics, only the handler (jsx-a11y accepts a handler on a
  * presentational element that is not itself interactive).
  */

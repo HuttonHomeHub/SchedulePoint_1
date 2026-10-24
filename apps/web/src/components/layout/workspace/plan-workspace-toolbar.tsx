@@ -19,7 +19,7 @@ import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
 import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
-import { SwimlanesFailedNotice } from './swimlanes-failed-notice';
+import { SwimlanesFailedRegion } from './swimlanes-failed-notice';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -2640,9 +2640,11 @@ export function ToolbarPlanWorkspace({
                 >
                   {/* The list failed while swimlanes are on: the diagram is drawn without them, and
                     this says so with a retry (the lens row carries the same sentence). Only on the
-                    diagram, which is where the division is drawn. */}
-                  {swimlanesAreShown && swimlaneScene.failed && ctx.planView !== 'gantt' ? (
-                    <SwimlanesFailedNotice
+                    diagram, which is where the division is drawn; its live region is mounted empty
+                    on the diagram so the sentence is announced when it arrives. */}
+                  {ctx.planView !== 'gantt' ? (
+                    <SwimlanesFailedRegion
+                      failed={swimlanesAreShown && swimlaneScene.failed}
                       onRetry={swimlaneScene.refetch}
                       restoreFocus={focusPlanSurface}
                     />

@@ -1478,7 +1478,7 @@ describe('a failed swimlane list is said over the diagram, with a retry', () => 
     renderScreen();
     const notice = screen.getByTestId('swimlanes-failed-notice');
     expect(notice).toHaveTextContent("Couldn't load swimlanes. The diagram is shown without them.");
-    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice.closest('[role="status"]')).not.toBeNull();
     fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

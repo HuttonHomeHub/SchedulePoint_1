@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowKeysStayInPanel } from '@/components/ui/toolbar/ArrowKeysStayInPanel';
 import { PopoverCloseContext } from '@/components/ui/toolbar/popover-close';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
+import { useTooltip } from '@/components/ui/tooltip';
 
 /**
  * The plural selection bar's **Move to swimlane…**: a button that opens the shared
@@ -36,6 +37,14 @@ export function MoveToSwimlaneButton({
   const reasonId = useId();
   const shut = !gate.writable;
   const selectRef = useRef<HTMLSelectElement>(null);
+  // The reason is already the button's permanent `sr-only` description, so the tip is a `reason-echo`
+  // (visual only, nothing linked) and a native `title` — which a screen reader would read a second
+  // time — is gone.
+  const tip = useTooltip({
+    content: shut && gate.reason ? gate.reason : undefined,
+    purpose: 'reason-echo',
+  });
+  const { ref: tipRef, ...tipTrigger } = tip.triggerProps;
   const { open, openPanel, close, panel } = usePopoverPanel({
     triggerRef,
     initialFocus: selectRef,
@@ -43,14 +52,18 @@ export function MoveToSwimlaneButton({
   return (
     <>
       <Button
-        ref={triggerRef}
+        {...tipTrigger}
+        ref={(node) => {
+          tipRef(node);
+          triggerRef.current = node;
+        }}
         type="button"
         size="sm"
         variant="secondary"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-disabled={shut || undefined}
-        {...(shut && gate.reason ? { 'aria-describedby': reasonId, title: gate.reason } : {})}
+        {...(shut && gate.reason ? { 'aria-describedby': reasonId } : {})}
         onClick={() => {
           if (shut) return;
           if (open) close(false);
@@ -60,6 +73,7 @@ export function MoveToSwimlaneButton({
         {MOVE_TO_SWIMLANE_LABEL}
         <ChevronDown aria-hidden="true" className="size-4" />
       </Button>
+      {tip.tooltip}
       {shut && gate.reason ? (
         <span id={reasonId} className="sr-only">
           {gate.reason}
