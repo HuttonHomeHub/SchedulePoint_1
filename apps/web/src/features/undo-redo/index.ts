@@ -1,4 +1,4 @@
-/** Public surface of the undo-redo feature (ADR-0048). Dark until M3 wires the toolbar + keybindings. */
+/** Public surface of the undo-redo feature (ADR-0048). */
 export {
   activityDefinitionInput,
   dependencyLinkOf,

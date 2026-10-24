@@ -45,12 +45,13 @@ export function membersBySwimlane(
 
 /**
  * The delete confirmation's sentence (feature-spec US-2). It says where the members go and that Undo
- * brings them back; both are true (a soft delete keeps `swimlaneId`, and a restore returns the
+ * (Ctrl+Z) brings them back; both are true (a soft delete keeps `swimlaneId`, and a restore returns the
  * swimlane with its remembered lanes).
  */
 export function deleteConsequence(memberCount: number): string {
-  if (memberCount === 0) return 'No activities are in this swimlane. Undo brings it back.';
+  if (memberCount === 0)
+    return 'No activities are in this swimlane. Press Undo (Ctrl+Z) to bring it back.';
   return memberCount === 1
-    ? '1 activity will show under No swimlane. Undo brings it back.'
-    : `${String(memberCount)} activities will show under No swimlane. Undo brings them back.`;
+    ? '1 activity will show under No swimlane. Press Undo (Ctrl+Z) to bring it back.'
+    : `${String(memberCount)} activities will show under No swimlane. Press Undo (Ctrl+Z) to bring them back.`;
 }

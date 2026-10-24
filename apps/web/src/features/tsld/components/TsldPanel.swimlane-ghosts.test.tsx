@@ -157,6 +157,56 @@ describe('TsldPanel — ghosts follow the bar into its swimlane row', () => {
   });
 });
 
+describe('TsldPanel — removed work is placed by the input’s own source', () => {
+  // Removed work has no live bar; its row comes from the lane the old baseline froze in its swimlane.
+  const REMOVED = {
+    activityId: 'gone',
+    name: 'Demolished',
+    fromStart: '2026-01-01',
+    fromFinish: '2026-01-05',
+    laneIndex: 0,
+    type: 'TASK' as const,
+    removed: true,
+    frozenSwimlaneId: 's2',
+    frozenLanes: [{ basis: 'SWIMLANE' as const, swimlaneId: 's2', laneIndex: 0 }],
+  };
+  const ghostsFor = (input: SwimlaneInput): string[] => {
+    render(<HarnessWith swimlanes={input} ghosts={[REMOVED]} />);
+    const last = seen.props[seen.props.length - 1]!;
+    return (last['compareGhosts'] as { activityId: string }[]).map((g) => g.activityId);
+  };
+
+  it('draws it on a hand-made input, in the swimlane it was frozen in', () => {
+    expect(ghostsFor(INPUT)).toEqual(['gone']);
+  });
+
+  it('counts it instead on a WBS input, which must not borrow the hand-made basis', () => {
+    expect(ghostsFor({ ...INPUT, source: 'WBS' })).toEqual([]);
+  });
+});
+
+function HarnessWith({
+  swimlanes,
+  ghosts,
+}: {
+  swimlanes: SwimlaneInput;
+  ghosts: typeof COMPARE_GHOSTS | readonly Record<string, unknown>[];
+}) {
+  const ui = useTsldCanvasUiState();
+  return (
+    <TsldPanel
+      activities={ACTIVITIES}
+      dependencies={[]}
+      dataDate="2026-01-01"
+      canvasUi={ui}
+      swimlanes={swimlanes}
+      compareGhosts={ghosts as never}
+      hasRevisionPair
+      compareGhostsUndrawable={0}
+    />
+  );
+}
+
 describe('TsldPanel — the comparison overlay words each count for its own cause', () => {
   it('places a live ghost on its display lane and says the unplaced one is a swimlane matter', () => {
     const { container } = render(<Harness swimlanes={INPUT} compare />);

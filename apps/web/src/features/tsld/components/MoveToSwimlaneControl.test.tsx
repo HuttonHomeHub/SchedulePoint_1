@@ -169,21 +169,21 @@ describe('MoveToSwimlaneControl', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/^Too many\.$/);
   });
 
-  it('words the prompt for one activity as "it", names the button for the editor, and links a standing hint', () => {
+  it('words the prompt for one activity as "it", labels the field for the editor, and links a standing hint', () => {
     render(
       <MoveToSwimlaneControl
         assignment={assignment}
         ids={['b']}
         names={['B']}
         gate={OPEN}
-        buttonLabel="Move to swimlane"
+        fieldLabel="Swimlane"
         hint={<p>Moves the activity now.</p>}
       />,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Choose where to move it.');
-    const button = screen.getByRole('button', { name: 'Move to swimlane' });
+    const button = screen.getByRole('button', { name: 'Move' });
     expect(button).toHaveAccessibleDescription(/Moves the activity now\./);
-    expect(screen.getByLabelText('Move to')).toHaveAccessibleDescription(
+    expect(screen.getByLabelText('Swimlane')).toHaveAccessibleDescription(
       /Moves the activity now\./,
     );
   });

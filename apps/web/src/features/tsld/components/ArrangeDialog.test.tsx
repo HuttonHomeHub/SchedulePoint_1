@@ -248,11 +248,11 @@ describe('ArrangeDialog', () => {
     expect(WITHIN_SWIMLANES).toContain('no activity changes swimlane');
     expect(WITHIN_SWIMLANES).toContain('the diagram can get taller');
     expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
-      `Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in. ${WITHIN_SWIMLANES}`,
+      `Choose how to rearrange the lanes. Dates do not change, only which lane (inside its swimlane) each activity is drawn in. ${WITHIN_SWIMLANES}`,
     );
   });
 
-  it('on swimlanes never promises "never adds lanes", and counts Rows rather than Lanes', () => {
+  it('on swimlanes never promises "never adds lanes", and counts Lanes in total rather than Lanes', () => {
     renderDialog(READY, vi.fn(), false, true);
     const tidy = screen.getByRole('radio', { name: 'Tidy' });
     const relayout = screen.getByRole('radio', { name: 'Re-layout' });
@@ -260,7 +260,7 @@ describe('ArrangeDialog', () => {
     expect(tidy).toHaveAccessibleDescription(/remove overlaps/);
     expect(relayout).toHaveAccessibleDescription(/may add lanes inside a swimlane/);
     expect(relayout).not.toHaveAccessibleDescription(/as many lanes as the diagram has now/);
-    expect(screen.getAllByText('Rows').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Lanes in total').length).toBeGreaterThan(0);
     expect(screen.queryByText('Lanes')).not.toBeInTheDocument();
   });
 
@@ -270,7 +270,7 @@ describe('ArrangeDialog', () => {
       /It never adds lanes/,
     );
     expect(screen.getAllByText('Lanes').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Rows')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lanes in total')).not.toBeInTheDocument();
   });
 
   it('says nothing about swimlanes when they are not shown', () => {

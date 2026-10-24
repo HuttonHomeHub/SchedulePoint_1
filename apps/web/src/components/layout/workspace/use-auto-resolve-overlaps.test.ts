@@ -281,7 +281,7 @@ describe('useAutoResolveOverlaps', () => {
       expect(batchPositions).not.toHaveBeenCalled();
       await waitFor(() => expect(view.result.current.resolve.notice).not.toBeNull());
       expect(announce).toHaveBeenCalledWith(
-        'Moved “C” to lane 2 of “Foundations” in the swimlane view so it no longer overlaps another activity.',
+        'Moved “C” to lane 2 of “Foundations”, within its swimlane, so it no longer overlaps another activity.',
       );
     });
 
@@ -321,7 +321,7 @@ describe('useAutoResolveOverlaps', () => {
       expect(batchPositions).not.toHaveBeenCalled();
       await waitFor(() => expect(view.result.current.resolve.notice).not.toBeNull());
       expect(announce).toHaveBeenCalledWith(
-        'Moved 1 activity in the swimlane view and 1 with swimlanes off so no two activities overlap.',
+        'Moved 1 activity to free lanes within its swimlane and 1 with swimlanes off so no two activities overlap.',
       );
       expect(view.result.current.history.undoLabel).toBe('Move activity clear of an overlap');
     });

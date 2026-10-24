@@ -3,6 +3,19 @@ import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import type { SwimlaneInput } from '@/features/tsld';
 
 /**
+ * The last build, keyed by the identity of its two inputs. **This is what makes the input one build per
+ * data change across the host:** the scene, Move to swimlane… and auto-resolve (which reads the query
+ * cache at settle time, ahead of any render) all hand this the cache's own arrays, so they get the
+ * same object back instead of each walking every activity again. One slot is enough — the three
+ * callers read the same plan — and a miss only costs the build it would have made anyway.
+ */
+let last: {
+  activities: readonly ActivitySummary[];
+  swimlanes: readonly SwimlaneSummary[];
+  input: SwimlaneInput;
+} | null = null;
+
+/**
  * The neutral {@link SwimlaneInput} for a plan whose swimlanes are **hand-made** (source `MANUAL`):
  * membership is each activity's own `swimlaneId`, and the stored lane is the row written against
  * that membership's basis.
@@ -21,6 +34,16 @@ import type { SwimlaneInput } from '@/features/tsld';
  * display order.
  */
 export function manualSwimlaneInput(
+  activities: readonly ActivitySummary[],
+  swimlanes: readonly SwimlaneSummary[],
+): SwimlaneInput {
+  if (last?.activities === activities && last.swimlanes === swimlanes) return last.input;
+  const input = buildManualSwimlaneInput(activities, swimlanes);
+  last = { activities, swimlanes, input };
+  return input;
+}
+
+function buildManualSwimlaneInput(
   activities: readonly ActivitySummary[],
   swimlanes: readonly SwimlaneSummary[],
 ): SwimlaneInput {
@@ -43,5 +66,6 @@ export function manualSwimlaneInput(
     swimlanes: swimlanes.map((s) => ({ id: s.id, name: s.name })),
     membership,
     storedLanes,
+    source: 'MANUAL',
   };
 }

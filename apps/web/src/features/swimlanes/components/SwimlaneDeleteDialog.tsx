@@ -23,8 +23,8 @@ export interface SwimlaneDeleteDialogProps {
 }
 
 /**
- * The delete confirmation (feature-spec US-2): "12 activities will show under No swimlane. Undo
- * brings them back." Both halves are true — a soft delete keeps every member's swimlane, and the
+ * The delete confirmation (feature-spec US-2): "12 activities will show under No swimlane. Press
+ * Undo (Ctrl+Z) to bring them back." Both halves are true — a soft delete keeps every member's swimlane, and the
  * restore Undo performs returns the swimlane with their remembered lanes.
  *
  * Working state lives for one opening: the error is cleared whenever it closes (ADR-0169).

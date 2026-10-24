@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectSwimlanes, type SwimlaneInput } from './project-swimlanes';
+import { projectSwimlanes, swimlaneMarksOf, type SwimlaneInput } from './project-swimlanes';
 
 import { anActivity } from '@/test/activity-fixture';
 
@@ -166,5 +166,14 @@ describe('projectSwimlanes', () => {
       OPTIONS,
     );
     expect([...out.derivedIds].sort()).toEqual(['a2', 'b1']);
+  });
+});
+
+describe('swimlaneMarksOf', () => {
+  it('is the projection’s extents with the ground choice, and absent without a projection', () => {
+    const out = projectSwimlanes([bar('a1', 0, 3)], input(), OPTIONS);
+    expect(swimlaneMarksOf(out, true)).toEqual({ extents: out.extents, ground: true });
+    expect(swimlaneMarksOf(out, false)?.ground).toBe(false);
+    expect(swimlaneMarksOf(null, true)).toBeUndefined();
   });
 });

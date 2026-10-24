@@ -6,6 +6,7 @@ import { axe } from 'vitest-axe';
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
 
 import { SwimlaneDeleteDialog } from './SwimlaneDeleteDialog';
+import { SwimlaneDialogs } from './SwimlaneDialogs';
 import { SwimlaneManageDialog } from './SwimlaneManageDialog';
 import { SwimlaneRenameDialog } from './SwimlaneRenameDialog';
 import { SwimlaneSetupDialog } from './SwimlaneSetupDialog';
@@ -458,7 +459,7 @@ describe('the delete confirmation', () => {
     mount(actions(), 12);
     const dialog = screen.getByRole('alertdialog', { name: 'Delete swimlane “Mechanical”?' });
     expect(dialog).toHaveAccessibleDescription(
-      '12 activities will show under No swimlane. Undo brings them back.',
+      '12 activities will show under No swimlane. Press Undo (Ctrl+Z) to bring them back.',
     );
   });
 
@@ -488,5 +489,46 @@ describe('the delete confirmation', () => {
       'Could not delete Mechanical: Changed elsewhere.',
     );
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('SwimlaneDialogs counts members only while a dialog is open', () => {
+  /** An activities list that reports each time it is walked. */
+  function countingActivities() {
+    const walks = { n: 0 };
+    const list: { swimlaneId: string | null }[] = [{ swimlaneId: 'a' }];
+    const counted = new Proxy(list, {
+      get(target, prop, receiver) {
+        if (prop === Symbol.iterator) walks.n += 1;
+        return Reflect.get(target, prop, receiver) as unknown;
+      },
+    });
+    return { walks, counted: counted as never };
+  }
+  const state = (over: Partial<{ manage: boolean }> = {}) => ({
+    setup: false,
+    manage: over.manage ?? false,
+    renameId: null,
+    deleteId: null,
+  });
+  const props = (activities: never, manage: boolean) => ({
+    state: state({ manage }),
+    close: vi.fn(),
+    openRename: vi.fn(),
+    openDelete: vi.fn(),
+    plan: { id: 'p1', version: 1, swimlaneSource: 'MANUAL' as const },
+    afterDelete: vi.fn(),
+    swimlanes: LIST,
+    activities,
+    actions: actions(),
+    gate: GATE,
+  });
+
+  it('walks nothing while every dialog is shut, and once when one opens', () => {
+    const { walks, counted } = countingActivities();
+    const { rerender } = render(withAnnouncer(<SwimlaneDialogs {...props(counted, false)} />));
+    expect(walks.n).toBe(0);
+    rerender(withAnnouncer(<SwimlaneDialogs {...props(counted, true)} />));
+    expect(walks.n).toBe(1);
   });
 });

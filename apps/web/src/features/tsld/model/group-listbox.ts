@@ -1,9 +1,9 @@
 import type { ActivitySummary } from '@repo/types';
 
 import type { SwimlaneInput, SwimlaneProjection } from '../render/project-swimlanes';
+import { NO_SWIMLANE_LABEL } from '../render/project-swimlanes';
 
 import { swimlanePlace } from './reposition-announcement';
-import { NO_SWIMLANE_LABEL } from './swimlane-lanes';
 
 /**
  * **The parallel listbox, grouped by swimlane** (swimlanes M2-T10, ui-architecture C9).

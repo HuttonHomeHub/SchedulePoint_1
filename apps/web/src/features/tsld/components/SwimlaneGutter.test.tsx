@@ -323,7 +323,7 @@ describe('the collapsed strip', () => {
     expect(mechanical.textContent).toBe('2');
     expect(mechanical).toHaveAttribute(
       'aria-label',
-      expect.stringMatching(/^Mechanical, swimlane 2/),
+      expect.stringMatching(/^2, Mechanical, swimlane 2/),
     );
     // Not only `title`: a focus tooltip carries the name, which a keyboard reader gets and a title does not.
     expect(mechanical).not.toHaveAttribute('title');
@@ -409,6 +409,47 @@ describe('the corner cell', () => {
     );
     // Only the expand control fits the strip as a full target.
     expect(screen.queryByRole('button', { name: 'Swimlanes…' })).not.toBeInTheDocument();
+  });
+
+  it('hands focus to the "Swimlane names" toggle when the strip collapses under the command', () => {
+    const a = actions();
+    const props = {
+      rootRef: createRef<HTMLDivElement>(),
+      swimlanes: SWIMLANES,
+      cornerHeightPx: 40,
+      footPx: 0,
+    };
+    const { rerender } = render(
+      <SwimlaneGutter {...props} widthPx={SWIMLANE_GUTTER_WIDTH_PX} actions={a} />,
+    );
+    act(() => screen.getByRole('button', { name: 'Swimlanes…' }).focus());
+    expect(screen.getByRole('button', { name: 'Swimlanes…' })).toHaveFocus();
+    rerender(
+      <SwimlaneGutter
+        {...props}
+        widthPx={SWIMLANE_GUTTER_COLLAPSED_PX}
+        actions={actions({ collapse: { collapsed: true, forcedByRoom: true, onToggle: vi.fn() } })}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Swimlanes…' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Swimlane names' })).toHaveFocus();
+  });
+
+  it('leaves focus alone when the strip collapses and the command did not hold it', () => {
+    const props = {
+      rootRef: createRef<HTMLDivElement>(),
+      swimlanes: SWIMLANES,
+      cornerHeightPx: 40,
+      footPx: 0,
+    };
+    const { rerender } = render(
+      <SwimlaneGutter {...props} widthPx={SWIMLANE_GUTTER_WIDTH_PX} actions={actions()} />,
+    );
+    act(() => labelButtons()[0]!.focus());
+    rerender(
+      <SwimlaneGutter {...props} widthPx={SWIMLANE_GUTTER_COLLAPSED_PX} actions={actions()} />,
+    );
+    expect(labelButtons()[0]).toHaveFocus();
   });
 
   it('shades the expand control with the no-room reason when the window is too narrow', () => {

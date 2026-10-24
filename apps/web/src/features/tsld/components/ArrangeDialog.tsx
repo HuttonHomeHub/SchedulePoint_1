@@ -31,7 +31,7 @@ import { RadioCardGroup, type RadioCardFigure } from '@/components/ui/radio-card
  * activity in its own swimlane (swimlanes M2-T6, owner decision 2026-10-24) and the diagram can get
  * taller, because swimlanes cannot share a row. The two cards stop promising what is false there —
  * Tidy no longer says it "never adds lanes" and Re-layout says it may add lanes inside a swimlane — and
- * the figure that counts display rows is labelled "Rows", not "Lanes".
+ * the figure that counts display rows is labelled "Lanes in total", not "Lanes".
  *
  * Confirm is `aria-disabled` with its reason linked, never native `disabled` (ADR-0145). Focus is
  * the caller's to return (ADR-0149 D8). The caller mounts it with a fresh `key` per opening, so the
@@ -74,7 +74,7 @@ export function arrangeFigures(
   const a: LayoutObjective = outcome.after;
   return [
     { label: 'Activities moved', value: String(outcome.changes.length) },
-    { label: withinSwimlanes ? 'Rows' : 'Lanes', value: change(b.rows, a.rows) },
+    { label: withinSwimlanes ? 'Lanes in total' : 'Lanes', value: change(b.rows, a.rows) },
     { label: 'Overlaps', value: change(b.overlaps, a.overlaps) },
     { label: 'Links behind bars', value: change(b.occluded, a.occluded) },
     { label: 'Crossings', value: change(b.crossings, a.crossings) },
@@ -128,7 +128,7 @@ export function ArrangeDialog({
       open={open}
       onClose={onClose}
       title="Arrange the diagram"
-      description={`Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in.${withinSwimlanes ? ` ${WITHIN_SWIMLANES}` : ''}`}
+      description={`Choose how to rearrange the lanes. Dates do not change, only which lane${withinSwimlanes ? ' (inside its swimlane)' : ''} each activity is drawn in.${withinSwimlanes ? ` ${WITHIN_SWIMLANES}` : ''}`}
     >
       <div className="flex flex-col gap-4">
         {search.kind === 'error' ? (

@@ -205,10 +205,12 @@ const DEFAULT_NAV_STATE: NavState = {
 
 /**
  * Whether swimlanes are shown: the planner's choice when they have made one, else whether the plan
- * has been set up for them (swimlanes ui-architecture C11).
+ * has been set up for them (swimlanes ui-architecture C11). A `WBS` source is never shown until M3
+ * derives its input: the host fetches and draws nothing for it (`swimlanePictureOn`), so "shown"
+ * would reserve a gutter and hold the diagram for a picture that cannot arrive.
  */
 export function swimlanesShown(override: boolean | null, source: SwimlaneSource): boolean {
-  return override ?? source !== 'NONE';
+  return source === 'WBS' ? false : (override ?? source !== 'NONE');
 }
 
 /**

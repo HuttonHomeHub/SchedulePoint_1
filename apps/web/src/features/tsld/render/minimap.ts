@@ -7,6 +7,7 @@ import {
   type Viewport,
   worldExtent,
 } from './geometry';
+import { NO_SWIMLANE_LABEL } from './project-swimlanes';
 import { calendarBoundaries } from './time-scale';
 
 /**
@@ -258,7 +259,7 @@ export function swimlanesInView(
   if (inView.length === 0) return 'past the last swimlane';
   // A blank name is a name somebody typed, not "No swimlane", so it is worded rather than hidden.
   const nameOf = (e: MinimapSwimlaneExtent): string =>
-    e.name === null ? 'no swimlane' : e.name.trim() || 'an unnamed swimlane';
+    e.name === null ? NO_SWIMLANE_LABEL.toLowerCase() : e.name.trim() || 'an unnamed swimlane';
   if (inView.length === 1) {
     const only = inView[0]!;
     if (only.name === null) return 'outside any swimlane';

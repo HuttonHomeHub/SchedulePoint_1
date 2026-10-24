@@ -58,7 +58,7 @@ describe('the Swimlanes lens', () => {
       'No swimlanes have been set up for this plan. Choose Set up swimlanes… to add some.',
     );
     expect(loading).toBe('Loading swimlanes…');
-    // No instruction: nothing in the product offers a retry, and the list is read again on its own.
+    // The retry is the canvas notice's (`SwimlanesFailedNotice`); the row only says what happened.
     expect(failed).toBe("Couldn't load swimlanes.");
     expect(new Set([noDiagram, nothing, loading, failed]).size).toBe(4);
   });
@@ -79,5 +79,36 @@ describe('the Swimlanes lens', () => {
     expect(
       lens().reason(makeTsldToolbarContext({ ...base, hasDiagram: true, swimlanesSetUp: false })),
     ).toBeDefined();
+  });
+});
+
+describe('the Swimlanes lens, nothing set up', () => {
+  const unsetUp = (over: Parameters<typeof makeTsldToolbarContext>[0] = {}) =>
+    lens().reason(makeTsldToolbarContext({ hasDiagram: true, swimlanesSetUp: false, ...over }));
+
+  it('points at Set up swimlanes… only for a reader who can press it', () => {
+    expect(unsetUp({ scheduleRefusal: () => null })).toBe(
+      'No swimlanes have been set up for this plan. Choose Set up swimlanes… to add some.',
+    );
+    const refused = unsetUp({ scheduleRefusal: () => 'Start editing to change swimlanes.' });
+    expect(refused).toBe('No swimlanes have been set up for this plan.');
+  });
+});
+
+describe('the Swimlanes lens note', () => {
+  const note = (over: Parameters<typeof makeTsldToolbarContext>[0]) => {
+    const n = lens().note;
+    expect(typeof n).toBe('function');
+    return (n as (ctx: ReturnType<typeof makeTsldToolbarContext>) => string | undefined)(
+      makeTsldToolbarContext(over),
+    );
+  };
+
+  it('says the diagram is shown without them when checked and failed, and otherwise nothing', () => {
+    expect(note({ swimlanesShown: true, swimlanesFailed: true })).toBe(
+      "Couldn't load swimlanes. The diagram is shown without them.",
+    );
+    expect(note({ swimlanesShown: false, swimlanesFailed: true })).toBeUndefined();
+    expect(note({ swimlanesShown: true })).toBeUndefined();
   });
 });

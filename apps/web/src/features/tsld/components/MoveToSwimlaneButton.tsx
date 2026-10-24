@@ -6,8 +6,8 @@ import { MOVE_TO_SWIMLANE_LABEL, type SwimlaneAssignment } from '../model/swimla
 import { MoveToSwimlaneControl } from './MoveToSwimlaneControl';
 
 import { Button } from '@/components/ui/button';
+import { ArrowKeysStayInPanel } from '@/components/ui/toolbar/ArrowKeysStayInPanel';
 import { PopoverCloseContext } from '@/components/ui/toolbar/popover-close';
-import { TOOLBAR_NAV_KEYS } from '@/components/ui/toolbar/toolbar-keyboard';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 
 /**
@@ -50,7 +50,7 @@ export function MoveToSwimlaneButton({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-disabled={shut || undefined}
-        {...(shut && gate.reason ? { 'aria-describedby': reasonId } : {})}
+        {...(shut && gate.reason ? { 'aria-describedby': reasonId, title: gate.reason } : {})}
         onClick={() => {
           if (shut) return;
           if (open) close(false);
@@ -68,15 +68,7 @@ export function MoveToSwimlaneButton({
       {panel(
         MOVE_TO_SWIMLANE_LABEL,
         <PopoverCloseContext.Provider value={() => close(true)}>
-          <div
-            role="presentation"
-            onKeyDown={(event) => {
-              // The arrows belong to the field; nothing above the panel in the React tree may rove.
-              if (TOOLBAR_NAV_KEYS.includes(event.key)) {
-                event.stopPropagation();
-              }
-            }}
-          >
+          <ArrowKeysStayInPanel>
             <MoveToSwimlaneControl
               assignment={assignment}
               ids={ids}
@@ -84,7 +76,7 @@ export function MoveToSwimlaneButton({
               gate={gate}
               selectRef={selectRef}
             />
-          </div>
+          </ArrowKeysStayInPanel>
         </PopoverCloseContext.Provider>,
       )}
     </>

@@ -13,13 +13,13 @@ import { EXPORT_GUTTER_WIDTH } from '../../export/export-swimlane-gutter';
 import { renderExportImage } from '../../export/render-export-image';
 import { deriveDiagramSource } from '../../model/derive-diagram-source';
 import { useCanvasSurface } from '../../render/canvas-surface';
-import type { SwimlaneMarks, TsldViewToggles } from '../../render/paint';
+import type { TsldViewToggles } from '../../render/paint';
 import {
   resolvePrintPalette,
   resolvePrintResourceStripPalette,
   resolvePrintWbsBandPalette,
 } from '../../render/palette';
-import type { SwimlaneInput } from '../../render/project-swimlanes';
+import { swimlaneMarksOf, type SwimlaneInput } from '../../render/project-swimlanes';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
 import { gutterSwimlanesFrom, type GutterSwimlane } from '../../render/swimlane-gutter';
@@ -199,9 +199,7 @@ export function useDiagramImage(args: {
       // The rule and the ground are scene marks, the gutter's names are chrome: both come off the one
       // projection that swapped in the display lanes, so the picture cannot disagree with itself.
       const projection = diagram.swimlaneScene;
-      const swimlaneMarks: SwimlaneMarks | undefined = projection
-        ? { extents: projection.extents, ground: swimlaneGround }
-        : undefined;
+      const swimlaneMarks = swimlaneMarksOf(projection, swimlaneGround);
       const gutterSwimlanes: readonly GutterSwimlane[] | null = projection
         ? gutterSwimlanesFrom(projection)
         : null;

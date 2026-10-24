@@ -44,7 +44,6 @@ export function MoveToSwimlaneControl({
   gate,
   onDone,
   fieldLabel = MOVE_TO_SWIMLANE_FIELD,
-  buttonLabel = MOVE_BUTTON_LABEL,
   hint,
   selectRef,
 }: {
@@ -57,11 +56,9 @@ export function MoveToSwimlaneControl({
   /** Told when a move landed; the host decides what to clear or focus. */
   onDone?: () => void;
   fieldLabel?: string;
-  /** The Move button's visible name; the editor says "Move to swimlane" because it has no popover title. */
-  buttonLabel?: string;
   /**
    * A standing sentence the field and the button are described by, for a host that must say
-   * something that is true whatever is chosen (the editor: this is not part of Save general).
+   * something that is true whatever is chosen (the editor: it is saved apart from the tab).
    */
   hint?: React.ReactNode;
   selectRef?: React.Ref<HTMLSelectElement>;
@@ -162,7 +159,7 @@ export function MoveToSwimlaneControl({
         }}
         className="self-start aria-busy:pointer-events-none"
       >
-        {busy ? 'Moving…' : buttonLabel}
+        {busy ? 'Moving…' : MOVE_BUTTON_LABEL}
       </Button>
       {hint ? (
         <div id={hintId} className="text-muted-foreground text-sm">

@@ -25,8 +25,8 @@ import { CONFLICT_REMEDIES } from './conflict-remedy';
 import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-gate';
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
+import { ArrowKeysStayInPanel } from '@/components/ui/toolbar/ArrowKeysStayInPanel';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
-import { TOOLBAR_NAV_KEYS } from '@/components/ui/toolbar/toolbar-keyboard';
 import {
   defineToolbar,
   type ToolbarGroupId,
@@ -57,6 +57,7 @@ import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
   MOVE_TO_SWIMLANE_LABEL,
+  SWIMLANES_OFF_MOVE_REASON,
   type SwimlaneAssignment,
 } from '@/features/tsld/model/swimlane-assignment';
 import {
@@ -152,8 +153,9 @@ export interface SelectionActionContext {
   onDuplicateBand: () => void;
   /**
    * **Move to swimlane…** for the selected activity, or `null`/absent when swimlanes are not offered
-   * here (the plan has none, the lens is not drawn, the host cannot plan the write). Omitted rather
-   * than lit and inert, like every other item whose precondition is the plan's (ADR-0082).
+   * here (the plan has none, the host cannot plan the write). Omitted rather than lit and inert, like
+   * every other item whose precondition is the plan's; where they exist but are not drawn it is
+   * shaded with a reason instead (`assignment.shown`, ADR-0082/0204).
    */
   moveToSwimlane?: {
     assignment: SwimlaneAssignment;
@@ -558,14 +560,7 @@ function MoveToSwimlaneItem({
       {...(api.disabled ? { disabled: true } : {})}
       {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
     >
-      <div
-        role="presentation"
-        onKeyDown={(event) => {
-          if (TOOLBAR_NAV_KEYS.includes(event.key)) {
-            event.stopPropagation();
-          }
-        }}
-      >
+      <ArrowKeysStayInPanel>
         <MoveToSwimlaneControl
           assignment={ctx.moveToSwimlane.assignment}
           ids={ctx.moveToSwimlane.ids}
@@ -573,7 +568,7 @@ function MoveToSwimlaneItem({
           gate={{ writable: ctx.canEditSchedule, reason: penRefusal(ctx) ?? null }}
           selectRef={selectRef}
         />
-      </div>
+      </ArrowKeysStayInPanel>
     </ToolbarPopover>
   );
 }
@@ -966,8 +961,8 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     //
     // A popover with the `SelectField` and a Move button, not a submenu: `Menu` has none and no
     // typeahead, and a plan may hold a hundred swimlanes. Registered for every selection and VISIBLE
-    // only where the host offers swimlanes — omitted, not shaded, while the plan has none (the source
-    // is `NONE`) or they are not drawn. Pen-gated as a set with Edit and Delete, so a reader without
+    // only where the host offers swimlanes — omitted while the plan has none (the source is `NONE`),
+    // and shaded with the lens's way out while they are not drawn. Pen-gated as a set with Edit and Delete, so a reader without
     // the pen is told once, here, and the panel is never opened onto a control that cannot act.
     {
       id: 'move-to-swimlane',
@@ -977,9 +972,16 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       label: MOVE_TO_SWIMLANE_LABEL,
       icon: <Layers className="size-4" />,
       penGated: true,
-      disabledReason: (ctx) => penRefusal(ctx),
+      // Shaded, never hidden, while swimlanes are off (ADR-0082, ADR-0204): the reason names the way
+      // out, which is the lens, and comes before the pen's because it is the one a reader can act on
+      // from here. Omitted only where the plan has no swimlanes to move to.
+      isEnabled: (ctx) => ctx.moveToSwimlane?.assignment.shown !== false,
+      disabledReason: (ctx) =>
+        ctx.moveToSwimlane?.assignment.shown === false
+          ? SWIMLANES_OFF_MOVE_REASON
+          : penRefusal(ctx),
       isVisible: (ctx: SelectionActionContext) => ctx.moveToSwimlane != null,
-      lostReason: 'Not available here: swimlanes are off or the plan has none.',
+      lostReason: 'Not available here: the plan has no swimlanes to move to.',
       render: (ctx, api) => <MoveToSwimlaneItem ctx={ctx} api={api} />,
     },
     {

@@ -1,8 +1,9 @@
 import type { LayoutPartition } from '../render/layout-partition';
-import type {
-  SwimlaneExtent,
-  SwimlaneInput,
-  SwimlaneProjection,
+import {
+  NO_SWIMLANE_LABEL,
+  type SwimlaneExtent,
+  type SwimlaneInput,
+  type SwimlaneProjection,
 } from '../render/project-swimlanes';
 
 import type { SwimlaneLaneFacts } from './reposition-announcement';
@@ -82,7 +83,6 @@ export interface SwimlaneEditContext {
   readonly stored: ReadonlyMap<string, number>;
 }
 
-export const NO_SWIMLANE_LABEL = 'No swimlane';
 export const NOT_DRAWN_REASON = 'That activity isn’t drawn yet, so there is nowhere to move it.';
 
 /**

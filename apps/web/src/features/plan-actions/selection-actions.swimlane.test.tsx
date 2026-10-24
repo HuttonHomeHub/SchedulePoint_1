@@ -114,6 +114,26 @@ describe('the selection bar — Move to swimlane…', () => {
     expect(trigger()).toHaveAccessibleDescription(/Start editing to change this activity/);
   });
 
+  it('is shaded, not hidden, while swimlanes are off, saying how to turn them on', () => {
+    render(
+      <SelectionActionsBar
+        context={ctx({
+          moveToSwimlane: {
+            assignment: { ...assignment, shown: false },
+            ids: ['a'],
+            names: ['Pour slab'],
+          },
+        })}
+      />,
+    );
+    expect(trigger()).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger()).toHaveAccessibleDescription(
+      'Turn on Swimlanes in View to move activities between them.',
+    );
+    fireEvent.click(trigger());
+    expect(screen.queryByLabelText('Move to')).toBeNull();
+  });
+
   it('puts focus on the select when the panel opens', () => {
     render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(trigger());

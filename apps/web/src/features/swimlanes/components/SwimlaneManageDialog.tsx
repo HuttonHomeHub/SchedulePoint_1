@@ -137,7 +137,11 @@ function ManageBody({
           it.
         </p>
       ) : (
+        // Tailwind's Preflight strips the list marker, and VoiceOver then drops the list role; the
+        // explicit role keeps the count it announces ("list, 3 items") — as HealthOffenderDisclosure's lists do.
+        // eslint-disable-next-line jsx-a11y/no-redundant-roles -- the same pattern as HealthOffenderDisclosure.
         <ul
+          role="list"
           ref={listRef}
           aria-label="Swimlanes"
           className="border-border divide-border divide-y rounded-md border"

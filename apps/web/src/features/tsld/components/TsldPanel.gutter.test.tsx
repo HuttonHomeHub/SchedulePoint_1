@@ -281,7 +281,7 @@ describe('the reservation', () => {
     // The full name is the button's accessible name; the focus tooltip is covered in SwimlaneGutter.test.
     expect(collapsed.container.querySelector('[data-swimlane="a"]')).toHaveAttribute(
       'aria-label',
-      expect.stringMatching(/^Mechanical, swimlane 1 of 1/),
+      expect.stringMatching(/^1, Mechanical, swimlane 1 of 1/),
     );
   });
 });

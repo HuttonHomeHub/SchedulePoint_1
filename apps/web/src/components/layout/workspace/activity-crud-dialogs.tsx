@@ -193,10 +193,10 @@ export function ActivityCrudDialogs({
                       writable: model.canEditSchedule,
                       reason: model.scheduleRefusal('change swimlanes'),
                     }}
-                    buttonLabel="Move to swimlane"
+                    fieldLabel="Swimlane"
                     hint={
                       <>
-                        <p>Moves the activity now. It isn’t part of Save general.</p>
+                        <p>Moves the activity now. Saved separately from this tab.</p>
                         {generalDirty ? (
                           <p>Your unsaved changes to this tab aren’t affected.</p>
                         ) : null}

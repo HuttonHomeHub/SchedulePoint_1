@@ -54,9 +54,10 @@ describe('useWriteSwimlaneLanes', () => {
     for (const row of body.positions) expect(row).not.toHaveProperty('laneIndex');
   });
 
-  it('invalidates both the activities list and the plan’s swimlane list', async () => {
+  it('invalidates the activities list, and not the swimlane list, for a lane-only write', async () => {
     const qc = new QueryClient();
     seed(qc);
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
     const { result } = renderHook(() => useWriteSwimlaneLanes('acme', 'p1'), {
       wrapper: wrapper(qc),
     });
@@ -67,11 +68,33 @@ describe('useWriteSwimlaneLanes', () => {
       }),
     );
 
+    // One call per gesture's write: the activities, never the swimlane list a lane cannot change.
+    expect(invalidate).toHaveBeenCalledTimes(1);
     expect(qc.getQueryState(activityKeys.listByPlan('acme', 'p1'))?.isInvalidated).toBe(true);
-    expect(qc.getQueryState(swimlaneKeys.byPlan('acme', 'p1'))?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(swimlaneKeys.byPlan('acme', 'p1'))?.isInvalidated).toBe(false);
   });
 
-  it('settles into both lists after a refused write too', async () => {
+  it('also invalidates the swimlane list when a row changes membership, including to none', async () => {
+    for (const swimlaneId of ['s2', null]) {
+      const qc = new QueryClient();
+      seed(qc);
+      const invalidate = vi.spyOn(qc, 'invalidateQueries');
+      const { result } = renderHook(() => useWriteSwimlaneLanes('acme', 'p1'), {
+        wrapper: wrapper(qc),
+      });
+
+      await act(() =>
+        result.current.mutateAsync({
+          positions: [{ id: 'a1', version: 1, swimlane: { swimlaneId, laneIndex: 0 } }],
+        }),
+      );
+
+      expect(invalidate).toHaveBeenCalledTimes(2);
+      expect(qc.getQueryState(swimlaneKeys.byPlan('acme', 'p1'))?.isInvalidated).toBe(true);
+    }
+  });
+
+  it('settles into the lists after a refused write too', async () => {
     vi.mocked(apiFetch).mockRejectedValueOnce(new Error('409'));
     const qc = new QueryClient();
     seed(qc);
@@ -81,7 +104,7 @@ describe('useWriteSwimlaneLanes', () => {
 
     await expect(
       result.current.mutateAsync({
-        positions: [{ id: 'a1', version: 1, swimlane: { laneIndex: 0 } }],
+        positions: [{ id: 'a1', version: 1, swimlane: { swimlaneId: 's2', laneIndex: 0 } }],
       }),
     ).rejects.toThrow('409');
 

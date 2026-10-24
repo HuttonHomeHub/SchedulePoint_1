@@ -1,5 +1,6 @@
+import { NO_SWIMLANE_LABEL } from '../render/project-swimlanes';
+
 import { swimlanePlace, type SwimlaneLaneFacts } from './reposition-announcement';
-import { NO_SWIMLANE_LABEL } from './swimlane-lanes';
 
 /**
  * **Move to swimlane…** as the surfaces that offer it see it (swimlanes M2-T10, ui-architecture C10):
@@ -26,9 +27,9 @@ export interface SwimlaneAssignOutcome {
 
 export interface SwimlaneAssignment {
   /**
-   * Whether the diagram is drawing swimlanes. The selection bars offer the move only then (a move
-   * the planner cannot see land is the editor's to offer, with a hint saying so), and the sentence
-   * leaves out the lane clause when they are not drawn.
+   * Whether the diagram is drawing swimlanes. The selection bars shade the move while it is not (a
+   * move the planner cannot see land; {@link SWIMLANES_OFF_MOVE_REASON} says how to turn them on),
+   * the editor keeps it with a hint, and the sentence leaves out the lane clause.
    */
   readonly shown: boolean;
   /** The plan's swimlanes in their order, then "No swimlane". */
@@ -46,10 +47,25 @@ export interface SwimlaneAssignment {
 }
 
 export const MOVE_TO_SWIMLANE_LABEL = 'Move to swimlane…';
+/** Why the selection bars' Move to swimlane… is shaded while swimlanes are off (ADR-0082, ADR-0204). */
+export const SWIMLANES_OFF_MOVE_REASON =
+  'Turn on Swimlanes in View to move activities between them.';
 export const MOVE_TO_SWIMLANE_FIELD = 'Move to';
 export const MOVE_BUTTON_LABEL = 'Move';
 
 export const NO_SWIMLANE_CHOICE_LABEL = NO_SWIMLANE_LABEL;
+
+/**
+ * The plural bar's gate for Move to swimlane…: shaded with the lens's way out while swimlanes are off
+ * (a reader can act on that from here), else with the pen's own verdict (ADR-0082, ADR-0204).
+ */
+export function moveToSwimlaneGate(
+  assignment: Pick<SwimlaneAssignment, 'shown'>,
+  write: { writable: boolean; reason: string | null },
+): { writable: boolean; reason: string | null } {
+  if (!assignment.shown) return { writable: false, reason: SWIMLANES_OFF_MOVE_REASON };
+  return { writable: write.writable, reason: write.writable ? null : write.reason };
+}
 
 const activities = (n: number): string => (n === 1 ? '1 activity' : `${String(n)} activities`);
 
