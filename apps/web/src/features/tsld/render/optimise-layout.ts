@@ -79,7 +79,7 @@ export interface OptimiseLayoutOptions {
    * The swimlanes to search inside. Present only while swimlanes are shown; the input's
    * `laneIndex` and the result's `lanes` are then lanes local to each activity's swimlane.
    */
-  partition?: LayoutPartition;
+  partition?: LayoutPartition | undefined;
   /** Pass cap P. */
   passes?: number;
   /** Evaluation cap E per pass. */

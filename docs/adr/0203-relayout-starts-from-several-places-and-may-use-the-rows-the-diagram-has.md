@@ -65,3 +65,18 @@ runs the starts one after another (concurrency is cores - 1, at least 1), so the
 longer; that is unmeasured. A freshly imported plan gains nothing
 from D1, because its rows already are a pack. `docs/TECH_DEBT.md` #382 is closed with the hand layout reached on the
 reference plan.
+
+## Amendment, 2026-10-24 (swimlanes M2-T6)
+
+While swimlanes are shown, Tidy and Re-layout run **inside each swimlane**. The search, the starts and the
+packer take one optional `partition` ([`feature-spec.md`](../specs/swimlanes/feature-spec.md) §4.5): swaps,
+alignment candidates and the one new row stay in the bar's own swimlane, compaction keeps one row per
+swimlane, and the objective is scored on display lanes so a link between swimlanes still counts. The starts
+are built one swimlane at a time. The limits (D3) stand: [`m0-reading.md`](../specs/swimlanes/m0-reading.md)
+measured the partitioned search cheaper in evaluations on every plan but one Tidy.
+
+The cost is height, because swimlanes cannot share a row (Re-layout 35 to 54 rows on the torture plan, 14 to 16
+on the power plant). The owner saw those figures on 2026-10-24 and chose **"Accept it"**
+([`DECISIONS.md`](../DECISIONS.md)); the Arrange dialog says so in one line. FC-R8 holds: with the partition
+absent the search answers byte for byte as before, checked against a digest record taken on the code that
+had no partition (`optimise-parity.golden.json`).

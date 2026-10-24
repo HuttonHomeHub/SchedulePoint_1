@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LayoutObjective } from '../render/layout-objective';
 
-import { ArrangeDialog } from './ArrangeDialog';
+import { ArrangeDialog, WITHIN_SWIMLANES } from './ArrangeDialog';
 import type { ArrangeOutcome, ArrangeSearchState } from './use-arrange-search';
 
 /**
@@ -36,7 +36,12 @@ const RELAYOUT: ArrangeOutcome = {
 };
 const READY: ArrangeSearchState = { kind: 'ready', tidy: TIDY, relayout: RELAYOUT, bounded: null };
 
-function renderDialog(search: ArrangeSearchState, onConfirm = vi.fn(), pending = false) {
+function renderDialog(
+  search: ArrangeSearchState,
+  onConfirm = vi.fn(),
+  pending = false,
+  withinSwimlanes?: boolean,
+) {
   render(
     <ArrangeDialog
       open
@@ -45,6 +50,7 @@ function renderDialog(search: ArrangeSearchState, onConfirm = vi.fn(), pending =
       onConfirm={onConfirm}
       pending={pending}
       error={null}
+      {...(withinSwimlanes !== undefined ? { withinSwimlanes } : {})}
     />,
   );
   return onConfirm;
@@ -235,6 +241,22 @@ describe('ArrangeDialog', () => {
     const relayout = screen.getByRole('radio', { name: 'Re-layout' });
     expect(relayout).toHaveAccessibleDescription(/^Pack the lanes again by time/);
     expect(relayout).not.toHaveAccessibleDescription(/as many lanes/);
+  });
+
+  it('says both options keep work inside its swimlane while swimlanes are shown', () => {
+    renderDialog(READY, vi.fn(), false, true);
+    expect(WITHIN_SWIMLANES).toBe('Within each swimlane. No activity changes swimlane.');
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      new RegExp(`Dates do not change.*${WITHIN_SWIMLANES.replace(/\./g, '\\.')}$`),
+    );
+  });
+
+  it('says nothing about swimlanes when they are not shown', () => {
+    renderDialog(READY);
+    expect(screen.getByRole('dialog')).not.toHaveAccessibleDescription(/swimlane/i);
+    cleanup();
+    renderDialog(READY, vi.fn(), false, false);
+    expect(screen.getByRole('dialog')).not.toHaveAccessibleDescription(/swimlane/i);
   });
 
   it('reports a failed search as an alert, with Confirm shaded', () => {

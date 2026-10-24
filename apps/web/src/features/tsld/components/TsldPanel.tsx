@@ -421,6 +421,12 @@ export interface TsldPanelProps {
    * version refused the whole batch; rejects on real error. Its presence shows the toolbar action. */
   onAutoArrange?: (
     changes: readonly { id: string; laneIndex: number }[],
+    /**
+     * Set instead of the changes' lanes while swimlanes are shown (swimlanes M2-T6): each moved bar's
+     * lane **inside its swimlane**, written through the positions endpoint with no `laneIndex`
+     * (SC-1), as one undo step. `changes` is then only the count of what moved.
+     */
+    swimlaneLanes?: readonly SwimlaneLanePlacement[],
   ) => Promise<TsldEditOutcome>;
   /** Open the logic (dependency) editor for an activity — the keyboard equivalent of link-draw,
    * invoked from the parallel listbox (no pointer-only capability, WCAG 2.1.1). Also the read action
@@ -2582,13 +2588,22 @@ export function TsldPanel({
     // does is on the diagram, and from the toolbar the old restore target was the Arrange button.
     listboxRef.current?.focus();
     setArrangeError(null);
+    // While swimlanes are drawn the search works in lanes inside each swimlane and keeps every bar in
+    // its own (feature-spec §4.5); `renderActivities` carry display lanes, so they are swapped here.
+    const inSwimlanes = swimlaneEditing.arrangeScene();
     setArrangeInput({
-      activities: renderActivities,
+      activities: inSwimlanes
+        ? renderActivities.map((a) => ({
+            ...a,
+            laneIndex: inSwimlanes.lanes.get(a.id) ?? a.laneIndex,
+          }))
+        : renderActivities,
       edges: renderEdges,
       dataDate,
       isWorkingDay: workingDayPredicate,
-      packChanges: computeArrangeChanges(),
+      packChanges: inSwimlanes ? [] : computeArrangeChanges(),
       textToggles: viewToggles,
+      ...(inSwimlanes ? { swimlanes: inSwimlanes.partition } : {}),
     });
     setArrangeRun((n) => n + 1);
   };
@@ -2604,7 +2619,14 @@ export function TsldPanel({
     if (!onAutoArrange || outcome.changes.length === 0) return;
     clearConflict();
     setArranging(true);
-    void onAutoArrange(outcome.changes)
+    // The search's lanes are lanes inside swimlanes, so they are written as such and never as a
+    // `laneIndex` (SC-1); the placements are built against the swimlanes as drawn now.
+    const swimlaneLanes = swimlaneEditing.arrangePlacements?.(
+      new Map(outcome.changes.map((c) => [c.id, c.laneIndex])),
+    );
+    void (
+      swimlaneLanes ? onAutoArrange(outcome.changes, swimlaneLanes) : onAutoArrange(outcome.changes)
+    )
       .then((result) => {
         setArranging(false);
         setArrangeInput(null);

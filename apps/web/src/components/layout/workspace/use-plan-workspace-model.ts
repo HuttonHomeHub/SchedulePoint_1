@@ -217,6 +217,10 @@ import { activityKeys } from '@/lib/query/hierarchy-keys';
 const MOVE_CONFLICT =
   'This plan changed since you opened it — your move wasn’t applied. Refresh to see the latest.';
 
+/** The stale-version sentence for an arrangement, on either layout. */
+const ARRANGE_CONFLICT =
+  'The plan changed since you opened it, so auto-arrange wasn’t applied. Refresh and try again.';
+
 /** A create on the swimlane layout whose row persisted but whose lane inside the swimlane did not. */
 const NEW_BAR_LANE_NOTE =
   'Activity added, but its lane in the swimlane couldn’t be saved, so it sits where the swimlane places it.';
@@ -2279,7 +2283,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // (`batchPositions` is declared beside `autoResolve`, which writes through it too.)
   const onTsldAutoArrange = async (
     changes: readonly { id: string; laneIndex: number }[],
+    swimlaneLanes?: readonly SwimlaneLanePlacement[],
   ): Promise<TsldEditOutcome> => {
+    // On the swimlane layout the arrangement is a set of lanes inside swimlanes, written with no
+    // `laneIndex` so the swimlane-free layout is untouched (SC-1); one batch, one undo step.
+    if (swimlaneLanes !== undefined) {
+      if (swimlaneLanes.length === 0) return { applied: false, conflict: null };
+      const written = await writeSwimlaneLanes(swimlaneLanes, { label: 'Arrange' });
+      return {
+        applied: written.applied,
+        conflict: written.conflict === MOVE_CONFLICT ? ARRANGE_CONFLICT : written.conflict,
+        ...(written.refreshable !== undefined ? { refreshable: written.refreshable } : {}),
+      };
+    }
     const rows = activities.data ?? [];
     const versionById = new Map(rows.map((a) => [a.id, a.version]));
     const laneById = new Map(rows.map((a) => [a.id, a.laneIndex]));
@@ -2317,8 +2333,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // All-or-nothing: one stale row rejected the whole pack — nothing moved.
         return {
           applied: false,
-          conflict:
-            'The plan changed since you opened it, so auto-arrange wasn’t applied. Refresh and try again.',
+          conflict: ARRANGE_CONFLICT,
         };
       }
       throw err;

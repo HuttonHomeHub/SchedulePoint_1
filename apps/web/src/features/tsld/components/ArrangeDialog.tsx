@@ -26,6 +26,10 @@ import { RadioCardGroup, type RadioCardFigure } from '@/components/ui/radio-card
  * already its best, and **bounded** when the plan is over the size the search is offered at, where
  * Tidy is shaded with the reason and Re-layout is preselected instead.
  *
+ * **While swimlanes are shown** the description adds {@link WITHIN_SWIMLANES}: both options keep every
+ * activity in its own swimlane (swimlanes M2-T6, owner decision 2026-10-24), which is also why the
+ * lane figures can grow — swimlanes cannot share a row.
+ *
  * Confirm is `aria-disabled` with its reason linked, never native `disabled` (ADR-0145). Focus is
  * the caller's to return (ADR-0149 D8). The caller mounts it with a fresh `key` per opening, so the
  * planner's pick never carries over from a previous run.
@@ -37,7 +41,12 @@ export interface ArrangeDialogProps {
   onConfirm: (choice: ArrangeChoice, outcome: ArrangeOutcome) => void;
   pending: boolean;
   error: string | null;
+  /** True while swimlanes are shown: both options work inside each swimlane. */
+  withinSwimlanes?: boolean;
 }
+
+/** What Tidy and Re-layout promise while swimlanes are shown (feature-spec §4.5). */
+export const WITHIN_SWIMLANES = 'Within each swimlane. No activity changes swimlane.';
 
 /**
  * The positions batch accepts at most this many rows in one write
@@ -72,6 +81,7 @@ export function ArrangeDialog({
   onConfirm,
   pending,
   error,
+  withinSwimlanes = false,
 }: ArrangeDialogProps): React.ReactElement {
   // Only an explicit pick is held; the caller remounts the dialog per opening, so it starts empty.
   const [picked, setPicked] = useState<ArrangeChoice | null>(null);
@@ -111,7 +121,7 @@ export function ArrangeDialog({
       open={open}
       onClose={onClose}
       title="Arrange the diagram"
-      description="Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in."
+      description={`Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in.${withinSwimlanes ? ` ${WITHIN_SWIMLANES}` : ''}`}
     >
       <div className="flex flex-col gap-4">
         {search.kind === 'error' ? (
@@ -219,5 +229,12 @@ export function ArrangeSearchDialog({
   input: ArrangeSearchInput | null;
 }): React.ReactElement {
   const search = useArrangeSearch(input !== null, input);
-  return <ArrangeDialog open={input !== null} search={search} {...rest} />;
+  return (
+    <ArrangeDialog
+      open={input !== null}
+      search={search}
+      withinSwimlanes={input?.swimlanes !== undefined}
+      {...rest}
+    />
+  );
 }

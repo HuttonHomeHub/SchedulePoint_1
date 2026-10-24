@@ -2,6 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { compareObjectives } from '../render/layout-objective';
+import type { LayoutPartition } from '../render/layout-partition';
 import type { OptimiseRequest } from '../render/optimise-layout-protocol';
 import { pickBestStart } from '../render/relayout-starts';
 import type { RenderActivity, RenderEdge } from '../render/render-model';
@@ -104,6 +105,11 @@ describe('relayoutBudget', () => {
         ]),
       ),
     ).toBe(2);
+  });
+
+  it('counts the rows by the height it is given, which is how swimlanes are budgeted', () => {
+    const lanes = new Map([['a', 0]]);
+    expect(relayoutBudget(lanes, lanes, () => 7)).toBe(7);
   });
 });
 
@@ -228,6 +234,103 @@ describe('useArrangeSearch multi-start', () => {
 
     expect(second.kind === 'ready' && second.relayout.changes).toEqual(
       first.kind === 'ready' ? first.relayout.changes : null,
+    );
+  });
+});
+
+describe('useArrangeSearch inside swimlanes (swimlanes M2-T6)', () => {
+  beforeEach(() => {
+    requests.length = 0;
+  });
+
+  const link = (predecessorId: string, successorId: string): RenderEdge => ({
+    predecessorId,
+    successorId,
+    type: 'FS',
+    isDriving: true,
+  });
+
+  const partition: LayoutPartition = {
+    swimlaneOf: new Map([
+      ['n1', 'north'],
+      ['n2', 'north'],
+      ['n3', 'north'],
+      ['s1', 'south'],
+      ['s2', 'south'],
+    ]),
+    order: ['north', 'empty', 'south'],
+  };
+
+  /** Lanes are lanes INSIDE each swimlane here: north is drawn in two rows, south in one. */
+  function swimlanePlan(): ArrangeSearchInput {
+    return {
+      ...inputOf(
+        [
+          bar('n1', 0, 0, 6),
+          bar('n2', 1, 2, 6),
+          bar('n3', 0, 12, 4),
+          bar('s1', 0, 1, 5),
+          bar('s2', 0, 14, 3),
+        ],
+        // Ignored while swimlanes are shown: a stored-lane pack means nothing in these lanes.
+        [{ id: 'n1', laneIndex: 9 }],
+      ),
+      edges: [link('n1', 'n3'), link('n2', 's2'), link('s1', 's2')],
+      swimlanes: partition,
+    };
+  }
+
+  it('hands the partition to every search, and to nothing when swimlanes are not shown', async () => {
+    await ready(swimlanePlan());
+    expect(requests.length).toBeGreaterThanOrEqual(2);
+    for (const r of requests) expect(r.options.partition).toEqual(partition);
+
+    requests.length = 0;
+    const { swimlanes: _shown, ...plain } = swimlanePlan();
+    await ready(plain);
+    for (const r of requests) expect(r.options).not.toHaveProperty('partition');
+  });
+
+  it("budgets Re-layout in the diagram's height: the swimlanes' rows added, an empty one counted", async () => {
+    await ready(swimlanePlan());
+    // north 2 + empty 1 + south 1 = 4 rows drawn now; the partitioned pack needs no more, so 4.
+    const relayout = requests.slice(1);
+    for (const r of relayout) expect(r.options.budget).toBeGreaterThanOrEqual(4);
+    expect(relayout[0]?.options.budget).toBe(4);
+  });
+
+  it('seeds start 0 from the partitioned pack, not from the stored-lane changes it was handed', async () => {
+    await ready(swimlanePlan());
+    const start0 = requests[1]!;
+    // Lanes inside a swimlane: n1 and n3 do not overlap, n2 overlaps n1; s1 and s2 share lane 0.
+    const lane = new Map(start0.activities.map((a) => [a.id, a.laneIndex]));
+    expect(lane.get('n1')).toBe(0);
+    expect(lane.get('n2')).toBe(1);
+    expect(lane.get('s1')).toBe(0);
+    expect(lane.get('s2')).toBe(0);
+  });
+
+  it('answers in lanes inside each swimlane and never moves a bar out of its own', async () => {
+    const state = await ready(swimlanePlan());
+    if (state.kind !== 'ready') throw new Error('not ready');
+    for (const outcome of [state.tidy, state.relayout]) {
+      for (const change of outcome?.changes ?? []) {
+        // A lane inside a swimlane is small: it can never be a stacked display lane past the diagram.
+        expect(change.laneIndex).toBeGreaterThanOrEqual(0);
+        expect(change.laneIndex).toBeLessThan(4);
+      }
+    }
+  });
+
+  it('gives the same answer every time it is asked', async () => {
+    const first = await ready(swimlanePlan());
+    requests.length = 0;
+    const second = await ready(swimlanePlan());
+    expect(second.kind === 'ready' && second.relayout.changes).toEqual(
+      first.kind === 'ready' ? first.relayout.changes : null,
+    );
+    expect(second.kind === 'ready' && second.tidy?.changes).toEqual(
+      first.kind === 'ready' ? first.tidy?.changes : null,
     );
   });
 });

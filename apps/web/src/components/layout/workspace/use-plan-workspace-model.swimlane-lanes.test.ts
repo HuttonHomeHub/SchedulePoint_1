@@ -642,3 +642,84 @@ describe('onTsldCreate with swimlane (create on the swimlane layout)', () => {
     expect(h.writeLanes).not.toHaveBeenCalled();
   });
 });
+
+describe('onTsldAutoArrange with swimlaneLanes (Arrange on the swimlane layout, M2-T6)', () => {
+  const ARRANGE = [
+    { id: 'a1', lane: 1, from: { swimlaneId: 'S1', lane: 0 } },
+    { id: 'a2', lane: 0, from: { swimlaneId: 'S1', lane: 1 } },
+  ];
+  const CHANGES = [
+    { id: 'a1', laneIndex: 1 },
+    { id: 'a2', laneIndex: 0 },
+  ];
+
+  it('writes the lanes inside the swimlanes in one batch, and no laneIndex (SC-1)', async () => {
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldAutoArrange(CHANGES, ARRANGE);
+    });
+    expect(outcome).toEqual({ applied: true, conflict: null });
+    expect(h.writeLanes).toHaveBeenCalledTimes(1);
+    const body = h.writeLanes.mock.calls[0]![0];
+    expect(body.positions).toEqual([
+      { id: 'a1', version: 7, swimlane: { laneIndex: 1 } },
+      { id: 'a2', version: 4, swimlane: { laneIndex: 0 } },
+    ]);
+    for (const row of body.positions) {
+      expect(row).not.toHaveProperty('laneIndex');
+      expect(row.swimlane).not.toHaveProperty('swimlaneId');
+    }
+    // The swimlane-free batch is never reached: it would write the other arrangement.
+    expect(h.batchPositions).not.toHaveBeenCalled();
+  });
+
+  it('records ONE undo step for the whole arrangement', async () => {
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldAutoArrange(CHANGES, ARRANGE);
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    const command = h.record.mock.calls[0]![0];
+    expect(command.label).toBe('Arrange');
+    expect(command.subjects.sort()).toEqual(['a1', 'a2']);
+  });
+
+  it('says the arrangement was not applied when a version is stale, and records nothing', async () => {
+    h.writeLanes.mockRejectedValue(apiError(409));
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldAutoArrange(CHANGES, ARRANGE);
+    });
+    expect(outcome).toEqual({
+      applied: false,
+      conflict: expect.stringContaining('auto-arrange wasn’t applied'),
+    });
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for an empty arrangement', async () => {
+    const { result } = setup();
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.onTsldAutoArrange(CHANGES, []);
+    });
+    expect(outcome).toEqual({ applied: false, conflict: null });
+    expect(h.writeLanes).not.toHaveBeenCalled();
+  });
+
+  it('off the swimlane layout it is still the swimlane-free batch, with the laneIndex', async () => {
+    h.batchPositions.mockResolvedValue([
+      { ...A1, laneIndex: 1, version: 8 },
+      { ...A2, laneIndex: 0, version: 5 },
+    ]);
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldAutoArrange(CHANGES);
+    });
+    expect(h.batchPositions).toHaveBeenCalledTimes(1);
+    expect(h.batchPositions.mock.calls[0]![0].positions[0]).toMatchObject({ laneIndex: 1 });
+    expect(h.writeLanes).not.toHaveBeenCalled();
+  });
+});

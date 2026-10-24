@@ -235,9 +235,65 @@ export function depthFirstStart(
   return overlay(activities, lane);
 }
 
+/**
+ * Start 0 inside swimlanes: `packLanes` with the partition and the links as its hint, so each swimlane
+ * is packed on its own and a link into another swimlane steers nothing (feature-spec §4.5). The lanes
+ * are local to each swimlane. Today's pack (`computeLaneArrangement`) is for the swimlane-free layout,
+ * where the WBS band's summaries are appended above the scene; while swimlanes are shown they have no
+ * lane here at all.
+ */
+export function partitionedPackStart(
+  activities: readonly RenderActivity[],
+  edges: readonly RenderEdge[],
+  dataDate: string,
+  partition: ReadonlyMap<string, string>,
+): Map<string, number> {
+  const predecessorsOf = new Map<string, string[]>();
+  for (const e of edges) {
+    const list = predecessorsOf.get(e.successorId);
+    if (list) list.push(e.predecessorId);
+    else predecessorsOf.set(e.successorId, [e.predecessorId]);
+  }
+  // A sentinel lane no pack can produce, so every item comes back as a change (`unhintedPackStart`).
+  const changes = packLanes(
+    itemsOf(activities, dataDate).map((i) => ({ ...i, laneIndex: -1 })),
+    predecessorsOf,
+    partition,
+  );
+  return overlay(activities, new Map(changes.map((c) => [c.id, c.laneIndex])));
+}
+
 export interface StartSeed {
   id: StartId;
   lanes: Map<string, number>;
+}
+
+/**
+ * Starts 1 to 3 inside swimlanes (swimlanes M2-T6, feature-spec §4.5): the same constructions, run on
+ * one swimlane's bars and the links between them at a time, so each swimlane is built from row 0 and
+ * the lanes that come back are local to it. A link into another swimlane says nothing about a row
+ * here. An id with no entry shares one group, as it does in `packLanes`.
+ */
+function inSwimlanes(
+  activities: readonly RenderActivity[],
+  edges: readonly RenderEdge[],
+  partition: ReadonlyMap<string, string>,
+  build: (acts: readonly RenderActivity[], within: readonly RenderEdge[]) => Map<string, number>,
+): Map<string, number> {
+  const groups = new Map<string | undefined, RenderActivity[]>();
+  for (const a of activities) {
+    const key = partition.get(a.id);
+    const group = groups.get(key);
+    if (group) group.push(a);
+    else groups.set(key, [a]);
+  }
+  const lanes = new Map<string, number>();
+  for (const acts of groups.values()) {
+    const ids = new Set(acts.map((a) => a.id));
+    const within = edges.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId));
+    for (const [id, lane] of build(acts, within)) lanes.set(id, lane);
+  }
+  return lanes;
 }
 
 const lanesKey = (lanes: ReadonlyMap<string, number>): string =>
@@ -253,20 +309,32 @@ export function relayoutSeeds(
     edges: readonly RenderEdge[];
     dataDate: string;
     packed: ReadonlyMap<string, number>;
+    /**
+     * Activity id → swimlane key, while swimlanes are shown. Starts 1 to 3 are then built one swimlane
+     * at a time, and `packed` is expected to be the partitioned pack (lanes local to a swimlane).
+     */
+    partition?: ReadonlyMap<string, string> | undefined;
   },
   ids: readonly StartId[],
 ): StartSeed[] {
   const seeds: StartSeed[] = [];
   const seen = new Set<string>();
+  const { partition } = plan;
+  const build: Record<
+    1 | 2 | 3,
+    (acts: readonly RenderActivity[], within: readonly RenderEdge[]) => Map<string, number>
+  > = {
+    1: (acts, within) => chainRowsStart(acts, within, plan.dataDate),
+    2: (acts, within) => depthFirstStart(acts, within, plan.dataDate),
+    3: (acts) => unhintedPackStart(acts, plan.dataDate),
+  };
   for (const id of [...ids].sort((a, b) => a - b)) {
     const lanes =
       id === 0
         ? new Map(plan.packed)
-        : id === 1
-          ? chainRowsStart(plan.activities, plan.edges, plan.dataDate)
-          : id === 2
-            ? depthFirstStart(plan.activities, plan.edges, plan.dataDate)
-            : unhintedPackStart(plan.activities, plan.dataDate);
+        : partition
+          ? inSwimlanes(plan.activities, plan.edges, partition, build[id])
+          : build[id](plan.activities, plan.edges);
     const key = lanesKey(lanes);
     if (seen.has(key)) continue;
     seen.add(key);

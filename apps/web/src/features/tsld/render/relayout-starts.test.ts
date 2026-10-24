@@ -181,6 +181,142 @@ describe('relayoutSeeds', () => {
   });
 });
 
+/** The same plan filed in two swimlanes: the chains apart from each other, the loose bars together. */
+const SWIMLANES: ReadonlyMap<string, string> = new Map([
+  ['a1', 'north'],
+  ['a2', 'north'],
+  ['a3', 'north'],
+  ['c1', 'north'],
+  ['b1', 'south'],
+  ['b2', 'south'],
+  ['b3', 'south'],
+  ['x1', 'south'],
+  ['x2', 'south'],
+  ['u1', 'south'],
+]);
+
+/** Start 0 as the partitioned pack gives it: lanes local to each swimlane. */
+function packedInSwimlanes(activities: readonly RenderActivity[]): Map<string, number> {
+  const lanes = new Map(activities.map((a) => [a.id, a.laneIndex]));
+  const changes = packLanes(
+    activities
+      .filter((a) => a.drawnStart !== null)
+      .map((a) => ({
+        id: a.id,
+        laneIndex: -1,
+        startDay: axisDayOf(a.type, DATA_DATE, a.drawnStart!),
+        endDay: axisDayOf(a.type, DATA_DATE, a.drawnFinish ?? a.drawnStart!),
+      })),
+    undefined,
+    SWIMLANES,
+  );
+  for (const c of changes) lanes.set(c.id, c.laneIndex);
+  return lanes;
+}
+
+function swimlaneSeedsOf(activities: readonly RenderActivity[], edges: readonly RenderEdge[]) {
+  return relayoutSeeds(
+    {
+      activities,
+      edges,
+      dataDate: DATA_DATE,
+      packed: packedInSwimlanes(activities),
+      partition: SWIMLANES,
+    },
+    [0, 1, 2, 3],
+  );
+}
+
+describe('relayoutSeeds inside swimlanes (swimlanes M2-T6)', () => {
+  it('builds starts 1 to 3 one swimlane at a time, each swimlane from row 0', () => {
+    const { activities, edges } = plan();
+    const seeds = swimlaneSeedsOf(activities, edges);
+    expect(seeds.length).toBeGreaterThan(1);
+    for (const seed of seeds.filter((s) => s.id !== 0)) {
+      for (const key of ['north', 'south']) {
+        const mine = activities.filter((a) => SWIMLANES.get(a.id) === key && a.drawnStart !== null);
+        const used = [...new Set(mine.map((a) => seed.lanes.get(a.id)!))].sort((a, b) => a - b);
+        expect(used[0], `start ${String(seed.id)} ${key}`).toBe(0);
+        expect(used, `start ${String(seed.id)} ${key}`).toEqual(used.map((_, i) => i));
+      }
+    }
+  });
+
+  it('is the construction run on that swimlane alone, links across swimlanes ignored', () => {
+    const { activities, edges } = plan();
+    const across = [...edges, link('a3', 'b3'), link('b1', 'c1')];
+    const together = swimlaneSeedsOf(activities, across);
+    for (const key of ['north', 'south']) {
+      const mine = activities.filter((a) => SWIMLANES.get(a.id) === key);
+      const ids = new Set(mine.map((a) => a.id));
+      const alone = relayoutSeeds(
+        {
+          activities: mine,
+          edges: across.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId)),
+          dataDate: DATA_DATE,
+          packed: packedInSwimlanes(activities),
+        },
+        [1, 2, 3],
+      );
+      for (const seed of alone) {
+        const joint = together.find((t) => t.id === seed.id);
+        // A start that duplicates an earlier one is dropped, so compare the ones that survived.
+        if (joint === undefined) continue;
+        for (const id of ids)
+          expect(joint.lanes.get(id), `start ${String(seed.id)} ${id}`).toBe(seed.lanes.get(id));
+      }
+    }
+  });
+
+  it('never overlaps two drawn bars of one swimlane on a row', () => {
+    const { activities, edges } = plan();
+    for (const seed of swimlaneSeedsOf(activities, edges)) {
+      const drawn = activities.filter((a) => a.drawnStart !== null);
+      for (const x of drawn) {
+        for (const y of drawn) {
+          if (x.id >= y.id || SWIMLANES.get(x.id) !== SWIMLANES.get(y.id)) continue;
+          if (seed.lanes.get(x.id) !== seed.lanes.get(y.id)) continue;
+          const xs = axisDayOf(x.type, DATA_DATE, x.drawnStart!);
+          const xe = axisDayOf(x.type, DATA_DATE, x.drawnFinish!);
+          const ys = axisDayOf(y.type, DATA_DATE, y.drawnStart!);
+          const ye = axisDayOf(y.type, DATA_DATE, y.drawnFinish!);
+          expect(xe < ys || ye < xs, `start ${String(seed.id)}: ${x.id} overlaps ${y.id}`).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
+  it('gives every seed a lane for every activity, an undrawn one keeping its own', () => {
+    const { activities, edges } = plan();
+    for (const seed of swimlaneSeedsOf(activities, edges)) {
+      expect([...seed.lanes.keys()].sort()).toEqual(activities.map((a) => a.id).sort());
+      expect(seed.lanes.get('u1')).toBe(2);
+    }
+  });
+
+  it('is the same whatever order the activities and links arrive in', () => {
+    const { activities, edges } = plan();
+    const key = (seeds: ReturnType<typeof swimlaneSeedsOf>) =>
+      JSON.stringify(seeds.map((s) => [s.id, [...s.lanes].sort((a, b) => (a[0] < b[0] ? -1 : 1))]));
+    expect(key(swimlaneSeedsOf([...activities].reverse(), [...edges].reverse()))).toBe(
+      key(swimlaneSeedsOf(activities, edges)),
+    );
+  });
+
+  it('is the old answer when no partition is given', () => {
+    const { activities, edges } = plan();
+    const packed = packedOf(activities);
+    const bare = relayoutSeeds({ activities, edges, dataDate: DATA_DATE, packed }, [0, 1, 2, 3]);
+    const absent = relayoutSeeds(
+      { activities, edges, dataDate: DATA_DATE, packed, partition: undefined },
+      [0, 1, 2, 3],
+    );
+    expect(absent).toEqual(bare);
+  });
+});
+
 describe('pickBestStart', () => {
   const objective = (crossings: number, rows = 3): { final: LayoutObjective } => ({
     final: {
