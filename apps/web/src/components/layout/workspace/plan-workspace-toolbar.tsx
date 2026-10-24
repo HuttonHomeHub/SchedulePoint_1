@@ -66,7 +66,7 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
-import { useUpdateActivityParents, type ActivitiesTableSwimlanes } from '@/features/activities';
+import { type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
@@ -120,6 +120,7 @@ import {
 } from '@/features/schedule-health';
 import {
   SWIMLANE_GROUND,
+  useReparentActivities,
   useSwimlaneAssignment,
   useSwimlaneManagement,
   useSwimlaneScene,
@@ -702,7 +703,7 @@ export function ToolbarPlanWorkspace({
       GANTT_HAS_ROW_MENUS,
     ),
   });
-  const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
+  const updateParents = useReparentActivities(model.orgSlug, model.planId);
 
   // **One call, two surfaces** (console epic M5). Its result goes to the deck's pen item through
   // the toolbar context and to the foot row's cluster through the status portal.
@@ -1744,7 +1745,7 @@ export function ToolbarPlanWorkspace({
    * The grid's structure WRITE (M5-T4). The panel decides *where* a row goes — it is the only
    * thing that knows the display order Indent reads — and this supplies the mutation.
    *
-   * `useUpdateActivityParents` is the ADR-0063 M4b batch the Members panel and the bulk-assign bar
+   * `useReparentActivities` is the ADR-0063 M4b batch the Members panel and the bulk-assign bar
    * already use, not a second reparent path: it carries each row's `version`, so a stale one
    * rejects the whole write with a 409 rather than half-moving a tree, and it invalidates the
    * baseline variance because `parentId` feeds the engine's WBS rollup.

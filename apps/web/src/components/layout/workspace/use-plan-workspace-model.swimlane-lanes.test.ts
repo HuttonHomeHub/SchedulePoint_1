@@ -33,6 +33,7 @@ const h = vi.hoisted(() => ({
   repositionLane: vi.fn(),
   batchPositions: vi.fn(),
   createPlaced: vi.fn(),
+  plan: {},
   onWriteRejected: vi.fn((): { kind: 'none' | 'lock' } => ({ kind: 'none' })),
 }));
 
@@ -66,7 +67,7 @@ vi.mock('@/features/plan-lock', async (importOriginal) => ({
   usePlanPen: () => ({ penManaged: true, holdsPen: true, onWriteRejected: h.onWriteRejected }),
 }));
 vi.mock('@/features/plans', () => ({
-  usePlan: () => query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' }),
+  usePlan: () => query(h.plan),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
 vi.mock('@/features/clients', () => ({ useClient: () => query({ id: 'c1' }) }));
@@ -149,6 +150,7 @@ const apiError = (status: number): ApiFetchError =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  h.plan = { id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' };
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.writeLanes.mockResolvedValue([
     { ...A1, version: 8 },
@@ -586,6 +588,34 @@ describe('onTsldCreate with swimlane (create on the swimlane layout)', () => {
       laneIndex: 0,
       name: 'Fix',
     });
+  });
+
+  it('from the WBS files it under the swimlane’s summary and names no swimlane (SQ-5)', async () => {
+    h.plan = { ...h.plan, swimlaneSource: 'WBS', swimlaneWbsLevel: 1 };
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldCreate(draw('S1'));
+    });
+    const sent = h.createPlaced.mock.calls[0]![0];
+    expect(sent).toMatchObject({ parentId: 'S1', name: 'Fix' });
+    expect(sent).not.toHaveProperty('swimlaneId');
+    // Its lane inside the swimlane is still written, naming no swimlane.
+    expect(h.writeLanes.mock.calls[0]![0].positions[0]).toEqual({
+      id: 'new',
+      version: 1,
+      swimlane: { laneIndex: 1 },
+    });
+  });
+
+  it('from the WBS, "No swimlane" files it under nothing', async () => {
+    h.plan = { ...h.plan, swimlaneSource: 'WBS', swimlaneWbsLevel: 1 };
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldCreate(draw(null));
+    });
+    const sent = h.createPlaced.mock.calls[0]![0];
+    expect(sent).not.toHaveProperty('parentId');
+    expect(sent).not.toHaveProperty('swimlaneId');
   });
 
   it('sends no swimlane for "No swimlane"', async () => {

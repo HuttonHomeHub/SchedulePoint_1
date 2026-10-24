@@ -42,7 +42,6 @@ import {
 // tests that never mean to stub a write.
 import {
   useDissolveSummary,
-  useUpdateActivityParents,
   type DissolveSummaryResponse,
 } from '@/features/activities/api/use-activities';
 import { useReplaceActivityStepsOn } from '@/features/activities/api/use-activity-steps';
@@ -112,6 +111,7 @@ import {
   swimlanePictureOn,
   swimlaneKeys,
   useSwimlanes,
+  useReparentActivities,
   useWriteSwimlaneLanes,
   type SwimlaneLaneRow,
 } from '@/features/swimlanes';
@@ -857,7 +857,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The writes the undo history replays for the records beside the bar (undo-redo M3). Each is a
   // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
   // writes have their own observers and report what landed through the `record*` seams below.
-  const updateParents = useUpdateActivityParents(orgSlug, planId);
+  const updateParents = useReparentActivities(orgSlug, planId);
   const dissolveSummary = useDissolveSummary(orgSlug, planId);
   const replaceSteps = useReplaceActivityStepsOn(orgSlug, planId);
   const createAssignmentOn = useCreateAssignmentOn(orgSlug, planId);
@@ -895,8 +895,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
       visualStart: dropDate,
-      // Drawn in a swimlane: it joins that swimlane (by hand; nothing to send for "No swimlane").
-      ...(input.swimlane?.swimlaneId ? { swimlaneId: input.swimlane.swimlaneId } : {}),
+      // Drawn in a swimlane: it joins that swimlane (nothing to send for "No swimlane"). By hand that
+      // is its `swimlaneId`; from the WBS the swimlane IS a summary, so it is filed under it (SQ-5) and
+      // the endpoint, which refuses a `swimlaneId` there, derives the membership from the parent.
+      ...(input.swimlane?.swimlaneId
+        ? swimlaneSource === 'WBS'
+          ? { parentId: input.swimlane.swimlaneId }
+          : { swimlaneId: input.swimlane.swimlaneId }
+        : {}),
     };
     // Before the write, so the new bar is "not in S0" and rule 1 can move it (ADR-0153).
     beginLayoutEdit([]);

@@ -234,16 +234,27 @@ function landedOf(
  * ghost stops at an edge instead of crossing it and being refused after (C6).
  *
  * Hand-made swimlanes put no edge in the way: a bar may cross into any swimlane, "No swimlane"
- * included, and the bottom is open because the last swimlane can take another lane. The seam is
- * here so a WBS source (M3), where a drag stops at its swimlane's edge, narrows it in one place.
- * `null` for a bar that is not drawn.
+ * included, and the bottom is open because the last swimlane can take another lane. **A WBS source
+ * narrows it to the bar's own swimlane** (SQ-5): filing is the WBS's, changed through Breakdown, and a
+ * vertical drag that re-filed would write a parent — and move summary dates — as a side effect. The
+ * bottom edge is the swimlane's last lane; growing it is the keyboard's (`Alt+↓`). `null` for a bar
+ * that is not drawn.
  */
 export function laneRangeOf(
   ctx: SwimlaneEditContext,
   activityId: string,
 ): { min: number; max: number } | null {
-  return ctx.scene.displayLanes.has(activityId) ? { min: 0, max: Number.POSITIVE_INFINITY } : null;
+  const display = ctx.scene.displayLanes.get(activityId);
+  if (display === undefined) return null;
+  if (ctx.input.source !== 'WBS') return { min: 0, max: Number.POSITIVE_INFINITY };
+  const home = ctx.scene.extents[extentIndexAt(ctx.scene, display)];
+  if (home === undefined) return null;
+  return { min: home.firstLane, max: home.firstLane + home.laneCount - 1 };
 }
+
+/** What a drop that would carry a bar into another WBS swimlane says: the WBS owns filing. */
+export const WBS_FILING_REASON =
+  'Swimlanes follow the WBS in this plan. Change the activity’s Breakdown to move it to another swimlane.';
 
 /**
  * The top of the swimlane a bar is in, as a display lane, and the name to say it by — what the
@@ -282,6 +293,11 @@ export function dropInSwimlane(
   const occupancy = new Occupancy(members.values(), new Set([activityId]));
   const dropped = Math.min(Math.max(0, displayLane) - to.firstLane, to.laneCount);
   const changedSwimlane = target !== subject.extent;
+  // The gesture is clamped by `laneRange`, so this is the backstop for a caller that is not: the
+  // server refuses a swimlane on a WBS plan, and the bar must not be shown crossing first.
+  if (changedSwimlane && ctx.input.source === 'WBS') {
+    return { kind: 'refuse', reason: WBS_FILING_REASON };
+  }
   let lane: number;
   let how: SwimlaneLaneFacts['how'];
   if (!changedSwimlane) {
@@ -547,6 +563,37 @@ export function arrangeInSwimlanes(
     written.add(id);
   }
   return moved.length === 0 ? [] : [...moved, ...materialise(ctx, members, touched, written)];
+}
+
+/**
+ * The lanes to store for bars whose swimlane **changed under them** (a WBS parent write moved them
+ * into another group): each at the lane it is drawn in inside its swimlane in `ctx`, which must be the
+ * picture AFTER the change. The projection has already chosen that lane — the lane the bar remembers
+ * for its new group when it is free at its span, otherwise the nearest free one (`deriveSwimlaneLanes`)
+ * — so this stores the choice rather than making it twice. The unplaced members of every swimlane
+ * touched are written beside them (materialise on write, §4.4).
+ *
+ * **Every row is `materialised`**: no row names a swimlane (the server derives the basis from the
+ * membership the parent write just made) and none carries `from`, so no undo step is built from
+ * them. Undoing the parent write puts the bar back in its old group, where its old lane row is still
+ * stored against the old basis.
+ */
+export function settleInSwimlanes(
+  ctx: SwimlaneEditContext,
+  ids: readonly string[],
+): SwimlaneLanePlacement[] {
+  const members = membersOf(ctx);
+  const settled: SwimlaneLanePlacement[] = [];
+  const touched = new Set<number>();
+  const written = new Set<string>();
+  for (const id of [...ids].sort()) {
+    const m = members.get(id);
+    if (m === undefined) continue;
+    settled.push({ id, lane: m.lane, materialised: true });
+    touched.add(m.extent);
+    written.add(id);
+  }
+  return settled.length === 0 ? [] : [...settled, ...materialise(ctx, members, touched, written)];
 }
 
 export const SWIMLANE_GONE_REASON =

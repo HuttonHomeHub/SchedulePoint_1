@@ -22,4 +22,5 @@ export {
 } from './model/use-swimlane-management';
 export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
 export { SwimlaneBulkAssignBar } from './components/SwimlaneBulkAssignBar';
+export { useReparentActivities } from './model/use-reparent-activities';
 export { WbsSwimlaneField } from './components/WbsSwimlaneField';

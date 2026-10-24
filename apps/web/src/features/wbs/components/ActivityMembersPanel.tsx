@@ -11,7 +11,7 @@ import { CheckboxField } from '@/components/ui/form';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { SearchField } from '@/components/ui/search-field';
-import { useUpdateActivityParents } from '@/features/activities';
+import { useReparentActivities } from '@/features/swimlanes';
 import { ApiFetchError } from '@/lib/api/client';
 
 /**
@@ -63,7 +63,7 @@ export function ActivityMembersPanel({
   onReparented?: OnReparented;
 }): React.ReactElement {
   const announce = useAnnounce();
-  const updateParents = useUpdateActivityParents(orgSlug, planId);
+  const updateParents = useReparentActivities(orgSlug, planId);
   const searchId = useId();
   const countId = useId();
   const errorId = useId();
