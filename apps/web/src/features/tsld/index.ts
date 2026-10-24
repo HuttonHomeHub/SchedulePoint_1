@@ -44,3 +44,5 @@ export {
   wbsBandHeight,
   WBS_BAND_MAX_DEPTH,
 } from './render/wbs-band';
+/** The neutral swimlane input the render layer projects (swimlanes epic C8) — composed by the host. */
+export type { SwimlaneInput } from './render/project-swimlanes';

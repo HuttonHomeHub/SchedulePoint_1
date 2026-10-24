@@ -28,6 +28,18 @@ const h = vi.hoisted<{
   search: Record<string, string>;
   // The canvas handle the stubbed panel publishes, so a viewport command's effect is observable.
   canvasControl: { goToDate: ReturnType<typeof vi.fn> };
+  // Swimlanes (M2-T1): whether the lens is offered, the plan's source, and the list's state. The
+  // lens is not offered in the product yet, so the suite switches it on to prove the HOST's wiring.
+  swimlanes: {
+    offered: boolean;
+    source: 'NONE' | 'MANUAL' | 'WBS';
+    list: {
+      data: { id: string; name: string }[] | undefined;
+      isPending: boolean;
+      isError?: boolean;
+      refetch?: () => unknown;
+    };
+  };
 }>(() => ({
   role: 'PLANNER',
   plannedStart: '2026-01-01',
@@ -35,6 +47,19 @@ const h = vi.hoisted<{
   migrationCount: 0,
   search: {},
   canvasControl: { goToDate: vi.fn() },
+  swimlanes: { offered: false, source: 'NONE', list: { data: undefined, isPending: true } },
+}));
+
+vi.mock('@/features/swimlanes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  get SWIMLANES_LENS_OFFERED() {
+    return h.swimlanes.offered;
+  },
+}));
+// The scene hook imports the list query by relative path, so the module it reads is stubbed here.
+vi.mock('@/features/swimlanes/api/use-swimlanes', () => ({
+  useSwimlanes: () => h.swimlanes.list,
+  swimlanesQueryOptions: () => ({}),
 }));
 
 vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
@@ -137,6 +162,7 @@ vi.mock('@/features/plans', async (importOriginal) => ({
       name: 'Tower',
       status: 'ACTIVE',
       plannedStart: h.plannedStart,
+      swimlaneSource: h.swimlanes.source,
       description: null,
       version: 1,
       // Read by (real, unmocked) PlanScheduleSettings once the Calendar dialog mounts it.
@@ -179,7 +205,16 @@ vi.mock('@/features/baselines', () => ({
 vi.mock('@/features/activities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useActivities: () =>
-    query([{ id: 'a1', version: 3, name: 'Excavate', earlyStart: '2026-01-02' }]),
+    query([
+      {
+        id: 'a1',
+        version: 3,
+        name: 'Excavate',
+        earlyStart: '2026-01-02',
+        swimlaneId: null,
+        swimlaneLanes: [],
+      },
+    ]),
   useUpdateActivityParents: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn() }),
@@ -310,6 +345,7 @@ beforeEach(() => {
   h.tsldProps.current = null;
   h.migrationCount = 0;
   h.search = {};
+  h.swimlanes = { offered: false, source: 'NONE', list: { data: undefined, isPending: true } };
 });
 
 /**
@@ -1262,5 +1298,87 @@ describe('a dock that has taken the row', () => {
       expect(dock.closest('[inert]')).toBeNull();
       expect(screen.getByRole('button', { name: /close health check/i })).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * Swimlanes in the host (M2-T1). The Swimlanes lens is not offered, so none of this is reachable by
+ * a user: these cases switch the offer on to prove the wiring that T2–T11 will build on.
+ */
+describe('the host composes the swimlane input (swimlanes M2-T1)', () => {
+  it('hands the canvas no swimlane input while the lens is not offered', () => {
+    h.swimlanes = { offered: false, source: 'MANUAL', list: { data: [], isPending: false } };
+    renderScreen();
+    expect(h.tsldProps.current?.swimlanes).toBeNull();
+  });
+
+  it('holds the diagram in its loading state while a shown list is still on its way (ADR-0202)', () => {
+    h.swimlanes = { offered: true, source: 'MANUAL', list: { data: undefined, isPending: true } };
+    renderScreen();
+    // The one frame this prevents is a swimlane-free layout followed by every bar jumping.
+    expect(screen.getByText('Loading the plan…')).toBeInTheDocument();
+    expect(screen.queryByTestId('tsld-panel')).toBeNull();
+  });
+
+  it('builds the input from the list once it has arrived, and shows the diagram', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
+    };
+    renderScreen();
+    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
+    const input = h.tsldProps.current?.swimlanes as { swimlanes: { id: string }[] };
+    expect(input.swimlanes.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('does not wait for a list when the plan has no swimlane source', () => {
+    h.swimlanes = { offered: true, source: 'NONE', list: { data: undefined, isPending: true } };
+    renderScreen();
+    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
+    expect(h.tsldProps.current?.swimlanes).toBeNull();
+  });
+
+  it('never unmounts a painted panel for a list that is pending again, so focus survives', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Mechanical' }], isPending: false },
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // A fresh element each time: React bails out of re-rendering an identical one.
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <AnnouncerProvider>
+          <TestChromeHost>
+            <PlanDetailScreen />
+          </TestChromeHost>
+        </AnnouncerProvider>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(tree());
+    const panel = screen.getByTestId('tsld-panel');
+    panel.tabIndex = -1;
+    panel.focus();
+    expect(document.activeElement).toBe(panel);
+
+    // A later toggle, or a refetch, can leave the list pending: the first-paint hold must not return.
+    h.swimlanes = { ...h.swimlanes, list: { data: undefined, isPending: true } };
+    rerender(tree());
+    expect(screen.queryByText('Loading the plan…')).toBeNull();
+    expect(screen.getByTestId('tsld-panel')).toBe(panel);
+    expect(document.activeElement).toBe(panel);
+  });
+
+  it('passes a failed list through to the model for the lens to word', () => {
+    h.swimlanes = {
+      offered: true,
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true },
+    };
+    renderScreen();
+    // The diagram is shown swimlane-free rather than held on a list that is not coming.
+    expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
+    expect(h.tsldProps.current?.swimlanes).toBeNull();
   });
 });
