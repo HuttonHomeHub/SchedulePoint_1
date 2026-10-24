@@ -52,6 +52,7 @@ const SCOPE = [
   'features/schedule',
   'features/schedule-health',
   'features/share',
+  'features/swimlanes',
   'features/tsld',
   'features/wbs',
 ];

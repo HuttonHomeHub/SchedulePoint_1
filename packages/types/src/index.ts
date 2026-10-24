@@ -231,6 +231,22 @@ export interface ActivitySwimlaneLaneSummary {
 }
 
 /**
+ * One hand-made swimlane of a plan (swimlanes spec §4.12): what `GET …/plans/:planId/swimlanes`
+ * returns, in `position` order. `version` is the optimistic-locking token a rename, a reorder and a
+ * delete send back.
+ */
+export interface SwimlaneSummary {
+  id: string;
+  planId: string;
+  name: string;
+  /** Zero-based order key; the API reads it as `ORDER BY position, id`. */
+  position: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
  * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.

@@ -1,0 +1,101 @@
+import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { SWIMLANES_LENS_OFFERED, useSwimlaneScene } from './use-swimlane-scene';
+
+import { anActivity } from '@/test/activity-fixture';
+
+// A plain function rather than `vi.fn()`: the spy's own bookkeeping leaves a rejected promise
+// unhandled, which fails the test that is asserting the rejection is survived.
+const h = vi.hoisted(() => ({ calls: 0, impl: (): Promise<unknown> => Promise.resolve([]) }));
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetchAllPages: () => {
+    h.calls += 1;
+    return h.impl();
+  },
+}));
+
+const LIST: SwimlaneSummary[] = [
+  {
+    id: 's1',
+    planId: 'p1',
+    name: 'Mechanical',
+    position: 0,
+    version: 1,
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  },
+];
+
+function render(args: {
+  source: SwimlaneSource;
+  shown: boolean;
+  activities?: readonly ActivitySummary[] | undefined;
+}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children);
+  return renderHook(
+    (props: typeof args) =>
+      useSwimlaneScene({ orgSlug: 'acme', planId: 'p1', ...props, activities: props.activities }),
+    { wrapper, initialProps: { activities: [anActivity({ swimlaneId: 's1' })], ...args } },
+  );
+}
+
+describe('useSwimlaneScene', () => {
+  beforeEach(() => {
+    h.calls = 0;
+    h.impl = () => Promise.resolve(LIST);
+  });
+
+  it('is dark: the lens is not offered, so nothing can be shown', () => {
+    expect(SWIMLANES_LENS_OFFERED).toBe(false);
+  });
+
+  it('builds nothing and fetches nothing while swimlanes are not shown', () => {
+    const { result } = render({ source: 'MANUAL', shown: false });
+    expect(result.current).toEqual({ input: null, pending: false });
+    expect(h.calls).toBe(0);
+  });
+
+  it.each(['NONE', 'WBS'] as const)('builds nothing for a %s plan, shown or not', (source) => {
+    const { result } = render({ source, shown: true });
+    expect(result.current).toEqual({ input: null, pending: false });
+    expect(h.calls).toBe(0);
+  });
+
+  it('is pending, with no input, until the list arrives; then builds the input (ADR-0202)', async () => {
+    const { result } = render({ source: 'MANUAL', shown: true });
+    expect(result.current).toEqual({ input: null, pending: true });
+
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    expect(result.current.input?.swimlanes).toEqual([{ id: 's1', name: 'Mechanical' }]);
+    expect(result.current.input?.membership.get('a1')).toBe('s1');
+  });
+
+  it('degrades to the swimlane-free diagram, not a spinner, when the list fails', async () => {
+    h.impl = () => Promise.reject(new Error('boom'));
+    const { result } = render({ source: 'MANUAL', shown: true });
+
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    expect(result.current.input).toBeNull();
+  });
+
+  it('builds once per data change: an unrelated re-render returns the same object', async () => {
+    const activities = [anActivity({ swimlaneId: 's1' })];
+    const { result, rerender } = render({ source: 'MANUAL', shown: true, activities });
+    await waitFor(() => expect(result.current.input).not.toBeNull());
+
+    const first = result.current.input;
+    rerender({ source: 'MANUAL', shown: true, activities });
+    rerender({ source: 'MANUAL', shown: true, activities });
+    expect(result.current.input).toBe(first);
+
+    rerender({ source: 'MANUAL', shown: true, activities: [...activities] });
+    expect(result.current.input).not.toBe(first);
+  });
+});

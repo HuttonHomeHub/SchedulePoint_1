@@ -355,6 +355,17 @@ export const planLockKeys = {
     [...planLockKeys.all(orgSlug), 'plan', planId] as const,
 };
 
+/**
+ * A plan's hand-made swimlanes (swimlanes spec §4.12). Plan content, so the key carries the plan: a
+ * swimlane write sweeps `byPlan` and the activities list together, because a delete changes which
+ * swimlane every member reads as belonging to.
+ */
+export const swimlaneKeys = {
+  all: (orgSlug: string) => ['swimlanes', orgSlug] as const,
+  byPlan: (orgSlug: string, planId: string) =>
+    [...swimlaneKeys.all(orgSlug), 'plan', planId] as const,
+};
+
 export const baselineKeys = {
   all: (orgSlug: string) => ['baselines', orgSlug] as const,
   listByPlan: (orgSlug: string, planId: string) =>
