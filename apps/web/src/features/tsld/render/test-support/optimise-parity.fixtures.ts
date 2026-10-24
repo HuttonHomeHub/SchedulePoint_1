@@ -156,11 +156,13 @@ export function runOptimiseParityInFull(): Answer[] {
 export const PARITY_SWIMLANES = ['x', 'y', 'z'] as const;
 
 /**
- * What the PARTITIONED search answers for the same plans. `optimise-partitioned.golden.json` is that
- * record, taken after the product's search was shown to return the lanes and the evaluation count of
- * the M0-T4 harness's independent copy (`scripts/netpoint-swimlane-run.ts`) on all 42 drawn plans here
- * and on the power-plant and torture corpus plans. It pins the §4.5 restrictions (swaps, candidates,
- * the new row, compaction, repair) as a record, so a change to any of them is a visible diff.
+ * What the PARTITIONED search answers for the same plans. `optimise-partitioned.golden.json` is a
+ * **regression pin**: it was recorded from the product's search, so it shows that nothing has changed
+ * since, not that the search is right. The §4.5 restrictions (swaps, candidates, the new row,
+ * compaction, repair) are pinned by it, and a change to any of them is a visible diff. That the search
+ * agrees with the M0-T4 harness's independent copy was checked once, by hand, in node, on these plans
+ * and on the corpus; the standing check on the cost is the evaluation-count test in
+ * `optimise-layout.partition.test.ts`.
  */
 export function runPartitionedParityInFull(): Answer[] {
   return parityPlans().map((plan) => {

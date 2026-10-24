@@ -137,10 +137,40 @@ describe('TsldPanel — Arrange with swimlanes shown', () => {
     expect(changes.map((c) => [c.id, c.laneIndex])).toEqual(placements.map((p) => [p.id, p.lane]));
   });
 
+  it('says so, and writes nothing, when the answer is already what is drawn by confirm time', async () => {
+    const onAutoArrange = vi.fn(() => Promise.resolve(OK));
+    const { rerender } = render(<Harness swimlanes={SWIMLANES} onAutoArrange={onAutoArrange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Re-layout' }));
+    // A colleague's change lands under the open dialog: Pour and Wire now sit exactly as Re-layout
+    // would put them (it swaps their two lanes), so confirming has nothing left to write.
+    rerender(
+      <Harness
+        onAutoArrange={onAutoArrange}
+        swimlanes={{
+          ...SWIMLANES,
+          storedLanes: new Map([
+            ['pour', { lane: 1, updatedAt: 2 }],
+            ['wire', { lane: 0, updatedAt: 2 }],
+            ['test', { lane: 0, updatedAt: 1 }],
+          ]),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /^Re-layout: move/ }));
+    expect(onAutoArrange).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nothing would move.');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('says in the dialog that no activity leaves its swimlane', async () => {
     openArrange({ swimlanes: SWIMLANES, onAutoArrange: () => Promise.resolve(OK) });
-    expect(await screen.findByRole('dialog')).toHaveAccessibleDescription(
-      new RegExp(`${WITHIN_SWIMLANES.replace('.', '\\.')}`),
+    // The dialog derives the flag from the search input's `swimlanes`, so the line and the card copy
+    // follow what the panel handed it.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAccessibleDescription(new RegExp(WITHIN_SWIMLANES.slice(0, 40)));
+    expect(screen.getByRole('radio', { name: 'Tidy' })).not.toHaveAccessibleDescription(
+      /never adds/,
     );
   });
 

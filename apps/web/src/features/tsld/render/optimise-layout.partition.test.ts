@@ -285,3 +285,89 @@ describe('optimiseLayout inside swimlanes', () => {
     expect(heightOf(roomy.lanes)).toBeLessThanOrEqual(30);
   });
 });
+
+/**
+ * **The cost the owner was shown** (`docs/specs/swimlanes/m0-reading.md`): the partitioned Tidy on the
+ * two corpus plans took 359 evaluations (power plant) and 356 (torture) in the M0-T4 harness. The
+ * product's search must make the same number of them, because the count is what the machine cannot
+ * move; it is the one figure here that ties the product to that reading. The splits are the harness's
+ * (`scripts/netpoint-swimlane-run.ts`: the code prefix, and the thousands digit of the code), the text
+ * width is the harness's 6 px a character (which `FIXED_WIDTH_TEXT` is), and the starting lanes are
+ * the diagram read per swimlane. Node only; no browser.
+ */
+interface CorpusPlan {
+  seedName: string;
+  dataDate: string;
+  activities: (RenderActivity & { code?: string })[];
+  edges: RenderEdge[];
+}
+
+function corpusPlan(name: string): CorpusPlan {
+  const file = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../scripts/fixtures/relayout-corpus.json',
+  );
+  const plans = (JSON.parse(readFileSync(file, 'utf8')) as { plans: CorpusPlan[] }).plans;
+  const plan = plans.find((p) => p.seedName === name);
+  if (!plan) throw new Error(`the committed corpus has no ${name}`);
+  return plan;
+}
+
+/** The harness's `localise`: each swimlane's distinct rows, in order, from 0. */
+function localLanes(plan: CorpusPlan, swimlaneOf: ReadonlyMap<string, string>): CorpusPlan {
+  const out = plan.activities.map((a) => ({ ...a }));
+  for (const key of new Set(swimlaneOf.values())) {
+    const members = out.filter((a) => swimlaneOf.get(a.id) === key);
+    const rows = [...new Set(members.map((a) => a.laneIndex))].sort((a, b) => a - b);
+    for (const a of members) a.laneIndex = rows.indexOf(a.laneIndex);
+  }
+  return { ...plan, activities: out };
+}
+
+describe('the partitioned Tidy costs what M0-T4 measured', () => {
+  it('makes 359 evaluations on the power plant, split by system', () => {
+    const plan = corpusPlan('reference-netpoint-power-plant');
+    const prefix = (code: string): string => code.split('_')[0]!;
+    const counts = new Map<string, number>();
+    for (const a of plan.activities)
+      counts.set(prefix(a.code!), (counts.get(prefix(a.code!)) ?? 0) + 1);
+    const swimlaneOf = new Map(
+      plan.activities.map((a) => [
+        a.id,
+        counts.get(prefix(a.code!))! >= 2 && prefix(a.code!) !== 'M' ? prefix(a.code!) : 'Common',
+      ]),
+    );
+    const local = localLanes(plan, swimlaneOf);
+    const r = optimiseLayout(
+      {
+        activities: local.activities,
+        edges: plan.edges,
+        dataDate: plan.dataDate,
+        text: FIXED_WIDTH_TEXT,
+      },
+      { partition: { swimlaneOf, order: [...new Set(swimlaneOf.values())] } },
+    );
+    expect(r.evaluations).toBe(359);
+  }, 120_000);
+
+  it('makes 356 evaluations on the torture plan, split by work package', () => {
+    const plan = corpusPlan('fixture-p6-torture-v1');
+    const swimlaneOf = new Map(
+      plan.activities.map((a) => [
+        a.id,
+        /^A\d/.test(a.code ?? '') ? `A${a.code!.slice(1, 2)}` : 'Summaries',
+      ]),
+    );
+    const local = localLanes(plan, swimlaneOf);
+    const r = optimiseLayout(
+      {
+        activities: local.activities,
+        edges: plan.edges,
+        dataDate: plan.dataDate,
+        text: FIXED_WIDTH_TEXT,
+      },
+      { partition: { swimlaneOf, order: [...new Set(swimlaneOf.values())].sort() } },
+    );
+    expect(r.evaluations).toBe(356);
+  }, 120_000);
+});

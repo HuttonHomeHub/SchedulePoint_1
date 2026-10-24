@@ -10,6 +10,7 @@ import { runOptimiseLayout as searchInProcess } from '../render/test-support/in-
 import { DEFAULT_VIEW_TOGGLES } from '../render/view-toggles';
 
 import {
+  inSwimlaneLanes,
   relayoutBudget,
   useArrangeSearch,
   type ArrangeSearchInput,
@@ -332,5 +333,18 @@ describe('useArrangeSearch inside swimlanes (swimlanes M2-T6)', () => {
     expect(second.kind === 'ready' && second.tidy?.changes).toEqual(
       first.kind === 'ready' ? first.tidy?.changes : null,
     );
+  });
+});
+
+describe('inSwimlaneLanes', () => {
+  it('gives a drawn activity its lane inside the swimlane, and an activity with none lane 0', () => {
+    const drawn = bar('d', 7, 0, 3);
+    const undrawn: RenderActivity = { ...bar('u', 9, 0, 3), drawnStart: null, drawnFinish: null };
+    const out = inSwimlaneLanes([drawn, undrawn], new Map([['d', 1]]));
+    // Never the display or stored lane it arrived with: that is another coordinate system.
+    expect(out.map((a) => [a.id, a.laneIndex])).toEqual([
+      ['d', 1],
+      ['u', 0],
+    ]);
   });
 });

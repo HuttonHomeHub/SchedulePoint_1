@@ -125,6 +125,19 @@ export function arrangeRequest(
   };
 }
 
+/**
+ * The activities as the search reads them while swimlanes are shown: each drawn one carries its lane
+ * **inside its swimlane**. An activity with no lane there (not drawn, so on no row) gets 0 and never
+ * its stored or display lane — handing the search a lane in the wrong coordinate system would move a
+ * bar by the difference.
+ */
+export function inSwimlaneLanes(
+  activities: readonly RenderActivity[],
+  lanes: ReadonlyMap<string, number>,
+): RenderActivity[] {
+  return activities.map((a) => ({ ...a, laneIndex: lanes.get(a.id) ?? 0 }));
+}
+
 /** The moves from `current` to `lanes`, in a fixed order. */
 export function changesBetween(
   activities: readonly RenderActivity[],

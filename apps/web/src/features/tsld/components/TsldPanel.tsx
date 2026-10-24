@@ -132,6 +132,7 @@ import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 import {
+  inSwimlaneLanes,
   type ArrangeChoice,
   type ArrangeOutcome,
   type ArrangeSearchInput,
@@ -2593,10 +2594,7 @@ export function TsldPanel({
     const inSwimlanes = swimlaneEditing.arrangeScene();
     setArrangeInput({
       activities: inSwimlanes
-        ? renderActivities.map((a) => ({
-            ...a,
-            laneIndex: inSwimlanes.lanes.get(a.id) ?? a.laneIndex,
-          }))
+        ? inSwimlaneLanes(renderActivities, inSwimlanes.lanes)
         : renderActivities,
       edges: renderEdges,
       dataDate,
@@ -2618,12 +2616,18 @@ export function TsldPanel({
   const runAutoArrange = (choice: ArrangeChoice, outcome: ArrangeOutcome): void => {
     if (!onAutoArrange || outcome.changes.length === 0) return;
     clearConflict();
-    setArranging(true);
     // The search's lanes are lanes inside swimlanes, so they are written as such and never as a
     // `laneIndex` (SC-1); the placements are built against the swimlanes as drawn now.
     const swimlaneLanes = swimlaneEditing.arrangePlacements?.(
       new Map(outcome.changes.map((c) => [c.id, c.laneIndex])),
     );
+    // The diagram changed under the open dialog and the answer is already what is drawn: say so
+    // rather than closing as if something had been written.
+    if (swimlaneLanes?.length === 0) {
+      setArrangeError('Nothing would move.');
+      return;
+    }
+    setArranging(true);
     void (
       swimlaneLanes ? onAutoArrange(outcome.changes, swimlaneLanes) : onAutoArrange(outcome.changes)
     )

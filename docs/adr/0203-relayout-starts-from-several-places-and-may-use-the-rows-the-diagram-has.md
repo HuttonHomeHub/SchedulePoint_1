@@ -72,7 +72,8 @@ While swimlanes are shown, Tidy and Re-layout run **inside each swimlane**. The 
 packer take one optional `partition` ([`feature-spec.md`](../specs/swimlanes/feature-spec.md) §4.5): swaps,
 alignment candidates and the one new row stay in the bar's own swimlane, compaction keeps one row per
 swimlane, and the objective is scored on display lanes so a link between swimlanes still counts. The starts
-are built one swimlane at a time. The limits (D3) stand: [`m0-reading.md`](../specs/swimlanes/m0-reading.md)
+are built one swimlane at a time. Only drawn bars take part: an undrawn activity's stored lane is deliberately
+left alone, where the unpartitioned search renumbers it when it compacts. The limits (D3) stand: [`m0-reading.md`](../specs/swimlanes/m0-reading.md)
 measured the partitioned search cheaper in evaluations on every plan but one Tidy.
 
 The cost is height, because swimlanes cannot share a row (Re-layout 35 to 54 rows on the torture plan, 14 to 16

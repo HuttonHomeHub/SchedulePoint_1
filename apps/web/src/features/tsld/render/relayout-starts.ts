@@ -287,11 +287,21 @@ function inSwimlanes(
     if (group) group.push(a);
     else groups.set(key, [a]);
   }
+  // Each link goes to the group both its ends are in, once, rather than every group filtering them all.
+  const groupOf = new Map<string, string | undefined>();
+  for (const [key, acts] of groups) for (const a of acts) groupOf.set(a.id, key);
+  const edgesOf = new Map<string | undefined, RenderEdge[]>();
+  for (const e of edges) {
+    const key = groupOf.get(e.predecessorId);
+    if (key === undefined && !groupOf.has(e.predecessorId)) continue;
+    if (!groupOf.has(e.successorId) || groupOf.get(e.successorId) !== key) continue;
+    const list = edgesOf.get(key);
+    if (list) list.push(e);
+    else edgesOf.set(key, [e]);
+  }
   const lanes = new Map<string, number>();
-  for (const acts of groups.values()) {
-    const ids = new Set(acts.map((a) => a.id));
-    const within = edges.filter((e) => ids.has(e.predecessorId) && ids.has(e.successorId));
-    for (const [id, lane] of build(acts, within)) lanes.set(id, lane);
+  for (const [key, acts] of groups) {
+    for (const [id, lane] of build(acts, edgesOf.get(key) ?? [])) lanes.set(id, lane);
   }
   return lanes;
 }

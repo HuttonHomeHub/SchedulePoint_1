@@ -63,6 +63,8 @@ import type { PlacedText } from './row-text-layout';
  *   count, and the budget is the diagram's height in rows.
  *
  * No bar ever leaves its swimlane: a lane is only ever read against the swimlane it was written for.
+ * Only drawn bars take part, so an undrawn activity's stored lane is deliberately left alone (the
+ * unpartitioned search renumbers it when it compacts; that lane is on no row here).
  * Absent, every branch below reduces to the unpartitioned search, byte for byte (ADR-0203 FC-R8; the
  * golden record in `test-support/optimise-parity.golden.json`).
  *
@@ -180,6 +182,23 @@ export function optimiseLayout(
     for (const rows of heightsOf(lanes).values()) total += rows;
     return total;
   };
+  // The bands of the layout last asked about. Phase 2 asks once per bar, and `lanes` is replaced (never
+  // edited) when a move is accepted, so the answer is reused until then.
+  let bandsFor: {
+    lanes: ReadonlyMap<string, number>;
+    heights: Map<string, number>;
+    total: number;
+    offsets: Map<string, number>;
+  } | null = null;
+  const bandsOf = (lanes: ReadonlyMap<string, number>) => {
+    if (bandsFor?.lanes !== lanes) {
+      const heights = heightsOf(lanes);
+      let total = 0;
+      for (const h of heights.values()) total += h;
+      bandsFor = { lanes, heights, total, offsets: offsetsOf(stack, heights) };
+    }
+    return bandsFor;
+  };
   const budget = options.budget ?? totalRowsOf(seedLanes);
 
   let evaluations = 0;
@@ -259,11 +278,10 @@ export function optimiseLayout(
       let total: number;
       let offset = 0;
       if (partition) {
-        const heights = heightsOf(lanes);
-        rows = heights.get(key)!;
-        total = 0;
-        for (const h of heights.values()) total += h;
-        offset = offsetsOf(stack, heights).get(key)!;
+        const bands = bandsOf(lanes);
+        rows = bands.heights.get(key)!;
+        total = bands.total;
+        offset = bands.offsets.get(key)!;
       } else {
         rows = total = rowsOf(lanes);
       }
