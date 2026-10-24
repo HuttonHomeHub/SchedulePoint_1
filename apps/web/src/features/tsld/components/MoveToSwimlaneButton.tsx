@@ -7,6 +7,7 @@ import { MoveToSwimlaneControl } from './MoveToSwimlaneControl';
 
 import { Button } from '@/components/ui/button';
 import { PopoverCloseContext } from '@/components/ui/toolbar/popover-close';
+import { TOOLBAR_NAV_KEYS } from '@/components/ui/toolbar/toolbar-keyboard';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 
 /**
@@ -71,11 +72,7 @@ export function MoveToSwimlaneButton({
             role="presentation"
             onKeyDown={(event) => {
               // The arrows belong to the field; nothing above the panel in the React tree may rove.
-              if (
-                ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(
-                  event.key,
-                )
-              ) {
+              if (TOOLBAR_NAV_KEYS.includes(event.key)) {
                 event.stopPropagation();
               }
             }}

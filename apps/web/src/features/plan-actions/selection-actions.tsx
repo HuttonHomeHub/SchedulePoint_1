@@ -26,6 +26,7 @@ import { MAKE_MILESTONE_LABEL, type MakeMilestoneGate } from './make-milestone-g
 
 import { Menu, MenuItem, MenuSection, useMenuTrigger } from '@/components/ui/menu';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
+import { TOOLBAR_NAV_KEYS } from '@/components/ui/toolbar/toolbar-keyboard';
 import {
   defineToolbar,
   type ToolbarGroupId,
@@ -560,9 +561,7 @@ function MoveToSwimlaneItem({
       <div
         role="presentation"
         onKeyDown={(event) => {
-          if (
-            ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
-          ) {
+          if (TOOLBAR_NAV_KEYS.includes(event.key)) {
             event.stopPropagation();
           }
         }}

@@ -134,4 +134,13 @@ describe('the selection bar — Move to swimlane…', () => {
     const item = selectionActionItems.find((i) => i.id === 'move-to-swimlane');
     expect(item?.labelVisibility).toBe('always');
   });
+
+  it('returns focus to the trigger on Escape', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    fireEvent.click(trigger());
+    expect(screen.getByLabelText('Move to')).toHaveFocus();
+    fireEvent.keyDown(screen.getByLabelText('Move to'), { key: 'Escape' });
+    expect(screen.queryByLabelText('Move to')).toBeNull();
+    expect(trigger()).toHaveFocus();
+  });
 });
