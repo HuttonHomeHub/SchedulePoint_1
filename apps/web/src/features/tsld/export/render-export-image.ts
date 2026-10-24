@@ -191,6 +191,11 @@ export const EXPORT_LAYER_INPUTS = {
  *
  * The ruler's labels are painted by {@link drawAxisMarkerRow} into the row `markerRow` reserves;
  * the gutter's by {@link paintExportGutter}.
+ *
+ * **What the gate proves, and what it does not:** that the composer was TOLD about each input — the
+ * key is named in the `renderExportImage` call — not that pixels exist. The pixels are asserted by
+ * `render-export-image.swimlanes.test.ts` (the ruler's chips and the gutter's names), because a
+ * literal key is satisfied equally by an input the renderer then ignores.
  */
 export const EXPORT_CHROME_INPUTS = {
   ruler: 'markerRow',
@@ -246,6 +251,9 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
 ];
 
+/** How many leading {@link EXPORT_LEGEND} rows are the criticality key. */
+const CRITICALITY_ENTRIES = 3;
+
 /** The entry for the over-allocation badge, last as on the screen's key (`TsldLegend.tsx`). It is
  * appended only when the picture draws a badge, so a key never names a mark the page lacks
  * (TECH_DEBT #524) — the same both-ways rule the DOM legend's census holds. */
@@ -271,8 +279,7 @@ function measuredWidth(ctx: CanvasRenderingContext2D, text: string): number {
 
 /**
  * The swimlane names the gutter had to shorten, said in the legend (ADR-0127 D3: what the picture
- * does not draw in full is counted, not silently clipped). Last, after the marks it explains nothing
- * about, so a narrow crop's "+N more" drops this before it drops a key.
+ * does not draw in full is counted, not silently clipped). Placed by {@link legendFor}.
  */
 function cutNamesEntry(count: number): LegendEntry {
   return {
@@ -286,7 +293,15 @@ function cutNamesEntry(count: number): LegendEntry {
 function legendFor(scene: TsldScene, cutNames: number): readonly LegendEntry[] {
   const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
   const rows = drawsBadge ? [...EXPORT_LEGEND, OVER_ALLOCATION_ENTRY] : EXPORT_LEGEND;
-  return cutNames > 0 ? [...rows, cutNamesEntry(cutNames)] : rows;
+  if (cutNames === 0) return rows;
+  // Straight after the criticality key, ahead of every optional row: a narrow crop's "+N more"
+  // takes entries from the tail, and the count of names the picture could not show is not the
+  // thing to lose first (ADR-0127 D3).
+  return [
+    ...rows.slice(0, CRITICALITY_ENTRIES),
+    cutNamesEntry(cutNames),
+    ...rows.slice(CRITICALITY_ENTRIES),
+  ];
 }
 
 /**

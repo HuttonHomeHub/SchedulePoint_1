@@ -9266,3 +9266,11 @@ The case "a project-calendar restore against a delete of its project ends with b
 Since #349 (`e2e-local.sh` holds `pg_try_advisory_lock(349)` in a session that stays connected to the database it guards), the `backup` target cannot pass: `backup-restore-check.sh` finds that session and stops with "Something else is connected to app_test (1 sessions); the comparison needs a quiet database." Running `pnpm --filter @repo/api test:e2e:backup-fixture` and then `scripts/backup-restore-check.sh` directly works, and CI's `image` job runs the check on its own, so nothing that ships is affected.
 
 **Next:** have the run lock connect to the `postgres` database with a key derived from the guarded database's name, or let the check ignore the session whose `application_name` starts `e2e-local[`. **Trigger:** none, open now; it is a two-line fix the next time someone works on the script.
+
+### 546. The legend and the resource strip's panel are DOM chrome with no `data-chrome` roster
+
+**Status:** open · **Verified:** 2026-10-24, by reading `scene-parity.structural.test.ts` (the chrome half pins its roster to `['ruler', 'swimlane-gutter']`) and `TsldLegend.tsx` and the strip's host panel (neither carries a `data-chrome`) · **Raised:** 2026-10-24 (swimlanes M2-T7) · **Size:** S · **Owner:** web
+
+Swimlanes M2-T7 gave DOM chrome a roster beside the layer roster: a literal `data-chrome="…"` on the element and `EXPORT_CHROME_INPUTS` in `render-export-image.ts`, with a named floor and a staleness check in both directions (ADR-0200 D2). It covers the ruler and the swimlane gutter only. The legend (its export equivalent is the hand-mirrored `EXPORT_LEGEND`, TECH_DEBT #48(e)) and the resource strip's panel (its equivalent is the caption row) are chrome the export reproduces by hand, and nothing fails if one is added, changed or dropped on the screen alone. ADR-0200 still says so in its Consequences rather than claiming them covered.
+
+**Next:** put a literal `data-chrome` on each, add them to `EXPORT_CHROME_INPUTS` (`legend` and `strip-caption`, naming the inputs that compose them) and widen the roster's pinned names; verify it red by removing the legend's composition. **Trigger:** the next change to the export legend or to the strip's panel, or the next piece of DOM chrome added to the diagram.

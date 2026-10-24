@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
-import { buildTsldToolbarItems } from './tsld-toolbar-items';
+import { buildTsldToolbarItems, LENS_TOGGLES } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
@@ -210,8 +210,8 @@ describe('Share & export — swimlanes not yet drawable (swimlanes M2-T7)', () =
   ];
 
   it.each([
-    ['still loading', { swimlanesLoading: true }, /still loading/],
-    ['failed to load', { swimlanesFailed: true }, /couldn't load/],
+    ['still loading', { swimlanesLoading: true }, /^Swimlanes are still loading$/],
+    ['failed to load', { swimlanesFailed: true }, /couldn’t load/],
   ])('shades every picture while swimlanes are shown and %s', (_name, over, reason) => {
     renderRows(ctx({ swimlanesShown: true, ...over }));
     openDeliver();
@@ -246,6 +246,37 @@ describe('Share & export — swimlanes not yet drawable (swimlanes M2-T7)', () =
       }
     },
   );
+
+  it('has a remedy that works: checked and failed, the lens is operable and turning it off lifts the shading', () => {
+    const lens = LENS_TOGGLES.find((t) => t.id === 'swimlanes')!;
+    let shown = true;
+    const make = () =>
+      ctx({
+        hasDiagram: true,
+        swimlanesShown: shown,
+        swimlanesFailed: true,
+        toggleSwimlanes: () => {
+          shown = !shown;
+        },
+      });
+    const before = make();
+    expect(lens.reason(before)).toBeUndefined();
+    lens.toggle(before);
+
+    renderRows(make());
+    openDeliver();
+    expect(
+      screen.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }),
+    ).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('uses the vocabulary of the lens row: a fragment, then the remedy', () => {
+    renderRows(ctx({ swimlanesShown: true, swimlanesFailed: true }));
+    openDeliver();
+    expect(screen.getByRole('menuitem', { name: 'Print…' })).toHaveAccessibleDescription(
+      'Swimlanes couldn’t load. Turn Swimlanes off to export without them.',
+    );
+  });
 
   it('is the prior menu when the list has arrived', () => {
     renderRows(ctx({ swimlanesShown: true }));

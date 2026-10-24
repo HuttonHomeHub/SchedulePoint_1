@@ -10,6 +10,7 @@ import {
   GUTTER_MIN_CONTAINER_PX,
   GUTTER_MIN_STAGE_PX,
   gutterHasRoom,
+  gutterSwimlanesFrom,
   gutterWidthFor,
   SWIMLANE_GUTTER_COLLAPSED_PX,
   SWIMLANE_GUTTER_WIDTH_PX,
@@ -175,5 +176,29 @@ describe('the room threshold', () => {
     const w = GUTTER_MIN_CONTAINER_PX;
     const first = gutterWidthFor({ collapsed: false, containerWidth: w });
     expect(gutterWidthFor({ collapsed: first.collapsed, containerWidth: w })).toEqual(first);
+  });
+});
+
+describe('gutterSwimlanesFrom', () => {
+  it('counts each swimlane’s activities in one pass over the display lanes', () => {
+    const out = gutterSwimlanesFrom({
+      displayLanes: new Map([
+        ['a', 0],
+        ['b', 1],
+        ['c', 1],
+        ['d', 3],
+      ]),
+      extents: [
+        { id: 's1', name: 'One', firstLane: 0, laneCount: 2 },
+        { id: 's2', name: 'Two', firstLane: 2, laneCount: 1 },
+        { id: null, name: null, firstLane: 3, laneCount: 1 },
+      ],
+      laneCount: 4,
+    });
+    expect(out.map((s) => [s.id, s.activityCount])).toEqual([
+      ['s1', 3],
+      ['s2', 0],
+      [null, 1],
+    ]);
   });
 });

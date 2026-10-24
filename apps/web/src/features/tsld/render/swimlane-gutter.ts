@@ -1,5 +1,5 @@
 import { LANE_HEIGHT, screenYOfLane, type Size, type Viewport } from './geometry';
-import type { SwimlaneExtent } from './project-swimlanes';
+import type { SwimlaneExtent, SwimlaneProjection } from './project-swimlanes';
 
 /**
  * **The swimlane gutter: what its labels say and where they sit** (swimlanes epic M2-T3;
@@ -214,4 +214,22 @@ export function swimlaneGutterModel(
 ): GutterLabel[] {
   const geometry = swimlaneGutterGeometry(scene.swimlanes, view, size);
   return swimlaneGutterText(scene, measure).map((t, i) => ({ ...t, ...geometry[i]! }));
+}
+
+/**
+ * The gutter's swimlanes from a projection: each extent plus how many activities sit in it. One pass
+ * over the display lanes, so a host and the export count the same way and neither rescans the map
+ * per swimlane.
+ */
+export function gutterSwimlanesFrom(projection: SwimlaneProjection): GutterSwimlane[] {
+  const owner: number[] = [];
+  projection.extents.forEach((e, index) => {
+    for (let lane = e.firstLane; lane < e.firstLane + e.laneCount; lane += 1) owner[lane] = index;
+  });
+  const counts = projection.extents.map(() => 0);
+  for (const lane of projection.displayLanes.values()) {
+    const index = owner[lane];
+    if (index !== undefined) counts[index] = (counts[index] ?? 0) + 1;
+  }
+  return projection.extents.map((e, index) => ({ ...e, activityCount: counts[index] ?? 0 }));
 }

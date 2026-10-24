@@ -392,26 +392,55 @@ interface ChromeElement {
   line: number;
 }
 
-function chromeElements(): ChromeElement[] {
+/**
+ * Every `data-chrome` in `text`. **Scans for the attribute NAME, then demands the strict literal
+ * form right after it**, and throws on anything else: a pattern that only matched the literal form
+ * would silently skip `data-chrome={'x'}`, `{name}` and a template literal, so the one way to hide a
+ * piece of chrome from this roster would be to write it in a slightly different way. A default
+ * would read as parity.
+ */
+export function chromeNamesIn(text: string, file: string): ChromeElement[] {
   const found: ChromeElement[] = [];
+  for (const match of text.matchAll(/\bdata-chrome\b/g)) {
+    const line = text.slice(0, match.index).split('\n').length;
+    const literal = /^="([a-z][a-z-]*)"/.exec(text.slice(match.index + match[0].length));
+    if (!literal) {
+      throw new Error(
+        `${file}:${line} has a data-chrome that is not the literal data-chrome="lower-case-name". ` +
+          `A computed or braced value cannot be classified, and a default would read as parity.`,
+      );
+    }
+    found.push({ chrome: literal[1]!, file, line });
+  }
+  return found;
+}
+
+function chromeElements(): ChromeElement[] {
   const files = CANVAS_ROOTS.flatMap((root) =>
     (readdirSync(root, { recursive: true }) as string[])
       .filter((f) => f.endsWith('.tsx') && !f.includes('.test.'))
       .map((f) => join(root, f)),
   );
-  for (const file of files) {
-    const text = readStripped(file);
-    for (const match of text.matchAll(/\bdata-chrome=(\{?)"([^"]*)"/g)) {
-      const line = text.slice(0, match.index).split('\n').length;
-      // A computed value cannot be classified, and a default would read as parity.
-      if (match[1] === '{' || !/^[a-z][a-z-]*$/.test(match[2]!)) {
-        throw new Error(`${file}:${line} has a data-chrome that is not a literal lower-case name.`);
-      }
-      found.push({ chrome: match[2]!, file, line });
-    }
-  }
-  return found;
+  return files.flatMap((file) => chromeNamesIn(readStripped(file), file));
 }
+
+describe('the chrome detector refuses what it cannot classify', () => {
+  it('reads the literal form', () => {
+    expect(chromeNamesIn('<div data-chrome="swimlane-gutter" />', 'x.tsx')).toEqual([
+      { chrome: 'swimlane-gutter', file: 'x.tsx', line: 1 },
+    ]);
+  });
+
+  it.each([
+    ['a braced literal', "<div data-chrome={'ruler'} />"],
+    ['a computed value', '<div data-chrome={name} />'],
+    ['a template literal', '<div data-chrome={`ruler`} />'],
+    ['an upper-case name', '<div data-chrome="Ruler" />'],
+    ['a bare attribute', '<div data-chrome />'],
+  ])('throws on %s, naming the file and line', (_name, source) => {
+    expect(() => chromeNamesIn(`\n${source}`, 'x.tsx')).toThrow(/x\.tsx:2 .*data-chrome/);
+  });
+});
 
 describe('the exported diagram accounts for every piece of DOM chrome the screen names (structural)', () => {
   const found = chromeElements();

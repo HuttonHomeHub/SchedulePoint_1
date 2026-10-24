@@ -63,7 +63,11 @@ const canvasControlRef = {
   },
 } as unknown as React.RefObject<never>;
 
-function exportWith(swimlanes: SwimlaneInput | null, swimlaneGround?: boolean) {
+function exportWith(
+  swimlanes: SwimlaneInput | null,
+  swimlaneGround?: boolean,
+  swimlanesBlocked = false,
+) {
   const { result } = renderHook(() =>
     useDiagramImage({
       plan: PLAN,
@@ -71,6 +75,7 @@ function exportWith(swimlanes: SwimlaneInput | null, swimlaneGround?: boolean) {
       dependencies: [],
       swimlanes,
       ...(swimlaneGround === undefined ? {} : { swimlaneGround }),
+      swimlanesBlocked,
       viewToggles: DEFAULT_VIEW_TOGGLES,
       tsldCalendar: null,
       todayIso: '2026-01-05',
@@ -80,7 +85,7 @@ function exportWith(swimlanes: SwimlaneInput | null, swimlaneGround?: boolean) {
     }),
   );
   const built = result.current('whole');
-  const input = rendered.mock.calls.at(-1)![0] as RenderExportImageInput;
+  const input = rendered.mock.calls.at(-1)?.[0] as RenderExportImageInput;
   return { built, input };
 }
 
@@ -107,7 +112,7 @@ describe('useDiagramImage with swimlanes', () => {
       ['s2', 1],
       [null, 1],
     ]);
-    expect(built?.swimlanesDrawn).toBe(true);
+    expect(built?.swimlaneCount).toBe(3);
   });
 
   it('reserves the gutter at the left, and only the left', () => {
@@ -126,10 +131,17 @@ describe('useDiagramImage with swimlanes', () => {
 
     expect(input.scene.swimlaneMarks).toBeUndefined();
     expect('swimlaneGutter' in input).toBe(false);
-    expect(built?.swimlanesDrawn).toBe(false);
+    expect(built?.swimlaneCount).toBe(0);
     // The same plan with swimlanes is exactly the column wider (the reservation test above); here
     // the point is that nothing of it is reserved when they are off.
     expect(input.size.width).toBe(exportWith(SWIMLANES).input.size.width - EXPORT_GUTTER_WIDTH);
+  });
+
+  it('refuses to build while swimlanes are shown and cannot be drawn, whoever asks', () => {
+    // The shaded menu items are the visible half; this is the half a new entry point cannot skip.
+    const { built } = exportWith(null, undefined, true);
+    expect(built).toBeNull();
+    expect(rendered).not.toHaveBeenCalled();
   });
 
   it('tints nothing unless the host says the ground is on', () => {

@@ -49,20 +49,28 @@ describe('printAlt — claims only what the picture holds (ADR-0122)', () => {
     ['empty', 'Diagram of North Tower, resource load section was empty'],
     [undefined, 'Diagram of North Tower'],
   ] as const)('strip %s', (status, expected) => {
-    expect(printAlt('North Tower', status)).toBe(expected);
+    expect(printAlt('North Tower', { strip: status })).toBe(expected);
   });
 
-  it('says the diagram is divided when swimlane names are painted into it', () => {
-    expect(printAlt('North Tower', undefined, true)).toBe(
-      'Diagram of North Tower, divided into swimlanes',
+  it('says how many swimlanes the diagram is divided into', () => {
+    expect(printAlt('North Tower', { swimlaneCount: 4 })).toBe(
+      'Diagram of North Tower, divided into 4 swimlanes',
     );
-    expect(printAlt('North Tower', 'ready', true)).toBe(
-      'Diagram of North Tower, divided into swimlanes, with resource load',
+    expect(printAlt('North Tower', { swimlaneCount: 1 })).toBe(
+      'Diagram of North Tower, divided into 1 swimlane',
     );
   });
 
-  it('is the prior sentence without swimlanes', () => {
-    expect(printAlt('North Tower', 'ready', false)).toBe(printAlt('North Tower', 'ready'));
+  it('carries the count and the strip together, count first', () => {
+    expect(printAlt('North Tower', { strip: 'ready', swimlaneCount: 4 })).toBe(
+      'Diagram of North Tower, divided into 4 swimlanes, with resource load',
+    );
+  });
+
+  it('is the prior sentence with no swimlanes', () => {
+    expect(printAlt('North Tower', { strip: 'ready', swimlaneCount: 0 })).toBe(
+      printAlt('North Tower', { strip: 'ready' }),
+    );
   });
 });
 
@@ -89,17 +97,17 @@ describe('printDiagramImage carries the swimlanes into the printed picture', () 
   });
 
   it.each([
-    [true, 'Diagram of North Tower, divided into swimlanes'],
-    [false, 'Diagram of North Tower'],
+    [4, 'Diagram of North Tower, divided into 4 swimlanes'],
+    [0, 'Diagram of North Tower'],
     [undefined, 'Diagram of North Tower'],
-  ])('swimlanesDrawn %s words the image’s alt as "%s"', (swimlanesDrawn, alt) => {
+  ])('swimlaneCount %s words the image’s alt as "%s"', (swimlaneCount, alt) => {
     act(() => {
       printDiagramImage(
         {
           blob,
           title: 'North Tower',
           subtitle: 'As of 2026-01-01',
-          ...(swimlanesDrawn === undefined ? {} : { swimlanesDrawn }),
+          ...(swimlaneCount === undefined ? {} : { swimlaneCount }),
         },
         { print: vi.fn() },
       );

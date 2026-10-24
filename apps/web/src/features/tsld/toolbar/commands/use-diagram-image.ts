@@ -22,7 +22,7 @@ import {
 import type { SwimlaneInput } from '../../render/project-swimlanes';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
-import type { GutterSwimlane } from '../../render/swimlane-gutter';
+import { gutterSwimlanesFrom, type GutterSwimlane } from '../../render/swimlane-gutter';
 import { makeWorkingDayPredicate } from '../../render/time-scale';
 import type { WorkingDayCalendar } from '../../render/time-scale';
 import { barDateSourceFor, toRenderEdges } from '../../render/to-render-model';
@@ -71,6 +71,14 @@ export function useDiagramImage(args: {
    * Irrelevant without {@link swimlanes}.
    */
   swimlaneGround?: boolean | undefined;
+  /**
+   * Swimlanes are shown on screen but cannot be drawn yet (their list is pending, or failed). The
+   * build then returns `null` rather than a swimlane-free picture, so no entry point — present or
+   * future — can hand over a deliverable that silently omits the division the planner is looking
+   * at. The menu items are shaded for the same reason (`swimlaneExportReason`); this is the
+   * structural half that does not depend on a caller remembering to shade.
+   */
+  swimlanesBlocked?: boolean | undefined;
   viewToggles: TsldViewToggles;
   /**
    * The plan's working-day calendar. Taken as an argument rather than resolved here so it is the
@@ -112,8 +120,8 @@ export function useDiagramImage(args: {
   imageHeight: number;
   /** The strip's state in the picture, `null` when it is not open (the printed diagram's `alt`). */
   resourceStripStatus: 'ready' | 'loading' | 'error' | 'empty' | null;
-  /** Whether the picture is divided into swimlanes (the printed diagram's `alt`). */
-  swimlanesDrawn: boolean;
+  /** How many swimlanes the picture is divided into, `0` when it is not (the printed `alt`). */
+  swimlaneCount: number;
 } | null {
   const {
     plan,
@@ -121,6 +129,7 @@ export function useDiagramImage(args: {
     dependencies,
     swimlanes,
     swimlaneGround = false,
+    swimlanesBlocked = false,
     viewToggles,
     tsldCalendar,
     todayIso,
@@ -149,6 +158,7 @@ export function useDiagramImage(args: {
       // **`'legend-only'` is the printed diagram's band** (`docs/TECH_DEBT.md` #217). Defaulted, so
       // the PNG and PDF deliverables — which are standalone files and must name themselves — are
       // byte-for-byte what they were.
+      if (swimlanesBlocked) return null;
       const bandContent = options.bandContent ?? 'full';
       const topBand = bandContent === 'full' ? EXPORT_TOP_BAND : EXPORT_PRINT_TOP_BAND;
       const dataDate = plan.plannedStart;
@@ -193,12 +203,7 @@ export function useDiagramImage(args: {
         ? { extents: projection.extents, ground: swimlaneGround }
         : undefined;
       const gutterSwimlanes: readonly GutterSwimlane[] | null = projection
-        ? projection.extents.map((e) => ({
-            ...e,
-            activityCount: [...projection.displayLanes.values()].filter(
-              (lane) => lane >= e.firstLane && lane < e.firstLane + e.laneCount,
-            ).length,
-          }))
+        ? gutterSwimlanesFrom(projection)
         : null;
       const layers = sceneLayers(viewToggles);
       const scene = {
@@ -323,7 +328,7 @@ export function useDiagramImage(args: {
         // What the strip contributed, so the printed diagram's `alt` claims only what is there
         // (ADR-0122): a snapshot with no caption predates the field and is a drawn strip.
         resourceStripStatus: strip ? (strip.caption?.status ?? 'ready') : null,
-        swimlanesDrawn: gutterSwimlanes !== null,
+        swimlaneCount: gutterSwimlanes?.length ?? 0,
         imageWidth: Math.max(1, Math.round(size.width * dpr)),
         imageHeight: Math.max(1, Math.round(size.height * dpr)),
       };
@@ -349,6 +354,7 @@ export function useDiagramImage(args: {
       dependencies,
       swimlanes,
       swimlaneGround,
+      swimlanesBlocked,
       viewToggles,
       todayIso,
       lateOverlayActive,

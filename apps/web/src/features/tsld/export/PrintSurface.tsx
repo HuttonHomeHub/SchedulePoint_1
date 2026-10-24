@@ -69,12 +69,16 @@ const STRIP_ALT_SUFFIX = {
 /** The printed diagram's alt text, worded by what the strip actually contributed (ADR-0122). */
 export function printAlt(
   title: string,
-  status: PrintSurfaceStripStatus | undefined,
-  swimlanes = false,
+  parts: { strip?: PrintSurfaceStripStatus | undefined; swimlaneCount?: number } = {},
 ): string {
-  // The swimlane names are painted into the picture, so the alt says the diagram is divided
-  // (ADR-0122: it states what the picture holds, and only that).
-  return `Diagram of ${title}${swimlanes ? ', divided into swimlanes' : ''}${status ? STRIP_ALT_SUFFIX[status] : ''}`;
+  const { strip, swimlaneCount = 0 } = parts;
+  // The swimlane names are painted into the picture, so the alt says the diagram is divided and
+  // into how many (ADR-0122: it states what the picture holds, and only that).
+  const divided =
+    swimlaneCount > 0
+      ? `, divided into ${String(swimlaneCount)} ${swimlaneCount === 1 ? 'swimlane' : 'swimlanes'}`
+      : '';
+  return `Diagram of ${title}${divided}${strip ? STRIP_ALT_SUFFIX[strip] : ''}`;
 }
 
 export interface PrintDiagramImageInput {
@@ -91,8 +95,8 @@ export interface PrintDiagramImageInput {
    * or was empty is named as exactly that, never as content the picture does not have.
    */
   resourceStripStatus?: PrintSurfaceStripStatus | null;
-  /** Whether the picture is divided into swimlanes, so the `alt` can say so. */
-  swimlanesDrawn?: boolean;
+  /** How many swimlanes the picture is divided into (`0`/absent: none), so the `alt` can say so. */
+  swimlaneCount?: number;
 }
 
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
@@ -118,7 +122,10 @@ export function printDiagramImage(
       imageUrl={url}
       title={input.title}
       subtitle={input.subtitle}
-      alt={printAlt(input.title, input.resourceStripStatus ?? undefined, input.swimlanesDrawn)}
+      alt={printAlt(input.title, {
+        strip: input.resourceStripStatus ?? undefined,
+        ...(input.swimlaneCount === undefined ? {} : { swimlaneCount: input.swimlaneCount }),
+      })}
     />,
     { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
   );

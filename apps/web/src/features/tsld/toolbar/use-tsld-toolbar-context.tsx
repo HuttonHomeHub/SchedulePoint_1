@@ -498,6 +498,7 @@ export function useTsldToolbarContext({
     // The same input the live canvas is handed, so the export draws the swimlanes the screen does.
     swimlanes: swimlaneScene.input,
     swimlaneGround,
+    swimlanesBlocked: swimlaneLensShown && (swimlaneScene.pending || swimlaneScene.failed === true),
     viewToggles,
     // Off the workspace model, which is where the live canvas reads it too — so the exported
     // picture shades the same days the screen does rather than from a second resolution.
@@ -905,7 +906,7 @@ export function useTsldToolbarContext({
               blob,
               title: plan.name,
               resourceStripStatus: built.resourceStripStatus,
-              swimlanesDrawn: built.swimlanesDrawn,
+              swimlaneCount: built.swimlaneCount,
               // Both dates, in ONE place and one format. The band used to print "As of
               // <iso> · Generated <iso>" under a repeat of the plan name; the document is the
               // better home for them because it is real, selectable text a reader can copy, and

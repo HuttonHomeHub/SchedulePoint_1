@@ -167,6 +167,48 @@ describe('renderExportImage, the swimlane gutter mirror', () => {
     expect(texts(calls)).toContain('2 swimlane names shortened');
   });
 
+  it('does not count a name only the crop’s edge shortened', async () => {
+    // The swimlane is tall enough for the whole name (LONG_NAME needs 5 lines), but the view cuts
+    // it a lane in: the label is clipped in THIS picture and whole in the plan.
+    const calls = await render({
+      swimlaneGutter: { swimlanes: [swimlane('s1', LONG_NAME, 0, 6)] },
+      size: { width: 1400, height: LABELS_TOP + 30 + 20 },
+      viewport: { pxPerDay: 10, originX: EXPORT_GUTTER_WIDTH, originY: LABELS_TOP },
+    });
+    expect(texts(calls).some((t) => t.endsWith('…'))).toBe(true);
+    expect(texts(calls).join('|')).not.toMatch(/shortened/);
+  });
+
+  it('keeps the count ahead of the optional rows, straight after the criticality key', async () => {
+    const calls = await render({
+      size: { width: 1400, height: LABELS_TOP + 6 * LANE },
+      swimlaneGutter: { swimlanes: [swimlane('s1', LONG_NAME, 0)] },
+    });
+    const t = texts(calls);
+    const at = t.indexOf('On schedule');
+    expect(t.slice(at, at + 2)).toEqual(['On schedule', '1 swimlane name shortened']);
+  });
+
+  it('draws the ruler’s chip in the marker row with no gutter at all', async () => {
+    const scene: TsldScene = {
+      activities: [],
+      edges: [],
+      dataDate: '2026-01-01',
+      dataDateLine: true,
+    };
+    const calls = await render({
+      scene,
+      viewport: { pxPerDay: 10, originX: 100, originY: LABELS_TOP },
+    });
+    const chip = calls.find(
+      (c) => c.method === 'fillText' && c.args[0] === 'Data date' && Number(c.args[2]) > TOP_BAND,
+    );
+    expect(chip, 'the marker row names the data date').toBeDefined();
+    // Inside the reserved row, not over the title band or the diagram.
+    expect(Number(chip!.args[2])).toBeGreaterThan(TOP_BAND);
+    expect(Number(chip!.args[2])).toBeLessThan(LABELS_TOP);
+  });
+
   it('draws "No swimlane" for the unassigned stack', async () => {
     const calls = await render({
       swimlaneGutter: { swimlanes: [swimlane('s1', 'Mechanical', 0), swimlane(null, null, 1)] },

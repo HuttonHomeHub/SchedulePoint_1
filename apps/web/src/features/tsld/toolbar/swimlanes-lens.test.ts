@@ -59,4 +59,22 @@ describe('the Swimlanes lens', () => {
     expect(failed).toBe("Couldn't load swimlanes.");
     expect(new Set([noDiagram, nothing, loading, failed]).size).toBe(4);
   });
+
+  it.each([
+    ['loading', { swimlanesLoading: true }],
+    ['failed', { swimlanesFailed: true }],
+  ])('stays operable while checked and %s, so it can always be turned off', (_name, over) => {
+    const checked = makeTsldToolbarContext({ hasDiagram: true, swimlanesShown: true, ...over });
+    expect(lens().reason(checked)).toBeUndefined();
+    const unchecked = makeTsldToolbarContext({ hasDiagram: true, swimlanesShown: false, ...over });
+    expect(lens().reason(unchecked)).toBeDefined();
+  });
+
+  it('still shuts a checked lens when there is no diagram or nothing is set up', () => {
+    const base = { swimlanesShown: true, swimlanesFailed: true };
+    expect(lens().reason(makeTsldToolbarContext({ ...base, hasDiagram: false }))).toBeDefined();
+    expect(
+      lens().reason(makeTsldToolbarContext({ ...base, hasDiagram: true, swimlanesSetUp: false })),
+    ).toBeDefined();
+  });
 });

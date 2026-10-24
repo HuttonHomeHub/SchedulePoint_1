@@ -43,7 +43,7 @@ const BASELINE_IN_LINE = 12;
 export interface ExportGutterLabel {
   /** The lines, already fitted to the gutter, the last ending in an ellipsis where it was cut. */
   lines: string[];
-  /** Whether the name did not fit its swimlane's height and ended in an ellipsis. */
+  /** Whether the drawn name ends in an ellipsis (its swimlane's height, or the crop's edge). */
   cut: boolean;
   /** The label's box in picture coordinates: the swimlane's block clipped to the framed region. */
   top: number;
@@ -65,7 +65,7 @@ export interface ExportGutterFrame {
 
 export interface ExportGutterLayout {
   labels: ExportGutterLabel[];
-  /** How many drawn names ended in an ellipsis; the legend counts them. */
+  /** How many names do not fit their swimlane's full block; the legend counts them. */
   cutCount: number;
 }
 
@@ -143,7 +143,10 @@ export function layoutExportGutter(
     const kept = lines.slice(0, allowed);
     // The tail of the cut line carries the rest of the name, so the ellipsis is judged on all of it.
     kept[allowed - 1] = ellipsise(lines.slice(allowed - 1).join(' '), usable, measure);
-    cutCount += 1;
+    // Counted only when the name would not fit its swimlane's FULL block. A name the crop's edge
+    // clipped is shortened in this picture and whole in the plan, and the legend's claim is about
+    // names that cannot be shown, not about where the planner happened to cut the view.
+    if (lines.length > m.maxLines) cutCount += 1;
     return { ...base, lines: kept, cut: true };
   });
   return { labels, cutCount };

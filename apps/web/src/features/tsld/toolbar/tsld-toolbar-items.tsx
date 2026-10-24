@@ -577,16 +577,23 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // (`CheckboxField`'s gate) and none is a live announcement, so a list that loads while the
     // popover is open is not read out over the planner. The failed sentence promises nothing: the
     // list is read again on focus and on remount, and the reason goes when it arrives.
+    //
+    // **Loading and failed shut the row only while it is UNchecked** — they block turning swimlanes
+    // ON. Checked, the planner can always turn them off, which is the remedy the export's own reason
+    // names ("Turn Swimlanes off to export without them"): a row shut by the failure it tells you to
+    // work around would make that sentence a dead end.
     reason: (ctx) =>
       !ctx.hasDiagram
         ? LENS_NO_DIAGRAM_REASON
         : !ctx.swimlanesSetUp
           ? 'No swimlanes have been set up for this plan.'
-          : ctx.swimlanesLoading
-            ? 'Loading swimlanes…'
-            : ctx.swimlanesFailed === true
-              ? "Couldn't load swimlanes."
-              : undefined,
+          : ctx.swimlanesShown
+            ? undefined
+            : ctx.swimlanesLoading
+              ? 'Loading swimlanes…'
+              : ctx.swimlanesFailed === true
+                ? "Couldn't load swimlanes."
+                : undefined,
   },
 ];
 
@@ -1853,10 +1860,9 @@ const EXPORT_NO_DIAGRAM_REASON = 'Add an activity first';
  */
 function swimlaneExportReason(ctx: TsldToolbarContext): string | undefined {
   if (!ctx.swimlanesShown) return undefined;
-  if (ctx.swimlanesLoading)
-    return 'Swimlanes are still loading. Wait, so the export includes them.';
+  if (ctx.swimlanesLoading) return 'Swimlanes are still loading';
   if (ctx.swimlanesFailed === true) {
-    return "Swimlanes couldn't load, so the export would leave them out. Turn Swimlanes off to export without them.";
+    return 'Swimlanes couldn’t load. Turn Swimlanes off to export without them.';
   }
   return undefined;
 }
