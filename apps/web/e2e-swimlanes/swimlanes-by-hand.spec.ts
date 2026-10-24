@@ -86,7 +86,7 @@ test.describe('swimlanes by hand', () => {
       await trigger.click();
       const popover = page.getByRole('dialog', { name: 'Move to swimlane…' });
       await expect(popover).toBeVisible();
-      await popover.getByLabel('Swimlane', { exact: true }).selectOption({ label: 'Mechanical' });
+      await popover.getByLabel('Move to', { exact: true }).selectOption({ label: 'Mechanical' });
       await popover.getByRole('button', { name: 'Move', exact: true }).click();
       await expect(popover).toBeHidden();
       // After the move, focus is back on the trigger that opened the panel (carry-forward: T9/T10).
