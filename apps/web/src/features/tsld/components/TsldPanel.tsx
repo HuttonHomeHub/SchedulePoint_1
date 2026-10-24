@@ -36,6 +36,7 @@ import {
   toggle,
 } from '../model/canvas-selection';
 import { planChain } from '../model/chain-order';
+import { deriveDiagramSource } from '../model/derive-diagram-source';
 import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
 import {
@@ -84,6 +85,7 @@ import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
 import type { CompareGhost, CompareLink } from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
+import type { SwimlaneInput } from '../render/project-swimlanes';
 import {
   addCalendarDays,
   daysBetween,
@@ -96,7 +98,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
-import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
+import { toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
   SelectionActionsBar,
@@ -133,7 +135,7 @@ import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/confi
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
-import { deriveWbsBandSource, wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
+import { wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -348,6 +350,12 @@ export interface TsldPanelProps {
   showConstraintKey?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
+  /**
+   * The neutral swimlane input, composed by the host and present only while swimlanes are drawn
+   * (swimlanes ui-architecture C6, C8). Absent or `null` is the swimlane-free diagram, byte for byte
+   * (SC-3). The panel imports no swimlanes code: it hands this to `deriveDiagramSource`.
+   */
+  swimlanes?: SwimlaneInput | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
   canEdit?: boolean;
   /**
@@ -687,6 +695,7 @@ export function TsldPanel({
   hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
+  swimlanes = null,
   canEdit = false,
   scheduleRefusal = (action) => `Start editing to ${action}.`,
   onCreate,
@@ -1222,19 +1231,11 @@ export function TsldPanel({
       });
   };
 
-  const wbsBand = useMemo(
-    () =>
-      deriveWbsBandSource(activities, {
-        enabled: WBS_IMPROVEMENTS_ENABLED,
-        toggleOn: viewToggles.wbsBand ?? false,
-        source: barDateSource,
-      }),
-    [activities, viewToggles.wbsBand, barDateSource],
-  );
-  const wbsBandGroupRows = wbsBand.groups;
-  const wbsBandHeightPx = wbsBand.height;
-
   /*
+   * The diagram's input, from the ONE derivation the image export also calls (swimlanes C7).
+   * Memoised on the data it reads, so it runs once per change to the activities, the toggle, the
+   * bar basis or the swimlane input — never per frame, and never per render of the parent.
+   *
    * The scene's activities. With the band on, summaries are drawn IN the band and not in the scene
    * (ADR-0063 §4) — drawing them in both would put one object on screen twice at two sizes, which
    * is how a planner comes to believe a summary has two sets of dates.
@@ -1245,10 +1246,19 @@ export function TsldPanel({
    * accessibility tree. A test pins the count across the toggle anyway, because "by construction"
    * is a property of today's code and not a promise about tomorrow's.
    */
-  const renderActivities = useMemo(
-    () => toRenderActivities(wbsBand.sceneActivities, barDateSource),
-    [wbsBand.sceneActivities, barDateSource],
+  const diagramSource = useMemo(
+    () =>
+      deriveDiagramSource(activities, {
+        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        swimlanes,
+        source: barDateSource,
+        dataDate,
+      }),
+    [activities, viewToggles.wbsBand, barDateSource, swimlanes, dataDate],
   );
+  const wbsBandGroupRows = diagramSource.bandGroups;
+  const wbsBandHeightPx = diagramSource.bandHeight;
+  const renderActivities = diagramSource.renderActivities;
   const renderEdges = useMemo(() => toRenderEdges(dependencies), [dependencies]);
   // The listbox option text (Tier-1 `describeActivity`) is memoised by activity, keyed on
   // `activities` only — NOT on selection or unrelated parent re-renders. Without this, any parent
@@ -1785,7 +1795,7 @@ export function TsldPanel({
    * withdrawal clause written down first. It is memoised on the four inputs it reads, so a pan, a
    * zoom, a selection or a hover costs nothing.
    *
-   * `wbsBand.sceneActivities` is what the canvas paints and what gets packed into the low lanes
+   * `diagramSource.sceneActivities` is what the canvas paints and what gets packed into the low lanes
    * (`docs/TECH_DEBT.md` #364); band off, that field is `activities` by identity, so this is the
    * pre-#364 pack unchanged.
    */
@@ -1793,11 +1803,11 @@ export function TsldPanel({
     () =>
       computeLaneArrangement({
         activities,
-        sceneActivities: wbsBand.sceneActivities,
+        sceneActivities: diagramSource.sceneActivities,
         dependencies,
         dataDate,
       }),
-    [activities, wbsBand.sceneActivities, dependencies, dataDate],
+    [activities, diagramSource.sceneActivities, dependencies, dataDate],
   );
   /**
    * How many drawn activities overlap another in their row (NetPoint-layout M5). The offer shows on
@@ -2522,7 +2532,7 @@ export function TsldPanel({
   // a dead case here, since the toolbar only renders when editing is enabled, which already
   // requires a data date.)
   //
-  // `wbsBand.sceneActivities` is what the canvas paints, and it is what gets packed into the low
+  // `diagramSource.sceneActivities` is what the canvas paints, and it is what gets packed into the low
   // lanes: the summaries the band draws are appended above it rather than threaded through it
   // (`docs/TECH_DEBT.md` #364). Band off, that field is `activities` by identity, so this is the
   // pre-#364 pack unchanged.

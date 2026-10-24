@@ -9,6 +9,7 @@ import {
   type ExportExtent,
 } from '../../export/export-image';
 import { renderExportImage } from '../../export/render-export-image';
+import { deriveDiagramSource } from '../../model/derive-diagram-source';
 import { useCanvasSurface } from '../../render/canvas-surface';
 import type { TsldViewToggles } from '../../render/paint';
 import {
@@ -16,11 +17,12 @@ import {
   resolvePrintResourceStripPalette,
   resolvePrintWbsBandPalette,
 } from '../../render/palette';
+import type { SwimlaneInput } from '../../render/project-swimlanes';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
 import { makeWorkingDayPredicate } from '../../render/time-scale';
 import type { WorkingDayCalendar } from '../../render/time-scale';
-import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../../render/to-render-model';
+import { barDateSourceFor, toRenderEdges } from '../../render/to-render-model';
 import { wbsBandBars } from '../../render/wbs-band';
 
 import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspace-model';
@@ -29,7 +31,6 @@ import {
   RESOURCE_STRIP_HEIGHT,
   type TsldCanvasHandle,
 } from '@/features/tsld/components/TsldCanvas';
-import { deriveWbsBandSource } from '@/features/wbs';
 
 /** Options for {@link useDiagramImage}'s build callback. */
 export interface BuildDiagramImageOptions {
@@ -59,6 +60,8 @@ export function useDiagramImage(args: {
   plan: LoadedPlan;
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
+  /** The host's swimlane input, or absent for the swimlane-free picture (the screen's own). */
+  swimlanes?: SwimlaneInput | null | undefined;
   viewToggles: TsldViewToggles;
   /**
    * The plan's working-day calendar. Taken as an argument rather than resolved here so it is the
@@ -105,6 +108,7 @@ export function useDiagramImage(args: {
     plan,
     activities,
     dependencies,
+    swimlanes,
     viewToggles,
     tsldCalendar,
     todayIso,
@@ -163,12 +167,13 @@ export function useDiagramImage(args: {
       // cannot disagree with the screen about the band's height or about which activities the
       // scene still paints. With the band on, summaries live in the band and not in the diagram —
       // exactly as they do on screen.
-      const band = deriveWbsBandSource(activities, {
-        enabled: WBS_IMPROVEMENTS_ENABLED,
-        toggleOn: viewToggles.wbsBand ?? false,
+      const diagram = deriveDiagramSource(activities, {
+        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        swimlanes,
         source,
+        dataDate,
       });
-      const renderActivities = toRenderActivities(band.sceneActivities, source);
+      const renderActivities = diagram.renderActivities;
       const layers = sceneLayers(viewToggles);
       const scene = {
         activities: renderActivities,
@@ -233,7 +238,7 @@ export function useDiagramImage(args: {
         liveViewport: live,
         dpr: globalThis.devicePixelRatio || 1,
         topBand,
-        wbsBandHeight: band.height,
+        wbsBandHeight: diagram.bandHeight,
         // Below the diagram, where the strip is on screen: the caption row, then the band.
         bottomBand: strip ? EXPORT_STRIP_CAPTION_ROW + stripBand : 0,
       });
@@ -255,13 +260,13 @@ export function useDiagramImage(args: {
         // Placed against the EXPORT viewport, by the same `wbsBandBars` the live canvas calls with
         // the live one — so the band's columns line up with the diagram's in the picture for the
         // same reason they do on screen, not by a second calculation that agrees.
-        ...(band.groups && band.height > 0
+        ...(diagram.bandGroups && diagram.bandHeight > 0
           ? {
               wbsBand: {
-                height: band.height,
-                bars: wbsBandBars(band.groups, dataDate, viewport, {
+                height: diagram.bandHeight,
+                bars: wbsBandBars(diagram.bandGroups, dataDate, viewport, {
                   width: size.width,
-                  height: band.height,
+                  height: diagram.bandHeight,
                 }),
                 palette: resolvePrintWbsBandPalette(canvasSurface),
               },
@@ -305,6 +310,7 @@ export function useDiagramImage(args: {
       todayFraction,
       activities,
       dependencies,
+      swimlanes,
       viewToggles,
       todayIso,
       lateOverlayActive,

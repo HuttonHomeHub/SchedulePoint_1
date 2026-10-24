@@ -480,6 +480,8 @@ export function useTsldToolbarContext({
     plan,
     activities,
     dependencies,
+    // The same input the live canvas is handed, so the export draws the swimlanes the screen does.
+    swimlanes: model.swimlaneInput,
     viewToggles,
     // Off the workspace model, which is where the live canvas reads it too — so the exported
     // picture shades the same days the screen does rather than from a second resolution.

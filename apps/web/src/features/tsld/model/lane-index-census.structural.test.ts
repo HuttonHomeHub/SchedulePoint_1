@@ -1,0 +1,100 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { allSourceFiles, SRC_DIR, stripComments } from '@/test/source-files';
+
+/**
+ * **The narrowed `laneIndex` census** (swimlanes ui-architecture C6, M2-T1).
+ *
+ * The first plan was a census of every `laneIndex` read in `features/tsld`, which is large because
+ * it has to cover the painters. The seam makes it small. `deriveDiagramSource` hands the canvas
+ * copies of the activities whose `laneIndex` IS the display lane, so the render layer, the canvas
+ * and the minimap read the right thing with no edit. What is left to watch is exactly the code that
+ * can mistake one lane for the other:
+ *
+ * - **the host and the write-side hooks** read `ActivitySummary.laneIndex` — the STORED lane — or
+ *   receive an intent in DISPLAY lanes from the canvas. Each of these needs the display-to-stored
+ *   conversion once swimlanes are drawn (M2-T4 and after). They are the roster below, and a new
+ *   file reading `laneIndex` has to be added to it deliberately, with a decision about which lane
+ *   it holds;
+ * - **everything that never meets the swimlane scene** is listed with the reason its stored-lane
+ *   read is right as it stands.
+ *
+ * The render layer (`features/tsld/render/**`) and the two canvas components are excluded by rule,
+ * not by roster: they are the readers the seam exists to keep correct, and the sibling structural
+ * test forbids them from importing the swimlanes feature.
+ *
+ * A source-reading test: it proves a file is on the roster, not that its use is right. What it
+ * stops is the silent case — a new `.laneIndex` read in the host that nobody asked "which lane?".
+ */
+type Held = 'stored-lane' | 'display-lane-intent';
+
+const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
+  // The seam itself: swaps the display lane in, reads the stored one.
+  'features/tsld/model/derive-diagram-source.ts': 'stored-lane',
+  // The host: composes the writes, so it is where an intent in display lanes is converted back.
+  'components/layout/workspace/use-plan-workspace-model.ts': 'display-lane-intent',
+  'components/layout/workspace/use-auto-resolve-overlaps.ts': 'stored-lane',
+  'features/activities/api/use-activities.ts': 'stored-lane',
+  'features/tsld/components/TsldPanel.tsx': 'display-lane-intent',
+  'features/tsld/components/use-arrange-search.ts': 'stored-lane',
+  'features/tsld/interaction/gesture-machine.ts': 'display-lane-intent',
+  'features/tsld/interaction/use-coalesced-duration-nudge.ts': 'display-lane-intent',
+  'features/tsld/interaction/use-coalesced-nudge.ts': 'display-lane-intent',
+  'features/tsld/interaction/use-coalesced-plural-nudge.ts': 'display-lane-intent',
+  'features/tsld/model/arrange-lanes.ts': 'stored-lane',
+  'features/tsld/model/auto-resolve.ts': 'display-lane-intent',
+  'features/tsld/model/bulk-move.ts': 'display-lane-intent',
+  'features/tsld/toolbar/use-tsld-toolbar-context.tsx': 'stored-lane',
+  'features/undo-redo/commands.ts': 'stored-lane',
+};
+
+const NEVER_MEETS_THE_SWIMLANE_SCENE: Readonly<Record<string, string>> = {
+  'features/swimlanes/model/manual-membership.ts':
+    'reads the stored in-swimlane lane rows to build the projection input; it is the input, not a consumer of the result',
+  'features/activity-copy/model/clone-graph.ts': 'a clone carries the stored lane',
+  'features/activity-copy/model/clone-projection.ts': 'a clone carries the stored lane',
+  'features/activity-history/lib/format-history-item.ts': 'labels a stored field in the history',
+  'features/gantt/layout/row-model.ts': 'the Gantt has its own rows and no lane axis',
+  'features/perf-probe/scenes/canvas-draw.ts': 'a synthetic scene, painted with no swimlanes',
+  'features/perf-probe/scenes/revision-diff.ts': 'a synthetic scene, painted with no swimlanes',
+  'features/perf-probe/scenes/scale-scene.ts': 'a synthetic scene, painted with no swimlanes',
+  'features/schedule/model/levelling-application.ts': 'snapshots the stored lane for undo',
+  'features/share/guest-api.ts': 'maps the guest DTO onto the stored field',
+  'test/activity-fixture.ts': 'a fixture',
+  'test/fake-plan-server.ts': 'a fixture',
+};
+
+const RENDER_SIDE = (file: string): boolean =>
+  file.startsWith('features/tsld/render/') ||
+  file === 'features/tsld/components/TsldCanvas.tsx' ||
+  file === 'features/tsld/components/TsldMinimap.tsx';
+
+describe('the laneIndex census, narrowed to the host and the write side', () => {
+  const readers = allSourceFiles().filter(
+    (file) =>
+      !RENDER_SIDE(file) &&
+      /\blaneIndex\b/.test(stripComments(readFileSync(join(SRC_DIR, file), 'utf8'))),
+  );
+  const rostered = [
+    ...Object.keys(HOST_AND_WRITE_SIDE),
+    ...Object.keys(NEVER_MEETS_THE_SWIMLANE_SCENE),
+  ];
+
+  it('every file outside the render layer that reads laneIndex is on the roster', () => {
+    expect(readers.filter((file) => !rostered.includes(file))).toEqual([]);
+  });
+
+  it('and every roster entry still reads it, so the roster does not outlive the code', () => {
+    expect(rostered.filter((file) => !readers.includes(file))).toEqual([]);
+  });
+
+  it('no file is on both lists', () => {
+    const both = Object.keys(HOST_AND_WRITE_SIDE).filter(
+      (file) => file in NEVER_MEETS_THE_SWIMLANE_SCENE,
+    );
+    expect(both).toEqual([]);
+  });
+});
