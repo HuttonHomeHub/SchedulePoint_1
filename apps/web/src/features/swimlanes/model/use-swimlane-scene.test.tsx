@@ -1,6 +1,6 @@
 import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +34,7 @@ const LIST: SwimlaneSummary[] = [
 function render(args: {
   source: SwimlaneSource;
   shown: boolean;
+  offered?: boolean;
   activities?: readonly ActivitySummary[] | undefined;
 }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -41,7 +42,13 @@ function render(args: {
     createElement(QueryClientProvider, { client: qc }, children);
   return renderHook(
     (props: typeof args) =>
-      useSwimlaneScene({ orgSlug: 'acme', planId: 'p1', ...props, activities: props.activities }),
+      useSwimlaneScene({
+        orgSlug: 'acme',
+        planId: 'p1',
+        ...props,
+        offered: props.offered ?? true,
+        activities: props.activities,
+      }),
     { wrapper, initialProps: { activities: [anActivity({ swimlaneId: 's1' })], ...args } },
   );
 }
@@ -57,20 +64,39 @@ describe('useSwimlaneScene', () => {
   });
 
   it('builds nothing and fetches nothing while swimlanes are not shown', () => {
-    const { result } = render({ source: 'MANUAL', shown: false });
-    expect(result.current).toEqual({ input: null, pending: false });
+    const { result } = render({ source: 'MANUAL', shown: false, offered: false });
+    expect(result.current).toMatchObject({ input: null, pending: false, failed: false });
     expect(h.calls).toBe(0);
+  });
+
+  it('fetches the list as soon as the lens is offered, shown or not, but builds no input', async () => {
+    const { result } = render({ source: 'MANUAL', shown: false });
+    await waitFor(() => expect(h.calls).toBe(1));
+    expect(result.current).toMatchObject({ input: null, pending: false });
+  });
+
+  it('a toggle after the list is cached builds the input with no pending window', async () => {
+    const { result, rerender } = render({ source: 'MANUAL', shown: false });
+    await waitFor(() => expect(h.calls).toBe(1));
+    await waitFor(() => expect(result.current.failed).toBe(false));
+    // let the cache settle
+    await new Promise((r) => setTimeout(r, 0));
+
+    rerender({ source: 'MANUAL', shown: true, activities: [anActivity({ swimlaneId: 's1' })] });
+    expect(result.current.pending).toBe(false);
+    expect(result.current.input).not.toBeNull();
+    expect(h.calls).toBe(1);
   });
 
   it.each(['NONE', 'WBS'] as const)('builds nothing for a %s plan, shown or not', (source) => {
     const { result } = render({ source, shown: true });
-    expect(result.current).toEqual({ input: null, pending: false });
+    expect(result.current).toMatchObject({ input: null, pending: false, failed: false });
     expect(h.calls).toBe(0);
   });
 
   it('is pending, with no input, until the list arrives; then builds the input (ADR-0202)', async () => {
     const { result } = render({ source: 'MANUAL', shown: true });
-    expect(result.current).toEqual({ input: null, pending: true });
+    expect(result.current).toMatchObject({ input: null, pending: true });
 
     await waitFor(() => expect(result.current.pending).toBe(false));
     expect(result.current.input?.swimlanes).toEqual([{ id: 's1', name: 'Mechanical' }]);
@@ -81,8 +107,22 @@ describe('useSwimlaneScene', () => {
     h.impl = () => Promise.reject(new Error('boom'));
     const { result } = render({ source: 'MANUAL', shown: true });
 
-    await waitFor(() => expect(result.current.pending).toBe(false));
+    // One retry (1 s) before the failure is reported, not three.
+    await waitFor(() => expect(result.current.failed).toBe(true), { timeout: 4000 });
+    expect(h.calls).toBe(2);
+    expect(result.current.pending).toBe(false);
     expect(result.current.input).toBeNull();
+  });
+
+  it('offers a refetch that recovers from a failure', async () => {
+    h.impl = () => Promise.reject(new Error('boom'));
+    const { result } = render({ source: 'MANUAL', shown: true });
+    await waitFor(() => expect(result.current.failed).toBe(true), { timeout: 4000 });
+
+    h.impl = () => Promise.resolve(LIST);
+    act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.input).not.toBeNull());
+    expect(result.current.failed).toBe(false);
   });
 
   it('builds once per data change: an unrelated re-render returns the same object', async () => {

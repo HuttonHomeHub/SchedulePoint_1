@@ -21,6 +21,8 @@ import { allSourceFiles, SRC_DIR, stripComments } from '@/test/source-files';
  * A source-reading test: it checks the import specifier, not what is reachable through a
  * re-export, which is why the feature's barrel is also the only specifier form it looks for.
  */
+// `TsldPanel.tsx` is deliberately NOT guarded: it receives the neutral input by prop and imports no
+// swimlanes code, so a ban there would police the host seam rather than the render layer.
 const GUARDED = (file: string): boolean =>
   file.startsWith('features/tsld/render/') || file === 'features/tsld/components/TsldCanvas.tsx';
 

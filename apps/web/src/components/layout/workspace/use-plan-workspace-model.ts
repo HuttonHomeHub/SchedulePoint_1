@@ -507,6 +507,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     source: plan.data?.swimlaneSource ?? 'NONE',
     activities: activities.data,
+    offered: SWIMLANES_LENS_OFFERED,
     shown: SWIMLANES_LENS_OFFERED,
   });
   // The calendars offered by the plan and activity calendar pickers (read for every member): the
@@ -2720,6 +2721,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Derived
     swimlaneInput: swimlaneScene.input,
     swimlanesPending: swimlaneScene.pending,
+    swimlanesFailed: swimlaneScene.failed,
+    refetchSwimlanes: swimlaneScene.refetch,
     tsldCalendar,
     todayIso,
     todayFraction,

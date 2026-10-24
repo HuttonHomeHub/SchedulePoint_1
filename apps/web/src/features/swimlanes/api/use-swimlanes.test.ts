@@ -4,9 +4,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { swimlaneKeys, useSwimlanes } from './use-swimlanes';
+import { useSwimlanes } from './use-swimlanes';
 
 import { apiFetchAllPages } from '@/lib/api/client';
+import { swimlaneKeys } from '@/lib/query/hierarchy-keys';
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

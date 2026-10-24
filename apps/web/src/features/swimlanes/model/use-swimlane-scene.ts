@@ -21,18 +21,28 @@ export interface SwimlaneScene {
   /** The input to the projection, or `null` when swimlanes are not being drawn. */
   input: SwimlaneInput | null;
   /**
-   * Swimlanes are wanted but their list has not arrived. The host holds the diagram in its loading
-   * state while this is true (ADR-0202): painting the swimlane-free layout first and then jumping
-   * every bar into its swimlane is the one frame this exists to prevent.
+   * Swimlanes are shown but their list has not arrived **yet**. The host holds the diagram in its
+   * loading state for the FIRST load only (ADR-0202): painting the swimlane-free layout and then
+   * jumping every bar into its swimlane is the one frame this exists to prevent. Once the panel
+   * has painted the host never unmounts it for this, or a later toggle would drop focus,
+   * selection and viewport; it latches that itself, because only it knows what has painted.
    */
   pending: boolean;
+  /** The list could not be loaded (after one retry). The lens words this; the diagram draws swimlane-free. */
+  failed: boolean;
+  /** Try the list again. */
+  refetch: () => void;
 }
 
 /**
  * Compose the scene's swimlane input, **only while swimlanes are shown**.
  *
- * Memoised on the two things that can change it — the activities and the list — so it is rebuilt
- * once per data change and never per frame or per render.
+ * The list itself is fetched whenever the lens is `offered` and the plan has hand-made swimlanes,
+ * independent of `shown`: a toggle made later then finds it cached and cannot cause a load that
+ * would hold the diagram.
+ *
+ * Memoised on the two things that can change the input — the activities and the list — so it is
+ * rebuilt once per data change and never per frame or per render.
  *
  * Source `WBS` yields no input here: its membership is derived from the summaries and arrives with
  * M3. Until then a WBS plan draws swimlane-free, as it does today.
@@ -42,21 +52,29 @@ export function useSwimlaneScene(args: {
   planId: string;
   source: SwimlaneSource;
   activities: readonly ActivitySummary[] | undefined;
+  /** The lens is offered at all (`SWIMLANES_LENS_OFFERED`). */
+  offered: boolean;
   shown: boolean;
 }): SwimlaneScene {
-  const { orgSlug, planId, source, activities, shown } = args;
-  const wanted = shown && source === 'MANUAL';
-  const list = useSwimlanes(orgSlug, planId, wanted);
+  const { orgSlug, planId, source, activities, offered, shown } = args;
+  const manual = offered && source === 'MANUAL';
+  const list = useSwimlanes(orgSlug, planId, manual);
   const swimlanes = list.data;
+  const drawn = manual && shown;
   const input = useMemo(
     () =>
-      wanted && swimlanes !== undefined && activities !== undefined
+      drawn && swimlanes !== undefined && activities !== undefined
         ? manualSwimlaneInput(activities, swimlanes)
         : null,
-    [wanted, swimlanes, activities],
+    [drawn, swimlanes, activities],
   );
-  // `isPending` is true for a disabled query that has no data, so it is gated on `wanted`; an error
+  // `isPending` is true for a disabled query that has no data, so it is gated on `drawn`; an error
   // is not pending, so a failed list degrades to the swimlane-free diagram rather than a spinner
   // that never ends.
-  return { input, pending: wanted && list.isPending };
+  return {
+    input,
+    pending: drawn && list.isPending,
+    failed: manual && list.isError,
+    refetch: () => void list.refetch(),
+  };
 }

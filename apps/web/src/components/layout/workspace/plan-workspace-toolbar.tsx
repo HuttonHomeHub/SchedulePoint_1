@@ -1095,11 +1095,16 @@ export function ToolbarPlanWorkspace({
   // resolve, show a loading placeholder distinct from the empty state. (Flag-off the empty canvas is
   // inert, so this window is harmless and we keep the byte-for-byte render.)
   //
-  // The same holds for swimlanes (ADR-0202): while their list is on its way the diagram stays in this
-  // state rather than painting the swimlane-free layout and then jumping every bar into its swimlane.
+  // The same holds for swimlanes (ADR-0202): while their list is on its way the FIRST paint stays in
+  // this state rather than painting the swimlane-free layout and then jumping every bar into its
+  // swimlane. Once the panel has painted it is never unmounted for a swimlane list: a toggle made
+  // later would otherwise drop focus to <body> and lose the selection and the viewport.
+  const loadingBeforeSwimlanes =
+    CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
+  const [panelPainted, setPanelPainted] = useState(false);
   const canvasLoading =
-    (CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending)) ||
-    model.swimlanesPending;
+    loadingBeforeSwimlanes || (model.swimlanesPending === true && !panelPainted);
+  if (!canvasLoading && !panelPainted) setPanelPainted(true);
 
   // The project finish, for the canvas's recalculation-settle announcement. The SAME query the
   // toolbar's pinned Finish chip already runs, so this is a cache read and adds no request; a recalc
