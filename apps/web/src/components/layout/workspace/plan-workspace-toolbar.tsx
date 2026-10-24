@@ -619,6 +619,7 @@ export function ToolbarPlanWorkspace({
     activities: model.activities.data,
     barDateSource,
     dataDate: plan.plannedStart,
+    shown: swimlanesAreShown,
     wbsBandOn: canvasUi.viewToggles.wbsBand ?? false,
     moveMany: model.bulkOperations.moveMany,
   });
@@ -1414,7 +1415,8 @@ export function ToolbarPlanWorkspace({
       swimlaneGround={SWIMLANE_GROUND}
       gutterWidthPx={swimlaneManagement.gutterWidthPx}
       gutterActions={swimlaneManagement.gutterActions}
-      swimlaneAssignment={swimlaneAssignment}
+      // The selection bars offer the move only while the diagram draws swimlanes; the editor keeps it.
+      swimlaneAssignment={swimlaneAssignment?.shown ? swimlaneAssignment : null}
       onGutterRoomChange={swimlaneManagement.onGutterRoomChange}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}

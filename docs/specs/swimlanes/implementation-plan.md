@@ -658,6 +658,10 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
     and stack lanes (US-3) in one positions batch with one undo step. A form field that saved a membership
     without a lane would be a second path to the same change, so the section is a slot (`swimlaneSlot`)
     holding the same control, and "Save general" does not cover it.
+    The slot renders **after** the General form, as its own region (a Move is not a field the form saves),
+    gated on the schedule and the pen like the bars, with a standing hint ("Moves the activity now. It
+    isn’t part of Save general.", plus "Your unsaved changes to this tab aren’t affected." while General is
+    dirty). Swimlanes not drawn: the selection bars omit the item and the editor keeps it with a hint.
   - **One plan of the write.** `useSwimlaneAssignment` builds its edit context from `deriveDiagramSource`
     over the panel's own inputs (`swimlaneEditContext`, extracted from `useSwimlaneEditing`), so a lane
     chosen "free" is free on the screen the planner sees, band toggle included. It writes through the
@@ -674,8 +678,10 @@ the lens is `enabled: false`, so no scene input is built and the gutter width is
     `listboxOrder`, the flattened rendered order. A bar's sentence says "in Mechanical, lane 2 of 3" in
     place of "lane N" (`describeActivity`'s `swimlane` option); a bar the scene does not draw drops the
     clause rather than speak its swimlane-free lane.
-  - **The copy test** reads string literals, templates and JSX text of a named roster with the TypeScript
-    parser and refuses any `lane` left after the qualified forms are masked. It found one real offender in
+  - **The copy test** reads string literals, templates and JSX text of every non-test file with the
+    TypeScript parser, checks any string naming a swimlane (and all of the swimlane-only files, and the
+    swimlane-named declarations of files that carry swimlane sentences without the word), and refuses any
+    `lane` left after the qualified forms are masked. It found one real offender in
     T4's copy ("it has no lane to move in"), reworded.
 
 ##### Task M2-T11: the entry point and the journey (one PR)

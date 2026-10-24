@@ -532,6 +532,53 @@ function ConflictReasonLine({ keys }: { keys: readonly ConflictKey[] }): React.R
  * Viewer looking at a flagged bar with no way to see what is wrong with it — which is the dead end
  * ADR-0082 exists to prevent, not an application of it.
  */
+/**
+ * The popover behind **Move to swimlane…** on the single-activity bar. A component and not inline in
+ * `render` because the panel takes focus on the select, which needs a ref; and the panel is portalled
+ * out of the toolbar but not out of its React tree, so an arrow key pressed in the select would
+ * otherwise bubble to the toolbar's roving handler and walk focus off the field the reader is on.
+ */
+function MoveToSwimlaneItem({
+  ctx,
+  api,
+}: {
+  ctx: SelectionBarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement | null {
+  const selectRef = useRef<HTMLSelectElement>(null);
+  if (!ctx.moveToSwimlane) return null;
+  return (
+    <ToolbarPopover
+      label={MOVE_TO_SWIMLANE_LABEL}
+      icon={<Layers className="size-4" />}
+      itemProps={api.itemProps}
+      labelState={api.labelState}
+      initialFocus={selectRef}
+      {...(api.disabled ? { disabled: true } : {})}
+      {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
+    >
+      <div
+        role="presentation"
+        onKeyDown={(event) => {
+          if (
+            ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
+          ) {
+            event.stopPropagation();
+          }
+        }}
+      >
+        <MoveToSwimlaneControl
+          assignment={ctx.moveToSwimlane.assignment}
+          ids={ctx.moveToSwimlane.ids}
+          names={ctx.moveToSwimlane.names}
+          gate={{ writable: ctx.canEditSchedule, reason: penRefusal(ctx) ?? null }}
+          selectRef={selectRef}
+        />
+      </div>
+    </ToolbarPopover>
+  );
+}
+
 function ConflictRemedyControl({
   ctx,
   api,
@@ -933,25 +980,8 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       penGated: true,
       disabledReason: (ctx) => penRefusal(ctx),
       isVisible: (ctx: SelectionActionContext) => ctx.moveToSwimlane != null,
-      lostReason: 'Swimlanes are not shown on this plan.',
-      render: (ctx, api) =>
-        ctx.moveToSwimlane ? (
-          <ToolbarPopover
-            label={MOVE_TO_SWIMLANE_LABEL}
-            icon={<Layers className="size-4" />}
-            itemProps={api.itemProps}
-            labelState={api.labelState}
-            {...(api.disabled ? { disabled: true } : {})}
-            {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
-          >
-            <MoveToSwimlaneControl
-              assignment={ctx.moveToSwimlane.assignment}
-              ids={ctx.moveToSwimlane.ids}
-              names={ctx.moveToSwimlane.names}
-              gate={{ writable: ctx.canEditSchedule, reason: penRefusal(ctx) ?? null }}
-            />
-          </ToolbarPopover>
-        ) : null,
+      lostReason: 'Not available here: swimlanes are off or the plan has none.',
+      render: (ctx, api) => <MoveToSwimlaneItem ctx={ctx} api={api} />,
     },
     {
       id: 'delete',

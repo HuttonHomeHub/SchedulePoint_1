@@ -16,6 +16,7 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announce }));
  */
 const assign = vi.fn();
 const assignment: SwimlaneAssignment = {
+  shown: true,
   choices: [
     { id: 's1', name: 'Civil' },
     { id: 's2', name: 'Mechanical' },
@@ -28,9 +29,9 @@ const OPEN = { writable: true, reason: null };
 
 const move = (): HTMLElement => screen.getByRole('button', { name: /^move$|moving/i });
 const choose = (name: string): void =>
-  void fireEvent.change(screen.getByLabelText('Swimlane'), {
+  void fireEvent.change(screen.getByLabelText('Move to'), {
     target: {
-      value: Array.from(screen.getByLabelText('Swimlane').querySelectorAll('option')).find(
+      value: Array.from(screen.getByLabelText('Move to').querySelectorAll('option')).find(
         (o) => o.textContent === name,
       )?.value,
     },
@@ -52,7 +53,7 @@ describe('MoveToSwimlaneControl', () => {
         gate={OPEN}
       />,
     );
-    const options = Array.from(screen.getByLabelText('Swimlane').querySelectorAll('option')).map(
+    const options = Array.from(screen.getByLabelText('Move to').querySelectorAll('option')).map(
       (o) => o.textContent,
     );
     expect(options).toEqual(['Choose a swimlane', 'Civil', 'Mechanical', 'No swimlane']);
@@ -140,6 +141,53 @@ describe('MoveToSwimlaneControl', () => {
     expect(announce).not.toHaveBeenCalled();
   });
 
+  it('does not say it twice: after a move the status reads where it went, with its live region off', async () => {
+    render(<MoveToSwimlaneControl assignment={assignment} ids={['b']} names={['B']} gate={OPEN} />);
+    choose('Civil');
+    await act(() => Promise.resolve(fireEvent.click(move())));
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Moved to Civil.');
+    expect(status).toHaveAttribute('aria-live', 'off');
+    // Choosing again puts the prompt back and the region live.
+    choose('Mechanical');
+    expect(screen.getByRole('status')).not.toHaveAttribute('aria-live', 'off');
+  });
+
+  it('says a refusal with no reason in a sentence, and tells a stale one to reload', async () => {
+    assign.mockResolvedValue({ applied: false, conflict: null });
+    render(<MoveToSwimlaneControl assignment={assignment} ids={['b']} names={['B']} gate={OPEN} />);
+    choose('Civil');
+    await act(() => Promise.resolve(fireEvent.click(move())));
+    expect(screen.getByRole('alert')).toHaveTextContent('Nothing was moved. Try again.');
+    assign.mockResolvedValue({ applied: false, conflict: 'Someone else changed it.' });
+    await act(() => Promise.resolve(fireEvent.click(move())));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Someone else changed it. Reload and try again.',
+    );
+    assign.mockResolvedValue({ applied: false, conflict: 'Too many.', refreshable: false });
+    await act(() => Promise.resolve(fireEvent.click(move())));
+    expect(screen.getByRole('alert')).toHaveTextContent(/^Too many\.$/);
+  });
+
+  it('words the prompt for one activity as "it", names the button for the editor, and links a standing hint', () => {
+    render(
+      <MoveToSwimlaneControl
+        assignment={assignment}
+        ids={['b']}
+        names={['B']}
+        gate={OPEN}
+        buttonLabel="Move to swimlane"
+        hint={<p>Moves the activity now.</p>}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Choose where to move it.');
+    const button = screen.getByRole('button', { name: 'Move to swimlane' });
+    expect(button).toHaveAccessibleDescription(/Moves the activity now\./);
+    expect(screen.getByLabelText('Move to')).toHaveAccessibleDescription(
+      /Moves the activity now\./,
+    );
+  });
+
   it('shows a failed write as an alert', async () => {
     assign.mockRejectedValue(new Error('Network down'));
     render(<MoveToSwimlaneControl assignment={assignment} ids={['b']} names={['B']} gate={OPEN} />);
@@ -157,7 +205,7 @@ describe('MoveToSwimlaneControl', () => {
         gate={{ writable: false, reason: 'Start editing to change swimlanes.' }}
       />,
     );
-    expect(screen.getByLabelText('Swimlane')).toBeDisabled();
+    expect(screen.getByLabelText('Move to')).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Start editing to change swimlanes.');
     // aria-disabled, not the native attribute: it stays in the tab order and keeps its focus.
     expect(move()).not.toBeDisabled();
@@ -184,6 +232,22 @@ describe('BulkSelectionBar — Move to swimlane…', () => {
   it('omits the button when swimlanes are not offered', () => {
     bar();
     expect(screen.queryByRole('button', { name: /move to swimlane/i })).toBeNull();
+  });
+
+  it('shades the trigger with the reason, and does not open, for a reader who may not write', () => {
+    bar({
+      moveToSwimlane: {
+        assignment,
+        ids: ['a', 'b'],
+        names: ['A', 'B'],
+        gate: { writable: false, reason: 'Start editing to change swimlanes.' },
+      },
+    });
+    const trigger = screen.getByRole('button', { name: /move to swimlane/i });
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).toHaveAccessibleDescription('Start editing to change swimlanes.');
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('offers it for the whole selection, in a popover that opens the shared control', async () => {

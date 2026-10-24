@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
@@ -34,7 +35,7 @@ const GATING = deriveActivityEditorGating({
   canReadCost: true,
 });
 
-function mount(swimlaneSlot?: React.ReactNode) {
+function mount(swimlaneSlot?: (s: { generalDirty: boolean }) => React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -73,12 +74,77 @@ describe('ActivityEditorDialog — the Swimlane section', () => {
     expect(screen.queryByTestId('swimlane-slot')).toBeNull();
   });
 
-  it('renders the host’s control in the General tab, inside its form and before Save general', () => {
-    mount(<div data-testid="swimlane-slot">Swimlane control</div>);
+  it('renders the host’s control in the General tab, after Save general', () => {
+    mount(() => <div data-testid="swimlane-slot">Swimlane control</div>);
     const slot = screen.getByTestId('swimlane-slot');
-    const form = slot.closest('form');
-    expect(form).not.toBeNull();
-    const save = within(form!).getByRole('button', { name: 'Save general' });
-    expect(slot.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save general' });
+    expect(save.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('sits outside the General form, in its own region, and is not part of Save general', () => {
+    mount(() => <div data-testid="swimlane-slot">Swimlane control</div>);
+    expect(screen.getByTestId('swimlane-slot').closest('form')).toBeNull();
+  });
+
+  it('says so when General has unsaved edits, and a Move leaves them and Save general working', async () => {
+    const patches: { version: number; name?: string }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          const body = JSON.parse(init.body as string) as { version: number; name?: string };
+          patches.push(body);
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ data: { ...TASK, version: body.version + 1 } }),
+          } as unknown as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ data: [] }),
+        } as unknown as Response);
+      }),
+    );
+    function Host() {
+      // The Move bumps the row's version, as the positions batch does; the live query hands the new
+      // row to the editor, which must neither reset its form nor save against the old version.
+      const [row, setRow] = useState(TASK);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      return (
+        <QueryClientProvider client={client}>
+          <ActivityEditorDialog
+            orgSlug="acme"
+            planId="plan-1"
+            open
+            onClose={() => {}}
+            activity={row}
+            gating={GATING}
+            planActivities={[row]}
+            intent={{ activityId: 'act-1', tab: 'general' }}
+            swimlaneSlot={({ generalDirty }) => (
+              <div data-testid="swimlane-slot">
+                <button type="button" onClick={() => setRow({ ...row, version: row.version + 1 })}>
+                  Fake move
+                </button>
+                {generalDirty ? <p>Your unsaved changes to this tab aren’t affected.</p> : null}
+              </div>
+            )}
+          />
+        </QueryClientProvider>
+      );
+    }
+    render(<Host />);
+    expect(screen.queryByText(/unsaved changes to this tab/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab 2' } });
+    expect(screen.getByText(/unsaved changes to this tab/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fake move' }));
+    expect(screen.getByLabelText('Name')).toHaveValue('Pour slab 2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save general' }));
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]).toMatchObject({ name: 'Pour slab 2', version: 2 });
   });
 });

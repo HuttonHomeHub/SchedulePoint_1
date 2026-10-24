@@ -24,9 +24,10 @@ const CANNOT_PLAN_REASON = 'Swimlanes can’t be changed just now. Try again in 
  * selection bars and the activity editor need to file work in a swimlane, built once and handed to
  * both so they cannot plan the write two ways.
  *
- * It plans against the same projection the diagram draws — `deriveDiagramSource` over the same
- * inputs, band toggle included — so a lane chosen "free" is free on the screen the planner is looking
- * at, and it writes through the plural move's swimlane form (`moveMany` with `swimlaneLanes` and a zero
+ * It plans against the projection the diagram draws — `deriveDiagramSource` over the same inputs,
+ * band toggle included — so a lane chosen "free" is free in the picture the panel paints from those
+ * inputs (whether or not swimlanes are shown). The projection is built when a move is made, not on
+ * every render: only `currentOf` needs the membership, which is cheap. It writes through the plural move's swimlane form (`moveMany` with `swimlaneLanes` and a zero
  * delta): one all-or-nothing positions batch, no `laneIndex` (SC-1), no time write, and one undo step
  * the host records with the ADR-0176 checks (`swimlaneLanesCommand`).
  *
@@ -43,40 +44,25 @@ export function useSwimlaneAssignment(args: {
   activities: readonly ActivitySummary[] | undefined;
   barDateSource: BarDateSource;
   dataDate: string | null;
+  /** Whether the diagram is drawing swimlanes (the lens state). */
+  shown: boolean;
   /** The pinned WBS band's toggle, which takes summaries out of the projection. */
   wbsBandOn: boolean;
   /** The host's plural move, which owns the write and the history. */
   moveMany: TsldBulkOperations['moveMany'] | undefined;
 }): SwimlaneAssignment | null {
   const { orgSlug, planId, source, offered, activities, barDateSource, dataDate, wbsBandOn } = args;
+  const { shown } = args;
   const { moveMany } = args;
   const manual = offered && source === 'MANUAL';
   const list = useSwimlanes(orgSlug, planId, manual).data;
 
-  const plan = useMemo(() => {
+  const input = useMemo(() => {
     if (!manual || list === undefined || list.length === 0 || activities === undefined) {
       return null;
     }
-    if (dataDate === null) return null;
-    const input = manualSwimlaneInput(activities, list);
-    const diagram = deriveDiagramSource(activities, {
-      wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: wbsBandOn },
-      swimlanes: input,
-      source: barDateSource,
-      dataDate,
-    });
-    return {
-      input,
-      ctx: swimlaneEditContext({
-        scene: diagram.swimlaneScene,
-        input,
-        sceneActivities: diagram.sceneActivities,
-        activities,
-        barDateSource,
-        dataDate,
-      }),
-    };
-  }, [manual, list, activities, dataDate, wbsBandOn, barDateSource]);
+    return dataDate === null ? null : manualSwimlaneInput(activities, list);
+  }, [manual, list, activities, dataDate]);
 
   const choices = useMemo(
     () => [
@@ -88,19 +74,34 @@ export function useSwimlaneAssignment(args: {
 
   const currentOf = useCallback(
     (activityId: string): string | null => {
-      const id = plan?.input.membership.get(activityId) ?? null;
+      const id = input?.membership.get(activityId) ?? null;
       // A deleted swimlane's id is kept for a restore; the bar is drawn under none.
-      return id !== null && plan?.input.swimlanes.some((s) => s.id === id) ? id : null;
+      return id !== null && input?.swimlanes.some((s) => s.id === id) ? id : null;
     },
-    [plan],
+    [input],
   );
 
   const assign = useCallback(
     async (ids: readonly string[], target: string | null): Promise<SwimlaneAssignOutcome> => {
-      if (!plan?.ctx || !moveMany || !activities) {
+      if (!input || !moveMany || !activities || dataDate === null) {
         return { applied: false, conflict: CANNOT_PLAN_REASON, refreshable: false };
       }
-      const move = assignToSwimlane(plan.ctx, ids, target);
+      const diagram = deriveDiagramSource(activities, {
+        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: wbsBandOn },
+        swimlanes: input,
+        source: barDateSource,
+        dataDate,
+      });
+      const ctx = swimlaneEditContext({
+        scene: diagram.swimlaneScene,
+        input,
+        sceneActivities: diagram.sceneActivities,
+        activities,
+        barDateSource,
+        dataDate,
+      });
+      if (!ctx) return { applied: false, conflict: CANNOT_PLAN_REASON, refreshable: false };
+      const move = assignToSwimlane(ctx, ids, target);
       if (move.kind === 'refuse') {
         return { applied: false, conflict: move.reason, refreshable: false };
       }
@@ -128,14 +129,16 @@ export function useSwimlaneAssignment(args: {
         applied: outcome.applied,
         conflict: outcome.conflict,
         ...(outcome.refreshable !== undefined ? { refreshable: outcome.refreshable } : {}),
-        ...(outcome.applied ? { moved: rows.length, landed: move.landed } : {}),
+        ...(outcome.applied
+          ? { moved: rows.length, ...(shown ? { landed: move.landed } : {}) }
+          : {}),
       };
     },
-    [plan, moveMany, activities, choices],
+    [input, moveMany, activities, choices, dataDate, wbsBandOn, barDateSource, shown],
   );
 
   return useMemo(
-    () => (plan?.ctx && moveMany ? { choices, currentOf, assign } : null),
-    [plan, moveMany, choices, currentOf, assign],
+    () => (input && moveMany ? { shown, choices, currentOf, assign } : null),
+    [input, moveMany, shown, choices, currentOf, assign],
   );
 }

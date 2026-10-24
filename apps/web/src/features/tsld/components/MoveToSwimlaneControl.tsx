@@ -1,10 +1,14 @@
 import { useId, useState } from 'react';
 
 import {
+  choosePrompt,
   MOVE_BUTTON_LABEL,
   MOVE_TO_SWIMLANE_FIELD,
+  movedStatus,
   moveToSwimlaneStatus,
+  NOT_MOVED_REASON,
   swimlaneAssignedAnnouncement,
+  withReload,
   type SwimlaneAssignment,
 } from '../model/swimlane-assignment';
 
@@ -40,6 +44,8 @@ export function MoveToSwimlaneControl({
   gate,
   onDone,
   fieldLabel = MOVE_TO_SWIMLANE_FIELD,
+  buttonLabel = MOVE_BUTTON_LABEL,
+  hint,
   selectRef,
 }: {
   assignment: SwimlaneAssignment;
@@ -51,15 +57,26 @@ export function MoveToSwimlaneControl({
   /** Told when a move landed; the host decides what to clear or focus. */
   onDone?: () => void;
   fieldLabel?: string;
+  /** The Move button's visible name; the editor says "Move to swimlane" because it has no popover title. */
+  buttonLabel?: string;
+  /**
+   * A standing sentence the field and the button are described by, for a host that must say
+   * something that is true whatever is chosen (the editor: this is not part of Save general).
+   */
+  hint?: React.ReactNode;
   selectRef?: React.Ref<HTMLSelectElement>;
 }): React.ReactElement {
   const announce = useAnnounce();
   const closePopover = usePopoverClose();
   const selectId = useId();
   const statusId = useId();
+  const hintId = useId();
+  const described = hint ? `${statusId} ${hintId}` : statusId;
   const [value, setValue] = useState(UNCHOSEN);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The swimlane the last move landed in, until the choice changes: the status then says so. */
+  const [movedTo, setMovedTo] = useState<string | null>(null);
 
   const target = value === UNCHOSEN ? undefined : value === NONE_VALUE ? null : value;
   const targetChoice =
@@ -76,7 +93,13 @@ export function MoveToSwimlaneControl({
       (outcome) => {
         setBusy(false);
         if (!outcome.applied) {
-          if (outcome.conflict) setError(outcome.conflict);
+          setError(
+            outcome.conflict
+              ? outcome.refreshable === false
+                ? outcome.conflict
+                : withReload(outcome.conflict)
+              : NOT_MOVED_REASON,
+          );
           return;
         }
         announce(
@@ -87,7 +110,9 @@ export function MoveToSwimlaneControl({
             landed: outcome.landed,
           }),
         );
-        setValue(UNCHOSEN);
+        // The choice stays, so the status can say where it went; the live region has already said so
+        // once, and the status line is switched off for that moment rather than repeating it.
+        setMovedTo(targetChoice.name);
         closePopover?.();
         onDone?.();
       },
@@ -107,12 +132,13 @@ export function MoveToSwimlaneControl({
         value={value}
         onChange={(event) => {
           setError(null);
+          setMovedTo(null);
           setValue(event.target.value);
         }}
         // `reason: null` because the status line below already carries the pen's reason and the
         // select points at it: one node, N references (ADR-0083 D4).
         gate={{ writable: gate.writable, reason: null }}
-        aria-describedby={statusId}
+        aria-describedby={described}
       >
         <option value={UNCHOSEN}>Choose a swimlane</option>
         {assignment.choices.map((choice) => (
@@ -126,7 +152,7 @@ export function MoveToSwimlaneControl({
         size="sm"
         aria-disabled={blocked}
         aria-busy={busy}
-        aria-describedby={statusId}
+        aria-describedby={described}
         onClick={(event) => {
           if (blocked) {
             event.preventDefault();
@@ -136,18 +162,31 @@ export function MoveToSwimlaneControl({
         }}
         className="self-start aria-busy:pointer-events-none"
       >
-        {busy ? 'Moving…' : MOVE_BUTTON_LABEL}
+        {busy ? 'Moving…' : buttonLabel}
       </Button>
-      <p id={statusId} role="status" className="text-muted-foreground text-sm">
+      {hint ? (
+        <div id={hintId} className="text-muted-foreground text-sm">
+          {hint}
+        </div>
+      ) : null}
+      <p
+        id={statusId}
+        role="status"
+        // Off while it repeats what the live region has just announced (no double speech).
+        aria-live={movedTo !== null ? 'off' : undefined}
+        className="text-muted-foreground text-sm"
+      >
         {!gate.writable
           ? (gate.reason ?? 'You can’t change swimlanes here.')
-          : targetChoice === undefined
-            ? 'Choose where to move them.'
-            : moveToSwimlaneStatus({
-                selected: ids.length,
-                willMove,
-                target: targetChoice.name,
-              })}
+          : movedTo !== null
+            ? movedStatus(movedTo)
+            : targetChoice === undefined
+              ? choosePrompt(ids.length)
+              : moveToSwimlaneStatus({
+                  selected: ids.length,
+                  willMove,
+                  target: targetChoice.name,
+                })}
       </p>
       {error ? (
         <p role="alert" className="text-destructive-text text-sm">

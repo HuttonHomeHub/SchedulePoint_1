@@ -173,7 +173,7 @@ export function ActivityCrudDialogs({
         activity={intended}
         {...(intended && swimlaneAssignment
           ? {
-              swimlaneSlot: (
+              swimlaneSlot: ({ generalDirty }: { generalDirty: boolean }) => (
                 <FormSection title="Swimlane">
                   <p className="text-muted-foreground text-sm">
                     {`Now in ${
@@ -187,7 +187,27 @@ export function ActivityCrudDialogs({
                     assignment={swimlaneAssignment}
                     ids={[intended.id]}
                     names={[intended.name]}
-                    gate={model.activityEditorGating.general}
+                    // The same right the selection bars use: this is a layout write of its own, not
+                    // part of any editor scope, so it is gated on the schedule and the pen.
+                    gate={{
+                      writable: model.canEditSchedule,
+                      reason: model.scheduleRefusal('change swimlanes'),
+                    }}
+                    buttonLabel="Move to swimlane"
+                    hint={
+                      <>
+                        <p>Moves the activity now. It isn’t part of Save general.</p>
+                        {generalDirty ? (
+                          <p>Your unsaved changes to this tab aren’t affected.</p>
+                        ) : null}
+                        {swimlaneAssignment.shown ? null : (
+                          <p>
+                            Swimlanes aren’t shown on the diagram. Turn on Swimlanes in View to see
+                            it.
+                          </p>
+                        )}
+                      </>
+                    }
                   />
                 </FormSection>
               ),

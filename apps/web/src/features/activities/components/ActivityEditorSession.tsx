@@ -736,57 +736,66 @@ export function ActivityEditorSession({
           {(current) => (
             <FieldGridContainer className="flex flex-1 flex-col gap-4 p-6">
               {current === 'general' ? (
-                <form
-                  noValidate
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void general.form.handleSubmit((values) => {
-                      // The one check the schema deliberately cannot make (ADR-0070): reachable
-                      // only on the degraded whole-days path, where `4h` is well-formed text this
-                      // field cannot express without a factor.
-                      if (
-                        !isDurationDerivedType(values.type) &&
-                        durationWriteFields(values.duration, hoursPerDay) === null
-                      ) {
-                        general.form.setError(
-                          'duration',
-                          { message: DURATION_NEEDS_WHOLE_DAYS },
-                          { shouldFocus: true },
-                        );
-                        return;
-                      }
-                      saveScope('general', generalBody(values, hoursPerDay), 'General', (after) => {
-                        resetKeepingLaterEdits(general.form, values);
-                        // A type change across the finish-milestone convention made the server
-                        // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
-                        // form still shows the old ones: a later edit there would send them back
-                        // and undo the move. Re-seed it from the saved row — but only when clean,
-                        // because a dirty Scheduling tab holds dates the reader typed, and
-                        // replacing them would discard work (plan M2-T2 risk R2; the Type hint
-                        // says a later Scheduling save is read the new way).
-                        if (after.type !== activity.type && !scheduling.form.formState.isDirty) {
-                          scheduling.form.reset(seedScheduling(after));
+                <>
+                  <form
+                    noValidate
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void general.form.handleSubmit((values) => {
+                        // The one check the schema deliberately cannot make (ADR-0070): reachable
+                        // only on the degraded whole-days path, where `4h` is well-formed text this
+                        // field cannot express without a factor.
+                        if (
+                          !isDurationDerivedType(values.type) &&
+                          durationWriteFields(values.duration, hoursPerDay) === null
+                        ) {
+                          general.form.setError(
+                            'duration',
+                            { message: DURATION_NEEDS_WHOLE_DAYS },
+                            { shouldFocus: true },
+                          );
+                          return;
                         }
-                      });
-                    })(event);
-                  }}
-                  className="flex flex-col gap-4"
-                >
-                  <FormProblemCount errors={general.form.formState.errors} />
-                  {scopeError('general')}
+                        saveScope(
+                          'general',
+                          generalBody(values, hoursPerDay),
+                          'General',
+                          (after) => {
+                            resetKeepingLaterEdits(general.form, values);
+                            // A type change across the finish-milestone convention made the server
+                            // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
+                            // form still shows the old ones: a later edit there would send them back
+                            // and undo the move. Re-seed it from the saved row — but only when clean,
+                            // because a dirty Scheduling tab holds dates the reader typed, and
+                            // replacing them would discard work (plan M2-T2 risk R2; the Type hint
+                            // says a later Scheduling save is read the new way).
+                            if (
+                              after.type !== activity.type &&
+                              !scheduling.form.formState.isDirty
+                            ) {
+                              scheduling.form.reset(seedScheduling(after));
+                            }
+                          },
+                        );
+                      })(event);
+                    }}
+                    className="flex flex-col gap-4"
+                  >
+                    <FormProblemCount errors={general.form.formState.errors} />
+                    {scopeError('general')}
 
-                  <FieldGateProvider gate={gating.general}>
-                    <ActivityIdentityFields form={general.form} />
+                    <FieldGateProvider gate={gating.general}>
+                      <ActivityIdentityFields form={general.form} />
 
-                    <ActivityWorkFields
-                      form={general.form}
-                      hoursPerDay={hoursPerDay}
-                      savedType={activity.type}
-                      savedDurationMinutes={activity.durationMinutes}
-                      derivedSpan={derivedSpan}
-                    />
+                      <ActivityWorkFields
+                        form={general.form}
+                        hoursPerDay={hoursPerDay}
+                        savedType={activity.type}
+                        savedDurationMinutes={activity.durationMinutes}
+                        derivedSpan={derivedSpan}
+                      />
 
-                    {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
+                      {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it
                       never asserts a false state while the plan activities are still resolving.
                       The "no summaries yet" guidance is a distinct, appended clause shown only
                       once the list has resolved empty — not conflated with loading or a load
@@ -796,26 +805,27 @@ export function ActivityEditorSession({
                       plan" whenever the offerable list was empty, which is exactly when a stored
                       but unresolvable parent is most likely — so the one activity that disproves
                       the sentence was the one it was shown to. */}
-                    {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                      <ActivityBreakdownField
-                        form={general.form}
-                        parentOptions={parentOptions}
-                        parentContentsHidden={parentContentsHidden}
-                        loading={planActivitiesLoading}
-                        errored={planActivitiesError}
+                      {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
+                        <ActivityBreakdownField
+                          form={general.form}
+                          parentOptions={parentOptions}
+                          parentContentsHidden={parentContentsHidden}
+                          loading={planActivitiesLoading}
+                          errored={planActivitiesError}
+                        />
+                      ) : null}
+                      <ScopeSaveBar
+                        gate={gating.general}
+                        dirty={general.isDirty}
+                        pending={saves.fieldsPending}
+                        saved={savedSlots.general === true}
+                        label="Save general"
+                        {...othersSaving('general')}
                       />
-                    ) : null}
-                    {swimlaneSlot}
-                    <ScopeSaveBar
-                      gate={gating.general}
-                      dirty={general.isDirty}
-                      pending={saves.fieldsPending}
-                      saved={savedSlots.general === true}
-                      label="Save general"
-                      {...othersSaving('general')}
-                    />
-                  </FieldGateProvider>
-                </form>
+                    </FieldGateProvider>
+                  </form>
+                  {swimlaneSlot?.({ generalDirty: general.isDirty })}
+                </>
               ) : null}
 
               {current === 'scheduling' ? (

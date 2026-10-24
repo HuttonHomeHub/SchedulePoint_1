@@ -258,7 +258,7 @@ describe('a pointer drag on the swimlane layout', () => {
     // Back in its lane — not "the next free lane", which it did not go on to.
     await waitFor(() =>
       expect(announceSpy).toHaveBeenCalledWith(
-        'Moved “Pour” to Electrical, lane 4 of 4, back in its lane.',
+        'Moved “Pour” to Electrical, lane 4 of 4, back in its remembered lane.',
       ),
     );
   });

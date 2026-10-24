@@ -47,6 +47,7 @@ function render(
     offered: boolean;
     dataDate: string | null;
     moveMany: ReturnType<typeof vi.fn> | undefined;
+    shown: boolean;
   }> = {},
 ) {
   const moveMany =
@@ -66,6 +67,7 @@ function render(
         activities: ACTIVITIES,
         barDateSource: 'visual',
         dataDate: over.dataDate === undefined ? '2026-01-01' : over.dataDate,
+        shown: over.shown ?? true,
         wbsBandOn: false,
         moveMany: moveMany as never,
       }),
@@ -163,5 +165,30 @@ describe('useSwimlaneAssignment', () => {
     const { result } = render({ moveMany: undefined });
     await new Promise((r) => setTimeout(r, 20));
     expect(result.current).toBeNull();
+  });
+
+  it('says whether the diagram is drawing swimlanes, and speaks no lane when it is not', async () => {
+    h.list = [swimlane('S1', 'Civil', 0)];
+    const shown = render({ shown: true });
+    await waitFor(() => expect(shown.result.current).not.toBeNull());
+    expect(shown.result.current?.shown).toBe(true);
+    expect((await shown.result.current!.assign(['b'], 'S1')).landed).toBeDefined();
+
+    const hidden = render({ shown: false });
+    await waitFor(() => expect(hidden.result.current).not.toBeNull());
+    expect(hidden.result.current?.shown).toBe(false);
+    const outcome = await hidden.result.current!.assign(['b'], 'S1');
+    expect(outcome).toMatchObject({ applied: true, moved: 1 });
+    expect(outcome.landed).toBeUndefined();
+  });
+
+  it('plans when a move is made, not when it renders', async () => {
+    h.list = [swimlane('S1', 'Civil', 0)];
+    const { result, moveMany } = render();
+    await waitFor(() => expect(result.current).not.toBeNull());
+    // Nothing has been planned or written by rendering, however often it rendered.
+    expect(moveMany).not.toHaveBeenCalled();
+    await result.current!.assign(['b'], 'S1');
+    expect(moveMany).toHaveBeenCalledTimes(1);
   });
 });

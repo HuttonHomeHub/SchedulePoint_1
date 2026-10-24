@@ -1,7 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
+import {
+  SelectionActionsBar,
+  selectionActionItems,
+  type SelectionBarContext,
+} from './selection-actions';
 
 import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
 
@@ -14,6 +18,7 @@ vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
  */
 const assign = vi.fn();
 const assignment: SwimlaneAssignment = {
+  shown: true,
   choices: [
     { id: 's1', name: 'Civil' },
     { id: null, name: 'No swimlane' },
@@ -88,7 +93,7 @@ describe('the selection bar — Move to swimlane…', () => {
   it('opens the shared control and assigns the selected activity', async () => {
     render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(trigger());
-    const select = screen.getByLabelText('Swimlane');
+    const select = screen.getByLabelText('Move to');
     fireEvent.change(select, { target: { value: 's1' } });
     await act(() => Promise.resolve(fireEvent.click(screen.getByRole('button', { name: 'Move' }))));
     expect(assign).toHaveBeenCalledWith(['a'], 's1');
@@ -105,7 +110,28 @@ describe('the selection bar — Move to swimlane…', () => {
     );
     expect(trigger()).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(trigger());
-    expect(screen.queryByLabelText('Swimlane')).toBeNull();
+    expect(screen.queryByLabelText('Move to')).toBeNull();
     expect(trigger()).toHaveAccessibleDescription(/Start editing to change this activity/);
+  });
+
+  it('puts focus on the select when the panel opens', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    fireEvent.click(trigger());
+    expect(screen.getByLabelText('Move to')).toHaveFocus();
+  });
+
+  it('keeps the arrows in the select: they do not rove the toolbar out from under the reader', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    fireEvent.click(trigger());
+    const select = screen.getByLabelText('Move to');
+    for (const key of ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      fireEvent.keyDown(select, { key });
+      expect(select).toHaveFocus();
+    }
+  });
+
+  it('keeps its label whatever the room: it is a named action, never icon-only', () => {
+    const item = selectionActionItems.find((i) => i.id === 'move-to-swimlane');
+    expect(item?.labelVisibility).toBe('always');
   });
 });

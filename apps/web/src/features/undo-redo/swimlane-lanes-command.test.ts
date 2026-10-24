@@ -146,7 +146,7 @@ describe('swimlaneLanesCommand', () => {
     expect(await command.undo(s.ctx)).toMatchObject({
       kind: 'not-applicable',
       reason: 'gone',
-      subjectName: 'The swimlane',
+      subjectName: 'the swimlane',
     });
     expect(s.writeLanes).not.toHaveBeenCalled();
     expect(await command.check?.('undo', s.ctx)).toMatchObject({ kind: 'not-applicable' });

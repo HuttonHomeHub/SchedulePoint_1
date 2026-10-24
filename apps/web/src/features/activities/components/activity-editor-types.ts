@@ -97,12 +97,17 @@ export interface ActivityEditorDialogProps {
    */
   historySlot?: React.ReactNode;
   /**
-   * The **Swimlane** section of the General tab (swimlanes M2-T10): Move to swimlane… as a field, the
+   * The **Swimlane** region of the General tab (swimlanes M2-T10): Move to swimlane… as a field, the
    * same control the selection bars use. A slot for the reason the History panel is one — the control
    * plans a write against the diagram's own projection, which this feature must not reach sideways.
-   * Absent ⇒ no section, which is what a plan with no hand-made swimlanes (source `NONE`) gets.
+   *
+   * **Rendered after the General form, not inside it**: Moving is an immediate write of its own (a
+   * positions batch with a lane and an undo step), not a field that "Save general" carries, and
+   * putting it inside the form would say otherwise. It is told whether General has unsaved edits so
+   * it can say that the Move does not touch them. Absent ⇒ no region, which is what a plan with no
+   * hand-made swimlanes (source `NONE`) gets.
    */
-  swimlaneSlot?: React.ReactNode;
+  swimlaneSlot?: (state: { generalDirty: boolean }) => React.ReactNode;
 }
 
 /** What the frame can ask of the session it hosts: close the way the footer Close does. */

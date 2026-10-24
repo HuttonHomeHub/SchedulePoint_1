@@ -1603,7 +1603,7 @@ export function autoArrangeCommand(params: {
 }
 
 /** What the strip names when the swimlane a step needs has been deleted: "… was deleted after your edit". */
-const DELETED_SWIMLANE_SUBJECT = 'The swimlane';
+const DELETED_SWIMLANE_SUBJECT = 'the swimlane';
 
 /** `useWriteSwimlaneLanes().mutateAsync` — an all-or-nothing batch of in-swimlane lanes. */
 export type WriteSwimlaneLanesFn = (input: {

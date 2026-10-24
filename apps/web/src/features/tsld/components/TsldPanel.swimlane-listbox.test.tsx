@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { act, fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { TsldPanel } from './TsldPanel';
 
@@ -136,5 +137,36 @@ describe('TsldPanel listbox — grouped by swimlane', () => {
     const { getByRole, getAllByRole } = render(<Harness swimlanes={null} />);
     expect(getAllByRole('group').filter((g) => getByRole('listbox').contains(g))).toHaveLength(0);
     expect(names(getAllByRole('option'))).toEqual(['Pour', 'Wire', 'Dig', 'Cure']);
+  });
+
+  it('crosses a group boundary with ArrowDown and back with ArrowUp, one row at a time', () => {
+    const { getByRole, getAllByRole } = render(<Harness swimlanes={INPUT} />);
+    const listbox = getByRole('listbox');
+    const active = (): string =>
+      getAllByRole('option')
+        .find((o) => o.id === listbox.getAttribute('aria-activedescendant'))
+        ?.textContent?.split(',')[0] ?? '';
+    act(() => listbox.focus());
+    // Dig is the only row of Civil; the next press leaves that group for Mechanical's first row.
+    expect(active()).toBe('Dig');
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    expect(active()).toBe('Pour');
+    fireEvent.keyDown(listbox, { key: 'ArrowUp' });
+    expect(active()).toBe('Dig');
+    // And out of Mechanical's last row into "No swimlane".
+    fireEvent.keyDown(listbox, { key: 'End' });
+    fireEvent.keyDown(listbox, { key: 'ArrowUp' });
+    expect(active()).toBe('Cure');
+  });
+
+  it('leaves every option reachable in the accessibility tree, with no axe violation', async () => {
+    const { container, getAllByRole, getByRole } = render(<Harness swimlanes={INPUT} />);
+    expect((await axe(container)).violations).toEqual([]);
+    // Every option sits in a named group inside the listbox: nothing is orphaned or hidden.
+    const listbox = getByRole('listbox');
+    for (const option of getAllByRole('option')) {
+      expect(listbox.contains(option)).toBe(true);
+      expect(option.closest('[role="group"]')?.getAttribute('aria-label')).toBeTruthy();
+    }
   });
 });

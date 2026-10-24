@@ -25,6 +25,12 @@ export interface SwimlaneAssignOutcome {
 }
 
 export interface SwimlaneAssignment {
+  /**
+   * Whether the diagram is drawing swimlanes. The selection bars offer the move only then (a move
+   * the planner cannot see land is the editor's to offer, with a hint saying so), and the sentence
+   * leaves out the lane clause when they are not drawn.
+   */
+  readonly shown: boolean;
   /** The plan's swimlanes in their order, then "No swimlane". */
   readonly choices: readonly SwimlaneChoice[];
   /** The swimlane an activity is drawn in now (`null`: none). */
@@ -40,7 +46,7 @@ export interface SwimlaneAssignment {
 }
 
 export const MOVE_TO_SWIMLANE_LABEL = 'Move to swimlane…';
-export const MOVE_TO_SWIMLANE_FIELD = 'Swimlane';
+export const MOVE_TO_SWIMLANE_FIELD = 'Move to';
 export const MOVE_BUTTON_LABEL = 'Move';
 
 export const NO_SWIMLANE_CHOICE_LABEL = NO_SWIMLANE_LABEL;
@@ -55,11 +61,25 @@ export function swimlaneAssignedAnnouncement(args: {
   readonly landed: SwimlaneLaneFacts | undefined;
 }): string {
   const { names, count, target, landed } = args;
-  if (count === 1 && names[0] !== undefined && landed !== undefined) {
-    return `Moved “${names[0]}” to ${swimlanePlace(landed)}.`;
+  if (count === 1 && names[0] !== undefined) {
+    // With swimlanes not drawn there is no lane to speak of: the short form names the swimlane only.
+    return `Moved “${names[0]}” to ${landed !== undefined ? swimlanePlace(landed) : target}.`;
   }
   return `${activities(count)} moved to ${target}.`;
 }
+
+/** What the status line says once a move has landed (and the live region has already said it). */
+export const movedStatus = (target: string): string => `Moved to ${target}.`;
+
+/** The prompt before anything is chosen. */
+export const choosePrompt = (selected: number): string =>
+  selected === 1 ? 'Choose where to move it.' : 'Choose where to move them.';
+
+/** A write that came back refused without saying why (a lost pen, a no-op). */
+export const NOT_MOVED_REASON = 'Nothing was moved. Try again.';
+
+/** The refusal a stale write gets, which only a fresh read cures. */
+export const withReload = (conflict: string): string => `${conflict} Reload and try again.`;
 
 /** The status line under the control: what pressing Move will do, in one sentence. */
 export function moveToSwimlaneStatus(args: {

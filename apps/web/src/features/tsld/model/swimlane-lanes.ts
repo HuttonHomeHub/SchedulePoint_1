@@ -557,12 +557,6 @@ export function assignToSwimlane(
   target: string | null,
 ): SwimlaneMove {
   const { extents } = ctx.scene;
-  const known = target === null || extents.some((e) => e.id === target);
-  // A swimlane with no member still takes one lane, so every real target is an extent; one that is
-  // not has been deleted since the list was read.
-  if (!known && !ctx.input.swimlanes.some((s) => s.id === target)) {
-    return { kind: 'refuse', reason: SWIMLANE_GONE_REASON };
-  }
   const members = membersOf(ctx);
   const rows: Member[] = [];
   for (const id of ids) {
@@ -571,6 +565,9 @@ export function assignToSwimlane(
     rows.push(m);
   }
   const found = extents.findIndex((e) => e.id === target);
+  // A swimlane with no member still takes one lane, so every real target is an extent; one that is
+  // not has been deleted since the list was read (its id may still be on members, kept for a restore).
+  if (target !== null && found < 0) return { kind: 'refuse', reason: SWIMLANE_GONE_REASON };
   // "No swimlane" is drawn only when something is in it, so moving the first bar into none targets an
   // extent that does not exist yet; it sits below the last one.
   const extent = found < 0 ? extents.length : found;

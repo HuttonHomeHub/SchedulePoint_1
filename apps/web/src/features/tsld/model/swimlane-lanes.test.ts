@@ -14,6 +14,7 @@ import {
   moveWithinSwimlane,
   NO_FREE_LANE_PLURAL,
   NO_SWIMLANE_KEY,
+  SWIMLANE_GONE_REASON,
   nudgeInSwimlane,
   type DaySpan,
   type SwimlaneEditContext,
@@ -614,6 +615,19 @@ describe('assignToSwimlane', () => {
 
   it('refuses a swimlane the plan does not have', () => {
     expect(assignToSwimlane(context(BASE), ['a1'], 'Z')).toMatchObject({ kind: 'refuse' });
+  });
+
+  it('refuses a swimlane that was deleted, though its id is still on members kept for a restore', () => {
+    const ctx = context([
+      { id: 'a1', start: 0, end: 3, swimlane: 'DELETED' },
+      { id: 'n1', start: 0, end: 3, swimlane: null },
+    ]);
+    // The projection draws a1 under none; its id is the deleted swimlane's.
+    expect(ctx.scene.extents.some((e) => e.id === 'DELETED')).toBe(false);
+    expect(assignToSwimlane(ctx, ['n1'], 'DELETED')).toEqual({
+      kind: 'refuse',
+      reason: SWIMLANE_GONE_REASON,
+    });
   });
 
   it('keeps a batch of two thousand in one write', () => {
