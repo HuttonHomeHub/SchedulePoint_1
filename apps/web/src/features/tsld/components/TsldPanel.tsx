@@ -112,8 +112,8 @@ import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './C
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
 import { LinkChainDialog } from './LinkChainDialog';
-import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { type SwimlaneGutterProps } from './SwimlaneGutter';
+import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
 import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
