@@ -9,7 +9,7 @@ import type {
 } from '@repo/types';
 
 import { API_BASE_URL } from '@/config/env';
-import type { WorkingDayCalendar } from '@/features/tsld';
+import type { SwimlaneInput, WorkingDayCalendar } from '@/features/tsld';
 
 /**
  * The session-less **External-Guest** API client (ADR-0051 F-M4 Task 2). It is DELIBERATELY separate
@@ -70,6 +70,12 @@ export interface GuestScheduleSummary {
   nearCriticalCount: number;
 }
 
+/** One swimlane of the shared plan (`GuestSwimlaneDto`): a name and the id its members carry. */
+export interface GuestSwimlane {
+  id: string;
+  name: string;
+}
+
 /** The composite `GET /share/plan` payload (`GuestPlanViewDto`). */
 export interface GuestPlanView {
   id: string;
@@ -79,6 +85,11 @@ export interface GuestPlanView {
   dataDate: string | null;
   calendar: GuestCalendar | null;
   summary: GuestScheduleSummary;
+  /**
+   * The plan's swimlanes in display order (ADR-0205), empty when it has none. **Optional on the wire
+   * type** for version skew: an older API does not send it, and absent reads as "no swimlanes".
+   */
+  swimlanes?: GuestSwimlane[];
 }
 
 /** A guest activity row (`GuestActivityDto`) — schedule + progress fields only. */
@@ -99,6 +110,14 @@ export interface GuestActivity {
   /** {@link GuestActivity.derivedDurationMinutes} rounded to whole days on the row's day factor. */
   derivedDurationDays?: number | null;
   laneIndex: number;
+  /**
+   * The swimlane the diagram draws this activity in, or `null` for "No swimlane" (ADR-0205). The
+   * server DERIVES it; it is not the member row's `swimlaneId`. **Optional on the wire type** for the
+   * same version-skew reason as {@link GuestPlanView.swimlanes}: absent reads as `null`.
+   */
+  memberOfSwimlaneId?: string | null;
+  /** The lane stored inside that swimlane, or `null` when never placed there — same skew rule. */
+  swimlaneLaneIndex?: number | null;
   earlyStart: string | null;
   earlyFinish: string | null;
   lateStart: string | null;
@@ -191,6 +210,33 @@ export function toWorkingDayCalendar(calendar: GuestCalendar | null): WorkingDay
 }
 
 /**
+ * The neutral swimlane input for the shared plan, or `null` when it has no swimlanes to draw
+ * (ADR-0205). The server has already derived each activity's membership and stored lane by the
+ * member diagram's own rule, so this only reshapes them for `projectSwimlanes` — the one projection
+ * both views draw by. A guest is never sent the lane rows' timestamps, so every stored lane carries
+ * the same recency and the projection breaks a stale-row collision by the lower id (ADR-0205 D5).
+ */
+export function toGuestSwimlaneInput(
+  swimlanes: readonly GuestSwimlane[] | undefined,
+  activities: readonly GuestActivity[],
+): SwimlaneInput | null {
+  if (!swimlanes || swimlanes.length === 0) return null;
+  const membership = new Map<string, string | null>();
+  const storedLanes = new Map<string, { lane: number; updatedAt: number }>();
+  for (const a of activities) {
+    membership.set(a.id, a.memberOfSwimlaneId ?? null);
+    if (a.swimlaneLaneIndex != null)
+      storedLanes.set(a.id, { lane: a.swimlaneLaneIndex, updatedAt: 0 });
+  }
+  return {
+    swimlanes: swimlanes.map(({ id, name }) => ({ id, name })),
+    membership,
+    storedLanes,
+    source: 'MANUAL',
+  };
+}
+
+/**
  * Widen a guest activity to the full {@link ActivitySummary} the canvas renders. Only the guest scope
  * (identity, computed CPM dates, duration/float/critical/near-critical, lane, progress) carries real values; every
  * field OUTSIDE the guest scope (constraints, external/EV/cost, resources, WBS, levelling, visual) is a
@@ -225,6 +271,8 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     resourceAssignmentCount: null,
     parentId: null,
     laneIndex: activity.laneIndex,
+    // The member row's own fields stay empty: a guest is given the DERIVED membership instead, and it
+    // reaches the canvas as `toGuestSwimlaneInput`, never through the summary (ADR-0205 D2).
     swimlaneId: null,
     swimlaneLanes: [],
     scheduleAsLateAsPossible: false,

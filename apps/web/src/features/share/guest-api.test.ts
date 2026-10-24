@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   toActivitySummary,
   toDependencySummary,
+  toGuestSwimlaneInput,
   type GuestActivity,
   type GuestDependency,
 } from './guest-api';
@@ -150,5 +151,44 @@ describe('toActivitySummary — swimlane fields', () => {
     const summary = toActivitySummary(baseActivity(), 'plan-1');
     expect(summary.swimlaneId).toBeNull();
     expect(summary.swimlaneLanes).toEqual([]);
+  });
+});
+
+describe('toGuestSwimlaneInput (ADR-0205)', () => {
+  const lanes = [
+    { id: 'sl-1', name: 'Civil' },
+    { id: 'sl-2', name: 'Mechanical' },
+  ];
+
+  it('is null when there are no swimlanes to draw, however the activities are filed', () => {
+    const filed = baseActivity({ memberOfSwimlaneId: 'sl-1', swimlaneLaneIndex: 2 });
+    expect(toGuestSwimlaneInput(undefined, [filed])).toBeNull();
+    expect(toGuestSwimlaneInput([], [filed])).toBeNull();
+  });
+
+  it('reshapes the server-derived membership and stored lane for the projection', () => {
+    const input = toGuestSwimlaneInput(lanes, [
+      baseActivity({ id: 'a', memberOfSwimlaneId: 'sl-2', swimlaneLaneIndex: 3 }),
+      baseActivity({ id: 'b', memberOfSwimlaneId: null, swimlaneLaneIndex: 0 }),
+      baseActivity({ id: 'c', memberOfSwimlaneId: 'sl-1', swimlaneLaneIndex: null }),
+    ]);
+    expect(input?.swimlanes).toEqual(lanes);
+    expect(input?.source).toBe('MANUAL');
+    expect(Object.fromEntries(input?.membership ?? [])).toEqual({
+      a: 'sl-2',
+      b: null,
+      c: 'sl-1',
+    });
+    // Lane 0 is a stored lane; only `null` is "never placed" (the absence of a row, ADR-0139).
+    expect(Object.fromEntries(input?.storedLanes ?? [])).toEqual({
+      a: { lane: 3, updatedAt: 0 },
+      b: { lane: 0, updatedAt: 0 },
+    });
+  });
+
+  it('reads an older API’s missing keys as "No swimlane", not as a fault', () => {
+    const input = toGuestSwimlaneInput(lanes, [baseActivity({ id: 'old' })]);
+    expect(input?.membership.get('old')).toBeNull();
+    expect(input?.storedLanes.has('old')).toBe(false);
   });
 });

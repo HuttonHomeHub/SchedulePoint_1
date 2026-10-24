@@ -1,7 +1,7 @@
 import type { PlanStatus } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarRange } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   fetchGuestActivities,
@@ -10,6 +10,7 @@ import {
   GuestFetchError,
   toActivitySummary,
   toDependencySummary,
+  toGuestSwimlaneInput,
   toWorkingDayCalendar,
   type GuestActivity,
 } from '../guest-api';
@@ -19,7 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ContextStrip } from '@/components/ui/form-layout';
 import { EmptyState, LoadingShape, Skeleton } from '@/components/ui/page';
-import { TsldPanel } from '@/features/tsld';
+import { SWIMLANE_GROUND } from '@/features/swimlanes/model/use-swimlane-scene';
+import { gutterWidthForRoom, TsldPanel } from '@/features/tsld';
 import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
 import { barDateSourceFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -176,6 +178,17 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   }, [dependenciesQuery.data, guestActivities, plan]);
   const calendar = useMemo(() => toWorkingDayCalendar(plan?.calendar ?? null), [plan?.calendar]);
 
+  // Swimlanes (ADR-0205): the server has already derived each activity's membership, so the input is a
+  // reshaping of what arrived — there is no second request and so no frame drawn without them. The
+  // lens is the guest's own, on by default, and held here because there is no workspace to keep it.
+  const swimlaneInput = useMemo(
+    () => toGuestSwimlaneInput(plan?.swimlanes, guestActivities ?? []),
+    [plan?.swimlanes, guestActivities],
+  );
+  const [swimlanesOn, setSwimlanesOn] = useState(true);
+  const [gutterRoom, setGutterRoom] = useState(true);
+  const swimlanesDrawn = swimlaneInput !== null && swimlanesOn;
+
   // A dead token (any 404) → the uniform "gone" copy; a 429 → a soft "try again" (still no oracle).
   if (planQuery.isError) return errorFrame(planQuery.error);
 
@@ -276,6 +289,23 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
                 // always resolves to `'visual'`: the plan as the planner laid it out (ADR-0148),
                 // which is what the placed span this share link now carries is FOR (ADR-0163).
                 barDateSource={barDateSourceFor(false)}
+                // A plan with no swimlanes offers no checkbox and draws the diagram it always did.
+                swimlanes={swimlanesDrawn ? swimlaneInput : null}
+                swimlaneGround={SWIMLANE_GROUND}
+                gutterWidthPx={
+                  swimlanesDrawn
+                    ? gutterWidthForRoom({ collapsed: false, room: gutterRoom }).widthPx
+                    : 0
+                }
+                onGutterRoomChange={setGutterRoom}
+                {...(swimlaneInput
+                  ? {
+                      swimlanesToggle: {
+                        checked: swimlanesOn,
+                        onChange: () => setSwimlanesOn((on) => !on),
+                      },
+                    }
+                  : {})}
               />
             )}
           </main>

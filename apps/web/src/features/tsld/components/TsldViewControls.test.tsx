@@ -29,6 +29,28 @@ describe('TsldViewControls', () => {
     expect(onZoomPreset).toHaveBeenCalledWith('day');
   });
 
+  it('offers a Swimlanes checkbox only when the host supplies the lens (the guest view)', () => {
+    const onChange = vi.fn();
+    const { rerender } = renderControls();
+    expect(screen.queryByRole('checkbox', { name: 'Swimlanes' })).not.toBeInTheDocument();
+
+    rerender(
+      <TsldViewControls
+        zoomPreset="week"
+        onZoomPreset={vi.fn()}
+        onZoomStep={vi.fn()}
+        onFit={vi.fn()}
+        toggles={DEFAULT_VIEW_TOGGLES}
+        onToggle={vi.fn()}
+        swimlanes={{ checked: true, onChange }}
+      />,
+    );
+    const lens = screen.getByRole('checkbox', { name: 'Swimlanes' });
+    expect(lens).toBeChecked();
+    fireEvent.click(lens);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
   it('steps zoom in and out', () => {
     const onZoomStep = vi.fn();
     renderControls({ onZoomStep });
