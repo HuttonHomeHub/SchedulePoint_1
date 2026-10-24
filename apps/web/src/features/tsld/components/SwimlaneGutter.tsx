@@ -11,7 +11,7 @@ import {
 } from '../render/swimlane-gutter';
 
 import { Button } from '@/components/ui/button';
-import { Menu, MenuItem } from '@/components/ui/menu';
+import { Menu, MenuItem, MenuSection } from '@/components/ui/menu';
 import { rovingIndexFor, containerShouldStandDown } from '@/components/ui/toolbar/toolbar-keyboard';
 import { useToolbarFocusHandoff } from '@/components/ui/toolbar/use-focus-handoff';
 import { useTooltip } from '@/components/ui/tooltip';
@@ -201,6 +201,8 @@ export function SwimlaneGutter({
           restoreFocusRef={openerRef}
           openerRef={openerRef}
         >
+          {/* The swimlane's full name, visibly: the way a touch reader gets it from the collapsed strip. */}
+          <MenuSection label={menuLabel.name} />
           <MenuItem
             disabled={!writable}
             {...(writeReason ? { disabledReason: writeReason } : {})}
@@ -391,7 +393,6 @@ function GutterLabelButton({
         onFocusLabel();
       }}
       onClick={(event) => {
-        tipTrigger.onClickCapture(event);
         if (hasMenu) open(event.currentTarget);
         else if (collapsed) tip.show();
       }}

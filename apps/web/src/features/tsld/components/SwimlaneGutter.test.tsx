@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import {
   GUTTER_NO_ROOM_REASON,
@@ -249,7 +250,9 @@ describe('the collapsed strip', () => {
   it('names the menu after the swimlane, so a tap reaches the full name on a touch screen', () => {
     mount({ widthPx: SWIMLANE_GUTTER_COLLAPSED_PX });
     fireEvent.click(labelButtons()[1]!);
-    expect(screen.getByRole('menu', { name: 'Actions for Mechanical' })).toBeInTheDocument();
+    const menu = screen.getByRole('menu', { name: 'Actions for Mechanical' });
+    // Visible as well as named: the strip shows "2", and the name is what the menu heads with.
+    expect(within(menu).getByText('Mechanical')).toBeVisible();
   });
 });
 
@@ -317,5 +320,20 @@ describe('the pointer over the gutter', () => {
   it('does not chain the wheel to the page, and the canvas wheel (a time-axis zoom) is not forwarded', () => {
     mount();
     expect(screen.getByTestId('tsld-swimlane-gutter')).toHaveClass('overscroll-contain');
+  });
+});
+
+describe('accessibility', () => {
+  it.each([
+    ['expanded', SWIMLANE_GUTTER_WIDTH_PX],
+    ['collapsed', SWIMLANE_GUTTER_COLLAPSED_PX],
+  ])('has no axe violations %s, or with its menu open', async (_name, widthPx) => {
+    const { container } = mount({ widthPx });
+    expect((await axe(container)).violations).toEqual([]);
+    fireEvent.click(labelButtons()[1]!);
+    // `region` is a page-level rule: a lone portalled menu is not in a landmark by design in a unit mount.
+    expect(
+      (await axe(document.body, { rules: { region: { enabled: false } } })).violations,
+    ).toEqual([]);
   });
 });
