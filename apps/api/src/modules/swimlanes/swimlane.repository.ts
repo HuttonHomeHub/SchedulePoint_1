@@ -215,6 +215,26 @@ export class SwimlaneRepository {
   }
 
   /**
+   * Which of these swimlanes are active in this plan and organisation — a plain read, no lock. For a
+   * caller that must tell a deleted swimlane from a live one without refusing the deleted one (a
+   * member's kept membership, swimlanes spec US-2); a swimlane it then names to write is still locked
+   * by {@link lockActiveForShare}.
+   */
+  async findActiveIds(
+    organizationId: string,
+    planId: string,
+    ids: readonly string[],
+    db: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await db.swimlane.findMany({
+      where: { organizationId, planId, id: { in: [...ids] }, deletedAt: null },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /**
    * Lock the named active swimlanes of this plan `FOR SHARE`, in id order, and return the ids found.
    * The caller holds its activity row locks already (schema-design §5): a swimlane's delete takes
    * `NO KEY UPDATE`, which conflicts with `FOR SHARE`, so an assignment cannot commit against a

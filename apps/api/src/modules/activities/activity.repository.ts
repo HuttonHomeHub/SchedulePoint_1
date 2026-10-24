@@ -321,12 +321,20 @@ export class ActivityRepository {
    * only wrote an in-swimlane lane still bumps `version` — the activity's version is the optimistic
    * lock for its lane rows (schema-design §3.5). The caller has already proven every named swimlane
    * active and in this plan, under `FOR SHARE`, after the activity locks (schema-design §5).
-   * `swimlaneId` travels as `''` for "unchanged", for the reason {@link updateParents} gives.
+   * `swimlaneId` is three-valued: `undefined` keeps the membership, `null` clears it, a uuid sets it.
+   * It travels as a text array plus a `bool[]` "is written" flag, because a single array cannot tell an
+   * omitted value from a null one (`unnest` of a null element is just NULL) — the same reason
+   * {@link updateParents} gives for its `''` sentinel.
    */
   async updateLanePositions(
     organizationId: string,
     planId: string,
-    positions: readonly { id: string; laneIndex?: number; swimlaneId?: string; version: number }[],
+    positions: readonly {
+      id: string;
+      laneIndex?: number;
+      swimlaneId?: string | null;
+      version: number;
+    }[],
     updatedBy: string,
     db: Prisma.TransactionClient,
   ): Promise<number> {
@@ -334,13 +342,15 @@ export class ActivityRepository {
     const ids = positions.map((p) => p.id);
     const laneIndexes = positions.map((p) => p.laneIndex ?? null);
     const swimlaneIds = positions.map((p) => p.swimlaneId ?? '');
+    const swimlaneWritten = positions.map((p) => p.swimlaneId !== undefined);
     const versions = positions.map((p) => p.version);
 
     await lockActivityRowsInIdOrder(db, organizationId, planId, ids);
     return db.$executeRaw`
       UPDATE activities AS a
       SET lane_index = COALESCE(v.lane_index, a.lane_index),
-          swimlane_id = COALESCE(NULLIF(v.swimlane_id, '')::uuid, a.swimlane_id),
+          swimlane_id = CASE WHEN v.swimlane_written THEN NULLIF(v.swimlane_id, '')::uuid
+                             ELSE a.swimlane_id END,
           version = a.version + 1,
           updated_by = ${updatedBy}::text,
           updated_at = now()
@@ -348,8 +358,9 @@ export class ActivityRepository {
         ${ids}::uuid[],
         ${laneIndexes}::int[],
         ${swimlaneIds}::text[],
+        ${swimlaneWritten}::boolean[],
         ${versions}::int[]
-      ) AS v(id, lane_index, swimlane_id, version)
+      ) AS v(id, lane_index, swimlane_id, swimlane_written, version)
       WHERE a.id = v.id
         AND a.version = v.version
         AND a.plan_id = ${planId}::uuid

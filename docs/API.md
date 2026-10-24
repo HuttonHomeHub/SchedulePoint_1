@@ -739,13 +739,16 @@ body that predates swimlanes is still valid. **There is no `basis`, and one is a
 derives it — the swimlane the activity will be in (`SWIMLANE`, or `NO_SWIMLANE`) when the source is
 `MANUAL`, the level-L ancestor summary (`WBS_SUMMARY`) or "No WBS group" at that level
 (`NO_WBS_SUMMARY`) when it is `WBS` — and upserts one row per basis, which is why switching source
-and back finds the old rows. `swimlaneId` in a row files the activity there as well (MANUAL only); an
-omitted one leaves its membership. A lane write while the source is `NONE` is **422
+and back finds the old rows. `swimlaneId` in a row files the activity there as well (MANUAL only):
+a uuid joins that swimlane, **`null` clears the membership ("No swimlane") and stores the lane against
+`NO_SWIMLANE`**, and an omitted one leaves the membership as it is. A member whose stored swimlane has
+been deleted is shown under "No swimlane", so an omitted `swimlaneId` writes its lane as `NO_SWIMLANE`
+too (200, not 404) and leaves its `swimlaneId` untouched for a restore. A lane write while the source is `NONE` is **422
 `SWIMLANE_SOURCE_NONE`**; a named swimlane in WBS mode is **422 `SWIMLANE_SOURCE_IS_WBS`**; an
 unknown, deleted or foreign swimlane is **404** and, like any failed row, nothing is written. The
 server writes exactly the rows it is sent: a client placing a swimlane's unplaced members sends them
-in the same batch. A move into another swimlane is recorded in the activity's history; a lane written
-inside the swimlane the activity is already in is not.
+in the same batch. A move into another swimlane, or out of one with `null`, is recorded in the activity's history; a lane
+written inside the swimlane the activity is already in is not.
 
 ### Activity change history (ADR-0174)
 

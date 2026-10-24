@@ -544,6 +544,126 @@ describe.skipIf(!hasDatabase)('Swimlane placement (e2e, pen enforced)', () => {
       expect((await getActivity(actor, a.id)).swimlaneId).toBeNull();
     });
 
+    it('clears a membership with a null swimlaneId and stores the lane as No swimlane', async () => {
+      const { actor, planId, civil, a } = await manualPlan();
+      const filed = (
+        await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200)
+      ).body.data[0] as ActivityBody;
+      const res = await send(actor, planId, [
+        position(filed, { swimlaneId: null, laneIndex: 6 }),
+      ]).expect(200);
+      const body = res.body.data[0] as ActivityBody;
+      expect(body.swimlaneId).toBeNull();
+      // Both bases are kept: Civil's lane is remembered, and No swimlane gains its own.
+      expect(shape(body.swimlaneLanes)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ basis: 'SWIMLANE', swimlaneId: civil, laneIndex: 3 }),
+          expect.objectContaining({ basis: 'NO_SWIMLANE', swimlaneId: null, laneIndex: 6 }),
+        ]),
+      );
+      expect(body.swimlaneLanes).toHaveLength(2);
+    });
+
+    it('leaves the membership alone when swimlaneId is omitted', async () => {
+      const { actor, planId, civil, a } = await manualPlan();
+      const filed = (
+        await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200)
+      ).body.data[0] as ActivityBody;
+      const res = await send(actor, planId, [position(filed, { laneIndex: 5 })]).expect(200);
+      const body = res.body.data[0] as ActivityBody;
+      expect(body.swimlaneId).toBe(civil);
+      expect(body.swimlaneLanes).toEqual([
+        expect.objectContaining({ basis: 'SWIMLANE', swimlaneId: civil, laneIndex: 5 }),
+      ]);
+    });
+
+    it('records the clear in the history, naming the swimlane it left', async () => {
+      const { actor, planId, civil, a } = await manualPlan();
+      const filed = (
+        await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200)
+      ).body.data[0] as ActivityBody;
+      await send(actor, planId, [position(filed, { swimlaneId: null, laneIndex: 1 })]).expect(200);
+      const entries = await prisma.activityHistoryEntry.findMany({
+        where: { activityId: a.id },
+        orderBy: { lastRecordedAt: 'asc' },
+      });
+      const last = entries[entries.length - 1];
+      expect(last?.changes).toMatchObject({
+        swimlaneId: { from: { id: civil, name: 'Civil' }, to: null },
+      });
+    });
+
+    it('writes a No swimlane lane for a member of a deleted swimlane and keeps its swimlane_id', async () => {
+      const { actor, planId, civil, a, b } = await manualPlan();
+      const filed = (
+        await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200)
+      ).body.data[0] as ActivityBody;
+      await actor.agent.delete(`${lanesUrl(planId)}/${civil}`).expect(204);
+      const member = await getActivity(actor, a.id);
+
+      // The batch holds a second, ordinary row: the deleted membership must not 404 the whole of it.
+      const res = await send(actor, planId, [
+        position(member, { laneIndex: 7 }),
+        position(b, { laneIndex: 2 }),
+      ]).expect(200);
+      const moved = (res.body.data as ActivityBody[]).find((r) => r.id === a.id)!;
+      expect(moved.swimlaneId).toBe(civil);
+      expect(moved.swimlaneLanes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ basis: 'NO_SWIMLANE', swimlaneId: null, laneIndex: 7 }),
+          expect.objectContaining({ basis: 'SWIMLANE', swimlaneId: civil, laneIndex: 3 }),
+        ]),
+      );
+      expect(filed.swimlaneId).toBe(civil);
+      expect((await prisma.activity.findUniqueOrThrow({ where: { id: a.id } })).swimlaneId).toBe(
+        civil,
+      );
+      // Undo of the delete returns the member to the lane it remembered.
+      await actor.agent.post(`${lanesUrl(planId)}/${civil}/restore`).expect(200);
+      expect((await getActivity(actor, a.id)).swimlaneId).toBe(civil);
+    });
+
+    it('moves a member of a deleted swimlane into an active one with an explicit id, bumping its version', async () => {
+      const { actor, planId, civil, mech, a } = await manualPlan();
+      await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200);
+      await actor.agent.delete(`${lanesUrl(planId)}/${civil}`).expect(204);
+      const member = await getActivity(actor, a.id);
+      const res = await send(actor, planId, [
+        position(member, { swimlaneId: mech, laneIndex: 2 }),
+      ]).expect(200);
+      const body = res.body.data[0] as ActivityBody;
+      expect(body).toMatchObject({ swimlaneId: mech, version: member.version + 1 });
+      expect(body.swimlaneLanes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ basis: 'SWIMLANE', swimlaneId: mech, laneIndex: 2 }),
+        ]),
+      );
+    });
+
+    it('bumps the version of a cleared row and of a kept-deleted row like any position write', async () => {
+      const { actor, planId, civil, a, b } = await manualPlan();
+      await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200);
+      await actor.agent.delete(`${lanesUrl(planId)}/${civil}`).expect(204);
+      const member = await getActivity(actor, a.id);
+      const kept = await send(actor, planId, [position(member, { laneIndex: 1 })]).expect(200);
+      expect((kept.body.data[0] as ActivityBody).version).toBe(member.version + 1);
+      const cleared = await send(actor, planId, [
+        position(b, { swimlaneId: null, laneIndex: 1 }),
+      ]).expect(200);
+      expect((cleared.body.data[0] as ActivityBody).version).toBe(b.version + 1);
+    });
+
+    it('still refuses an explicit deleted swimlaneId for a member of a deleted swimlane (404)', async () => {
+      const { actor, planId, civil, a } = await manualPlan();
+      const filed = (
+        await send(actor, planId, [position(a, { swimlaneId: civil, laneIndex: 3 })]).expect(200)
+      ).body.data[0] as ActivityBody;
+      await actor.agent.delete(`${lanesUrl(planId)}/${civil}`).expect(204);
+      await send(actor, planId, [
+        position(await getActivity(actor, filed.id), { swimlaneId: civil, laneIndex: 1 }),
+      ]).expect(404);
+    });
+
     it('answers 404 for an activity of another plan', async () => {
       const { actor, planId, civil } = await manualPlan();
       const otherPlan = await makePlan(actor, 'acme', 'Other plan');
