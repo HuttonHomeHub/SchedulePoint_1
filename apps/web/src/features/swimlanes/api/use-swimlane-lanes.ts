@@ -20,6 +20,19 @@ export interface SwimlaneLaneRow {
     swimlaneId?: string | null;
     laneIndex: number;
   };
+  /**
+   * The same activity's lane in the swimlane-free layout, beside its swimlane lane. Sent by exactly
+   * one caller: auto-resolve, which moves a bar in both pictures in one write (M2-T5). A lane move
+   * on the swimlane layout never sends it (SC-1).
+   */
+  laneIndex?: number;
+}
+
+/** A row that moves only the swimlane-free lane, for a bar auto-resolve moves in that picture alone. */
+export interface PlainLaneRow {
+  id: string;
+  version: number;
+  laneIndex: number;
 }
 
 /**
@@ -35,7 +48,7 @@ export interface SwimlaneLaneRow {
 export function useWriteSwimlaneLanes(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { positions: SwimlaneLaneRow[] }) =>
+    mutationFn: (input: { positions: (SwimlaneLaneRow | PlainLaneRow)[] }) =>
       apiFetch<ActivitySummary[]>(
         `/organizations/${orgSlug}/plans/${planId}/activities/positions`,
         { method: 'PATCH', body: JSON.stringify(input) },

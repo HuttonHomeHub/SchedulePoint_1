@@ -1,13 +1,22 @@
 import type { ActivitySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { PlainLaneRow, SwimlaneLaneRow } from '@/features/swimlanes';
+import type { SwimlaneInput } from '@/features/tsld';
+import type { LaneResolution } from '@/features/tsld/model/auto-resolve';
 import {
-  laneSnapshotOf,
-  type LaneResolution,
-  type LaneSnapshot,
-  resolveNewOverlaps,
-} from '@/features/tsld/model/auto-resolve';
-import { autoArrangeCommand, type BatchPositionsFn, type Command } from '@/features/undo-redo';
+  layoutSnapshotsOf,
+  resolveBothLayouts,
+  type LayoutSnapshots,
+  type SwimlaneResolution,
+} from '@/features/tsld/model/auto-resolve-swimlanes';
+import {
+  autoArrangeCommand,
+  composeSteps,
+  swimlaneLanesCommand,
+  type BatchPositionsFn,
+  type Command,
+} from '@/features/undo-redo';
 import type { PlanEditHistory } from '@/features/undo-redo/use-plan-edit-history';
 
 /** What the dock says after an edit moved a bar clear of an overlap. */
@@ -48,7 +57,7 @@ const RETRY_MS = 250;
 const MAX_RETRIES = 40;
 
 interface Pending {
-  readonly s0: LaneSnapshot;
+  readonly s0: LayoutSnapshots;
   readonly subjects: Set<string>;
 }
 
@@ -67,12 +76,44 @@ function whenIdle(run: () => void): void {
   else setTimeout(run, 0);
 }
 
-function sentenceFor(moves: readonly LaneResolution[], nameOf: (id: string) => string): string {
-  if (moves.length === 1) {
-    const [move] = moves as [LaneResolution];
-    return `Moved “${nameOf(move.id)}” to lane ${move.to + 1} so it no longer overlaps another activity.`;
+const activities = (count: number): string =>
+  count === 1 ? '1 activity' : `${String(count)} activities`;
+
+/**
+ * The dock's sentence, which also names **which picture moved** once the plan has two (swimlanes
+ * M2-T5): a bar can be cleared in the swimlane view, in the plain one the planner would see with
+ * swimlanes off, or in both, and "lane 3" means a different lane in each. With no swimlane picture
+ * the sentences are exactly the ones this had before swimlanes, and a swimlane lane is never named
+ * as a bare "lane" — it is a lane of a named swimlane.
+ */
+function sentenceFor(
+  moves: { plain: readonly LaneResolution[]; swimlane: readonly SwimlaneResolution[] },
+  names: { activity: (id: string) => string; swimlane: (id: string | null) => string },
+  hasSwimlanePicture: boolean,
+): string {
+  const { plain, swimlane } = moves;
+  if (!hasSwimlanePicture) {
+    if (plain.length === 1) {
+      const [move] = plain as [LaneResolution];
+      return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} so it no longer overlaps another activity.`;
+    }
+    return `Moved ${plain.length} activities to free lanes so no two activities overlap.`;
   }
-  return `Moved ${moves.length} activities to free lanes so no two activities overlap.`;
+  if (plain.length > 0 && swimlane.length > 0) {
+    return `Moved ${activities(swimlane.length)} in the swimlane view and ${activities(plain.length)} in the plain view so no two activities overlap.`;
+  }
+  if (swimlane.length === 1) {
+    const [move] = swimlane as [SwimlaneResolution];
+    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} of “${names.swimlane(move.swimlaneId)}” in the swimlane view so it no longer overlaps another activity.`;
+  }
+  if (swimlane.length > 1) {
+    return `Moved ${swimlane.length} activities to free lanes in the swimlane view so no two activities overlap.`;
+  }
+  if (plain.length === 1) {
+    const [move] = plain as [LaneResolution];
+    return `Moved “${names.activity(move.id)}” to lane ${move.to + 1} in the plain view so it no longer overlaps another activity.`;
+  }
+  return `Moved ${plain.length} activities to free lanes in the plain view so no two activities overlap.`;
 }
 
 /**
@@ -102,6 +143,16 @@ export function useAutoResolveOverlaps(params: {
   /** Whether any write is in flight — ANY, including the pen's heartbeat, hence the retry below. */
   isWriting: () => boolean;
   batchPositions: BatchPositionsFn;
+  /**
+   * The neutral swimlane input built from the cache, or `null` when the plan has no readable
+   * swimlanes (source `NONE`, a WBS source before M3, or a list not loaded). With one, both
+   * layouts are resolved and written in one batch.
+   */
+  readSwimlaneInput: () => SwimlaneInput | null;
+  /** The positions write that takes swimlane rows too (`useWriteSwimlaneLanes`). */
+  writeLayouts: (input: {
+    positions: (SwimlaneLaneRow | PlainLaneRow)[];
+  }) => Promise<ActivitySummary[]>;
   history: PlanEditHistory;
   announce: (message: string) => void;
   onWriteRejected: (err: unknown) => void;
@@ -114,7 +165,7 @@ export function useAutoResolveOverlaps(params: {
   const [notice, setNotice] = useState<LayoutResolvedNotice | null>(null);
 
   const begin = useCallback((subjects: Iterable<string>): void => {
-    const { enabled, readActivities } = paramsRef.current;
+    const { enabled, readActivities, readSwimlaneInput } = paramsRef.current;
     if (!enabled) return;
     const pending = pendingRef.current;
     if (pending !== null) {
@@ -122,7 +173,7 @@ export function useAutoResolveOverlaps(params: {
       return;
     }
     pendingRef.current = {
-      s0: laneSnapshotOf(readActivities() ?? []),
+      s0: layoutSnapshotsOf(readActivities() ?? [], readSwimlaneInput()),
       subjects: new Set(subjects),
     };
   }, []);
@@ -170,17 +221,42 @@ export function useAutoResolveOverlaps(params: {
     const rows = paramsRef.current.readActivities();
     if (rows === undefined) return;
     pendingRef.current = null;
-    const moves = resolveNewOverlaps(pending.s0, laneSnapshotOf(rows), pending.subjects);
-    if (moves.length === 0) return;
+    const after = layoutSnapshotsOf(rows, paramsRef.current.readSwimlaneInput());
+    const moves = resolveBothLayouts(pending.s0, after, pending.subjects);
+    if (moves.plain.length === 0 && moves.swimlane.length === 0) return;
     const byId = new Map(rows.map((a) => [a.id, a]));
-    const positions = moves.flatMap((m) => {
+    const plainPositions = moves.plain.flatMap((m) => {
       const row = byId.get(m.id);
       return row === undefined ? [] : [{ id: m.id, laneIndex: m.to, version: row.version }];
     });
-    if (positions.length === 0) return;
+    const swimlaneFor = new Map(moves.swimlane.map((m) => [m.id, m]));
+    const plainTo = new Map(moves.plain.map((m) => [m.id, m.to]));
+    // **One batch for both pictures.** A bar moved in both is one row carrying both lanes; each
+    // field is the picture's own and neither is ever derived from the other (SC-1).
+    const mixed: (SwimlaneLaneRow | PlainLaneRow)[] = [];
+    for (const id of new Set([...plainTo.keys(), ...swimlaneFor.keys()])) {
+      const row = byId.get(id);
+      if (row === undefined) continue;
+      const lane = swimlaneFor.get(id);
+      const flat = plainTo.get(id);
+      mixed.push(
+        lane === undefined
+          ? { id, version: row.version, laneIndex: flat! }
+          : {
+              id,
+              version: row.version,
+              swimlane: { laneIndex: lane.to },
+              ...(flat === undefined ? {} : { laneIndex: flat }),
+            },
+      );
+    }
+    if (mixed.length === 0) return;
     let saved: ActivitySummary[];
     try {
-      saved = await batchPositions({ positions });
+      saved =
+        moves.swimlane.length === 0
+          ? await batchPositions({ positions: plainPositions })
+          : await paramsRef.current.writeLayouts({ positions: mixed });
     } catch (err) {
       // A 423 runs the shared pen contract; anything else (a 409 from a concurrent edit) leaves the
       // overlap drawn with its cue, and the Arrange offer is how the planner clears it. Never a
@@ -189,18 +265,46 @@ export function useAutoResolveOverlaps(params: {
       announce('An overlap could not be cleared automatically. Arrange can clear it.');
       return;
     }
-    const nameOf = (id: string): string => byId.get(id)?.name ?? 'Activity';
-    const message = sentenceFor(moves, nameOf);
-    const command = autoArrangeCommand({
-      batchPositions,
-      before: moves.map((m) => ({ id: m.id, laneIndex: m.from })),
-      after: moves.map((m) => ({ id: m.id, laneIndex: m.to })),
-      saved,
-      label:
-        moves.length === 1
-          ? 'Move activity clear of an overlap'
-          : `Move ${moves.length} activities clear of overlaps`,
-    });
+    const swimlaneNames = new Map(
+      (paramsRef.current.readSwimlaneInput()?.swimlanes ?? []).map((s) => [s.id, s.name]),
+    );
+    const message = sentenceFor(
+      moves,
+      {
+        activity: (id) => byId.get(id)?.name ?? 'Activity',
+        swimlane: (id) => (id === null ? 'No swimlane' : (swimlaneNames.get(id) ?? 'No swimlane')),
+      },
+      pending.s0.swimlane !== null && after.swimlane !== null,
+    );
+    const steps: Command[] = [];
+    if (moves.plain.length > 0) {
+      steps.push(
+        autoArrangeCommand({
+          batchPositions,
+          before: moves.plain.map((m) => ({ id: m.id, laneIndex: m.from })),
+          after: moves.plain.map((m) => ({ id: m.id, laneIndex: m.to })),
+          saved,
+        }),
+      );
+    }
+    if (moves.swimlane.length > 0) {
+      steps.push(
+        swimlaneLanesCommand({
+          writeLanes: paramsRef.current.writeLayouts,
+          before: moves.swimlane.map((m) => ({ id: m.id, swimlaneId: m.swimlaneId, lane: m.from })),
+          after: moves.swimlane.map((m) => ({ id: m.id, swimlaneId: m.swimlaneId, lane: m.to })),
+          saved,
+        }),
+      );
+    }
+    const total = new Set([...plainTo.keys(), ...swimlaneFor.keys()]).size;
+    const label =
+      total === 1
+        ? 'Move activity clear of an overlap'
+        : `Move ${total} activities clear of overlaps`;
+    // Always composed, even for one picture: the swimlane step coalesces by its set of bars, and a
+    // planner nudging the moved bar within 500 ms must not fold their edit into this step (CQ-2).
+    const command = composeSteps({ label, steps });
     history.record(command);
     announce(message);
     setNotice({ message, command });
