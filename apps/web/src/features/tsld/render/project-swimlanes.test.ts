@@ -149,6 +149,22 @@ describe('projectSwimlanes', () => {
 
   it('exposes a read model only', () => {
     const out = projectSwimlanes([], input(), OPTIONS);
-    expect(Object.keys(out).sort()).toEqual(['displayLanes', 'extents', 'laneCount']);
+    expect(Object.keys(out).sort()).toEqual(['derivedIds', 'displayLanes', 'extents', 'laneCount']);
+  });
+
+  it('names the members whose lane was derived rather than read from a stored row', () => {
+    const out = projectSwimlanes(
+      [bar('a1', 0, 1), bar('a2', 0, 1), bar('b1', 0, 1)],
+      input({
+        membership: new Map([
+          ['a1', 'A'],
+          ['a2', 'A'],
+          ['b1', 'B'],
+        ]),
+        storedLanes: new Map([['a1', { lane: 0, updatedAt: 1 }]]),
+      }),
+      OPTIONS,
+    );
+    expect([...out.derivedIds].sort()).toEqual(['a2', 'b1']);
   });
 });

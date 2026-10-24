@@ -47,11 +47,15 @@ const HOST_AND_WRITE_SIDE: Readonly<Record<string, Held>> = {
   'features/tsld/model/arrange-lanes.ts': 'stored-lane',
   'features/tsld/model/auto-resolve.ts': 'display-lane-intent',
   'features/tsld/model/bulk-move.ts': 'display-lane-intent',
+  // The inverse of the projection (M2-T4): turns a display lane into the lane inside a swimlane.
+  'features/tsld/model/swimlane-lanes.ts': 'display-lane-intent',
   'features/tsld/toolbar/use-tsld-toolbar-context.tsx': 'stored-lane',
   'features/undo-redo/commands.ts': 'stored-lane',
 };
 
 const NEVER_MEETS_THE_SWIMLANE_SCENE: Readonly<Record<string, string>> = {
+  'features/swimlanes/api/use-swimlane-lanes.ts':
+    'sends the lane INSIDE a swimlane (`swimlane.laneIndex`); it takes no display lane and writes no swimlane-free one',
   'features/swimlanes/model/manual-membership.ts':
     'reads the stored in-swimlane lane rows to build the projection input; it is the input, not a consumer of the result',
   'features/activity-copy/model/clone-graph.ts': 'a clone carries the stored lane',

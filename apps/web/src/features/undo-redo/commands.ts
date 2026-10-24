@@ -36,6 +36,7 @@ import type {
 import { typeChangeReexpressesDates } from '@/features/activities/model/type-change-dates';
 import { isDurationDerivedType } from '@/features/activities/schemas/activity-schemas';
 import type { DeleteDependencyInput } from '@/features/dependencies/api/use-dependencies';
+import type { SwimlaneLaneRow } from '@/features/swimlanes';
 import { ApiFetchError } from '@/lib/api/client';
 import { minorToMajorInput } from '@/lib/format-money';
 
@@ -1569,6 +1570,139 @@ export function autoArrangeCommand(params: {
       }),
     affectsSchedule: false,
   };
+}
+
+/** `useWriteSwimlaneLanes().mutateAsync` — an all-or-nothing batch of in-swimlane lanes. */
+export type WriteSwimlaneLanesFn = (input: {
+  positions: SwimlaneLaneRow[];
+}) => Promise<ActivitySummary[]>;
+
+/** One bar's place on the swimlane layout: its swimlane (`null`: none) and its lane inside it. */
+export interface SwimlaneLaneState {
+  id: string;
+  swimlaneId: string | null;
+  lane: number;
+}
+
+/** The lane stored for `row` against `swimlaneId`, or `undefined` when it was never placed there. */
+function storedSwimlaneLane(row: ActivitySummary, swimlaneId: string | null): number | undefined {
+  return row.swimlaneLanes.find((l) =>
+    swimlaneId === null
+      ? l.basis === 'NO_SWIMLANE'
+      : l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId,
+  )?.laneIndex;
+}
+
+/**
+ * Reverse a **lane move on the swimlane layout** — a drag, an `Alt+↑/↓` or a plural move made while
+ * swimlanes were drawn (swimlanes M2-T4). It is `autoArrangeCommand`'s shape over the lane a bar
+ * holds *inside its swimlane*: undo puts every bar back in the swimlane and lane it came from, redo
+ * re-applies the move, each through the same all-or-nothing positions batch, and none of it can touch
+ * the swimlane-free `laneIndex` (SC-1).
+ *
+ * A step is checked against the swimlane and the stored lane the step left, so a colleague who has
+ * since moved a bar sets the whole step aside rather than having it dragged back. The swimlane's
+ * unplaced members written beside the move are no part of it: they were already drawn where they were
+ * written, so there is nothing to put back.
+ *
+ * Coalesces by the set of bars, like the plural nudge: a held key is one step.
+ */
+export function swimlaneLanesCommand(params: {
+  writeLanes: WriteSwimlaneLanesFn;
+  before: readonly SwimlaneLaneState[];
+  after: readonly SwimlaneLaneState[];
+  /** The rows the forward batch returned — the state an undo expects to find. */
+  saved: readonly ActivitySummary[];
+  label?: string;
+}): Command {
+  const { writeLanes } = params;
+  const savedById = new Map(params.saved.map((row) => [row.id, row]));
+  const expectation = (
+    states: readonly SwimlaneLaneState[],
+    from?: ReadonlyMap<string, ActivitySummary>,
+  ): Map<string, SwimlaneLaneState> =>
+    new Map(
+      states.map((state) => {
+        const row = from?.get(state.id);
+        return [
+          state.id,
+          row
+            ? {
+                id: state.id,
+                swimlaneId: row.swimlaneId,
+                lane: storedSwimlaneLane(row, row.swimlaneId) ?? state.lane,
+              }
+            : state,
+        ];
+      }),
+    );
+  let atUndo = expectation(params.after, savedById);
+  let atRedo = expectation(params.before);
+  const replay = async (
+    ctx: ReplayContext,
+    expect: ReadonlyMap<string, SwimlaneLaneState>,
+    target: readonly SwimlaneLaneState[],
+    settle: (next: Map<string, SwimlaneLaneState>) => void,
+  ): Promise<ReplayResult> => {
+    const checked = await checkActivities(
+      ctx,
+      [...expect.values()].map((s) => ({ id: s.id, expect: { swimlaneId: s.swimlaneId } })),
+    );
+    if (!checked.ok) return checked.result;
+    for (const state of expect.values()) {
+      const row = checked.rows.get(state.id);
+      if (row === undefined) return notApplicable('gone', 'An activity in this step');
+      if (storedSwimlaneLane(row, state.swimlaneId) !== state.lane) {
+        return notApplicable('changed', row.name);
+      }
+    }
+    const positions: SwimlaneLaneRow[] = [];
+    for (const t of target) {
+      const row = checked.rows.get(t.id);
+      if (row === undefined) return notApplicable('gone', 'An activity in this step');
+      // The endpoint can file an activity in a swimlane and cannot yet file it in none: a step whose
+      // inverse would is set aside, not half-applied.
+      if (t.swimlaneId === null && row.swimlaneId !== null) {
+        return notApplicable('changed', row.name);
+      }
+      positions.push({
+        id: t.id,
+        version: row.version,
+        swimlane: {
+          ...(t.swimlaneId !== null && t.swimlaneId !== row.swimlaneId
+            ? { swimlaneId: t.swimlaneId }
+            : {}),
+          laneIndex: t.lane,
+        },
+      });
+    }
+    return writeOrSetAside('An activity in this step', async () => {
+      const result = await writeLanes({ positions });
+      settle(expectation(target, new Map(result.map((row) => [row.id, row]))));
+    });
+  };
+  const command: Command = {
+    label: params.label ?? `Move ${params.after.length} activities`,
+    subjects: params.after.map((s) => s.id),
+    undo: (ctx) =>
+      replay(ctx, atUndo, params.before, (next) => {
+        atRedo = next;
+      }),
+    redo: (ctx) =>
+      replay(ctx, atRedo, params.after, (next) => {
+        atUndo = next;
+      }),
+    affectsSchedule: false,
+  };
+  return coalescable(command, {
+    key: `swimlane-lanes:${params.after
+      .map((s) => s.id)
+      .sort()
+      .join(',')}`,
+    before: params.before,
+    after: params.after,
+    rebuild: (b, a) => swimlaneLanesCommand({ ...params, before: b, after: a }),
+  });
 }
 
 /** `useBatchPlacements().mutateAsync` — an all-or-nothing time+lane batch; resolves to the rows. */

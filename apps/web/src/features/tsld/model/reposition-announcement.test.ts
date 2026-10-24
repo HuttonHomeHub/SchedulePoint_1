@@ -86,3 +86,90 @@ describe('pluralMoveHint', () => {
     );
   });
 });
+
+describe('repositionAnnouncement with swimlanes shown (ui-architecture C9)', () => {
+  const inMechanical = (lane: number, count: number, changedSwimlane = false) => ({
+    swimlane: 'Mechanical',
+    lane,
+    count,
+    changedSwimlane,
+  });
+
+  it('names the swimlane and the lane inside it, never a bare lane number', () => {
+    const said = repositionAnnouncement(
+      facts({
+        laneChanged: true,
+        requested: 1,
+        landed: 1,
+        original: 0,
+        swimlane: inMechanical(1, 3),
+      }),
+    );
+    expect(said).toBe('Moved “Clad”, in Mechanical, lane 2 of 3.');
+    expect(said).not.toMatch(/ to lane \d/);
+  });
+
+  it('says where a bar went when it crossed into another swimlane', () => {
+    expect(
+      repositionAnnouncement(
+        facts({
+          laneChanged: true,
+          requested: 0,
+          landed: 0,
+          original: 0,
+          swimlane: { swimlane: 'Electrical', lane: 0, count: 2, changedSwimlane: true },
+        }),
+      ),
+    ).toBe('Moved “Clad” to Electrical, lane 1 of 2.');
+  });
+
+  it('says the lane it landed on was the next free one, in the same form', () => {
+    expect(
+      repositionAnnouncement(
+        facts({
+          laneChanged: true,
+          requested: 1,
+          landed: 2,
+          original: 0,
+          swimlane: inMechanical(2, 3),
+        }),
+      ),
+    ).toBe('Moved “Clad”, in Mechanical, lane 3 of 3, the next free lane.');
+  });
+
+  it('says it stayed when there was no free lane, naming the swimlane', () => {
+    expect(
+      repositionAnnouncement(
+        facts({
+          laneChanged: true,
+          requested: 0,
+          landed: 1,
+          original: 1,
+          swimlane: inMechanical(1, 2),
+        }),
+      ),
+    ).toBe('Moved “Clad”; no free lane above, so it stays in Mechanical, lane 2 of 2.');
+  });
+
+  it('keeps the date sentence for a diagonal move', () => {
+    expect(
+      repositionAnnouncement(
+        facts({
+          laneChanged: true,
+          timeChanged: true,
+          snappedDate: 'Mon 3 Feb',
+          requested: 1,
+          landed: 1,
+          original: 0,
+          swimlane: inMechanical(1, 2),
+        }),
+      ),
+    ).toBe('Moved “Clad” to Mon 3 Feb, the next working day, in Mechanical, lane 2 of 2.');
+  });
+
+  it('is unchanged when no swimlane is passed', () => {
+    expect(repositionAnnouncement(facts({ laneChanged: true, requested: 2, landed: 2 }))).toBe(
+      'Moved “Clad” to lane 3.',
+    );
+  });
+});

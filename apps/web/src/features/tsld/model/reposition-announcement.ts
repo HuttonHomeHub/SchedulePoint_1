@@ -12,6 +12,14 @@
  * `requested`, `landed` and `original` are 0-based lanes; the reader hears them 1-based.
  */
 export interface RepositionOutcomeFacts {
+  /**
+   * Present while swimlanes are shown: where the bar is, in its swimlane's terms. The sentence then
+   * names the swimlane and the lane within it ("in Mechanical, lane 2 of 3", ui-architecture C9) and
+   * never a bare "lane N", because a stored lane number means nothing in a stack of swimlanes and a
+   * display lane means something different from the lane the listener sees counted in the gutter.
+   * `requested`/`landed`/`original` still say whether the bar went where it was aimed.
+   */
+  readonly swimlane?: SwimlaneLaneFacts;
   readonly name: string;
   /** The formatted working day a drop onto a non-working day rolls to, when it did. */
   readonly snappedDate: string | null;
@@ -23,7 +31,38 @@ export interface RepositionOutcomeFacts {
   readonly original: number;
 }
 
+/** A lane inside a swimlane, 0-based, and how many lanes the swimlane has once the move has landed. */
+export interface SwimlaneLaneFacts {
+  readonly swimlane: string;
+  readonly lane: number;
+  readonly count: number;
+  /** True when the move put the bar in a different swimlane. */
+  readonly changedSwimlane: boolean;
+}
+
+/** "in Mechanical, lane 2 of 3" — the C9 form. */
+const swimlanePlace = (f: SwimlaneLaneFacts): string =>
+  `${f.swimlane}, lane ${String(f.lane + 1)} of ${String(f.count)}`;
+
+function swimlaneRepositionAnnouncement(f: RepositionOutcomeFacts, s: SwimlaneLaneFacts): string {
+  let sentence = `Moved “${f.name}”`;
+  if (f.snappedDate) sentence += ` to ${f.snappedDate}, the next working day`;
+  if (f.laneChanged) {
+    const place = swimlanePlace(s);
+    if (f.landed === f.original && f.requested !== f.original && !s.changedSwimlane) {
+      sentence += `; no free lane above, so it stays in ${place}`;
+    } else {
+      const lead = s.changedSwimlane ? (f.snappedDate ? ', into' : ' to') : ', in';
+      sentence += `${lead} ${place}`;
+      if (f.landed !== f.requested) sentence += ', the next free lane';
+    }
+  }
+  if (f.timeChanged && !f.snappedDate) sentence += '; dates will update';
+  return `${sentence}.`;
+}
+
 export function repositionAnnouncement(f: RepositionOutcomeFacts): string {
+  if (f.swimlane !== undefined) return swimlaneRepositionAnnouncement(f, f.swimlane);
   let sentence = `Moved “${f.name}”`;
   if (f.snappedDate) sentence += ` to ${f.snappedDate}, the next working day`;
   if (f.laneChanged) {
@@ -40,6 +79,14 @@ export function repositionAnnouncement(f: RepositionOutcomeFacts): string {
   }
   if (f.timeChanged && !f.snappedDate) sentence += '; dates will update';
   return `${sentence}.`;
+}
+
+/**
+ * Said when a lane move on the swimlane layout found no free lane that way and nothing was written.
+ * Off the swimlane layout the host says its own version of this; here the swimlane is part of it.
+ */
+export function stayInSwimlaneAnnouncement(name: string, s: SwimlaneLaneFacts): string {
+  return `No free lane that way for “${name}”; it stays in ${swimlanePlace(s)}.`;
 }
 
 const plural = (n: number, unit: string): string => `${String(n)} ${unit}${n === 1 ? '' : 's'}`;

@@ -46,3 +46,5 @@ export {
 } from './render/wbs-band';
 /** The neutral swimlane input the render layer projects (swimlanes epic C8) — composed by the host. */
 export type { SwimlaneInput } from './render/project-swimlanes';
+/** One row of a lane write on the swimlane layout — a lane inside a swimlane (swimlanes M2-T4). */
+export type { SwimlaneLanePlacement } from './model/swimlane-lanes';

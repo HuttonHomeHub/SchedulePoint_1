@@ -72,6 +72,7 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useRepositionLane: recorded('relaneCommand'),
   useSetActivityVisualStart: recorded('visualStartCommand'),
   useBatchPositions: recorded('autoArrangeCommand'),
+  useWriteSwimlaneLanes: recorded('swimlaneLanesCommand'),
   useBatchPlacements: recorded('bulkPlacementCommand'),
   useReplaceActivitySteps: recorded('stepsReplaceCommand'),
   useReplaceActivityStepsOn: recorded('stepsReplaceCommand'),

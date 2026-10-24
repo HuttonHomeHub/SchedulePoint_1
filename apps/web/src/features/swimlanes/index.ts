@@ -1,4 +1,5 @@
 /** Public surface of the swimlanes feature (swimlanes epic). */
+export { useWriteSwimlaneLanes, type SwimlaneLaneRow } from './api/use-swimlane-lanes';
 export { swimlanesQueryOptions, useSwimlanes } from './api/use-swimlanes';
 export { swimlaneKeys } from '@/lib/query/hierarchy-keys';
 export { manualSwimlaneInput } from './model/manual-membership';

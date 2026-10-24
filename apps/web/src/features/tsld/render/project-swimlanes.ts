@@ -12,12 +12,10 @@ import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
  * that stack. The host swaps it in for `laneIndex` before `toRenderActivities`, which is how the
  * canvas stays ignorant of swimlanes (ADR-0026 §8).
  *
- * **Dark until M2-T1: nothing imports this yet.**
- *
  * It returns a **read model and nothing else**. A display lane is derived and never stored, so
  * there is deliberately no helper that turns one back into a (swimlane, lane) pair here — that
- * inverse is the write side's, and lives with it (M2-T4). Offering it here would invite a display
- * lane to be written as if it were an in-swimlane lane.
+ * inverse is the write side's and lives with it (`model/swimlane-lanes.ts`, M2-T4). Offering it
+ * here would invite a display lane to be written as if it were an in-swimlane lane.
  *
  * The input is neutral on purpose: the render layer imports no other feature, so the host maps the
  * swimlanes feature's rows onto {@link SwimlaneInput}.
@@ -58,6 +56,12 @@ export interface SwimlaneProjection {
   extents: readonly SwimlaneExtent[];
   /** Total display lanes: the sum of the extents' `laneCount`. */
   laneCount: number;
+  /**
+   * The drawn members whose lane was **derived** rather than read from a stored row (feature-spec
+   * §4.4). The write side files each at its displayed lane in the same batch as the first write
+   * into their swimlane, so nothing on screen moves except the subject (materialise on write).
+   */
+  derivedIds: ReadonlySet<string>;
 }
 
 export function projectSwimlanes(
@@ -104,6 +108,7 @@ export function projectSwimlanes(
   if ((placed.get(NONE)?.laneCount ?? 0) > 0) stack.push({ id: null, name: null, key: NONE });
 
   const displayLanes = new Map<string, number>();
+  const derivedIds = new Set<string>();
   const extents: SwimlaneExtent[] = [];
   let next = 0;
   for (const { id, name, key } of stack) {
@@ -112,8 +117,9 @@ export function projectSwimlanes(
     for (const [activityId, lane] of placement?.lanes ?? []) {
       displayLanes.set(activityId, next + lane);
     }
+    for (const activityId of placement?.derived ?? []) derivedIds.add(activityId);
     extents.push({ id, name, firstLane: next, laneCount });
     next += laneCount;
   }
-  return { displayLanes, extents, laneCount: next };
+  return { displayLanes, extents, laneCount: next, derivedIds };
 }
