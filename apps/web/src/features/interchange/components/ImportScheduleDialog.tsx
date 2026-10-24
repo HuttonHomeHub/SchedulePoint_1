@@ -1,4 +1,4 @@
-import type { ResourceCollisionResolution } from '@repo/interchange';
+import type { InterchangeReport, ResourceCollisionResolution } from '@repo/interchange';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -79,6 +79,20 @@ export function ImportScheduleDialog({
 }
 
 /** The upload → dry-run → confirm → commit flow. Mounted only while the dialog is open. */
+/**
+ * Whether the dry-run found a SchedulePoint layout to restore: placed starts, lanes or swimlanes. Each
+ * count is omitted from a foreign file's report, so any of them being present means the file is ours.
+ */
+function carriesLayout(report: InterchangeReport): boolean {
+  const { placements, lanes, swimlanes, swimlaneMembers } = report.mapped;
+  return (
+    placements !== undefined ||
+    lanes !== undefined ||
+    swimlanes !== undefined ||
+    swimlaneMembers !== undefined
+  );
+}
+
 function ImportFlow({
   orgSlug,
   projectId,
@@ -129,14 +143,11 @@ function ImportFlow({
         // Announce that the report resolved so a screen-reader user not focused on the mounting
         // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
         onSuccess: (report) => {
-          if (report.mapped.placements !== undefined || report.mapped.lanes !== undefined) {
-            setFileHasLayout(true);
-          }
+          if (carriesLayout(report)) setFileHasLayout(true);
           const collisions = report.resourceCollisions?.length ?? 0;
-          const layout =
-            report.mapped.placements !== undefined || report.mapped.lanes !== undefined
-              ? ' The file carries a SchedulePoint layout, which will be restored.'
-              : '';
+          const layout = carriesLayout(report)
+            ? ' The file carries a SchedulePoint layout, which will be restored.'
+            : '';
           announce(
             `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.` +
               layout +
