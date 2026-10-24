@@ -48,10 +48,7 @@ import {
 } from '@/features/plan-actions/make-milestone-gate';
 import { ActivityResourcesDialog, type OnAssignmentEdited } from '@/features/resources';
 import { SwimlaneBulkAssignBar } from '@/features/swimlanes';
-import {
-  SWIMLANES_FOLLOW_WBS_REASON,
-  type SwimlaneAssignment,
-} from '@/features/tsld/model/swimlane-assignment';
+import { SWIMLANES_FOLLOW_WBS_REASON, type SwimlaneAssignment } from '@/features/tsld';
 import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
@@ -902,7 +899,7 @@ export function ActivitiesTable({
       // The activity's swimlane (swimlanes M4-T1), only when the host says the plan has some to show.
       // Display only: assigning is the bulk bar's job, as the other definition columns are the editor's.
       // Under the WBS source it says so rather than naming a swimlane the table does not derive — the
-      // reason is the cell's visible text, its tooltip and its screen-reader text (ADR-0083).
+      // reason is stated once, in a visible note above the table, not repeated on every row (ADR-0083).
       ...(swimlanes
         ? [
             {
@@ -911,20 +908,16 @@ export function ActivitiesTable({
               cellClassName: 'hidden whitespace-nowrap lg:table-cell',
               cell: (activity: ActivitySummary) => {
                 if (swimlanes.source === 'WBS') {
-                  return (
-                    <span className="text-muted-foreground" title={SWIMLANES_FOLLOW_WBS_REASON}>
-                      Follows the WBS
-                      <span className="sr-only">. {SWIMLANES_FOLLOW_WBS_REASON}</span>
-                    </span>
-                  );
+                  return <span className="text-muted-foreground">Follows the WBS</span>;
                 }
                 const { assignment } = swimlanes;
-                const current = assignment.choices.find(
-                  (c) => c.id === assignment.currentOf(activity.id),
-                );
-                return (
-                  <span className="text-muted-foreground">{current?.name ?? 'No swimlane'}</span>
-                );
+                const currentId = assignment.currentOf(activity.id);
+                const current =
+                  currentId === null
+                    ? undefined
+                    : assignment.choices.find((c) => c.id === currentId);
+                // An em dash for none, as the Parent column reads (the select still names "No swimlane").
+                return <span className="text-muted-foreground">{current?.name ?? '—'}</span>;
               },
             } satisfies Column<ActivitySummary>,
           ]
@@ -1066,6 +1059,25 @@ export function ActivitiesTable({
     actionsFor,
   ]);
 
+  /** A bulk write landed: clear the selection and hand focus back to the table's region. */
+  const afterBulkWrite = (): void => {
+    flushSync(clearSelection);
+    regionRef.current?.focus();
+  };
+
+  const swimlaneBar = (companion: boolean): React.ReactElement | null =>
+    swimlaneAssignment ? (
+      <SwimlaneBulkAssignBar
+        assignment={swimlaneAssignment}
+        ids={selectedActivities.map((a) => a.id)}
+        names={selectedActivities.map((a) => a.name)}
+        gate={swimlaneGate}
+        companion={companion}
+        onClear={clearSelection}
+        onDone={afterBulkWrite}
+      />
+    ) : null;
+
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
@@ -1121,6 +1133,8 @@ export function ActivitiesTable({
       */}
       {wbsBulkAssignActive ? (
         <div className="shrink-0">
+          {/* One container when both apply: the WBS bar owns the count, the live region and Clear
+              selection, and the swimlane row sits inside it as a companion. */}
           <WbsBulkAssignBar
             orgSlug={orgSlug}
             planId={planId}
@@ -1129,29 +1143,17 @@ export function ActivitiesTable({
             gate={membersGate}
             {...(onReparented ? { onReparented } : {})}
             onClear={clearSelection}
-            onDone={() => {
-              flushSync(clearSelection);
-              regionRef.current?.focus();
-            }}
-          />
+            onDone={afterBulkWrite}
+          >
+            {swimlaneBar(true)}
+          </WbsBulkAssignBar>
         </div>
+      ) : swimlaneAssignment ? (
+        <div className="shrink-0">{swimlaneBar(false)}</div>
       ) : null}
 
-      {swimlaneAssignment ? (
-        <div className="shrink-0">
-          <SwimlaneBulkAssignBar
-            assignment={swimlaneAssignment}
-            ids={selectedActivities.map((a) => a.id)}
-            names={selectedActivities.map((a) => a.name)}
-            gate={swimlaneGate}
-            companion={wbsBulkAssignActive}
-            onClear={clearSelection}
-            onDone={() => {
-              flushSync(clearSelection);
-              regionRef.current?.focus();
-            }}
-          />
-        </div>
+      {swimlanes?.source === 'WBS' ? (
+        <p className="text-muted-foreground shrink-0 text-sm">{SWIMLANES_FOLLOW_WBS_REASON}</p>
       ) : null}
 
       {/* `scroll="contained"`: this table is the ONE scroller inside a height-capped pane

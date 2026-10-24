@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
+import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable, type ActivitiesTableSwimlanes } from './ActivitiesTable';
 
@@ -74,19 +75,30 @@ describe('ActivitiesTable — Swimlane column', () => {
     expect(screen.queryByRole('checkbox', { name: 'Select all activities' })).toBeNull();
   });
 
-  it('names each activity’s swimlane, and "No swimlane" for one that is in none', () => {
+  it('is absent when the host passes null, as for a hand-made plan with no swimlanes yet', () => {
+    renderTable(null);
+    expect(screen.queryByRole('columnheader', { name: 'Swimlane' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Select all activities' })).toBeNull();
+  });
+
+  it('names each activity’s swimlane, and an em dash for one that is in none', () => {
     renderTable(manual());
     expect(screen.getByRole('columnheader', { name: 'Swimlane' })).toBeInTheDocument();
     expect(within(rowOf('Excavate')).getByText('Civil')).toBeInTheDocument();
-    expect(within(rowOf('Blind')).getByText('No swimlane')).toBeInTheDocument();
+    // The same cell position in the other row: the Swimlane column.
+    const civilCell = within(rowOf('Excavate')).getByText('Civil').closest('td') as HTMLElement;
+    const position = Array.from(rowOf('Excavate').children).indexOf(civilCell);
+    expect(rowOf('Blind').children[position]).toHaveTextContent('—');
+    expect(within(rowOf('Blind')).queryByText('No swimlane')).toBeNull();
   });
 
   it('is read-only with its reason under the WBS source, and offers no selection', () => {
     renderTable({ source: 'WBS' });
     expect(screen.getByRole('columnheader', { name: 'Swimlane' })).toBeInTheDocument();
     const cell = within(rowOf('Excavate')).getByText('Follows the WBS');
-    expect(cell).toHaveAttribute('title', 'Swimlanes follow the WBS in this plan.');
-    expect(cell).toHaveTextContent('Swimlanes follow the WBS in this plan.');
+    expect(cell).not.toHaveAttribute('title');
+    // The full reason is stated once, visibly, not on every row.
+    expect(screen.getAllByText('Swimlanes follow the WBS in this plan.')).toHaveLength(1);
     expect(screen.queryByRole('checkbox', { name: 'Select all activities' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
   });
@@ -115,11 +127,14 @@ describe('ActivitiesTable — bulk assign to a swimlane', () => {
     renderTable(manual(), true, [...ROWS, SUMMARY]);
     expect(screen.queryByRole('checkbox', { name: 'Select Substructure' })).toBeNull();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Excavate' }));
-    // Two bars over one selection, one count and one Clear between them.
-    expect(screen.getAllByText('1 activity selected')).toHaveLength(1);
+    // One container, one count, one Clear and one live region for both rows.
+    expect(screen.getAllByText(/1 activity selected/)).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Clear selection' })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Move' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Assign' })).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    const swimlaneRow = screen.getByRole('group', { name: 'Swimlane' });
+    const assign = screen.getByRole('button', { name: 'Assign' });
+    expect(swimlaneRow).toContainElement(screen.getByRole('button', { name: 'Move' }));
+    expect(swimlaneRow.parentElement).toContainElement(assign);
   });
 
   it('shades Move with aria-disabled and says why when the reader may not write', () => {
@@ -129,6 +144,34 @@ describe('ActivitiesTable — bulk assign to a swimlane', () => {
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toBeDisabled();
     expect(screen.getByText('You can’t change swimlanes here.')).toBeInTheDocument();
+  });
+
+  it('reuses the editor’s General gate for the swimlane write, by its reason', () => {
+    const gating = {
+      general: { writable: false, reason: 'Start editing to change this plan.' },
+      members: { writable: true, reason: null },
+    } as unknown as ActivityEditorGating;
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      activityKeys.listByPlan('acme', 'pl1'),
+      ROWS.map((r) => ({ parentId: null, ...r })),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ActivitiesTable
+          onOpenEditor={() => {}}
+          orgSlug="acme"
+          planId="pl1"
+          canEditSchedule
+          editorGating={gating}
+          calendars={[]}
+          swimlanes={manual()}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Excavate' }));
+    expect(screen.getByText('Start editing to change this plan.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('clears the selection from the bar', () => {

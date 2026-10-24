@@ -1,8 +1,11 @@
 import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
-import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
+import {
+  MoveToSwimlaneControl,
+  SWIMLANES_OFF_MOVE_REASON,
+  type SwimlaneAssignment,
+} from '@/features/tsld';
 
 const selectedCount = (n: number): string =>
   n === 1 ? '1 activity selected' : `${String(n)} activities selected`;
@@ -49,7 +52,12 @@ export function SwimlaneBulkAssignBar({
     <div
       role="group"
       {...(companion ? { 'aria-label': 'Swimlane' } : { 'aria-labelledby': headingId })}
-      className="border-border bg-muted/40 flex flex-col gap-3 rounded-lg border p-3"
+      // Alone it is a bar of its own; as a companion it is a row inside the other bar's container.
+      className={
+        companion
+          ? 'border-border flex flex-col gap-3 border-t pt-3'
+          : 'border-border bg-muted/40 flex flex-col gap-3 rounded-lg border p-3'
+      }
     >
       {companion ? null : (
         <p id={headingId} className="text-foreground text-sm">
@@ -63,11 +71,9 @@ export function SwimlaneBulkAssignBar({
         gate={gate}
         onDone={onDone}
         fieldLabel="Move to swimlane"
-        hint={
-          assignment.shown ? undefined : (
-            <p>Swimlanes aren’t shown on the diagram. Turn on Swimlanes in View to see them.</p>
-          )
-        }
+        quietStatus={companion}
+        // One reason at a time: the pen's reason, when there is one, is the status line's.
+        hint={assignment.shown || !gate.writable ? undefined : <p>{SWIMLANES_OFF_MOVE_REASON}</p>}
       />
       {companion ? null : (
         <div>

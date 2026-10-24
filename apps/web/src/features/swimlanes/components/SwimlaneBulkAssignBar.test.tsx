@@ -5,7 +5,7 @@ import { axe } from 'vitest-axe';
 import { SwimlaneBulkAssignBar } from './SwimlaneBulkAssignBar';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
+import { SWIMLANES_OFF_MOVE_REASON, type SwimlaneAssignment } from '@/features/tsld';
 
 const WRITABLE = { writable: true, reason: null };
 
@@ -119,7 +119,16 @@ describe('SwimlaneBulkAssignBar', () => {
 
   it('points at the View toggle when swimlanes are not drawn', () => {
     renderBar({}, assignment({ shown: false }));
-    expect(screen.getByText(/Turn on Swimlanes in View to see them/)).toBeInTheDocument();
+    expect(screen.getByText(SWIMLANES_OFF_MOVE_REASON)).toBeInTheDocument();
+  });
+
+  it('gives one reason at a time: the pen’s, not also the View hint', () => {
+    renderBar(
+      { gate: { writable: false, reason: 'Start editing to change swimlanes.' } },
+      assignment({ shown: false }),
+    );
+    expect(screen.getByText('Start editing to change swimlanes.')).toBeInTheDocument();
+    expect(screen.queryByText(SWIMLANES_OFF_MOVE_REASON)).toBeNull();
   });
 
   it('clears the selection on request', () => {
@@ -131,6 +140,8 @@ describe('SwimlaneBulkAssignBar', () => {
   it('leaves out the count and Clear when another bar already carries them', () => {
     renderBar({ companion: true });
     expect(screen.queryByText('2 activities selected')).toBeNull();
+    // Its status line is not a second live region beside the other bar's.
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Clear selection' })).toBeNull();
     expect(screen.getByRole('group', { name: 'Swimlane' })).toBeInTheDocument();
     expect(move()).toBeInTheDocument();

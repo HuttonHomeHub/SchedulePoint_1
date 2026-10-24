@@ -59,3 +59,9 @@ export type {
   SwimlaneAssignOutcome,
   SwimlaneChoice,
 } from './model/swimlane-assignment';
+/** The control behind every Move to swimlane…, and the reasons its hosts shade it with (M4-T1). */
+export { MoveToSwimlaneControl } from './components/MoveToSwimlaneControl';
+export {
+  SWIMLANES_FOLLOW_WBS_REASON,
+  SWIMLANES_OFF_MOVE_REASON,
+} from './model/swimlane-assignment';
