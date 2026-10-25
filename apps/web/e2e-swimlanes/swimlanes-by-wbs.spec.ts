@@ -74,8 +74,10 @@ async function findBar(page: Page, name: string): Promise<{ x: number; y: number
   };
   let last = await activeText();
   for (let y = region.y + 12; y < region.y + region.height - 4; y += 9) {
-    // Well in from the left: the bar's end zones (8 px, `EDGE_HANDLE_PX`) start a resize, not a move.
-    for (const dx of [40, 60, 90, 130, 180]) {
+    // Well inside a bar: its end zones (8 px, `EDGE_HANDLE_PX`) start a resize, not a move. The bars
+    // here start at the data date, about 60 px in from the gutter, and run for days, so 200 px and
+    // more lands on the body of a bar and never on its start edge.
+    for (const dx of [200, 260, 320, 380, 440]) {
       await page.mouse.click(left + dx, y);
       const now = await activeText();
       if (now !== last && now.startsWith(name)) return { x: left + dx, y };
