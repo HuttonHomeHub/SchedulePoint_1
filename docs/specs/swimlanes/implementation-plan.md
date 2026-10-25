@@ -899,9 +899,17 @@ swimlanesOffered)` drops it unless the host says the plan has swimlanes (the tab
     change a closed select on every arrow. A refusal keeps the list open beside its sentence.
   - **Under the WBS source** the cell reads "Follows the WBS", is `aria-readonly` and carries
     `SWIMLANES_FOLLOW_WBS_REASON` (sr-only description, plus the app's own tip on a double-click, ADR-0204).
-  - **Open:** F2 opens the first writable typed cell, which is Activity, so the keyboard route to a swimlane
-    is the activity editor's Swimlane field (M2-T10), as Duration and the dates have no keyboard cell cursor either.
-    A summary's swimlane is not "rolled up", so `ganttCellGate` leaves it out of the summary rule.
+  - **The keyboard route is Shift+F2 on a row** (WCAG 2.1.1; review fold-in). Plain F2 still opens the first
+    writable typed cell, and the grid has no cell cursor to name a column, so the picker has its own chord:
+    the cell registers its `open` with the panel (as `registerShow` registers the tip) and Shift+F2 calls it
+    and focuses the list; shut, it shows the cell's tip and announces the reason once. A summary's swimlane is
+    not "rolled up", so `ganttCellGate` leaves it out of the summary rule.
+  - **Refusals are spoken and linked:** every failure is announced and the list is described by the visible
+    refusal (`GanttCell` hands the field the refusal's id). A draft made with the arrow keys is committed on
+    blur rather than dropped. A writable closed cell draws a chevron; the WBS text is muted like the table's.
+  - **Known trade-off:** the open list is 24 px (`h-6`) and carries `data-gantt-coarse-exempt="cell-input"`,
+    exactly like the typed cells' input. Its large-target route is the activity editor's Swimlane field
+    (ADR-0177 D4); the 44 px coarse sweep does not cover it.
 
 #### Feature: the guest view (only if SQ-4 = yes)
 

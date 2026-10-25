@@ -292,6 +292,24 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
     trigger.remove();
   });
 
+  it('never prints the Swimlane column, even with nothing hidden (swimlanes M4-T2)', () => {
+    act(() => {
+      printGanttSchedule(
+        {
+          title: 'North Tower',
+          subtitle: '—',
+          activities: [anActivity()],
+          hiddenColumns: new Set(),
+          dependencies: [],
+        },
+        { print: vi.fn() },
+      );
+    });
+    const headers = [...(container()?.querySelectorAll('th') ?? [])].map((h) => h.textContent);
+    expect(headers).toContain('Predecessors');
+    expect(headers).not.toContain('Swimlane');
+  });
+
   it('tears down on the fallback timeout when `afterprint` never fires', () => {
     vi.useFakeTimers();
     act(() => {

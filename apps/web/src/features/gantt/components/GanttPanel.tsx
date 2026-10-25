@@ -72,11 +72,7 @@ import {
   type GanttColumnKey,
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
-import {
-  SWIMLANE_CELL_WBS_REASON,
-  swimlaneCellLabel,
-  type GanttSwimlanes,
-} from '../model/swimlane-cell';
+import { swimlaneCellGate, swimlaneCellLabel, type GanttSwimlanes } from '../model/swimlane-cell';
 import { TOUCH_ARM_HINT, takeTouchHint, touchSelectionNote } from '../model/touch-note';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
@@ -462,6 +458,13 @@ function GanttPanelBody({
   const registerCellShow = useCallback((cellId: string, show: (() => void) | null): void => {
     if (show) cellShows.current.set(cellId, show);
     else cellShows.current.delete(cellId);
+  }, []);
+  // Each Swimlane cell's `open`, keyed `activityId:swimlane`: the cell owns its open state, so
+  // Shift+F2 on a row asks it through this (the same shape as `cellShows`).
+  const cellOpens = useRef(new Map<string, () => void>());
+  const registerCellOpen = useCallback((cellId: string, open: (() => void) | null): void => {
+    if (open) cellOpens.current.set(cellId, open);
+    else cellOpens.current.delete(cellId);
   }, []);
   const pendingFocus = useRef(false);
 
@@ -1035,6 +1038,23 @@ function GanttPanelBody({
         // rather than leaving a reader to infer that F2 is arbitrary.
         if (!row || row.kind !== 'activity' || editing === undefined) break;
         const activity = row.activity;
+        // **Shift+F2 is the keyboard route to the Swimlane cell** (WCAG 2.1.1). Plain F2 keeps opening
+        // the first writable typed cell, and the grid has no cell cursor to say "the third column", so
+        // the picker gets its own chord rather than being reachable only by a double-click. Shut, it
+        // states its reason the way a refused F2 does.
+        if (event.shiftKey) {
+          if (!swimlanes || !COLUMNS.some((c) => c.key === 'swimlane')) break;
+          event.preventDefault();
+          const swimlaneId = `${activity.id}:swimlane`;
+          const gate = swimlaneCellGate(swimlanes, editing, activity.id);
+          if (gate.writable) {
+            cellOpens.current.get(swimlaneId)?.();
+          } else if (!event.repeat) {
+            cellShows.current.get(swimlaneId)?.();
+            if (gate.reason !== null) drag?.announce(gate.reason);
+          }
+          break;
+        }
         let firstRefusal: { cellKey: GanttCellKey; reason: string } | null = null;
         for (const column of COLUMNS) {
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
@@ -1440,6 +1460,7 @@ function GanttPanelBody({
                   onTouchSelect={onTouchSelect}
                   onTouchEngaged={dismissTouchHint}
                   registerCellShow={registerCellShow}
+                  registerCellOpen={registerCellOpen}
                   registerMenu={(handle: GanttRowMenuHandle | null) => {
                     if (handle) menuHandles.current.set(id, handle);
                     else menuHandles.current.delete(id);
@@ -1717,6 +1738,8 @@ interface GanttRowViewProps {
   registerMenu?: ((handle: GanttRowMenuHandle | null) => void) | undefined;
   /** Hands the panel each editable cell's reason-tip function (F2's refusal reaches the cell by it). */
   registerCellShow?: ((cellId: string, show: (() => void) | null) => void) | undefined;
+  /** Hands the panel each Swimlane cell's opener (Shift+F2 reaches the cell by it). */
+  registerCellOpen?: ((cellId: string, open: (() => void) | null) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
@@ -1777,6 +1800,7 @@ function GanttRowView({
   onTouchEngaged,
   registerMenu,
   registerCellShow,
+  registerCellOpen,
   onToggle,
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
@@ -2181,18 +2205,10 @@ function GanttRowView({
                 text={text}
                 colIndex={i + 1}
                 width={resolveColumnWidth(column)}
-                gate={
-                  swimlanes.source === 'WBS'
-                    ? {
-                        writable: false,
-                        readable: true,
-                        readOnly: true,
-                        reason: SWIMLANE_CELL_WBS_REASON,
-                      }
-                    : editing.gateFor('swimlane', activity.id)
-                }
+                gate={swimlaneCellGate(swimlanes, editing, activity.id)}
                 assignment={swimlanes.source === 'MANUAL' ? swimlanes.assignment : null}
                 registerShow={(show) => registerCellShow?.(`${activity.id}:swimlane`, show)}
+                registerOpen={(open) => registerCellOpen?.(`${activity.id}:swimlane`, open)}
                 onClosed={editing.onCellClosed}
               />
             );

@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { GanttCellGate } from '../model/cell-gate';
 
 import { GanttCell } from './GanttCell';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import type { SwimlaneAssignment } from '@/features/tsld';
+import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
 import {
   NOT_MOVED_REASON,
+  SWIMLANE_MOVE_FAILED,
   swimlaneAssignedAnnouncement,
   withReload,
 } from '@/features/tsld/model/swimlane-assignment';
@@ -53,6 +55,7 @@ export function GanttSwimlaneCell({
   gate,
   assignment,
   registerShow,
+  registerOpen,
   onClosed,
 }: {
   activityId: string;
@@ -65,6 +68,11 @@ export function GanttSwimlaneCell({
   /** Absent under the WBS source, where the cell can only be shut. */
   assignment: SwimlaneAssignment | null;
   registerShow: ((show: (() => void) | null) => void) | undefined;
+  /**
+   * Hands the panel this cell's `open`, and withdraws it on unmount: the keyboard route (Shift+F2 on
+   * the row) cannot ask the cell any other way, because the cell owns its open state.
+   */
+  registerOpen: ((open: (() => void) | null) => void) | undefined;
   /** The cell closed: the host restores focus to the row (WCAG 2.4.3). */
   onClosed: () => void;
 }): React.ReactElement {
@@ -83,6 +91,24 @@ export function GanttSwimlaneCell({
     if (open) selectRef.current?.focus();
   }, [open]);
 
+  const begin = useCallback((): void => {
+    if (assignment === null) return;
+    setDraft(currentValue);
+    setOpen(true);
+  }, [assignment, currentValue]);
+  // Handed to the panel so the keyboard route (Shift+F2 on the row) can open this cell, which owns its
+  // open state; withdrawn on unmount so a recycled row never holds a stale opener.
+  useEffect(() => {
+    registerOpen?.(begin);
+    return () => registerOpen?.(null);
+  }, [registerOpen, begin]);
+
+  /** A refusal is spoken as well as drawn: the field's description is read on arrival, not on change. */
+  const fail = (message: string): void => {
+    setError(message);
+    announce(message);
+  };
+
   const close = (restoreFocus: boolean): void => {
     keyboardNav.current = false;
     setError(null);
@@ -90,15 +116,19 @@ export function GanttSwimlaneCell({
     if (restoreFocus) onClosed();
   };
 
-  const commit = (value: string): void => {
+  const commit = (value: string, restoreFocus = true): void => {
     if (assignment === null || busy) return;
     if (value === currentValue) {
-      close(true);
+      close(restoreFocus);
       return;
     }
     const target = value === NONE_VALUE ? null : value;
     const choice = assignment.choices.find((c) => c.id === target);
-    if (choice === undefined) return;
+    if (choice === undefined) {
+      // The list is built from `choices`, so a value outside it is a stale list: say so, never no-op.
+      fail(NOT_MOVED_REASON);
+      return;
+    }
     setError(null);
     setBusy(true);
     assignment.assign([activityId], target).then(
@@ -107,10 +137,10 @@ export function GanttSwimlaneCell({
         if (!outcome.applied) {
           // A stay (already there) closes quietly; a refusal keeps the list open beside its reason.
           if (outcome.conflict === null && outcome.moved === 0) {
-            close(true);
+            close(restoreFocus);
             return;
           }
-          setError(
+          fail(
             outcome.conflict
               ? outcome.refreshable === false
                 ? outcome.conflict
@@ -127,16 +157,16 @@ export function GanttSwimlaneCell({
             landed: outcome.landed,
           }),
         );
-        close(true);
+        close(restoreFocus);
       },
       (err: unknown) => {
         setBusy(false);
-        setError(err instanceof Error ? err.message : 'Couldn’t move the activity.');
+        fail(err instanceof Error ? err.message : SWIMLANE_MOVE_FAILED);
       },
     );
   };
 
-  const field =
+  const field = ({ errorId }: { errorId: string | undefined }): React.ReactNode =>
     assignment === null ? null : (
       <select
         ref={selectRef}
@@ -146,6 +176,7 @@ export function GanttSwimlaneCell({
         aria-label={`Swimlane, ${activityName}`}
         aria-busy={busy || undefined}
         aria-invalid={error !== null || undefined}
+        aria-describedby={errorId}
         value={draft}
         className="bg-field text-field-foreground border-input h-6 w-full rounded border px-1"
         onPointerDown={() => {
@@ -177,7 +208,11 @@ export function GanttSwimlaneCell({
           }
         }}
         onBlur={() => {
-          if (!busy) close(false);
+          if (busy) return;
+          // A draft made with the arrow keys is committed on the way out rather than silently dropped
+          // (the planner picked it), without pulling focus back from where they went.
+          if (keyboardNav.current && draft !== currentValue) commit(draft, false);
+          else close(false);
         }}
       >
         {assignment.choices.map((choice) => (
@@ -199,17 +234,24 @@ export function GanttSwimlaneCell({
       text={text}
       busy={busy}
       errorMessage={error}
-      onBegin={() => {
-        if (assignment === null) return;
-        setDraft(currentValue);
-        setOpen(true);
-      }}
+      onBegin={begin}
       onChange={() => undefined}
       onCommit={() => undefined}
       onCancel={() => close(true)}
       registerShow={registerShow}
       className="text-left"
       field={field}
-    />
+    >
+      {/* A writable cell shows a chevron: otherwise nothing says it is a list, and double-click or F2
+          is not discoverable. Under the WBS source the text is muted like the table's. */}
+      <span className="flex items-center justify-between gap-1">
+        <span className={assignment === null ? 'text-muted-foreground truncate' : 'truncate'}>
+          {text}
+        </span>
+        {assignment !== null && gate.writable ? (
+          <ChevronDown aria-hidden="true" className="text-muted-foreground size-3 shrink-0" />
+        ) : null}
+      </span>
+    </GanttCell>
   );
 }

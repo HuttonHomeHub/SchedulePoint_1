@@ -79,9 +79,10 @@ export interface GanttCellProps {
   /**
    * A control to show in place of the text input while the cell is open, for a cell that picks from a
    * list rather than types (the swimlane cell, swimlanes M4-T2). It owns its own keys and focus; the
-   * cell still supplies the gate, the reason and the refusal. Additive and Gantt-feature-local.
+   * cell still supplies the gate, the reason and the refusal; given as a function it is handed the
+   * refusal's id (only while a refusal is showing) so the control can be described by it. Additive and Gantt-feature-local.
    */
-  field?: React.ReactNode;
+  field?: React.ReactNode | ((refusal: { errorId: string | undefined }) => React.ReactNode);
   children?: React.ReactNode;
 }
 
@@ -124,7 +125,9 @@ export function GanttCell({
   // The refusal belongs to the open field, so it is only shown (and only linked) while one is open.
   const errorShown = editing && errorMessage !== null;
 
-  const field = customField ?? (
+  const field = (typeof customField === 'function'
+    ? customField({ errorId: errorShown ? errorId : undefined })
+    : customField) ?? (
     <input
       ref={inputRef}
       // ADR-0177 D4's coarse list: the open input is 24 px (`h-6`) and its large-target route

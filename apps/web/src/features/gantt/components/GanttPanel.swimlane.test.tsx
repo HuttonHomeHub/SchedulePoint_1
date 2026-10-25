@@ -9,8 +9,11 @@ import type { GanttSwimlanes } from '../model/swimlane-cell';
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import type { SwimlaneAssignOutcome, SwimlaneAssignment } from '@/features/tsld';
-import { SWIMLANES_FOLLOW_WBS_REASON } from '@/features/tsld';
+import type {
+  SwimlaneAssignOutcome,
+  SwimlaneAssignment,
+} from '@/features/tsld/model/swimlane-assignment';
+import { SWIMLANES_FOLLOW_WBS_REASON } from '@/features/tsld/model/swimlane-assignment';
 import { anActivity } from '@/test/activity-fixture';
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -94,13 +97,31 @@ const manual = (assignment: SwimlaneAssignment): GanttSwimlanes => ({
   assignment,
 });
 
+const dragAnnounce = vi.fn();
+
 function renderGrid(
   swimlanes: GanttSwimlanes | null | undefined,
   editing: GanttGridEditing | null = editingBundle(),
+  extra: Partial<React.ComponentProps<typeof GanttPanel>> = {},
 ) {
   return render(
     <AnnouncerProvider>
-      <GanttPanel activities={[activity()]} editing={editing ?? undefined} swimlanes={swimlanes} />
+      <GanttPanel
+        activities={[activity()]}
+        editing={editing ?? undefined}
+        swimlanes={swimlanes}
+        drag={{
+          canEdit: true,
+          reason: null,
+          plannedStartIso: '2026-01-01',
+          isWorkingDay: null,
+          moveTo: vi.fn(() => Promise.resolve()),
+          resizeTo: vi.fn(() => Promise.resolve()),
+          resizeStart: vi.fn(() => Promise.resolve()),
+          announce: dragAnnounce,
+        }}
+        {...extra}
+      />
     </AnnouncerProvider>,
   );
 }
@@ -295,5 +316,147 @@ describe('when the cell is shut', () => {
     renderGrid({ source: 'WBS' });
     fireEvent.doubleClick(swimlaneCell());
     expect(document.querySelector('[data-tooltip]')).toHaveTextContent(SWIMLANES_FOLLOW_WBS_REASON);
+  });
+});
+
+describe('the keyboard route (WCAG 2.1.1)', () => {
+  const grid = () => screen.getByRole('treegrid');
+
+  it('Shift+F2 on a row opens the picker and focuses it', () => {
+    renderGrid(manual(assignmentOf({ current: 'z1' })));
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    expect(screen.getByRole('combobox', { name: 'Swimlane, Foundations' })).toHaveFocus();
+  });
+
+  it('plain F2 still opens the first typed cell, not the picker', () => {
+    const editing = editingBundle();
+    renderGrid(manual(assignmentOf()), editing);
+    fireEvent.keyDown(grid(), { key: 'F2' });
+    expect(editing.begin).toHaveBeenCalledWith({ activityId: 'a1', key: 'name' }, 'Foundations');
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('Shift+F2 on a WBS-sourced plan shows and announces the reason', () => {
+    dragAnnounce.mockClear();
+    renderGrid({ source: 'WBS' });
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent(SWIMLANES_FOLLOW_WBS_REASON);
+    expect(dragAnnounce).toHaveBeenCalledExactlyOnceWith(SWIMLANES_FOLLOW_WBS_REASON);
+  });
+
+  it('Shift+F2 without the pen announces the pen’s reason', () => {
+    dragAnnounce.mockClear();
+    renderGrid(manual(assignmentOf()), editingBundle(NO_PEN));
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(dragAnnounce).toHaveBeenCalledExactlyOnceWith('Start editing to change this.');
+  });
+
+  it('does nothing when the column is not offered', () => {
+    const editing = editingBundle();
+    renderGrid(null, editing);
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(dragAnnounce).not.toHaveBeenCalled();
+  });
+});
+
+describe('a refusal is spoken and linked', () => {
+  it('describes the list by the refusal and announces it', async () => {
+    const assign = vi.fn(() =>
+      Promise.resolve<SwimlaneAssignOutcome>({ applied: false, conflict: 'That lane is taken.' }),
+    );
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.doubleClick(swimlaneCell());
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'z1' } });
+    const list = await screen.findByRole('combobox', { description: /That lane is taken\./ });
+    expect(list).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent('That lane is taken.'),
+    );
+  });
+
+  it('announces a rejected write', async () => {
+    const assign = vi.fn(() => Promise.reject(new Error('Network down')));
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.doubleClick(swimlaneCell());
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'z1' } });
+    await waitFor(() => expect(screen.getByTestId('announcer')).toHaveTextContent('Network down'));
+  });
+});
+
+describe('a draft left by leaving the list', () => {
+  it('is committed on blur, not dropped', () => {
+    const assign = vi.fn(() =>
+      Promise.resolve<SwimlaneAssignOutcome>({ applied: true, conflict: null }),
+    );
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.doubleClick(swimlaneCell());
+    const list = screen.getByRole('combobox');
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.change(list, { target: { value: 'z2' } });
+    expect(assign).not.toHaveBeenCalled();
+    fireEvent.blur(list);
+    expect(assign).toHaveBeenCalledExactlyOnceWith(['a1'], 'z2');
+  });
+
+  it('writes nothing when blurred untouched', () => {
+    const assign = vi.fn(() =>
+      Promise.resolve<SwimlaneAssignOutcome>({ applied: true, conflict: null }),
+    );
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.doubleClick(swimlaneCell());
+    fireEvent.blur(screen.getByRole('combobox'));
+    expect(assign).not.toHaveBeenCalled();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+});
+
+describe('how the closed cell looks', () => {
+  it('draws a chevron when the cell can be changed, and none when it is shut', () => {
+    const open = renderGrid(manual(assignmentOf()));
+    expect(swimlaneCell().querySelector('svg')).not.toBeNull();
+    open.unmount();
+    renderGrid(manual(assignmentOf()), editingBundle(NO_PEN));
+    expect(swimlaneCell().querySelector('svg')).toBeNull();
+  });
+
+  it('mutes the WBS rule like the table does', () => {
+    renderGrid({ source: 'WBS' });
+    expect(within(swimlaneCell()).getByText('Follows the WBS')).toHaveClass(
+      'text-muted-foreground',
+    );
+  });
+
+  it('keeps a persisted hide of the column inert while the plan has no swimlanes', () => {
+    renderGrid(null, editingBundle(), {
+      viewState: {
+        sort: { key: 'name', direction: 'asc' },
+        hiddenColumns: new Set(['swimlane']),
+        collapsed: new Set(),
+        onSortChange: vi.fn(),
+        onHiddenColumnsChange: vi.fn(),
+        onCollapsedChange: vi.fn(),
+        collapsedWithheld: 0,
+      },
+    });
+    expect(screen.queryByRole('columnheader', { name: 'Swimlane' })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Code' })).toBeInTheDocument();
+  });
+
+  it('honours a persisted hide when the plan does have swimlanes', () => {
+    renderGrid(manual(assignmentOf()), editingBundle(), {
+      viewState: {
+        sort: { key: 'name', direction: 'asc' },
+        hiddenColumns: new Set(['swimlane']),
+        collapsed: new Set(),
+        onSortChange: vi.fn(),
+        onHiddenColumnsChange: vi.fn(),
+        onCollapsedChange: vi.fn(),
+        collapsedWithheld: 0,
+      },
+    });
+    expect(screen.queryByRole('columnheader', { name: 'Swimlane' })).toBeNull();
   });
 });

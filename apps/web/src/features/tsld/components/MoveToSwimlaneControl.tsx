@@ -7,6 +7,7 @@ import {
   movedStatus,
   moveToSwimlaneStatus,
   NOT_MOVED_REASON,
+  SWIMLANE_MOVE_FAILED,
   swimlaneAssignedAnnouncement,
   withReload,
   type SwimlaneAssignment,
@@ -122,7 +123,7 @@ export function MoveToSwimlaneControl({
       },
       (err: unknown) => {
         setBusy(false);
-        setError(err instanceof Error ? err.message : 'Couldn’t move the activities.');
+        setError(err instanceof Error ? err.message : SWIMLANE_MOVE_FAILED);
       },
     );
   };
