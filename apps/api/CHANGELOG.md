@@ -1,5 +1,16 @@
 # @repo/api
 
+## 0.101.0
+
+### Minor Changes
+
+- [#1147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1147) [`d39706a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d39706a659485e92abd30b2c238d8b7e8b8dbb95) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Exporting a plan as XER now includes its swimlanes: the export reads the plan's active swimlanes and the lane each activity holds inside its swimlane, so importing the file into another project restores them under "restore layout". A plan without swimlanes exports as before.
+
+### Patch Changes
+
+- Updated dependencies [[`d39706a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d39706a659485e92abd30b2c238d8b7e8b8dbb95)]:
+  - @repo/interchange@0.15.0
+
 ## 0.100.0
 
 ### Minor Changes
