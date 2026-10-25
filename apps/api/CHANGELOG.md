@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.101.1
+
+### Patch Changes
+
+- [#1150](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1150) [`340b777`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/340b7772387020a781ea7391ffa397e85f8d3cfa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Swimlanes gate pass. When a plan's swimlanes follow its WBS, the note above the Activities table and
+  the Gantt's Swimlane cell now say how to move an activity (file it under another summary in
+  Breakdown), and the table's note is hidden on narrow screens where the column is. The API
+  documentation now gives the swimlane list's real default page size (100) and the order in which a
+  swimlane request is refused.
+
 ## 0.101.0
 
 ### Minor Changes
