@@ -3,63 +3,48 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-25. The owner asked for **swimlanes M3** ("One swimlane per WBS group") and
-**M4** ("Beyond the diagram") built from the approved spec and run to completion. **Both are merged
-and released** as **`web` 0.199.1**, **`api` 0.101.0** and **`@repo/interchange` 0.15.0**. A plan can
-now take its swimlanes from the WBS; the Activities table and the Gantt have a Swimlane column;
-people with a share link see swimlanes; and a SchedulePoint XER round trip keeps them. **M5 (the gate
-pass and the M5 ADR) is the only swimlanes work left** and was not in scope. The owner's **hard rule**
-still stands: nothing that needs them to test, measure or check anything on their server or devices
-(a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call
-(ADR-0190).
+**Written:** 2026-10-25 (evening). The owner asked for **swimlanes M5** ("Gate pass and records") and
+nothing else. **The swimlanes epic is now closed:** M0 to M5 are merged and released, the last release
+being **`web` 0.199.2** and **`api` 0.101.1** (Version Packages #1151). M5 added no feature: it reviewed the
+whole epic, folded the small findings, filed **ADR-0206** and brought the records in line with what
+shipped. The owner's **hard rule** still stands: nothing that needs them to test, measure or check
+anything on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**;
+that stays the owner's call (ADR-0190).
 
 ## The owner's answers this session (2026-10-25)
 
-- None new. The scope was set by the prompt: build M3 and M4 side by side, one PR merged at a time,
-  the Version Packages PR last, and rewrite this file. The earlier answers (SQ-1 to SQ-7, the row
-  growth) are in `docs/DECISIONS.md` and summarised under "Decided" below.
+- **The three known swimlane gaps: "None now".** #547 (the editor's Breakdown field and Dissolve do
+  not store the lane), guests seeing swimlanes on a WBS-source plan, and full membership in a
+  WBS-source XER export all stay recorded follow-ons (`docs/DECISIONS.md`, 2026-10-25). Do not build
+  them unless the owner asks.
 
 ## Where things stand
 
-- **Latest releases:** `web` 0.199.1, `api` 0.101.0, `@repo/interchange` 0.15.0 (Version Packages
-  #1148). The first release this session was `web` 0.199.0 / `api` 0.100.0 / interchange 0.14.0
-  (#1141); both release runs' tag and image-publish jobs finished green.
+- **Latest releases:** `web` 0.199.2, `api` 0.101.1 (Version Packages #1151); `@repo/interchange` is
+  still 0.15.0. Before that, `web` 0.199.1 / `api` 0.101.0 (#1148).
 - **This session's PRs, in merge order:**
-  - **#1140** M4-T1: the Swimlane column in the Activities table and a bulk "Move to swimlane" bar
-    (one container with the WBS assign bar, one live region).
-  - **#1142** M3-T1: membership at level N from the WBS, the "One per WBS group" setup option, the
-    undoable source switch in Swimlanes…, and the read-only editor field.
-  - **#1143** M3-T2: one shared helper stores the lane a moved activity takes in its new WBS group,
-    a bar drawn in a WBS swimlane is filed under its summary, a drag stops at the swimlane edge with
-    a spoken reason, and the `swimlanes-by-wbs` journey.
-  - **#1144** M4-T4: the XER reader (names held at least as strict as the database, swimlanes created
-    in one batch, members packed per swimlane, counts in the report).
-  - **#1145** M4-T2: the Gantt Swimlane column (double-click or **Shift+F2** on the row), read-only
-    under the WBS with its reason.
-  - **#1146** M4-T3: guests with a share link see swimlanes (ADR-0205 amends ADR-0051 §4).
-  - **#1141** the first Version Packages release.
-  - **#1147** M4-T5: the XER writer (ADR-0156 D9: the reader had been released first).
-  - **#1148** the final Version Packages release.
-- **Reviews:** component, accessibility and UX on every UI task, security and API on the API tasks,
-  backend-performance on the reader. Real findings were folded before each merge (a shaded corner
-  command with a self-pointing reason, a silent drag stop, an import cycle, a keyboard route to the
-  Gantt cell, and two security findings where the reader was looser than the database).
-- **How it was tested:** unit suites, lint and typecheck locally for every task; short Playwright
-  suites locally; the long suites and the full API suite on **CI for each PR**, because this
-  container restarts about every 20 minutes and a long local run never finishes (see the
-  environment notes). Every merged PR had all ten checks green on its exact head.
-- **Known gaps, recorded and not hidden:**
-  - **TECH_DEBT #547:** the activity editor's Breakdown field and Dissolve do not store the moved
-    activity's lane (the bar is still drawn without overlap; the lane is derived on read).
-  - **Guests do not see swimlanes on a plan whose swimlanes follow the WBS** (ADR-0205 D3): the
-    guest read needs the WBS membership and order derived on the server. The DTO is already
-    source-neutral, so it is a new branch in `apps/api/src/modules/share/guest-swimlanes.ts`.
-  - **An XER export of a WBS-source plan writes only the source and level**: membership is
-    re-derived from the WBS rows on import and in-swimlane lanes are repacked (the reader discards
-    hand-made data under a WBS source, so writing it would make our own file report repairs).
-    `docs/API.md` and ADR-0156 say so.
-  - The Gantt swimlane list is 24 px high (a recorded coarse-pointer trade-off); the editor's
-    Swimlane field is the large-target route.
+  - **#1150** M5-T1: ADR-0206 (Part A data A1 to A10, Part B frontend B1 to B12, and the boundary
+    rule's ~2:1 contrast basis), its CLAUDE.md §16 line, the ADR index and roadmap entries, amendment
+    notes on ADR-0026, 0031, 0063, 0090, 0100, 0152, 0153 and 0205, the brief's swimlane question
+    answered, BACKLOG (swimlanes closed; P6 activity codes added as the follow-on), TECH_DEBT #548 to
+    #550, the four spec documents set to `Accepted — shipped (ADR-0206)`, and the gate review's folds.
+  - **#1151** the Version Packages release.
+  - This hand-off.
+- **The gate review:** accessibility, component, UX, front-end performance, API, security and
+  back-end performance, on the whole epic (`6fe69268..4d541256`). **No blocking finding.** Folded: a
+  way forward in the WBS-source reason on the table and the Gantt cell, one "Follows the WBS" label and
+  one column-source type for both grids, the table note hidden below `lg` with its column, the
+  swimlane list's OpenAPI default (100), the DELETE's 422, and `docs/API.md`'s refusal order. Declined
+  with reasons in `docs/DECISIONS.md` (2026-10-25): naming the WBS swimlane in the table and Gantt
+  (the plan specified "Follows the WBS"), importing the guest view's constant from the feature index
+  (it would pull `features/activities` into the guest chunk), and one shared stem for the WBS sentences.
+- **Known swimlane gaps, recorded and parked by the owner's "None now":**
+  - **#547:** the editor's Breakdown field and Dissolve leave the moved activity's lane derived.
+  - **Guests see no swimlanes on a WBS-source plan** (ADR-0205 D3 and its 2026-10-25 note): a new
+    branch in `apps/api/src/modules/share/guest-swimlanes.ts`.
+  - **An XER export of a WBS-source plan writes only the source and level** (ADR-0156's amendment).
+  - **#549:** the Gantt view says nothing when the swimlane list fails to load.
+  - The Gantt swimlane list is 24 px high (a recorded coarse-pointer trade-off).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -119,6 +104,7 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-24: accept the swimlane row growth (35 → 54 rows on the torture plan).
 - 2026-10-25: swimlanes M3 and M4 built to the approved spec with no new owner decisions; the
   defaults taken are recorded in ADR-0205 (guests) and the ADR-0156 amendments (XER reader and writer).
+- 2026-10-25 (evening): swimlanes M5 only; the three known gaps stay follow-ons ("None now").
 
 ## Parked by the owner — keep, do not raise
 
@@ -159,21 +145,23 @@ owner returns to one, the steps are ready:
   activity's swimlane lane (derived on read, so nothing overlaps on screen). Every other M3 and M4
   review finding was folded into its own task's PR.
 
+- **New on 2026-10-25 (M5):** **#548** (`features/tsld` imports other features against ADR-0026 §8;
+  ten files predate swimlanes and `model/reparent-lanes.ts` was added by M3-T2), **#549** (above),
+  **#550** (a top-level activity create does not take the plan lock, the #520 race shape; any fix
+  goes past the backend-performance reviewer first). **#536** is closed (2026-10-22); the host-steps
+  section above still calls it new because it records that day.
+
 ## Suggested next
 
-**Swimlanes M5** ("Gate pass and records", `docs/specs/swimlanes/implementation-plan.md` §M5): the
-epic's gate review and the **M5 ADR** (ADR-0206 is the next free number), which must record the
-boundary rule's ~2:1 contrast basis and answer the open questions in the brief and ADR-0026. Possible
-follow-ups from "Known gaps" above (the guest WBS branch, #547) are the owner's to prioritise. Each UI
-task needs the component, accessibility and UX reviewers. Switch the session to **Sonnet** for any
-building.
+**Swimlanes is finished.** Nothing on it is owed unless the owner picks up one of the gaps above or the
+P6 activity-codes follow-on (`docs/BACKLOG.md`; it needs a spec and a database-architect pass).
 
-Shortlist candidates when the owner wants a break from swimlanes (check each row against the code
-first): #539 (a finish milestone after work on another calendar is dated wrongly: an engine defect,
-needs care), #495 (`SizeField` and `TextField` can drift), #371 (thirty measurement scripts repeat one
-esbuild block), and the two BACKLOG import items (carry notes through XER/MSPDI; clean up an import's
-leftover calendars). The next reconciliation pass when `check:reconcile-due` warns on a full clone
-(last pass 2026-10-19).
+Shortlist candidates (check each row against the code first): #539 (a finish milestone after work on
+another calendar is dated wrongly: an engine defect, needs care), #495 (`SizeField` and `TextField` can
+drift), #371 (thirty measurement scripts repeat one esbuild block), #550 (small, API), and the two
+BACKLOG import items (carry notes through XER/MSPDI; clean up an import's leftover calendars). The next
+reconciliation pass when `check:reconcile-due` warns on a full clone (last pass 2026-10-19); an epic
+boundary has now passed, so it is a fair next step. Switch the session to **Sonnet** for building.
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -612,3 +600,17 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     and "no keyboard route"; both were cheap to fix before merge and expensive after.
   - **`list_workflow_runs` is fine when filtered:** `resource_id: release.yml`, `perPage: 1`,
     `workflow_runs_filter: {branch: main, event: push}`, then `list_workflow_jobs` on that run id.
+
+- **2026-10-25 swimlanes M5 lessons:**
+  - **Seven read-only reviewers in parallel finished in about a minute each** and needed only a scoped
+    brief (the commit range, the milestones to weight, and the gaps not to report). Verify every
+    finding in the code before folding: two of seven suggestions were wrong for this repo (a deep import
+    that is deliberate for chunk size, and copy the approved plan specified).
+  - **`pnpm turbo run lint --filter=@repo/web` can die with exit 134 (out of memory)** in this
+    container; re-run with `NODE_OPTIONS=--max-old-space-size=8192`.
+  - **`prettier --check .` flags six files nobody owns** (`apps/api/scripts/*.mts`,
+    `prototypes/tsld-spike`); use `pnpm check:format`, which is what CI runs.
+  - **A long ADR title re-aligns the whole `docs/adr/README.md` table** under prettier (400 lines of
+    churn). Use the short form of the title in the index; `check:adr-coverage` reads the number.
+  - **A claim that a rule "held" is checkable:** `grep` the imports on the tree before and after the
+    epic. ADR-0026 §8 did not hold, and the ADR says so.
