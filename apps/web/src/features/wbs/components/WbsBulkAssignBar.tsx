@@ -3,11 +3,11 @@ import { useId, useState } from 'react';
 
 import { bulkParentChanges } from '../model/membership-diff';
 import type { OnReparented } from '../model/reparented';
+import { useReparentActivities } from '../model/use-reparent-activities';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { SelectField } from '@/components/ui/form';
-import { useUpdateActivityParents } from '@/features/activities';
 
 /** The sentinel `<option>` value for "file these at the top level" — `null` cannot ride in a DOM value. */
 const TOP_LEVEL = '';
@@ -68,7 +68,7 @@ export function WbsBulkAssignBar({
   children?: React.ReactNode;
 }): React.ReactElement | null {
   const announce = useAnnounce();
-  const updateParents = useUpdateActivityParents(orgSlug, planId);
+  const updateParents = useReparentActivities(orgSlug, planId);
   const selectId = useId();
   const statusId = useId();
   const [targetId, setTargetId] = useState<string>(TOP_LEVEL);

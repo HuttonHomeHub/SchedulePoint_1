@@ -21,6 +21,11 @@ export {
   type PlacedActivityInput,
 } from './api/use-activities';
 export {
+  useWriteSwimlaneLanes,
+  type PlainLaneRow,
+  type SwimlaneLaneRow,
+} from './api/use-swimlane-lanes';
+export {
   useActivitySteps,
   useReplaceActivitySteps,
   activityStepsQueryOptions,

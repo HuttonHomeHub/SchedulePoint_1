@@ -270,6 +270,11 @@ export interface PlacedActivityInput {
    * on a plan whose swimlanes come from its WBS, where the endpoint refuses it.
    */
   swimlaneId?: string;
+  /**
+   * File the new activity under this WBS summary — how a create inside a swimlane joins it when the
+   * plan's swimlanes come from its WBS (swimlanes M3-T2, SQ-5).
+   */
+  parentId?: string;
 }
 
 export function useCreatePlacedActivity(orgSlug: string, planId: string) {

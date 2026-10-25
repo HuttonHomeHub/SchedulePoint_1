@@ -967,15 +967,15 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:wbs
 
-      # The swimlanes-by-hand journey (playwright.swimlanes.config.ts, docs/specs/swimlanes/, M2-T11 —
-      # the entry point and the journey, ADR-0081). No VITE_ flag: the lens is lit in the shipped
+      # The swimlanes journeys (playwright.swimlanes.config.ts, docs/specs/swimlanes/): by hand (M2-T11)
+      # and from the WBS (M3-T2) — the entry point and the journey, ADR-0081. No VITE_ flag: the lens is lit in the shipped
       # bundle, so this runs the default build, which IS the surface. The pen is enforced at the API
       # because every swimlane write is pen-gated and a mocked fetch accepts a stale version from
       # anybody. What only a browser can prove is here: the order focus lands in after each dialog
       # closes or a swimlane is deleted, the grouped listbox, the lens round-trip against the stored
       # lanes, and the View panel's height at the 1024 x 600 floor. Shard 1, tied lightest with shard 2
       # (`scripts/e2e-durations.json`).
-      - name: Web end-to-end tests (swimlanes by hand)
+      - name: Web end-to-end tests (swimlanes)
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:swimlanes
 

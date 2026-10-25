@@ -3042,7 +3042,8 @@ export function TsldCanvas({
             // A started bar's drag holds its day: say so under the pointer while it is being
             // refused (docs/TECH_DEBT.md #431). An inline write, cleared on release.
             if (state.kind === 'repositioning' && canvasRef.current) {
-              canvasRef.current.style.cursor = state.sidewaysBlocked === true ? 'not-allowed' : '';
+              canvasRef.current.style.cursor =
+                state.sidewaysBlocked === true || state.laneClamped === true ? 'not-allowed' : '';
             }
             return;
           }

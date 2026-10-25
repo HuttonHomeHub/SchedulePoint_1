@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
 import { planCommands, recalculate } from '../e2e-support/toolbar';
 
 /**
@@ -427,5 +428,171 @@ export async function describeFocus(page: Page): Promise<string> {
     if (!el) return 'nothing';
     const label = el.getAttribute('aria-label') ?? el.textContent ?? '';
     return `${el.tagName.toLowerCase()} "${label.trim().slice(0, 60)}"`;
+  });
+}
+
+/**
+ * Open the tabbed editor on `name` from the Activities table's row menu, showing the panel first if
+ * it is folded. The editor is a dialog, found by the activity sections it carries.
+ */
+export async function openActivityEditor(page: Page, name: string): Promise<Locator> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+  await page
+    .getByRole('button', { name: `Actions for ${name}` })
+    .first()
+    .click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const editor = activityEditor(page);
+  await expect(editor).toBeVisible();
+  return editor;
+}
+
+/** The names the WBS journey's plan is built from; the summaries are the swimlanes. */
+export const WBS_PLAN = {
+  name: 'A plan divided by its WBS',
+  summaries: ['Substructure', 'Superstructure'],
+  // Every task starts at the data date (nothing is linked), so any two in one swimlane overlap in
+  // time and must sit on different lanes: that is what makes "no overlap" a claim that can fail.
+  tasks: [
+    { name: 'Pile caps', parent: 'Substructure', days: 5 },
+    { name: 'Ground slab', parent: 'Substructure', days: 10 },
+    { name: 'Steel frame', parent: 'Superstructure', days: 5 },
+    { name: 'Roof deck', parent: 'Superstructure', days: 10 },
+    { name: 'Site cabins', parent: null, days: 5 },
+  ],
+};
+
+/**
+ * Sign up and open a plan whose swimlane source is **NONE** but whose WBS has two level-1 summaries
+ * with two tasks each, plus one task under neither. Built through the public API, like the seeded
+ * plans: the journey is about what the WBS does to the diagram, not about drawing a WBS by hand.
+ * Recalculated, so every bar (and each summary's rolled-up span) is drawn.
+ *
+ * Returns the organisation slug. The pen is held by the API session that built it, as in
+ * {@link openPlainPlan}; a case that writes through the UI calls {@link ensurePen}.
+ */
+export async function openWbsPlan(page: Page, stamp: number): Promise<string> {
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  const projectId = /projects\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+  if (!projectId) throw new Error(`no project id in ${page.url()}`);
+  await page.evaluate(
+    async ({ org, project, spec }: { org: string; project: string; spec: typeof WBS_PLAN }) => {
+      const call = async (path: string, body?: unknown): Promise<{ id: string }> => {
+        const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        if (!response.ok) {
+          throw new Error(`POST ${path} ${String(response.status)}: ${await response.text()}`);
+        }
+        return ((await response.json()) as { data: { id: string } }).data;
+      };
+      const plan = await call(`/projects/${project}/plans`, {
+        name: spec.name,
+        plannedStart: '2026-01-05',
+      });
+      await call(`/plans/${plan.id}/edit-lock`, {});
+      const summaryIds = new Map<string, string>();
+      let lane = 0;
+      for (const name of spec.summaries) {
+        const made = await call(`/plans/${plan.id}/activities`, {
+          name,
+          type: 'WBS_SUMMARY',
+          // Its dates roll up from its members, so it takes no duration of its own.
+          laneIndex: lane,
+        });
+        summaryIds.set(name, made.id);
+        lane += 1;
+      }
+      for (const task of spec.tasks) {
+        const parentId = task.parent === null ? undefined : summaryIds.get(task.parent);
+        await call(`/plans/${plan.id}/activities`, {
+          name: task.name,
+          durationDays: task.days,
+          laneIndex: lane,
+          ...(parentId === undefined ? {} : { parentId }),
+        });
+        lane += 1;
+      }
+      await call(`/plans/${plan.id}/schedule/recalculate`);
+    },
+    { org: orgSlug, project: projectId, spec: WBS_PLAN },
+  );
+  await page.reload();
+  await page.getByRole('link', { name: WBS_PLAN.name }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+  await expect(option(page, 'Pile caps')).toHaveCount(1, { timeout: 30_000 });
+  return orgSlug;
+}
+
+/** One activity as the API stores it, with the lane rows the swimlane pictures read. */
+export interface StoredWbsActivity {
+  name: string;
+  parentId: string | null;
+  laneIndex: number;
+  swimlaneId: string | null;
+  swimlaneLanes: unknown;
+}
+
+/** Every activity by name, with its parent and every stored lane row, straight from the API. */
+export async function storedWbsActivities(
+  page: Page,
+  orgSlug: string,
+): Promise<Record<string, StoredWbsActivity>> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      if (!response.ok) {
+        throw new Error(`activities ${String(response.status)}: ${await response.text()}`);
+      }
+      const body = (await response.json()) as {
+        data: {
+          name: string;
+          parentId: string | null;
+          laneIndex: number;
+          swimlaneId?: string | null;
+          swimlaneLanes?: unknown;
+        }[];
+        meta?: { nextCursor?: string | null };
+      };
+      if (body.meta?.nextCursor) {
+        throw new Error('the plan has more than one page — this probe would undercount');
+      }
+      return Object.fromEntries(
+        body.data.map((a) => [
+          a.name,
+          {
+            name: a.name,
+            parentId: a.parentId,
+            laneIndex: a.laneIndex,
+            swimlaneId: a.swimlaneId ?? null,
+            swimlaneLanes: a.swimlaneLanes ?? [],
+          },
+        ]),
+      );
+    },
+    { org: orgSlug, id: planId },
+  );
+}
+
+/** The swimlane and in-swimlane lane every option of one listbox group states, by its sentence. */
+export async function groupPlaces(
+  group: Locator,
+): Promise<{ text: string; swimlane: string; lane: number }[]> {
+  const texts = await group.getByRole('option').allTextContents();
+  return texts.map((text) => {
+    const [swimlane, lane] = swimlanePlace(text).split('|');
+    return { text, swimlane: swimlane!, lane: Number(lane) };
   });
 }

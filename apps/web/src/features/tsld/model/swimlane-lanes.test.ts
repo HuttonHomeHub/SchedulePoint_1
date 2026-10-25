@@ -16,6 +16,8 @@ import {
   NO_FREE_LANE_PLURAL,
   NO_SWIMLANE_KEY,
   SWIMLANE_GONE_REASON,
+  settleInSwimlanes,
+  WBS_FILING_REASON,
   nudgeInSwimlane,
   type DaySpan,
   type SwimlaneEditContext,
@@ -91,6 +93,53 @@ describe('laneRangeOf', () => {
 
   it('has nothing to say about a bar that is not drawn', () => {
     expect(laneRangeOf(context(BASE), 'ghost')).toBeNull();
+  });
+
+  describe('a WBS source (SQ-5)', () => {
+    const base = context(BASE);
+    const wbs: SwimlaneEditContext = { ...base, input: { ...base.input, source: 'WBS' } };
+
+    it('stops a bar at its own swimlane, top and bottom', () => {
+      // Alpha holds display lanes 0-1, Beta lane 2, "No swimlane" lane 3.
+      expect(laneRangeOf(wbs, 'a1')).toEqual({ min: 0, max: 1 });
+      expect(laneRangeOf(wbs, 'b1')).toEqual({ min: 2, max: 2 });
+      expect(laneRangeOf(wbs, 'n1')).toEqual({ min: 3, max: 3 });
+    });
+
+    it('still has nothing to say about a bar that is not drawn', () => {
+      expect(laneRangeOf(wbs, 'ghost')).toBeNull();
+    });
+
+    it('refuses a drop into another swimlane, whoever sent it', () => {
+      expect(dropInSwimlane(wbs, 'a1', 2)).toEqual({ kind: 'refuse', reason: WBS_FILING_REASON });
+    });
+
+    it('still moves a bar inside its own swimlane', () => {
+      expect(dropInSwimlane(wbs, 'a1', 1).kind).toBe('write');
+    });
+  });
+});
+
+describe('settleInSwimlanes', () => {
+  it('stores the lane each mover is drawn in, with no swimlane and no undo origin', () => {
+    const move = settleInSwimlanes(context(BASE), ['a2']);
+    expect(move[0]).toEqual({ id: 'a2', lane: 1, materialised: true });
+    expect(move.every((p) => p.materialised === true && p.swimlaneId === undefined)).toBe(true);
+    expect(move.every((p) => p.from === undefined)).toBe(true);
+  });
+
+  it('writes the unplaced members of the swimlane beside the mover, so none is re-placed later', () => {
+    const specs: Spec[] = [
+      { id: 'a1', start: 0, end: 3, swimlane: 'A', lane: 0 },
+      { id: 'a2', start: 5, end: 8, swimlane: 'A' },
+      { id: 'b1', start: 0, end: 3, swimlane: 'B' },
+    ];
+    const ids = settleInSwimlanes(context(specs), ['a1']).map((p) => p.id);
+    expect(ids).toEqual(['a1', 'a2']);
+  });
+
+  it('writes nothing for a bar that is not drawn', () => {
+    expect(settleInSwimlanes(context(BASE), ['ghost'])).toEqual([]);
   });
 });
 

@@ -803,6 +803,33 @@ gutter's corner cell.
   4. Add the clamp.
   5. Add the journey.
   6. Add a changeset.
+- **As built (2026-10-24):**
+  - **The helper** is `useReparentActivities` (`features/wbs/model/use-reparent-activities.ts`, below `features/swimlanes` so `features/wbs` imports no swimlanes code; `useWriteSwimlaneLanes` moved to `features/activities/api` for the same reason). It
+    writes the parents through the bare endpoint, then stores the lane each mover (and each descendant
+    that came with it) now occupies, planned by `planReparentLanes` (`features/tsld/model/reparent-lanes.ts`)
+    against the picture after the change. The projection already places a bar at the lane it remembers for
+    its new group when that is free and otherwise the nearest free one, so the planner stores that choice
+    (`settleInSwimlanes`) instead of making it twice. No row names a swimlane or carries an undo origin:
+    undoing the parents puts the work back in a group where its old lane is still stored. A lane failure
+    is logged and never rejects the call, because the parents have committed.
+  - **The census** is `features/wbs/reparent-callers.structural.test.ts`: the bare hook is named by
+    its definition, its re-export, the undo roster and the helper only, and four surfaces call the helper
+    (the workspace model, which hands it to undo and redo; the Gantt's indent and outdent; the Members
+    panel; the bulk Assign bar).
+  - **Not wired, by decision:** the activity editor's Breakdown field saves `parentId` through the scope's
+    PATCH and Dissolve promotes children through its own endpoint; neither is an `updateParents` caller.
+    Both leave the mover's lane to the projection, which draws it free of overlap and re-derives it until
+    the next lane write into that swimlane (docs/TECH_DEBT.md #547).
+  - **Filing on create:** `onTsldCreate` sends `parentId` (not `swimlaneId`, which the server refuses on a
+    WBS plan) for a draw inside a swimlane of a WBS plan, then writes the lane as it does by hand.
+  - **A clamped drag says why:** the gesture state carries `laneClamped`, the cursor shows `not-allowed`,
+    and the drop announces `WBS_EDGE_NOTE` once. A failed lane write announces "Moved. Its position in the
+    swimlane could not be saved."
+  - **The clamp:** `laneRangeOf` narrows to the bar's own swimlane under a `WBS` source; its last lane is
+    the bottom, and growing the swimlane stays the keyboard's. `dropInSwimlane` refuses a crossing under
+    `WBS` as a backstop.
+  - **The journey** is `e2e-swimlanes/swimlanes-by-wbs.spec.ts` in the same `playwright.swimlanes.config.ts`
+    (shard 1), so `scripts/e2e-durations.json`'s estimate for `test:e2e:swimlanes` is unchanged and low.
 
 ---
 

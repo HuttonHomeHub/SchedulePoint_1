@@ -15,8 +15,8 @@ import { ApiFetchError } from '@/lib/api/client';
  * would unfile everyone the current filter hides, in a request that looks perfectly well-formed.
  */
 const mutateSpy = vi.fn();
-vi.mock('@/features/activities', () => ({
-  useUpdateActivityParents: () => ({ mutateAsync: mutateSpy, isPending: false }),
+vi.mock('../model/use-reparent-activities', () => ({
+  useReparentActivities: () => ({ mutateAsync: mutateSpy, isPending: false }),
 }));
 
 const announceSpy = vi.fn();

@@ -58,7 +58,7 @@ import {
   swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
 import { moveToSwimlaneGate, type SwimlaneAssignment } from '../model/swimlane-assignment';
-import type { SwimlaneLanePlacement } from '../model/swimlane-lanes';
+import { WBS_EDGE_NOTE, type SwimlaneLanePlacement } from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
@@ -2793,6 +2793,10 @@ export function TsldPanel({
       // A started activity's drag never carries a day (the gesture holds its ghost in its column);
       // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
       // data — and the banner's `role="alert"` says it, as the start-edge backstop does.
+      if (intent.laneClamped && intent.startDay === undefined && intent.laneIndex === undefined) {
+        announce(WBS_EDGE_NOTE);
+        return;
+      }
       if (intent.sidewaysRefused) {
         const selected =
           CANVAS_MULTI_SELECT_ENABLED && selection.ids.includes(intent.activityId)
@@ -2986,7 +2990,11 @@ export function TsldPanel({
               original: activity.laneIndex,
               ...(outcome.swimlane ? { swimlane: outcome.swimlane } : {}),
             });
-            announce(intent.sidewaysDiscarded ? `${moved} ${START_NOT_CHANGED_NOTE}` : moved);
+            const notes = [
+              intent.sidewaysDiscarded ? START_NOT_CHANGED_NOTE : null,
+              intent.laneClamped ? WBS_EDGE_NOTE : null,
+            ].filter((note) => note !== null);
+            announce([moved, ...notes].join(' '));
           }
         })
         .catch((err: unknown) => {
