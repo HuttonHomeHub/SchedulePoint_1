@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 27 API modules
-> (`apps/api/src/modules/`), 38 Prisma models across 77 migrations, 1806 web
+> (`apps/api/src/modules/`), 38 Prisma models across 77 migrations, 1807 web
 > source files with 49 Playwright suites beside the base journey, and
-> 204 ADRs.
+> 205 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -453,7 +453,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0048** _(Accepted; amended by ADR-0176)_ — Client-side command-stack undo/redo for plan authoring → [`0048-undo-redo-command-stack.md`](docs/adr/0048-undo-redo-command-stack.md)
 - **ADR-0049** _(Proposed; amended by ADR-0200)_ — Canvas-axis-aligned resource strip — a shared-viewport sibling canvas layer → [`0049-canvas-axis-aligned-resource-strip.md`](docs/adr/0049-canvas-axis-aligned-resource-strip.md)
 - **ADR-0050** _(Accepted)_ — Schedule interchange — canonical model + import pipeline → [`0050-schedule-interchange-canonical-model.md`](docs/adr/0050-schedule-interchange-canonical-model.md)
-- **ADR-0051** _(Accepted; amended by ADR-0163 and ADR-0198)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
+- **ADR-0051** _(Accepted; amended by ADR-0163, ADR-0198 and ADR-0205)_ — External-Guest per-plan share links → [`0051-external-guest-share-links.md`](docs/adr/0051-external-guest-share-links.md)
 - **ADR-0052** _(Accepted)_ — TSLD direct manipulation & canvas visual refresh → [`0052-canvas-direct-manipulation-and-visual-refresh.md`](docs/adr/0052-canvas-direct-manipulation-and-visual-refresh.md)
 - **ADR-0053** _(Accepted)_ — Calendar scoping tiers & the resource management layer → [`0053-calendar-scoping-and-resource-management.md`](docs/adr/0053-calendar-scoping-and-resource-management.md)
 - **ADR-0054** _(Accepted)_ — Canvas live feedback & GPM float/drift visualisation → [`0054-canvas-live-feedback-and-float-visualisation.md`](docs/adr/0054-canvas-live-feedback-and-float-visualisation.md)
@@ -607,6 +607,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0202** _(Accepted; amends ADR-0146 D3)_ — A loading state is the settled shape, and says one sentence → [`0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md`](docs/adr/0202-a-loading-state-is-the-settled-shape-and-says-one-sentence.md)
 - **ADR-0203** _(Accepted; amends ADR-0152 D1, D3 and D4 for Re-layout)_ — Re-layout starts from several places and may use the rows the diagram already has → [`0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md`](docs/adr/0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)
 - **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117; amended for the Gantt cell, #538)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
+- **ADR-0205** _(Accepted; amends ADR-0051 §4)_ — A guest sees the swimlanes the diagram is drawn in → [`0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md`](docs/adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

@@ -5,6 +5,7 @@ import { WorkingWeekdays } from '@repo/types';
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import type { CalendarWithExceptions } from '../../calendars/calendar.repository';
 import type { ScheduleAggregate } from '../../schedule/schedule.repository';
+import type { GuestSwimlaneEntry } from '../guest-swimlanes';
 
 /**
  * Guest read DTOs for the plan view (ADR-0051 §4, F-M3). These are DELIBERATELY
@@ -14,7 +15,7 @@ import type { ScheduleAggregate } from '../../schedule/schedule.repository';
  * that copies it). In particular these carry NO cost / Earned-Value / money, NO
  * resources / assignments, NO baselines / variance, NO notes, NO audit columns
  * (createdBy/updatedBy/version/deletedAt/timestamps), NO user identity, NO plan-lock
- * holder, and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
+ * holder, NO swimlane source/level (only the swimlanes' ids and names), and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
  */
 
 /** A single dated calendar exception, stripped to what the time axis needs. */
@@ -114,6 +115,15 @@ export class GuestScheduleSummaryDto {
   }
 }
 
+/** One swimlane of the plan, as a guest is shown it: a name and the id its members carry. */
+export class GuestSwimlaneDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ description: 'Swimlane name.' })
+  name!: string;
+}
+
 /** The domain inputs the guest plan view is assembled from (all derived from the token's plan). */
 export interface GuestPlanViewSource {
   plan: {
@@ -125,6 +135,8 @@ export interface GuestPlanViewSource {
   };
   calendar: CalendarWithExceptions | null;
   aggregate: ScheduleAggregate;
+  /** The plan's swimlanes a guest is shown, in display order (empty unless hand-made). */
+  swimlanes: readonly GuestSwimlaneEntry[];
 }
 
 /**
@@ -162,6 +174,15 @@ export class GuestPlanViewDto {
   @ApiProperty({ type: GuestScheduleSummaryDto })
   summary!: GuestScheduleSummaryDto;
 
+  @ApiProperty({
+    type: GuestSwimlaneDto,
+    isArray: true,
+    description:
+      'The plan’s swimlanes in display order (ADR-0051 §4 as amended for swimlanes): id and name ' +
+      'only. Empty when the plan has none, or its swimlanes follow its WBS, which no view draws yet.',
+  })
+  swimlanes!: GuestSwimlaneDto[];
+
   static from(source: GuestPlanViewSource): GuestPlanViewDto {
     const dataDate = source.plan.plannedStart ? formatCalendarDate(source.plan.plannedStart) : null;
     return {
@@ -172,6 +193,7 @@ export class GuestPlanViewDto {
       dataDate,
       calendar: source.calendar ? GuestCalendarDto.from(source.calendar) : null,
       summary: GuestScheduleSummaryDto.from(source.aggregate, dataDate),
+      swimlanes: source.swimlanes.map(({ id, name }) => ({ id, name })),
     };
   }
 }

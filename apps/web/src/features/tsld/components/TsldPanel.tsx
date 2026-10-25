@@ -312,6 +312,12 @@ export interface TsldPanelProps {
   swimlanes?: SwimlaneInput | null;
   /** Tint alternate swimlanes (feature-spec SQ-6). The host owns the answer; absent is no tint. */
   swimlaneGround?: boolean;
+  /**
+   * The Swimlanes checkbox on the panel's own view controls, for a host that has no `View ▾` to carry
+   * the lens (the guest share view, swimlanes M4-T3). Ignored when chromeless: the workspace toolbar
+   * hosts the lens there. Absent offers none.
+   */
+  swimlanesToggle?: { checked: boolean; onChange: () => void };
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
   canEdit?: boolean;
   /**
@@ -669,6 +675,7 @@ export function TsldPanel({
   dataDate: dataDateProp,
   swimlanes = null,
   swimlaneGround = false,
+  swimlanesToggle,
   canEdit = false,
   scheduleRefusal = (action) => `Start editing to ${action}.`,
   onCreate,
@@ -3286,6 +3293,7 @@ export function TsldPanel({
           onFit={requestFit}
           toggles={viewToggles}
           onToggle={toggleView}
+          swimlanes={swimlanesToggle}
         />
       ) : null}
 

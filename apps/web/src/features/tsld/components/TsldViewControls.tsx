@@ -38,6 +38,12 @@ export interface TsldViewControlsProps {
   onFit: () => void;
   toggles: TsldViewToggles;
   onToggle: (key: keyof TsldViewToggles) => void;
+  /**
+   * The Swimlanes lens for a host with no `View ▾` — the guest share view (swimlanes M4-T3, SQ-4).
+   * Absent offers no checkbox, which is today's control byte for byte. It is a lens and nothing else:
+   * the host owns the state and nothing is sent anywhere when it flips.
+   */
+  swimlanes?: { checked: boolean; onChange: () => void } | undefined;
 }
 
 /**
@@ -53,6 +59,7 @@ export function TsldViewControls({
   onFit,
   toggles,
   onToggle,
+  swimlanes,
 }: TsldViewControlsProps): React.ReactElement {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -116,6 +123,14 @@ export function TsldViewControls({
             onChange={() => onToggle(key)}
           />
         ))}
+        {swimlanes ? (
+          <CheckboxField
+            density="compact"
+            label="Swimlanes"
+            checked={swimlanes.checked}
+            onChange={swimlanes.onChange}
+          />
+        ) : null}
       </fieldset>
     </div>
   );

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as GuestApi from '../guest-api';
@@ -23,13 +23,39 @@ vi.mock('../guest-api', async (importOriginal) => ({
 // CAPTURES its `barDateSource` prop (ADR-0163 M2-T2), so a regression that stops passing it, or
 // passes the wrong value, is visible from a component test rather than only from a pixel journey.
 vi.mock('@/features/tsld', () => ({
-  TsldPanel: (props: { barDateSource?: string; showConstraintKey?: boolean }) => (
+  // The real helper reads two constants; the stub keeps its contract (a collapsed gutter is narrower)
+  // so the view's width wiring is checked without loading the render layer.
+  gutterWidthForRoom: ({ collapsed, room }: { collapsed: boolean; room: boolean }) => ({
+    widthPx: collapsed || !room ? 28 : 160,
+  }),
+  TsldPanel: (props: {
+    barDateSource?: string;
+    showConstraintKey?: boolean;
+    swimlanes?: { swimlanes: { id: string }[]; membership: Map<string, string | null> } | null;
+    gutterWidthPx?: number;
+    swimlanesToggle?: { checked: boolean; onChange: () => void };
+  }) => (
     <div
       data-testid="tsld-panel"
       data-bar-date-source={String(props.barDateSource)}
       data-show-constraint-key={String(props.showConstraintKey)}
+      data-swimlanes={props.swimlanes ? props.swimlanes.swimlanes.map((s) => s.id).join(',') : ''}
+      data-members={
+        props.swimlanes
+          ? [...props.swimlanes.membership].map(([id, lane]) => `${id}:${String(lane)}`).join(',')
+          : ''
+      }
+      data-gutter-width={String(props.gutterWidthPx)}
     >
       canvas
+      {props.swimlanesToggle ? (
+        <input
+          type="checkbox"
+          aria-label="Swimlanes"
+          checked={props.swimlanesToggle.checked}
+          onChange={props.swimlanesToggle.onChange}
+        />
+      ) : null}
     </div>
   ),
 }));
@@ -161,6 +187,58 @@ describe('GuestPlanView', () => {
     renderView();
 
     expect((await screen.findByTestId('tsld-panel')).dataset.showConstraintKey).toBe('false');
+  });
+
+  describe('swimlanes (ADR-0205)', () => {
+    const WITH_LANES: GuestPlanViewDto = {
+      ...PLAN,
+      swimlanes: [
+        { id: 'sl-civil', name: 'Civil' },
+        { id: 'sl-mech', name: 'Mechanical' },
+      ],
+    };
+
+    async function shown(plan: GuestPlanViewDto) {
+      vi.mocked(fetchGuestPlan).mockResolvedValue(plan);
+      vi.mocked(fetchGuestActivities).mockResolvedValue([
+        activity({ id: 'a1', memberOfSwimlaneId: 'sl-mech', swimlaneLaneIndex: 1 }),
+        activity({ id: 'a2', memberOfSwimlaneId: null, swimlaneLaneIndex: null }),
+      ]);
+      vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+      renderView();
+      return screen.findByTestId('tsld-panel');
+    }
+
+    it('hands the panel the plan’s swimlanes, in order, with each activity’s derived membership', async () => {
+      const panel = await shown(WITH_LANES);
+      expect(panel.dataset.swimlanes).toBe('sl-civil,sl-mech');
+      expect(panel.dataset.members).toBe('a1:sl-mech,a2:null');
+      expect(panel.dataset.gutterWidth).toBe('160');
+    });
+
+    it('offers the lens on by default, and turning it off draws the swimlane-free diagram', async () => {
+      const panel = await shown(WITH_LANES);
+      const lens = screen.getByRole('checkbox', { name: 'Swimlanes' });
+      expect(lens).toBeChecked();
+
+      fireEvent.click(lens);
+      expect(screen.getByRole('checkbox', { name: 'Swimlanes' })).not.toBeChecked();
+      expect(panel.dataset.swimlanes).toBe('');
+      expect(panel.dataset.gutterWidth).toBe('0');
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Swimlanes' }));
+      expect(panel.dataset.swimlanes).toBe('sl-civil,sl-mech');
+    });
+
+    it.each([
+      ['an older API that sends no list', PLAN],
+      ['a plan with none', { ...PLAN, swimlanes: [] }],
+    ])('offers no lens and draws no swimlanes for %s', async (_name, plan) => {
+      const panel = await shown(plan);
+      expect(panel.dataset.swimlanes).toBe('');
+      expect(panel.dataset.gutterWidth).toBe('0');
+      expect(screen.queryByRole('checkbox', { name: 'Swimlanes' })).not.toBeInTheDocument();
+    });
   });
 
   it('names the header dates "Plan dates" and lists the data date and project finish', async () => {

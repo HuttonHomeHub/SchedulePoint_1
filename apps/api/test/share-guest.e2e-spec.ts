@@ -336,9 +336,13 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     'laneIndex',
     'lateFinish',
     'lateStart',
+    // Swimlanes (SQ-4): derived by the service; the raw fields are pinned absent in
+    // `share-guest-swimlanes.e2e-spec.ts`.
+    'memberOfSwimlaneId',
     'name',
     'percentComplete',
     'status',
+    'swimlaneLaneIndex',
     'totalFloat',
     'type',
     'visualEffectiveFinish',

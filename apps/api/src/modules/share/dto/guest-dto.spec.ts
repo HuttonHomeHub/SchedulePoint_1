@@ -7,6 +7,7 @@ import type { CalendarWithExceptions } from '../../calendars/calendar.repository
 import type { DependencyWithEndpoints } from '../../dependencies/dependency.repository';
 import type { WithLagDayFactor } from '../../dependencies/lag-day-factor';
 import type { ScheduleAggregate } from '../../schedule/schedule.repository';
+import { NO_GUEST_SWIMLANE } from '../guest-swimlanes';
 
 import { GuestActivityDto } from './guest-activity.dto';
 import { GuestDependencyDto } from './guest-dependency.dto';
@@ -110,8 +111,10 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
 
 /** Keys that must NEVER appear on a guest activity DTO (cost / audit / user / internal). */
 const FORBIDDEN_ACTIVITY_KEYS = [
-  // Swimlanes (swimlanes spec SQ-4): guest exposure is a later, separately reviewed change
-  // (M4-T3). Until it lands, the row carries `swimlaneId` and the guest DTO must not copy it.
+  // Swimlanes (swimlanes spec SQ-4, ADR-0051 §4 as amended): a guest is given the DERIVED
+  // membership and lane (`memberOfSwimlaneId`, `swimlaneLaneIndex`, asserted present below), never
+  // the row's own `swimlaneId` — it survives a source change, may name a deleted swimlane, and
+  // `swimlaneLanes` carries every basis the activity was ever placed on, with audit timestamps.
   'swimlaneId',
   'swimlaneLanes',
   // CQ-4 of `docs/TECH_DEBT.md` #86: a guest adopts the CORRECTED `durationDays` and never learns
@@ -189,7 +192,7 @@ const FORBIDDEN_ACTIVITY_KEYS = [
 ];
 
 describe('GuestActivityDto', () => {
-  const dto = GuestActivityDto.from(activityRow());
+  const dto = GuestActivityDto.from(activityRow(), NO_GUEST_SWIMLANE);
 
   it('exposes ONLY the whitelisted schedule + progress fields', () => {
     expect(Object.keys(dto).sort()).toEqual(
@@ -208,6 +211,11 @@ describe('GuestActivityDto', () => {
         'derivedDurationMinutes',
         'derivedDurationDays',
         'laneIndex',
+        // Swimlanes (SQ-4): where the diagram draws the bar, DERIVED by the service from the live
+        // swimlane list — the same kind of fact as `laneIndex`. See the forbidden list for the raw
+        // fields these replace.
+        'memberOfSwimlaneId',
+        'swimlaneLaneIndex',
         'earlyStart',
         'earlyFinish',
         'lateStart',
@@ -251,18 +259,30 @@ describe('GuestActivityDto', () => {
 
   it('states a derived duration for a summary and withholds it from every other type (ADR-0197)', () => {
     const base = activityRow();
-    const summary = GuestActivityDto.from({
-      ...base,
-      type: 'WBS_SUMMARY',
-      derivedDurationMinutes: 960,
-      dayFactorMinutes: 480,
-    });
+    const summary = GuestActivityDto.from(
+      { ...base, type: 'WBS_SUMMARY', derivedDurationMinutes: 960, dayFactorMinutes: 480 },
+      NO_GUEST_SWIMLANE,
+    );
     expect(summary.derivedDurationMinutes).toBe(960);
     expect(summary.derivedDurationDays).toBe(2);
     // A stale value on a row whose type has since changed is never shown.
-    const task = GuestActivityDto.from({ ...base, type: 'TASK', derivedDurationMinutes: 960 });
+    const task = GuestActivityDto.from(
+      { ...base, type: 'TASK', derivedDurationMinutes: 960 },
+      NO_GUEST_SWIMLANE,
+    );
     expect(task.derivedDurationMinutes).toBeNull();
     expect(task.derivedDurationDays).toBeNull();
+  });
+
+  it('copies the service-derived swimlane placement, not the row’s own swimlaneId', () => {
+    const placed = GuestActivityDto.from(activityRow(), {
+      memberOfSwimlaneId: 'derived-lane',
+      swimlaneLaneIndex: 4,
+    });
+    expect(placed.memberOfSwimlaneId).toBe('derived-lane');
+    expect(placed.swimlaneLaneIndex).toBe(4);
+    // The fixture row is filed in 'lane-1'; that value must not surface anywhere.
+    expect(JSON.stringify(placed)).not.toContain('lane-1');
   });
 
   // FC-3 (spec §2): the fixture's OTHER dates are all `DAY` (2026-07-01) — this pins that the
@@ -451,12 +471,42 @@ describe('GuestPlanViewDto', () => {
     },
     calendar: calendarRow(),
     aggregate: aggregate(),
+    swimlanes: [{ id: 'lane-1', name: 'Mechanical' }],
   });
 
-  it('exposes ONLY the header + calendar + summary, never token/audit/lock/scope', () => {
+  it('exposes ONLY the header + calendar + summary + swimlanes, never token/audit/lock/scope', () => {
     expect(Object.keys(dto).sort()).toEqual(
-      ['id', 'name', 'status', 'description', 'dataDate', 'calendar', 'summary'].sort(),
+      [
+        'id',
+        'name',
+        'status',
+        'description',
+        'dataDate',
+        'calendar',
+        'summary',
+        'swimlanes',
+      ].sort(),
     );
+  });
+
+  it('lists each swimlane by id and name ONLY (SQ-4: no version, position, audit or plan id)', () => {
+    const [lane] = GuestPlanViewDto.from({
+      plan: { id: 'plan-1', name: 'T', status: 'ACTIVE', description: null, plannedStart: DAY },
+      calendar: null,
+      aggregate: aggregate(),
+      // A full row, as the repository returns it: the mapper must drop what the guest is not given.
+      swimlanes: [
+        {
+          id: 'lane-1',
+          name: 'Mechanical',
+          position: 2,
+          version: 9,
+          planId: 'plan-1',
+          createdBy: 'user-secret',
+        } as { id: string; name: string },
+      ],
+    }).swimlanes;
+    expect(Object.keys(lane ?? {}).sort()).toEqual(['id', 'name']);
   });
 
   it.each([
@@ -476,7 +526,6 @@ describe('GuestPlanViewDto', () => {
     'lockedBy',
     'swimlaneSource',
     'swimlaneWbsLevel',
-    'swimlanes',
   ])('never exposes %s', (key) => {
     expect(dto).not.toHaveProperty(key);
   });
@@ -498,6 +547,7 @@ describe('GuestPlanViewDto', () => {
       },
       calendar: null,
       aggregate: aggregate(),
+      swimlanes: [],
     });
     expect(noCal.calendar).toBeNull();
     expect(noCal.dataDate).toBeNull();

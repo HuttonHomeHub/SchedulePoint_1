@@ -6,6 +6,7 @@ import { DependenciesModule } from '../dependencies/dependencies.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlansModule } from '../plans/plans.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { SwimlanesModule } from '../swimlanes/swimlanes.module';
 
 import { PlanShareRepository } from './plan-share.repository';
 import { ShareGuestController } from './share-guest.controller';
@@ -27,7 +28,7 @@ import { ShareService } from './share.service';
  * depends on PlanShareRepository + PlanRepository), and the {@link ShareGuestService} that
  * reads the token's ONE plan through the existing domain repositories. It imports the domain
  * modules that export those repositories (ActivitiesModule / CalendarsModule /
- * DependenciesModule / ScheduleModule — the same repository-reuse pattern as InterchangeModule),
+ * DependenciesModule / ScheduleModule / SwimlanesModule — the same repository-reuse pattern as InterchangeModule),
  * so guest reads compose the existing scoped reads rather than re-implementing them.
  *
  * The plan-delete cascade for share links lives in the shared HierarchyLifecycleService (F-M1),
@@ -41,6 +42,7 @@ import { ShareService } from './share.service';
     CalendarsModule,
     DependenciesModule,
     ScheduleModule,
+    SwimlanesModule,
   ],
   controllers: [ShareController, ShareGuestController],
   providers: [ShareService, ShareGuestService, ShareTokenGuard, PlanShareRepository],

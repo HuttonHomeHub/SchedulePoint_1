@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { PageMeta } from '@repo/types';
+import type { SwimlaneSource } from '@prisma/client';
+import type { ActivitySwimlaneLaneSummary, PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { GuestPrincipal } from '../../common/auth/guest-principal';
@@ -12,10 +13,16 @@ import { DependencyRepository } from '../dependencies/dependency.repository';
 import { attachLagDayFactors } from '../dependencies/lag-day-factor';
 import { PlanRepository } from '../plans/plan.repository';
 import { ScheduleRepository } from '../schedule/schedule.repository';
+import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { GuestActivityDto } from './dto/guest-activity.dto';
 import { GuestDependencyDto } from './dto/guest-dependency.dto';
 import { GuestPlanViewDto } from './dto/guest-plan.dto';
+import {
+  guestSwimlaneList,
+  guestSwimlanePlacement,
+  type GuestSwimlaneEntry,
+} from './guest-swimlanes';
 import { PlanShareRepository } from './plan-share.repository';
 
 /**
@@ -56,6 +63,7 @@ export class ShareGuestService {
     private readonly activities: ActivityRepository,
     private readonly dependencies: DependencyRepository,
     private readonly schedule: ScheduleRepository,
+    private readonly swimlanes: SwimlaneRepository,
     private readonly shares: PlanShareRepository,
     @InjectPinoLogger(ShareGuestService.name) private readonly logger: PinoLogger,
   ) {}
@@ -74,9 +82,10 @@ export class ShareGuestService {
       ? await this.calendars.findActiveDetailByIdInOrg(plan.calendarId, guest.organizationId)
       : null;
     const aggregate = await this.schedule.summarise(guest.organizationId, guest.planId);
+    const swimlanes = await this.liveSwimlanes(guest, plan.swimlaneSource);
 
     this.touchAccess(guest.shareId);
-    return GuestPlanViewDto.from({ plan, calendar, aggregate });
+    return GuestPlanViewDto.from({ plan, calendar, aggregate, swimlanes });
   }
 
   /** A cursor-paginated page of the plan's activities, stripped to the guest scope. */
@@ -91,6 +100,16 @@ export class ShareGuestService {
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
     const { items, meta } = this.paginate(rows, query.limit);
+    // Swimlane membership is DERIVED here and never copied (ADR-0051 §4 as amended): the plan's live
+    // list decides which swimlane a member is in, and the stored lane is the row for that basis.
+    const plan = await this.plans.findActiveByIdInOrg(guest.planId, guest.organizationId);
+    if (!plan) throw this.notFound();
+    const live = await this.liveSwimlanes(guest, plan.swimlaneSource);
+    const known = new Set(live.map((swimlane) => swimlane.id));
+    const lanes =
+      known.size > 0
+        ? await this.swimlanes.findLanesForActivities(items)
+        : new Map<string, ActivitySwimlaneLaneSummary[]>();
     // Day-denominated fields are measured on each activity's effective calendar (ADR-0068), so a
     // guest reads the same durations a member does. The plan's calendar is one lookup for the page;
     // a per-activity calendar resolves itself.
@@ -111,7 +130,12 @@ export class ShareGuestService {
         : new Map(),
     );
     this.touchAccess(guest.shareId);
-    return { items: decorated.map((row) => GuestActivityDto.from(row)), meta };
+    return {
+      items: decorated.map((row) =>
+        GuestActivityDto.from(row, guestSwimlanePlacement(known, row, lanes.get(row.id) ?? [])),
+      ),
+      meta,
+    };
   }
 
   /** A cursor-paginated page of the plan's dependency edges, stripped to the guest scope. */
@@ -150,6 +174,18 @@ export class ShareGuestService {
     );
     this.touchAccess(guest.shareId);
     return { items: decorated.map((row) => GuestDependencyDto.from(row)), meta };
+  }
+
+  /** The swimlanes a guest is shown (`[]` unless hand-made), read only when the plan could have any. */
+  private async liveSwimlanes(
+    guest: GuestPrincipal,
+    source: SwimlaneSource,
+  ): Promise<GuestSwimlaneEntry[]> {
+    if (source !== 'MANUAL') return [];
+    return guestSwimlaneList(
+      source,
+      await this.swimlanes.findAllActiveByPlan(guest.organizationId, guest.planId),
+    );
   }
 
   /** Keyset page helper (id cursor) — the member list convention (take limit+1, peek for hasMore). */

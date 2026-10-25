@@ -9,6 +9,7 @@ import {
   minutesToDays,
   type WithDayFactor,
 } from '../../activities/day-factor';
+import type { GuestSwimlanePlacement } from '../guest-swimlanes';
 
 /** Day↔minute factor (ADR-0036 §4.2): storage is minutes, the public field stays days. */
 /**
@@ -25,7 +26,8 @@ import {
  * critical/near-critical (ADR-0198: "which activities make up `nearCriticalCount`", a function of
  * fields already exposed and a product constant), the engine-derived duration of a summary or level-of-effort
  * (`derivedDurationMinutes`/`derivedDurationDays`, ADR-0197 — schedule, not analysis), lane
- * position, and the progress trio.
+ * position, the DERIVED swimlane membership and in-swimlane lane (ADR-0051 §4 as amended for
+ * swimlanes — where the bar is drawn, like the placed span), and the progress trio.
  *
  * EXCLUDED BY CONSTRUCTION (must NEVER appear — no `from` copies them), each for a reason ADR-0163
  * §4.5/§4.6 states rather than assumes:
@@ -37,6 +39,8 @@ import {
  *   exists, and constraints are out.
  * - `visualDriftDays`/`remainingFloat` — a float is analysis, not the schedule a share link exists
  *   to show (a guest can only ESTIMATE these from the exposed fields).
+ * - the RAW `swimlaneId`/`swimlaneLanes` — kept while a plan's source is not `MANUAL`, and able to
+ *   name a deleted swimlane; a guest gets only the membership the diagram is drawn by.
  * - cost / Earned-Value / money (budgetedExpense, actualExpense, percentCompleteType,
  *   physicalPercentComplete, accrualType); resources / assignments; baseline / variance; notes;
  *   the levelling overlay (leveled*, levelingPriority, selfOverAllocated); the constraint /
@@ -96,6 +100,26 @@ export class GuestActivityDto {
 
   @ApiProperty({ description: 'Graphical y-lane / vertical position on the TSLD canvas.' })
   laneIndex!: number;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'The swimlane the diagram draws this activity in: an id from the plan view’s `swimlanes`, ' +
+      'or null for "No swimlane" (also null on a plan with no swimlanes, and for a member of a ' +
+      'swimlane since deleted). Derived by the same rule the member diagram draws by.',
+  })
+  memberOfSwimlaneId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'The 0-based lane inside that swimlane, as stored; null when the activity has never been ' +
+      'placed there (the diagram derives one).',
+  })
+  swimlaneLaneIndex!: number | null;
 
   @ApiProperty({ format: 'date', nullable: true, type: String, description: 'CPM early start.' })
   earlyStart!: string | null;
@@ -158,7 +182,7 @@ export class GuestActivityDto {
   visualEffectiveFinish!: string | null;
 
   /** Map an activity row to the guest shape — copying ONLY the whitelisted scope fields. */
-  static from(entity: WithDayFactor<Activity>): GuestActivityDto {
+  static from(entity: WithDayFactor<Activity>, swimlane: GuestSwimlanePlacement): GuestActivityDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
     return {
       id: entity.id,
@@ -171,6 +195,9 @@ export class GuestActivityDto {
       durationMinutes: entity.durationMinutes,
       ...derivedDuration(entity),
       laneIndex: entity.laneIndex,
+      // Derived by the service from the live swimlane list; never the row's own `swimlaneId`.
+      memberOfSwimlaneId: swimlane.memberOfSwimlaneId,
+      swimlaneLaneIndex: swimlane.swimlaneLaneIndex,
       earlyStart: day(entity.earlyStart),
       earlyFinish: day(entity.earlyFinish),
       lateStart: day(entity.lateStart),

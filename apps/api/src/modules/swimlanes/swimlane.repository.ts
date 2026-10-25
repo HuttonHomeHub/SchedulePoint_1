@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type Swimlane } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { loadSwimlaneLanes } from '../activities/swimlane-lanes';
 
 /** A locked swimlane row's identity, order key and version (the reorder's read). */
 export interface LockedSwimlane {
@@ -85,6 +86,23 @@ export class SwimlaneRepository {
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
     });
+  }
+
+  /**
+   * Every active swimlane of the plan in display order, in one unpaginated read: a plan holds at
+   * most `SWIMLANE_LIMIT` (the create and restore paths refuse more), and the guest read needs the
+   * whole list to tell a live swimlane from a deleted one on each page of activities.
+   */
+  findAllActiveByPlan(organizationId: string, planId: string): Promise<Swimlane[]> {
+    return this.prisma.swimlane.findMany({
+      where: this.active({ organizationId, planId }),
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /** The stored lane rows of a page of activities, in one query (the member read's own loader). */
+  findLanesForActivities(rows: readonly { id: string; organizationId: string }[]) {
+    return loadSwimlaneLanes(this.prisma, rows);
   }
 
   /** All of a plan's active swimlanes in display order, inside a transaction (the reorder's answer). */
