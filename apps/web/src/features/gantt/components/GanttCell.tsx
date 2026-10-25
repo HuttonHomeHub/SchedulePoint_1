@@ -82,6 +82,8 @@ export interface GanttCellProps {
    * cell still supplies the gate, the reason and the refusal; given as a function it is handed the
    * refusal's id (only while a refusal is showing) so the control can be described by it. Additive and Gantt-feature-local.
    */
+  /** The chord that opens this cell from the row, named for assistive technology (`aria-keyshortcuts`). */
+  keyShortcuts?: string;
   field?: React.ReactNode | ((refusal: { errorId: string | undefined }) => React.ReactNode);
   children?: React.ReactNode;
 }
@@ -105,6 +107,7 @@ export function GanttCell({
   className,
   lead,
   field: customField,
+  keyShortcuts,
   children,
 }: GanttCellProps): React.ReactElement {
   const reasonId = useId();
@@ -230,6 +233,7 @@ export function GanttCell({
       // the app's own tip replaces it (hover, double-click, F2) and no `title` rides beside it, or
       // hover would show both (ADR-0204 D3). The `sr-only` span below stays the description.
       {...tip?.triggerProps}
+      aria-keyshortcuts={keyShortcuts}
       {...(gate.reason === null ? {} : { 'aria-describedby': reasonId })}
       className={cn(
         'shrink-0 px-2 text-xs',

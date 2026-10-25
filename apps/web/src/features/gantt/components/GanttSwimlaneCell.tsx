@@ -92,10 +92,11 @@ export function GanttSwimlaneCell({
   }, [open]);
 
   const begin = useCallback((): void => {
-    if (assignment === null) return;
+    // Already open: Shift+F2 again must not reset the arrow-key draft the planner is holding.
+    if (assignment === null || open) return;
     setDraft(currentValue);
     setOpen(true);
-  }, [assignment, currentValue]);
+  }, [assignment, currentValue, open]);
   // Handed to the panel so the keyboard route (Shift+F2 on the row) can open this cell, which owns its
   // open state; withdrawn on unmount so a recycled row never holds a stale opener.
   useEffect(() => {
@@ -230,6 +231,7 @@ export function GanttSwimlaneCell({
       colIndex={colIndex}
       width={width}
       gate={gate}
+      {...(assignment !== null && gate.writable ? { keyShortcuts: 'Shift+F2' } : {})}
       editing={open}
       text={text}
       busy={busy}

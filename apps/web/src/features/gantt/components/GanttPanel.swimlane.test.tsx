@@ -460,3 +460,44 @@ describe('how the closed cell looks', () => {
     expect(screen.queryByRole('columnheader', { name: 'Swimlane' })).toBeNull();
   });
 });
+
+describe('the keyboard chord is named and safe to repeat', () => {
+  const grid = () => screen.getByRole('treegrid');
+
+  it('names Shift+F2 on a writable cell only', () => {
+    const writable = renderGrid(manual(assignmentOf()));
+    expect(swimlaneCell()).toHaveAttribute('aria-keyshortcuts', 'Shift+F2');
+    writable.unmount();
+    renderGrid(manual(assignmentOf()), editingBundle(NO_PEN));
+    expect(swimlaneCell()).not.toHaveAttribute('aria-keyshortcuts');
+  });
+
+  it('keeps the arrow-key draft when Shift+F2 is pressed again', () => {
+    const assign = vi.fn(() =>
+      Promise.resolve<SwimlaneAssignOutcome>({ applied: true, conflict: null }),
+    );
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    const list = screen.getByRole('combobox');
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.change(list, { target: { value: 'z2' } });
+    fireEvent.keyDown(grid(), { key: 'F2', shiftKey: true });
+    expect(screen.getByRole('combobox')).toHaveValue('z2');
+  });
+
+  it('announces a blur-committed move exactly once', async () => {
+    const assign = vi.fn(() =>
+      Promise.resolve<SwimlaneAssignOutcome>({ applied: true, conflict: null, moved: 1 }),
+    );
+    renderGrid(manual(assignmentOf({ assign })));
+    fireEvent.doubleClick(swimlaneCell());
+    const list = screen.getByRole('combobox');
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.change(list, { target: { value: 'z2' } });
+    fireEvent.blur(list);
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent('Moved “Foundations” to Zone B.'),
+    );
+    expect(assign).toHaveBeenCalledTimes(1);
+  });
+});
