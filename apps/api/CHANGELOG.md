@@ -1,5 +1,18 @@
 # @repo/api
 
+## 0.100.0
+
+### Minor Changes
+
+- [#1146](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1146) [`0341339`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/03413390d789a46cb183570204e4a6e00f50b56e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shared plan link now carries the plan's swimlanes. The shared plan view lists them (name only, in order), and each shared activity says which swimlane it is drawn in and its lane there, worked out by the same rule the planner's own diagram uses. The planner's raw swimlane assignments, the plan's swimlane source and any WBS settings are not shared. This applies to every link already issued; a plan whose swimlanes follow its WBS is still shared without them.
+
+- [#1144](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1144) [`d095060`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d0950605bd232957d3d9e6b9d6ae58e4a2825d06) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Importing a SchedulePoint XER that carries swimlanes now restores them. With "Restore the SchedulePoint layout" on (the default), the new plan gets the swimlanes by name in the file's order, the plan's swimlane source, each activity's membership, and a lane for every member inside its swimlane (a lane the file carried is kept; the rest are packed within the swimlane). Names are held to the same rules as a swimlane made by hand, spellings that differ only by case are merged, at most 100 are kept, and anything refused is counted in the report, which also gains `swimlanes` and `swimlaneMembers` counts. No SchedulePoint release writes these fields yet, so only a hand-edited file carries them.
+
+### Patch Changes
+
+- Updated dependencies [[`d095060`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d0950605bd232957d3d9e6b9d6ae58e4a2825d06)]:
+  - @repo/interchange@0.14.0
+
 ## 0.99.1
 
 ### Patch Changes

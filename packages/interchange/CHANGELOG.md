@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.14.0
+
+### Minor Changes
+
+- [#1144](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1144) [`d095060`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d0950605bd232957d3d9e6b9d6ae58e4a2825d06) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The XER reader understands the swimlane fields a SchedulePoint file can carry: each activity's swimlane name and its lane inside it, and one project-level field naming where the plan's swimlanes come from and listing them in order. Names are held to the same shape as a swimlane made by hand (1 to 80 characters, no control characters, unique ignoring case), at most 100 are kept, and everything refused is counted in the report. The import report gains `swimlanes` and `swimlaneMembers` counts. No SchedulePoint release writes these fields yet, so only a hand-edited file carries them.
+
 ## 0.13.1
 
 ### Patch Changes

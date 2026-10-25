@@ -1,5 +1,26 @@
 # @repo/web
 
+## 0.199.0
+
+### Minor Changes
+
+- [#1142](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1142) [`1b83f94`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1b83f943c9335f9ad7187136d82940cfcdd9d360) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Swimlanes can now follow the WBS. Set up swimlanes offers "One per WBS group at level N" beside "By hand", preselected to the shallowest level with two groups. Each summary at that level becomes a swimlane named after it, and everything filed under it, at any depth, is in it. Swimlanes... lets you switch between by hand and the WBS as one undo step, and switching back returns the hand-made swimlanes exactly as they were. While the WBS leads, the activity editor's Swimlane field shows where the activity is and says why it can't be changed there.
+
+- [#1146](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1146) [`0341339`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/03413390d789a46cb183570204e4a6e00f50b56e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shared plan link now shows the plan's swimlanes, as the planner sees them: labelled bands down the left of the diagram, and the keyboard list grouped by swimlane. The shared view's diagram controls gain a Swimlanes checkbox, on by default, which hides or shows them for that viewer only. A plan without swimlanes looks exactly as before.
+
+- [#1145](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1145) [`3275a2a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3275a2ab8b85ddb33251cb43da881751ba425d40) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt has a Swimlane column when the plan has swimlanes. It shows each activity's swimlane, with a dash for none. Double-click a cell, or press Shift+F2 on the row, then choose a swimlane from the list, to move that one activity there; the bar keeps its dates and Undo puts it back. While the swimlanes follow the WBS, or without the editing pen, the cell is read-only and says why. View, Columns lists the column and its width, and the printed programme leaves it out.
+
+- [#1140](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1140) [`8a2f447`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8a2f4471c5f1dde3569afb17368000ec52e7543b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Activities table now has a Swimlane column showing which swimlane each activity is in. Tick several activities and choose a swimlane under Move to swimlane to file them all in one step, which can be undone. The control explains why it is unavailable when you can't edit the plan. In a plan whose swimlanes follow the WBS the column is read-only and says so.
+
+- [#1143](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1143) [`85c4458`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/85c44581e5d10324f09c993a340b35700803c081) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Swimlanes that follow the WBS now keep up with it. Re-filing work under another summary (the Members panel, the bulk Assign bar, Indent and Outdent, and undo or redo of any of them) stores where each moved activity now sits in its new swimlane: the lane it remembers for that group when it is free, otherwise the nearest free one. An activity drawn inside a swimlane is filed under that swimlane's summary. A vertical drag in a WBS swimlane now stops at the swimlane's edge instead of crossing it and being refused; change the Breakdown to move work to another swimlane.
+
+- [#1144](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1144) [`d095060`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d0950605bd232957d3d9e6b9d6ae58e4a2825d06) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import review shows how many swimlanes and swimlane members a SchedulePoint XER carries, and offers "Restore the SchedulePoint layout" for a file whose only layout is its swimlanes.
+
+### Patch Changes
+
+- Updated dependencies [[`d095060`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d0950605bd232957d3d9e6b9d6ae58e4a2825d06)]:
+  - @repo/interchange@0.14.0
+
 ## 0.198.0
 
 ### Minor Changes
