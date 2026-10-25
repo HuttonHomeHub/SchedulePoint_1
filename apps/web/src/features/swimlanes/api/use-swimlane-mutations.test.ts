@@ -139,4 +139,25 @@ describe('the swimlane writes', () => {
     });
     expect(queryClient.getQueryData(planKeys.detail('acme', 'p1'))).toEqual(plan);
   });
+
+  it('names the level only with a WBS source, which is the only source that has one', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ id: 'p1', version: 9 });
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useSetPlanSwimlaneSource('acme'), { wrapper });
+    await act(() =>
+      result.current.mutateAsync({ planId: 'p1', version: 8, source: 'WBS', level: 2 }),
+    );
+    expect(apiFetch).toHaveBeenLastCalledWith('/organizations/acme/plans/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2, version: 8 }),
+    });
+    // Back to hand-made: no level is sent, and the server clears the one it holds.
+    await act(() =>
+      result.current.mutateAsync({ planId: 'p1', version: 9, source: 'MANUAL', level: 2 }),
+    );
+    expect(apiFetch).toHaveBeenLastCalledWith('/organizations/acme/plans/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ swimlaneSource: 'MANUAL', version: 9 }),
+    });
+  });
 });

@@ -140,8 +140,11 @@ export function SwimlaneGutter({
 
   const menuLabel = menu ? labels.find((l) => l.key === menu.key) : undefined;
   const menuIndex = menuLabel ? named.findIndex((l) => l.key === menuLabel.key) : -1;
-  const writable = actions?.write.writable ?? false;
-  const writeReason = actions?.write.reason ?? undefined;
+  // The label menus' own gate when the host gives one (a WBS swimlane is a summary, so its rows are shut
+  // for a reason the corner's command is not); else the pen's, which is the corner's too.
+  const rowGate = actions?.rows ?? actions?.write;
+  const writable = rowGate?.writable ?? false;
+  const writeReason = rowGate?.reason ?? undefined;
 
   return (
     <div

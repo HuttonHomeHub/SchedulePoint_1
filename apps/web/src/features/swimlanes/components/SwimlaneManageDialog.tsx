@@ -1,20 +1,28 @@
-import type { SwimlaneSummary } from '@repo/types';
+import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { swimlaneErrorText } from '../model/swimlane-errors';
 import { swimlaneNameProblem } from '../model/swimlane-names';
-import type { SwimlaneActions } from '../model/use-swimlane-actions';
+import type { SwimlaneActions, SwimlanePlanFacts } from '../model/use-swimlane-actions';
+
+import { SwimlaneSourceFields, type ChosenSource } from './SwimlaneSourceFields';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/form';
+import { FormSection } from '@/components/ui/form-layout';
+import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
 
 export interface SwimlaneManageDialogProps {
   open: boolean;
   onClose: () => void;
-  /** The plan's active swimlanes in display order. */
+  /** The plan, at the version last read: a change of source is locked on it. */
+  plan: SwimlanePlanFacts;
+  /** The plan's activities, which the WBS option reads its levels from; `undefined` while they load. */
+  activities: readonly ActivitySummary[] | undefined;
+  /** The plan's active hand-made swimlanes in display order (kept, but not drawn, while the WBS leads). */
   swimlanes: readonly SwimlaneSummary[];
   /** Activities per swimlane id; a swimlane nobody is in is absent. */
   memberCounts: ReadonlyMap<string, number>;
@@ -26,8 +34,13 @@ export interface SwimlaneManageDialogProps {
 }
 
 /**
- * **Swimlanes** — add, rename, reorder and delete (swimlanes M2-T9, feature-spec US-2). Every change
- * applies at once and is one undo step; there is no Save, so the dialog's only button is Close.
+ * **Swimlanes** — add, rename, reorder and delete (swimlanes M2-T9, feature-spec US-2), and choose where
+ * they come from (M3-T1). Every change applies at once and is one undo step; there is no Save.
+ *
+ * **Switching between by hand and the WBS writes the plan's source and nothing else.** Lanes are stored
+ * per basis, so switching back returns the hand-made swimlanes, their members and their lanes as they
+ * were. While the WBS leads, the hand-made list is kept but not shown or editable here: its swimlanes
+ * are not drawn, and editing a list nobody can see would change a picture that returns later.
  *
  * The row actions are icon buttons named for their row ("Move Mechanical up") — ADR-0117 — and are
  * shaded with `aria-disabled` rather than hidden or natively disabled when the pen is not held or a
@@ -49,6 +62,8 @@ export function SwimlaneManageDialog(props: SwimlaneManageDialogProps): React.Re
 
 function ManageBody({
   onClose,
+  plan,
+  activities,
   swimlanes,
   memberCounts,
   actions,
@@ -87,6 +102,32 @@ function ManageBody({
     } finally {
       setBusy(false);
     }
+  };
+
+  // Where the swimlanes come from. The picker starts on what the plan holds, so an untouched dialog
+  // reads "unchanged" and the button has nothing to do.
+  const followsWbs = plan.swimlaneSource === 'WBS';
+  const current: ChosenSource = followsWbs ? 'WBS' : 'MANUAL';
+  const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
+  const [source, setSource] = useState<ChosenSource>(current);
+  const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
+  const level = clampWbsLevel(pickedLevel ?? plan.swimlaneWbsLevel, levels);
+  const unchanged = source === current && (source === 'MANUAL' || level === plan.swimlaneWbsLevel);
+  const unchangedId = useId();
+
+  const switchSource = (): Promise<void> => {
+    if (busy || shut || unchanged) return Promise.resolve();
+    if (source === 'WBS') {
+      if (level === null) return Promise.resolve();
+      return run('change where swimlanes come from', async () => {
+        await actions.switchSource(plan, { source: 'WBS', level });
+        announce(`Swimlanes now follow the WBS at level ${String(level)}.`);
+      });
+    }
+    return run('change where swimlanes come from', async () => {
+      await actions.switchSource(plan, { source: 'MANUAL', level: null });
+      announce('Swimlanes are now made by hand.');
+    });
   };
 
   const add = (): Promise<void> => {
@@ -131,7 +172,52 @@ function ManageBody({
           {gate.reason}
         </p>
       ) : null}
-      {swimlanes.length === 0 ? (
+      <FormSection title="Where swimlanes come from">
+        <SwimlaneSourceFields
+          source={source}
+          onSource={setSource}
+          level={level}
+          onLevel={setPickedLevel}
+          levels={levels}
+          loaded={activities !== undefined}
+        />
+        <p className="text-muted-foreground text-sm">
+          {followsWbs
+            ? 'Choosing here changes nothing until you press the button below.'
+            : 'Choosing here changes nothing until you press the button below. Adding, renaming, moving and deleting swimlanes apply as soon as you do them.'}
+        </p>
+        {unchanged ? (
+          <p id={unchangedId} className="text-muted-foreground text-sm">
+            Swimlanes already come from this.
+          </p>
+        ) : null}
+        <div>
+          {/* `aria-disabled` and a guard, never native `disabled` (ADR-0204): it flips under the
+              planner's own focus while the write runs. */}
+          <Button
+            type="button"
+            variant="outline"
+            aria-disabled={busy || shut || unchanged}
+            aria-busy={busy}
+            aria-describedby={
+              [shut ? reasonId : undefined, unchanged ? unchangedId : undefined]
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            onClick={() => void switchSource()}
+          >
+            {busy ? 'Switching…' : source === 'WBS' ? 'Use WBS groups' : 'Make by hand'}
+          </Button>
+        </div>
+      </FormSection>
+      {followsWbs ? (
+        <p className="text-muted-foreground text-sm">
+          {`Swimlanes follow the WBS at level ${String(plan.swimlaneWbsLevel ?? level ?? 1)}: one for each summary, in WBS order. Rename or move a summary to change them.`}
+          {swimlanes.length > 0
+            ? ` The swimlanes you made by hand (${String(swimlanes.length)}) are kept, and come back if you switch back.`
+            : ''}
+        </p>
+      ) : swimlanes.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           No swimlanes yet. Add one below; every activity stays under “No swimlane” until you place
           it.
@@ -204,38 +290,40 @@ function ManageBody({
           })}
         </ul>
       )}
-      <form
-        noValidate
-        className="flex items-end gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void add();
-        }}
-      >
-        <div className="min-w-0 flex-1">
-          <TextField
-            ref={nameRef}
-            label="New swimlane"
-            data-new-swimlane
-            value={name}
-            onChange={(event) => {
-              setProblem(null);
-              setName(event.target.value);
-            }}
-            error={problem ?? undefined}
-            gate={{ writable: gate.writable, reason: null }}
-            aria-describedby={shut ? reasonId : undefined}
-          />
-        </div>
-        <Button
-          type="submit"
-          aria-disabled={busy || shut}
-          aria-busy={busy}
-          aria-describedby={shut ? reasonId : undefined}
+      {followsWbs ? null : (
+        <form
+          noValidate
+          className="flex items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void add();
+          }}
         >
-          Add swimlane
-        </Button>
-      </form>
+          <div className="min-w-0 flex-1">
+            <TextField
+              ref={nameRef}
+              label="New swimlane"
+              data-new-swimlane
+              value={name}
+              onChange={(event) => {
+                setProblem(null);
+                setName(event.target.value);
+              }}
+              error={problem ?? undefined}
+              gate={{ writable: gate.writable, reason: null }}
+              aria-describedby={shut ? reasonId : undefined}
+            />
+          </div>
+          <Button
+            type="submit"
+            aria-disabled={busy || shut}
+            aria-busy={busy}
+            aria-describedby={shut ? reasonId : undefined}
+          >
+            Add swimlane
+          </Button>
+        </form>
+      )}
       {failure !== null ? (
         <p role="alert" className="text-destructive-text text-sm">
           {failure}

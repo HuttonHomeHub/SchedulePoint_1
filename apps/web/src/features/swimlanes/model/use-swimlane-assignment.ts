@@ -4,7 +4,6 @@ import { useCallback, useMemo } from 'react';
 import { useSwimlanes } from '../api/use-swimlanes';
 
 import { manualSwimlaneInput } from './manual-membership';
-import { swimlanePictureOn } from './use-swimlane-scene';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { SwimlaneAssignment, SwimlaneAssignOutcome } from '@/features/tsld';
@@ -50,7 +49,9 @@ export function useSwimlaneAssignment(args: {
   const { orgSlug, planId, source, activities, barDateSource, dataDate, wbsBandOn } = args;
   const { shown } = args;
   const { moveMany } = args;
-  const manual = swimlanePictureOn({ source });
+  // Hand-made only: with a WBS source membership is the summary an activity is filed under, changed
+  // through Breakdown, never through this control.
+  const manual = source === 'MANUAL';
   const list = useSwimlanes(orgSlug, planId, manual).data;
 
   const input = useMemo(() => {

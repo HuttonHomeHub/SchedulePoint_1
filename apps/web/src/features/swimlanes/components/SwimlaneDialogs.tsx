@@ -47,12 +47,15 @@ export function SwimlaneDialogs({
         onClose={() => close('setup')}
         plan={plan}
         swimlanes={swimlanes}
+        activities={activities}
         actions={actions}
         gate={gate}
       />
       <SwimlaneManageDialog
         open={state.manage}
         onClose={() => close('manage')}
+        plan={plan}
+        activities={activities}
         swimlanes={swimlanes}
         memberCounts={memberCounts}
         actions={actions}

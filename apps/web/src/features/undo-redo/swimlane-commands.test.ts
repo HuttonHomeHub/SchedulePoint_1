@@ -1,4 +1,4 @@
-import type { SwimlaneSummary } from '@repo/types';
+import type { PlanSummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ReplayContext } from './replay';
@@ -7,6 +7,7 @@ import {
   swimlaneDeleteCommand,
   swimlaneRenameCommand,
   swimlaneReorderCommand,
+  swimlaneSourceCommand,
 } from './swimlane-commands';
 
 import { ApiFetchError } from '@/lib/api/client';
@@ -259,5 +260,93 @@ describe('every swimlane step', () => {
       expect(c.subjects).toEqual([]);
       expect(c.affectsSchedule).toBe(false);
     }
+  });
+});
+
+describe('swimlaneSourceCommand', () => {
+  /** A plan record in one object: the pair the step reads, and a version the write must use. */
+  function plan(initial: { swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }) {
+    const state = { ...initial, version: 4 };
+    const ctx = {
+      readPlan: () => Promise.resolve({ id: 'p1', ...state } as unknown as PlanSummary),
+    } as unknown as ReplayContext;
+    const setSource = vi.fn(
+      (input: { version: number; source: SwimlaneSource; level: number | null }) => {
+        if (input.version !== state.version) {
+          return Promise.reject(new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }));
+        }
+        state.swimlaneSource = input.source;
+        state.swimlaneWbsLevel = input.level;
+        state.version += 1;
+        return Promise.resolve({});
+      },
+    );
+    return { state, ctx, setSource };
+  }
+  const MANUAL = { source: 'MANUAL', level: null } as const;
+  const WBS2 = { source: 'WBS', level: 2 } as const;
+
+  it('undo puts the previous choice back, redo the new one, each at the plan’s current version', async () => {
+    const p = plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 });
+    const command = swimlaneSourceCommand({
+      planId: 'p1',
+      before: MANUAL,
+      after: WBS2,
+      setSource: p.setSource,
+    });
+    expect(command.label).toBe('Make swimlanes one per WBS group at level 2');
+    expect(await command.undo(p.ctx)).toEqual({ kind: 'applied' });
+    expect(p.setSource).toHaveBeenLastCalledWith({
+      planId: 'p1',
+      version: 4,
+      source: 'MANUAL',
+      level: null,
+    });
+    expect(await command.redo(p.ctx)).toEqual({ kind: 'applied' });
+    expect(p.setSource).toHaveBeenLastCalledWith({
+      planId: 'p1',
+      version: 5,
+      source: 'WBS',
+      level: 2,
+    });
+  });
+
+  it('writes the plan record and nothing else, so no lane is written in either direction', async () => {
+    const p = plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 });
+    const command = swimlaneSourceCommand({
+      planId: 'p1',
+      before: MANUAL,
+      after: WBS2,
+      setSource: p.setSource,
+    });
+    await command.undo(p.ctx);
+    await command.redo(p.ctx);
+    // The command is handed one write and no other seam: a lane write could not be made from it.
+    expect(p.setSource).toHaveBeenCalledTimes(2);
+    expect(command.subjects).toEqual([]);
+    expect(command.affectsSchedule).toBe(false);
+  });
+
+  it('sets the step aside, writing nothing, when somebody chose another level since', async () => {
+    const p = plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 3 });
+    const command = swimlaneSourceCommand({
+      planId: 'p1',
+      before: MANUAL,
+      after: WBS2,
+      setSource: p.setSource,
+    });
+    expect(await command.undo(p.ctx)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
+    expect(p.setSource).not.toHaveBeenCalled();
+  });
+
+  it('sets the step aside when the plan is gone', async () => {
+    const command = swimlaneSourceCommand({
+      planId: 'p1',
+      before: MANUAL,
+      after: WBS2,
+      setSource: vi.fn(),
+    });
+    const ctx = { readPlan: () => Promise.resolve(undefined) } as unknown as ReplayContext;
+    expect(await command.undo(ctx)).toMatchObject({ kind: 'not-applicable', reason: 'gone' });
   });
 });

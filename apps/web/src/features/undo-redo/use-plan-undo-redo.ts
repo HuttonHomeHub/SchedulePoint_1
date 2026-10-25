@@ -3,6 +3,7 @@ import type {
   ActivitySummary,
   CrossPlanDependencySummary,
   DependencySummary,
+  PlanSummary,
   ResourceAssignmentSummary,
 } from '@repo/types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,6 +39,7 @@ import {
   baselineKeys,
   crossPlanDependencyKeys,
   dependencyKeys,
+  planKeys,
   scheduleKeys,
 } from '@/lib/query/hierarchy-keys';
 
@@ -308,6 +310,11 @@ export function usePlanUndoRedo(params: {
         ),
       readSwimlanes: () =>
         queryClient.fetchQuery({ ...swimlanesQueryOptions(orgSlug, planId), ...fresh }),
+      readPlan: () =>
+        readOne<PlanSummary>(
+          planKeys.detail(orgSlug, planId),
+          `/organizations/${orgSlug}/plans/${planId}`,
+        ),
     };
   }, [queryClient, orgSlug, planId]);
 

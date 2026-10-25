@@ -33,6 +33,7 @@ const LIST: SwimlaneSummary[] = [
 
 function render(args: {
   source: SwimlaneSource;
+  level?: number | null;
   shown: boolean;
   activities?: readonly ActivitySummary[] | undefined;
 }) {
@@ -76,10 +77,81 @@ describe('useSwimlaneScene', () => {
     expect(h.calls).toBe(1);
   });
 
-  it.each(['NONE', 'WBS'] as const)('builds nothing for a %s plan, shown or not', (source) => {
-    const { result } = render({ source, shown: true });
+  it.each([
+    ['NONE', null],
+    ['WBS', null],
+  ] as const)('builds nothing for a %s plan with level %s, shown or not', (source, level) => {
+    const { result } = render({ source, level, shown: true });
     expect(result.current).toMatchObject({ input: null, pending: false, failed: false });
     expect(h.calls).toBe(0);
+  });
+
+  describe('a WBS plan (M3)', () => {
+    const tree = [
+      anActivity({ id: 'works', type: 'WBS_SUMMARY', name: 'The Works' }),
+      anActivity({ id: 'struct', type: 'WBS_SUMMARY', parentId: 'works', name: 'Structure' }),
+      anActivity({ id: 'slab', parentId: 'struct' }),
+    ];
+
+    it('is drawn from the activities alone: no list is fetched and nothing is ever pending', () => {
+      const { result } = render({ source: 'WBS', level: 2, shown: true, activities: tree });
+      expect(result.current.pending).toBe(false);
+      expect(result.current.input?.swimlanes).toEqual([{ id: 'struct', name: 'Structure' }]);
+      expect(result.current.input?.membership.get('slab')).toBe('struct');
+      expect(result.current.input?.source).toBe('WBS');
+      expect(h.calls).toBe(0);
+    });
+
+    it('builds no input while hidden, and none before the activities have arrived', () => {
+      expect(
+        render({ source: 'WBS', level: 2, shown: false, activities: tree }).result.current.input,
+      ).toBeNull();
+      expect(
+        render({ source: 'WBS', level: 2, shown: true, activities: undefined }).result.current
+          .input,
+      ).toBeNull();
+    });
+
+    it('follows a rename with no write: a changed name is a changed list, nothing else', () => {
+      const { result, rerender } = render({
+        source: 'WBS',
+        level: 2,
+        shown: true,
+        activities: tree,
+      });
+      rerender({
+        source: 'WBS',
+        level: 2,
+        shown: true,
+        activities: tree.map((a) => (a.id === 'struct' ? { ...a, name: 'Substructure' } : a)),
+      });
+      expect(result.current.input?.swimlanes).toEqual([{ id: 'struct', name: 'Substructure' }]);
+      expect(h.calls).toBe(0);
+    });
+
+    it('returns the same by-hand picture after a round trip through the WBS: no write in between', async () => {
+      const activities = [anActivity({ swimlaneId: 's1' })];
+      const { result, rerender } = render({ source: 'MANUAL', shown: true, activities });
+      await waitFor(() => expect(result.current.input).not.toBeNull());
+      const before = structuredClone({
+        swimlanes: result.current.input?.swimlanes,
+        membership: [...(result.current.input?.membership ?? [])],
+        storedLanes: [...(result.current.input?.storedLanes ?? [])],
+      });
+
+      rerender({ source: 'WBS', level: 1, shown: true, activities });
+      expect(result.current.input?.source).toBe('WBS');
+      rerender({ source: 'MANUAL', shown: true, activities });
+      await waitFor(() => expect(result.current.input?.source).toBe('MANUAL'));
+
+      expect({
+        swimlanes: result.current.input?.swimlanes,
+        membership: [...(result.current.input?.membership ?? [])],
+        storedLanes: [...(result.current.input?.storedLanes ?? [])],
+      }).toEqual(before);
+      // Membership and the stored lanes are read, never written: the activity is as it was.
+      expect(activities[0]?.swimlaneId).toBe('s1');
+    });
   });
 
   it('is pending, with no input, until the list arrives; then builds the input (ADR-0202)', async () => {
@@ -129,18 +201,44 @@ describe('useSwimlaneScene', () => {
 });
 
 describe('swimlanePictureOn / swimlanePictureInput (M2-T5: the one gate)', () => {
-  it('is on for a hand-made source, and only for a writer when asked; NONE and WBS have none', () => {
+  it('is on for a hand-made source, and only for a writer when asked; NONE has none', () => {
     expect(swimlanePictureOn({ source: 'MANUAL' })).toBe(true);
     expect(swimlanePictureOn({ source: 'MANUAL', canEdit: false })).toBe(false);
     expect(swimlanePictureOn({ source: 'NONE' })).toBe(false);
-    expect(swimlanePictureOn({ source: 'WBS' })).toBe(false);
   });
 
-  it('yields no input unless the picture is on and both lists are loaded', () => {
+  it('is on for a WBS source with a level, and off for one without (the server stores none)', () => {
+    expect(swimlanePictureOn({ source: 'WBS', level: 2 })).toBe(true);
+    expect(swimlanePictureOn({ source: 'WBS', level: 2, canEdit: false })).toBe(false);
+    expect(swimlanePictureOn({ source: 'WBS', level: null })).toBe(false);
+    expect(swimlanePictureOn({ source: 'WBS' })).toBe(false);
+    expect(swimlanePictureOn({ source: 'WBS', level: 4 })).toBe(false);
+  });
+
+  it('yields no input unless the picture is on and what the source reads has loaded', () => {
     const rows: never[] = [];
-    expect(swimlanePictureInput({ on: false, activities: rows, list: [] })).toBeNull();
-    expect(swimlanePictureInput({ on: true, activities: undefined, list: [] })).toBeNull();
-    expect(swimlanePictureInput({ on: true, activities: rows, list: undefined })).toBeNull();
-    expect(swimlanePictureInput({ on: true, activities: rows, list: [] })).not.toBeNull();
+    const manual = { source: 'MANUAL' } as const;
+    expect(swimlanePictureInput({ ...manual, on: false, activities: rows, list: [] })).toBeNull();
+    expect(
+      swimlanePictureInput({ ...manual, on: true, activities: undefined, list: [] }),
+    ).toBeNull();
+    expect(
+      swimlanePictureInput({ ...manual, on: true, activities: rows, list: undefined }),
+    ).toBeNull();
+    expect(
+      swimlanePictureInput({ ...manual, on: true, activities: rows, list: [] }),
+    ).not.toBeNull();
+  });
+
+  it('reads a WBS plan from the activities alone, and never from a list', () => {
+    const rows: never[] = [];
+    const wbs = { source: 'WBS', level: 1 } as const;
+    expect(
+      swimlanePictureInput({ ...wbs, on: true, activities: rows, list: undefined }),
+    ).toMatchObject({ source: 'WBS' });
+    expect(swimlanePictureInput({ ...wbs, on: true, activities: undefined, list: [] })).toBeNull();
+    expect(
+      swimlanePictureInput({ source: 'WBS', level: null, on: true, activities: rows, list: [] }),
+    ).toBeNull();
   });
 });

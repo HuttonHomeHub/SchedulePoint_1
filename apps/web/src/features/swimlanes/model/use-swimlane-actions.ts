@@ -1,4 +1,4 @@
-import type { SwimlaneSummary } from '@repo/types';
+import type { SwimlaneSource, SwimlaneSummary } from '@repo/types';
 import { useCallback, useMemo } from 'react';
 
 import {
@@ -17,7 +17,9 @@ import {
   swimlaneDeleteCommand,
   swimlaneRenameCommand,
   swimlaneReorderCommand,
+  swimlaneSourceCommand,
   type Command,
+  type SwimlaneBasisChoice,
 } from '@/features/undo-redo';
 
 export interface SwimlaneActions {
@@ -31,6 +33,20 @@ export interface SwimlaneActions {
   remove: (swimlane: SwimlaneSummary) => Promise<void>;
   /** Switch the plan to hand-made swimlanes. A plan setting, so it is not an undo step. */
   setManualSource: (plan: { id: string; version: number }) => Promise<void>;
+  /**
+   * Choose where the plan's swimlanes come from — by hand, or one per WBS group at a level — as one
+   * undo step. It writes the plan record and nothing else: lanes are stored per basis, so the old
+   * picture is still there to come back to.
+   */
+  switchSource: (plan: SwimlanePlanFacts, to: SwimlaneBasisChoice) => Promise<void>;
+}
+
+/** What a source write needs of the plan: its lock, and the choice it holds now (the undo's "before"). */
+export interface SwimlanePlanFacts {
+  id: string;
+  version: number;
+  swimlaneSource: SwimlaneSource;
+  swimlaneWbsLevel: number | null;
 }
 
 /**
@@ -141,8 +157,28 @@ export function useSwimlaneActions(
     [setSource],
   );
 
+  const switchSource = useCallback(
+    async (plan: SwimlanePlanFacts, to: SwimlaneBasisChoice): Promise<void> => {
+      await setSource({
+        planId: plan.id,
+        version: plan.version,
+        source: to.source,
+        level: to.level,
+      });
+      remember(
+        swimlaneSourceCommand({
+          planId: plan.id,
+          before: { source: plan.swimlaneSource, level: plan.swimlaneWbsLevel },
+          after: to,
+          setSource,
+        }),
+      );
+    },
+    [remember, setSource],
+  );
+
   return useMemo(
-    () => ({ add, addAfter, rename, move, remove, setManualSource }),
-    [add, addAfter, rename, move, remove, setManualSource],
+    () => ({ add, addAfter, rename, move, remove, setManualSource, switchSource }),
+    [add, addAfter, rename, move, remove, setManualSource, switchSource],
   );
 }

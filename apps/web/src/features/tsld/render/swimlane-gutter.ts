@@ -105,6 +105,12 @@ export function gutterWidthForRoom(options: { collapsed: boolean; room: boolean 
 export interface GutterActions {
   /** May the caller change swimlanes; when not, why. A shaded control says so rather than vanishing. */
   write: { writable: boolean; reason: string | null };
+  /**
+   * The label menus' (Rename, Move, Delete) gate, when it differs from {@link write}. Absent, they obey
+   * `write`. It exists so a reason that shuts a swimlane's rows (its name and order live on a WBS
+   * summary) never shuts the corner command that is the way out of it (ADR-0093, ADR-0204).
+   */
+  rows?: { writable: boolean; reason: string | null };
   /** The corner cell's command: "Set up swimlanes…" or "Swimlanes…". */
   manage: { label: string; onOpen: () => void };
   /** The expand/collapse control. `forcedByRoom` shades it with {@link GUTTER_NO_ROOM_REASON}. */

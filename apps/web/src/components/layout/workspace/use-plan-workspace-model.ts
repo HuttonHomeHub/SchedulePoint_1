@@ -698,20 +698,29 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const batchPositions = useBatchPositions(orgSlug, planId);
   const writeSwimlaneLanesMutation = useWriteSwimlaneLanes(orgSlug, planId);
   const queryClient = useQueryClient();
-  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only for a hand-made plan
-  // the planner can write (`swimlanePictureOn`, the same gate the scene uses); otherwise nothing is
-  // fetched and auto-resolve is the plain one. Once on, the list is wanted even when the lens is
-  // not showing it, because an edit made in one picture can overlap bars in the other; it is the
-  // scene's own query, so one fetch.
+  // The swimlane picture auto-resolve reads (swimlanes M2-T5). It exists only for a plan with
+  // swimlanes — hand-made, or from the WBS (M3) — that the planner can write (`swimlanePictureOn`, the
+  // same gate the scene uses); otherwise nothing is fetched and auto-resolve is the plain one. Once
+  // on, the list is wanted even when the lens is not showing it, because an edit made in one picture
+  // can overlap bars in the other; it is the scene's own query, so one fetch.
   const swimlaneSource = plan.data?.swimlaneSource ?? 'NONE';
+  const swimlaneLevel = plan.data?.swimlaneWbsLevel ?? null;
   const swimlanePicture = swimlanePictureOn({
     source: swimlaneSource,
+    level: swimlaneLevel,
     canEdit: canEditSchedule,
   });
-  const swimlaneList = useSwimlanes(orgSlug, planId, swimlanePicture);
+  // The list is only a hand-made plan's; a WBS plan's swimlanes are read from the activities.
+  const swimlaneList = useSwimlanes(
+    orgSlug,
+    planId,
+    swimlanePicture && swimlaneSource === 'MANUAL',
+  );
   const readSwimlaneInput = (): SwimlaneInput | null =>
     swimlanePictureInput({
       on: swimlanePicture,
+      source: swimlaneSource,
+      level: swimlaneLevel,
       list:
         queryClient.getQueryData<SwimlaneSummary[]>(swimlaneKeys.byPlan(orgSlug, planId)) ??
         swimlaneList.data,

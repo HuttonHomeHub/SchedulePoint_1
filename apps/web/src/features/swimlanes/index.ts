@@ -22,3 +22,4 @@ export {
 } from './model/use-swimlane-management';
 export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
 export { SwimlaneBulkAssignBar } from './components/SwimlaneBulkAssignBar';
+export { WbsSwimlaneField } from './components/WbsSwimlaneField';

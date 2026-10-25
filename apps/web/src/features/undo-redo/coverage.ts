@@ -97,13 +97,14 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useUpdateNote: excluded(REASON.notes),
   useDeleteNote: excluded(REASON.notes),
 
-  // Swimlanes (the list; assignment is M2-T10, and the plan's source is a plan setting below)
+  // Swimlanes (the list, assignment, and where they come from). A hand-made setup's own source write
+  // is not a step: undoing that setup removes its swimlanes (swimlane-commands.ts).
   useCreateSwimlane: recorded('swimlaneAddCommand'),
   useRenameSwimlane: recorded('swimlaneRenameCommand'),
   useReorderSwimlanes: recorded('swimlaneReorderCommand'),
   useDeleteSwimlane: recorded('swimlaneDeleteCommand'),
   useRestoreSwimlane: recorded('swimlaneDeleteCommand'),
-  useSetPlanSwimlaneSource: excluded(REASON.planSettings),
+  useSetPlanSwimlaneSource: recorded('swimlaneSourceCommand'),
 
   // Plan settings and the plan record
   useSetPlanCalendar: excluded(REASON.planSettings),

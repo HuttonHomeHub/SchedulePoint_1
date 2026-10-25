@@ -4,6 +4,7 @@ import { projectSwimlanes, type SwimlaneInput } from '../render/project-swimlane
 
 import { groupListboxRows, listboxOrder, swimlaneLaneClauses } from './group-listbox';
 
+import { wbsSwimlaneInput } from '@/features/wbs';
 import { anActivity } from '@/test/activity-fixture';
 
 const bar = (id: string, start: number, end: number) =>
@@ -82,5 +83,30 @@ describe('swimlaneLaneClauses', () => {
     expect(clauses.get('d')).toBe('in Mechanical, lane 1 of 2');
     expect(clauses.get('c')).toBe('in No swimlane, lane 1 of 1');
     expect(clauses.has('undrawn')).toBe(false);
+  });
+});
+
+describe('a WBS source is spoken like a hand-made one (M3)', () => {
+  const dated = { visualEffectiveStart: '2026-01-02', visualEffectiveFinish: '2026-01-05' };
+  const TREE = [
+    anActivity({ id: 'struct', name: 'Structure', type: 'WBS_SUMMARY', ...dated }),
+    anActivity({ id: 'slab', parentId: 'struct', ...dated }),
+    anActivity({ id: 'shed', ...dated }),
+  ];
+
+  it('groups the listbox under the summary’s name, with "No swimlane" last', () => {
+    const groups = groupListboxRows(TREE, wbsSwimlaneInput(TREE, 1));
+    expect(groups.map((g) => [g.label, g.rows.map((r) => r.id)])).toEqual([
+      ['Structure', ['struct', 'slab']],
+      ['No swimlane', ['shed']],
+    ]);
+  });
+
+  it('words a bar’s place with the summary’s name', () => {
+    const scene = projectSwimlanes(TREE, wbsSwimlaneInput(TREE, 1), {
+      source: 'visual',
+      dataDate: '2026-01-01',
+    });
+    expect(swimlaneLaneClauses(scene).get('slab')).toMatch(/^in Structure, lane \d of \d$/);
   });
 });

@@ -3,6 +3,7 @@ import type {
   ActivitySummary,
   CrossPlanDependencySummary,
   DependencySummary,
+  PlanSummary,
   ResourceAssignmentSummary,
   SwimlaneSummary,
 } from '@repo/types';
@@ -84,6 +85,8 @@ export interface ReplayContext {
   readCrossPlanLink: (linkId: string) => Promise<CrossPlanDependencySummary | undefined>;
   /** The plan's active swimlanes in display order, read fresh. A deleted swimlane is simply absent. */
   readSwimlanes: () => Promise<readonly SwimlaneSummary[]>;
+  /** The plan record, read fresh; `undefined` when the plan itself is gone. */
+  readPlan: () => Promise<PlanSummary | undefined>;
 }
 
 /** A field's value for comparison: the API speaks `null`, so an absent field and a null are one value. */

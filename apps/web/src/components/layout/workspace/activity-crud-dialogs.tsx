@@ -23,11 +23,13 @@ import {
 import { ActivityHistoryPanel } from '@/features/activity-history';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
+import { WbsSwimlaneField } from '@/features/swimlanes';
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
   NO_SWIMLANE_CHOICE_LABEL,
   type SwimlaneAssignment,
 } from '@/features/tsld/model/swimlane-assignment';
+import { isWbsSwimlaneLevel } from '@/features/wbs';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
@@ -61,6 +63,12 @@ export function ActivityCrudDialogs({
   const [dissolveError, setDissolveError] = useState<string | null>(null);
   const [bandCopyError, setBandCopyError] = useState<string | null>(null);
   const [bandCopyPending, setBandCopyPending] = useState(false);
+
+  const plan = model.plan.data;
+  const wbsSwimlaneLevel =
+    plan?.swimlaneSource === 'WBS' && isWbsSwimlaneLevel(plan.swimlaneWbsLevel)
+      ? plan.swimlaneWbsLevel
+      : null;
 
   // The intent holds an id, the row comes from the live query, so a save that bumps `version` feeds
   // the next one and the editor closes when its target is deleted.
@@ -171,6 +179,21 @@ export function ActivityCrudDialogs({
         planActivitiesLoading={model.activities.isPending}
         planActivitiesError={model.activities.isError}
         activity={intended}
+        {...(intended && !swimlaneAssignment && wbsSwimlaneLevel !== null && model.activities.data
+          ? {
+              // The swimlanes follow the WBS: the field says where the activity is, and why it is not
+              // editable here. Filing it under another summary (Breakdown) is what moves it.
+              swimlaneSlot: () => (
+                <FormSection title="Swimlane">
+                  <WbsSwimlaneField
+                    activities={model.activities.data ?? []}
+                    level={wbsSwimlaneLevel}
+                    activityId={intended.id}
+                  />
+                </FormSection>
+              ),
+            }
+          : {})}
         {...(intended && swimlaneAssignment
           ? {
               swimlaneSlot: ({ generalDirty }: { generalDirty: boolean }) => (

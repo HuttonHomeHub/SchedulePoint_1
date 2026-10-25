@@ -225,6 +225,7 @@ export function fakePlanServer(
       ),
     // This fake holds no swimlanes: the swimlane commands are tested against their own small store.
     readSwimlanes: () => Promise.resolve([]),
+    readPlan: () => Promise.resolve(undefined),
     readCrossPlanLink: (id) => {
       const link = crossPlanLinks.get(id);
       return Promise.resolve(link === undefined ? undefined : { ...link });

@@ -6,6 +6,7 @@ import { useSwimlanes } from '../api/use-swimlanes';
 import { manualSwimlaneInput } from './manual-membership';
 
 import type { SwimlaneInput } from '@/features/tsld';
+import { isWbsSwimlaneLevel, wbsSwimlaneInput } from '@/features/wbs';
 
 /**
  * Whether alternate swimlanes carry the faint ground. The approved default of feature-spec SQ-6 is
@@ -15,32 +16,42 @@ import type { SwimlaneInput } from '@/features/tsld';
 export const SWIMLANE_GROUND = true;
 
 /**
- * Whether the plan's swimlane picture exists for this session: the plan's swimlanes are hand-made
- * (a `WBS` source has no input until M3, so a plan whose source was set through the API draws and
- * resolves swimlane-free) and, where it matters, the planner can write. **The one gate** for
- * fetching the swimlane list, drawing it, assigning to it and auto-resolving in it.
+ * Whether the plan's swimlane picture exists for this session: its swimlanes are hand-made, or come
+ * from the WBS at a valid level, and, where it matters, the planner can write. **The one gate** for
+ * drawing it and auto-resolving in it; assigning is hand-made only and says so at its own call.
+ *
+ * A `WBS` source without a level (which the server refuses to store) reads as no picture rather than
+ * as level 1, so a half-written plan draws and resolves swimlane-free.
  */
 export function swimlanePictureOn(args: {
   source: SwimlaneSource;
+  /** The plan's WBS level; only read for source `WBS`. */
+  level?: number | null | undefined;
   /** Only the writers of auto-resolve pass this; the read-only scene has no use for it. */
   canEdit?: boolean;
 }): boolean {
-  return args.source === 'MANUAL' && (args.canEdit ?? true);
+  const fromSource =
+    args.source === 'MANUAL' || (args.source === 'WBS' && isWbsSwimlaneLevel(args.level));
+  return fromSource && (args.canEdit ?? true);
 }
 
 /**
- * The swimlane input auto-resolve reads from the caches: `null` unless the picture is on and both
- * the activities and the list are loaded.
+ * The swimlane input auto-resolve reads from the caches: `null` unless the picture is on and what the
+ * source needs has loaded — the list for hand-made swimlanes, only the activities for the WBS.
  */
 export function swimlanePictureInput(args: {
   on: boolean;
+  source: SwimlaneSource;
+  level?: number | null | undefined;
   activities: readonly ActivitySummary[] | undefined;
   list: readonly SwimlaneSummary[] | undefined;
 }): SwimlaneInput | null {
-  const { on, activities, list } = args;
-  return on && activities !== undefined && list !== undefined
-    ? manualSwimlaneInput(activities, list)
-    : null;
+  const { on, source, level, activities, list } = args;
+  if (!on || activities === undefined) return null;
+  if (source === 'WBS') {
+    return isWbsSwimlaneLevel(level) ? wbsSwimlaneInput(activities, level) : null;
+  }
+  return list !== undefined ? manualSwimlaneInput(activities, list) : null;
 }
 
 export interface SwimlaneScene {
@@ -76,34 +87,36 @@ export interface SwimlaneScene {
  * Memoised on the two things that can change the input — the activities and the list — so it is
  * rebuilt once per data change and never per frame or per render.
  *
- * Source `WBS` yields no input here: its membership is derived from the summaries and arrives with
- * M3. Until then a WBS plan draws swimlane-free, as it does today.
+ * **Source `WBS` needs no list**: its swimlanes are the plan's summaries at the level, read from the
+ * activities already loaded, so the input exists the moment the diagram can be drawn and `pending` is
+ * never true. No frame paints the swimlane-free layout first (ui-architecture §6).
  */
 export function useSwimlaneScene(args: {
   orgSlug: string;
   planId: string;
   source: SwimlaneSource;
+  /** The plan's WBS level; only read for source `WBS`. */
+  level?: number | null | undefined;
   activities: readonly ActivitySummary[] | undefined;
   shown: boolean;
 }): SwimlaneScene {
-  const { orgSlug, planId, source, activities, shown } = args;
-  const manual = swimlanePictureOn({ source });
+  const { orgSlug, planId, source, level, activities, shown } = args;
+  const picture = swimlanePictureOn({ source, level });
+  const manual = picture && source === 'MANUAL';
   const list = useSwimlanes(orgSlug, planId, manual);
   const swimlanes = list.data;
-  const drawn = manual && shown;
+  const drawn = picture && shown;
   const input = useMemo(
     () =>
-      drawn && swimlanes !== undefined && activities !== undefined
-        ? manualSwimlaneInput(activities, swimlanes)
-        : null,
-    [drawn, swimlanes, activities],
+      drawn ? swimlanePictureInput({ on: true, source, level, activities, list: swimlanes }) : null,
+    [drawn, source, level, swimlanes, activities],
   );
   // `isPending` is true for a disabled query that has no data, so it is gated on `drawn`; an error
   // is not pending, so a failed list degrades to the swimlane-free diagram rather than a spinner
   // that never ends.
   return {
     input,
-    pending: drawn && list.isPending,
+    pending: drawn && manual && list.isPending,
     failed: manual && list.isError,
     count: manual ? swimlanes?.length : undefined,
     refetch: () => void list.refetch(),
