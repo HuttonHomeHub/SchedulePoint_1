@@ -48,7 +48,11 @@ import {
 } from '@/features/plan-actions/make-milestone-gate';
 import { ActivityResourcesDialog, type OnAssignmentEdited } from '@/features/resources';
 import { SwimlaneBulkAssignBar } from '@/features/swimlanes';
-import { SWIMLANES_FOLLOW_WBS_REASON, type SwimlaneAssignment } from '@/features/tsld';
+import {
+  FOLLOWS_WBS_LABEL,
+  SWIMLANES_FOLLOW_WBS_REASON,
+  type SwimlaneColumnSource,
+} from '@/features/tsld';
 import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
@@ -114,8 +118,7 @@ function scheduleColumn(
  * swimlanes that follow the WBS the column is shown read-only with its reason (US-4). Absent when the
  * plan has no swimlanes to show, which leaves the table exactly as it was.
  */
-export type ActivitiesTableSwimlanes =
-  { source: 'MANUAL'; assignment: SwimlaneAssignment } | { source: 'WBS' };
+export type ActivitiesTableSwimlanes = SwimlaneColumnSource;
 
 /** The coarse sweep's hook, on the label (the hit target) rather than the 16 px input. */
 const ROW_SELECT_TARGET = { 'data-row-select': '' } as const;
@@ -908,7 +911,7 @@ export function ActivitiesTable({
               cellClassName: 'hidden whitespace-nowrap lg:table-cell',
               cell: (activity: ActivitySummary) => {
                 if (swimlanes.source === 'WBS') {
-                  return <span className="text-muted-foreground">Follows the WBS</span>;
+                  return <span className="text-muted-foreground">{FOLLOWS_WBS_LABEL}</span>;
                 }
                 const { assignment } = swimlanes;
                 const currentId = assignment.currentOf(activity.id);
@@ -1153,7 +1156,10 @@ export function ActivitiesTable({
       ) : null}
 
       {swimlanes?.source === 'WBS' ? (
-        <p className="text-muted-foreground shrink-0 text-sm">{SWIMLANES_FOLLOW_WBS_REASON}</p>
+        // The note explains the Swimlane column, so it goes where the column goes (below `lg`).
+        <p className="text-muted-foreground hidden shrink-0 text-sm lg:block">
+          {SWIMLANES_FOLLOW_WBS_REASON}
+        </p>
       ) : null}
 
       {/* `scroll="contained"`: this table is the ONE scroller inside a height-capped pane

@@ -1,6 +1,6 @@
 # Swimlanes: frontend architecture review
 
-- **Status:** Approved with the spec (2026-10-22), input to [`feature-spec.md`](./feature-spec.md) and
+- **Status:** Accepted — shipped (ADR-0206, Part B adopts §3 as written). Approved with the spec (2026-10-22), input to [`feature-spec.md`](./feature-spec.md) and
   [`implementation-plan.md`](./implementation-plan.md). It does not edit them.
 - **Author:** ui-architect (Claude Code), for James Ewbank (product owner)
 - **Date:** 2026-10-22

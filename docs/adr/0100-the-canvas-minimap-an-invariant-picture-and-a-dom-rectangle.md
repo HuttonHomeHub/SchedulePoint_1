@@ -150,6 +150,12 @@ D7 built a parallel a11y layer instead.
   test; the reviews' non-blocking findings are `docs/TECH_DEBT.md` #155.
 - The register's stage-banner counts move (new files); `pnpm check:counts` re-derives them.
 
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+While swimlanes are shown the minimap's bitmap and marker use display lanes, and its readout names the swimlanes
+in view in place of "lanes a–b" (`TsldMinimap.tsx`, `swimlanesInView`). It draws **no swimlane grounds**:
+`MINIMAP_GROUNDS` deliberately has no band, and adding one would widen its contrast set (ADR-0206 B12).
+
 ## References
 
 - `docs/specs/tsld-minimap/` — feature spec, implementation plan, three input reports,

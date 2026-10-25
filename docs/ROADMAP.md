@@ -933,7 +933,15 @@ discriminators. Each becomes a spec/plan before build:
   plan at [`docs/specs/guest-critical-cues/`](specs/guest-critical-cues/), `docs/TECH_DEBT.md`
   #403): the guest read gains the engine's `isNearCritical` and `isDriving` flags so the guest
   canvas draws and speaks what a member sees.
-- **A share link shows the plan's swimlanes** — **built, releasing with swimlanes M4**
+- **Labelled swimlanes on the diagram** — **shipped** (2026-10-25, `web` 0.199.1 and `api` 0.101.0;
+  [ADR-0206](adr/0206-a-swimlane-is-a-projection-of-lanes.md); spec and plan at
+  [`docs/specs/swimlanes/`](specs/swimlanes/)): one labelled band per system or trade, made by hand or one
+  per WBS group at a chosen level, kept live. The names sit in a gutter at the diagram's left, a quiet rule
+  marks each boundary, bars pack inside their swimlane, and turning swimlanes off gives back the
+  swimlane-free picture exactly. The Activities table and the Gantt have a Swimlane column, the export and
+  print carry them, and a SchedulePoint XER keeps them. The engine never sees them. P6 activity codes as a
+  source are the `docs/BACKLOG.md` follow-on.
+- **A share link shows the plan's swimlanes** — **shipped** (with swimlanes M4)
   ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
   [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list
   and each activity's derived swimlane and lane, and the share view gains the same Swimlanes lens.
@@ -942,7 +950,6 @@ discriminators. Each becomes a spec/plan before build:
   stronger and an ordinary driving link slightly quieter, so the work is never the faintest meaningful
   mark on the diagram, and a gate and a Chromium case hold the ordering. Critical and near-critical
   links are unchanged.
-- **The resource strip reaches the exported diagram** — **in progress** (approved 2026-10-17,
 - **The resource strip reaches the exported diagram** — **shipped** (approved 2026-10-17,
   [ADR-0200](adr/0200-a-layer-is-a-canvas-and-the-export-accounts-for-every-one.md); spec and plan at
   [`docs/specs/resource-strip-export/`](specs/resource-strip-export/)): the loading strip a planner has

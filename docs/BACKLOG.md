@@ -249,12 +249,14 @@ a product idea that has not yet earned a roadmap line:
   activity notes (ADR-0046). Demand: on 2026-10-22 the owner's remarks for a programme
   had to travel in a separate spreadsheet beside the XER.
 
-- `M`–`L` **Labelled swimlanes on the diagram** (one horizontal band per system or trade, with its
-  name). Asked for by the owner on 2026-10-22 ("is there a way to put the systems in swimlanes?"),
-  who then chose, for now, to regroup the WBS by system instead (`docs/DECISIONS.md`, 2026-10-22).
-  Still an open question in `docs/PROJECT_BRIEF.md` ("Default: no in v1") and ADR-0026; this is the
-  first recorded demand. **Specified and approved 2026-10-22:** `docs/specs/swimlanes/` (L–XL, six
-  milestones); being built.
+- `M` **Swimlanes from P6 activity codes.** Labelled swimlanes shipped on 2026-10-25 (ADR-0206,
+  `docs/specs/swimlanes/`), made by hand or from the WBS. A P6 programme often groups work by an
+  **activity code** (system, area, trade) rather than by its WBS, and an import cannot use that today:
+  the XER parser reads no `ACTVTYPE`, `ACTVCODE` or `TASKACTV` (no match in `packages/interchange/src`
+  on 2026-10-25). A third source would let a planner pick one code type and get one swimlane per value.
+  It needs a spec: the codes have to be stored (or the swimlanes made once, at import, by hand-made
+  source), and that choice is a schema question for the database-architect. Demand: the swimlanes spec
+  names it as the follow-on (feature-spec §4.8); the owner has not asked for it yet.
 
 - `S` **Tidy up the calendars an import leaves behind.** Deleting an imported plan keeps the project
   calendars its import created (`docs/API.md`: they go with the project, not the plan), so

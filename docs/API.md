@@ -706,7 +706,8 @@ A **name** is trimmed, 1 to 80 characters, with no control characters, and uniqu
 active swimlanes **ignoring case** (a soft-deleted name does not block reuse). At most **100** active
 swimlanes per plan, counted under the plan advisory lock. `organizationId` is never accepted: it is
 copied from the plan, and an unknown property is a 422. Anti-IDOR is uniform: another organisation's
-plan, another plan's swimlane, or a deleted one is a **404**, answered before 403 or 423. The 409
+plan is a **404** before anything else; inside the organisation the role is checked next (**403**), and
+then another plan's swimlane, a deleted one, or a missing plan is a **404**, answered before 423. The 409
 message is fixed text and never echoes a stored name. Create, rename and reorder write no audit row
 (the row is durably attributed); delete and restore do (ADR-0073).
 

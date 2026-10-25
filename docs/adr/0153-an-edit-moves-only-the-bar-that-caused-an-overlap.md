@@ -97,3 +97,9 @@ the nearest free row.** Nothing else shifts.
 - **The CPM engine is not imported and no migration runs.** The resolution writes `lane_index`
   through the existing positions batch, with its RBAC, organisation scope, optimistic `version` and
   ADR-0028 pen unchanged.
+
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+The rule holds in **both layouts**. With swimlanes off an overlap moves `laneIndex`; with them on it moves the
+in-swimlane lane stored against the activity's current basis, and `laneIndex` is not written. Either way only the
+bar that caused the overlap moves (ADR-0206 A6).

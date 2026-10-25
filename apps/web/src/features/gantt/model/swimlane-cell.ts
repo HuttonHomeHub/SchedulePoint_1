@@ -1,8 +1,11 @@
 import type { GanttGridEditing } from './cell-edit';
 import type { GanttCellGate } from './cell-gate';
 
-import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
-import { SWIMLANES_FOLLOW_WBS_REASON } from '@/features/tsld/model/swimlane-assignment';
+import type { SwimlaneColumnSource } from '@/features/tsld/model/swimlane-assignment';
+import {
+  FOLLOWS_WBS_LABEL,
+  SWIMLANES_FOLLOW_WBS_REASON,
+} from '@/features/tsld/model/swimlane-assignment';
 
 /**
  * What the Gantt is told about the plan's swimlanes (swimlanes M4-T2). The host composes it, so this
@@ -11,14 +14,7 @@ import { SWIMLANES_FOLLOW_WBS_REASON } from '@/features/tsld/model/swimlane-assi
  * column is shown read-only with its reason (US-4). Absent when the plan has no swimlanes to show, which
  * leaves the grid exactly as it was.
  */
-export type GanttSwimlanes =
-  { source: 'MANUAL'; assignment: SwimlaneAssignment } | { source: 'WBS' };
-
-/** What a WBS-sourced plan's cell reads: the swimlane is derived, so the cell names the rule. */
-export const FOLLOWS_WBS_LABEL = 'Follows the WBS';
-
-/** Why a WBS-sourced plan's cell is read-only. The sentence is the table's, from the same constant. */
-export const SWIMLANE_CELL_WBS_REASON = SWIMLANES_FOLLOW_WBS_REASON;
+export type GanttSwimlanes = SwimlaneColumnSource;
 
 /**
  * The gate for one Swimlane cell: shut with the rule's own sentence under the WBS source (even for a
@@ -30,7 +26,7 @@ export function swimlaneCellGate(
   activityId: string,
 ): GanttCellGate {
   if (swimlanes.source === 'WBS') {
-    return { writable: false, readable: true, readOnly: true, reason: SWIMLANE_CELL_WBS_REASON };
+    return { writable: false, readable: true, readOnly: true, reason: SWIMLANES_FOLLOW_WBS_REASON };
   }
   return editing.gateFor('swimlane', activityId);
 }

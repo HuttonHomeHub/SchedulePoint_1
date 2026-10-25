@@ -1,3 +1,5 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 import { SWIMLANE_LIMIT } from './reorder-swimlanes.dto';
@@ -7,5 +9,12 @@ import { SWIMLANE_LIMIT } from './reorder-swimlanes.dto';
  * swimlanes needs all of them and the cap makes that one page (swimlanes spec §4.12).
  */
 export class SwimlaneListQueryDto extends PaginationQueryDto {
+  // Re-declared so the OpenAPI states this list's own default; the inherited decorator says 20.
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: SWIMLANE_LIMIT,
+    default: SWIMLANE_LIMIT,
+    description: 'Page size.',
+  })
   override limit = SWIMLANE_LIMIT;
 }
