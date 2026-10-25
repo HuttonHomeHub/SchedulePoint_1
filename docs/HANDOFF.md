@@ -3,49 +3,63 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-24 (evening). The owner asked for **swimlanes M2** ("Swimlanes by hand, on the
-diagram") built from the approved spec and run to completion. **All eleven tasks are merged and
-released** as **`web` 0.198.0** and **`api` 0.99.1**. Swimlanes are now **live**: the Swimlanes row
-in `View ▾` is offered, and a planner can set them up, move work between them, and rename, reorder or
-delete them. The owner's **hard rule** still stands: nothing that needs them to test, measure or
-check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not
-cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-25. The owner asked for **swimlanes M3** ("One swimlane per WBS group") and
+**M4** ("Beyond the diagram") built from the approved spec and run to completion. **Both are merged
+and released** as **`web` 0.199.1**, **`api` 0.101.0** and **`@repo/interchange` 0.15.0**. A plan can
+now take its swimlanes from the WBS; the Activities table and the Gantt have a Swimlane column;
+people with a share link see swimlanes; and a SchedulePoint XER round trip keeps them. **M5 (the gate
+pass and the M5 ADR) is the only swimlanes work left** and was not in scope. The owner's **hard rule**
+still stands: nothing that needs them to test, measure or check anything on their server or devices
+(a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call
+(ADR-0190).
 
-## The owner's answers this session (2026-10-24)
+## The owner's answers this session (2026-10-25)
 
-- **Swimlanes M2:** build it, every task merged one at a time, the lens lit only by M2-T11.
-- **The row growth** (Re-layout 35 → 54 rows on the torture plan, from `m0-reading.md`): **accept
-  it**. Recorded in `docs/DECISIONS.md` (2026-10-24) and in ADR-0203's note by M2-T6.
-- The earlier answers (2026-10-22 and 2026-10-23) are in `docs/DECISIONS.md` and summarised under
-  "Decided" below.
+- None new. The scope was set by the prompt: build M3 and M4 side by side, one PR merged at a time,
+  the Version Packages PR last, and rewrite this file. The earlier answers (SQ-1 to SQ-7, the row
+  growth) are in `docs/DECISIONS.md` and summarised under "Decided" below.
 
 ## Where things stand
 
-- **Latest releases:** `web` 0.198.0 and `api` 0.99.1 (Version Packages #1130).
+- **Latest releases:** `web` 0.199.1, `api` 0.101.0, `@repo/interchange` 0.15.0 (Version Packages
+  #1148). The first release this session was `web` 0.199.0 / `api` 0.100.0 / interchange 0.14.0
+  (#1141); both release runs' tag and image-publish jobs finished green.
 - **This session's PRs, in merge order:**
-  - **#1126** M2-T3: the swimlane gutter's space at the canvas's left edge.
-  - **#1127** M2-T1: the swimlane hooks, manual membership, `SwimlaneInput` and `deriveDiagramSource`
-    (one place that decides what the screen and the export draw).
-  - **#1128** M2-T2: the lens (`swimlanePictureOn`), the boundary rule and the swimlane ground.
-  - **#1129** API fix: in the positions batch, `swimlane.swimlaneId: null` now clears membership, and
-    a member of a deleted swimlane gets a "No swimlane" lane instead of a 404 (found while building T4).
-  - **#1131** M2-T8: the minimap names swimlanes; baseline and levelled ghosts sit in their display row.
-  - **#1132** M2-T7: export and print carry swimlanes, checked by a chrome roster (`EXPORT_CHROME_INPUTS`).
-  - **#1133** M2-T4: moving and creating bars inside swimlanes, one undo step per gesture.
-  - **#1134** M2-T9: the swimlane name column (gutter) as a vertical toolbar, its menus and the set-up,
-    manage and delete dialogs.
-  - **#1135** M2-T5: auto-resolve overlaps in both pictures (swimlanes off and within each swimlane).
-  - **#1136** M2-T6: Tidy and Re-layout search inside each swimlane (cost pinned to M0's 359/356
-    evaluations; unpartitioned output byte-identical).
-  - **#1137** M2-T10: Move to swimlane… on both selection bars, the listbox grouped by swimlane, the
-    editor's swimlane field, and an undo whose swimlane was deleted is set aside.
-  - **#1138** M2-T11: the lens is offered, the gate-review fold (failed-list notice with Try again,
-    arrow keys kept inside swimlane panels, lazy dialogs that hand focus back) and the
-    **`swimlanes-by-hand` Playwright journey** (17 tests, CI shard 1; suite count 49).
-  - **#1130** the Version Packages release.
-- **Reviews:** component, accessibility and UX on every UI task; the M2 gate review (accessibility,
-  component, UX, performance) passed after its fold. `plan-detail` is 122.06 kB gzip against its
-  132 KiB ceiling.
+  - **#1140** M4-T1: the Swimlane column in the Activities table and a bulk "Move to swimlane" bar
+    (one container with the WBS assign bar, one live region).
+  - **#1142** M3-T1: membership at level N from the WBS, the "One per WBS group" setup option, the
+    undoable source switch in Swimlanes…, and the read-only editor field.
+  - **#1143** M3-T2: one shared helper stores the lane a moved activity takes in its new WBS group,
+    a bar drawn in a WBS swimlane is filed under its summary, a drag stops at the swimlane edge with
+    a spoken reason, and the `swimlanes-by-wbs` journey.
+  - **#1144** M4-T4: the XER reader (names held at least as strict as the database, swimlanes created
+    in one batch, members packed per swimlane, counts in the report).
+  - **#1145** M4-T2: the Gantt Swimlane column (double-click or **Shift+F2** on the row), read-only
+    under the WBS with its reason.
+  - **#1146** M4-T3: guests with a share link see swimlanes (ADR-0205 amends ADR-0051 §4).
+  - **#1141** the first Version Packages release.
+  - **#1147** M4-T5: the XER writer (ADR-0156 D9: the reader had been released first).
+  - **#1148** the final Version Packages release.
+- **Reviews:** component, accessibility and UX on every UI task, security and API on the API tasks,
+  backend-performance on the reader. Real findings were folded before each merge (a shaded corner
+  command with a self-pointing reason, a silent drag stop, an import cycle, a keyboard route to the
+  Gantt cell, and two security findings where the reader was looser than the database).
+- **How it was tested:** unit suites, lint and typecheck locally for every task; short Playwright
+  suites locally; the long suites and the full API suite on **CI for each PR**, because this
+  container restarts about every 20 minutes and a long local run never finishes (see the
+  environment notes). Every merged PR had all ten checks green on its exact head.
+- **Known gaps, recorded and not hidden:**
+  - **TECH_DEBT #547:** the activity editor's Breakdown field and Dissolve do not store the moved
+    activity's lane (the bar is still drawn without overlap; the lane is derived on read).
+  - **Guests do not see swimlanes on a plan whose swimlanes follow the WBS** (ADR-0205 D3): the
+    guest read needs the WBS membership and order derived on the server. The DTO is already
+    source-neutral, so it is a new branch in `apps/api/src/modules/share/guest-swimlanes.ts`.
+  - **An XER export of a WBS-source plan writes only the source and level**: membership is
+    re-derived from the WBS rows on import and in-swimlane lanes are repacked (the reader discards
+    hand-made data under a WBS source, so writing it would make our own file report repairs).
+    `docs/API.md` and ADR-0156 say so.
+  - The Gantt swimlane list is 24 px high (a recorded coarse-pointer trade-off); the editor's
+    Swimlane field is the large-target route.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -103,6 +117,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-23: swimlanes M0/M1 (SQ-1 to SQ-6 defaults, SQ-7 yes); CI install "time limit + retry"
   and "keep the packages".
 - 2026-10-24: accept the swimlane row growth (35 → 54 rows on the torture plan).
+- 2026-10-25: swimlanes M3 and M4 built to the approved spec with no new owner decisions; the
+  defaults taken are recorded in ADR-0205 (guests) and the ADR-0156 amendments (XER reader and writer).
 
 ## Parked by the owner — keep, do not raise
 
@@ -139,17 +155,18 @@ owner returns to one, the steps are ready:
   its own check because the run-lock session is connected; run the fixture and the check directly).
 - **The CI browser-install hang is fixed** (#1114, #1117); no row was needed.
 - **No new rows on 2026-10-24.** Every M2 review finding was folded into its own task's PR.
+- **#547** (2026-10-25): the activity editor's Breakdown field and Dissolve do not store the moved
+  activity's swimlane lane (derived on read, so nothing overlaps on screen). Every other M3 and M4
+  review finding was folded into its own task's PR.
 
 ## Suggested next
 
-**Swimlanes M3** ("One swimlane per WBS group", `docs/specs/swimlanes/implementation-plan.md`
-§M3, two tasks: M3-T1 membership, the setup option and the source switch; M3-T2 change handling,
-filing on create, `laneRange`, and the journey). **M4** ("Beyond the diagram": the Activities table
-column and bulk bar, then the Gantt column) depends only on M2, so it can run beside M3. **M5** (gate
-pass and records, including the M5 ADR that must record the boundary rule's ~2:1 contrast basis)
-comes after both. Each UI task needs the component, accessibility and UX reviewers; M3-T2 adds a
-journey. Until M3, a plan whose source is WBS reads as "not set up" on the lens (by design in M2).
-Switch the session to **Sonnet** for the building (the spec is approved).
+**Swimlanes M5** ("Gate pass and records", `docs/specs/swimlanes/implementation-plan.md` §M5): the
+epic's gate review and the **M5 ADR** (ADR-0206 is the next free number), which must record the
+boundary rule's ~2:1 contrast basis and answer the open questions in the brief and ADR-0026. Possible
+follow-ups from "Known gaps" above (the guest WBS branch, #547) are the owner's to prioritise. Each UI
+task needs the component, accessibility and UX reviewers. Switch the session to **Sonnet** for any
+building.
 
 Shortlist candidates when the owner wants a break from swimlanes (check each row against the code
 first): #539 (a finish milestone after work on another calendar is dated wrongly: an engine defect,
@@ -561,3 +578,37 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     `AND` came back rewritten, and the backup round trip in CI failed on it (`docs/DATABASE.md`).
   - **The export 429 test waits on the export's own advisory lock**
     (`hashtext('org-export')`, `objsubid = 2`); a general "any advisory lock" wait saw the run lock.
+
+- **2026-10-25 swimlanes M3 + M4 lessons:**
+  - **The container restarts about every 20 minutes** (seen many times in one session). A long local run
+    dies with it and leaves no summary line. Start a run straight after a restart, one at a time,
+    from a **resumable script** (skip steps already recorded as `name=0`), and let **CI be the
+    runner for the long suites** (`workspace-fit`, `gantt-editing`, the full API suite). The full API
+    suite takes ~15 minutes, so a run only finishes if it starts in the first few minutes of a
+    container's life; to check a few specs, run them directly: export
+    `DATABASE_URL=postgresql://app:app@localhost:5432/app_test?schema=public`, run
+    `scripts/e2e-local.sh --db-only`, then `pnpm --filter @repo/api test:e2e test/<spec>` (without the
+    URL every spec reads as "skipped" and the run exits 0).
+  - **A timeout can look like a hang.** A journey step that waits for a button renamed in a later UI
+    fix sits silently until the 5-minute test timeout; the log shows nothing between the last passing
+    test and the end. Run the one test with `-g` and a hard `timeout`, and read the failure context
+    before suspecting the product. The same journey's later steps had never run because step 5 failed
+    first.
+  - **A spec that creates swimlane rows must clear them in `afterAll`** (the 2026-10-23 lesson held
+    again): leftovers made `schedule.e2e-spec.ts` fail 35 tests in `beforeAll` on
+    `swimlanes_plan_id_fkey`. Wrap the reset in `try/finally` and call `clearDomainData(prisma)`.
+  - **A schema CHECK and a unique index are the reader's contract.** Anything that writes a name
+    must be at least as strict as `ck_swimlanes_name_shape` (`[[:cntrl:]]`, which also counts
+    U+2028, U+2029 and U+FFF9 to U+FFFB) and as the `lower()` fold behind
+    `uq_swimlanes_plan_name` (per code point; U+0130 folds to `i`). One refused name inside the import
+    transaction would roll the whole import back. The API e2e sweep over every code point proves it
+    against Postgres.
+  - **Rebasing a stack after a squash:** `git rebase --onto origin/main <old base>` replays the
+    review-fold commits too and conflicts on `CLAUDE.md`'s banner count. Resolve by taking main's
+    side, then set the number `pnpm check:counts` names; `git rebase --skip` a commit that only fixes
+    the count. Push with `--force-with-lease=<branch>:<old remote sha>` read from `git ls-remote`.
+  - **Brief a builder to put the way forward in every refusal,** and to fold review findings in the
+    same branch: the accessibility reviewer blocked two tasks on "a reason that points at itself"
+    and "no keyboard route"; both were cheap to fix before merge and expensive after.
+  - **`list_workflow_runs` is fine when filtered:** `resource_id: release.yml`, `perPage: 1`,
+    `workflow_runs_filter: {branch: main, event: push}`, then `list_workflow_jobs` on that run id.
