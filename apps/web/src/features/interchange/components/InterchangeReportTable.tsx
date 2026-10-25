@@ -24,7 +24,7 @@ export function InterchangeReportTable({
           { label: 'Activities', value: report.mapped.activities },
           { label: 'Relationships', value: report.mapped.relationships },
           { label: 'Calendars', value: report.mapped.calendars },
-          // Only a SchedulePoint XER carries a layout (layout-interchange), so these two appear only
+          // Only a SchedulePoint XER carries a layout (layout-interchange), so these four appear only
           // for one: a figure reading 0 on every foreign import would describe a feature that file
           // could never have used.
           ...(report.mapped.placements === undefined
@@ -33,6 +33,12 @@ export function InterchangeReportTable({
           ...(report.mapped.lanes === undefined
             ? []
             : [{ label: 'Lanes', value: report.mapped.lanes }]),
+          ...(report.mapped.swimlanes === undefined
+            ? []
+            : [{ label: 'Swimlanes', value: report.mapped.swimlanes }]),
+          ...(report.mapped.swimlaneMembers === undefined
+            ? []
+            : [{ label: 'In a swimlane', value: report.mapped.swimlaneMembers }]),
         ]}
       />
 

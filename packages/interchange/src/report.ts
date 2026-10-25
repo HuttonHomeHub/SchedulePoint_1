@@ -140,6 +140,10 @@ export function buildReportSchemas(mode: ReportSchemaMode) {
     placements: z.number().int().min(0).optional(),
     /** Activities whose row was restored from SchedulePoint's own XER; absent = 0. */
     lanes: z.number().int().min(0).optional(),
+    /** Swimlanes restored from SchedulePoint's own XER (swimlanes M4-T4); absent = 0. */
+    swimlanes: z.number().int().min(0).optional(),
+    /** Activities placed in one of those swimlanes; absent = 0. */
+    swimlaneMembers: z.number().int().min(0).optional(),
   });
 
   /** One advisory line: which activity, by its source code, and a sentence saying what to do. */

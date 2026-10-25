@@ -951,6 +951,19 @@ are not imported and are reported as one `drop` finding with their count. A malf
 discarded and counted in a `repair` finding; the import proceeds. An unknown `restoreLayout` value is a
 **422**.
 
+**A SchedulePoint XER also carries its swimlanes** (swimlanes M4-T4, ADR-0156's amendment). Three more
+user-defined fields on the same `v1` rule: `SchedulePoint layout v1: swimlane` (a task's swimlane name),
+`SchedulePoint layout v1: swimlane lane` (its lane inside that swimlane) and, on the project,
+`SchedulePoint layout v1: swimlanes` (a JSON object naming the source, the WBS level and the swimlane
+names in order). The **reader ships one release before the writer**, so until the writer's release only a
+hand-edited file carries them. Under `restoreLayout=RESTORE` the import creates the swimlanes by name in
+file order, sets the plan's `swimlaneSource` and `swimlaneWbsLevel`, assigns each activity, and packs the
+members inside each swimlane (a lane the file carried is kept). Names are held to the same shape as
+`POST …/swimlanes` (1 to 80 characters, trimmed, no control character), are unique ignoring case (a later
+spelling is merged into the first and counted), and at most 100 are kept; every refusal is counted in a
+`repair` finding. The report adds `mapped.swimlanes` and `mapped.swimlaneMembers` (**absent when zero**).
+`restoreLayout=IGNORE` creates none.
+
 **Resource-name collisions** are the one thing an import will not decide for you. A source resource whose
 `code` matches a library row **is** that row — a code is an identifier, and matching one is not a guess. The
 ambiguous case is a code that matches nothing while the **name** is already taken: `uq_resources_org_name`

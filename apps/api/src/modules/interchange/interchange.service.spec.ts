@@ -8,6 +8,9 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../common/errors/domain-errors';
+import { type PrismaService } from '../../prisma/prisma.service';
+import type { ActivityRepository } from '../activities/activity.repository';
+import type { DependencyRepository } from '../dependencies/dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ProjectRepository } from '../projects/project.repository';
@@ -92,6 +95,7 @@ describe('InterchangeService.dryRun', () => {
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
       plans as unknown as PlanRepository,
+      unused,
       unused,
       unused,
       unused,
@@ -196,5 +200,220 @@ describe('importedNameProbePrefix (#540)', () => {
     expect(prefix.length).toBeLessThan(name.length);
     expect(name.startsWith(prefix)).toBe(true);
     expect(variant.startsWith(prefix)).toBe(true);
+  });
+});
+
+/** A SchedulePoint XER whose two tasks carry swimlane fields (swimlanes M4-T4). */
+function swimlaneXer(): string {
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date',
+    '%R\tP1\tSample\t2026-01-05 00:00\t2026-01-04 00:00',
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    '%R\tT1\tP1\tA1000\tMobilise\tTT_Task\t40',
+    '%R\tT2\tP1\tA1010\tDesign\tTT_Task\t80',
+    '%T\tUDFTYPE',
+    '%F\tudf_type_id\ttable_name\tudf_type_name\tudf_type_label\tlogical_data_type',
+    '%R\t1\tTASK\tu1\tSchedulePoint layout v1: swimlane\tFT_TEXT',
+    '%R\t2\tTASK\tu2\tSchedulePoint layout v1: swimlane lane\tFT_INT',
+    '%T\tUDFVALUE',
+    '%F\tudf_type_id\tfk_id\tproj_id\tudf_date\tudf_number\tudf_text\tudf_code_id',
+    '%R\t1\tT1\tP1\t\t\tSite\t',
+    '%R\t1\tT2\tP1\t\t\tsite\t',
+    '%R\t2\tT2\tP1\t\t3\t\t',
+    '%E',
+  ].join('\n');
+}
+
+describe('InterchangeService.dryRun — swimlanes', () => {
+  const planner = principalWith(['interchange:import']);
+  const build = (): InterchangeService => {
+    const unused: never = undefined as never;
+    return new InterchangeService(
+      {
+        resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
+      } as unknown as OrganizationsService,
+      {
+        findActiveByIdInOrg: vi.fn().mockResolvedValue({ id: PROJECT_ID }),
+      } as unknown as ProjectRepository,
+      { existsActiveNameInProject: vi.fn().mockResolvedValue(false) } as unknown as PlanRepository,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger,
+    );
+  };
+
+  it('counts the swimlanes and their members, merging spellings that differ by case', async () => {
+    const report = await build().dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(swimlaneXer()));
+    expect(report.mapped).toMatchObject({ swimlanes: 1, swimlaneMembers: 2 });
+    expect(report.repairs).toEqual([
+      expect.objectContaining({
+        detail: '1 swimlane name(s) matched an earlier name ignoring case and were merged into it',
+      }),
+    ]);
+  });
+
+  it('applies none of it when the planner declines the layout', async () => {
+    const report = await build().dryRun(planner, ORG_SLUG, PROJECT_ID, fileFrom(swimlaneXer()), {
+      restoreLayout: 'IGNORE',
+    });
+    expect(report.mapped).not.toHaveProperty('swimlanes');
+    expect(report.mapped).not.toHaveProperty('swimlaneMembers');
+  });
+});
+
+describe('InterchangeService — laying out swimlane members', () => {
+  const ORG = 'org-1';
+  const PLAN = 'plan-1';
+  interface LayoutRow {
+    id: string;
+    code: string;
+    type: string;
+    laneIndex: number;
+    version: number;
+    swimlaneId: string | null;
+    visualEffectiveStart: Date | null;
+    visualEffectiveFinish: Date | null;
+  }
+  const day = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
+  const row = (
+    id: string,
+    code: string,
+    swimlaneId: string | null,
+    start: string,
+    finish: string,
+  ): LayoutRow => ({
+    id,
+    code,
+    type: 'TASK',
+    laneIndex: 0,
+    version: 1,
+    swimlaneId,
+    visualEffectiveStart: day(start),
+    visualEffectiveFinish: day(finish),
+  });
+
+  const run = async (
+    rows: LayoutRow[],
+    carried: Map<string, number>,
+    edges: { predecessorId: string; successorId: string }[] = [],
+  ) => {
+    const upsert = vi.fn().mockResolvedValue(undefined);
+    const unused: never = undefined as never;
+    const prisma = { $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn({})) };
+    const service = new InterchangeService(
+      unused,
+      unused,
+      unused,
+      unused,
+      {
+        findLayoutRowsForPlan: vi.fn().mockResolvedValue(rows),
+        upsertSwimlaneLanes: upsert,
+      } as unknown as ActivityRepository,
+      { findEdgesForPlan: vi.fn().mockResolvedValue(edges) } as unknown as DependencyRepository,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      unused,
+      prisma as unknown as PrismaService,
+      { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger,
+    );
+    const result = await (
+      service as unknown as {
+        packImportedSwimlaneLanes: (
+          org: string,
+          plan: string,
+          carried: Map<string, number>,
+          user: string,
+        ) => Promise<{ carriedOverlaps: number }>;
+      }
+    ).packImportedSwimlaneLanes(ORG, PLAN, carried, 'user-1');
+    const written = (upsert.mock.calls[0]?.[2] ?? []) as {
+      activityId: string;
+      basis: string;
+      swimlaneId: string;
+      laneIndex: number;
+    }[];
+    return { result, written, upsert };
+  };
+
+  it('packs each swimlane on its own, so two swimlanes both start at lane 0', async () => {
+    const { written } = await run(
+      [
+        row('a', 'A1', 'S1', '2026-01-05', '2026-01-09'),
+        row('b', 'A2', 'S1', '2026-01-06', '2026-01-10'),
+        row('c', 'A3', 'S2', '2026-01-05', '2026-01-09'),
+        row('d', 'A4', null, '2026-01-05', '2026-01-09'),
+      ],
+      new Map(),
+    );
+    const lanes = Object.fromEntries(written.map((w) => [w.activityId, w.laneIndex]));
+    expect(lanes).toEqual({ a: 0, b: 1, c: 0 });
+    expect(written.every((w) => w.basis === 'SWIMLANE')).toBe(true);
+    expect(written.find((w) => w.activityId === 'c')?.swimlaneId).toBe('S2');
+  });
+
+  it('keeps a carried lane and packs the others around it', async () => {
+    const { written, result } = await run(
+      [
+        row('a', 'A1', 'S1', '2026-01-05', '2026-01-09'),
+        row('b', 'A2', 'S1', '2026-01-06', '2026-01-10'),
+      ],
+      new Map([['A1', 4]]),
+    );
+    const lanes = Object.fromEntries(written.map((w) => [w.activityId, w.laneIndex]));
+    expect(lanes['a']).toBe(4);
+    expect(lanes['b']).not.toBe(4);
+    expect(result.carriedOverlaps).toBe(0);
+  });
+
+  it('counts, and does not resolve, carried lanes that overlap in one swimlane', async () => {
+    const { written, result } = await run(
+      [
+        row('a', 'A1', 'S1', '2026-01-05', '2026-01-09'),
+        row('b', 'A2', 'S1', '2026-01-06', '2026-01-10'),
+      ],
+      new Map([
+        ['A1', 2],
+        ['A2', 2],
+      ]),
+    );
+    expect(written.map((w) => w.laneIndex)).toEqual([2, 2]);
+    expect(result.carriedOverlaps).toBe(2);
+  });
+
+  it('writes nothing for a plan with no members, and skips a member with no computed dates', async () => {
+    const none = await run([row('a', 'A1', null, '2026-01-05', '2026-01-09')], new Map());
+    expect(none.upsert).not.toHaveBeenCalled();
+    const undated = await run(
+      [{ ...row('a', 'A1', 'S1', '2026-01-05', '2026-01-09'), visualEffectiveFinish: null }],
+      new Map(),
+    );
+    expect(undated.upsert).not.toHaveBeenCalled();
+  });
+
+  it('lays the same file out the same way whatever order its rows arrive in', async () => {
+    const rows = [
+      row('a', 'A1', 'S1', '2026-01-05', '2026-01-09'),
+      row('b', 'A2', 'S1', '2026-01-05', '2026-01-09'),
+      row('c', 'A3', 'S1', '2026-01-05', '2026-01-09'),
+    ];
+    const forward = await run(rows, new Map());
+    const reversed = await run([...rows].reverse(), new Map());
+    const byId = (w: { activityId: string; laneIndex: number }[]) =>
+      Object.fromEntries(w.map((x) => [x.activityId, x.laneIndex]));
+    expect(byId(reversed.written)).toEqual(byId(forward.written));
   });
 });

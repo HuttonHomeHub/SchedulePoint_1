@@ -17,14 +17,40 @@
  * Every value is attacker-controlled and bounded here: labels are resolved through a `Map`, a date
  * must be a real `YYYY-MM-DD`, a row an integer in `0 … MAX_LAYOUT_LANE`. A value that fails is
  * discarded and **counted** in one finding per kind, never one finding per row.
+ *
+ * **Swimlanes** (swimlanes M4-T4) travel the same way, in three more fields on the same version: a
+ * task's swimlane NAME, its lane inside that swimlane, and one project-level field saying where the
+ * plan's swimlanes come from and listing them in display order. A swimlane name is a hostile string
+ * that will be written to a column with a shape constraint (`ck_swimlanes_name_shape`), so it is
+ * held to that shape here - 1 to 80 characters, trimmed, no control character - and de-duplicated
+ * ignoring case before anything is inserted (`docs/specs/swimlanes/schema-design.md` section 9). The
+ * **reader ships one release before the writer** (ADR-0156 D9): until the writer lands, only a hand
+ * edited file carries these labels.
  */
-import type { CanonicalActivity, CanonicalActivityLayout } from './canonical.js';
+import type {
+  CanonicalActivity,
+  CanonicalActivityLayout,
+  CanonicalSwimlanes,
+} from './canonical.js';
 import type { ReportFinding } from './report.js';
 import type { XerDocument } from './xer-parser.js';
 import type { XerTableData } from './xer-serialiser.js';
 
 export const LAYOUT_LABEL_PLACED_START = 'SchedulePoint layout v1: placed start';
 export const LAYOUT_LABEL_ROW = 'SchedulePoint layout v1: lane';
+/** On `TASK`, `FT_TEXT`: the name of the swimlane the activity belongs to. */
+export const LAYOUT_LABEL_SWIMLANE = 'SchedulePoint layout v1: swimlane';
+/** On `TASK`, `FT_INT`: the activity's lane inside its swimlane. */
+export const LAYOUT_LABEL_SWIMLANE_LANE = 'SchedulePoint layout v1: swimlane lane';
+/** On `PROJECT`, `FT_TEXT`: the swimlane source, its WBS level and the swimlane names in order. */
+export const LAYOUT_LABEL_SWIMLANES = 'SchedulePoint layout v1: swimlanes';
+
+/** The cap the swimlanes module enforces per plan (`SWIMLANE_LIMIT`); a file past it is clipped. */
+export const MAX_LAYOUT_SWIMLANES = 100;
+/** `ck_swimlanes_name_shape`: at most 80 characters. */
+export const MAX_SWIMLANE_NAME_LENGTH = 80;
+/** The project field holds at most 100 names of 80 characters plus JSON; anything bigger is hostile. */
+const MAX_SWIMLANES_FIELD_LENGTH = 65_536;
 
 /**
  * The row ceiling the API already enforces on `laneIndex` (`create-activity.dto.ts`, `@Max(10000)`),
@@ -35,14 +61,29 @@ export const MAX_LAYOUT_LANE = 10_000;
 /** What a SchedulePoint file said about one activity's picture. Either half may be absent. */
 export type ActivityLayout = CanonicalActivityLayout;
 
-type LayoutField = 'placedStart' | 'lane';
-type LayoutTable = 'TASK' | 'PROJWBS';
+type LayoutField = 'placedStart' | 'lane' | 'swimlane' | 'swimlaneLane' | 'swimlanes';
+type LayoutTable = 'TASK' | 'PROJWBS' | 'PROJECT';
 
 /** The known labels. A `Map`, so a file-supplied label such as `__proto__` can never match. */
 const KNOWN_LABELS: ReadonlyMap<string, LayoutField> = new Map([
   [LAYOUT_LABEL_PLACED_START, 'placedStart'],
   [LAYOUT_LABEL_ROW, 'lane'],
+  [LAYOUT_LABEL_SWIMLANE, 'swimlane'],
+  [LAYOUT_LABEL_SWIMLANE_LANE, 'swimlaneLane'],
+  [LAYOUT_LABEL_SWIMLANES, 'swimlanes'],
 ]);
+
+/**
+ * The tables each field may sit on. A known label on any other table is somebody else's field: a
+ * swimlane name on a summary would otherwise be read as membership of something that has none.
+ */
+const FIELD_TABLES: Readonly<Record<LayoutField, readonly LayoutTable[]>> = {
+  placedStart: ['TASK', 'PROJWBS'],
+  lane: ['TASK', 'PROJWBS'],
+  swimlane: ['TASK'],
+  swimlaneLane: ['TASK'],
+  swimlanes: ['PROJECT'],
+};
 
 /** A label from SOME version of this contract: `SchedulePoint layout v<n>: …`. */
 const VERSIONED_LABEL = /^SchedulePoint layout v(\d+): /;
@@ -62,6 +103,94 @@ function isCalendarDate(value: string): boolean {
   );
 }
 
+/**
+ * Every character the database's `[[:cntrl:]]` could reject, and then some. PostgreSQL asks the C
+ * library, and musl's `iswcntrl` counts the line and paragraph separators (U+2028, U+2029) and the
+ * interlinear annotation marks (U+FFF9 to U+FFFB) beside the C0 and C1 controls. Rejecting the
+ * Unicode categories Cc, Zl, Zp and Cf covers all of them on any C library: stricter than the CHECK,
+ * never looser, so no accepted name can fail it with `23514` and roll the import back.
+ */
+const UNSAFE_CHARACTER = /[\p{Cc}\p{Zl}\p{Zp}\p{Cf}]/u;
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/**
+ * Whether `name` (already trimmed) is safe to hand to `ck_swimlanes_name_shape` - at least as strict as
+ * the CHECK (`swimlane-name-shape` in `layout-interchange.e2e-spec.ts` sweeps the whole BMP against
+ * the real database to hold it to that), and well-formed UTF-16 so the value survives the trip.
+ * Length counts characters, as PostgreSQL's `char_length` does, not UTF-16 code units.
+ */
+export function isSwimlaneName(name: string): boolean {
+  if (name === '' || name !== name.trim()) return false;
+  // 80 code points are at most 160 code units: refuse a long string before spreading it.
+  if (name.length > MAX_SWIMLANE_NAME_LENGTH * 2) return false;
+  if (UNSAFE_CHARACTER.test(name) || LONE_SURROGATE.test(name)) return false;
+  return [...name].length <= MAX_SWIMLANE_NAME_LENGTH;
+}
+
+const firstCodePoint = (text: string): string => String.fromCodePoint(text.codePointAt(0) ?? 0);
+
+/**
+ * The key two names are compared by. The unique index is on `lower(name)`, and the C library lowers
+ * one character at a time, keeping one character out of every one: U+0130 (I with a dot) becomes `i`
+ * there, where JavaScript's `toLowerCase` gives `i` plus a combining dot. So this folds per code point
+ * and keeps only the first code point of each result, then goes lower, upper, lower so a case pair
+ * the library's tables relate differently still lands together. It can only be stricter than the
+ * database: folding too much merges two swimlanes the file meant as two, and says so; folding too
+ * little aborts the whole import on a unique violation. Held to that by the same database sweep.
+ */
+export function foldSwimlaneName(name: string): string {
+  let folded = '';
+  for (const char of name) {
+    const lower = firstCodePoint(char.toLowerCase());
+    folded += firstCodePoint(firstCodePoint(lower.toUpperCase()).toLowerCase());
+  }
+  return folded;
+}
+
+type SwimlaneSourceName = CanonicalSwimlanes['source'];
+const SWIMLANE_SOURCES: ReadonlySet<string> = new Set<SwimlaneSourceName>([
+  'NONE',
+  'MANUAL',
+  'WBS',
+]);
+
+interface SwimlanesField {
+  readonly source: SwimlaneSourceName;
+  readonly wbsLevel: number | null;
+  readonly names: readonly unknown[];
+}
+
+/** The project field's JSON, or null when it is not the shape this reader knows. */
+function parseSwimlanesField(text: string): SwimlanesField | null {
+  if (text.length > MAX_SWIMLANES_FIELD_LENGTH) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const source = record['source'];
+  if (typeof source !== 'string' || !SWIMLANE_SOURCES.has(source)) return null;
+  const level = record['level'] ?? null;
+  const names = record['names'] ?? [];
+  if (!Array.isArray(names)) return null;
+  // The pair the plans CHECK enforces: a WBS source needs a level of 1 to 3, anything else none.
+  if (source === 'WBS') {
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 3) {
+      return null;
+    }
+  } else if (level !== null) {
+    return null;
+  }
+  return {
+    source: source as SwimlaneSourceName,
+    wbsLevel: source === 'WBS' ? level : null,
+    names,
+  };
+}
+
 function cell(row: ReadonlyMap<string, string>, name: string): string | undefined {
   const value = row.get(name)?.trim();
   return value === undefined || value === '' ? undefined : value;
@@ -70,6 +199,8 @@ function cell(row: ReadonlyMap<string, string>, name: string): string | undefine
 export interface DecodedLayout {
   /** Keyed by canonical activity id: a TASK's `task_id`, a summary's `wbs:<wbs_id>`. */
   readonly layout: ReadonlyMap<string, ActivityLayout>;
+  /** The plan's swimlanes; absent when the file carried none (every foreign file). */
+  readonly swimlanes?: CanonicalSwimlanes;
   readonly findings: readonly ReportFinding[];
 }
 
@@ -97,9 +228,11 @@ export function decodeLayoutFields(
   for (const row of typeRows) {
     const label = cell(row, 'udf_type_label');
     const typeId = cell(row, 'udf_type_id');
-    const table = cell(row, 'table_name');
+    const tableName = cell(row, 'table_name');
     const field = label === undefined ? undefined : KNOWN_LABELS.get(label);
-    if (field === undefined || typeId === undefined || (table !== 'TASK' && table !== 'PROJWBS')) {
+    const table =
+      field === undefined ? undefined : FIELD_TABLES[field].find((t) => t === tableName);
+    if (field === undefined || typeId === undefined || table === undefined) {
       const version = label === undefined ? null : VERSIONED_LABEL.exec(label);
       if (version !== null && Number(version[1]) > 1) newerVersion += 1;
       else foreign += 1;
@@ -146,6 +279,11 @@ export function decodeLayoutFields(
   // --- Their values ---------------------------------------------------------------------------------
   const placed = new Map<string, string>();
   const lanes = new Map<string, number>();
+  const swimlaneNames = new Map<string, string>(); // task id -> the name as written
+  const swimlaneLanes = new Map<string, number>();
+  let projectField: string | undefined;
+  let badSwimlaneNames = 0;
+  let badSwimlaneLanes = 0;
   let orphans = 0;
   let badDates = 0;
   let badLanes = 0;
@@ -159,12 +297,47 @@ export function decodeLayoutFields(
     if (valueProj !== undefined && valueProj !== projId) continue; // another project in the file
     const fk = cell(row, 'fk_id');
     const exists =
-      fk !== undefined && (type.table === 'TASK' ? known.taskIds.has(fk) : known.wbsIds.has(fk));
+      fk !== undefined &&
+      (type.table === 'TASK'
+        ? known.taskIds.has(fk)
+        : type.table === 'PROJWBS'
+          ? known.wbsIds.has(fk)
+          : fk === projId);
     if (fk === undefined || !exists) {
       orphans += 1;
       continue;
     }
-    const key = type.table === 'TASK' ? fk : `wbs:${fk}`;
+    const key = type.table === 'PROJWBS' ? `wbs:${fk}` : fk;
+
+    if (type.field === 'swimlanes') {
+      const text = cell(row, 'udf_text');
+      if (text === undefined) continue;
+      if (projectField !== undefined) duplicates += 1;
+      else projectField = text;
+      continue;
+    }
+    if (type.field === 'swimlane') {
+      const text = cell(row, 'udf_text');
+      if (text === undefined) continue; // an empty name is "No swimlane", not a refusal
+      if (!isSwimlaneName(text)) {
+        badSwimlaneNames += 1;
+        continue;
+      }
+      if (swimlaneNames.has(key)) duplicates += 1;
+      else swimlaneNames.set(key, text);
+      continue;
+    }
+    if (type.field === 'swimlaneLane') {
+      const raw = cell(row, 'udf_number');
+      const lane = raw === undefined ? Number.NaN : Number(raw);
+      if (!Number.isInteger(lane) || lane < 0 || lane > MAX_LAYOUT_LANE) {
+        badSwimlaneLanes += 1;
+        continue;
+      }
+      if (swimlaneLanes.has(key)) duplicates += 1;
+      else swimlaneLanes.set(key, lane);
+      continue;
+    }
 
     if (type.field === 'placedStart') {
       if (type.table === 'PROJWBS') {
@@ -227,11 +400,103 @@ export function decodeLayoutFields(
     'a WBS summary is never hand-placed (ADR-0038)',
   );
 
-  const layout = new Map<string, ActivityLayout>();
-  for (const key of new Set([...placed.keys(), ...lanes.keys()])) {
-    layout.set(key, { placedStart: placed.get(key) ?? null, lane: lanes.get(key) ?? null });
+  // --- Swimlanes: names resolved, folded and clipped ------------------------------------------------
+  const field = projectField === undefined ? null : parseSwimlanesField(projectField);
+  if (projectField !== undefined && field === null) {
+    discarded(
+      1,
+      'swimlane source and list could not be read and were discarded',
+      'the swimlanes field is bounded JSON naming a source, a level and the swimlane names',
+    );
   }
-  return { layout, findings };
+  // A WBS source takes its swimlanes from the summaries, so hand-made names would be created only to
+  // sit unseen. They are not imported, and the file is told once.
+  const dropManual = field?.source === 'WBS';
+  if (dropManual) {
+    discarded(
+      (field?.names.length ?? 0) + swimlaneNames.size,
+      'hand-made swimlane name(s) were not imported because the plan takes its swimlanes from the WBS',
+      'a WBS swimlane source ignores hand-made swimlanes',
+    );
+  }
+  const canonical = new Map<string, string>(); // folded name -> the spelling the plan will use
+  const order: string[] = [];
+  const mergedSpellings = new Set<string>();
+  let overLimit = 0;
+  const admit = (name: string): string | undefined => {
+    const folded = foldSwimlaneName(name);
+    const existing = canonical.get(folded);
+    if (existing !== undefined) {
+      if (existing !== name) mergedSpellings.add(name);
+      return existing;
+    }
+    if (order.length >= MAX_LAYOUT_SWIMLANES) return undefined;
+    canonical.set(folded, name);
+    order.push(name);
+    return name;
+  };
+  for (const entry of dropManual ? [] : (field?.names ?? [])) {
+    const name = typeof entry === 'string' ? entry.trim() : '';
+    if (!isSwimlaneName(name)) {
+      badSwimlaneNames += 1;
+      continue;
+    }
+    if (admit(name) === undefined) overLimit += 1;
+  }
+  const memberOf = new Map<string, string>(); // task id -> canonical swimlane name
+  for (const [key, name] of dropManual ? [] : swimlaneNames) {
+    const resolved = admit(name);
+    if (resolved === undefined) overLimit += 1;
+    else memberOf.set(key, resolved);
+  }
+  let orphanSwimlaneLanes = 0;
+  for (const key of dropManual ? [] : swimlaneLanes.keys()) {
+    if (!memberOf.has(key)) orphanSwimlaneLanes += 1;
+  }
+
+  discarded(
+    badSwimlaneNames,
+    `swimlane name(s) were not 1 to ${String(MAX_SWIMLANE_NAME_LENGTH)} characters without control characters and were discarded`,
+    'a swimlane name is trimmed text of at most 80 characters (ck_swimlanes_name_shape)',
+  );
+  discarded(
+    badSwimlaneLanes,
+    `swimlane lane value(s) were not a whole number from 0 to ${String(MAX_LAYOUT_LANE)} and were discarded`,
+    'a lane is a whole number',
+  );
+  discarded(
+    orphanSwimlaneLanes,
+    'swimlane lane value(s) belonged to an activity with no readable swimlane and were discarded',
+    'a lane inside a swimlane needs the swimlane',
+  );
+  discarded(
+    overLimit,
+    `swimlane name(s) past the limit of ${String(MAX_LAYOUT_SWIMLANES)} were not imported`,
+    'a plan holds at most 100 swimlanes',
+  );
+  discarded(
+    mergedSpellings.size,
+    'swimlane name(s) matched an earlier name ignoring case and were merged into it',
+    'swimlane names are unique ignoring case (uq_swimlanes_plan_name)',
+  );
+
+  const layout = new Map<string, ActivityLayout>();
+  for (const key of new Set([...placed.keys(), ...lanes.keys(), ...memberOf.keys()])) {
+    const swimlane = memberOf.get(key);
+    layout.set(key, {
+      placedStart: placed.get(key) ?? null,
+      lane: lanes.get(key) ?? null,
+      ...(swimlane === undefined ? {} : { swimlane, swimlaneLane: swimlaneLanes.get(key) ?? null }),
+    });
+  }
+
+  // The plan-level answer exists when the file said how swimlanes are sourced, or named any. A list
+  // with no source field is hand-made membership, so it reads as MANUAL.
+  const swimlanes: CanonicalSwimlanes | undefined =
+    order.length > 0 || (field !== null && field.source !== 'NONE')
+      ? { source: field?.source ?? 'MANUAL', wbsLevel: field?.wbsLevel ?? null, names: order }
+      : undefined;
+  return { layout, findings, ...(swimlanes === undefined ? {} : { swimlanes }) };
 }
 
 /** The canonical activity, as far as the encoder needs it: its id, type and layout. */

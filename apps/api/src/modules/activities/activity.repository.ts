@@ -226,6 +226,7 @@ export class ActivityRepository {
       type: ActivityType;
       laneIndex: number;
       version: number;
+      swimlaneId: string | null;
       visualEffectiveStart: Date | null;
       visualEffectiveFinish: Date | null;
     }[]
@@ -238,6 +239,7 @@ export class ActivityRepository {
         type: true,
         laneIndex: true,
         version: true,
+        swimlaneId: true,
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
       },

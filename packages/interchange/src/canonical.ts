@@ -222,6 +222,14 @@ export const canonicalActivityLayoutSchema = z
   .object({
     placedStart: isoDateSchema.nullable(),
     lane: z.number().int().min(0).max(10_000).nullable(),
+    /**
+     * The swimlane this activity belongs to, by NAME (swimlanes M4-T4) — already trimmed, bounded and
+     * folded to the one spelling the file's swimlane list uses, so two spellings that differ only by
+     * case arrive as one. Optional, so a file without swimlanes yields exactly what it always did.
+     */
+    swimlane: z.string().min(1).max(80).nullable().optional(),
+    /** The lane inside that swimlane (`activity_swimlane_lanes`, basis SWIMLANE); needs `swimlane`. */
+    swimlaneLane: z.number().int().min(0).max(10_000).nullable().optional(),
   })
   .strict();
 export type CanonicalActivityLayout = z.infer<typeof canonicalActivityLayoutSchema>;
@@ -359,6 +367,21 @@ export const canonicalProjectSchema = z
   .strict();
 export type CanonicalProject = z.infer<typeof canonicalProjectSchema>;
 
+/**
+ * **The swimlanes a SchedulePoint file carried for the whole plan** (swimlanes M4-T4): where the
+ * plan's swimlanes come from and, in display order, the hand-made ones. Names are final: trimmed,
+ * bounded to the database's name shape and unique ignoring case (`schema-design.md` §9).
+ */
+export const canonicalSwimlanesSchema = z
+  .object({
+    source: z.enum(['NONE', 'MANUAL', 'WBS']),
+    /** 1 to 3 when the source is `WBS`, null otherwise (`ck_plans_swimlane_source_level`). */
+    wbsLevel: z.number().int().min(1).max(3).nullable(),
+    names: z.array(z.string().min(1).max(80)).max(100),
+  })
+  .strict();
+export type CanonicalSwimlanes = z.infer<typeof canonicalSwimlanesSchema>;
+
 /** Provenance of a parsed model — echoed into the `InterchangeReport`. */
 export const canonicalSourceMetaSchema = z
   .object({
@@ -385,6 +408,8 @@ export const canonicalModelSchema = z
     relationships: z.array(canonicalRelationshipSchema),
     resources: z.array(canonicalResourceSchema),
     assignments: z.array(canonicalAssignmentSchema),
+    /** Present only when a SchedulePoint file carried swimlanes; absent for every foreign file. */
+    swimlanes: canonicalSwimlanesSchema.optional(),
   })
   .strict();
 export type CanonicalModel = z.infer<typeof canonicalModelSchema>;

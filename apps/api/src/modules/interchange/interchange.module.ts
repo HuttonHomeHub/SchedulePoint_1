@@ -9,6 +9,7 @@ import { PlansModule } from '../plans/plans.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { ResourcesModule } from '../resources/resources.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { SwimlanesModule } from '../swimlanes/swimlanes.module';
 
 import { ExportService } from './export.service';
 import { InterchangeController } from './interchange.controller';
@@ -46,6 +47,7 @@ import { PlanExportController } from './plan-export.controller';
     ResourcesModule,
     ScheduleModule,
     PlanLockModule,
+    SwimlanesModule,
   ],
   controllers: [InterchangeController, PlanExportController],
   providers: [InterchangeService, ExportService],

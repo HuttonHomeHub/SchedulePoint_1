@@ -5,7 +5,13 @@ import { join } from 'node:path';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { encodeLayoutFields, importSchedule, parseXer } from '@repo/interchange';
+import {
+  encodeLayoutFields,
+  foldSwimlaneName,
+  importSchedule,
+  isSwimlaneName,
+  parseXer,
+} from '@repo/interchange';
 import { drawnSpanDays } from '@repo/layout';
 import { SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
@@ -15,7 +21,7 @@ import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-po
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearAuditEvents, clearDomainData } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
@@ -50,6 +56,8 @@ interface Row {
   visualConflictReason: string | null;
   isCritical: boolean;
   version: number;
+  swimlaneId: string | null;
+  swimlaneLanes: { basis: string; swimlaneId: string | null; laneIndex: number }[];
 }
 
 /** The only genuine P6 export in the repository (the ADR-0034 torture fixture). */
@@ -126,7 +134,7 @@ interface Finding {
   detail: string;
 }
 interface Report {
-  mapped: { placements?: number; lanes?: number };
+  mapped: { placements?: number; lanes?: number; swimlanes?: number; swimlaneMembers?: number };
   approximations: Finding[];
   repairs: Finding[];
   drops: Finding[];
@@ -136,6 +144,30 @@ interface Side {
   planId: string;
   rows: Map<string, Row>;
   finish: string | null;
+}
+
+interface SwimlaneRow {
+  id: string;
+  name: string;
+  position: number;
+}
+
+/** What a plan holds after a file with swimlane fields is committed (M4-T4). */
+interface SwimlanePlan {
+  names: string[];
+  assign: Record<string, string>;
+  lanes: Record<string, number>;
+  civil: string[];
+  mechanical: string[];
+  carriedCode: string;
+  carriedLane: number;
+}
+
+interface SwimlaneSide {
+  side: Side;
+  report: Report;
+  swimlanes: SwimlaneRow[];
+  source: string;
 }
 
 describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)', () => {
@@ -168,6 +200,12 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   let editedNew: string;
   let exportedHasLayout: boolean;
   let editedText: string;
+  // M4-T4 — files carrying swimlane fields, built by injecting them (no release writes them yet).
+  let swimlaned: SwimlaneSide;
+  let swimlanedDry: Report;
+  let swimlanedIgnored: SwimlaneSide;
+  let swimlanedClipped: SwimlaneSide;
+  let swimlanedPlan: SwimlanePlan;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -306,6 +344,41 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       Buffer.from(editedText, 'utf8'),
     ));
 
+    // --- M4-T4: SchedulePoint files that carry swimlane fields ----------------------------------------
+    const swimlaneCommit = async (
+      name: string,
+      file: Buffer,
+      restoreLayout?: string,
+    ): Promise<SwimlaneSide> => {
+      const { side, report } = await commitInto(name, file, restoreLayout);
+      const lanes = await client.getPage<SwimlaneRow>(
+        `/api/v1/organizations/${orgSlug}/plans/${side.planId}/swimlanes?limit=100`,
+      );
+      const plan = await client.get<{ swimlaneSource: string }>(
+        `/api/v1/organizations/${orgSlug}/plans/${side.planId}`,
+      );
+      return { side, report, swimlanes: lanes.rows, source: plan.swimlaneSource };
+    };
+    swimlanedPlan = planSwimlanes(source);
+    const swimlaneFile = withSwimlaneFields(bytes, swimlanedPlan);
+    swimlaned = await swimlaneCommit('Swimlaned', swimlaneFile);
+    swimlanedIgnored = await swimlaneCommit('Swimlaned ignored', swimlaneFile, 'IGNORE');
+    swimlanedClipped = await swimlaneCommit(
+      'Swimlaned clipped',
+      withSwimlaneFields(bytes, {
+        names: Array.from({ length: 101 }, (_, i) => `Lane ${String(i + 1).padStart(3, '0')}`),
+        assign: {},
+        lanes: {},
+      }),
+    );
+    const swimlaneDryProject = await project('Swimlane dry run');
+    swimlanedDry = (
+      await agent
+        .post(`/api/v1/organizations/${orgSlug}/projects/${swimlaneDryProject}/interchange/dry-run`)
+        .attach('file', swimlaneFile, 'netpoint-power-plant.xer')
+        .expect(200)
+    ).body.data as Report;
+
     // A fresh project: the source plan's own project already holds its name, which the dry-run
     // refuses before any report (#541).
     const dryProject = await project('Dry run');
@@ -321,8 +394,15 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   }, 360_000);
 
   afterAll(async () => {
-    await resetDatabase();
-    await app?.close();
+    // Swimlane rows are RESTRICT into their plan, so one left behind makes the next spec's
+    // `plan.deleteMany()` fail. `clearDomainData` removes them in dependency order even when the
+    // hand-written reset above stopped early.
+    try {
+      await resetDatabase();
+    } finally {
+      await clearDomainData(prisma).catch(() => undefined);
+      await app?.close();
+    }
   });
 
   async function read(planId: string): Promise<Side> {
@@ -491,6 +571,146 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     });
   });
 
+  describe('a SchedulePoint XER carrying swimlanes (M4-T4)', () => {
+    const byName = (side: SwimlaneSide): Map<string, string> =>
+      new Map(side.swimlanes.map((l) => [l.name, l.id]));
+    const membersOf = (side: SwimlaneSide, name: string): string[] =>
+      [...side.side.rows.values()]
+        .filter((r) => r.swimlaneId === byName(side).get(name))
+        .map((r) => r.code)
+        .sort();
+
+    it('creates the swimlanes by name, in the file’s order, and sets the source', () => {
+      expect(swimlaned.swimlanes.map((l) => [l.name, l.position])).toEqual([
+        ['Civil', 0],
+        ['Mechanical', 1],
+        ['Empty', 2],
+      ]);
+      expect(swimlaned.source).toBe('MANUAL');
+    });
+
+    it('puts each activity in its swimlane, case variants in the one swimlane', () => {
+      expect(membersOf(swimlaned, 'Civil')).toEqual([...swimlanedPlan.civil].sort());
+      expect(membersOf(swimlaned, 'Mechanical')).toEqual([...swimlanedPlan.mechanical].sort());
+      expect(membersOf(swimlaned, 'Empty')).toEqual([]);
+      const assigned = new Set([...swimlanedPlan.civil, ...swimlanedPlan.mechanical]);
+      const stray = [...swimlaned.side.rows.values()].filter(
+        (r) => r.swimlaneId !== null && !assigned.has(r.code),
+      );
+      expect(stray.map((r) => r.code)).toEqual([]);
+    });
+
+    it('counts what it created and what it refused, once each', () => {
+      expect(swimlaned.report.mapped).toMatchObject({
+        swimlanes: 3,
+        swimlaneMembers: swimlanedPlan.civil.length + swimlanedPlan.mechanical.length,
+      });
+      const repairs = swimlaned.report.repairs.map((f) => f.detail);
+      expect(repairs).toContain(
+        '1 swimlane name(s) matched an earlier name ignoring case and were merged into it',
+      );
+      expect(repairs).toContain(
+        '2 swimlane name(s) were not 1 to 80 characters without control characters and were discarded',
+      );
+    });
+
+    it('the dry-run reports the counts the commit produced', () => {
+      expect(swimlanedDry.mapped).toMatchObject({
+        swimlanes: swimlaned.report.mapped.swimlanes,
+        swimlaneMembers: swimlaned.report.mapped.swimlaneMembers,
+      });
+    });
+
+    it('keeps the lane the file carried and packs the rest inside their swimlane', () => {
+      const laneIn = (code: string, name: string): number | undefined =>
+        swimlaned.side.rows
+          .get(code)
+          ?.swimlaneLanes.find(
+            (l) => l.basis === 'SWIMLANE' && l.swimlaneId === byName(swimlaned).get(name),
+          )?.laneIndex;
+      expect(laneIn(swimlanedPlan.carriedCode, 'Civil')).toBe(swimlanedPlan.carriedLane);
+      // Every drawn member has a stored lane, and no two members of one swimlane share a lane while
+      // overlapping in time.
+      for (const name of ['Civil', 'Mechanical']) {
+        const members = membersOf(swimlaned, name);
+        const stored = members.map((code) => ({ code, lane: laneIn(code, name) }));
+        expect(stored.filter((m) => m.lane === undefined)).toEqual([]);
+        const rows = members.map((code) => {
+          const r = swimlaned.side.rows.get(code)!;
+          return { ...r, laneIndex: laneIn(code, name) ?? -1 };
+        });
+        expect(
+          overlappingCodes({ ...swimlaned.side, rows: new Map(rows.map((r) => [r.code, r])) }),
+        ).toEqual([]);
+      }
+    });
+
+    it('leaves the swimlane-free picture exactly as a file without swimlanes would', () => {
+      expect(overlappingActivities(swimlaned.side)).toBe(0);
+      expect(lanesByCode(swimlaned.side)).toEqual(lanesByCode(stripped));
+    });
+
+    it('creates none of it when the planner declines the layout', () => {
+      expect(swimlanedIgnored.swimlanes).toEqual([]);
+      expect(swimlanedIgnored.source).toBe('NONE');
+      expect([...swimlanedIgnored.side.rows.values()].filter((r) => r.swimlaneId !== null)).toEqual(
+        [],
+      );
+      expect(swimlanedIgnored.report.mapped.swimlanes).toBeUndefined();
+    });
+
+    it('keeps the first 100 names and reports the rest, instead of aborting the import', () => {
+      expect(swimlanedClipped.swimlanes).toHaveLength(100);
+      expect(swimlanedClipped.swimlanes.at(-1)?.name).toBe('Lane 100');
+      expect(swimlanedClipped.report.repairs.map((f) => f.detail)).toContain(
+        '1 swimlane name(s) past the limit of 100 were not imported',
+      );
+    });
+  });
+
+  describe('swimlane-name-shape: the reader is never looser than the database (M4-T4)', () => {
+    /** Every BMP code point but the surrogates, in one round trip - never one insert per character. */
+    const sweep = async (): Promise<{ cp: number; shapeOk: boolean; lowered: number[] }[]> => {
+      const rows = await prisma.$queryRaw<{ cp: number; shape_ok: boolean; lowered: string }[]>`
+        SELECT cp,
+               ('a' || chr(cp) || 'a') !~ '[[:cntrl:]]' AS shape_ok,
+               lower(chr(cp)) AS lowered
+        FROM generate_series(1, 65535) AS cp
+        WHERE cp NOT BETWEEN 55296 AND 57343
+        ORDER BY cp
+      `;
+      return rows.map((r) => ({
+        cp: r.cp,
+        shapeOk: r.shape_ok,
+        lowered: [...r.lowered].map((c) => c.codePointAt(0)!),
+      }));
+    };
+
+    it('accepts no character the CHECK ck_swimlanes_name_shape would refuse', async () => {
+      const refusedByDatabase = (await sweep()).filter((r) => !r.shapeOk).map((r) => r.cp);
+      const acceptedByReader = refusedByDatabase.filter((cp) =>
+        isSwimlaneName(`a${String.fromCodePoint(cp)}a`),
+      );
+      expect(acceptedByReader.map((cp) => cp.toString(16))).toEqual([]);
+    });
+
+    it('calls two characters equal whenever the database lower() does', async () => {
+      const byLowered = new Map<string, number[]>();
+      for (const r of await sweep()) {
+        const key = r.lowered.join(',');
+        byLowered.set(key, [...(byLowered.get(key) ?? []), r.cp]);
+      }
+      const split = [...byLowered.values()]
+        .filter((group) => group.length > 1)
+        .filter(
+          (group) =>
+            new Set(group.map((cp) => foldSwimlaneName(String.fromCodePoint(cp)))).size > 1,
+        )
+        .map((group) => group.map((cp) => cp.toString(16)));
+      expect(split).toEqual([]);
+    });
+  });
+
   describe('an exported SchedulePoint XER (M3)', () => {
     it('carries the layout tables', () => {
       expect(exportedHasLayout).toBe(true);
@@ -577,6 +797,77 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
         ].join('\n'),
       )
       .join('\n');
+    const end = text.lastIndexOf('%E');
+    return Buffer.from(`${text.slice(0, end)}${tables}\n${text.slice(end)}`, 'utf8');
+  }
+
+  /**
+   * The swimlane picture M4-T4's file carries, chosen from the source plan's own activities: six in
+   * `Civil` (one spelled `CIVIL`, one with a carried lane), four in `Mechanical`, an empty `Empty`, and
+   * two whose names the database would refuse (81 characters; a control character).
+   */
+  function planSwimlanes(from: Side): SwimlanePlan {
+    const codes = [...from.rows.values()]
+      .filter((r) => r.type !== 'WBS_SUMMARY' && r.visualEffectiveStart !== null)
+      .map((r) => r.code)
+      .sort();
+    const civil = codes.slice(0, 6);
+    const mechanical = codes.slice(6, 10);
+    const assign: Record<string, string> = {};
+    civil.forEach((code, i) => {
+      assign[code] = i === 1 ? 'CIVIL' : 'Civil';
+    });
+    for (const code of mechanical) assign[code] = 'Mechanical';
+    assign[codes[10]!] = 'x'.repeat(81);
+    assign[codes[11]!] = 'Bad\u0007Name';
+    return {
+      names: ['Civil', 'Mechanical', 'Empty'],
+      assign,
+      lanes: { [civil[0]!]: 5 },
+      civil,
+      mechanical,
+      carriedCode: civil[0]!,
+      carriedLane: 5,
+    };
+  }
+
+  /**
+   * The exported file with SchedulePoint's swimlane fields injected, keyed through the file's own TASK
+   * ids and replacing the layout tables the export writes. `names` is the project field's ordered list.
+   */
+  function withSwimlaneFields(
+    file: Buffer,
+    plan: { names: string[]; assign: Record<string, string>; lanes: Record<string, number> },
+  ): Buffer {
+    const parsed = parseXer(new Uint8Array(file));
+    if (!parsed.ok) throw new Error('the export did not parse');
+    const project = parsed.document.tables.get('PROJECT')!.rows[0]!.get('proj_id')!;
+    const taskIds = new Map<string, string>();
+    for (const row of parsed.document.tables.get('TASK')?.rows ?? []) {
+      taskIds.set(row.get('task_code')!, row.get('task_id')!);
+    }
+    const value = (typeId: string, fk: string, number: string, text: string): string =>
+      ['%R', typeId, fk, project, '', number, text, ''].join('\t');
+    const rows = [
+      value('3', project, '', JSON.stringify({ source: 'MANUAL', level: null, names: plan.names })),
+      ...Object.entries(plan.assign).map(([code, name]) =>
+        value('1', taskIds.get(code)!, '', name),
+      ),
+      ...Object.entries(plan.lanes).map(([code, lane]) =>
+        value('2', taskIds.get(code)!, String(lane), ''),
+      ),
+    ];
+    const tables = [
+      '%T\tUDFTYPE',
+      '%F\tudf_type_id\ttable_name\tudf_type_name\tudf_type_label\tlogical_data_type',
+      '%R\t1\tTASK\tuser_field_sp_1\tSchedulePoint layout v1: swimlane\tFT_TEXT',
+      '%R\t2\tTASK\tuser_field_sp_2\tSchedulePoint layout v1: swimlane lane\tFT_INT',
+      '%R\t3\tPROJECT\tuser_field_sp_3\tSchedulePoint layout v1: swimlanes\tFT_TEXT',
+      '%T\tUDFVALUE',
+      '%F\tudf_type_id\tfk_id\tproj_id\tudf_date\tudf_number\tudf_text\tudf_code_id',
+      ...rows,
+    ].join('\n');
+    const text = stripLayoutTables(file.toString('utf8'));
     const end = text.lastIndexOf('%E');
     return Buffer.from(`${text.slice(0, end)}${tables}\n${text.slice(end)}`, 'utf8');
   }
@@ -669,6 +960,8 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     await prisma.note.deleteMany();
     await prisma.crossPlanDependency.deleteMany();
     await clearActivityTree(prisma);
+    // RESTRICT from activities and lane rows, both gone by now; before the plan (swimlanes M4-T4).
+    await prisma.swimlane.deleteMany();
     await prisma.planLock.deleteMany();
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();

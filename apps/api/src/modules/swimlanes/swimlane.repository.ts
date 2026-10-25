@@ -33,6 +33,21 @@ export class SwimlaneRepository {
     return db.swimlane.create({ data });
   }
 
+  /**
+   * Insert a freshly-imported plan's swimlanes in one statement. The caller has already made the names
+   * unique ignoring case and shaped them to `ck_swimlanes_name_shape`, and the plan is the importer's
+   * own, so no other writer can hold its plan lock; nothing here counts the cap. The importer caps
+   * the list at `SWIMLANE_LIMIT` (100) before it gets here and the interchange schema's `.max(100)`
+   * says the same: keep the three in step.
+   */
+  async createManyForImport(
+    rows: readonly Prisma.SwimlaneCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.swimlane.createMany({ data: [...rows] });
+  }
+
   /** An active swimlane of this plan and organisation (anti-IDOR). */
   findActiveInPlan(
     id: string,

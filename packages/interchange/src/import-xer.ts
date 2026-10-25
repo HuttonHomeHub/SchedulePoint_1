@@ -126,7 +126,7 @@ export function importXer(input: ImportXerInput): ImportXerResult {
   let model = adapted.model;
   if (input.restoreLayout === 'IGNORE') {
     const carried = model.activities.filter((a) => a.layout !== undefined).length;
-    if (carried > 0) {
+    if (carried > 0 || model.swimlanes !== undefined) {
       layoutFindings.push({
         kind: 'drop',
         entity: 'activity',
@@ -134,8 +134,9 @@ export function importXer(input: ImportXerInput): ImportXerResult {
         detail: `The file carries a SchedulePoint layout for ${String(carried)} activit${carried === 1 ? 'y' : 'ies'}; it was not applied`,
         reason: 'Restore the SchedulePoint layout was switched off',
       });
+      const { swimlanes: _swimlanes, ...withoutSwimlanes } = model;
       model = {
-        ...model,
+        ...withoutSwimlanes,
         activities: model.activities.map(({ layout: _layout, ...rest }) => rest),
       };
     }
@@ -232,6 +233,8 @@ export function importXer(input: ImportXerInput): ImportXerResult {
 
   const placements = g.activities.filter((a) => a.visualStart != null).length;
   const lanes = g.activities.filter((a) => a.laneIndex != null).length;
+  const swimlanes = g.swimlanes?.length ?? 0;
+  const swimlaneMembers = g.activities.filter((a) => a.swimlaneKey != null).length;
 
   // Activities imported faithfully that the planner probably wants to convert (ADR-0162).
   const advisories = zeroDurationAdvisories(g);
@@ -250,6 +253,8 @@ export function importXer(input: ImportXerInput): ImportXerResult {
       ...(g.assignments.length > 0 ? { assignments: g.assignments.length } : {}),
       ...(placements > 0 ? { placements } : {}),
       ...(lanes > 0 ? { lanes } : {}),
+      ...(swimlanes > 0 ? { swimlanes } : {}),
+      ...(swimlaneMembers > 0 ? { swimlaneMembers } : {}),
     },
     approximations,
     repairs,

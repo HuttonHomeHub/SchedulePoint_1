@@ -58,6 +58,20 @@ describe('InterchangeReportTable', () => {
     expect(screen.getByText('Lanes').nextElementSibling).toHaveTextContent('40');
   });
 
+  it('shows the swimlane counts only for a file that carried swimlanes', () => {
+    const { unmount } = render(<InterchangeReportTable report={report} />);
+    expect(screen.queryByText('Swimlanes')).not.toBeInTheDocument();
+    expect(screen.queryByText('In a swimlane')).not.toBeInTheDocument();
+    unmount();
+    render(
+      <InterchangeReportTable
+        report={{ ...report, mapped: { ...report.mapped, swimlanes: 3, swimlaneMembers: 41 } }}
+      />,
+    );
+    expect(screen.getByText('Swimlanes').nextElementSibling).toHaveTextContent('3');
+    expect(screen.getByText('In a swimlane').nextElementSibling).toHaveTextContent('41');
+  });
+
   it('renders each finding section as a labelled region with its count', () => {
     render(<InterchangeReportTable report={report} />);
     expect(screen.getByRole('heading', { name: 'Approximations (1)' })).toBeInTheDocument();

@@ -375,6 +375,18 @@ describe('ImportScheduleDialog', () => {
       expect(screen.getByText('Lanes')).toBeInTheDocument();
     });
 
+    it('is offered for a file that carries swimlanes and nothing else', async () => {
+      vi.mocked(fetch).mockResolvedValue(
+        jsonResponse(200, {
+          data: { ...REPORT, mapped: { ...REPORT.mapped, swimlanes: 3, swimlaneMembers: 12 } },
+        }),
+      );
+      renderDialog();
+      pickFile();
+      expect(await screen.findByLabelText('Restore the SchedulePoint layout')).toBeChecked();
+      expect(screen.getByText('Swimlanes')).toBeInTheDocument();
+    });
+
     it('marks the checkbox busy while the toggle re-runs the dry-run, and clears it when it settles', async () => {
       let settle: (response: Response) => void = () => undefined;
       vi.mocked(fetch)
