@@ -180,6 +180,15 @@ export class ExportService {
         this.activities.findSwimlaneLanesForPlan(organizationId, plan.id),
       ]);
 
+    if (swimlaneRows.length >= SWIMLANE_LIMIT) {
+      // The read is capped at the swimlanes module's own limit, as the import side's is; reaching it
+      // means the list may be the whole plan or a clip of it, and the file is written from what was read.
+      this.logger.warn(
+        { organizationId, planId: plan.id, limit: SWIMLANE_LIMIT },
+        'interchange export read the swimlane limit; the swimlane list may be clipped',
+      );
+    }
+
     // Membership as the member screen draws it: a swimlane that has been deleted is not one, so its
     // members are in "No swimlane" (their kept id is only for a restore). The lane is the one stored
     // against the SWIMLANE basis of the swimlane they are in - a row for another swimlane is stale.

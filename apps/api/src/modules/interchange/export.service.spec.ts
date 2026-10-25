@@ -193,6 +193,18 @@ describe('ExportService.exportPlan', () => {
     expect(byCode.get('A1010')?.swimlaneKey ?? null).toBeNull();
   });
 
+  it('logs when the swimlane read reaches the limit, so a clipped list is not silent', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' }));
+    swimlanes.findManyActiveByPlan.mockResolvedValue(
+      Array.from({ length: 100 }, (_, i) => ({ id: `sl-${String(i)}`, name: `Lane ${String(i)}` })),
+    );
+    await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100 }),
+      expect.stringContaining('swimlane limit'),
+    );
+  });
+
   it('derives a safe download filename from the plan name (slugified)', async () => {
     const { filename } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
     expect(filename).toBe('riverside-phase-1.xer');

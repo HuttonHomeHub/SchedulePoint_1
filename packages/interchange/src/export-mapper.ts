@@ -1,8 +1,8 @@
 import type {
   CanonicalActivity,
+  CanonicalActivityLayout,
   CanonicalAssignment,
   CanonicalCalendar,
-  CanonicalActivityLayout,
   CanonicalCalendarException,
   CanonicalModel,
   CanonicalRelationship,
@@ -359,7 +359,7 @@ export function mapExportGraphToCanonical(
       sourceRef: null,
       detail:
         swimlanes.model.source === 'WBS'
-          ? 'the plan takes its swimlanes from the WBS; the source was written as a SchedulePoint layout field'
+          ? 'the plan takes its swimlanes from the WBS; the source and level were written as a SchedulePoint layout field, but lanes inside swimlanes are not carried (they are packed again on import) and hand-made swimlanes kept on the plan are not written'
           : `${String(swimlanes.model.names.length)} swimlane(s) and ${String(members)} membership(s) written as SchedulePoint layout fields; P6 and other tools show no swimlanes`,
       reason:
         'a swimlane is a SchedulePoint concept; only SchedulePoint reads these fields back (swimlanes M4-T5)',

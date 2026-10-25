@@ -155,7 +155,7 @@ cites this release's tag.
 ### The writer (swimlanes M4-T5, 2026-10-25)
 
 The writer follows the reader by one release, as D9 requires; it cites the release carrying M4-T4
-(`api-vX.Y.Z` / `web-vX.Y.Z`, to be filled in when this merges). `encodeLayoutFields` takes the plan's
+(`api-v0.100.0` / `web-v0.199.0`, with `@repo/interchange` 0.14.0). `encodeLayoutFields` takes the plan's
 swimlanes and writes the three fields with the next fixed definition ids (4, 5 and 6), so a plan without
 swimlanes writes the bytes it always did.
 
