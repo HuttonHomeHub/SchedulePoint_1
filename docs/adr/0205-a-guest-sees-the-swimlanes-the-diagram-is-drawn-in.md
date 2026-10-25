@@ -77,6 +77,13 @@ settle on the next write into the swimlane; an audit timestamp is not worth disc
 - **Residual disclosure, stated:** a guest learns the names a planner gave the bands and which activities are in
   each. These are labels on the schedule being shared, chosen to be read.
 
+## Amendment, 2026-10-25 ([ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+Swimlanes M3 (WBS swimlanes) has shipped, and D3 still stands: a guest sees no swimlanes on a plan whose
+swimlanes follow its WBS. The owner chose on 2026-10-25 to keep it as a follow-on. The DTO is source-neutral, so
+building it is a new branch in `guest-swimlanes.ts` that derives the summaries at the plan's level, in WBS order,
+without sending `parentId`.
+
 ## References
 
 - ADR-0051 §4; ADR-0163; ADR-0198.

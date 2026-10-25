@@ -550,3 +550,8 @@ deployed container.
   `components/layout/workspace/plan-workspace-toolbar.tsx`,
   `components/layout/chrome/chrome-band.tsx`, `components/layout/navigator/app-shell.tsx`
 - Register: `scripts/flag-retirement.json`, `docs/TECH_DEBT.md` #122
+
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+Swimlanes add no row to the command surface: the lens is in View ▾ `Structure` and its command beside it and in
+the gutter's corner cell (ADR-0206 B7), so this ADR's row budget is unchanged.

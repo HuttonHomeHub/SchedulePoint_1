@@ -260,3 +260,10 @@ was stale.
 
 No server, schema or API change; no flag (ADR-0088 D1). The server stays authoritative; the client
 predicate only stops a planner being offered a tick that would be refused.
+
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+The canvas band model gains a **third reservation edge**: the swimlane gutter, reserved at the left while
+swimlanes are shown. `measure()` subtracts it as it subtracts the WBS band, and `sceneOrigin` is the one container
+offset every consumer reads, including the create popover (ADR-0206 B4). The pinned WBS band stays inside the
+stack; the gutter's corner cell spans it.

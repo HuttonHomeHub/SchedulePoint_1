@@ -9282,3 +9282,27 @@ Swimlanes M2-T7 gave DOM chrome a roster beside the layer roster: a literal `dat
 When the plan's swimlanes come from the WBS, `useReparentActivities` stores the lane each mover occupies in its new group after every `updateParents` write. The activity editor's Breakdown field and Dissolve change membership through other endpoints and do not call it. The bar is still drawn in the right swimlane and clear of overlap, because the projection derives a lane for a member with no stored row, but that lane is derived: a recalculation can re-derive it until the next write into the swimlane stores it.
 
 **Next:** call the same planner (`planReparentLanes`) after the editor's General save when `parentId` changed, and after a dissolve for the promoted children (plan against the picture without the dissolved summary, which is no longer a swimlane); pin both in the census. **Trigger:** a report of a bar changing lane after a recalculation in a WBS swimlane plan, or the next change to the editor's save path.
+
+### 548. `features/tsld` imports eleven files' worth of other features, against ADR-0026 §8
+
+**Status:** open · **Verified:** 2026-10-25, by `grep -rnE "from '@/features/(activities|wbs|plan-actions|gantt)" apps/web/src/features/tsld` (tests excluded) on `4d541256`, against the same grep on `6fe69268`, the tree before swimlanes · **Raised:** 2026-10-25 (swimlanes M5, `ui-architecture.md` C8) · **Size:** M · **Owner:** web
+
+ADR-0026 §8 says `features/tsld` "imports **no** other feature". Ten non-test files did before the swimlanes epic: `TsldPanel.tsx` (`activities`, `plan-actions`, `wbs`), `export-csv.ts` (`activities`), and eight under `toolbar/` (`activities`, `plan-actions`, `gantt`), the toolbar ones re-exporting or reading view state that has no neutral home yet. The epic moved the two `features/wbs` band imports into one place, `model/derive-diagram-source.ts` (M2-T1), and added one, `model/reparent-lanes.ts` (M3-T2: it reads WBS membership to plan the lane a re-filed bar takes). Nothing is wrong at run time; the cost is that the rule reads as held while the tree says otherwise, and each slip makes the next look like precedent (ADR-0206 B3 says so).
+
+**Next:** either move the shared pieces to a neutral tier (`lib/` or a `features/plan-model` the host composes) so the imports point down, or amend ADR-0026 §8 to name the dependencies it accepts. Decide per import; the toolbar ones are the bulk. **Trigger:** the next PR that adds a sideways import into `features/tsld`, or a reconciliation pass.
+
+### 549. The Gantt view says nothing when the swimlane list fails to load, and its Swimlane column disappears
+
+**Status:** open · **Verified:** 2026-10-25, by reading `plan-workspace-toolbar.tsx` (the `SwimlanesFailedRegion` is mounted only when `ctx.planView !== 'gantt'`; `tableSwimlanes` is `null` while a hand-made plan has no assignment, and `shownColumns(…, tableSwimlanes !== null)` then drops the column) and `swimlanes-failed-notice.tsx` (`SWIMLANES_FAILED_NOTE` names the diagram) · **Raised:** 2026-10-25 (swimlanes M5 gate, UX review) · **Size:** S · **Owner:** web
+
+On the diagram, a failed swimlane list shows a warning strip with **Try again** (the M2 gate). In the Gantt view a plan with hand-made swimlanes loses its Swimlane column and the table's bulk bar is withheld, with no sentence and no retry, until the list loads. Nothing is written wrongly; the reader is just not told. The Activities table under the diagram is covered by the diagram's strip.
+
+**Next:** mount the region in the Gantt view too, with a Gantt sentence ("Couldn't load swimlanes. The Swimlane column is hidden until they load.") passed to `SwimlanesFailedNotice`, and a unit test in the toolbar suite. **Trigger:** the next change to the Gantt's swimlane column or to the failed notice.
+
+### 550. Creating an activity without a parent does not take the plan lock, so it can land under a plan being deleted
+
+**Status:** open · **Verified:** 2026-10-25, by reading `ActivitiesService.create` in `apps/api/src/modules/activities/activities.service.ts` (the plan advisory lock is taken only when `parentId` is set) and `common/db/hierarchy-row-lock.ts` (the #520 shape it guards) · **Raised:** 2026-10-25, from `docs/specs/swimlanes/schema-design.md` §5, where it was "noted, not changed" · **Size:** S · **Owner:** api
+
+A plan delete holds the plan advisory lock across its sweep. Swimlane create and restore take the same lock, because an insert after the sweep read would be active under a deleted plan, and the foreign key's `KEY SHARE` does not conflict with the cascade's `NO KEY UPDATE`. Activity create takes it only for a child, so a top-level activity created in the instant a plan is deleted can commit as a live row under a deleted plan: unseen while the plan is in the bin, and back with it on restore. It is the race #520 closed for project calendars.
+
+**Next:** take the plan advisory lock on every activity create (it is already taken for a child), with an API e2e that races a create against a plan delete. Run it past the backend-performance reviewer, since every create would then serialise on the plan lock. **Trigger:** a live activity found under a deleted plan, or the next change to activity create.

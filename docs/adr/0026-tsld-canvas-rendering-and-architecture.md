@@ -566,6 +566,16 @@ freedom), and #261 exists precisely because canvas size decides the verdict. Any
     scope here); the **minimap** and swimlane-by-resource/WBS modes (§20 Should/Could).
   - CLAUDE.md §16 and the ADR index list this ADR as **Proposed** pending approval.
 
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+- **The deferred "swimlane-by-resource/WBS modes" are answered.** Labelled swimlanes shipped, made by hand or
+  one per WBS group at a chosen level; by resource was not built. The scene learns of them only as a
+  `swimlanes` input and a drag's `laneRange`, after the host swaps each bar's `laneIndex` for its display lane
+  (ADR-0206 B1), so the canvas, coordinate and viewport model above is unchanged.
+- **§8 ("imports no other feature") is not held in the tree**, and was not before swimlanes: ten non-test files
+  under `features/tsld` import `activities`, `plan-actions`, `wbs` or `gantt`, and the epic added one more
+  (`model/reparent-lanes.ts`). They are recorded as `docs/TECH_DEBT.md` #548 rather than claimed.
+
 ## References
 
 - PROJECT_BRIEF §12 & §14 (canvas perf + response-time NFRs), §11 (TSLD functional

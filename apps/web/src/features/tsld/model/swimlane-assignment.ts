@@ -50,8 +50,24 @@ export const MOVE_TO_SWIMLANE_LABEL = 'Move to swimlane…';
 /** Why the selection bars' Move to swimlane… is shaded while swimlanes are off (ADR-0082, ADR-0204). */
 export const SWIMLANES_OFF_MOVE_REASON =
   'Turn on Swimlanes in View to move activities between them.';
-/** Why a swimlane is not assigned by hand while the plan's swimlanes come from the WBS (US-4, ADR-0083). */
-export const SWIMLANES_FOLLOW_WBS_REASON = 'Swimlanes follow the WBS in this plan.';
+/**
+ * Why a swimlane is not assigned by hand while the plan's swimlanes come from the WBS (US-4, ADR-0083),
+ * and what moves an activity instead: a shaded control that gives no way on is a dead end (ADR-0204).
+ */
+export const SWIMLANES_FOLLOW_WBS_REASON =
+  'Swimlanes follow the WBS in this plan. To move an activity, file it under another summary in Breakdown.';
+/** What a swimlane column's cell reads under the WBS source: the rule, stated once per surface (US-4). */
+export const FOLLOWS_WBS_LABEL = 'Follows the WBS';
+
+/**
+ * What a grid's Swimlane column is told about the plan's swimlanes (swimlanes M4-T1, M4-T2). The host
+ * composes it, so the table and the Gantt learn nothing of how a swimlane is stored or written: with
+ * hand-made swimlanes it carries the one assignment the selection bars and the editor also use; with
+ * swimlanes that follow the WBS the column is read-only with its reason. One type, so the two grids
+ * cannot drift apart when a source is added.
+ */
+export type SwimlaneColumnSource =
+  { source: 'MANUAL'; assignment: SwimlaneAssignment } | { source: 'WBS' };
 export const MOVE_TO_SWIMLANE_FIELD = 'Move to';
 export const MOVE_BUTTON_LABEL = 'Move';
 

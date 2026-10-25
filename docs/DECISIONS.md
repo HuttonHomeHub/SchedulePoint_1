@@ -10,6 +10,35 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-25 — Swimlanes are closed at the gate pass, and the three known gaps stay follow-ons
+
+**Recorded at swimlanes M5** ([ADR-0206](adr/0206-a-swimlane-is-a-projection-of-lanes.md)). Seven
+reviewers read the whole epic (`6fe69268..4d541256`): accessibility, component, UX, front-end
+performance, API, security and back-end performance. **None found a blocking defect.** Folded in the
+M5 PR: the WBS-source reason on the Activities table and the Gantt cell now names a way forward
+(ADR-0204); "Follows the WBS" and the column's source type are each defined once for both grids; the
+table's note is hidden below `lg` with its column; the swimlane list's OpenAPI default says 100, its
+delete documents the 422, and `docs/API.md` states the real check order (another organisation 404,
+then the role 403, then the plan or swimlane 404, then 423).
+
+**Not taken, with the reason:**
+
+- Showing the WBS swimlane's name in the table and Gantt instead of "Follows the WBS": the approved
+  plan specifies the latter (M4-T2), and the diagram, editor and listbox name it.
+- Importing `SWIMLANE_GROUND` in the guest view from the feature's index: the index also re-exports
+  `features/activities`, which would pull it into the guest page's chunk. The deep import stays.
+- One shared stem for the five WBS-source sentences: each gives a different way forward on purpose.
+- The in-swimlane placement's cost when one swimlane holds most of a 2,000-bar plan with many unplaced
+  members, and lane rows never being pruned: unmeasured, recorded in ADR-0206's consequences.
+
+**New rows:** #548 (`features/tsld` imports other features, ADR-0026 §8, including one the epic
+added), #549 (the Gantt view says nothing when the swimlane list fails), #550 (a top-level activity
+create does not take the plan lock).
+
+**The owner's answer (2026-10-25):** asked whether to build any of the three known gaps now (#547, guest
+swimlanes on a WBS-source plan, full membership in a WBS-source XER export), the owner chose **"None
+now"**. They stay recorded follow-ons.
+
 ## 2026-10-24 — Tidy and Re-layout keep work inside its swimlane, and the extra height is accepted
 
 **Decided by the product owner** (this session), shown the cost in

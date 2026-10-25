@@ -101,3 +101,11 @@ row count and added unlinked glyph contact directly below crossings.
 - **A weighted sum.** The product owner gave an order, not weights, and any weights would be a number
   tuned to the fixtures. Rejected.
 - **Counting hidden links in the offer.** Measured at 32× over its budget (decision 7). Rejected.
+
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+While swimlanes are shown, the optimiser chooses rows **inside each swimlane**: Tidy's swaps and Re-layout's
+search, starts and compaction take the optional swimlane `partition` (`render/optimise-layout.ts`,
+`render/layout-partition.ts`), and the objective is scored on display lanes so a link between swimlanes still
+counts. With swimlanes off, or one swimlane, the result is the old one (ADR-0206 A5; the ADR-0203 amendment
+records the Re-layout details).

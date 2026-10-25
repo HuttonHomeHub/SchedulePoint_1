@@ -229,3 +229,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0203](0203-relayout-starts-from-several-places-and-may-use-the-rows-the-diagram-has.md)        | Re-layout starts from several places and may use the rows the diagram already has          | Accepted           |
 | [0204](0204-a-shaded-control-says-why-to-every-input.md)                                        | A shaded control says why, to every input                                                  | Accepted           |
 | [0205](0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)                              | A guest sees the swimlanes the diagram is drawn in                                         | Accepted           |
+| [0206](0206-a-swimlane-is-a-projection-of-lanes.md)                                             | A swimlane is a projection of lanes                                                        | Accepted           |

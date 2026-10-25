@@ -370,3 +370,9 @@ consolidation pass. It refines — does not supersede — the two-row amendment 
 **Scope.** Frontend-only, within the existing `VITE_CANVAS_TOOLBAR` surface (no flag change). No
 API/DB/type change. New: `PlanSummaryPanel`, `TsldLegendPanel`, `useLegendPanelPrefs`, a `?`-key
 binding, and a `row: 'look'` move for Shortcuts.
+
+## Amendment, 2026-10-25 (swimlanes, [ADR-0206](0206-a-swimlane-is-a-projection-of-lanes.md))
+
+The **Swimlanes** lens joins View ▾'s `Structure` group as a lens toggle, beside the day and month grids, and a
+separate **Swimlanes…** command opens setup (a checkbox never opens a dialog, WCAG 3.2.2). No new toolbar row or
+group (ADR-0206 B7).

@@ -8,7 +8,10 @@ import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 
 import { ActivitiesTable, type ActivitiesTableSwimlanes } from './ActivitiesTable';
 
-import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
+import {
+  SWIMLANES_FOLLOW_WBS_REASON,
+  type SwimlaneAssignment,
+} from '@/features/tsld/model/swimlane-assignment';
 
 /**
  * The Swimlane column and the bulk-assign bar (swimlanes M4-T1). The write itself is the host's
@@ -98,7 +101,7 @@ describe('ActivitiesTable — Swimlane column', () => {
     const cell = within(rowOf('Excavate')).getByText('Follows the WBS');
     expect(cell).not.toHaveAttribute('title');
     // The full reason is stated once, visibly, not on every row.
-    expect(screen.getAllByText('Swimlanes follow the WBS in this plan.')).toHaveLength(1);
+    expect(screen.getAllByText(SWIMLANES_FOLLOW_WBS_REASON)).toHaveLength(1);
     expect(screen.queryByRole('checkbox', { name: 'Select all activities' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
   });

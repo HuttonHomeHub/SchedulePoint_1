@@ -158,6 +158,7 @@ export class SwimlanesController {
   @ApiNoContentResponse()
   @ApiConflictResponse({ description: 'A `version` was sent and the swimlane is at another.' })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiUnprocessableEntityResponse({ description: 'An invalid `version` query parameter.' })
   @ApiLockedResponse(PEN)
   async remove(
     @CurrentUser() principal: Principal,

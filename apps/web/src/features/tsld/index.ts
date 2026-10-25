@@ -63,5 +63,7 @@ export type {
 export { MoveToSwimlaneControl } from './components/MoveToSwimlaneControl';
 export {
   SWIMLANES_FOLLOW_WBS_REASON,
+  FOLLOWS_WBS_LABEL,
+  type SwimlaneColumnSource,
   SWIMLANES_OFF_MOVE_REASON,
 } from './model/swimlane-assignment';
