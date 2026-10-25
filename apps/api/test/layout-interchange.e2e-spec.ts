@@ -21,7 +21,7 @@ import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-po
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearAuditEvents, clearDomainData } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 
@@ -394,8 +394,15 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   }, 360_000);
 
   afterAll(async () => {
-    await resetDatabase();
-    await app?.close();
+    // Swimlane rows are RESTRICT into their plan, so one left behind makes the next spec's
+    // `plan.deleteMany()` fail. `clearDomainData` removes them in dependency order even when the
+    // hand-written reset above stopped early.
+    try {
+      await resetDatabase();
+    } finally {
+      await clearDomainData(prisma).catch(() => undefined);
+      await app?.close();
+    }
   });
 
   async function read(planId: string): Promise<Side> {
