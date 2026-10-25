@@ -21,7 +21,9 @@ import {
 } from './column-widths';
 import { GANTT_COLUMNS } from './grid-columns';
 
-const DEFAULT_SET = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors');
+/** Every column a plan without swimlanes can show. */
+const STANDARD_COLUMNS = GANTT_COLUMNS.filter((c) => c.key !== 'swimlane');
+const DEFAULT_SET = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors' && c.key !== 'swimlane');
 
 describe('readStoredWidths is total', () => {
   it.each([
@@ -90,7 +92,7 @@ describe('the shipped widths', () => {
 
   it('fix at 524 px for the default set, and 686 with everything and a baseline', () => {
     expect(ganttFixedWidth(DEFAULT_SET, {}, 0)).toBe(524);
-    expect(ganttFixedWidth(GANTT_COLUMNS, {}, 72)).toBe(686);
+    expect(ganttFixedWidth(STANDARD_COLUMNS, {}, 72)).toBe(686);
   });
 });
 
@@ -150,7 +152,10 @@ describe('pinnedExtraWidth', () => {
 
 describe('shownColumns', () => {
   it('drops hidden columns and keeps declaration order', () => {
-    expect(shownColumns(new Set())).toEqual(GANTT_COLUMNS);
+    expect(shownColumns(new Set())).toEqual(STANDARD_COLUMNS);
+    // The Swimlane column is offered only to a plan that has swimlanes (swimlanes M4-T2), last.
+    expect(shownColumns(new Set(), true)).toEqual(GANTT_COLUMNS);
+    expect(shownColumns(new Set(['swimlane']), true)).toEqual(STANDARD_COLUMNS);
     expect(shownColumns(new Set(['predecessors'])).map((c) => c.key)).toEqual(
       DEFAULT_SET.map((c) => c.key),
     );

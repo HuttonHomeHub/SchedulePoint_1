@@ -324,7 +324,17 @@ describe('cellWriteFields', () => {
     // teaches the next reader to widen it.
     earlyStart: '2026-03-03',
     earlyFinish: '2026-03-09',
+    // Refused by design: the swimlane cell picks from a list and is NOT in `GANTT_EDITABLE_COLUMNS`,
+    // so the test below never asks the commit path about it (swimlanes M4-T2).
+    swimlane: 'Zone A',
   };
+
+  it('keeps the swimlane key out of the typed-cell roster, because the commit path refuses it', () => {
+    expect(Object.values(GANTT_EDITABLE_COLUMNS)).not.toContain('swimlane');
+    expect(cellWriteFields('swimlane', ACCEPTED_SAMPLE.swimlane, ctx())).toMatchObject({
+      ok: false,
+    });
+  });
 
   it('never lists a column as editable that the commit path refuses outright', () => {
     /**

@@ -29,7 +29,8 @@ import type { GanttCellGate } from './cell-gate';
  */
 
 /** The columns a planner may type into. Q2 folded Start and Finish in after three reviews. */
-export type GanttCellKey = 'name' | 'duration' | 'percentComplete' | 'earlyStart' | 'earlyFinish';
+export type GanttCellKey =
+  'name' | 'duration' | 'percentComplete' | 'earlyStart' | 'earlyFinish' | 'swimlane';
 
 /**
  * Which permission a write through this cell needs.
@@ -54,6 +55,11 @@ export const GANTT_CELL_SCOPES: Record<GanttCellKey, GanttCellScope> = {
   earlyStart: 'definition',
   earlyFinish: 'definition',
   percentComplete: 'progress',
+  // Moving work between swimlanes is a layout write: gated on the pen like a definition edit, and the
+  // table's bulk bar reads the same `general` gate (swimlanes M4-T1). It is a key so the cell resolves
+  // its gate through the one derivation, and it is NOT in `GANTT_EDITABLE_COLUMNS`: the cell picks from
+  // a list and writes through the host's assignment, never through typed text.
+  swimlane: 'definition',
 };
 
 /** Which cell, on which activity. */

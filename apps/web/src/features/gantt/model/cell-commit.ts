@@ -131,6 +131,11 @@ export function cellWriteFields(key: GanttCellKey, text: string, ctx: CellWriteC
     case 'earlyStart':
     case 'earlyFinish':
       return dateWriteFields(key, trimmed, ctx);
+
+    // Never reached from the grid: the swimlane cell is not in `GANTT_EDITABLE_COLUMNS` and writes
+    // through the host's assignment. Refused rather than omitted so the switch stays exhaustive.
+    case 'swimlane':
+      return refuse(GENERIC_REFUSAL);
   }
 }
 

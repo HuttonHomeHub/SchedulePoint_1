@@ -37,6 +37,12 @@ export interface GanttColumn {
    */
   sortable?: false;
   /**
+   * The column exists only while the plan has swimlanes to show (swimlanes M4-T2), so the grid, the
+   * `View ▾` chooser and the width arithmetic all skip it otherwise — and the printed programme
+   * always does, which carries the standard columns. Absent means offered everywhere.
+   */
+  swimlanesOnly?: true;
+  /**
    * The cell's text for an activity — also the accessible content, never derived from the bar.
    *
    * `source` is the same {@link BarDateSource} the bars are drawn from (ADR-0033), defaulting to
@@ -51,6 +57,7 @@ export interface GanttColumn {
     source?: BarDateSource,
     hoursPerDay?: number,
     predecessorNames?: readonly string[],
+    swimlaneLabel?: string | null,
   ) => string;
 }
 
@@ -142,6 +149,18 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
       predecessorNames === undefined || predecessorNames.length === 0
         ? '—'
         : predecessorNames.join(', '),
+  },
+  {
+    key: 'swimlane',
+    label: 'Swimlane',
+    sortable: false,
+    swimlanesOnly: true,
+    /**
+     * The swimlane the activity is filed in, resolved by the HOST and passed in (swimlanes M4-T2):
+     * membership is the plan's swimlane list plus the source, and a pure column module has no business
+     * reading either. An em dash means none, as the Parent column and the table's Swimlane read.
+     */
+    value: (_a, _source, _hoursPerDay, _predecessorNames, swimlaneLabel) => swimlaneLabel ?? '—',
   },
 ];
 

@@ -76,6 +76,15 @@ export interface GanttCellProps {
    * Gantt-feature-local — not a shared primitive's contract (ADR-0105).
    */
   lead?: React.ReactNode;
+  /**
+   * A control to show in place of the text input while the cell is open, for a cell that picks from a
+   * list rather than types (the swimlane cell, swimlanes M4-T2). It owns its own keys and focus; the
+   * cell still supplies the gate, the reason and the refusal; given as a function it is handed the
+   * refusal's id (only while a refusal is showing) so the control can be described by it. Additive and Gantt-feature-local.
+   */
+  /** The chord that opens this cell from the row, named for assistive technology (`aria-keyshortcuts`). */
+  keyShortcuts?: string;
+  field?: React.ReactNode | ((refusal: { errorId: string | undefined }) => React.ReactNode);
   children?: React.ReactNode;
 }
 
@@ -97,6 +106,8 @@ export function GanttCell({
   registerShow,
   className,
   lead,
+  field: customField,
+  keyShortcuts,
   children,
 }: GanttCellProps): React.ReactElement {
   const reasonId = useId();
@@ -117,7 +128,9 @@ export function GanttCell({
   // The refusal belongs to the open field, so it is only shown (and only linked) while one is open.
   const errorShown = editing && errorMessage !== null;
 
-  const field = (
+  const field = (typeof customField === 'function'
+    ? customField({ errorId: errorShown ? errorId : undefined })
+    : customField) ?? (
     <input
       ref={inputRef}
       // ADR-0177 D4's coarse list: the open input is 24 px (`h-6`) and its large-target route
@@ -220,6 +233,7 @@ export function GanttCell({
       // the app's own tip replaces it (hover, double-click, F2) and no `title` rides beside it, or
       // hover would show both (ADR-0204 D3). The `sr-only` span below stays the description.
       {...tip?.triggerProps}
+      aria-keyshortcuts={keyShortcuts}
       {...(gate.reason === null ? {} : { 'aria-describedby': reasonId })}
       className={cn(
         'shrink-0 px-2 text-xs',

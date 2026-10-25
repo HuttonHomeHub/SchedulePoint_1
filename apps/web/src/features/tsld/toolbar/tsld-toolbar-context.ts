@@ -82,6 +82,8 @@ export interface TsldToolbarContext {
   ganttColumns?:
     | {
         hidden: ReadonlySet<GanttColumnKey>;
+        /** The plan has swimlanes to show, so the chooser lists the Swimlane column (M4-T2). */
+        swimlanesOffered?: boolean;
         setHidden: (next: ReadonlySet<GanttColumnKey>) => void;
         /**
          * **Column widths, typed** (ADR-0173). Every resizable column's current width in px —

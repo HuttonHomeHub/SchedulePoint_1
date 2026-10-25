@@ -96,6 +96,9 @@ export const choosePrompt = (selected: number): string =>
 /** A write that came back refused without saying why (a lost pen, a no-op). */
 export const NOT_MOVED_REASON = 'Nothing was moved. Try again.';
 
+/** What a rejected move says when the error carries no message (the control and the Gantt cell share it). */
+export const SWIMLANE_MOVE_FAILED = 'Couldn’t move the activities.';
+
 /** The refusal a stale write gets, which only a fresh read cures. */
 export const withReload = (conflict: string): string => `${conflict} Reload and try again.`;
 

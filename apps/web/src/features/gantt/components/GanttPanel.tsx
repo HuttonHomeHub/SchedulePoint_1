@@ -72,6 +72,7 @@ import {
   type GanttColumnKey,
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
+import { swimlaneCellGate, swimlaneCellLabel, type GanttSwimlanes } from '../model/swimlane-cell';
 import { TOUCH_ARM_HINT, takeTouchHint, touchSelectionNote } from '../model/touch-note';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
@@ -84,6 +85,7 @@ import { GanttLinkOverlay } from './GanttLinkOverlay';
 import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
+import { GanttSwimlaneCell } from './GanttSwimlaneCell';
 
 import {
   FORCED_ARMED_OUTLINE,
@@ -263,6 +265,12 @@ export interface GanttPanelProps {
    */
   editing?: GanttGridEditing | undefined;
   /**
+   * The plan's swimlanes, for the Swimlane column (swimlanes M4-T2). **Absent ⇒ the column is not
+   * offered** and the grid is exactly what it was; present, the column shows each activity's swimlane
+   * and, with `editing`, lets a planner move one (hand-made) or reads the WBS rule (shut with its reason).
+   */
+  swimlanes?: GanttSwimlanes | null | undefined;
+  /**
    * Bar movement (M3). Absent ⇒ no gesture and no keyboard binding, which is the read-only chart
    * exactly as it was — the same parity contract `editing` carries.
    */
@@ -402,7 +410,10 @@ const NO_WIDTHS: ColumnWidths = {};
 function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
   const { viewState, columnWidths, varianceByActivityId } = props;
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const columns = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const columns = useMemo(
+    () => shownColumns(hiddenColumns, props.swimlanes != null),
+    [hiddenColumns, props.swimlanes],
+  );
   const gridPrefs = useGanttGridPrefs({
     columns,
     widths: columnWidths?.widths ?? NO_WIDTHS,
@@ -421,6 +432,7 @@ function GanttPanelBody({
   barDateSource,
   hoursPerDayFor,
   editing,
+  swimlanes,
   drag,
   dependencies,
   rowMenuContextFor,
@@ -447,6 +459,13 @@ function GanttPanelBody({
     if (show) cellShows.current.set(cellId, show);
     else cellShows.current.delete(cellId);
   }, []);
+  // Each Swimlane cell's `open`, keyed `activityId:swimlane`: the cell owns its open state, so
+  // Shift+F2 on a row asks it through this (the same shape as `cellShows`).
+  const cellOpens = useRef(new Map<string, () => void>());
+  const registerCellOpen = useCallback((cellId: string, open: (() => void) | null): void => {
+    if (open) cellOpens.current.set(cellId, open);
+    else cellOpens.current.delete(cellId);
+  }, []);
   const pendingFocus = useRef(false);
 
   // Sort and the collapse set are the panel's own state UNLESS a host supplies `viewState` — the
@@ -469,7 +488,10 @@ function GanttPanelBody({
    * it is a derivation rather than a branch: there is no "columns feature off" path to keep in step.
    */
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const COLUMNS = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const COLUMNS = useMemo(
+    () => shownColumns(hiddenColumns, swimlanes != null),
+    [hiddenColumns, swimlanes],
+  );
   const widths = columnWidths?.widths ?? NO_WIDTHS;
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
@@ -1016,6 +1038,23 @@ function GanttPanelBody({
         // rather than leaving a reader to infer that F2 is arbitrary.
         if (!row || row.kind !== 'activity' || editing === undefined) break;
         const activity = row.activity;
+        // **Shift+F2 is the keyboard route to the Swimlane cell** (WCAG 2.1.1). Plain F2 keeps opening
+        // the first writable typed cell, and the grid has no cell cursor to say "the third column", so
+        // the picker gets its own chord rather than being reachable only by a double-click. Shut, it
+        // states its reason the way a refused F2 does.
+        if (event.shiftKey) {
+          if (!swimlanes || !COLUMNS.some((c) => c.key === 'swimlane')) break;
+          event.preventDefault();
+          const swimlaneId = `${activity.id}:swimlane`;
+          const gate = swimlaneCellGate(swimlanes, editing, activity.id);
+          if (gate.writable) {
+            cellOpens.current.get(swimlaneId)?.();
+          } else if (!event.repeat) {
+            cellShows.current.get(swimlaneId)?.();
+            if (gate.reason !== null) drag?.announce(gate.reason);
+          }
+          break;
+        }
         let firstRefusal: { cellKey: GanttCellKey; reason: string } | null = null;
         for (const column of COLUMNS) {
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
@@ -1386,6 +1425,7 @@ function GanttPanelBody({
                 barDateSource,
                 hoursPerDayFor,
                 editing,
+                swimlanes,
                 drag,
                 dependencies,
                 predecessorsById,
@@ -1420,6 +1460,7 @@ function GanttPanelBody({
                   onTouchSelect={onTouchSelect}
                   onTouchEngaged={dismissTouchHint}
                   registerCellShow={registerCellShow}
+                  registerCellOpen={registerCellOpen}
                   registerMenu={(handle: GanttRowMenuHandle | null) => {
                     if (handle) menuHandles.current.set(id, handle);
                     else menuHandles.current.delete(id);
@@ -1668,6 +1709,7 @@ interface GanttRowViewProps {
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   editing: GanttGridEditing | undefined;
+  swimlanes: GanttSwimlanes | null | undefined;
   drag: GanttBarDrag | undefined;
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
@@ -1696,6 +1738,8 @@ interface GanttRowViewProps {
   registerMenu?: ((handle: GanttRowMenuHandle | null) => void) | undefined;
   /** Hands the panel each editable cell's reason-tip function (F2's refusal reaches the cell by it). */
   registerCellShow?: ((cellId: string, show: (() => void) | null) => void) | undefined;
+  /** Hands the panel each Swimlane cell's opener (Shift+F2 reaches the cell by it). */
+  registerCellOpen?: ((cellId: string, open: (() => void) | null) => void) | undefined;
   onToggle: (id: string, collapse: boolean) => void;
   /** True when a float path is selected and this row is not on it (audit F4). */
   offFloatPath?: boolean;
@@ -1738,6 +1782,7 @@ function GanttRowView({
   barDateSource,
   hoursPerDayFor,
   editing,
+  swimlanes,
   drag,
   dependencies,
   predecessorsById,
@@ -1755,6 +1800,7 @@ function GanttRowView({
   onTouchEngaged,
   registerMenu,
   registerCellShow,
+  registerCellOpen,
   onToggle,
   offFloatPath = false,
 }: GanttRowViewProps): React.ReactElement {
@@ -2098,6 +2144,7 @@ function GanttRowView({
             barDateSource,
             hoursPerDayFor?.(activity),
             predecessorNames,
+            swimlanes ? swimlaneCellLabel(swimlanes, activity.id) : null,
           );
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
           // Keyed on the column, not on `i === 1`: the Code column is hideable, and the indent and
@@ -2146,6 +2193,26 @@ function GanttRowView({
               />
             )
           ) : null;
+          // The Swimlane cell picks rather than types, so it is not in the editable map above. Under the
+          // WBS source it is shut with the rule's own sentence; otherwise the pen's and role's verdict is
+          // the one every definition cell reads (ADR-0095's per-cell write scope).
+          if (column.key === 'swimlane' && editing !== undefined && swimlanes) {
+            return (
+              <GanttSwimlaneCell
+                key={column.key}
+                activityId={activity.id}
+                activityName={activity.name}
+                text={text}
+                colIndex={i + 1}
+                width={resolveColumnWidth(column)}
+                gate={swimlaneCellGate(swimlanes, editing, activity.id)}
+                assignment={swimlanes.source === 'MANUAL' ? swimlanes.assignment : null}
+                registerShow={(show) => registerCellShow?.(`${activity.id}:swimlane`, show)}
+                registerOpen={(open) => registerCellOpen?.(`${activity.id}:swimlane`, open)}
+                onClosed={editing.onCellClosed}
+              />
+            );
+          }
           // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
           // column maps to one. Neither implies the other — the print surface has no bundle, and
           // `code`/`totalFloat` are engine output nobody types.

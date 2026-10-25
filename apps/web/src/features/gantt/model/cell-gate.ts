@@ -79,7 +79,9 @@ export function ganttCellGate({
   const isSummary = activity.type === 'WBS_SUMMARY';
   const isMilestone = activity.type === 'START_MILESTONE' || activity.type === 'FINISH_MILESTONE';
 
-  if (isSummary && key !== 'name') {
+  // A summary is a swimlane member like any other row (the table's bulk bar files one), so its
+  // swimlane is not part of what it rolls up.
+  if (isSummary && key !== 'name' && key !== 'swimlane') {
     return {
       writable: false,
       readable: true,

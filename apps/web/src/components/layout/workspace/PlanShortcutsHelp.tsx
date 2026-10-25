@@ -158,7 +158,12 @@ const GANTT_READ_SHORTCUTS: readonly Shortcut[] = [
 ];
 
 const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
-  { keys: 'F2  ·  double-click', action: 'Edit the focused cell (Activity or Duration)' },
+  {
+    keys: 'F2  ·  double-click',
+    action:
+      'F2 edits the first editable cell on the row (Activity); double-click the cell you want',
+  },
+  { keys: 'Shift + F2', action: 'Choose the focused row’s swimlane (when the plan has swimlanes)' },
   { keys: 'Enter', action: 'Commit the cell edit' },
   { keys: 'Tab', action: 'Commit and move to the next cell' },
   { keys: 'Esc', action: 'Discard the cell edit' },
