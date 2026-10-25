@@ -12,6 +12,7 @@ import type { OrganizationsService } from '../organizations/organizations.servic
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import type { ResourceRepository } from '../resources/resource.repository';
+import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { EXPORT_ERROR, ExportService, slugify } from './export.service';
 
@@ -32,6 +33,8 @@ function planRow(overrides: Partial<Record<string, unknown>> = {}): Record<strin
     name: 'Riverside Phase 1!!',
     plannedStart: new Date(Date.UTC(2026, 0, 4)),
     calendarId: 'cal-1',
+    swimlaneSource: 'NONE',
+    swimlaneWbsLevel: null,
     ...overrides,
   };
 }
@@ -51,6 +54,7 @@ function activityRow(overrides: Partial<Record<string, unknown>> = {}): Record<s
     visualStart: null,
     // NOT NULL on the real table (default 0), so every row the service reads has one.
     laneIndex: 0,
+    swimlaneId: null,
     secondaryConstraintType: null,
     secondaryConstraintDate: null,
     scheduleAsLateAsPossible: false,
@@ -93,10 +97,14 @@ describe('ExportService.exportPlan', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let calendars: { findActiveDetailByIdsInOrg: ReturnType<typeof vi.fn> };
-  let activities: { findAllActiveByPlan: ReturnType<typeof vi.fn> };
+  let activities: {
+    findAllActiveByPlan: ReturnType<typeof vi.fn>;
+    findSwimlaneLanesForPlan: ReturnType<typeof vi.fn>;
+  };
   let dependencies: { findAllActiveByPlan: ReturnType<typeof vi.fn> };
   let resources: { findActiveByIdsInOrg: ReturnType<typeof vi.fn> };
   let assignments: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
+  let swimlanes: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: ExportService;
   const member = principalWith(['interchange:export']);
@@ -114,6 +122,7 @@ describe('ExportService.exportPlan', () => {
           activityRow(),
           activityRow({ id: 'act-2', code: 'A1010', name: 'Design', durationMinutes: 4800 }),
         ]),
+      findSwimlaneLanesForPlan: vi.fn().mockResolvedValue([]),
     };
     dependencies = {
       findAllActiveByPlan: vi
@@ -124,6 +133,7 @@ describe('ExportService.exportPlan', () => {
     };
     resources = { findActiveByIdsInOrg: vi.fn().mockResolvedValue([]) };
     assignments = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
+    swimlanes = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     service = new ExportService(
@@ -134,6 +144,7 @@ describe('ExportService.exportPlan', () => {
       dependencies as unknown as DependencyRepository,
       resources as unknown as ResourceRepository,
       assignments as unknown as ResourceAssignmentRepository,
+      swimlanes as unknown as SwimlaneRepository,
       logger as unknown as PinoLogger,
     );
   });
@@ -151,6 +162,47 @@ describe('ExportService.exportPlan', () => {
       expect(reimport.graph.dependencies).toHaveLength(1);
       expect(reimport.graph.dependencies[0]?.type).toBe('FS');
     }
+  });
+
+  /** The seam the pure package cannot test: the rows' swimlane columns reach the file (swimlanes M4-T5). */
+  it('writes swimlanes off the rows: live membership and its lane, not a deleted swimlane', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' }));
+    swimlanes.findManyActiveByPlan.mockResolvedValue([
+      { id: 'sl-1', name: 'North' },
+      { id: 'sl-2', name: 'South' },
+    ]);
+    activities.findAllActiveByPlan.mockResolvedValue([
+      activityRow({ swimlaneId: 'sl-1' }),
+      // Kept membership of a swimlane that is no longer active: drawn in "No swimlane".
+      activityRow({ id: 'act-2', code: 'A1010', name: 'Design', swimlaneId: 'sl-gone' }),
+    ]);
+    activities.findSwimlaneLanesForPlan.mockResolvedValue([
+      { activityId: 'act-1', swimlaneId: 'sl-1', laneIndex: 4 },
+      // A row against another swimlane than the one it is in is stale and is not written.
+      { activityId: 'act-1', swimlaneId: 'sl-2', laneIndex: 9 },
+      { activityId: 'act-2', swimlaneId: 'sl-gone', laneIndex: 1 },
+    ]);
+
+    const { bytes, filename } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    const reimport = importSchedule({ content: bytes, filename });
+    if (!reimport.ok) throw new Error('reimport failed');
+    expect(reimport.graph.plan.swimlaneSource).toBe('MANUAL');
+    expect(reimport.graph.swimlanes?.map((s) => s.name)).toEqual(['North', 'South']);
+    const byCode = new Map(reimport.graph.activities.map((a) => [a.code, a]));
+    expect(byCode.get('A1000')).toMatchObject({ swimlaneKey: 'swimlane:1', swimlaneLane: 4 });
+    expect(byCode.get('A1010')?.swimlaneKey ?? null).toBeNull();
+  });
+
+  it('logs when the swimlane read reaches the limit, so a clipped list is not silent', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' }));
+    swimlanes.findManyActiveByPlan.mockResolvedValue(
+      Array.from({ length: 100 }, (_, i) => ({ id: `sl-${String(i)}`, name: `Lane ${String(i)}` })),
+    );
+    await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100 }),
+      expect.stringContaining('swimlane limit'),
+    );
   });
 
   it('derives a safe download filename from the plan name (slugified)', async () => {

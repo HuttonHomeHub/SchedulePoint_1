@@ -1,5 +1,6 @@
 import type {
   CanonicalActivity,
+  CanonicalActivityLayout,
   CanonicalAssignment,
   CanonicalCalendar,
   CanonicalCalendarException,
@@ -7,11 +8,13 @@ import type {
   CanonicalRelationship,
   CanonicalResource,
   CanonicalShift,
+  CanonicalSwimlanes,
   CanonicalWorkWeek,
 } from './canonical.js';
 import type { ExportCalendar, ExportGraph, ExportPlan } from './export-graph.js';
 import type { ImportCalendarShift, ImportWorkWindow } from './import-graph.js';
 import type { ReportFinding } from './report.js';
+import { foldSwimlaneName, isSwimlaneName } from './xer-layout-fields.js';
 
 /**
  * The **SchedulePoint export-graph → canonical mapper** (ADR-0050 M4, Task 4a.2) — the dual of
@@ -153,6 +156,89 @@ function mapPlan(plan: ExportPlan): CanonicalModel['project'] {
   };
 }
 
+/** What the swimlane half of the layout resolved to: the canonical answer and who is in which swimlane. */
+interface MappedSwimlanes {
+  readonly model: CanonicalSwimlanes;
+  /** Export key of a swimlane -> its name, for the swimlanes the file will list. Empty under a WBS source. */
+  readonly nameOfKey: ReadonlyMap<string, string>;
+}
+
+/**
+ * The plan-level swimlane field of a SchedulePoint XER (swimlanes M4-T5), or undefined when the plan has
+ * none, so a swimlane-free plan exports exactly the bytes it always did.
+ *
+ * A plan "has swimlanes" when its source is not `NONE` or when it holds hand-made ones (a `NONE` plan can
+ * keep them, switched off). Names are held to the same shape the reader holds them to
+ * (`isSwimlaneName`, folded; the graph schema already caps the list at 100), so a file we write is never one our reader trims: a name
+ * that fails, or repeats an earlier one ignoring case, is left out and reported once. A `WBS` source lists
+ * no names and no membership - the reader ignores hand-made swimlanes under it, and the WBS the file
+ * already carries is what puts each activity in its swimlane.
+ */
+function mapSwimlanes(graph: ExportGraph, findings: ReportFinding[]): MappedSwimlanes | undefined {
+  const source = graph.plan.swimlaneSource ?? 'NONE';
+  const listed = graph.swimlanes ?? [];
+  if (source === 'NONE' && listed.length === 0) return undefined;
+  if (source === 'WBS') {
+    return {
+      model: { source, wbsLevel: graph.plan.swimlaneWbsLevel ?? null, names: [] },
+      nameOfKey: new Map(),
+    };
+  }
+
+  const names: string[] = [];
+  const nameOfKey = new Map<string, string>();
+  const seen = new Set<string>();
+  let refused = 0;
+  for (const swimlane of listed) {
+    const folded = foldSwimlaneName(swimlane.name);
+    if (!isSwimlaneName(swimlane.name) || seen.has(folded)) {
+      refused += 1;
+      continue;
+    }
+    seen.add(folded);
+    names.push(swimlane.name);
+    nameOfKey.set(swimlane.key, swimlane.name);
+  }
+  if (refused > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'project',
+      sourceRef: null,
+      detail: `${String(refused)} swimlane(s) were not written to the exported file`,
+      reason:
+        'a swimlane name must be 1 to 80 characters without control characters and unique ignoring case (xer-layout-fields)',
+    });
+  }
+  return { model: { source, wbsLevel: null, names }, nameOfKey };
+}
+
+/**
+ * The picture one activity carries into a format that writes it: the placement, the row and, when it is
+ * in a listed swimlane, the swimlane and the lane inside it. Absent when there is nothing to say. A
+ * summary is never placed and never a member (ADR-0038).
+ */
+function mapLayout(
+  activity: ExportGraph['activities'][number],
+  carriesLayout: boolean,
+  swimlanes: MappedSwimlanes | undefined,
+): { layout?: CanonicalActivityLayout } {
+  if (!carriesLayout) return {};
+  const swimlane =
+    activity.type === 'WBS_SUMMARY' || activity.swimlaneKey == null
+      ? undefined
+      : swimlanes?.nameOfKey.get(activity.swimlaneKey);
+  if (activity.visualStart == null && activity.laneIndex == null && swimlane === undefined) {
+    return {};
+  }
+  return {
+    layout: {
+      placedStart: activity.type === 'WBS_SUMMARY' ? null : (activity.visualStart ?? null),
+      lane: activity.laneIndex ?? null,
+      ...(swimlane === undefined ? {} : { swimlane, swimlaneLane: activity.swimlaneLane ?? null }),
+    },
+  };
+}
+
 export interface ExportMapResult {
   readonly model: CanonicalModel;
   readonly findings: ReportFinding[];
@@ -197,6 +283,8 @@ export function mapExportGraphToCanonical(
     ),
   );
 
+  const swimlanes = options.carriesLayout === true ? mapSwimlanes(graph, findings) : undefined;
+
   const activities: CanonicalActivity[] = graph.activities.map((activity) => ({
     id: activity.key,
     code: activity.code,
@@ -214,15 +302,7 @@ export function mapExportGraphToCanonical(
     // The picture: the placement and the lane. On the canonical model only for a format that writes it
     // (XER), so no other emitter can start reading a field it was never meant to carry (M3 security
     // review). A summary is never placed, so its placement is dropped here.
-    ...(options.carriesLayout !== true ||
-    (activity.visualStart == null && activity.laneIndex == null)
-      ? {}
-      : {
-          layout: {
-            placedStart: activity.type === 'WBS_SUMMARY' ? null : (activity.visualStart ?? null),
-            lane: activity.laneIndex ?? null,
-          },
-        }),
+    ...mapLayout(activity, options.carriesLayout === true, swimlanes),
     ...(options.carriesDerivedDuration === true &&
     (activity.type === 'WBS_SUMMARY' || activity.type === 'LEVEL_OF_EFFORT') &&
     activity.derivedDurationMinutes != null
@@ -263,6 +343,38 @@ export function mapExportGraphToCanonical(
       detail: `${String(placedActivities.length)} activity(ies) carry a hand-placed start, which is not written to the exported file`,
       reason:
         'this format has no field for a hand-placement; the receiving tool will read every activity at its computed dates (one-planning-surface)',
+    });
+  }
+
+  // The swimlanes, reported by the same rule as the placement: only when the plan has some. XER writes them
+  // as SchedulePoint's own fields (only SchedulePoint reads them back); a format without the fields
+  // loses them outright. ONE producer, for the reason the placement finding gives above.
+  if (swimlanes !== undefined) {
+    const members = graph.activities.filter(
+      (activity) => activity.swimlaneKey != null && swimlanes.nameOfKey.has(activity.swimlaneKey),
+    ).length;
+    findings.push({
+      kind: 'approximation',
+      entity: 'project',
+      sourceRef: null,
+      detail:
+        swimlanes.model.source === 'WBS'
+          ? 'the plan takes its swimlanes from the WBS; the source and level were written as a SchedulePoint layout field, but lanes inside swimlanes are not carried (they are packed again on import) and hand-made swimlanes kept on the plan are not written'
+          : `${String(swimlanes.model.names.length)} swimlane(s) and ${String(members)} membership(s) written as SchedulePoint layout fields; P6 and other tools show no swimlanes`,
+      reason:
+        'a swimlane is a SchedulePoint concept; only SchedulePoint reads these fields back (swimlanes M4-T5)',
+    });
+  } else if (
+    (graph.plan.swimlaneSource ?? 'NONE') !== 'NONE' ||
+    (graph.swimlanes?.length ?? 0) > 0
+  ) {
+    findings.push({
+      kind: 'drop',
+      entity: 'project',
+      sourceRef: null,
+      detail: "the plan's swimlanes are not written to the exported file",
+      reason:
+        'this format has no field for a swimlane; the receiving tool shows none (swimlanes M4-T5)',
     });
   }
 
@@ -321,6 +433,7 @@ export function mapExportGraphToCanonical(
     relationships,
     resources,
     assignments,
+    ...(swimlanes === undefined ? {} : { swimlanes: swimlanes.model }),
   };
 
   return { model, findings };

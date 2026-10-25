@@ -24,8 +24,8 @@
  * that will be written to a column with a shape constraint (`ck_swimlanes_name_shape`), so it is
  * held to that shape here - 1 to 80 characters, trimmed, no control character - and de-duplicated
  * ignoring case before anything is inserted (`docs/specs/swimlanes/schema-design.md` section 9). The
- * **reader ships one release before the writer** (ADR-0156 D9): until the writer lands, only a hand
- * edited file carries these labels.
+ * **reader shipped one release before the writer** (ADR-0156 D9): `encodeLayoutFields` writes them
+ * from M4-T5, and only for a plan that has swimlanes.
  */
 import type {
   CanonicalActivity,
@@ -519,7 +519,7 @@ const UDFVALUE_FIELDS = [
   'udf_code_id',
 ] as const;
 
-/** The three field definitions, with ids FIXED so the same plan always writes the same bytes. */
+/** The field definitions, with ids FIXED so the same plan always writes the same bytes. */
 const DEFINITIONS: readonly {
   readonly id: string;
   readonly label: string;
@@ -529,6 +529,10 @@ const DEFINITIONS: readonly {
   { id: '1', label: LAYOUT_LABEL_PLACED_START, table: 'TASK', dataType: 'FT_TEXT' },
   { id: '2', label: LAYOUT_LABEL_ROW, table: 'TASK', dataType: 'FT_INT' },
   { id: '3', label: LAYOUT_LABEL_ROW, table: 'PROJWBS', dataType: 'FT_INT' },
+  // The swimlane fields (M4-T5) take the next ids, so a plan without swimlanes writes what it always did.
+  { id: '4', label: LAYOUT_LABEL_SWIMLANE, table: 'TASK', dataType: 'FT_TEXT' },
+  { id: '5', label: LAYOUT_LABEL_SWIMLANE_LANE, table: 'TASK', dataType: 'FT_INT' },
+  { id: '6', label: LAYOUT_LABEL_SWIMLANES, table: 'PROJECT', dataType: 'FT_TEXT' },
 ];
 
 /**
@@ -543,6 +547,7 @@ const DEFINITIONS: readonly {
 export function encodeLayoutFields(
   activities: readonly Encodable[],
   projId: string,
+  swimlanes?: CanonicalSwimlanes,
 ): XerTableData[] {
   const values: { typeId: string; fk: string; row: Record<string, string> }[] = [];
   for (const activity of activities) {
@@ -556,6 +561,28 @@ export function encodeLayoutFields(
     if (layout.lane !== null) {
       values.push({ typeId: isSummary ? '3' : '2', fk, row: { udf_number: String(layout.lane) } });
     }
+    // Membership is a task's alone, and a lane inside a swimlane needs the swimlane (the reader discards
+    // one without it).
+    if (!isSummary && layout.swimlane != null) {
+      values.push({ typeId: '4', fk, row: { udf_text: layout.swimlane } });
+      if (layout.swimlaneLane != null) {
+        values.push({ typeId: '5', fk, row: { udf_number: String(layout.swimlaneLane) } });
+      }
+    }
+  }
+  // The exact object `parseSwimlanesField` reads. Key order is fixed so the same plan writes the same bytes.
+  if (swimlanes !== undefined) {
+    values.push({
+      typeId: '6',
+      fk: projId,
+      row: {
+        udf_text: JSON.stringify({
+          source: swimlanes.source,
+          level: swimlanes.wbsLevel,
+          names: swimlanes.names,
+        }),
+      },
+    });
   }
   if (values.length === 0) return [];
   values.sort((a, b) =>
