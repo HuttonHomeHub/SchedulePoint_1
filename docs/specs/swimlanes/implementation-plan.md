@@ -958,6 +958,10 @@ swimlanesOffered)` drops it unless the host says the plan has swimlanes (the tab
 - **Development steps:**
   1. Write the encoder.
   2. Add a changeset.
+- **As built (2026-10-25):** `encodeLayoutFields` writes the three fields (definition ids 4 to 6) only for a
+  plan with swimlanes; `export-mapper.ts` applies the reader's name rules and reports once; `ExportService`
+  reads the active swimlanes and the `SWIMLANE`-basis lane rows. A WBS source writes the project field
+  alone, because the reader ignores hand-made names and lanes under it. See ADR-0156's writer amendment.
 
 ---
 

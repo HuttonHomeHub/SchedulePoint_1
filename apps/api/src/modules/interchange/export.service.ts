@@ -19,6 +19,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import { ResourceRepository } from '../resources/resource.repository';
+import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
+import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { INTERCHANGE_EXPORT } from './interchange-permissions';
 
@@ -79,6 +81,7 @@ export class ExportService {
     private readonly dependencies: DependencyRepository,
     private readonly resources: ResourceRepository,
     private readonly assignments: ResourceAssignmentRepository,
+    private readonly swimlanes: SwimlaneRepository,
     @InjectPinoLogger(ExportService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -163,11 +166,27 @@ export class ExportService {
    * parentage are read from the same activity rows for the same reason.
    */
   private async readGraph(organizationId: string, plan: Plan): Promise<ExportGraph> {
-    const [activityRows, dependencyRows, assignmentRows] = await Promise.all([
-      this.activities.findAllActiveByPlan(organizationId, plan.id),
-      this.dependencies.findAllActiveByPlan(organizationId, plan.id),
-      this.assignments.findManyActiveByPlan(organizationId, plan.id),
-    ]);
+    const [activityRows, dependencyRows, assignmentRows, swimlaneRows, laneRows] =
+      await Promise.all([
+        this.activities.findAllActiveByPlan(organizationId, plan.id),
+        this.dependencies.findAllActiveByPlan(organizationId, plan.id),
+        this.assignments.findManyActiveByPlan(organizationId, plan.id),
+        // The cap is the swimlanes module's own, so one page is the whole list (it is the default page).
+        this.swimlanes.findManyActiveByPlan({
+          organizationId,
+          planId: plan.id,
+          take: SWIMLANE_LIMIT,
+        }),
+        this.activities.findSwimlaneLanesForPlan(organizationId, plan.id),
+      ]);
+
+    // Membership as the member screen draws it: a swimlane that has been deleted is not one, so its
+    // members are in "No swimlane" (their kept id is only for a restore). The lane is the one stored
+    // against the SWIMLANE basis of the swimlane they are in - a row for another swimlane is stale.
+    const activeSwimlaneIds = new Set(swimlaneRows.map((s) => s.id));
+    const laneOf = new Map(
+      laneRows.map((l) => [`${l.activityId}|${l.swimlaneId ?? ''}`, l.laneIndex] as const),
+    );
 
     // Resolve only the resources this plan's assignments reference (batched, org-scoped).
     const resourceIds = [...new Set(assignmentRows.map((a) => a.resourceId))];
@@ -196,7 +215,11 @@ export class ExportService {
         name: plan.name,
         dataDate: formatCalendarDate(plan.plannedStart),
         defaultCalendarKey: calendarKeyOrNull(plan.calendarId),
+        // Where the plan's swimlanes come from; the pure mapper decides whether and how to write them.
+        swimlaneSource: plan.swimlaneSource,
+        swimlaneWbsLevel: plan.swimlaneWbsLevel,
       },
+      swimlanes: swimlaneRows.map((s) => ({ key: s.id, name: s.name })),
       calendars: calendarRows.map((c) => this.toExportCalendar(c)),
       activities: activityRows.map((a) => ({
         key: a.id,
@@ -227,6 +250,12 @@ export class ExportService {
         // The row the bar sits in. With `visualStart`, what a SchedulePoint XER carries back
         // (layout-interchange M3); every other format ignores it.
         laneIndex: a.laneIndex,
+        ...(a.swimlaneId !== null && activeSwimlaneIds.has(a.swimlaneId)
+          ? {
+              swimlaneKey: a.swimlaneId,
+              swimlaneLane: laneOf.get(`${a.id}|${a.swimlaneId}`) ?? null,
+            }
+          : {}),
       })),
       dependencies: dependencyRows.map((d: ExportEdge) => ({
         key: d.id,

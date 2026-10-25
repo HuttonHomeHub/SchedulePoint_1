@@ -151,3 +151,22 @@ cites this release's tag.
   swimlane's members on their own through the swimlane partition, keeping any lane the file carried.
   The report gains `mapped.swimlanes` and `mapped.swimlaneMembers` (absent when zero).
 - A file with none of these labels reads exactly as before: no key is added to its graph or report.
+
+### The writer (swimlanes M4-T5, 2026-10-25)
+
+The writer follows the reader by one release, as D9 requires; it cites the release carrying M4-T4
+(`api-vX.Y.Z` / `web-vX.Y.Z`, to be filled in when this merges). `encodeLayoutFields` takes the plan's
+swimlanes and writes the three fields with the next fixed definition ids (4, 5 and 6), so a plan without
+swimlanes writes the bytes it always did.
+
+- **When:** the plan's source is not `NONE`, or it holds a hand-made swimlane (a `NONE` plan keeps them).
+- **Project field:** `{"source":…,"level":…,"names":[…]}` in display order, an empty swimlane included.
+- **Per task:** the swimlane name and the lane stored against that swimlane's `SWIMLANE` basis, the lane
+  absent when there is none. A summary is never a member. Membership in a deleted swimlane is written as none.
+- **Under a WBS source** only the project field is written, with no names. The reader ignores hand-made
+  names and lanes under a WBS source and would count each as a `repair`, so writing them would make a
+  SchedulePoint file report repairs on its own round trip. The WBS in the file is the membership; the lanes
+  under a WBS source are not carried and are packed again on import.
+- **Never refused:** the export mapper applies the reader's own `isSwimlaneName` and `foldSwimlaneName`, so
+  a name the reader would refuse, or repeat ignoring case, is left out with its members and counted in one
+  `drop` finding.

@@ -960,8 +960,17 @@ discarded and counted in a `repair` finding; the import proceeds. An unknown `re
 user-defined fields on the same `v1` rule: `SchedulePoint layout v1: swimlane` (a task's swimlane name),
 `SchedulePoint layout v1: swimlane lane` (its lane inside that swimlane) and, on the project,
 `SchedulePoint layout v1: swimlanes` (a JSON object naming the source, the WBS level and the swimlane
-names in order). The **reader ships one release before the writer**, so until the writer's release only a
-hand-edited file carries them. Under `restoreLayout=RESTORE` the import creates the swimlanes by name in
+names in order). The **reader shipped one release before the writer** (the release carrying M4-T4:
+`api-vX.Y.Z` / `web-vX.Y.Z`, to be filled in), and an XER export now writes them - **only for a plan that
+has swimlanes** (a source other than `NONE`, or any hand-made swimlane), so a swimlane-free plan's file is
+byte-identical to what it was. A hand-made plan writes the project field with the names in display order
+(an empty swimlane included), and each member's swimlane name and its lane inside that swimlane (absent
+when it has none). A member of a swimlane that has since been deleted is written as in none. A plan whose
+swimlanes come from the WBS writes the project field alone (`source` `WBS`, the `level`, no names): the
+WBS the file already carries puts each activity in its swimlane, and the reader ignores hand-made names
+under a WBS source. A name the reader would refuse is left out and counted in one `drop` finding; the
+export report names the rest as one `approximation`, and an MSPDI export reports the swimlanes as one
+`drop`. Under `restoreLayout=RESTORE` the import creates the swimlanes by name in
 file order, sets the plan's `swimlaneSource` and `swimlaneWbsLevel`, assigns each activity, and packs the
 members inside each swimlane (a lane the file carried is kept). Names are held to the same shape as
 `POST …/swimlanes` (1 to 80 characters, trimmed, no control character), are unique ignoring case (a later

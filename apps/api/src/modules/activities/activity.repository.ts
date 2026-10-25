@@ -170,6 +170,28 @@ export class ActivityRepository {
   }
 
   /**
+   * The in-swimlane lanes stored against a hand-made swimlane (basis `SWIMLANE`) for the plan's active
+   * activities, for the XER writer (swimlanes M4-T5). One query; the other bases (a WBS group, "No
+   * swimlane") are not written - the reader ignores them. A lane row has no `deleted_at` of its own: it
+   * lives exactly as long as its activity, so the activity's state is what is stated.
+   */
+  findSwimlaneLanesForPlan(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ activityId: string; swimlaneId: string | null; laneIndex: number }[]> {
+    return db.activitySwimlaneLane.findMany({
+      where: {
+        organizationId,
+        basis: 'SWIMLANE',
+        activity: this.active({ organizationId, planId }),
+      },
+      select: { activityId: true, swimlaneId: true, laneIndex: true },
+      orderBy: [{ activityId: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
    * Optimistic-locked update: only touches the active row if its version still
    * matches. Returns the row as written — `null` means a version conflict or the row
    * is gone, which the service maps to 409. The row comes back from the update itself

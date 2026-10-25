@@ -465,10 +465,10 @@ export function emitXerFromCanonical(model: CanonicalModel): XerEmitResult {
   if (taskRsrcRows.length > 0) {
     tables.push({ name: 'TASKRSRC', fields: [...TASKRSRC_FIELDS], rows: taskRsrcRows });
   }
-  // SchedulePoint's own layout, as two P6 user-defined fields (layout-interchange, spec §4.4). Last,
+  // SchedulePoint's own layout, as P6 user-defined fields (layout-interchange, spec §4.4). Last,
   // after every table whose rows the values point at, and written by the one module that names the
   // fields — this emitter never spells a label.
-  tables.push(...encodeLayoutFields(model.activities, projId));
+  tables.push(...encodeLayoutFields(model.activities, projId, model.swimlanes));
 
   return { tables, findings };
 }

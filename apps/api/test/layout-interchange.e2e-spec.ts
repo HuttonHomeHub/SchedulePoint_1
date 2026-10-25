@@ -17,6 +17,7 @@ import { SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { swimlanesPlan, swimlanesWbsPlan } from '../../seed-cli/src/capabilities/swimlanes.js';
 import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-power-plant.js';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -199,13 +200,17 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   let editedCorrupt: string;
   let editedNew: string;
   let exportedHasLayout: boolean;
+  let exportedHasSwimlaneField: boolean;
   let editedText: string;
-  // M4-T4 — files carrying swimlane fields, built by injecting them (no release writes them yet).
+  // M4-T4 — files carrying swimlane fields, built by injecting them (the writer's own is M4-T5 below).
   let swimlaned: SwimlaneSide;
   let swimlanedDry: Report;
   let swimlanedIgnored: SwimlaneSide;
   let swimlanedClipped: SwimlaneSide;
   let swimlanedPlan: SwimlanePlan;
+  // M4-T5 — a plan with swimlanes, exported by the writer and imported into a second project.
+  let writerManual: { original: SwimlaneSide; back: SwimlaneSide; text: string };
+  let writerWbs: { original: SwimlaneSide; back: SwimlaneSide; text: string };
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -327,6 +332,7 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     ({ side: conflictedSide, report: conflicted } = await commitInto('Conflicted', conflictedFile));
 
     exportedHasLayout = /^%T\tUDFVALUE$/m.test(bytes.toString('utf8'));
+    exportedHasSwimlaneField = bytes.toString('utf8').includes('layout v1: swimlane');
     ({ side: stripped } = await commitInto(
       'Stripped',
       Buffer.from(stripLayoutTables(bytes.toString('utf8')), 'utf8'),
@@ -378,6 +384,42 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
         .attach('file', swimlaneFile, 'netpoint-power-plant.xer')
         .expect(200)
     ).body.data as Report;
+
+    // --- M4-T5: the writer. Seeded plans with swimlanes, exported by the real route and imported back.
+    const swimlaneStateOf = async (planId: string): Promise<SwimlaneSide> => {
+      const lanes = await client.getPage<SwimlaneRow>(
+        `/api/v1/organizations/${orgSlug}/plans/${planId}/swimlanes?limit=100`,
+      );
+      const plan = await client.get<{ swimlaneSource: string }>(
+        `/api/v1/organizations/${orgSlug}/plans/${planId}`,
+      );
+      return {
+        side: await read(planId),
+        report: { mapped: {}, approximations: [], repairs: [], drops: [] },
+        swimlanes: lanes.rows,
+        source: plan.swimlaneSource,
+      };
+    };
+    const writerRoundTrip = async (
+      spec: Parameters<typeof seedPlan>[2],
+      name: string,
+    ): Promise<{ original: SwimlaneSide; back: SwimlaneSide; text: string }> => {
+      const seededPlan = await seedPlan(client, { orgSlug, projectId: await project(name) }, spec);
+      expect(seededPlan.planId, JSON.stringify(seededPlan.findings)).not.toBeNull();
+      const file = (
+        await agent
+          .get(`/api/v1/organizations/${orgSlug}/plans/${seededPlan.planId}/interchange/export/xer`)
+          .responseType('blob')
+          .expect(200)
+      ).body as Buffer;
+      return {
+        original: await swimlaneStateOf(seededPlan.planId!),
+        back: await swimlaneCommit(`${name} imported`, file),
+        text: file.toString('utf8'),
+      };
+    };
+    writerManual = await writerRoundTrip(swimlanesPlan(), 'Writer by hand');
+    writerWbs = await writerRoundTrip(swimlanesWbsPlan(), 'Writer by WBS');
 
     // A fresh project: the source plan's own project already holds its name, which the dry-run
     // refuses before any report (#541).
@@ -665,6 +707,59 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       expect(swimlanedClipped.report.repairs.map((f) => f.detail)).toContain(
         '1 swimlane name(s) past the limit of 100 were not imported',
       );
+    });
+  });
+
+  describe('the XER writer keeps swimlanes through a round trip (M4-T5)', () => {
+    const nameOf = (side: SwimlaneSide, id: string | null): string | null =>
+      side.swimlanes.find((l) => l.id === id)?.name ?? null;
+    const memberships = (side: SwimlaneSide): Record<string, string | null> =>
+      Object.fromEntries(
+        [...side.side.rows.values()]
+          .filter((r) => r.type !== 'WBS_SUMMARY')
+          .map((r) => [r.code, nameOf(side, r.swimlaneId)]),
+      );
+    const laneOf = (side: SwimlaneSide, code: string): number | null => {
+      const row = side.side.rows.get(code);
+      return (
+        row?.swimlaneLanes.find((l) => l.basis === 'SWIMLANE' && l.swimlaneId === row.swimlaneId)
+          ?.laneIndex ?? null
+      );
+    };
+
+    it('by hand: the names in order, each activity in its swimlane, and its lane', () => {
+      const { original, back } = writerManual;
+      expect(original.swimlanes.map((l) => l.name)).toHaveLength(3);
+      expect(back.swimlanes.map((l) => l.name)).toEqual(original.swimlanes.map((l) => l.name));
+      expect(back.source).toBe('MANUAL');
+      expect(memberships(back)).toEqual(memberships(original));
+      expect(Object.values(memberships(original)).filter((n) => n !== null)).toHaveLength(6);
+      for (const code of Object.keys(memberships(original))) {
+        expect(laneOf(back, code), code).toBe(laneOf(original, code));
+      }
+    });
+
+    it('by hand: the import reports nothing it had to repair about swimlanes', () => {
+      expect(writerManual.back.report.mapped).toMatchObject({ swimlanes: 3, swimlaneMembers: 6 });
+      expect(writerManual.back.report.repairs.filter((f) => f.detail.includes('swimlane'))).toEqual(
+        [],
+      );
+    });
+
+    it('by WBS: the source and level come back, with no hand-made swimlane made for it', () => {
+      const { original, back, text } = writerWbs;
+      expect(original.source).toBe('WBS');
+      expect(back.source).toBe('WBS');
+      expect(back.swimlanes).toEqual([]);
+      expect(text).toContain('SchedulePoint layout v1: swimlanes');
+      expect(text).not.toContain('SchedulePoint layout v1: swimlane\t');
+      expect([...back.side.rows.keys()].sort()).toEqual([...original.side.rows.keys()].sort());
+      expect(back.report.repairs.filter((f) => f.detail.includes('swimlane'))).toEqual([]);
+    });
+
+    it('a plan without swimlanes writes no swimlane field', () => {
+      expect(exportedHasLayout).toBe(true);
+      expect(exportedHasSwimlaneField).toBe(false);
     });
   });
 
