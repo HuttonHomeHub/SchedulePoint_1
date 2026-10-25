@@ -74,7 +74,8 @@ async function findBar(page: Page, name: string): Promise<{ x: number; y: number
   };
   let last = await activeText();
   for (let y = region.y + 12; y < region.y + region.height - 4; y += 9) {
-    for (const dx of [14, 36, 64, 100, 150]) {
+    // Well in from the left: the bar's end zones (8 px, `EDGE_HANDLE_PX`) start a resize, not a move.
+    for (const dx of [40, 60, 90, 130, 180]) {
       await page.mouse.click(left + dx, y);
       const now = await activeText();
       if (now !== last && now.startsWith(name)) return { x: left + dx, y };
