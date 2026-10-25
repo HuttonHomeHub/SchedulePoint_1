@@ -41,7 +41,7 @@ const ACTIVITIES = [
   }),
 ];
 
-const IDENTITY = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors');
+const IDENTITY = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors' && c.key !== 'swimlane');
 
 /** The identity header widths, in column order. */
 const headerWidths = (): number[] =>

@@ -295,3 +295,17 @@ describe('inside the View ▾ popover of a real toolbar', () => {
     expect(code).toHaveFocus();
   });
 });
+
+describe('the Swimlane column in the chooser (swimlanes M4-T2)', () => {
+  it('is not listed when the plan has no swimlanes to show', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    expect(screen.queryByRole('checkbox', { name: 'Swimlane' })).toBeNull();
+    expect(screen.queryByRole('spinbutton', { name: 'Swimlane width' })).toBeNull();
+  });
+
+  it('is listed, shown and sized when the plan has swimlanes', () => {
+    render(<GanttColumnsGroup columns={bundle({ swimlanesOffered: true })} />);
+    expect(screen.getByRole('checkbox', { name: 'Swimlane' })).toBeChecked();
+    expect(field('Swimlane width')).toHaveValue(110);
+  });
+});

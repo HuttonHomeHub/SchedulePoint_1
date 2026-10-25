@@ -6,7 +6,7 @@ import { GANTT_COLUMNS } from '../layout/grid-columns';
 
 import { useGanttGridPrefs } from './use-gantt-grid-prefs';
 
-const COLUMNS = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors');
+const COLUMNS = GANTT_COLUMNS.filter((c) => c.key !== 'predecessors' && c.key !== 'swimlane');
 const WIDENED: ColumnWidths = { code: 160 };
 
 describe('useGanttGridPrefs — Reset widths restores the divider', () => {

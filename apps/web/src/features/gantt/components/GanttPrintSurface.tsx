@@ -9,7 +9,8 @@ import './GanttPrintSurface.css';
 
 import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import { barGeometry, baselineGeometry, chartAnchor, fitPxPerDay } from '../layout/bar-geometry';
-import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import { shownColumns } from '../layout/column-widths';
+import { varianceText, type GanttColumn } from '../layout/grid-columns';
 import { predecessorNamesBySuccessor } from '../layout/link-paths';
 import {
   buildRows,
@@ -58,7 +59,7 @@ const PRINT_ROW_HEIGHT = 20;
 /** Height of the ruler band inside the repeating table header. */
 const PRINT_RULER_HEIGHT = 26;
 
-/** Print column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
+/** Print column widths, keyed to the shared `GANTT_COLUMNS` semantics. */
 const PRINT_COLUMN_WIDTHS: Record<string, number> = {
   code: 60,
   name: 180,
@@ -456,7 +457,7 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       title={input.title}
       subtitle={input.subtitle}
       activities={input.activities}
-      columns={GANTT_COLUMNS.filter((column) => !input.hiddenColumns.has(column.key))}
+      columns={shownColumns(input.hiddenColumns)}
       dependencies={input.dependencies}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
       {...(input.varianceBasis !== undefined ? { varianceBasis: input.varianceBasis } : {})}

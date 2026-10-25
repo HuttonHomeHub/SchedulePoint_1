@@ -45,7 +45,7 @@ import { searchString } from '@/lib/router/search-string';
  */
 
 /** Columns the chooser may hide. `name` is deliberately absent — see {@link HIDEABLE_COLUMNS}. */
-export type GanttColumnKey = GanttSortKey | 'predecessors';
+export type GanttColumnKey = GanttSortKey | 'predecessors' | 'swimlane';
 
 /**
  * The columns a planner may switch off.
@@ -62,6 +62,7 @@ export const HIDEABLE_COLUMNS: readonly GanttColumnKey[] = [
   'earlyFinish',
   'totalFloat',
   'predecessors',
+  'swimlane',
 ];
 
 /**

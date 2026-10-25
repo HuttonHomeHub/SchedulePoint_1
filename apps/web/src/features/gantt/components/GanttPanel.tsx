@@ -72,6 +72,11 @@ import {
   type GanttColumnKey,
 } from '../model/gantt-view-state';
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
+import {
+  SWIMLANE_CELL_WBS_REASON,
+  swimlaneCellLabel,
+  type GanttSwimlanes,
+} from '../model/swimlane-cell';
 import { TOUCH_ARM_HINT, takeTouchHint, touchSelectionNote } from '../model/touch-note';
 import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
@@ -84,6 +89,7 @@ import { GanttLinkOverlay } from './GanttLinkOverlay';
 import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
+import { GanttSwimlaneCell } from './GanttSwimlaneCell';
 
 import {
   FORCED_ARMED_OUTLINE,
@@ -263,6 +269,12 @@ export interface GanttPanelProps {
    */
   editing?: GanttGridEditing | undefined;
   /**
+   * The plan's swimlanes, for the Swimlane column (swimlanes M4-T2). **Absent ⇒ the column is not
+   * offered** and the grid is exactly what it was; present, the column shows each activity's swimlane
+   * and, with `editing`, lets a planner move one (hand-made) or reads the WBS rule (shut with its reason).
+   */
+  swimlanes?: GanttSwimlanes | null | undefined;
+  /**
    * Bar movement (M3). Absent ⇒ no gesture and no keyboard binding, which is the read-only chart
    * exactly as it was — the same parity contract `editing` carries.
    */
@@ -402,7 +414,10 @@ const NO_WIDTHS: ColumnWidths = {};
 function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
   const { viewState, columnWidths, varianceByActivityId } = props;
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const columns = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const columns = useMemo(
+    () => shownColumns(hiddenColumns, props.swimlanes != null),
+    [hiddenColumns, props.swimlanes],
+  );
   const gridPrefs = useGanttGridPrefs({
     columns,
     widths: columnWidths?.widths ?? NO_WIDTHS,
@@ -421,6 +436,7 @@ function GanttPanelBody({
   barDateSource,
   hoursPerDayFor,
   editing,
+  swimlanes,
   drag,
   dependencies,
   rowMenuContextFor,
@@ -469,7 +485,10 @@ function GanttPanelBody({
    * it is a derivation rather than a branch: there is no "columns feature off" path to keep in step.
    */
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
-  const COLUMNS = useMemo(() => shownColumns(hiddenColumns), [hiddenColumns]);
+  const COLUMNS = useMemo(
+    () => shownColumns(hiddenColumns, swimlanes != null),
+    [hiddenColumns, swimlanes],
+  );
   const widths = columnWidths?.widths ?? NO_WIDTHS;
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
@@ -1386,6 +1405,7 @@ function GanttPanelBody({
                 barDateSource,
                 hoursPerDayFor,
                 editing,
+                swimlanes,
                 drag,
                 dependencies,
                 predecessorsById,
@@ -1668,6 +1688,7 @@ interface GanttRowViewProps {
   barDateSource: BarDateSource | undefined;
   hoursPerDayFor: ((activity: ActivitySummary) => number | undefined) | undefined;
   editing: GanttGridEditing | undefined;
+  swimlanes: GanttSwimlanes | null | undefined;
   drag: GanttBarDrag | undefined;
   dependencies: readonly DependencySummary[] | undefined;
   predecessorsById: ReadonlyMap<string, readonly string[]>;
@@ -1738,6 +1759,7 @@ function GanttRowView({
   barDateSource,
   hoursPerDayFor,
   editing,
+  swimlanes,
   drag,
   dependencies,
   predecessorsById,
@@ -2098,6 +2120,7 @@ function GanttRowView({
             barDateSource,
             hoursPerDayFor?.(activity),
             predecessorNames,
+            swimlanes ? swimlaneCellLabel(swimlanes, activity.id) : null,
           );
           const cellKey = GANTT_EDITABLE_COLUMNS[column.key];
           // Keyed on the column, not on `i === 1`: the Code column is hideable, and the indent and
@@ -2146,6 +2169,34 @@ function GanttRowView({
               />
             )
           ) : null;
+          // The Swimlane cell picks rather than types, so it is not in the editable map above. Under the
+          // WBS source it is shut with the rule's own sentence; otherwise the pen's and role's verdict is
+          // the one every definition cell reads (ADR-0095's per-cell write scope).
+          if (column.key === 'swimlane' && editing !== undefined && swimlanes) {
+            return (
+              <GanttSwimlaneCell
+                key={column.key}
+                activityId={activity.id}
+                activityName={activity.name}
+                text={text}
+                colIndex={i + 1}
+                width={resolveColumnWidth(column)}
+                gate={
+                  swimlanes.source === 'WBS'
+                    ? {
+                        writable: false,
+                        readable: true,
+                        readOnly: true,
+                        reason: SWIMLANE_CELL_WBS_REASON,
+                      }
+                    : editing.gateFor('swimlane', activity.id)
+                }
+                assignment={swimlanes.source === 'MANUAL' ? swimlanes.assignment : null}
+                registerShow={(show) => registerCellShow?.(`${activity.id}:swimlane`, show)}
+                onClosed={editing.onCellClosed}
+              />
+            );
+          }
           // An editable cell only where BOTH are true: the host supplied an editing bundle, and this
           // column maps to one. Neither implies the other — the print surface has no bundle, and
           // `code`/`totalFloat` are engine output nobody types.

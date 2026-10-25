@@ -692,8 +692,8 @@ export function ToolbarPlanWorkspace({
   // out with, from the visible columns and whether a baseline column is showing.
   const ganttColumnWidths = useGanttColumnWidths();
   const ganttVisibleColumns = useMemo(
-    () => shownColumns(ganttViewState.hiddenColumns),
-    [ganttViewState.hiddenColumns],
+    () => shownColumns(ganttViewState.hiddenColumns, tableSwimlanes !== null),
+    [ganttViewState.hiddenColumns, tableSwimlanes],
   );
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
@@ -949,6 +949,7 @@ export function ToolbarPlanWorkspace({
       planView === 'gantt'
         ? {
             hidden: ganttViewState.hiddenColumns,
+            swimlanesOffered: tableSwimlanes !== null,
             setHidden: ganttViewState.onHiddenColumnsChange,
             widths: resolveColumnWidths(ganttColumnWidths.widths),
             setWidth: ganttColumnWidths.setWidth,
@@ -1807,6 +1808,9 @@ export function ToolbarPlanWorkspace({
           // In-grid editing (M2). Its absence is the read-only grid byte-for-byte, so this prop is
           // the entry point the milestone claims (ADR-0081).
           editing={ganttEditing}
+          // The Swimlane column (swimlanes M4-T2): the SAME composition the Activities table gets, so the
+          // two cannot disagree about whether the plan has swimlanes or how a move is written.
+          swimlanes={tableSwimlanes}
           // Bar movement (M3). `canEdit` is the SHARED binding the canvas receives — the same one,
           // not a second expression of it (`host-parity.structural.test.ts`).
           drag={ganttDrag}

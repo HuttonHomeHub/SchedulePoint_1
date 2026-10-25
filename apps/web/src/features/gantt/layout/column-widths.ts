@@ -43,6 +43,7 @@ export const DEFAULT_COLUMN_WIDTHS: Readonly<Record<ResizableColumnKey, number>>
   earlyFinish: 90,
   totalFloat: 60,
   predecessors: 90,
+  swimlane: 110,
 };
 
 /** The Activity column's width when the pane is first seeded; it is elastic afterwards. */
@@ -78,9 +79,18 @@ export {
   VARIANCE_COLUMN_WIDTH,
 } from './pinned-geometry';
 
-/** The columns a planner has not hidden, in declaration order. */
-export function shownColumns(hidden: ReadonlySet<GanttColumnKey>): readonly GanttColumn[] {
-  return GANTT_COLUMNS.filter((c) => !hidden.has(c.key));
+/**
+ * The columns a planner has not hidden, in declaration order — minus the swimlane column unless the
+ * plan has swimlanes to show (`swimlanesOffered`, swimlanes M4-T2), which defaults to not so that a
+ * caller that never heard of swimlanes (the printed programme) gets the standard columns.
+ */
+export function shownColumns(
+  hidden: ReadonlySet<GanttColumnKey>,
+  swimlanesOffered = false,
+): readonly GanttColumn[] {
+  return GANTT_COLUMNS.filter(
+    (c) => !hidden.has(c.key) && (swimlanesOffered || c.swimlanesOnly !== true),
+  );
 }
 
 export const COLUMN_WIDTHS_STORAGE_KEY = 'schedulepoint:gantt-column-widths';

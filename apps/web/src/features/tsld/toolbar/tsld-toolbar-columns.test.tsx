@@ -32,6 +32,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     planView: 'gantt',
     ganttColumns: {
       hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      // The chooser lists the Swimlane column only for a plan that has swimlanes (swimlanes M4-T2).
+      swimlanesOffered: true,
       setHidden,
       widths: resolveColumnWidths({}),
       setWidth: vi.fn((_key: string, width: number) => width),
@@ -80,6 +82,14 @@ describe('in the Gantt', () => {
     // `Activity` is not offered: it identifies the row and carries the editor and the de-emphasis
     // marker, so a grid that could hide it is not a shorter grid but a broken one.
     expect(screen.queryByRole('checkbox', { name: 'Activity' })).toBeNull();
+  });
+
+  it('omits the Swimlane column for a plan with no swimlanes', () => {
+    const base = ctx().ganttColumns!;
+    renderRows(ctx({ ganttColumns: { ...base, swimlanesOffered: false } }));
+    openView();
+    expect(screen.queryByRole('checkbox', { name: 'Swimlane' })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Float left' })).toBeInTheDocument();
   });
 
   it('shows a column as checked, and hidden as unchecked', () => {

@@ -48,7 +48,9 @@ export function GanttColumnsGroup({
 
   return (
     <div className="flex flex-col gap-2">
-      {HIDEABLE_COLUMNS.map((key) => {
+      {HIDEABLE_COLUMNS.filter(
+        (key) => key !== 'swimlane' || columns.swimlanesOffered === true,
+      ).map((key) => {
         const shown = !columns.hidden.has(key);
         return (
           <div key={key} className="flex flex-col">
