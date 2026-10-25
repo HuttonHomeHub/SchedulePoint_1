@@ -231,20 +231,22 @@ test.describe('swimlanes from the WBS', () => {
 
       let dialog = await openManageFromView(page);
       await dialog.getByRole('radio', { name: /By hand/ }).click();
-      await dialog.getByRole('button', { name: 'Switch', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Make by hand', exact: true }).click();
       await expect(page.getByTestId('announcer')).toContainText('Swimlanes are now made by hand.');
       await dialog.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(dialog).toBeHidden();
       // The summaries are no longer swimlanes.
       await expect(list.getByRole('group', { name: 'Groundworks', exact: true })).toHaveCount(0);
 
-      dialog = await openManageFromView(page);
+      // By hand with no swimlane of its own, the plan reads as not set up: the way back is the set-up
+      // dialog's second option, which writes only the plan's source and level.
+      const panel = await openStructure(page);
+      await manageButton(panel).click();
+      dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+      await expect(dialog).toBeVisible();
       await dialog.getByRole('radio', { name: /One per WBS group/ }).click();
-      await dialog.getByRole('button', { name: 'Switch', exact: true }).click();
-      await expect(page.getByTestId('announcer')).toContainText(
-        'Swimlanes now follow the WBS at level 1.',
-      );
-      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(dialog.getByLabel('WBS level')).toHaveValue('1');
+      await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
       await expect(dialog).toBeHidden();
 
       await expect(list.getByRole('group', { name: 'Groundworks', exact: true })).toBeVisible();
