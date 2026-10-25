@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.15.0
+
+### Minor Changes
+
+- [#1147](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1147) [`d39706a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d39706a659485e92abd30b2c238d8b7e8b8dbb95) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An XER export now writes a plan's swimlanes in SchedulePoint's own fields: the source, the WBS level and the swimlane names in order (an empty swimlane included), and for a hand-made plan each activity's swimlane and its lane inside it. A SchedulePoint file round trip keeps them. A plan without swimlanes exports exactly the file it did before, and an MSPDI export reports the swimlanes as not written.
+
 ## 0.14.0
 
 ### Minor Changes
