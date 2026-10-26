@@ -48,8 +48,8 @@ export interface PendingProgressedVisualPlan {
  * walk is topological the rule propagates down a chain, and it converges: the second boot finds nothing
  * pending, so it recalculates nothing.
  *
- * **Three boot services can recalculate one plan.** This service, `FinishMilestoneRederiveService` and
- * `CrossPlanRederiveService` all start at bootstrap, none is awaited, and every replica runs them, so a
+ * **Four boot services can recalculate one plan.** This service, `FinishMilestoneRederiveService`,
+ * `CrossPlanRederiveService` and `MilestoneRederiveService` all start at bootstrap, none is awaited, and every replica runs them, so a
  * plan pending for several may be recalculated more than once. That is harmless: recalculation is
  * idempotent and serialised by the plan advisory lock, each of whose transactions takes and releases its
  * own lock, so no service holds two and none can deadlock.

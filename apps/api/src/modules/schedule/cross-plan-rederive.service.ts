@@ -55,9 +55,10 @@ export interface PendingCrossPlanPlan {
  * not a silent wrong date. And backward bounds converge one pass behind, as they do in every programme
  * recalculation (ADR-0045 §4): an upstream recalculated first reads its downstream's previous late dates.
  *
- * **Two boot services can recalculate one plan.** This service and `FinishMilestoneRederiveService` both
- * start at bootstrap, neither is awaited, and both run on every replica, so a plan pending for both may be
- * recalculated twice. That is harmless: recalculation is idempotent and serialised by the plan advisory
+ * **Four boot services can recalculate one plan** (two when this was written: it and
+ * `FinishMilestoneRederiveService`; `ProgressedVisualRederiveService` and `MilestoneRederiveService` joined).
+ * All start at bootstrap, none is awaited, and every one runs on every replica, so a plan pending for
+ * several may be recalculated more than once. That is harmless: recalculation is idempotent and serialised by the plan advisory
  * lock. One consequence is recorded (spec D8): the finish-milestone service orders by plan id, so on a
  * host that jumps both releases at once it can recalculate a downstream plan AFTER this service has
  * recalculated its upstream, and that downstream then shows stale until a programme recalculation clears
