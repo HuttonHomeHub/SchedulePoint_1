@@ -259,6 +259,7 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
   describe('authorable exception windows (TECH_DEBT #80)', () => {
     const exceptionsOf = async (actor: Actor, calendarId: string) =>
       (await actor.agent.get(`${base}/${calendarId}`).expect(200)).body.data.exceptions as {
+        id: string;
         date: string;
         endDate: string;
         isWorking: boolean;
@@ -336,6 +337,32 @@ describe.skipIf(!hasDatabase)('Calendars API (e2e)', () => {
 
       const [exception] = await exceptionsOf(actor, id);
       expect(exception).toMatchObject({ isWorking: false, windows: [] });
+    });
+
+    it('bumps the calendar version on every content edit (the import’s FOR SHARE relies on it, ADR-0208)', async () => {
+      // A reusing import holds the calendar ROW `FOR SHARE`, which only an UPDATE of that row
+      // conflicts with. If a shift or exception edit stopped bumping `calendars.version`, the edit
+      // would no longer wait for the import and could change working time under a bound plan.
+      const { actor } = await adminWithOrg();
+      const id = await createCalendar(actor, 'Version bump');
+      const versionOf = async (): Promise<number> =>
+        (await prisma.calendar.findUniqueOrThrow({ where: { id } })).version;
+
+      const v1 = await versionOf();
+      await actor.agent.post(`${base}/${id}/exceptions`).send({ date: '2026-05-04' }).expect(201);
+      const v2 = await versionOf();
+      expect(v2).toBeGreaterThan(v1);
+
+      const [exception] = await exceptionsOf(actor, id);
+      await actor.agent.delete(`${base}/${id}/exceptions/${exception?.id}`).expect(204);
+      const v3 = await versionOf();
+      expect(v3).toBeGreaterThan(v2);
+
+      await actor.agent
+        .patch(`${base}/${id}`)
+        .send({ shifts: [{ weekday: 4, startMinute: 480, endMinute: 720 }], version: v3 })
+        .expect(200);
+      expect(await versionOf()).toBeGreaterThan(v3);
     });
 
     it('exposes `endDate` so the stored range is never silently dropped', async () => {

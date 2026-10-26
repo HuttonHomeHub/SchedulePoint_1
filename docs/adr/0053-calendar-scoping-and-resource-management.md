@@ -370,7 +370,14 @@ states the tier faithfully; the _receiving_ tenant decides whether a foreign fil
 **MSPDI has no equivalent** — `IsBaseCalendar`/`BaseCalendarUID` express calendar _inheritance_, not an
 org-vs-project tier — so MSPDI import is always PROJECT and MSPDI export reports the tier as a **drop**.
 
-**An import never REUSES a calendar.** A name the target tier already holds is created afresh under
+> **Amended 2026-10-26 by [ADR-0208](0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md):
+> an import now REUSES a calendar when a copy would differ only in its name** (identical hours per day,
+> shifts and exceptions, and the file's name or the importer's own `(imported …)` variant of it). A name
+> match alone still never reuses one, and everything below about a name that is held but not identical
+> still stands. The paragraph is kept as written because it is the reason reuse is conditioned on
+> identity.
+
+**An import never REUSES a calendar by name.** A name the target tier already holds is created afresh under
 `"<name> (imported YYYY-MM-DD)"` and reported as a `repair`. Matching by name would silently reschedule
 every imported activity onto a calendar with a different working week — the one change an import must
 never make quietly (resources are matched, but a resource carries no working time of its own to
@@ -381,7 +388,8 @@ That settles **CQ-4 (archived match) for calendars as _not applicable_**, rather
 second time: with no match path there is nothing to unarchive. An archived calendar still holds its
 name (§4 deliberately does not free it), so it is disambiguated around exactly like an active one.
 Should calendar reuse ever be introduced, the resource answer immediately below is the precedent to
-copy — and this paragraph is the seam to revisit.
+copy — and this paragraph is the seam to revisit. (Revisited by ADR-0208: reuse skips archived calendars,
+so the "not applicable" answer stands in this form.)
 
 **CQ-4 (archived match) landed with M4 for resources, and only for resources.** `InterchangeService`
 already resolves-or-creates the org resource library by `code` else `name`, and that match

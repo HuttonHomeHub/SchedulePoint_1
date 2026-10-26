@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 27 API modules
 > (`apps/api/src/modules/`), 38 Prisma models across 77 migrations, 1807 web
 > source files with 49 Playwright suites beside the base journey, and
-> 206 ADRs.
+> 207 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -609,6 +609,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117; amended for the Gantt cell, #538)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
 - **ADR-0205** _(Accepted; amends ADR-0051 §4)_ — A guest sees the swimlanes the diagram is drawn in → [`0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md`](docs/adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)
 - **ADR-0206** _(Accepted; amends ADR-0026, ADR-0031, ADR-0063, ADR-0090, ADR-0100, ADR-0152 and ADR-0153)_ — A swimlane is a projection of lanes: each basis keeps its own lane, the rule is in the scene and the name in the gutter → [`0206-a-swimlane-is-a-projection-of-lanes.md`](docs/adr/0206-a-swimlane-is-a-projection-of-lanes.md)
+- **ADR-0208** _(Proposed; amends ADR-0053 §5)_ — An import reuses a calendar it would have copied exactly → [`0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`](docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

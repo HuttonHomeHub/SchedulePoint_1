@@ -998,8 +998,9 @@ fails the commit with **422 `UNRESOLVED_RESOURCE_COLLISIONS`** (`details.collisi
 list) rather than being guessed: the resource library is org-global, and levelling, over-allocation and
 Earned Value all read from one pool — reusing the wrong row discards rates for a crew that may not be the
 same crew, and duplicating one splits its demand across two rows that each look half-loaded. Calendars take
-the **opposite** route on purpose (always created, suffixed, reported): a duplicated calendar is inert until
-something is scheduled on it, so there is nothing to ask about.
+a different route on purpose (ADR-0208): an import **reuses** an existing calendar only when a copy would
+differ in nothing but its name, and otherwise creates its own, suffixed and reported. Nothing is asked,
+because an identical calendar changes no date and a non-identical one is never bound.
 
 **Imported calendars land in the target project, not the shared library** (ADR-0053 §5). An import
 creates each calendar at **`PROJECT`** scope pinned to the target project — so a fresh import adds
@@ -1008,9 +1009,18 @@ exceptions, both **named in the report**: a calendar an imported **resource** ho
 **`ORG`** (a resource is organisation-global and can hold nothing else), and a source **global**
 calendar (P6 `clndr_type = CA_Base`) is created at `ORG` when the caller sends
 `globalCalendarScope=ORG` — otherwise it lands in the project with a "promote it if others need it"
-finding. A calendar name the target tier already holds is created afresh as
-`"<name> (imported YYYY-MM-DD)"` and reported as a repair — **never silently reused**, because two
-calendars sharing a name can have different working weeks. **Export** emits `clndr_type` from the
+finding. **Reuse (ADR-0208).** A source calendar is bound to an existing calendar, with no new
+row, when that calendar is active, **unarchived**, in the same tier (and in the target project for
+`PROJECT`), carries the file's name or the importer's own `"<name> (imported YYYY-MM-DD)"` variant of it,
+and is identical in hours per day, weekly shifts and active exceptions (dates, windows and labels). The
+exact name is preferred, then the oldest variant, and one existing calendar serves one calendar of the
+file. The report's `repairs` says `calendar “<source>” was matched to the existing calendar “<existing>”`
+in the dry-run and in the commit, and the `interchange.imported` audit row carries `calendarsReused`. A
+name the tier holds that is **not** identical (or is archived) is created afresh as
+`"<name> (imported YYYY-MM-DD)"` and reported as `was created as` — **never reused by name alone**,
+because two calendars sharing a name can have different working weeks. The commit decides again under its own locks, so it can differ from the dry-run when a calendar
+changed in between (the post-commit report says what was done). Revisions that reuse a calendar
+share it, so editing it changes all of their dates. **Export** emits `clndr_type` from the
 stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
 reports the tier as a drop.
 

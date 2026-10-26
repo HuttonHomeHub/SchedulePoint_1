@@ -8,6 +8,7 @@ import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
+  calendarXerFile,
   layoutXerFile,
   onboard,
   openNewProject,
@@ -409,4 +410,48 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
   expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
+});
+
+/**
+ * **A re-imported revision reuses its unchanged calendar** (ADR-0208, amending ADR-0053 §5;
+ * `docs/specs/import-calendar-tidy/`, M1).
+ *
+ * Two revisions of one programme are imported into one project. They differ in their plan name and
+ * nothing else, so the second one's calendar is the first one's. The review report's Repairs section
+ * says so BEFORE anything is committed, and after **Confirm import** the project's own calendar list
+ * still holds exactly one "Site 6-Day" and no `(imported …)` copy. Before ADR-0208 every re-import
+ * left another copy there.
+ */
+test('a re-imported revision reuses its unchanged calendar', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+  const projectUrl = page.url();
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const first = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await first.getByLabel('Schedule file (.xer or .xml)').setInputFiles(calendarXerFile('Rev A'));
+  await expect(first.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+  await first.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(calendarXerFile('Rev B'));
+
+  const repairs = dialog.getByRole('region', { name: /^Repairs/ });
+  await expect(repairs).toContainText('was matched to the existing calendar');
+  await expect(repairs).toContainText('Site 6-Day');
+  await expect(repairs).not.toContainText('was created as');
+
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  await page.goto(projectUrl);
+  const calendars = page.getByRole('table', { name: /^Calendars belonging to/ });
+  await expect(calendars.getByRole('button', { name: 'Edit Site 6-Day', exact: true })).toHaveCount(
+    1,
+  );
+  await expect(calendars.getByRole('button', { name: /\(imported/ })).toHaveCount(0);
 });
