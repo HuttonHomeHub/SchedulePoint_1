@@ -32,6 +32,15 @@
  * as is any row not reachable at all. A WBS summary or LOE row is derived from its children and
  * neighbours (ADR-0035 §21, §24), so it is explained when one of those is.
  *
+ * **What it cannot see (its limits, stated rather than implied).** It classifies by REACHABILITY, not by
+ * cause: a row downstream of a seed that moved a forward field is "explained" without the harness knowing
+ * that this seed moved it, so a defect in the rule that happens to move a reachable row passes. It reads
+ * the catalogue and the torture fixture, not a customer's plans, and the catalogue holds no other-calendar
+ * lag beside a zero-span activity and no finish milestone dated on a non-working day (the `lag-calendar`
+ * and `fm-date` classes census at 0), so those two classes are exercised only by the unit specs. It compares
+ * the engine with itself through the seed mapper (the ADR-0155 argument), so a mapper approximation cancels
+ * and is not tested. An edge's driving flag is compared and printed, but is not classified.
+ *
  * **The unexplained bucket is printed in full, never summarised, and must be empty.** A baseline also
  * prints a census (how many plans and rows each class seeds), so a run that exercises none of the
  * defect says so rather than reporting "nothing moved".
@@ -77,8 +86,13 @@ type Snapshot = Record<
 const CLASSES = ['zero-span', 'lag-calendar', 'fm-date'] as const;
 type MovementClass = (typeof CLASSES)[number];
 
-/** Fields only the backward pass (or the flags it feeds) writes; every other field is forward-pass. */
-const BACKWARD_FIELD = /late|float|critical|driv|path/i;
+/**
+ * Fields only the backward pass writes (late dates, float, and the criticality flags that are read off
+ * float); every other field is treated as forward-pass. The list is exact on purpose: a loose pattern
+ * (`driv`, `path`) once matched `externalDriven`, a forward flag, and excused it by an upstream cause.
+ */
+const BACKWARD_FIELD =
+  /^(lateStart|lateFinish|lateStartOffset|lateFinishOffset|totalFloat|freeFloat|remainingFloatMinutes|isCritical|isNearCritical)$/;
 /** In-memory instants a result carries for levelling; never persisted and never on a response. */
 const IN_MEMORY_INSTANT = /^(passOn(Start|Finish)Instant|leveledStartInstant)$/;
 

@@ -10,7 +10,11 @@ import {
   middle,
 } from './compute.cross-calendar.fixture';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
-import { allMinutesWorkCalendar, type WorkingTimeCalendar } from './working-time-calendar';
+import {
+  absMinutesToInstant,
+  allMinutesWorkCalendar,
+  type WorkingTimeCalendar,
+} from './working-time-calendar';
 
 /**
  * **A zero-span activity keeps the instant its logic gives it: what the rule does to everything that
@@ -329,4 +333,54 @@ describe('the milestone’s own calendar cannot change what its neighbours read 
       }
     },
   );
+});
+
+describe('converting a zero-duration task to a finish milestone keeps its POSITION on its own calendar (ADR-0162 D3)', () => {
+  // The re-expression moves each stored date one calendar day earlier when a task becomes a finish
+  // milestone. Since D2 the milestone's reading is midnight rather than the next working minute, so what
+  // is kept is the position on the milestone's own calendar, not the raw instant.
+  it('a weekday successor is unchanged; an every-minute successor sees the gap (8 hours) the roll used to hide', () => {
+    const successors: EngineActivity[] = [
+      { id: 'D', durationMinutes: 480, type: 'TASK' },
+      { id: 'E', durationMinutes: 60, type: 'TASK', calendar: allMinutesWorkCalendar },
+    ];
+    const edges = [link('A', 'Z'), link('Z', 'D'), link('Z', 'E')];
+    // A task pinned SNET Fri 06-25 (its opening, Fri 08:00) ...
+    const asTask = run(
+      [
+        A,
+        {
+          id: 'Z',
+          durationMinutes: 0,
+          type: 'TASK',
+          constraintType: 'SNET',
+          constraintDate: '2027-06-25',
+        },
+        ...successors,
+      ],
+      edges,
+    );
+    // ... and the same activity as a finish milestone with the date re-expressed to Thu 06-24 (Fri 00:00).
+    const asMilestone = run(
+      [
+        A,
+        {
+          id: 'Z',
+          durationMinutes: 0,
+          type: 'FINISH_MILESTONE',
+          constraintType: 'SNET',
+          constraintDate: '2027-06-24',
+        },
+        ...successors,
+      ],
+      edges,
+    );
+    // Position on its own calendar: the weekday successor and Z's own float and schedule are identical.
+    expect(asMilestone.get('D').earlyStart).toBe(asTask.get('D').earlyStart);
+    expect(asMilestone.get('D').earlyStart).toBe('2027-06-25');
+    expect(asMilestone.get('Z').totalFloat).toBe(asTask.get('Z').totalFloat);
+    // The raw instant is NOT kept: the every-minute successor starts at Fri 00:00 instead of Fri 08:00.
+    expect(absMinutesToInstant(asTask.get('E').passOnStartInstant)).toBe('2027-06-25T08:00');
+    expect(absMinutesToInstant(asMilestone.get('E').passOnStartInstant)).toBe('2027-06-25');
+  });
 });

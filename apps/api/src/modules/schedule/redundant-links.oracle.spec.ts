@@ -226,6 +226,31 @@ describe('every exclusion is necessary (M0-T3)', () => {
     expect(found.some((d) => d.field === 'earlyStart' || d.field === 'earlyFinish')).toBe(false);
   });
 
+  it('CE2 as it was drawn before #539 no longer diverges on the new engine (recorded: TECH_DEBT #558)', () => {
+    // The original plan: A on the plan calendar, C late on a Saturday on Monday-to-Friday's roll. Its
+    // divergence rested on the milestone rolling C's late finish back a weekend, which D1 removed. The
+    // exclusion this case justified (an intermediate left at its start across calendars) is therefore
+    // pinned by the replacement above and by nothing else; whether the exclusion is now over-conservative
+    // is #558. This case holds the observation so that a change to it is a reviewed one.
+    const p = plan(
+      [
+        task('A', 60),
+        task('B', 480, { calendar: 'OFFICE' }),
+        task('C', DAY, { calendar: 'MON_SAT' }),
+        task('E', 6 * DAY, { calendar: 'MON_SAT' }),
+        task('M', 0, { type: 'FINISH_MILESTONE' }),
+      ],
+      [
+        link('AB', 'A', 'B'),
+        link('BC', 'B', 'C', 'SS'),
+        link('AC', 'A', 'C'),
+        link('CM', 'C', 'M'),
+        link('EM', 'E', 'M'),
+      ],
+    );
+    expect(diverges(p, 'AC')).toEqual([]);
+  });
+
   it('CE3 C transparent: a started successor entered at its finish moves free float', () => {
     // C started before A could finish, and both the chain (SF) and the direct link (FF) bind its
     // finish. C's finish is frozen by its actuals, so D's gap is negative while the chain's first gap
