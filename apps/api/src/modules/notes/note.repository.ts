@@ -6,6 +6,9 @@ import type { ActivityNoteCount } from '@repo/types';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
+/** Rows per page of an export's note read; small enough that a page of 5,000-character notes is modest. */
+const EXPORT_READ_PAGE = 500;
+
 /** Fields a note edit may change (only the body; scope/parent are immutable). */
 export interface NotePatch {
   body: string;
@@ -34,6 +37,94 @@ export class NoteRepository {
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<Note> {
     return db.note.create({ data });
+  }
+
+  /**
+   * Insert a batch of brand-new notes inside the caller's transaction (the schedule-interchange commit,
+   * ADR-0050). Ids and `createdAt` are supplied so the caller can order the thread deterministically; all
+   * rows are new, so there is no optimistic-lock or audit ceremony beyond the create defaults. One
+   * `createMany` keeps the statement count independent of the number of notes — the import runs inside a
+   * single interactive transaction with a time budget.
+   */
+  async createManyForImport(
+    rows: readonly Prisma.NoteCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.note.createMany({ data: [...rows] });
+  }
+
+  /**
+   * The active notes an export can carry: a plan's ACTIVITY notes whose activity is itself live. A note on
+   * a soft-deleted activity is deleted with it, so it must neither take a slot under the cap nor be
+   * counted as left out.
+   */
+  private exportableActivityNotes(organizationId: string, planId: string): Prisma.NoteWhereInput {
+    return this.active({
+      organizationId,
+      planId,
+      entityType: 'ACTIVITY',
+      activity: { deletedAt: null },
+    });
+  }
+
+  /**
+   * A plan's exportable ACTIVITY notes, oldest first (schedule interchange). Only the columns the file
+   * needs are read, never the author, so nothing about who wrote a note can reach a file. Ordered by
+   * `created_at, id` — the plan's `(plan_id, created_at, id)` index — so the order a thread reads in is
+   * the order the file carries.
+   *
+   * **Bounded in rows and in bytes, and paged**, so a plan holding a great many large notes cannot make
+   * one export hold them all in memory: reading stops at `maxNotes` rows or once the summed body size
+   * would pass `maxBytes`, with `truncated` saying so. At most one page beyond the budget is ever held.
+   */
+  async findActiveActivityNotesForExport(
+    organizationId: string,
+    planId: string,
+    limits: { maxNotes: number; maxBytes: number },
+  ): Promise<{ notes: { activityId: string; body: string }[]; truncated: boolean }> {
+    const where = this.exportableActivityNotes(organizationId, planId);
+    const notes: { activityId: string; body: string }[] = [];
+    let bytes = 0;
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await this.prisma.note.findMany({
+        where,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: EXPORT_READ_PAGE,
+        ...(cursor === undefined ? {} : { cursor: { id: cursor }, skip: 1 }),
+        select: { id: true, activityId: true, body: true },
+      });
+      for (const row of page) {
+        if (row.activityId === null) continue;
+        const size = Buffer.byteLength(row.body, 'utf8');
+        if (notes.length >= limits.maxNotes || bytes + size > limits.maxBytes) {
+          return { notes, truncated: true };
+        }
+        notes.push({ activityId: row.activityId, body: row.body });
+        bytes += size;
+      }
+      const last = page[page.length - 1];
+      if (page.length < EXPORT_READ_PAGE || last === undefined) return { notes, truncated: false };
+      cursor = last.id;
+    }
+  }
+
+  /**
+   * How many notes of one kind a plan holds, for the export report's "not written" counts. ACTIVITY
+   * counts the same population the export read draws from, so the subtraction is like for like.
+   */
+  countActiveForPlan(
+    organizationId: string,
+    planId: string,
+    entityType: 'PLAN' | 'ACTIVITY',
+  ): Promise<number> {
+    return this.prisma.note.count({
+      where:
+        entityType === 'ACTIVITY'
+          ? this.exportableActivityNotes(organizationId, planId)
+          : this.active({ organizationId, planId, entityType }),
+    });
   }
 
   /** An active note scoped to its organisation (anti-IDOR). */

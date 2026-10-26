@@ -232,3 +232,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0206](0206-a-swimlane-is-a-projection-of-lanes.md)                                             | A swimlane is a projection of lanes                                                        | Accepted           |
 | [0207](0207-a-milestone-stays-where-its-logic-puts-it.md)                                       | A milestone stays where its logic puts it, across calendars                                | Accepted           |
 | [0208](0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)                        | An import reuses a calendar it would have copied exactly                                   | Accepted           |
+| [0209](0209-an-imported-note-is-the-importers.md)                                               | An imported note is the importer's                                                         | Accepted           |

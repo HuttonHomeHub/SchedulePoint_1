@@ -10,6 +10,25 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-26 — Notes through XER and MSPDI shipped, and what the build corrected in the spec
+
+**What was decided.** The approved spec was built as ADR-0209 with every default. Three spec claims were corrected by
+reading the code, and are recorded so the next reader does not re-derive them:
+
+- **The import transaction has 15 s, not 5 s.** `PrismaService` sets `TRANSACTION_TIMEOUT_MS` (`prisma.service.ts:25`,
+  `:58`); the first harness used a bare client and stopped M1 against the wrong limit. The real path measured p50 5.6 s
+  and at most 5.9 s with 20,000 notes, so one atomic transaction stood.
+- **20,000 notes of 1,000 characters cannot reach the API.** The upload is capped at 16 MiB
+  (`interchange.constants.ts:24`), which bounds one import's note text to about 14 MB.
+- **The XER parser loses blank lines inside a memo** (`xer-parser.ts:306`), which the spec had not recorded. Pinned by a
+  unit case, not changed.
+
+Review findings (bidirectional characters, a byte-bounded paged export read, notes of deleted activities, a throttle on
+the plan export route) were folded; the ledger and the red-first table are in the ADR.
+
+**Consequences.** Remarks now leave SchedulePoint in every export. The report states the count, and the ADR names the
+P6 assumptions (FC-7) that an owner-supplied file would settle.
+
 ## 2026-10-26 — #539 built: a milestone keeps its instant, and what building it found
 
 **What was decided.** The approved spec ([`docs/specs/milestone-cross-calendar/`](specs/milestone-cross-calendar/),

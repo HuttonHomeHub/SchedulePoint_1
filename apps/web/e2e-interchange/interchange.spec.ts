@@ -4,14 +4,17 @@ import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { drawnSpanDays } from '@repo/layout';
 
+import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   calendarXerFile,
   layoutXerFile,
+  notesXerFile,
   onboard,
   openNewProject,
+  showActivities,
   validMspdiFile,
   validXerFile,
   zeroDurationXerFile,
@@ -77,6 +80,58 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await confirmButton.click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
+
+/**
+ * **An imported remark arrives as a note** (notes-through-interchange M1, `docs/specs/interchange-notes/`).
+ *
+ * The file carries a P6 `TASKMEMO` on A1000 holding HTML with a `<script>` element. The dry-run report
+ * counts **Notes 1** and says formatting was removed, before anything is committed. After the commit the
+ * activity's Notes tab shows the remark as plain text, authored by the person who imported, and nothing
+ * in the thread is an element the memo supplied (FC-5). The thread is read through the row's actions
+ * menu, the route `e2e-notes` drives; the selection bar's Notes button opens the same tab.
+ */
+test('an imported P6 remark arrives as a plain-text activity note', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(notesXerFile());
+
+  const mappedCounts = dialog.locator('dl[aria-label="Mapped"]');
+  await expect(mappedCounts).toBeVisible();
+  await expect(
+    mappedCounts.getByText('Notes', { exact: true }).locator('xpath=following-sibling::*[1]'),
+  ).toHaveText('1');
+  const approximations = dialog.getByRole('region', { name: /^Approximations/ });
+  await expect(approximations).toContainText('formatting was removed from 1 note');
+
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+
+  await showActivities(page);
+  await page.getByRole('button', { name: 'Actions for Mobilise' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
+  const editor = activityEditor(page);
+  await expect(editor.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
+
+  // The remark is text: the markup is gone and the script's content was never kept.
+  const body = editor.getByText('Pour level 3', { exact: true });
+  await expect(body).toBeVisible();
+  await expect(editor.getByText('Interchange Tester', { exact: true })).toBeVisible();
+  // The note body is the app's own paragraph; the memo's `<p>`, `<b>` and `<script>` made nothing.
+  await expect(body.locator('*')).toHaveCount(0);
+  await expect(editor.locator('b, script')).toHaveCount(0);
+  await expect(editor.getByText('alert(1)')).toHaveCount(0);
+
+  const axe = await new AxeBuilder({ page })
+    .include('dialog[open]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
 });
 
 /**
@@ -357,6 +412,9 @@ test('a planner exports a plan to .xer from the canvas Export menu', async ({ pa
  * the downloaded bytes are imported into a second project through **Import from file…** — the two
  * entry points a planner uses, with nothing in between. The restored values are read back through
  * the API (the ADR-0070 rule), per activity code, because the two plans share no ids.
+ *
+ * It carries a **note** too (notes-through-interchange M2): one is written on A1000 through the
+ * Notes tab before the export, and after the re-import the second plan's A1000 holds the same text.
  */
 test('an exported .xer re-imports with its placed starts and lanes', async ({ page }) => {
   const stamp = Date.now();
@@ -372,6 +430,17 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   await seed.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
+  // A remark on A1000, written the way a planner writes one: the row's Notes tab, compose, post.
+  await showActivities(page);
+  await page.getByRole('button', { name: 'Actions for Mobilise' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
+  const editor = activityEditor(page);
+  await editor.getByLabel('Add a note').fill('Crane pad to be confirmed & signed off');
+  await editor.getByRole('button', { name: 'Add note' }).click();
+  await expect(editor.getByText('Crane pad to be confirmed & signed off')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+
   await page.getByRole('button', { name: /^(Share & export|Export)$/ }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -379,6 +448,7 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   ]);
   const bytes = readFileSync(await download.path());
   expect(bytes.toString('utf8')).toMatch(/^%T\tUDFVALUE$/m);
+  expect(bytes.toString('utf8')).toMatch(/^%T\tTASKMEMO$/m);
 
   // A second project, so the re-imported plan's name does not collide with the source's.
   await page.goto(projectUrl);
@@ -404,12 +474,21 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   expect(res.ok()).toBe(true);
   const rows = (
     (await res.json()) as {
-      data: { code: string; visualStart: string | null; laneIndex: number }[];
+      data: { id: string; code: string; visualStart: string | null; laneIndex: number }[];
     }
   ).data;
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
   expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
+
+  // The note came back on the same activity code, as text, from a different plan.
+  const copied = await page.request.get(
+    `/api/v1/organizations/${orgSlug}/activities/${(byCode['A1000'] as { id: string }).id}/notes`,
+  );
+  expect(copied.ok()).toBe(true);
+  expect(((await copied.json()) as { data: { body: string }[] }).data.map((n) => n.body)).toEqual([
+    'Crane pad to be confirmed & signed off',
+  ]);
 });
 
 /**

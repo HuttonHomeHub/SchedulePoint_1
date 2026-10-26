@@ -953,6 +953,12 @@ discriminators. Each becomes a spec/plan before build:
   calendar the project already holds when its working week, exceptions and hours per day are identical,
   and the report says so. The project's calendar section gains **Remove unused calendars…** to clear the
   copies that already exist, each restorable alone from Recently deleted.
+- **Activity notes travel through XER and MSPDI** — **shipped**
+  ([ADR-0209](adr/0209-an-imported-note-is-the-importers.md); spec and plan at
+  [`docs/specs/interchange-notes/`](specs/interchange-notes/), closing the carry half of `docs/TECH_DEBT.md` #543):
+  a P6 `TASKMEMO` and an MS Project task `<Notes>` import as plain-text notes authored by the importer, and every
+  export writes the plan's notes (one memo per activity under a SchedulePoint topic in an XER, one task note in an
+  MSPDI), text only. The report counts them and says what changed or was left out.
 - **A share link shows the plan's swimlanes** — **shipped** (with swimlanes M4)
   ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
   [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list

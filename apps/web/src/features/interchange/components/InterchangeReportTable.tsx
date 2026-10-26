@@ -24,6 +24,11 @@ export function InterchangeReportTable({
           { label: 'Activities', value: report.mapped.activities },
           { label: 'Relationships', value: report.mapped.relationships },
           { label: 'Calendars', value: report.mapped.calendars },
+          // Only a file that carried a readable remark has a count (ADR-0046): a 0 on every other
+          // import would describe a feature that file never used.
+          ...(report.mapped.notes === undefined
+            ? []
+            : [{ label: 'Notes', value: report.mapped.notes }]),
           // Only a SchedulePoint XER carries a layout (layout-interchange), so these four appear only
           // for one: a figure reading 0 on every foreign import would describe a feature that file
           // could never have used.

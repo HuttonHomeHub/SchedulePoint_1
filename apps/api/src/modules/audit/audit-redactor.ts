@@ -185,6 +185,7 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
     'calendarCount',
     'calendarsReused',
     'resourceCount',
+    'noteCount',
     'findingCount',
   ],
   // — Staff (ADR-0086). Deliberately EMPTY, and that is the decision rather than an omission.

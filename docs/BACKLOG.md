@@ -242,13 +242,6 @@ a product idea that has not yet earned a roadmap line:
   isolated (the import producer must **not** sit in its transaction, because phase 2 hard-deletes
   the plan on recalculation failure). Three `database-architect` tasks are mandatory at M1/M4/M5.
 
-- `M` **Carry activity notes through XER and MSPDI** (import and export). P6 keeps remarks in
-  `TASKMEMO`, MS Project in `<Notes>`; neither adapter reads them today, so a programme's remarks are
-  lost on import — the report now names them as one aggregate drop (closed `docs/TECH_DEBT.md` #543), but nothing
-  is carried. The target already exists:
-  activity notes (ADR-0046). Demand: on 2026-10-22 the owner's remarks for a programme
-  had to travel in a separate spreadsheet beside the XER.
-
 - `M` **Swimlanes from P6 activity codes.** Labelled swimlanes shipped on 2026-10-25 (ADR-0206,
   `docs/specs/swimlanes/`), made by hand or from the WBS. A P6 programme often groups work by an
   **activity code** (system, area, trade) rather than by its WBS, and an import cannot use that today:

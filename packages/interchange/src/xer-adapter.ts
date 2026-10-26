@@ -15,6 +15,8 @@ import type {
   CanonicalResource,
   CanonicalResourceKind,
 } from './canonical.js';
+import { NoteCollector } from './note-import.js';
+import { SCHEDULEPOINT_NOTES_TOPIC } from './note-text.js';
 import type { ReportFinding } from './report.js';
 import { fallbackWorkWeek, parseClndrData } from './xer-calendar.js';
 import { decodeLayoutFields } from './xer-layout-fields.js';
@@ -47,8 +49,9 @@ const TABLE = {
   projwbs: 'PROJWBS',
   rsrc: 'RSRC',
   taskRsrc: 'TASKRSRC',
-  // Read only to COUNT the notes the import cannot yet carry (ADR-0050: every source field is mapped or named).
+  // Activity notes (ADR-0046): one row per memo, optionally named by a `MEMOTYPE` notebook topic.
   taskMemo: 'TASKMEMO',
+  memoType: 'MEMOTYPE',
 } as const;
 
 /**
@@ -442,24 +445,6 @@ export function adaptXerToCanonical(
     });
   }
 
-  // Activity notes (P6 `TASKMEMO`) have no canonical field yet, so they would otherwise vanish with a
-  // clean report. One aggregate finding, not one per note (docs/TECH_DEBT.md #543).
-  const notedActivities = rowsOf(document, TABLE.taskMemo).filter((row) => {
-    const rowProject = field(row, 'proj_id');
-    return (
-      field(row, 'task_memo') !== undefined && (rowProject === undefined || rowProject === projId)
-    );
-  }).length;
-  if (notedActivities > 0) {
-    findings.push({
-      kind: 'drop',
-      entity: 'activity',
-      sourceRef: null,
-      detail: `${notedActivities} activity ${notedActivities === 1 ? 'note was' : 'notes were'} not imported`,
-      reason: 'the import does not carry activity notes yet (ADR-0046, docs/BACKLOG.md)',
-    });
-  }
-
   const projectClndrId = field(firstProject, 'clndr_id');
   const defaultCalendarId =
     projectClndrId !== undefined && knownCalendarIds.has(projectClndrId)
@@ -633,6 +618,39 @@ export function adaptXerToCanonical(
       progress: mapProgress(row, expectedFinishFromConstraint),
     });
   }
+
+  // --- Activity notes (TASKMEMO, optionally named by MEMOTYPE; ADR-0046) ----------------------------
+  // A topic is named only through a `memo_type` column on MEMOTYPE: that is the name this repository's own
+  // writer uses and the only one it has seen, so a file that spells it differently reads as no topic
+  // rather than as a guess. The exact SchedulePoint label means the memo is ours: split on the rule, no
+  // prefix. Memos for another project are ignored (the extra projects are already reported above).
+  const topicById = new Map<string, string>();
+  for (const row of rowsOf(document, TABLE.memoType)) {
+    const id = field(row, 'memo_type_id');
+    const topic = field(row, 'memo_type');
+    if (id !== undefined && topic !== undefined) topicById.set(id, topic);
+  }
+  const takenTaskIds = new Set(taskActivities.map((a) => a.id));
+  const collector = new NoteCollector();
+  for (const row of rowsOf(document, TABLE.taskMemo)) {
+    const rowProject = field(row, 'proj_id');
+    if (rowProject !== undefined && rowProject !== projId) continue;
+    const memo = row.get('task_memo');
+    if (memo === undefined || memo.trim() === '') continue;
+    const taskId = field(row, 'task_id');
+    if (taskId === undefined || !takenTaskIds.has(taskId)) {
+      collector.orphan();
+      continue;
+    }
+    const typeId = field(row, 'memo_type_id');
+    const topic = typeId === undefined ? undefined : topicById.get(typeId);
+    // The topic label is a convention, not proof the file is ours: anyone can write it. The only thing it
+    // changes is how the memo is cut (on `<hr>`, with no prefix), and every note still passes the same
+    // text step, so a forged label gains nothing a plain memo does not have.
+    if (topic === SCHEDULEPOINT_NOTES_TOPIC) collector.add(taskId, memo, 'XER_SCHEDULEPOINT');
+    else collector.add(taskId, memo, 'XER_FOREIGN', topic);
+  }
+  findings.push(...collector.findings());
 
   // WBS summaries precede real activities (their hierarchy is defined first); duplicate-code repair keeps
   // the earliest, so a code shared by a summary and an activity resolves deterministically.
@@ -810,6 +828,7 @@ export function adaptXerToCanonical(
     resources,
     assignments,
     ...(decoded.swimlanes === undefined ? {} : { swimlanes: decoded.swimlanes }),
+    ...(collector.notes.length === 0 ? {} : { notes: collector.notes }),
   };
 
   return { ok: true, model, findings };

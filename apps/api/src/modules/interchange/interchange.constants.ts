@@ -22,3 +22,11 @@ export const INTERCHANGE_FILE_FIELD = 'file';
  * than in env so the boundary cannot be misconfigured away.
  */
 export const INTERCHANGE_MAX_UPLOAD_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most note text one export reads, in UTF-8 bytes. Equal to the upload cap on purpose: a file this
+ * application writes should be one it would accept back, and 20,000 notes of 5,000 characters would
+ * otherwise be 100 MB held in memory for one request. Notes past it are counted in the report, not
+ * written.
+ */
+export const EXPORT_NOTES_MAX_BYTES = INTERCHANGE_MAX_UPLOAD_BYTES;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { importGraphSchema } from './import-graph.js';
 import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES, MAX_RESOURCES } from './import-xer.js';
+import { MAX_NOTES } from './note-text.js';
 import { interchangeReportStrictSchema, type ReportFinding } from './report.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
@@ -771,46 +772,218 @@ describe('importXer — M2 ceilings + hostile-key hardening (security fold)', ()
   });
 });
 
-describe('importXer — activity notes (TASKMEMO) are named in the report', () => {
+describe('importXer — activity notes (TASKMEMO) become notes', () => {
   const MEMO_FIELDS = ['memo_id', 'proj_id', 'task_id', 'memo_type_id', 'task_memo'];
-  const memoDrops = (xer: string) =>
-    importOk(xer).report.drops.filter((f: ReportFinding) => f.detail.includes('note'));
 
-  function withMemos(rows: string[][]): string {
+  function withTables(tables: XerTableSpec[]): string {
     const base = cleanXer();
-    return `${base.replace(/\n%E$/, '')}\n${[
-      '%T\tTASKMEMO',
-      `%F\t${MEMO_FIELDS.join('\t')}`,
-      ...rows.map((row) => `%R\t${row.join('\t')}`),
-      '%E',
-    ].join('\n')}`;
+    const extra = buildXer(tables).split('\n').slice(1, -1);
+    return `${base.replace(/\n%E$/, '')}\n${[...extra, '%E'].join('\n')}`;
   }
 
-  it('reports ONE aggregate drop counting the activities that carry a note', () => {
-    const drops = memoDrops(
-      withMemos([
-        ['M1', 'P1', 'T1', 'MT1', 'Check the crane pad'],
-        ['M2', 'P1', 'T2', 'MT1', 'Client to confirm'],
+  const memoTable = (rows: string[][], fields = MEMO_FIELDS): XerTableSpec => ({
+    name: 'TASKMEMO',
+    fields,
+    rows,
+  });
+  const memoTypes = (rows: string[][]): XerTableSpec => ({
+    name: 'MEMOTYPE',
+    fields: ['memo_type_id', 'memo_type'],
+    rows,
+  });
+  const noteFindings = (findings: ReportFinding[]) => findings.filter((f) => f.entity === 'note');
+
+  it('creates one note per memo, in source order, and counts them', () => {
+    const { graph, report } = importOk(
+      withTables([
+        memoTable([
+          ['M1', 'P1', 'T1', 'MT1', 'Check the crane pad'],
+          ['M2', 'P1', 'T2', 'MT1', 'Client to confirm'],
+          ['M3', 'P1', 'T1', 'MT1', 'Second remark on T1'],
+        ]),
       ]),
     );
-    expect(drops).toHaveLength(1);
-    expect(drops[0]).toMatchObject({ kind: 'drop', entity: 'activity', sourceRef: null });
-    expect(drops[0]?.detail).toBe('2 activity notes were not imported');
+    expect(graph.notes).toEqual([
+      { activityKey: 'T1', body: 'Check the crane pad' },
+      { activityKey: 'T2', body: 'Client to confirm' },
+      { activityKey: 'T1', body: 'Second remark on T1' },
+    ]);
+    expect(report.mapped.notes).toBe(3);
+    expect(noteFindings([...report.drops, ...report.approximations])).toEqual([]);
+    expect(importGraphSchema.safeParse(graph).success).toBe(true);
+    expect(interchangeReportStrictSchema.safeParse(report).success).toBe(true);
   });
 
-  it('says "note was" for exactly one, and ignores blank memos and other projects', () => {
-    const drops = memoDrops(
-      withMemos([
-        ['M1', 'P1', 'T1', 'MT1', 'Only one'],
-        ['M2', 'P1', 'T2', 'MT1', '   '],
-        ['M3', 'P9', 'T9', 'MT1', 'Someone else’s'],
+  it('ignores blank memos and memos of another project without a finding', () => {
+    const { graph, report } = importOk(
+      withTables([
+        memoTable([
+          ['M1', 'P1', 'T1', 'MT1', 'Only one'],
+          ['M2', 'P1', 'T2', 'MT1', '   '],
+          ['M3', 'P9', 'T9', 'MT1', 'Someone else’s'],
+        ]),
       ]),
     );
-    expect(drops.map((f: ReportFinding) => f.detail)).toEqual(['1 activity note was not imported']);
+    expect(graph.notes).toEqual([{ activityKey: 'T1', body: 'Only one' }]);
+    expect(noteFindings([...report.drops, ...report.approximations])).toEqual([]);
   });
 
-  it('adds no drop when the file has no notes', () => {
-    expect(memoDrops(cleanXer())).toEqual([]);
-    expect(memoDrops(withMemos([['M1', 'P1', 'T1', 'MT1', '']]))).toEqual([]);
+  it('counts a memo for a task the import did not take in one drop', () => {
+    const { graph, report } = importOk(
+      withTables([
+        memoTable([
+          ['M1', 'P1', 'T1', 'MT1', 'Kept'],
+          ['M2', 'P1', 'NOPE', 'MT1', 'Orphan one'],
+          ['M3', 'P1', 'NOPE2', 'MT1', 'Orphan two'],
+        ]),
+      ]),
+    );
+    expect(graph.notes).toHaveLength(1);
+    expect(noteFindings(report.drops)).toEqual([
+      expect.objectContaining({
+        kind: 'drop',
+        detail: '2 notes were not imported',
+        reason: 'the note belongs to an activity this import did not take',
+      }),
+    ]);
+  });
+
+  it('puts a foreign notebook topic first, and none when MEMOTYPE has no memo_type column', () => {
+    const named = importOk(
+      withTables([
+        memoTable([['M1', 'P1', 'T1', 'MT1', 'Body']]),
+        memoTypes([['MT1', 'Site Notes']]),
+      ]),
+    );
+    expect(named.graph.notes).toEqual([{ activityKey: 'T1', body: '[Site Notes]\nBody' }]);
+
+    const unnamed = importOk(
+      withTables([
+        memoTable([['M1', 'P1', 'T1', 'MT1', 'Body']]),
+        {
+          name: 'MEMOTYPE',
+          fields: ['memo_type_id', 'memo_type_name'],
+          rows: [['MT1', 'Site Notes']],
+        },
+      ]),
+    );
+    expect(unnamed.graph.notes).toEqual([{ activityKey: 'T1', body: 'Body' }]);
+  });
+
+  it('converts P6 HTML to text and reports that formatting was removed', () => {
+    const { graph, report } = importOk(
+      withTables([
+        memoTable([
+          [
+            'M1',
+            'P1',
+            'T1',
+            'MT1',
+            '<HTML><BODY><P><FONT color=red>Pour</FONT> level 3</P><P>Then cure</P></BODY></HTML>',
+          ],
+        ]),
+      ]),
+    );
+    expect(graph.notes).toEqual([{ activityKey: 'T1', body: 'Pour level 3\nThen cure' }]);
+    expect(noteFindings(report.approximations)).toEqual([
+      expect.objectContaining({ detail: 'formatting was removed from 1 note' }),
+    ]);
+  });
+
+  it('imports hostile markup as inert text', () => {
+    const { graph } = importOk(
+      withTables([
+        memoTable([
+          [
+            'M1',
+            'P1',
+            'T1',
+            'MT1',
+            '<script>alert(1)</script><img src=x onerror=alert(2)><a href="javascript:alert(3)">go</a>',
+          ],
+        ]),
+      ]),
+    );
+    expect(graph.notes).toEqual([{ activityKey: 'T1', body: 'go' }]);
+  });
+
+  it('splits notes over 5,000 characters, never loses text, and reports it', () => {
+    const long = `${'a'.repeat(3000)}\n\n${'b'.repeat(3000)}`;
+    const { graph, report } = importOk(withTables([memoTable([['M1', 'P1', 'T1', 'MT1', long]])]));
+    expect(graph.notes?.map((n) => n.body)).toEqual(['a'.repeat(3000), 'b'.repeat(3000)]);
+    expect(report.mapped.notes).toBe(2);
+    expect(noteFindings(report.approximations)).toEqual([
+      expect.objectContaining({ detail: '1 long note was split into 2 notes' }),
+    ]);
+  });
+
+  it('splits a SchedulePoint memo back into the notes it was written from', () => {
+    const memo = '<html><body>one<hr>two &amp; <br>three</body></html>';
+    const { graph } = importOk(
+      withTables([
+        memoTable([['M1', 'P1', 'T1', 'SP', memo]]),
+        memoTypes([['SP', 'SchedulePoint notes v1']]),
+      ]),
+    );
+    expect(graph.notes).toEqual([
+      { activityKey: 'T1', body: 'one' },
+      { activityKey: 'T1', body: 'two & \nthree' },
+    ]);
+  });
+
+  it('keeps at most MAX_NOTES notes and counts the rest in one drop', () => {
+    const rows = Array.from({ length: MAX_NOTES + 3 }, (_, i) => [
+      `M${i}`,
+      'P1',
+      'T1',
+      'MT1',
+      `note ${i}`,
+    ]);
+    const { graph, report } = importOk(withTables([memoTable(rows)]));
+    expect(graph.notes).toHaveLength(MAX_NOTES);
+    expect(noteFindings(report.drops)).toEqual([
+      expect.objectContaining({ detail: '3 notes were not imported' }),
+    ]);
+  });
+
+  it('adds nothing for a file without notes (parity)', () => {
+    const { graph, report } = importOk(cleanXer());
+    expect('notes' in graph).toBe(false);
+    expect('notes' in report.mapped).toBe(false);
+    expect(noteFindings([...report.approximations, ...report.repairs, ...report.drops])).toEqual(
+      [],
+    );
+    const blankOnly = importOk(withTables([memoTable([['M1', 'P1', 'T1', 'MT1', '']])]));
+    expect('notes' in blankOnly.graph).toBe(false);
+  });
+
+  describe('the parser pins this reader depends on (not changed by this work)', () => {
+    it('keeps a multi-line memo when task_memo is the last column, losing its blank lines', () => {
+      const xer = withTables([memoTable([['M1', 'P1', 'T1', 'MT1', 'line one']])]).replace(
+        'line one',
+        'line one\nline two\n\nline four',
+      );
+      expect(importOk(xer).graph.notes).toEqual([
+        // The parser skips blank lines (`xer-parser.ts:306`), so a blank line inside a P6 memo is gone
+        // before this reader sees it. A SchedulePoint memo is unaffected: it writes `<br>`, not a newline.
+        { activityKey: 'T1', body: 'line one\nline two\nline four' },
+      ]);
+    });
+
+    it('attaches a continuation line to the LAST column, so a memo before another column is cut', () => {
+      const fields = ['memo_id', 'proj_id', 'task_id', 'task_memo', 'memo_type_id'];
+      const xer = withTables([
+        memoTable([['M1', 'P1', 'T1', 'first line', 'MT1']], fields),
+      ]).replace('first line\tMT1', 'first line\tMT1\nsecond line');
+      expect(importOk(xer).graph.notes).toEqual([{ activityKey: 'T1', body: 'first line' }]);
+    });
+
+    it('rejects a whole file whose memo continuation line starts with a percent sign', () => {
+      const xer = withTables([memoTable([['M1', 'P1', 'T1', 'MT1', 'a']])]).replace(
+        'MT1\ta',
+        'MT1\ta\n%oops 100% done',
+      );
+      expect(importXer({ content: xer }).ok).toBe(false);
+    });
   });
 });

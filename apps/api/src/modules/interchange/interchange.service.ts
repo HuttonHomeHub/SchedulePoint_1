@@ -40,6 +40,7 @@ import {
 } from '../calendars/calendar.repository';
 import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
+import { NoteRepository } from '../notes/note.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { isPlanNameConflict, planNameTakenError } from '../plans/plan-name-conflict';
@@ -158,6 +159,7 @@ export class InterchangeService {
     private readonly resources: ResourceRepository,
     private readonly assignments: ResourceAssignmentRepository,
     private readonly swimlanes: SwimlaneRepository,
+    private readonly notes: NoteRepository,
     private readonly schedule: ScheduleService,
     private readonly editLock: PlanEditLockService,
     private readonly audit: AuditService,
@@ -264,6 +266,7 @@ export class InterchangeService {
 
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
+    const persistStarted = performance.now();
     const {
       planId,
       createdCalendarIds,
@@ -335,6 +338,11 @@ export class InterchangeService {
         dependencies: graph.dependencies.length,
         resources: graph.resources.length,
         assignments: graph.assignments.length,
+        // A count, never a body: a note is a customer's own words.
+        notes: graph.notes?.length ?? 0,
+        // The transaction's whole wall time, so the note volume's cost against the 15 s budget shows in
+        // production and not only in the one measurement the spec records.
+        persistMs: Math.round(performance.now() - persistStarted),
       },
       'interchange commit persisted a plan',
     );
@@ -404,6 +412,8 @@ export class InterchangeService {
         // How many of those were an existing calendar rather than a new one (ADR-0208 D4).
         calendarsReused: reusedCalendarCount,
         resourceCount: graph.resources.length,
+        // How many notes the import wrote. Individual notes earn no event (plan content, ADR-0073).
+        noteCount: graph.notes?.length ?? 0,
         // Scalar, deliberately: the report is a document, and `normalise()` would reduce it to a
         // type marker anyway. A count says "this import was not clean, go and read the report"
         // without pretending the row IS the report.
@@ -512,7 +522,7 @@ export class InterchangeService {
    * (`@default(uuid(7))`) rows are **pre-generated in memory** and the source `key` → id maps built up
    * front, so every foreign key resolves before any DB write and the whole graph lands in a handful of
    * **batched `createMany`s** (constant statement count, independent of graph size) — sidestepping the
-   * per-row-insert loop that risked Prisma's 5s interactive-transaction timeout at the import ceiling
+   * per-row-insert loop that risked the interactive-transaction timeout (`TRANSACTION_TIMEOUT_MS`, 15 s) at the import ceiling
    * (ADR-0050 B3). Order stays FK-safe: calendars (+ shifts/exceptions/windows) → plan → activities →
    * dependencies:
    * - **Calendars** first, materialising each source-derived `key` → the pre-generated id, so the plan
@@ -815,6 +825,25 @@ export class InterchangeService {
       },
     );
     await this.dependencies.createMany(dependencyRows, tx);
+
+    // 4a. Activity notes (ADR-0046), one batch, after the activities they belong to. The importer is the
+    // author — `created_by` is what the author-only edit rule reads, and a null would leave a note nobody
+    // could ever change. A thread sorts newest first by `created_at, id` and the ids are random, so
+    // without distinct timestamps the imported order would be arbitrary: each note is stamped one
+    // millisecond after the one before it, in source order. An endpoint that does not resolve fails loud
+    // and rolls the whole import back, as a dependency's does.
+    const notesAt = Date.now();
+    const noteRows: Prisma.NoteCreateManyInput[] = (graph.notes ?? []).map((note, index) => ({
+      id: randomUUID(),
+      organizationId,
+      entityType: 'ACTIVITY',
+      planId: plan.id,
+      activityId: this.resolveActivityId(note.activityKey, activityIdByKey),
+      body: note.body,
+      createdAt: new Date(notesAt + index),
+      ...stamp,
+    }));
+    await this.notes.createManyForImport(noteRows, tx);
 
     // 5. Resources — RESOLVE-OR-CREATE, org-scoped (ADR-0039). Resources are an org-scoped LIBRARY the
     // target org may already hold: the active partial-uniques (uq_resources_org_name / uq_resources_org_code)
@@ -1641,6 +1670,9 @@ export class InterchangeService {
       // they are named for the same reason as history. Lanes before activities, swimlanes after
       // them (activities.swimlane_id is RESTRICT) and before the plan.
       await tx.activitySwimlaneLane.deleteMany({ where: { activity: { planId } } });
+      // Notes are RESTRICT into activities and the plan, so they go first or this raises 23503 and
+      // leaves a half-imported plan behind.
+      await tx.note.deleteMany({ where: { planId } });
       await tx.activity.deleteMany({ where: { planId } });
       await tx.swimlane.deleteMany({ where: { planId } });
       // The pen we took for the recalc is released best-effort before this runs; clear any residual

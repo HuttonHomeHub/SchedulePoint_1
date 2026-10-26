@@ -106,6 +106,14 @@ export class InterchangeCountsResponseDto {
       'Activities placed in one of those swimlanes (swimlanes M4-T4). Absent when none were restored.',
   })
   swimlaneMembers?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Activity notes the import creates, counted after any splitting (ADR-0046). Absent when the file ' +
+      'carried none. Authored by the importing user, so only they can edit or delete them.',
+  })
+  notes?: number;
 }
 
 /** The library resource an imported one collides with, named so a planner can tell whether it is the same crew. */
@@ -265,6 +273,7 @@ export class InterchangeReportResponseDto {
         ...(report.mapped.swimlaneMembers === undefined
           ? {}
           : { swimlaneMembers: report.mapped.swimlaneMembers }),
+        ...(report.mapped.notes === undefined ? {} : { notes: report.mapped.notes }),
       },
       approximations: report.approximations.map(toFinding),
       repairs: report.repairs.map(toFinding),

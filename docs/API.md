@@ -980,6 +980,34 @@ spelling is merged into the first and counted), and at most 100 are kept; every 
 `repair` finding. The report adds `mapped.swimlanes` and `mapped.swimlaneMembers` (**absent when zero**).
 `restoreLayout=IGNORE` creates none.
 
+**An import carries activity notes** (notes-through-interchange M1, ADR-0046). A P6 `TASKMEMO` row and an
+MS Project task's `<Notes>` each become **plain-text notes on the activity** (a summary task's note goes on its
+WBS summary), written in the same transaction as the plan and removed with it if the recalculation fails. The
+**importing user is the author** of every one, so only they can edit or delete it (ADR-0046's author-only
+rule); the thread lists them newest first, which reads the file's order backwards. HTML is converted to text
+(block tags become line breaks; `script`, `style` and `head` are dropped with their content; every other tag is
+removed), entities are decoded, control characters are removed, a note over 5,000 characters is split at a
+paragraph, line or space, and a rich-text (RTF) note is left out. A P6 notebook topic named by a `memo_type`
+column on `MEMOTYPE` becomes a `[topic]` first line. At most 20,000 notes are kept per import and the rest
+are counted. The report adds `mapped.notes` (**absent when zero**, so a file without notes reports as it
+always did) and up to five aggregate findings, each with a count: formatting removed (`approximation`), long
+notes split (`approximation`), and notes not imported for a reason (`drop`): no matching activity, rich
+text, too large, or over the limit. The `interchange.imported` audit row gains `noteCount`.
+The upload itself is capped at 16 MiB, which bounds the note text of one import to about 14 MB.
+
+**An export carries activity notes** (notes-through-interchange M2). Every XER or MSPDI export writes the plan's
+active activity notes, oldest first, **bodies only**: no author and no date leave SchedulePoint. An XER gets one
+`MEMOTYPE` row (`SPNOTES`, `SchedulePoint notes v1`) and one `TASKMEMO` row per task with notes, holding that
+task's notes joined by `<hr>` as escaped HTML, so a SchedulePoint XER re-imports with its notes split back
+exactly. An MSPDI gets one `<Notes>` per task (summaries included): several notes on one task are joined with a
+rule and **come back as one note**, which the report says. Neither table appears for a plan without notes, whose
+file is byte-identical to before. The export report gains `mapped.notes` and aggregate findings: notes written
+(`approximation`, naming the missing authors and dates), activities whose notes were joined and characters XML
+1.0 forbids that were removed (MSPDI), and, as `drop`, plan notes (no field in either format), notes on WBS
+summaries (XER only, because a summary exports as a `PROJWBS` row), and notes past the 20,000 ceiling. The XER
+memo tables' column names are an **assumption**: no P6 file with a notebook topic has been read here.
+Anyone who can export can already read notes, so this exposes nothing inside the organisation; the file leaves it.
+
 **Resource-name collisions** are the one thing an import will not decide for you. A source resource whose
 `code` matches a library row **is** that row — a code is an identifier, and matching one is not a guess. The
 ambiguous case is a code that matches nothing while the **name** is already taken: `uq_resources_org_name`

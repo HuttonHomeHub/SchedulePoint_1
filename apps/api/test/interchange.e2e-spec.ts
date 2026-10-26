@@ -709,6 +709,454 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(Math.max(...lanes.map((a) => a.laneIndex))).toBe(distinctLanes - 1);
   }, 60_000);
 
+  // ---- Activity notes through the importer (notes-through-interchange M1, ADR-0046) --------------------
+
+  /** A two-activity XER whose tasks carry the given `TASKMEMO` rows (`task_memo` is the last column). */
+  function xerWithMemos(memos: ReadonlyArray<readonly [taskId: string, memo: string]>): string {
+    const base = validXer().replace(/\n%E$/, '');
+    return [
+      base,
+      '%T\tTASKMEMO',
+      '%F\tmemo_id\tproj_id\ttask_id\tmemo_type_id\ttask_memo',
+      ...memos.map(([taskId, memo], i) => `%R\tM${i + 1}\tP1\t${taskId}\tMT1\t${memo}`),
+      '%E',
+    ].join('\n');
+  }
+
+  const notesUrl = (activityId: string) =>
+    `/api/v1/organizations/acme/activities/${activityId}/notes`;
+
+  it('commits TASKMEMO rows as notes authored by the importer, in source order', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const planner = await addMember(orgId, 'planner@example.com', 'PLANNER');
+    const other = await addMember(orgId, 'other@example.com', 'PLANNER');
+    const xer = xerWithMemos([
+      ['T1', 'First remark'],
+      ['T2', 'On the other activity'],
+      ['T1', 'Second remark'],
+      ['T1', 'Third remark'],
+    ]);
+
+    const dry = await planner.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(xer, 'utf8'), 'memos.xer')
+      .expect(200);
+    // A preview creates nothing: no plan and so no note.
+    expect(await prisma.note.count()).toBe(0);
+    const res = await planner.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xer, 'utf8'), 'memos.xer')
+      .expect(201);
+
+    // The preview and the commit count the same notes.
+    expect(dry.body.data.mapped.notes).toBe(4);
+    expect(res.body.data.report.mapped.notes).toBe(4);
+
+    const planId = res.body.data.planId as string;
+    const rows = await prisma.note.findMany({ where: { planId }, orderBy: { createdAt: 'asc' } });
+    expect(rows.map((n) => n.body)).toEqual([
+      'First remark',
+      'On the other activity',
+      'Second remark',
+      'Third remark',
+    ]);
+    expect(rows.every((n) => n.entityType === 'ACTIVITY' && n.deletedAt === null)).toBe(true);
+    expect(
+      rows.every((n) => n.createdBy === planner.userId && n.updatedBy === planner.userId),
+    ).toBe(true);
+    expect(rows.every((n) => n.organizationId === orgId)).toBe(true);
+
+    // The thread is newest first, so the source order reads back reversed — and deterministically.
+    const t1 = await prisma.activity.findFirstOrThrow({ where: { planId, code: 'A1000' } });
+    const thread = await planner.agent.get(notesUrl(t1.id)).expect(200);
+    expect((thread.body.data as { body: string }[]).map((n) => n.body)).toEqual([
+      'Third remark',
+      'Second remark',
+      'First remark',
+    ]);
+
+    // The importer owns them: they can edit one, and nobody else can (ADR-0046's author-only rule).
+    const noteId = (thread.body.data as { id: string; version: number }[])[0]!.id;
+    await other.agent
+      .patch(`/api/v1/organizations/acme/notes/${noteId}`)
+      .send({ body: 'Not mine to change', version: 1 })
+      .expect(403);
+    await planner.agent
+      .patch(`/api/v1/organizations/acme/notes/${noteId}`)
+      .send({ body: 'Changed by the importer', version: 1 })
+      .expect(200);
+  });
+
+  it('leaves the schedule untouched by notes: the same file with and without memos computes the same dates', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const plain = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer().replace('Sample', 'Plain'), 'utf8'), 'plain.xer')
+      .expect(201);
+    const noted = await actor.agent
+      .post(commitUrl(projectId))
+      .attach(
+        'file',
+        Buffer.from(xerWithMemos([['T1', 'A remark']]).replace('Sample', 'Noted'), 'utf8'),
+        'noted.xer',
+      )
+      .expect(201);
+
+    const dates = async (planId: string) =>
+      (await prisma.activity.findMany({ where: { planId }, orderBy: { code: 'asc' } })).map((a) => [
+        a.code,
+        a.earlyStart?.toISOString(),
+        a.earlyFinish?.toISOString(),
+        a.lateStart?.toISOString(),
+        a.lateFinish?.toISOString(),
+        a.isCritical,
+      ]);
+    const plainDates = await dates(plain.body.data.planId as string);
+    expect(plainDates.every((row) => row[1] !== undefined)).toBe(true);
+    expect(await dates(noted.body.data.planId as string)).toEqual(plainDates);
+    expect(await prisma.note.count({ where: { planId: plain.body.data.planId as string } })).toBe(
+      0,
+    );
+  });
+
+  it('stores hostile and unrepresentable memo text as inert plain text, and still commits', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    // `&#0;` decodes to a NUL, which PostgreSQL `text` refuses; the text step must remove it or the
+    // whole import would roll back on one byte.
+    const hostile =
+      '<script>alert(1)</script><img src=x onerror=alert(2)><a href="javascript:alert(3)">link</a> a&#0;b';
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithMemos([['T1', hostile]]), 'utf8'), 'hostile.xer')
+      .expect(201);
+
+    const stored = await prisma.note.findMany({
+      where: { planId: res.body.data.planId as string },
+    });
+    expect(stored.map((n) => n.body)).toEqual(['link ab']);
+    expect(stored[0]!.body).not.toContain('<script');
+    expect(stored[0]!.body).not.toContain('\u0000');
+  });
+
+  it('inserts more notes than one statement can bind in a single batch', async () => {
+    // PostgreSQL binds at most 32,767 parameters per statement, so this table's `createMany` is split by
+    // Prisma at roughly 3,600 rows. 4,000 notes pin that the batched insert crosses the boundary intact.
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const memos = Array.from({ length: 4000 }, (_, i): [string, string] => [
+      i % 2 === 0 ? 'T1' : 'T2',
+      `Remark ${String(i)}`,
+    ]);
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithMemos(memos), 'utf8'), 'many.xer')
+      .expect(201);
+
+    expect(res.body.data.report.mapped.notes).toBe(4000);
+    const planId = res.body.data.planId as string;
+    expect(await prisma.note.count({ where: { planId } })).toBe(4000);
+    const stored = await prisma.note.findMany({
+      where: { planId },
+      orderBy: { createdAt: 'asc' },
+      select: { body: true },
+    });
+    expect(stored[0]?.body).toBe('Remark 0');
+    expect(stored[3999]?.body).toBe('Remark 3999');
+  });
+
+  it('splits a memo over 5,000 characters into notes that each satisfy the CHECK, and reports it', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const long = `${'a'.repeat(3000)} ${'b'.repeat(3000)}`;
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithMemos([['T1', long]]), 'utf8'), 'long.xer')
+      .expect(201);
+
+    expect(res.body.data.report.mapped.notes).toBe(2);
+    expect(res.body.data.report.approximations).toEqual([
+      expect.objectContaining({ entity: 'note', detail: '1 long note was split into 2 notes' }),
+    ]);
+    const stored = await prisma.note.findMany({
+      where: { planId: res.body.data.planId as string },
+    });
+    expect(stored.map((n) => n.body.length).sort()).toEqual([3000, 3000]);
+  });
+
+  it('removes the imported notes with the plan when the post-commit recalculation fails (compensation)', async () => {
+    // Notes are RESTRICT into activities and the plan, so a compensation that deleted the activities
+    // first would raise 23503 and leave a half-imported plan behind.
+    const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+    const schedule = app.get(ScheduleService, { strict: false });
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    let seenPlanId: string | undefined;
+    let notesAtFailure = 0;
+    vi.spyOn(schedule, 'recalculate').mockImplementation(async (_principal, _slug, planId) => {
+      seenPlanId = planId;
+      notesAtFailure = await prisma.note.count({ where: { planId } });
+      throw new Error('recalculation failed');
+    });
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach(
+        'file',
+        Buffer.from(
+          xerWithMemos([
+            ['T1', 'One'],
+            ['T2', 'Two'],
+          ]),
+          'utf8',
+        ),
+        'x.xer',
+      )
+      .expect(500);
+
+    expect(notesAtFailure).toBe(2);
+    expect(seenPlanId).toBeDefined();
+    expect(await prisma.plan.count({ where: { id: seenPlanId as string } })).toBe(0);
+    expect(await prisma.activity.count()).toBe(0);
+    expect(await prisma.note.count()).toBe(0);
+  });
+
+  it('records how many notes an import created on its audit row', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach(
+        'file',
+        Buffer.from(
+          xerWithMemos([
+            ['T1', 'One'],
+            ['T2', 'Two'],
+          ]),
+          'utf8',
+        ),
+        'x.xer',
+      )
+      .expect(201);
+
+    const event = await prisma.auditEvent.findFirstOrThrow({
+      where: { action: 'interchange.imported' },
+    });
+    expect((event.changes as { after: Record<string, unknown> }).after).toMatchObject({
+      noteCount: 2,
+    });
+  });
+
+  // ---- Activity notes through export, and back (notes-through-interchange M2, FC-1 and FC-2) -----------
+
+  const exportUrl = (planId: string, format: 'xer' | 'mspdi') =>
+    `/api/v1/organizations/acme/plans/${planId}/interchange/export/${format}`;
+
+  async function activityId(planId: string, code: string): Promise<string> {
+    return (await prisma.activity.findFirstOrThrow({ where: { planId, code } })).id;
+  }
+
+  /** Per activity code, the bodies of the plan's active activity notes, oldest first. */
+  async function bodiesByCode(planId: string): Promise<Record<string, string[]>> {
+    const rows = await prisma.note.findMany({
+      where: { planId, entityType: 'ACTIVITY', deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      include: { activity: { select: { code: true } } },
+    });
+    const out: Record<string, string[]> = {};
+    for (const row of rows) {
+      const code = row.activity?.code ?? '?';
+      (out[code] ??= []).push(row.body);
+    }
+    return out;
+  }
+
+  it('exports a plan’s notes to XER and re-imports them: same bodies, same order, per code (FC-1)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+
+    const bodies = [
+      'plain',
+      'A & B < C > D "quoted"',
+      'tab\there',
+      'blank\n\nlines\n\n\nand three',
+      'literal <hr> and <script>alert(1)</script>',
+      'ünïcödé — 日本語',
+      'x'.repeat(5000),
+    ];
+    for (const body of bodies) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+        .send({ body })
+        .expect(201);
+    }
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'on the second' })
+      .expect(201);
+    // A plan note and a deleted note: neither may reach the file.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${sourceId}/notes`)
+      .send({ body: 'plan level' })
+      .expect(201);
+    const doomed = await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'withdrawn' })
+      .expect(201);
+    await actor.agent
+      .delete(`/api/v1/organizations/acme/notes/${doomed.body.data.id as string}`)
+      .expect(204);
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: { notes?: number };
+      drops: { detail: string }[];
+    };
+    expect(report.mapped.notes).toBe(bodies.length + 1);
+    expect(report.drops.map((d) => d.detail)).toContain(
+      '1 plan note was not written to the exported file',
+    );
+    expect((exported.body as Buffer).toString('utf8')).not.toContain('withdrawn');
+
+    const secondProject = await makeSecondProject(actor);
+    const reimport = await actor.agent
+      .post(commitUrl(secondProject))
+      .attach('file', exported.body as Buffer, 'exported.xer')
+      .expect(201);
+    const copyId = reimport.body.data.planId as string;
+    const copy = await bodiesByCode(copyId);
+    expect(copy['A1000']).toEqual(bodies);
+    expect(copy['A1010']).toEqual(['on the second']);
+    expect(await prisma.note.count({ where: { planId: copyId, entityType: 'PLAN' } })).toBe(0);
+  });
+
+  it('exports notes to MSPDI: one note comes back as it was, several as one joined note (FC-2)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'first & <foremost>' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'second' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'only one\nacross lines' })
+      .expect(201);
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'mspdi'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const secondProject = await makeSecondProject(actor);
+    const reimport = await actor.agent
+      .post(commitUrl(secondProject))
+      .attach('file', exported.body as Buffer, 'exported.xml')
+      .expect(201);
+    const copy = await bodiesByCode(reimport.body.data.planId as string);
+    expect(copy['A1010']).toEqual(['only one\nacross lines']);
+    expect(copy['A1000']).toEqual(['first & <foremost>\n\n————\n\nsecond']);
+  });
+
+  it('leaves out notes on a soft-deleted activity without counting them as lost', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'kept' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'on an activity deleted behind the note’s back' })
+      .expect(201);
+    // Only the activity is soft-deleted, so its note is still `deleted_at IS NULL`: the exact shape
+    // the export read must exclude by the activity, not by the note.
+    await prisma.activity.update({ where: { id: a2 }, data: { deletedAt: new Date() } });
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((exported.body as Buffer).toString('utf8')).not.toContain('deleted behind');
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: { notes?: number };
+      drops: { entity: string }[];
+    };
+    expect(report.mapped.notes).toBe(1);
+    expect(report.drops.some((d) => d.entity === 'note')).toBe(false);
+  });
+
+  it('exports a plan without notes exactly as before: no memo tables, no note finding', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const exported = await actor.agent
+      .get(exportUrl(source.body.data.planId as string, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((exported.body as Buffer).toString('utf8')).not.toMatch(/MEMOTYPE|TASKMEMO/);
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: Record<string, unknown>;
+      approximations: { entity: string }[];
+      drops: { entity: string }[];
+    };
+    expect('notes' in report.mapped).toBe(false);
+    expect([...report.approximations, ...report.drops].some((f) => f.entity === 'note')).toBe(
+      false,
+    );
+  });
+
   it('rolls back the whole transaction when a create fails mid-way (nothing created)', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);

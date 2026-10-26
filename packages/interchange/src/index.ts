@@ -14,6 +14,7 @@
  * orchestrator that runs the whole pure pipeline end to end.
  */
 export * from './canonical.js';
+export * from './note-text.js';
 export * from './report.js';
 export * from './advisories.js';
 export * from './xer-parser.js';

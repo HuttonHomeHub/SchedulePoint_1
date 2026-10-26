@@ -147,6 +147,43 @@ export function calendarXerFile(projectName: string): {
   };
 }
 
+/**
+ * {@link validXer} plus one `TASKMEMO` on A1000 "Mobilise": the HTML P6 writes for a remark, with a
+ * `<script>` element in it. The import must bring it in as the plain text "Pour level 3" (the markup is
+ * removed, the script dropped with its content), count one note, and say formatting was removed. The
+ * memo is the last column of its table, which is the shape the XER reader's multi-line rule requires.
+ */
+export function notesXerFile(): { name: string; mimeType: string; buffer: Buffer } {
+  const memo = '<html><body><p>Pour <b>level 3</b></p><script>alert(1)</script></body></html>';
+  const text = validXer().replace(
+    /%E$/,
+    [
+      '%T\tTASKMEMO',
+      '%F\tmemo_id\tproj_id\ttask_id\tmemo_type_id\ttask_memo',
+      `%R\tM1\tP1\tT1\tMT1\t${memo}`,
+      '%E',
+    ].join('\n'),
+  );
+  return {
+    name: 'schedule-with-notes.xer',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
+/**
+ * Open the plan's activities panel if it is collapsed. Idempotent, and it waits on the toggle rather
+ * than on the table (the same two traps `e2e-notes/support.ts` documents: an empty table renders no
+ * `<table>`, and `isVisible()` is a snapshot taken before the page has painted).
+ */
+export async function showActivities(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+}
+
 /** The `.xer` fixture as bytes, ready for `Locator.setInputFiles`. */
 export function validXerFile(): { name: string; mimeType: string; buffer: Buffer } {
   return {

@@ -13,6 +13,11 @@ import type {
 } from './canonical.js';
 import type { ExportCalendar, ExportGraph, ExportPlan } from './export-graph.js';
 import type { ImportCalendarShift, ImportWorkWindow } from './import-graph.js';
+import {
+  noteBodiesToPlainNotes,
+  SCHEDULEPOINT_NOTES_TOPIC,
+  stripInvisibleControls,
+} from './note-text.js';
 import type { ReportFinding } from './report.js';
 import { foldSwimlaneName, isSwimlaneName } from './xer-layout-fields.js';
 
@@ -239,6 +244,117 @@ function mapLayout(
   };
 }
 
+/**
+ * The notes the target format will write, and the findings for what it will not or cannot keep. ONE
+ * producer for both formats, for the reason the placement finding gives below: two copies would drift
+ * and each would look right alone. Every finding is aggregate. Authors and dates are never written, so
+ * the approximation says so whenever any note is.
+ */
+function mapNotes(
+  graph: ExportGraph,
+  format: ExportMapOptions['notesFormat'],
+  findings: ReportFinding[],
+): { activityId: string; body: string }[] {
+  const planNotes = graph.planNoteCount ?? 0;
+  const overLimit = graph.unwrittenNoteCount ?? 0;
+  const dropped = (count: number, detail: string, reason: string): void => {
+    if (count > 0) findings.push({ kind: 'drop', entity: 'note', sourceRef: null, detail, reason });
+  };
+  const plural = (count: number, noun: string): string =>
+    `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+  if (format === undefined) return [];
+  dropped(
+    planNotes,
+    `${plural(planNotes, 'plan note')} ${planNotes === 1 ? 'was' : 'were'} not written to the exported file`,
+    'this format has no field for a note on the plan itself',
+  );
+  dropped(
+    overLimit,
+    `${plural(overLimit, 'activity note')} ${overLimit === 1 ? 'was' : 'were'} not written to the exported file`,
+    'an export carries at most 20,000 notes',
+  );
+
+  const summaryIds = new Set(
+    graph.activities.filter((a) => a.type === 'WBS_SUMMARY').map((activity) => activity.key),
+  );
+  const written: { activityId: string; body: string }[] = [];
+  let onSummaries = 0;
+  for (const note of graph.notes ?? []) {
+    if (format === 'XER' && summaryIds.has(note.activityKey)) onSummaries += 1;
+    else written.push({ activityId: note.activityKey, body: note.body });
+  }
+  dropped(
+    onSummaries,
+    `${plural(onSummaries, 'note')} on WBS summaries ${onSummaries === 1 ? 'was' : 'were'} not written to the exported file`,
+    'a P6 memo belongs to a task, and a WBS summary exports as a PROJWBS row',
+  );
+  if (written.length === 0) return written;
+
+  // The emitters strip direction overrides and zero-width characters (they can make a remark read
+  // differently from what it says); the report says how many notes that touched.
+  const stripped = written.filter((note) => stripInvisibleControls(note.body) !== note.body).length;
+  if (stripped > 0) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'note',
+      sourceRef: null,
+      detail: `invisible direction and zero-width characters were removed from ${plural(stripped, 'note')}`,
+      reason: 'they can make a note read differently from what it says',
+    });
+  }
+
+  findings.push({
+    kind: 'approximation',
+    entity: 'note',
+    sourceRef: null,
+    detail:
+      format === 'XER'
+        ? `${plural(written.length, 'note')} written as the P6 notebook topic '${SCHEDULEPOINT_NOTES_TOPIC}'; authors and dates are not written`
+        : `${plural(written.length, 'note')} written as task notes; authors and dates are not written`,
+    reason:
+      format === 'XER'
+        ? 'P6 memos carry text only, so the author and date of each note stay in SchedulePoint'
+        : 'an MSPDI task note carries text only, so the author and date of each note stay in SchedulePoint',
+  });
+
+  if (format === 'MSPDI') {
+    const bodiesByActivity = new Map<string, string[]>();
+    for (const note of written) {
+      const list = bodiesByActivity.get(note.activityId);
+      if (list === undefined) bodiesByActivity.set(note.activityId, [note.body]);
+      else list.push(note.body);
+    }
+    let joined = 0;
+    let cleaned = 0;
+    for (const bodies of bodiesByActivity.values()) {
+      if (bodies.length > 1) joined += 1;
+      // Counted after the invisible characters, which have their own finding above.
+      if (noteBodiesToPlainNotes(bodies.map(stripInvisibleControls)).removedForbidden) cleaned += 1;
+    }
+    if (joined > 0) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'note',
+        sourceRef: null,
+        detail: `the notes of ${joined} ${joined === 1 ? 'activity' : 'activities'} were joined into one task note each, separated by a rule`,
+        reason:
+          'an MSPDI task has a single Notes field, so re-importing this file gives one note, not several',
+      });
+    }
+    if (cleaned > 0) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'note',
+        sourceRef: null,
+        detail: `characters XML 1.0 forbids were removed from the notes of ${cleaned} ${cleaned === 1 ? 'activity' : 'activities'}`,
+        reason: 'the file would otherwise not be well-formed XML',
+      });
+    }
+  }
+  return written;
+}
+
 export interface ExportMapResult {
   readonly model: CanonicalModel;
   readonly findings: ReportFinding[];
@@ -259,6 +375,15 @@ export interface ExportMapOptions {
    * carries `derivedDurationMinutes`, so an emitter that cannot use it is never handed it.
    */
   readonly carriesDerivedDuration?: boolean;
+  /**
+   * How the target format writes activity notes, which decides what the one notes finding set says and
+   * which notes it can place (notes-through-interchange M2). Absent = the format writes none, so the
+   * model carries none.
+   * - `XER`: one P6 memo per task under the SchedulePoint notebook topic. A WBS summary exports as a
+   *   `PROJWBS` row, which `TASKMEMO` cannot key on, so its notes are counted and left out.
+   * - `MSPDI`: one `<Notes>` per task, summaries included; several notes on one task are joined.
+   */
+  readonly notesFormat?: 'XER' | 'MSPDI';
 }
 
 export function mapExportGraphToCanonical(
@@ -378,6 +503,8 @@ export function mapExportGraphToCanonical(
     });
   }
 
+  const notes = mapNotes(graph, options.notesFormat, findings);
+
   const relationships: CanonicalRelationship[] = graph.dependencies.map((dependency) => ({
     id: dependency.key,
     predecessorId: dependency.predecessorKey,
@@ -434,6 +561,7 @@ export function mapExportGraphToCanonical(
     resources,
     assignments,
     ...(swimlanes === undefined ? {} : { swimlanes: swimlanes.model }),
+    ...(notes.length === 0 ? {} : { notes }),
   };
 
   return { model, findings };

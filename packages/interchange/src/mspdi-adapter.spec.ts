@@ -390,30 +390,83 @@ describe('adaptMspdiToCanonical — resources + assignments', () => {
 });
 
 describe('adaptMspdiToCanonical — task notes', () => {
-  const noteDrops = (tasks: MspdiTaskSpec[]) =>
-    adaptOk({ ...BASE, tasks }).findings.filter((f) => f.detail.includes('note'));
+  const task = (uid: string, extra: Partial<MspdiTaskSpec> = {}): MspdiTaskSpec => ({
+    uid,
+    id: uid,
+    name: `Task ${uid}`,
+    outlineLevel: 1,
+    duration: 'PT8H0M0S',
+    ...extra,
+  });
+  const noteFindings = (findings: ReportFinding[]) => findings.filter((f) => f.entity === 'note');
 
-  it('reports ONE aggregate drop counting the tasks that carry <Notes>', () => {
-    const drops = noteDrops([
-      { uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Remark A' },
-      { uid: '2', id: '2', name: 'B', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Remark B' },
-      { uid: '3', id: '3', name: 'C', outlineLevel: 1, duration: 'PT8H0M0S' },
+  it('reads each <Notes> as a note on its task, in document order', () => {
+    const { model, findings } = adaptOk({
+      ...BASE,
+      tasks: [task('1', { notes: 'Remark A' }), task('2', { notes: 'Remark B' }), task('3')],
+    });
+    expect(model.notes).toEqual([
+      { activityId: '1', body: 'Remark A' },
+      { activityId: '2', body: 'Remark B' },
     ]);
-    expect(drops).toHaveLength(1);
-    expect(drops[0]).toMatchObject({ kind: 'drop', entity: 'activity', sourceRef: null });
-    expect(drops[0]?.detail).toBe('2 activity notes were not imported');
+    expect(noteFindings(findings)).toEqual([]);
+    expect(canonicalModelSchema.safeParse(model).success).toBe(true);
   });
 
-  it('says "note was" for exactly one', () => {
-    const drops = noteDrops([
-      { uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S', notes: 'Only one' },
-    ]);
-    expect(drops.map((f) => f.detail)).toEqual(['1 activity note was not imported']);
+  it('decodes entities, which the parser deliberately leaves alone', () => {
+    const { model } = adaptOk({
+      ...BASE,
+      tasks: [
+        task('1', { notes: 'Fish &amp; chips &lt;b&gt;x&lt;/b&gt; &quot;q&quot;&#10;next &#x41;' }),
+      ],
+    });
+    expect(model.notes).toEqual([{ activityId: '1', body: 'Fish & chips <b>x</b> "q"\nnext A' }]);
   });
 
-  it('adds no drop when no task has notes', () => {
-    expect(
-      noteDrops([{ uid: '1', id: '1', name: 'A', outlineLevel: 1, duration: 'PT8H0M0S' }]),
-    ).toEqual([]);
+  it('puts a summary task’s note on its WBS summary', () => {
+    const { model } = adaptOk({
+      ...BASE,
+      tasks: [
+        task('1', { summary: true, notes: 'On the summary' }),
+        task('2', { outlineLevel: 2 }),
+      ],
+    });
+    expect(model.activities.find((a) => a.id === '1')?.type).toBe('WBS_SUMMARY');
+    expect(model.notes).toEqual([{ activityId: '1', body: 'On the summary' }]);
+  });
+
+  it('leaves rich text out and counts it in one drop', () => {
+    const { model, findings } = adaptOk({
+      ...BASE,
+      tasks: [task('1', { notes: '{\\rtf1\\ansi Hello}' }), task('2', { notes: '{\\rtf1 Two}' })],
+    });
+    expect(model.notes).toBeUndefined();
+    expect(noteFindings(findings)).toEqual([
+      expect.objectContaining({
+        kind: 'drop',
+        detail: '2 notes were not imported',
+        reason: 'rich-text notes cannot be read',
+      }),
+    ]);
+  });
+
+  it('splits a long note and says so', () => {
+    const { model, findings } = adaptOk({
+      ...BASE,
+      tasks: [task('1', { notes: `${'a'.repeat(3000)}\n\n${'b'.repeat(3000)}` })],
+    });
+    expect(model.notes?.map((n) => n.body)).toEqual(['a'.repeat(3000), 'b'.repeat(3000)]);
+    expect(noteFindings(findings)).toEqual([
+      expect.objectContaining({
+        kind: 'approximation',
+        detail: '1 long note was split into 2 notes',
+      }),
+    ]);
+  });
+
+  it('adds no notes key and no finding when no task has notes (parity)', () => {
+    const { model, findings } = adaptOk({ ...BASE, tasks: [task('1')] });
+    expect('notes' in model).toBe(false);
+    expect(noteFindings(findings)).toEqual([]);
   });
 });
