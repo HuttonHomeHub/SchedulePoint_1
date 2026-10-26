@@ -279,16 +279,20 @@ export class InterchangeService {
       // which a delete does not conflict with, so without it the import can land under a project
       // being deleted (`docs/TECH_DEBT.md` #531, the same race as `PlansService.create`).
       //
-      // Calendars first, in id order, then the ancestors (see `lockedCalendarIds`). `FOR SHARE` on the
-      // rows is what a version-gated content edit waits on; the advisory lock is what a delete and a
-      // tier move wait on (neither covers the other, ADR-0208 R2).
+      // Calendar ADVISORY locks first, in id order, then the ancestors (see `lockedCalendarIds`):
+      // the order every other path takes, and the advisory lock is what a calendar delete and a tier
+      // move wait on. The calendar ROWS are locked `FOR SHARE` only AFTER the chain. A project or
+      // client delete holds the project row `FOR NO KEY UPDATE` and then updates the project's
+      // calendars, so an import holding a calendar row while it waited for the project would close a
+      // cycle with it (`40P01`, ADR-0208 D3). The row lock is what a version-gated content edit waits
+      // on, since content edits take no advisory lock (ADR-0208 R2).
       for (const calendarId of lockedCalendarIds) await acquireCalendarWriteLock(tx, calendarId);
-      await this.calendars.lockActiveForShare(lockedCalendarIds, tx);
       const active = await lockActiveProjectChainForShare(tx, {
         clientId: project.clientId,
         projectId: project.id,
       });
       if (!active) throw new NotFoundError('Project not found.');
+      await this.calendars.lockActiveForShare(lockedCalendarIds, tx);
       return this.persistGraph(tx, principal, project, graph, options, lockedCalendarIds);
     });
 

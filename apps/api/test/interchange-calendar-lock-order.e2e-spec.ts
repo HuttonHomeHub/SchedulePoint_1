@@ -181,4 +181,111 @@ describe.skipIf(!hasDatabase)('Interchange calendar lock order (e2e)', () => {
     const second = await prisma.plan.findFirstOrThrow({ where: { projectId, name: 'Rev B' } });
     expect(second.calendarId).toBe(calendarId);
   });
+
+  /** Reads `pg_stat_activity` until a backend runs a statement like `pattern` while waiting on a lock. */
+  async function waitUntilBlockedOn(events: readonly string[], pattern: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const rows = await aux.$queryRaw<{ wait_event: string }[]>`
+        SELECT wait_event FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+          AND wait_event_type = 'Lock'
+          AND wait_event = ANY(${[...events]}::text[])
+          AND query ILIKE ${pattern}`;
+      if (rows.length > 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error(`no backend waited on ${events.join(' or ')} for ${pattern} within 10 s`);
+  }
+
+  /** A project with one imported plan, whose calendar a second import would reuse. */
+  async function seedReusableCalendar(): Promise<{
+    clientId: string;
+    projectId: string;
+    calendarId: string;
+    commit: string;
+  }> {
+    const client = await agent.post(`${ORG}/clients`).send({ name: 'Northgate' }).expect(201);
+    const clientId = client.body.data.id as string;
+    const project = await agent
+      .post(`${ORG}/clients/${clientId}/projects`)
+      .send({ name: 'Riverside' })
+      .expect(201);
+    const projectId = project.body.data.id as string;
+    const commit = `${ORG}/projects/${projectId}/interchange/commit`;
+    const first = await agent
+      .post(commit)
+      .attach('file', Buffer.from(xer('Rev A'), 'utf8'), 'a.xer')
+      .expect(201);
+    const seeded = await prisma.plan.findUniqueOrThrow({ where: { id: first.body.data.planId } });
+    return { clientId, projectId, calendarId: seeded.calendarId as string, commit };
+  }
+
+  it('holds no calendar row while it waits for the project (a project delete holds the project row, then updates its calendars)', async () => {
+    // B1 (ADR-0208 D3). A project or client delete takes the project row `FOR NO KEY UPDATE` and then
+    // updates the project's calendars. An import that held a calendar row `FOR SHARE` while it waited
+    // for the project would close a cycle with it (`40P01`). The test parks the project row as the
+    // delete does, starts a reusing import, and asks whether the calendar row can still be taken
+    // `FOR NO KEY UPDATE NOWAIT` (the lock an UPDATE takes) while the import waits.
+    const { projectId, calendarId, commit } = await seedReusableCalendar();
+
+    const release = await hold(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM projects WHERE id = ${projectId}::uuid FOR NO KEY UPDATE`;
+    });
+    let status: Promise<number> | undefined;
+    try {
+      status = agent
+        .post(commit)
+        .attach('file', Buffer.from(xer('Rev B'), 'utf8'), 'b.xer')
+        .then((res) => res.status);
+      await waitUntilBlockedOn(['tuple', 'transactionid'], '%FROM projects%');
+
+      await expect(
+        aux.$queryRaw`SELECT id FROM calendars WHERE id = ${calendarId}::uuid FOR NO KEY UPDATE NOWAIT`,
+      ).resolves.toBeDefined();
+    } finally {
+      await release();
+    }
+    expect(await status).toBe(201);
+    const plan = await prisma.plan.findFirstOrThrow({ where: { projectId, name: 'Rev B' } });
+    expect(plan.calendarId).toBe(calendarId);
+  });
+
+  it('holds the reused calendar row FOR SHARE for the rest of its transaction', async () => {
+    // R2 (ADR-0208 D3). A version-gated content edit bumps `calendars.version`, an UPDATE, which
+    // conflicts with a `FOR SHARE` row lock. The import is parked mid-transaction, after its calendar
+    // work, by an uncommitted plan of the same name: its plan insert waits on that unique entry.
+    const { projectId, calendarId, commit } = await seedReusableCalendar();
+    const organizationId = (await prisma.project.findUniqueOrThrow({ where: { id: projectId } }))
+      .organizationId;
+
+    const release = await hold(async (tx) => {
+      await tx.plan.create({
+        data: { organizationId, projectId, name: 'Rev B', plannedStart: new Date('2026-01-05') },
+      });
+    });
+    let status: Promise<number> | undefined;
+    try {
+      status = agent
+        .post(commit)
+        .attach('file', Buffer.from(xer('Rev B'), 'utf8'), 'b.xer')
+        .then((res) => res.status);
+      await waitUntilBlockedOn(['transactionid'], '%plans%');
+
+      // What a version bump needs is refused while the import is open ...
+      await expect(
+        aux.$queryRaw`SELECT id FROM calendars WHERE id = ${calendarId}::uuid FOR NO KEY UPDATE NOWAIT`,
+      ).rejects.toThrow(/55P03|could not obtain lock/);
+      // ... and a second reader is not held up.
+      await expect(
+        aux.$queryRaw`SELECT id FROM calendars WHERE id = ${calendarId}::uuid FOR SHARE NOWAIT`,
+      ).resolves.toBeDefined();
+    } finally {
+      await release();
+    }
+    // The uncommitted plan committed, so the import's own plan name is taken: 409, nothing created.
+    expect(await status).toBe(409);
+    expect(await prisma.plan.count({ where: { projectId, name: 'Rev B' } })).toBe(1);
+  });
 });
