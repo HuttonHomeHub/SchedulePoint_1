@@ -1,5 +1,5 @@
 import type { UnusedCalendar } from '@repo/types';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { useUnusedProjectCalendars } from '../api/use-calendars';
 
@@ -45,6 +45,13 @@ export function RemoveUnusedCalendarsButton({
  * Deleting the last unused calendar unmounts this, and a native `<dialog>` restores focus to a
  * control that is gone. So this component, not its parent, owns the hand-off: its wrapper hands
  * focus to `focusTarget` when it goes, and the dialog has already announced the result (ADR-0135).
+ *
+ * **The dialog is still open when that happens.** The delete's own `onSettled` waits for the list to
+ * refetch, so the list empties before the `mutate()` callback that would close the dialog runs. While
+ * a `showModal()` dialog is open the rest of the page is inert, and `focus()` on the section does
+ * nothing, so focus fell to `<body>` in every real browser (jsdom has no inertness, so the unit
+ * suite passed). The cleanup below therefore closes the dialog first and puts focus back on the
+ * opener; the hand-off's own cleanup, which runs after it, then moves it to `focusTarget`.
  */
 function RemoveUnusedCalendarsControl({
   orgSlug,
@@ -59,11 +66,32 @@ function RemoveUnusedCalendarsControl({
 }): React.ReactElement {
   const [opening, setOpening] = useState(0);
   const [open, setOpen] = useState(false);
+  const opener = useRef<HTMLButtonElement>(null);
+  const wrapper = useRef<HTMLDivElement | null>(null);
+  // Declared before the hand-off so its cleanup runs first: effects are torn down in order.
+  useLayoutEffect(
+    () => () => {
+      const modal = wrapper.current?.querySelector('dialog[open]');
+      if (!(modal instanceof HTMLDialogElement) || !modal.contains(document.activeElement)) return;
+      modal.close();
+      if (document.activeElement === null || document.activeElement === document.body) {
+        opener.current?.focus();
+      }
+    },
+    [],
+  );
   const { wrapperProps } = useContainerUnmountHandoff({ target: focusTarget });
 
   return (
-    <div {...wrapperProps}>
+    <div
+      {...wrapperProps}
+      ref={(node) => {
+        wrapperProps.ref(node);
+        if (node !== null) wrapper.current = node;
+      }}
+    >
       <Button
+        ref={opener}
         variant="outline"
         onClick={() => {
           setOpening((previous) => previous + 1);

@@ -1,6 +1,6 @@
 import type { UnusedCalendar } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RemoveUnusedCalendarsButton } from './RemoveUnusedCalendarsButton';
@@ -204,6 +204,48 @@ describe('RemoveUnusedCalendarsButton', () => {
       ),
     );
     expect(screen.getByRole('heading', { name: 'Calendars' })).toHaveFocus();
+  });
+
+  it('closes its open dialog before handing focus on, when the list empties underneath it', async () => {
+    // In a real browser the delete's own refetch empties the list while the dialog is still open,
+    // and everything outside an open modal is inert, so focusing the section then does nothing and
+    // focus falls to <body> (it did, in all three CI browsers). jsdom has no inertness, so the test
+    // records whether a dialog was open at the moment the hand-off focuses its target.
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset();
+    vi.mocked(apiFetchAllPages).mockResolvedValueOnce([COPY_A]).mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AnnouncerProvider>
+          <h2 tabIndex={-1}>Calendars</h2>
+          <RemoveUnusedCalendarsButton
+            orgSlug="acme"
+            projectId="proj-1"
+            projectName="Riverside"
+            // Not a role query: while the dialog is open the rest of the tree is hidden from them.
+            focusTarget={() => document.querySelector('h2')}
+          />
+        </AnnouncerProvider>
+      </QueryClientProvider>,
+    );
+    const heading = screen.getByRole('heading', { name: 'Calendars' });
+    const dialogOpenAtHandoff: boolean[] = [];
+    const focusHeading = heading.focus.bind(heading);
+    heading.focus = (options?: FocusOptions) => {
+      dialogOpenAtHandoff.push(document.querySelector('dialog[open]') !== null);
+      focusHeading(options);
+    };
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove unused calendars…' }));
+    (await screen.findByRole('button', { name: /^Delete 1 calendar$/ })).focus();
+    await act(() => client.invalidateQueries());
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove unused calendars…' })).toBeNull(),
+    );
+    expect(dialogOpenAtHandoff).toEqual([false]);
+    expect(heading).toHaveFocus();
   });
 
   function renderButton() {
