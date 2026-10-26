@@ -213,6 +213,12 @@ git ls-files apps/web/src apps/api/src packages |
   done | sort
 ```
 
+**The query needs a full clone.** On a shallow clone every file has exactly one reachable commit, so
+the query lists everything: on 2026-10-26 this container's shallow clone reported one commit dated
+2026-10-22 for every file (2,343 of them), which is the clone's graft point and not history. Run
+`git fetch --unshallow` first. `check:reconcile-due` already warns of the same thing for its own
+date reading.
+
 **Do not read all of it** — 541 files under `apps/web/src` alone have one commit,
 and most legitimately landed once and are right. The set worth reading is the
 intersection with **files that set policy for everything else**: the query

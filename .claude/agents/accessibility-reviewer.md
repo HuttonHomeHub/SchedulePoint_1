@@ -64,6 +64,12 @@ code. Be specific and cite the offending file/line.
   one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
   (G1-G4) is the gate; the status-in-busy-subtree rule was reasoned from ARIA 1.2 and never observed
   with a screen reader, so a reviewer who can run one should.
+- **The swimlane boundary rule is about 2:1 on screen, below WCAG 1.4.11's 3:1 by decision:** the name is
+  DOM text in the gutter, the listbox is grouped by swimlane, and the table, Gantt and editor say it in
+  words; the paper twin is gated at 3:1. Do not ask for it louder (ADR-0206, contrast basis). The gutter
+  is a vertical roving toolbar with one tab stop (B9).
+- **A shaded item states its reason to every input (ADR-0204):** in a menu or listbox the reason is
+  inline `aria-hidden` text referenced by `aria-describedby` (D2, D4).
 
 ## Review checklist
 

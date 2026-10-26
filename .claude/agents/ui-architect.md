@@ -74,6 +74,12 @@ The frontend is not a blank slate; most "new" structure has a precedent.
   the component layer owns flags, React and the DOM a11y mirror.
 - **Server state in TanStack Query, URL state in TanStack Router**, forms via
   RHF + Zod (ADR-0004/0005/0007). Client state stays minimal and co-located.
+- **Swimlanes reach the canvas only through `projectSwimlanes`**
+  (`features/tsld/render/project-swimlanes.ts`), and `deriveDiagramSource` feeds both screen and export
+  (ADR-0206 B1–B2). The gutter is a left reservation in the band model, and the gutter and ruler carry
+  `data-chrome` under the `EXPORT_CHROME_INPUTS` roster (B4–B5). `features/tsld` importing other features
+  breaks ADR-0026 §8 and is tracked as `docs/TECH_DEBT.md` #548; do not add a new such import without
+  saying so.
 
 Propose the smallest structure that fits these. If you are adding a third of
 something, extract the primitive; if you are adding a first, don't.

@@ -140,11 +140,12 @@ echo "ready: ${DATABASE_URL}"
 
 # --- 2. One run per database ------------------------------------------------
 #
-# **A busy port is refused below and a busy DATABASE was not** (`docs/TECH_DEBT.md` #349). Two runs,
-# or a run and a seeding pass, sharing `app_test` do not fail with an error naming contention: they
-# produce a red assertion about the product, with a screenshot, and the next move is to change the
-# test. When two agents held it, one suite failed with a plausible "the bar never plots" and a
-# second run of the same code failed differently — a defect does not change its symptom.
+# **A busy port is refused below and a busy DATABASE was not** (`docs/TECH_DEBT.md` #349). Two runs
+# sharing `app_test` do not fail with an error naming contention: they produce a red assertion about
+# the product, with a screenshot, and the next move is to change the test. When two agents held it,
+# one suite failed with a plausible "the bar never plots" and a second run of the same code failed
+# differently — a defect does not change its symptom. A seeding pass contends for `app_test` the
+# same way but takes no lock of its own, so only a run that goes through this script is covered.
 #
 # So take a Postgres advisory lock for the whole run, from a background `psql` session. Advisory
 # locks belong to the SESSION, which is why a session is kept open rather than asking once: the

@@ -83,6 +83,9 @@ exist** — ADR-0057 deleted them. Read real suites instead:
   against one API, so a chromium-only census understates that bucket.
 - **API e2e runs against real Postgres** (`describe.skipIf(!hasDatabase)`), so
   cascade, cursor and lock behaviour is exercised for real.
+- **Swimlane seeds are `plan:capability-swimlanes` and `plan:capability-swimlanes-wbs`**
+  (`docs/TEST_PLAYBOOK.md`); the journey suite is `e2e-swimlanes`. A spec that creates swimlanes clears
+  them in `afterAll` (`clearDomainData`), or later specs fail on `swimlanes_plan_id_fkey`.
 
 ## Standards
 

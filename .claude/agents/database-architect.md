@@ -68,6 +68,13 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
   in one transaction.
 - **Measure before adding an index**, and record the measurement in the migration
   comment — the library search and recycle-bin decisions both did.
+- **`swimlanes` is a plan-scoped, soft-deleted table; `activity_swimlane_lanes` keeps one row per
+  activity per `SwimlaneLaneBasis`**, so switching source is lossless, and no swimlane edit writes
+  `activities.lane_index` (ADR-0206 A1–A2). `ck_plans_swimlane_source_level` ties source and level together.
+- **Restore differs from ADR-0201 on purpose (A8):** an activity restored onto a deleted swimlane is
+  admitted and drawn under "No swimlane"; only a new assignment to a deleted swimlane is refused. Expiry
+  deletes lane rows, then activities, then swimlanes, then the plan (`activities.swimlane_id` is
+  RESTRICT; `hierarchy-expiry.runner.ts`).
 
 ## What you do
 
