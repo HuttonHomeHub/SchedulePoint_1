@@ -2,8 +2,19 @@ import type { DependencyType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
+import {
+  CROSS_DATA_DATE,
+  crossCalendarNetwork,
+  link,
+  middle,
+  runCrossCalendar,
+  WEEKDAY_CAL,
+  WEEKDAY_MINUTES,
+  WEEKEND_CAL,
+} from './compute.cross-calendar.fixture';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
 import {
+  absMinutesToInstant,
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
   fullDayWeek,
@@ -135,5 +146,151 @@ describe('per-activity calendars (M5, ADR-0037)', () => {
       expect(byId.get(id)!.totalFloat).toBe(0);
       expect(byId.get(id)!.isCritical).toBe(true);
     }
+  });
+});
+
+/**
+ * **A zero-span activity keeps the instant its logic gives it, across calendars** (`docs/TECH_DEBT.md`
+ * #539; `docs/specs/milestone-cross-calendar/`). The engine snaps a zero-duration activity onto its own
+ * calendar in both passes (`compute.ts` forward `:266`, backward `:510`), so a milestone between a
+ * weekend task and weekday work either pushes the weekday work a week (milestone on the weekend
+ * calendar) or reads the day before the weekend work and charges it a weekend of negative float
+ * (milestone on the plan calendar). The network and its dates are `compute.cross-calendar.fixture.ts`.
+ *
+ * **Every case here passes since M2 (D1) except the FNLT one, which needed M3 (D2):** a date given for
+ * a finish milestone is read as midnight at the end of its day. The cases began as `it.fails` (they
+ * asserted the correct values while the engine was wrong, so `main` stayed green and the fix had to
+ * flip them). The all-minutes control passed before M2 and is a plain `it`: the same network with no
+ * calendar seam at `M`.
+ */
+describe('a zero-span activity between calendars keeps its logic instant (#539)', () => {
+  const FNLT_FRIDAY = { constraintType: 'FNLT', constraintDate: '2027-06-25' } as const;
+
+  function expectedFixtureOutcome(get: (id: string) => EngineResult) {
+    expect(get('W').totalFloat).toBe(0);
+    expect(get('K').earlyStart).toBe('2027-06-28');
+    // Five weekdays of slack between A and W's SNET: Fri 06-18 → Fri 06-25.
+    expect(get('A').totalFloat).toBe(5 * WEEKDAY_MINUTES);
+  }
+
+  it('control: M on an all-minutes calendar already gives K Monday and W float 0', () => {
+    const { activities, edges } = crossCalendarNetwork(
+      middle('FINISH_MILESTONE', TWENTY_FOUR_SEVEN),
+    );
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+  });
+
+  it('FINISH_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Sunday', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyStart).toBe('2027-06-27');
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+    expect(get('M').lateFinish).toBe('2027-06-27');
+  });
+
+  it('FINISH_MILESTONE on the weekend calendar: K starts Monday, not a week later', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE', WEEKEND_CAL));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+  });
+
+  it('START_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Monday', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('START_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyStart).toBe('2027-06-28');
+  });
+
+  it('START_MILESTONE on the weekend calendar: K starts Monday, W float 0', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('START_MILESTONE', WEEKEND_CAL));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+  });
+
+  it('a zero-duration TASK in M’s place: K starts Monday, W float 0', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('TASK'));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyStart).toBe('2027-06-28');
+  });
+
+  it('an edge into a milestone between calendars drives it, and the longest path runs through it', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const out = computeSchedule(activities, edges, {
+      dataDate: CROSS_DATA_DATE,
+      calendar: WEEKDAY_CAL,
+      criticalDefinition: 'LONGEST_PATH',
+    });
+    const driving = new Map(out.edges.map((e) => [e.edgeId, e.isDriving]));
+    // W → M: the bound IS M's kept start (Sunday 19:00), which M's own calendar would roll to Monday.
+    expect(driving.get('W-M')).toBe(true);
+    expect(driving.get('M-K')).toBe(true);
+    const critical = out.results.filter((r) => r.isCritical).map((r) => r.activityId);
+    expect(critical).toEqual(expect.arrayContaining(['W', 'M', 'K', 'F']));
+    // A has the five weekdays of slack before W's SNET, so the chain does not reach back through it.
+    expect(critical).not.toContain('A');
+  });
+
+  it('a milestone DRIVEN to exactly the data date keeps the link instant, in both passes', () => {
+    // P is a zero-duration task on an every-minute calendar, so it finishes at the data date itself
+    // (Monday 00:00), and M, a start milestone on the weekend calendar, is driven by it. A bound that
+    // equals the data date is a driver, not the floor: M keeps Monday 00:00 where an undriven M rolls to
+    // Saturday 07:00 (plan offset 2,400).
+    const { get } = runCrossCalendar(
+      [
+        { id: 'P', durationMinutes: 0, type: 'TASK', calendar: allMinutesWorkCalendar },
+        middle('START_MILESTONE', WEEKEND_CAL),
+      ],
+      [link('P', 'M')],
+    );
+    expect(get('M').earlyStartOffset).toBe(0);
+    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-14');
+  });
+
+  it('a milestone nothing drives still rolls its bound, the data date, onto its own calendar', () => {
+    // The one bound D1 does not keep: the data date itself, so a free-standing milestone does not move.
+    // Monday 00:00 is a gap on the weekend calendar; M reads the first working minute of that calendar.
+    const { get } = runCrossCalendar([middle('START_MILESTONE', WEEKEND_CAL)], []);
+    expect(get('M').earlyStartOffset).toBe(5 * WEEKDAY_MINUTES);
+    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-19T07:00');
+    expect(get('M').earlyStart).toBe('2027-06-19');
+  });
+
+  it('FNLT on the Friday after W: W carries its whole weekend, M reads Sunday and floats 0', () => {
+    const { activities, edges } = crossCalendarNetwork(
+      middle('FINISH_MILESTONE', undefined, FNLT_FRIDAY),
+    );
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('W').totalFloat).toBe(-1440);
+    expect(Math.abs(get('M').totalFloat)).toBe(0);
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+  });
+
+  it('the mirror: weekday work → a milestone on the weekend calendar → weekend work', () => {
+    // L is a long weekday task that sets the project finish well past W's FNLT, so A and W have room.
+    const { get } = runCrossCalendar(
+      [
+        { id: 'A', durationMinutes: 5 * WEEKDAY_MINUTES, type: 'TASK' },
+        middle('FINISH_MILESTONE', WEEKEND_CAL),
+        {
+          id: 'W',
+          durationMinutes: 1440,
+          type: 'TASK',
+          calendar: WEEKEND_CAL,
+          constraintType: 'FNLT',
+          constraintDate: '2027-06-27',
+        },
+        { id: 'L', durationMinutes: 20 * WEEKDAY_MINUTES, type: 'TASK' },
+      ],
+      [link('A', 'M'), link('M', 'W')],
+    );
+    // W works Sat 06-19 to Sun 06-20 and may finish as late as Sun 06-27: one weekend of float. A may
+    // finish as late as Fri 06-25, five weekdays after it does; a weekend must not reduce that.
+    expect(get('W').totalFloat).toBe(1440);
+    expect(get('A').totalFloat).toBe(5 * WEEKDAY_MINUTES);
   });
 });

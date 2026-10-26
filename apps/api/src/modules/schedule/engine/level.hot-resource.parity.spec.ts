@@ -23,15 +23,22 @@ import { computeSchedule, levelSchedule, type EngineAssignment } from './index';
  * levelling's OUTPUT moved. If `scaleSpec` itself is changed on purpose, regenerate them from a tree
  * that still has the old engine, never from the one under test.
  */
+/*
+ * **All eight were regenerated on purpose by #539 M2 (ADR-0207 D1)**, which stops snapping a zero-span
+ * activity onto its own calendar. Each shape was diffed against the engine at the parent commit before
+ * its hash was replaced (`docs/specs/milestone-cross-calendar/levelling-hash-evidence.md`). What differs is only in-memory instants on this plan's 14 milestones (11 start,
+ * 3 finish): `passOnStartInstant` and `passOnFinishInstant` with Pass C off, and with it on also
+ * `leveledStartInstant`. No date, offset, float, flag or summary moved in any of the eight.
+ */
 const FROZEN: Record<string, string> = {
-  'hot8 off': '75a75d4a4c03675d83af8dd1b4094c3a077b731660708af9a4dddc4fc71740dd',
-  'hot8 on': '41db6a8623b26bdfe4e5c673227e1fe6149de11a2083190c264d405b44f8de13',
-  'hot3 off': '3c6b23a624130d389f8832fbef951a8b932f9912bd600ca413411eec235c91a4',
-  'hot3 on': '4467a141f9ea891347f5782c74dae498e8b981198e9fcb5716ee4021412fb8b4',
-  'scale8 off': '2c52de827ae4693c6144d87672cb89094bc8be38415b13201d2edd97b2f56e1c',
-  'scale8 on': 'b39743e18e545b3e8ef1d666edaf4d171840fea7ae202de6c132feca49526e1e',
-  'scale2 off': 'e4f28240db69bca68cb1f891f55d85cc15235bb0b5ee1195145d01a6aebf0b41',
-  'scale2 on': '66d75aa6e6155a1037b9f8e75a84d6ceffadce8e8f827d52581f971a1e592327',
+  'hot8 off': 'a15a69a97fd54fbbb79f49c34334dd55ad161df35b368a11b965954fb02f6ce8',
+  'hot8 on': '0b89496ba1c2804e6bacaa35310e97902520c01469c8677118296fc50e559dca',
+  'hot3 off': '67f60b10cad8bbc908a2fb9b4c6202985a87d8718e2cf05896ce0cf8af01359c',
+  'hot3 on': '75c4a28913a13071750d3619e173c9b8c2239c664dbdb3d059eed5abb01ef31d',
+  'scale8 off': '10207b579bea982dbc764c4bce5b569ee1461198e149fb795853fd9e82624bce',
+  'scale8 on': '23e06585377864d6dfd4a7d042e8b2cfc6b0ffdc4d05dd1b4bc9501f28ed81bf',
+  'scale2 off': '20b3859106e43e11328b35efcac8783d3cd8822f392ca2cbd20b5937b1427d7d',
+  'scale2 on': '510bdfe57978fd1c9b5579fe25f1ed016c94c73f9315dfbc69e34e94a7a5692a',
 };
 
 /**

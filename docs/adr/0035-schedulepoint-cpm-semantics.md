@@ -173,6 +173,9 @@ We will implement the following semantics. Each cites the milestone that will bu
 22. **Zero-duration task ≠ milestone:** a zero-duration `TASK` has both a start and a finish (equal),
     can carry resources, and obeys duration-type rules; it is not coerced to a milestone (A7550).
 
+    > **See the ADR-0207 amendment below:** a zero-duration activity keeps the instant its logic gives it
+    > rather than being snapped onto its own calendar; the dating rule stated here is unchanged.
+
     > **§22 amendment — the date a zero-duration task reads (ADR-0162, 2026-09-26).** A zero-duration
     > `TASK` is dated by the day its instant **opens**, and every date given for one (placement,
     > constraint, external date) means the start of that day. This is the rule it always had; §22
@@ -617,3 +620,24 @@ SPI)`, the schedule-**and**-cost-adjusted forecast). All three are computed by t
   it includes the knock-on.
 - The exclusions bullet is unchanged for **resource** delays. The network float, the critical path and
   the fixture JSON are untouched.
+
+### Amendment (ADR-0207, 2026-10-26) — a zero-duration activity keeps the instant its logic gives it
+
+A `START_MILESTONE`, a `FINISH_MILESTONE` and a zero-duration `TASK` occupy no working time, so they
+are not snapped onto their own calendar. In the forward pass each takes its binding lower bound as an
+instant, except that the data date alone is rolled onto its calendar; in the backward pass each takes
+its binding upper bound as an instant. Its neighbours still roll onto their own calendars, so a
+milestone between two activities is transparent: `A → M → B` schedules `B` as `A → B` does, whatever
+calendars `A`, `M` and `B` use. A lag is measured on the calendar its edge resolves to, from that
+instant.
+
+§12 is amended for a finish milestone: a date given for one means midnight at the end of that
+calendar day and is not rolled; on its own calendar this is the same working position as before.
+A finish milestone whose instant is a working-minute start on its calendar is dated by the working
+minute before it (ADR-0155); one whose instant lies in its calendar's non-working time is dated by
+the real minute before it; neither earlier than the data date. A start milestone and a zero-duration
+task are dated by the day their next working minute opens, as before (§22).
+
+Float is still measured on the activity's own calendar (§18, ADR-0037 §4). The golden and scenario
+values this changed are listed in the conformance PR; the new golden is
+`finish-milestone-between-weekday-and-weekend-calendars` in `conformance/goldens.ts`.

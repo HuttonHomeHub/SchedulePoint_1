@@ -6,6 +6,9 @@
 - **Deciders:** James Ewbank (with Claude Code); the open choices were delegated by the product
   owner on 2026-09-26 ("go with the most robust options you consider correct and let the agents
   ratify them").
+- **Amended by:** [ADR-0207](./0207-a-milestone-stays-where-its-logic-puts-it.md): decision 3's "the instant
+  is kept" is now "the position on its own calendar is kept", because a finish milestone's date is read as
+  midnight and no longer rolled (`zero-duration-reexpression.ts`).
 - **Amends:** [ADR-0035](./0035-schedulepoint-cpm-semantics.md) §22 (adds the date rule it never
   had). Notes against [ADR-0155](./0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)
   (decision 5 confirmed; one attribution corrected) and

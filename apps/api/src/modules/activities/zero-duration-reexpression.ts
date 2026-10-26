@@ -14,8 +14,12 @@ import { formatCalendarDate } from '../../common/validation/calendar-date';
  *
  * The rule re-expresses each **stored, unsent** date field one **calendar** day: earlier when the
  * activity enters `FINISH_MILESTONE`, later when it leaves. On any calendar,
- * `finishMilestoneDateInstant(cal, D − 1 day)` is the start of D rolled forward to working time, so
- * the instant is unchanged (spec E17; M0-T2's 60 cases). It is calendar-free, which is also why it is
+ * `finishMilestoneDateInstant(D − 1 day)` is midnight at the start of D, which is zero working minutes
+ * from the start of D rolled forward to working time, so the activity keeps its POSITION on its own
+ * calendar (spec E17; M0-T2's 60 cases). Since #539 (ADR-0207 D2) the milestone's reading is no longer
+ * rolled onto its calendar, so the INSTANT can differ from a task's by the gap before its first working
+ * minute; that matters only to a neighbour on another calendar, which is the case #539 corrects. It is
+ * calendar-free, which is also why it is
  * not a working-day shift: a working-day shift keeps the instant too whenever D is a working day, and
  * differs only in the stored value (a Monday goes to Sunday here, Friday there) and in a round trip
  * from a non-working day (a Sunday comes back as Sunday here, Monday there). The unit suite pins both.

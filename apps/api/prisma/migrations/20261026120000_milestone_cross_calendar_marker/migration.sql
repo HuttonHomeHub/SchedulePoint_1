@@ -1,0 +1,39 @@
+-- MARKER FOR THE ZERO-DURATION ACTIVITY RE-DERIVATION — milestone-cross-calendar M4-T1
+-- (docs/TECH_DEBT.md #539, ADR-0207).
+--
+-- Spec: docs/specs/milestone-cross-calendar/feature-spec.md §1 (defaults), §4.5, §4.6; plan M4-T1.
+-- Approved by the product owner 2026-10-26. Designed by the database-architect agent
+-- (CLAUDE.md §19.3).
+--
+-- THIS FILE CONTAINS NO STATEMENT, ON PURPOSE. Its only product is its own `_prisma_migrations`
+-- row. `finished_at` on that row is the instant this release's engine took over on the host.
+-- `MilestoneRederiveService` recalculates, once, every live plan whose `schedule_computed_at` is
+-- earlier than that instant and which either holds a live zero-span activity (zero input duration,
+-- not an LOE or WBS summary; or any milestone) or is an endpoint of a live cross-plan link whose
+-- other end is one. Those are the plans whose engine-owned date, float and criticality columns the
+-- old engine wrote by snapping a zero-span activity onto its own calendar (ADR-0207 D1–D3) and by
+-- back-rolling a zero-duration remote's late date (cross-plan-derivation.ts, `remoteInstants`).
+-- The three earlier re-derivations key the same way (docs/DATABASE.md "Re-derivation markers").
+--
+-- WHY A FILE OF ITS OWN AND NOT AN EARLIER MARKER, A CONSTANT OR A COLUMN: see the header of
+-- 20260930120000_progressed_predecessor_visual_marker. Every reason given there applies unchanged.
+-- An earlier marker misses plans the old engine recalculated after it. A constant differs per host.
+-- A column on `plans` is DDL on the hottest table for what this row already records.
+-- `prisma migrate deploy` runs in docker-entrypoint.sh before `node dist/main.js`, in the same image
+-- as the engine fix (ADR-0018), so no instant exists at which this row is visible to the old engine.
+--
+-- ORDERING AGAINST M2/M3 (the engine fix). This file lands in M4, after M2 and M3. The only
+-- possible error is over-inclusion: a plan the fixed engine recalculated before this row existed is
+-- recalculated once more, which is idempotent. The unsafe order (marker live before the fixed
+-- engine) cannot be produced by merging M2, M3, then M4.
+--
+-- NOTHING TO REVERSE IN THE SCHEMA. No table, column, index, constraint or application row is
+-- touched. A ROLLBACK OF THE IMAGE MUST DELETE THIS ROW (docs/DEPLOYMENT.md "Rolling back past the
+-- milestone cross-calendar release"). If it does not, plans the previous image recalculates are
+-- stamped after `finished_at`, and a later roll-forward skips them while their dates are still
+-- old-rule. Outside a rollback, do NOT delete the row as a "reset": the next deploy re-applies the
+-- file with a new `finished_at` and repeats the whole re-derivation unasked.
+--
+-- Cost: none at migrate time. A pending marker DOES make the ADR-0192 pre-migrate copy run on hosts
+-- with the /backups mount. That copy is the rollback point holding old-rule dates. The re-derivation's
+-- read cost is measured in docs/DATABASE.md "Re-derivation markers".

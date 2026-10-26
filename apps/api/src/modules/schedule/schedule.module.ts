@@ -10,6 +10,7 @@ import { PlansModule } from '../plans/plans.module';
 import { CrossPlanRederiveService } from './cross-plan-rederive.service';
 import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
 import { FinishMilestoneRederiveService } from './finish-milestone-rederive.service';
+import { MilestoneRederiveService } from './milestone-rederive.service';
 import { ProgressedVisualRederiveService } from './progressed-visual-rederive.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleRepository } from './schedule.repository';
@@ -43,6 +44,8 @@ import { ScheduleService } from './schedule.service';
   // under the old cross-plan rule (#385, spec D8).
   // ProgressedVisualRederiveService: the one-shot boot recalculation of plans whose placed dates the old
   // Pass 2 wrote, and of the plans downstream of them (#421, spec §4.4).
+  // MilestoneRederiveService: the one-shot boot recalculation of plans holding a zero-span activity (or
+  // linked to one) computed under the old calendar snap (#539, ADR-0207).
   providers: [
     ScheduleService,
     ScheduleRepository,
@@ -50,6 +53,7 @@ import { ScheduleService } from './schedule.service';
     FinishMilestoneRederiveService,
     CrossPlanRederiveService,
     ProgressedVisualRederiveService,
+    MilestoneRederiveService,
   ],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column

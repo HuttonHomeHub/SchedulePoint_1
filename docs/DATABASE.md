@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 38
-> models across 77 committed migrations — is the single source of truth for the data model.
+> models across 78 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -2010,7 +2010,7 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
 
 Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
 When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
-it as stale (ADR-0155 D9). Three boot services now recalculate such plans once, and each is
+it as stale (ADR-0155 D9). Four boot services now recalculate such plans once, and each is
 keyed on a migration's `finished_at`:
 
 | Service                           | Marker migration                                        | Has DDL/data |
@@ -2018,6 +2018,7 @@ keyed on a migration's `finished_at`:
 | `FinishMilestoneRederiveService`  | `20260923120000_finish_milestone_end_of_day_placements` | yes          |
 | `CrossPlanRederiveService`        | `20260926120000_cross_plan_lag_working_minutes`         | yes          |
 | `ProgressedVisualRederiveService` | `20260930120000_progressed_predecessor_visual_marker`   | **no**       |
+| `MilestoneRederiveService`        | `20261026120000_milestone_cross_calendar_marker`        | **no**       |
 
 - **Why `finished_at` is the right key.** `docker-entrypoint.sh` runs `prisma migrate deploy`
   before `node dist/main.js`, in the image that carries the engine change (ADR-0018). So the row
@@ -2060,6 +2061,45 @@ keyed on a migration's `finished_at`:
   - **No index is added.** The read is bounded by one scan of `activities` once per host, and
     under 1 ms after that. An index on `actual_start`/`actual_finish`/`expected_finish` would serve
     only this once-per-release read, and every progress write would pay for it for ever.
+- **The #539 marker, and what its pending set adds** (`MilestoneRederiveService`, ADR-0207; designed
+  by the database-architect). Same shape, no statement. A plan is pending when it is live, has a data
+  date, was computed before the marker, and either holds a live zero-span activity or is an endpoint of
+  a live cross-plan link whose other end is one. The activity predicate mirrors the engine's
+  `isZeroSpan` (zero duration, not a level-of-effort or WBS summary) **widened to both milestone
+  types**, because nothing forces a milestone's stored duration to 0 (the column defaults to 480; only
+  the service enforces it). A zero-duration LOE or summary is excluded: those types always store 0, and
+  counting them would make every plan with a summary pending.
+- **The cross-plan arms are not optional.** The derivation stopped back-rolling a zero-duration
+  REMOTE's late date. The remote is a successor in another plan, read through the upstream plan's
+  OUTGOING edge, so a plan with no zero-span activity of its own whose outgoing link reaches a
+  milestone reads a different late bound now. It is upstream of the plan the downstream extension
+  starts from, and ADR-0045 staleness reads upstream `schedule_computed_at` only, so nothing else
+  would flag it. The incoming arm is already covered by the downstream extension when the upstream
+  plan recalculates in the same run; it is included for a run in which that plan failed.
+- **The #539 pending read, measured** by the database-architect on a local scratch database (PostgreSQL 16.15; production runs PostgreSQL 17, so the figures are indicative of shape, not absolute) (`77 migrations` plus a hand-inserted marker, 10
+  organisations, 2,000 plans, 200,000 activities, 100 live cross-plan links from plans with no
+  zero-span activity to start milestones; 5% soft-deleted, 2% never calculated, one plan in seven
+  holding only a zero-duration LOE and summary; 1,710 pending, checked by hand with an independent
+  `count(*)`). `EXPLAIN ANALYZE`, last five of six runs:
+  - **First boot:** 31–46 ms: one parallel scan of `activities` into the `zero_span` CTE, hashed, with
+    the edges hash-joined. No JIT.
+  - **Steady state:** 0.47–0.83 ms. `stale` returns nothing, so `zero_span` never runs.
+  - **A few left pending** (10 failing): 23–31 ms.
+  - **Two shapes were measured and rejected; do not "simplify" into either.** Three `OR EXISTS` arms
+    correlated on `plans` returned the right rows, but the plan cost (225,184) exceeded
+    `jit_above_cost` (100,000), so JIT compiled on every boot: 51 ms of JIT for a steady state that
+    finds nothing. One `EXISTS` with `a.plan_id = p.id OR a.id IN (…edges…)` took 28–31 **seconds** on
+    the first boot, because the correlated OR blocks every index and hash. The CTE form materialises
+    the stale plans first.
+  - **No `organization_id` predicate in the subqueries, and no new index**, for the #421 reasons above.
+- **Restoring a copy.** A copy taken before this release has no marker row; `migrate deploy` applies it
+  with `finished_at` = now and every affected plan in the copy is re-derived. A copy taken after it
+  carries the marker, and plans already done are stamped after it. A plan restored from the recycle bin
+  keeps its old `schedule_computed_at`, so it is pending at the next boot (as with the three above).
+- **Rolling the image back must delete the marker row** (`docs/DEPLOYMENT.md` "Rolling back past the
+  milestone cross-calendar release"). The previous image ignores an extra applied row, stamps the plans
+  it recalculates after `finished_at`, and a later roll-forward would never re-derive them. The #421
+  marker has the same gap and no rollback section (`docs/TECH_DEBT.md` #556).
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

@@ -2,6 +2,13 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
+import {
+  crossCalendarNetwork,
+  link,
+  middle,
+  runCrossCalendar,
+  WEEKEND_CAL,
+} from './compute.cross-calendar.fixture';
 import type { EngineActivity, EngineEdge } from './types';
 import {
   allMinutesWorkCalendar,
@@ -160,5 +167,80 @@ describe('what the rule leaves alone', () => {
       [],
     );
     expect(get('M').earlyFinish).toBe('2026-01-02');
+  });
+});
+
+/**
+ * **A finish milestone after work on another calendar reads the day that work ends** (#539, Q1 A;
+ * `docs/specs/milestone-cross-calendar/`; amends ADR-0155 decisions 1, 3 and 4).
+ *
+ * `crossCalendarNetwork` is the row's fixture: weekend work `W` ends Sunday 2027-06-27 19:00 and the
+ * milestone sits on the weekday plan calendar. The first case passes since M2 (D1 and D3); the FNLT and Sunday-placement cases
+ * needed a date given for a finish milestone read as midnight at the end of its day (M3, D2). They began
+ * as `it.fails`, asserting the correct value while the engine was wrong. The plain `it` control is
+ * ADR-0155's single-calendar reading, which the fix must not move.
+ */
+describe('a finish milestone after weekend work (#539)', () => {
+  it('on the plan calendar reads Sunday, the day the weekend work ends', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('M').earlyStart).toBe('2027-06-27');
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+    expect(get('M').lateFinish).toBe('2027-06-27');
+  });
+
+  it('FNLT on the Friday before: W carries its whole weekend, M floats 0 and reads Sunday', () => {
+    const { activities, edges } = crossCalendarNetwork(
+      middle('FINISH_MILESTONE', undefined, {
+        constraintType: 'FNLT',
+        constraintDate: '2027-06-25',
+      }),
+    );
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('W').totalFloat).toBe(-1440);
+    expect(Math.abs(get('M').totalFloat)).toBe(0);
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+  });
+
+  it('control: a lead into a finish milestone at a day’s opening still reads the day before (ADR-0155)', () => {
+    // FS with a one-day lead on a 24-hour-day calendar lands at Friday 00:00, the opening of a
+    // working day on the milestone's own calendar: the day before, as ADR-0155 decided.
+    const { get } = run([A, milestone()], [{ ...fs('A', 'M'), lagMinutes: -DAY }]);
+    expect(get('M').earlyFinish).toBe('2026-01-08');
+  });
+
+  it('placed on a Sunday reads Sunday, and is not early after Friday work', () => {
+    const { get } = run([A, milestone({ visualStart: '2026-01-11' })], [fs('A', 'M')]);
+    expect(get('M').visualEffectiveStart).toBe('2026-01-11');
+    expect(get('M').visualConflict).toBe(false);
+  });
+});
+
+describe('a date given for a finish milestone is not rolled onto its calendar (#539 D2)', () => {
+  it('FNET on a Friday lets a weekend successor start that Saturday, not the weekend after', () => {
+    // A (five weekdays) ends Friday 2027-06-18; the weekday-calendar milestone is held to the end of
+    // Friday 06-25 (Saturday 00:00). Rolled onto its own calendar that was Monday 06-28 08:00, which a
+    // weekend task rolled to Saturday 07-03.
+    const { get } = runCrossCalendar(
+      [
+        { id: 'A', durationMinutes: 5 * 480, type: 'TASK' },
+        middle('FINISH_MILESTONE', undefined, {
+          constraintType: 'FNET',
+          constraintDate: '2027-06-25',
+        }),
+        { id: 'S', durationMinutes: 720, type: 'TASK', calendar: WEEKEND_CAL },
+      ],
+      [link('A', 'M'), link('M', 'S')],
+    );
+    expect(get('S').earlyStart).toBe('2027-06-26');
+  });
+
+  it('a Friday placement after Sunday work is reported as earlier than logic', () => {
+    const { activities, edges } = crossCalendarNetwork(
+      middle('FINISH_MILESTONE', undefined, { visualStart: '2027-06-25' }),
+    );
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('M').visualConflict).toBe(true);
+    expect(get('M').visualConflictReason).toBe('EARLIER_THAN_LOGIC');
   });
 });

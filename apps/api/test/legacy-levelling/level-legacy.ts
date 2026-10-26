@@ -2,19 +2,26 @@
 // #84), kept verbatim apart from its import paths. The differential in
 // `src/modules/schedule/engine/level.legacy-differential.spec.ts` holds the shipped engine to it.
 // `test/` is outside the production build. Do not "fix" or modernise it: its value is that it is old.
+// The one exception is #539 (ADR-0207 D1/D3): a zero-span activity now keeps its instant and a finish
+// milestone is dated from its instant, which changes what levelling answers for those rows on purpose.
+// The three sites that implement it (the link push, the milestone short-cut in `earliestFeasibleStart`
+// and `leveledDate`) carry the same edit here, so the differential still holds the speed-up and nothing
+// else to account.
 import {
   isLoe,
   isMandatory,
   isMilestone,
   isSummary,
+  isZeroSpan,
 } from '../../src/modules/schedule/engine/constraints';
 import { forwardLowerBound } from '../../src/modules/schedule/engine/edge-bounds';
 import { buildGraph } from '../../src/modules/schedule/engine/graph';
 import {
   advanceWorking,
-  finishMilestoneDisplayIndex,
+  finishMilestoneReportedDate,
   offsetFromDataDate,
   rollForwardToWorking,
+  workingIndexDate,
 } from '../../src/modules/schedule/engine/instants';
 import type {
   EngineActivity,
@@ -537,7 +544,8 @@ export function levelSchedule(
 
     const r = resultById.get(id)!;
     const anchorInst = instOfOffset(accessors.startOffset(r));
-    const earliest = rollForwardToWorking(cal, Math.max(anchorInst, floorL));
+    const linkInst = Math.max(anchorInst, floorL);
+    const earliest = isZeroSpan(a) ? linkInst : rollForwardToWorking(cal, linkInst);
     const existing = overlayById.get(id);
     if ((existing ? existing.leveledStartInstant : anchorInst) >= earliest) continue;
 
@@ -708,9 +716,9 @@ function earliestFeasibleStart(
   d: number,
   perResource: readonly ResourceContention[],
 ): { start: number; finish: number } {
-  const start0 = rollForwardToWorking(cal, esAbs);
   // A milestone (zero duration) occupies no span, so no resource can ever block it.
-  if (d === 0) return { start: start0, finish: start0 };
+  if (d === 0) return { start: esAbs, finish: esAbs };
+  const start0 = rollForwardToWorking(cal, esAbs);
 
   // With every lag at zero the candidates are the blackout ends themselves, in the order the walk finds
   // them, and a run of known length either fits in the first gap or is pushed past the blackout that
@@ -803,14 +811,9 @@ function leveledDate(
   isFinish: boolean,
   type: EngineActivity['type'],
 ): string {
+  if (type === 'FINISH_MILESTONE') {
+    return finishMilestoneReportedDate(cal, dataDate, dataDateAbs, inst);
+  }
   const own = offsetFromDataDate(cal, dataDateAbs, inst);
-  // A finish milestone is reported on the day it closes (#381), start and finish alike, exactly as
-  // `compute.ts` dates its own; every other type reads its own offset.
-  const reported = type === 'FINISH_MILESTONE' ? finishMilestoneDisplayIndex(own) : own;
-  const index = isFinish && durationMinutes > 0 ? reported - 1 : reported;
-  const endBoundary = cal.addWorkingTime(dataDate, index + 1);
-  const iso = endBoundary.length > 10 ? `${endBoundary}:00Z` : `${endBoundary}T00:00:00Z`;
-  const instant = new Date(iso);
-  instant.setUTCMinutes(instant.getUTCMinutes() - 1);
-  return instant.toISOString().slice(0, 10);
+  return workingIndexDate(cal, dataDate, isFinish && durationMinutes > 0 ? own - 1 : own);
 }

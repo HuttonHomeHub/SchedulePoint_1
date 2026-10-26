@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 27 API modules
-> (`apps/api/src/modules/`), 38 Prisma models across 77 migrations, 1809 web
+> (`apps/api/src/modules/`), 38 Prisma models across 78 migrations, 1809 web
 > source files with 49 Playwright suites beside the base journey, and
-> 207 ADRs.
+> 208 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -114,7 +114,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   27 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (38 models) + 77 migrations
+│   │   ├── prisma/           #   Schema (38 models) + 78 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -437,7 +437,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0032** _(Proposed)_ — Canvas-first plan authoring — a live empty canvas, coalesced auto-recalc, on-canvas activity types, and a two-click Link tool-mode → [`0032-canvas-first-plan-authoring.md`](docs/adr/0032-canvas-first-plan-authoring.md)
 - **ADR-0033** _(Accepted; amended by ADR-0148 — the two scheduling modes are gone)_ — Scheduling modes & a de-overloaded plan start — Early/Visual authoring, a Late-Start overlay, advisory `visualStart`, and a mandatory data date → [`0033-scheduling-modes-and-canvas-planning.md`](docs/adr/0033-scheduling-modes-and-canvas-planning.md)
 - **ADR-0034** _(Accepted)_ — Engine conformance & validation methodology → [`0034-engine-conformance-methodology.md`](docs/adr/0034-engine-conformance-methodology.md)
-- **ADR-0035** _(Proposed; §28 and §31 amended by ADR-0166, §28 again by ADR-0168)_ — SchedulePoint CPM semantics (the golden contract) → [`0035-schedulepoint-cpm-semantics.md`](docs/adr/0035-schedulepoint-cpm-semantics.md)
+- **ADR-0035** _(Proposed; §28 and §31 amended by ADR-0166, §28 again by ADR-0168, §12 and §22 by ADR-0207)_ — SchedulePoint CPM semantics (the golden contract) → [`0035-schedulepoint-cpm-semantics.md`](docs/adr/0035-schedulepoint-cpm-semantics.md)
 - **ADR-0036** _(Accepted)_ — Hour/shift-granular calendars & durations (engine rework) → [`0036-hour-granular-calendars-and-durations.md`](docs/adr/0036-hour-granular-calendars-and-durations.md)
 - **ADR-0037** _(Accepted)_ — Per-activity calendars & the engine's absolute-instant axis → [`0037-per-activity-calendars-and-instant-axis.md`](docs/adr/0037-per-activity-calendars-and-instant-axis.md)
 - **ADR-0038** _(Accepted)_ — WBS activity hierarchy — adjacency-list parent tree & the WBS_SUMMARY type → [`0038-wbs-activity-hierarchy.md`](docs/adr/0038-wbs-activity-hierarchy.md)
@@ -554,14 +554,14 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0152** _(Accepted)_ — A row is chosen for how its links will route → [`0152-a-row-is-chosen-for-how-its-links-will-route.md`](docs/adr/0152-a-row-is-chosen-for-how-its-links-will-route.md)
 - **ADR-0153** _(Accepted)_ — An edit moves only the bar that caused an overlap → [`0153-an-edit-moves-only-the-bar-that-caused-an-overlap.md`](docs/adr/0153-an-edit-moves-only-the-bar-that-caused-an-overlap.md)
 - **ADR-0154** _(Accepted)_ — A link says what drives, which way, and how long it waits → [`0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md`](docs/adr/0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md)
-- **ADR-0155** _(Accepted)_ — A finish milestone is dated by the day it closes → [`0155-a-finish-milestone-is-dated-by-the-day-it-closes.md`](docs/adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)
+- **ADR-0155** _(Accepted; amended by ADR-0207)_ — A finish milestone is dated by the day it closes → [`0155-a-finish-milestone-is-dated-by-the-day-it-closes.md`](docs/adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)
 - **ADR-0156** _(Accepted)_ — A SchedulePoint layout travels in an inert field that only SchedulePoint reads → [`0156-a-schedulepoint-layout-travels-in-an-inert-field.md`](docs/adr/0156-a-schedulepoint-layout-travels-in-an-inert-field.md)
 - **ADR-0157** _(Accepted; D2 and D4 amended by ADR-0199)_ — A mark's class is its hue and its shape, and the grid is the quietest mark → [`0157-a-marks-class-is-its-hue-and-its-shape.md`](docs/adr/0157-a-marks-class-is-its-hue-and-its-shape.md)
 - **ADR-0158** _(Accepted)_ — A link leaves and enters at its node → [`0158-a-link-leaves-and-enters-at-its-node.md`](docs/adr/0158-a-link-leaves-and-enters-at-its-node.md)
 - **ADR-0159** _(Accepted)_ — A route reads the text it is drawn beside, and a two-way track splits at its node → [`0159-a-route-reads-the-text-it-is-drawn-beside.md`](docs/adr/0159-a-route-reads-the-text-it-is-drawn-beside.md)
 - **ADR-0160** _(Accepted; converse rule built 2026-10-22 as `check:ci-roster` R9–R13)_ — A gate CI runs is a gate prepush runs → [`0160-a-gate-ci-runs-is-a-gate-prepush-runs.md`](docs/adr/0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)
 - **ADR-0161** _(Accepted)_ — A cross-plan link is the same link in one plan → [`0161-a-cross-plan-link-is-the-same-link-in-one-plan.md`](docs/adr/0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)
-- **ADR-0162** _(Accepted)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
+- **ADR-0162** _(Accepted; D3 amended by ADR-0207)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
 - **ADR-0163** _(Accepted)_ — A guest sees the plan as placed → [`0163-a-guest-sees-the-plan-as-placed.md`](docs/adr/0163-a-guest-sees-the-plan-as-placed.md)
 - **ADR-0164** _(Accepted)_ — A lint warning is a failure, and a gate has no pass-with-findings outcome → [`0164-a-lint-warning-is-a-failure.md`](docs/adr/0164-a-lint-warning-is-a-failure.md)
 - **ADR-0165** _(Accepted)_ — A long table renders the rows in view → [`0165-a-long-table-renders-the-rows-in-view.md`](docs/adr/0165-a-long-table-renders-the-rows-in-view.md)
@@ -609,6 +609,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0204** _(Accepted; amends ADR-0082 §2, extends ADR-0117; amended for the Gantt cell, #538)_ — A shaded control says why, to every input → [`0204-a-shaded-control-says-why-to-every-input.md`](docs/adr/0204-a-shaded-control-says-why-to-every-input.md)
 - **ADR-0205** _(Accepted; amends ADR-0051 §4)_ — A guest sees the swimlanes the diagram is drawn in → [`0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md`](docs/adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)
 - **ADR-0206** _(Accepted; amends ADR-0026, ADR-0031, ADR-0063, ADR-0090, ADR-0100, ADR-0152 and ADR-0153)_ — A swimlane is a projection of lanes: each basis keeps its own lane, the rule is in the scene and the name in the gutter → [`0206-a-swimlane-is-a-projection-of-lanes.md`](docs/adr/0206-a-swimlane-is-a-projection-of-lanes.md)
+- **ADR-0207** _(Accepted; amends ADR-0035 §12 and §22, ADR-0155 and ADR-0162 D3)_ — A milestone stays where its logic puts it, across calendars → [`0207-a-milestone-stays-where-its-logic-puts-it.md`](docs/adr/0207-a-milestone-stays-where-its-logic-puts-it.md)
 - **ADR-0208** _(Proposed; amends ADR-0053 §5)_ — An import reuses a calendar it would have copied exactly → [`0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`](docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)
 
 A lighter-weight running log of smaller decisions is in

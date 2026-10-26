@@ -104,7 +104,8 @@ function mixedName(cell: CrossPlanMatrixCell, cals: TwinCalendars): string {
 describe('#385 FC-1 mixed-calendar axis: plans on different calendars (spec D5, CQ-2)', () => {
   for (const cals of MIXED_PAIRS) {
     for (const [row, cells] of groups(mixedCells())) {
-      it(`${row.replace(' standard', '')} upstream=${cals.upstream} downstream=${cals.downstream}`, () => {
+      const title = `${row.replace(' standard', '')} upstream=${cals.upstream} downstream=${cals.downstream}`;
+      it(title, () => {
         for (const cell of cells) expectEqual(cell, mixedName(cell, cals), cals);
       });
     }

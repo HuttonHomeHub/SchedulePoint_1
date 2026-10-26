@@ -60,14 +60,19 @@ export function offsetFromDataDate(
  * its last day. Reading the milestone's own dates (placement, constraints, external dates) as the
  * START of their day put it a day before that moment: a planner who dropped it on its predecessor's
  * last day got "placed earlier than logic allows", and an `FNLT` on that day gave a false day of
- * negative float. The end of day D is the start of day D+1, rolled forward to the next working minute
- * — exactly where the engine puts a finish milestone after a task ending on D.
+ * negative float. The end of day D is midnight at the start of day D+1.
+ *
+ * **It is not rolled onto the milestone's calendar** (#539, ADR-0207 D2). A milestone keeps the instant
+ * its logic gives it (D1), so a date given for it is an instant too: rolled to the next working minute
+ * it would be Monday 08:00 for a Friday on a weekday calendar, which another calendar reads as a
+ * weekend later than the moment the planner typed. On the milestone's own calendar nothing changes, as
+ * no working minute lies between midnight and the minute it was rolled to.
  *
  * A date carrying a time of day is already an instant and is read as one.
  */
-export function finishMilestoneDateInstant(cal: WorkingTimeCalendar, date: string): number {
+export function finishMilestoneDateInstant(date: string): number {
   const abs = instantToAbsMinutes(date);
-  return rollForwardToWorking(cal, date.length > 10 ? abs : abs + MINUTES_PER_DAY);
+  return date.length > 10 ? abs : abs + MINUTES_PER_DAY;
 }
 
 /**
@@ -77,6 +82,55 @@ export function finishMilestoneDateInstant(cal: WorkingTimeCalendar, date: strin
  */
 export function finishMilestoneDisplayIndex(ownOffset: number): number {
   return Math.max(ownOffset - 1, 0);
+}
+
+/**
+ * The calendar day of the working-minute at inclusive offset `index` on `calendar` (ADR-0023).
+ * Take the instant one working-minute later (the exclusive boundary after `index`) and step back
+ * a single real minute, so a start or finish that lands exactly on a **non-working gap** reads as
+ * its true working day — the finish day for a finish, the next working day for a start — not the
+ * empty gap instant. `index` is an offset **on `calendar`** (each activity uses its own).
+ */
+export function workingIndexDate(
+  calendar: WorkingTimeCalendar,
+  dataDate: string,
+  index: number,
+): string {
+  const endBoundary = calendar.addWorkingTime(dataDate, index + 1);
+  const iso = endBoundary.length > 10 ? `${endBoundary}:00Z` : `${endBoundary}T00:00:00Z`;
+  const instant = new Date(iso);
+  instant.setUTCMinutes(instant.getUTCMinutes() - 1);
+  return instant.toISOString().slice(0, 10);
+}
+
+/**
+ * **The day a `FINISH_MILESTONE` at `inst` is reported on** (#539, ADR-0207 D3; amends ADR-0155
+ * decision 1). Read from the instant, because the working-minute offset cannot tell Friday 16:00 from
+ * the Sunday 19:00 that weekend work ended at: on a weekday calendar both are the same offset.
+ *
+ * - An instant that opens a working minute on the milestone's own calendar reads the day of the
+ *   working minute before it (ADR-0155: a lead or an `SS` link into a day's opening reads the day
+ *   before), never before the data date.
+ * - Any other instant sits in the calendar's non-working time, which only another calendar's work, an
+ *   elapsed lag or a date given for it can put a finish milestone in; it reads the day of the real
+ *   minute before it, again never before the data date. After a weekday task ending Friday 16:00 that
+ *   is Friday, as before; after weekend work ending Sunday 19:00 it is Sunday.
+ */
+export function finishMilestoneReportedDate(
+  cal: WorkingTimeCalendar,
+  dataDate: string,
+  dataDateAbs: number,
+  inst: number,
+): string {
+  if (rollForwardToWorking(cal, inst) === inst) {
+    return workingIndexDate(
+      cal,
+      dataDate,
+      finishMilestoneDisplayIndex(offsetFromDataDate(cal, dataDateAbs, inst)),
+    );
+  }
+  const day = absMinutesToInstant(inst - 1).slice(0, 10);
+  return day < dataDate ? dataDate : day;
 }
 
 /** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
@@ -99,7 +153,7 @@ export function startDateInstant(
   date: string,
   type: ActivityType,
 ): number {
-  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(date);
   return rollForwardToWorking(cal, instantToAbsMinutes(date));
 }
 
@@ -126,7 +180,7 @@ export function finishDateInstant(
   type: ActivityType,
   durationMinutes: number,
 ): number {
-  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(date);
   if (durationMinutes === 0) return rollForwardToWorking(cal, instantToAbsMinutes(date));
   return rollBackwardToWorking(cal, anchorAbs, instantToAbsMinutes(nextCalendarDay(date)));
 }

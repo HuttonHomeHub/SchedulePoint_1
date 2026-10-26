@@ -9,16 +9,18 @@ import {
   isMandatory,
   isMilestone,
   isSummary,
+  isZeroSpan,
 } from './constraints';
 import { backwardUpperBound, forwardLowerBound } from './edge-bounds';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
-  finishMilestoneDisplayIndex,
+  finishMilestoneReportedDate,
   offsetFromDataDate,
   rollBackwardToWorking,
   rollForwardToWorking,
   startDateInstant,
+  workingIndexDate,
 } from './instants';
 import {
   nextCalendarDay,
@@ -111,21 +113,6 @@ function isFrozenByActuals(progress: ResolvedProgress): boolean {
   return progress.actualStartInst !== null || progress.status === 'COMPLETE';
 }
 
-/**
- * The calendar day of the working-minute at inclusive offset `index` on `calendar` (ADR-0023).
- * Take the instant one working-minute later (the exclusive boundary after `index`) and step back
- * a single real minute, so a start or finish that lands exactly on a **non-working gap** reads as
- * its true working day — the finish day for a finish, the next working day for a start — not the
- * empty gap instant. `index` is an offset **on `calendar`** (each activity uses its own).
- */
-function workingIndexDate(calendar: WorkingTimeCalendar, dataDate: string, index: number): string {
-  const endBoundary = calendar.addWorkingTime(dataDate, index + 1);
-  const iso = endBoundary.length > 10 ? `${endBoundary}:00Z` : `${endBoundary}T00:00:00Z`;
-  const instant = new Date(iso);
-  instant.setUTCMinutes(instant.getUTCMinutes() - 1);
-  return instant.toISOString().slice(0, 10);
-}
-
 /** The engine's full result: per-activity schedule, per-edge driving flags, plan roll-up. */
 export interface EngineOutput {
   results: EngineResult[];
@@ -211,6 +198,9 @@ export function computeSchedule(
     }
     const inProgress = progress.status === 'IN_PROGRESS';
     let lower = dataDateAbs; // the data date floors any (remaining) work — never before it (§2)
+    // The latest link bound that reached this activity, or -Infinity when none did. It is what tells a
+    // milestone DRIVEN to exactly the data date from one nothing drives (#539, ADR-0207 D1).
+    let linkBound = Number.NEGATIVE_INFINITY;
     for (const edge of graph.incoming.get(id)!) {
       // A Level-of-Effort predecessor never drives or bounds its successor (ADR-0035 §21): the LOE is
       // a hammock that spans its neighbours, so its own (derived) dates carry no logic downstream.
@@ -228,6 +218,7 @@ export function computeSchedule(
       const predStart = earlyStart.get(edge.predecessorId)!;
       const predFinish = earlyFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predStart, predFinish, cal, duration, planCalendar);
+      if (bound > linkBound) linkBound = bound;
       if (bound > lower) lower = bound;
     }
     // Suspend/resume (§4): a resume date floors the remaining at max(data date, resume date), so a
@@ -263,7 +254,15 @@ export function computeSchedule(
     // External-driven (§30): the external bound raised the start above pure logic AND survived the
     // constraint clamp (no hard pin discarded it) — observability only, it moved no date logic didn't.
     if (withExternal > logicLower && lower === withExternal) externalDriven.set(id, true);
-    const workStart = rollForwardToWorking(cal, lower);
+    // A zero-span activity keeps the instant its logic gives it (#539, ADR-0207 D1) rather than snapping
+    // onto its own calendar, so a milestone between calendars is transparent: `A → M → B` gives B what
+    // `A → B` gives it. The one exception is the data date FLOOR with nothing driving the activity, which
+    // still rolls onto its own calendar so a free-standing milestone does not move. A link that reaches
+    // the data date exactly is a driver, and its instant wins.
+    const workStart =
+      isZeroSpan(activity) && (lower !== dataDateAbs || linkBound >= dataDateAbs)
+        ? lower
+        : rollForwardToWorking(cal, lower);
     // Expected Finish (§9): with the plan option on, RECOMPUTE the work remaining from `workStart` so
     // the early finish lands on the target date (its working-end boundary, like an actual finish),
     // floored at `workStart` — a target on/before the start collapses it to zero, never negative. It
@@ -320,32 +319,36 @@ export function computeSchedule(
     const activity = graph.activities.get(id)!;
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
-    let logicEarliest = dataDateAbs;
+    let logicBound = dataDateAbs;
+    let pass2LinkBound = Number.NEGATIVE_INFINITY; // as Pass 1's `linkBound`
     for (const edge of graph.incoming.get(id)!) {
       // An LOE predecessor never pushes its successor in the effective-Visual pass either (§21).
       if (isLoe(graph.activities.get(edge.predecessorId)!.type)) continue;
       const predPs = visualPropStart.get(edge.predecessorId)!;
       const predPf = visualPropFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predPs, predPf, cal, duration, planCalendar);
-      if (bound > logicEarliest) logicEarliest = bound;
+      if (bound > pass2LinkBound) pass2LinkBound = bound;
+      if (bound > logicBound) logicBound = bound;
     }
-    logicEarliest = rollForwardToWorking(
-      cal,
-      clampForwardStart(
+    const clampedEarliest = clampForwardStart(
+      activity,
+      // The effective-Visual logic-earliest respects the external early start too (§30.1), so a bar's
+      // pushed baseline reflects an imported commitment — consistent with the pure pass. No-op absent.
+      clampExternalForwardStart(
         activity,
-        // The effective-Visual logic-earliest respects the external early start too (§30.1), so a bar's
-        // pushed baseline reflects an imported commitment — consistent with the pure pass. No-op absent.
-        clampExternalForwardStart(
-          activity,
-          logicEarliest,
-          cal,
-          dataDateAbs,
-          ignoreExternalRelationships,
-        ),
+        logicBound,
         cal,
         dataDateAbs,
+        ignoreExternalRelationships,
       ),
+      cal,
+      dataDateAbs,
     );
+    // The same rule as Pass 1: a zero-span activity keeps its logic instant, bar the undriven data date.
+    const logicEarliest =
+      isZeroSpan(activity) && (clampedEarliest !== dataDateAbs || pass2LinkBound >= dataDateAbs)
+        ? clampedEarliest
+        : rollForwardToWorking(cal, clampedEarliest);
     // A finish milestone's placement means the END of its day (#381): dropped on its predecessor's
     // last day, it sits exactly where logic puts it rather than a day early. `startDateInstant` is
     // the one reader of "a date given for a start", shared with `planLevellingApplication`, so the
@@ -408,7 +411,11 @@ export function computeSchedule(
       // The bound drives when, rolled onto the successor's calendar, it is exactly its early start.
       edgeResults.push({
         edgeId: edge.id,
-        isDriving: rollForwardToWorking(cal, bound) === successorStart,
+        // A zero-span successor keeps an instant that may sit in its calendar's non-working time (D1), so
+        // both sides are read at the position they have on its calendar: a link and a constraint that
+        // fall in the same gap are the same position, as they were when the successor was rolled. For
+        // any other successor the start is a working minute already and this is the old test.
+        isDriving: rollForwardToWorking(cal, bound) === rollForwardToWorking(cal, successorStart),
       });
     }
   }
@@ -507,7 +514,8 @@ export function computeSchedule(
     // External-driven (§30): the external late finish tightened the bound below pure logic AND survived
     // the constraint clamps (no hard pin discarded it). OR-ed with the forward-pass flag.
     if (withExternalUpper < logicUpper && upper === withExternalUpper) externalDriven.set(id, true);
-    let finish = rollBackwardToWorking(cal, dataDateAbs, upper);
+    // The mirror of the forward pass (D1): a zero-span activity keeps the upper bound its logic gives it.
+    let finish = isZeroSpan(activity) ? upper : rollBackwardToWorking(cal, dataDateAbs, upper);
     if (progress.status === 'IN_PROGRESS') {
       // The remaining work can't be scheduled to finish before its own early finish; the started
       // portion pins the late start at the actual start. Float is then measured on the finish side
@@ -878,27 +886,45 @@ export function computeSchedule(
     const started = progress.actualStartInst !== null;
     const isComplete = progress.status === 'COMPLETE';
     /**
-     * **A finish milestone is reported on the day it closes** (#381; amends ADR-0023 §4). It sits on
-     * the boundary its predecessor finishes at, which is the start of the NEXT working minute, and
-     * ADR-0023 dated a zero-duration node by that minute's day — so it read the day after (after a
-     * Friday finish, the Monday). P6 and NetPoint print the predecessor's last day, and so does a
-     * task's finish here. Only the reported day moves: the instant, the float and every successor
-     * are unchanged. A start milestone keeps its start's day, which is already right.
+     * **A finish milestone is reported on the day it closes** (#381; amends ADR-0023 §4; #539,
+     * ADR-0207 D3). It sits on the boundary its predecessor finishes at, which is the start of the NEXT
+     * working minute, and ADR-0023 dated a zero-duration node by that minute's day — so it read the day
+     * after (after a Friday finish, the Monday). P6 and NetPoint print the predecessor's last day, and
+     * so does a task's finish here. Only the reported day moves: the instant, the float and every
+     * successor are unchanged. A start milestone keeps its start's day, which is already right.
+     *
+     * The day is read from the INSTANT, not the working-minute offset (#539): the offset cannot tell
+     * Friday 16:00 from the Sunday 19:00 that weekend work ended at, so a milestone kept at the latter
+     * read Friday. `dayOf` is that choice for one instant; every other type reads its own offset.
      */
-    const reportIndex = (ownOffset: number): number =>
-      activity.type === 'FINISH_MILESTONE' ? finishMilestoneDisplayIndex(ownOffset) : ownOffset;
-    const earlyStartDate = started
-      ? activity.actualStart!
-      : workingIndexDate(cal, dataDate, reportIndex(esOwn));
-    const earlyFinishDate = isComplete
-      ? activity.actualFinish!
-      : workingIndexDate(cal, dataDate, reportIndex(inclusiveFinishOwn));
-    const lateStartDate = started
-      ? activity.actualStart!
-      : workingIndexDate(cal, dataDate, reportIndex(lsOwn));
+    const dayOf = (inst: number, ownOffset: number): string =>
+      activity.type === 'FINISH_MILESTONE'
+        ? finishMilestoneReportedDate(cal, dataDate, dataDateAbs, inst)
+        : workingIndexDate(cal, dataDate, ownOffset);
+    // A finish milestone the planner placed reads back the day they typed (#539, ADR-0207 D2): its
+    // instant is the end of that day, which on a Sunday is the Monday opening and would read Friday.
+    const placedDayOf = (inst: number, ownOffset: number): string =>
+      activity.type === 'FINISH_MILESTONE' &&
+      activity.visualStart != null &&
+      activity.visualStart.length === 10
+        ? activity.visualStart
+        : dayOf(inst, ownOffset);
+    const earlyStartDate = started ? activity.actualStart! : dayOf(esInst, esOwn);
+    const earlyFinishDate = isComplete ? activity.actualFinish! : dayOf(esInst, inclusiveFinishOwn);
+    // A milestone with no negative float sits where its early position is on its own calendar, so a
+    // late date earlier than the early one would claim float it does not have: its late dates are
+    // never read before the early date (a finish milestone after weekend work, whose late instant is
+    // the Monday opening the work leads to, reads the Sunday it closes).
+    const lateDayOf = (inst: number, ownOffset: number): string => {
+      const day = dayOf(inst, ownOffset);
+      return activity.type === 'FINISH_MILESTONE' && finishFloat >= 0 && day < earlyStartDate
+        ? earlyStartDate
+        : day;
+    };
+    const lateStartDate = started ? activity.actualStart! : lateDayOf(lsInst, lsOwn);
     const lateFinishDate = isComplete
       ? activity.actualFinish!
-      : workingIndexDate(cal, dataDate, reportIndex(inclusiveLateFinishOwn));
+      : lateDayOf(lsInst, inclusiveLateFinishOwn);
     // Pass 2 defers to Pass 1 wherever an actual froze an endpoint (M-P) — see the two
     // `visualEffective*` fields below for why this is one predicate and not two.
     const frozenByActuals = isFrozenByActuals(progress);
@@ -910,7 +936,15 @@ export function computeSchedule(
     // `duration === 0` (ADR-0035 §22): a zero-duration TASK is a task here, so it loses the tie-break
     // to a finish milestone at the same instant (and `esInst === efInst` for it, so `efInst − 1` is
     // its own last minute).
-    const inclusiveFinishInstant = isMilestone(activity.type) ? esInst : efInst - 1;
+    // A zero-span activity now keeps its logic instant (#539), but the project finish DATE is still
+    // decided among them at the position each was ranked at before: rolled onto its own calendar. That
+    // is what keeps the tie-breaks above (a finish milestone beats a zero-duration task at the same
+    // instant, which beats a task ending there) exactly as they were on a single calendar.
+    const rankInst = (inst: number): number =>
+      isZeroSpan(activity) ? rollForwardToWorking(cal, inst) : inst;
+    const inclusiveFinishInstant = isMilestone(activity.type)
+      ? rankInst(esInst)
+      : rankInst(efInst) - 1;
     // A Level-of-Effort activity never defines the project finish DATE either (§21) — consistent with
     // its exclusion from `projectFinishInstant` above; its span mirrors a real successor that is already
     // in this max. A WBS-summary is excluded the same way (§24): its rolled-up finish mirrors a real
@@ -994,10 +1028,10 @@ export function computeSchedule(
        */
       visualEffectiveStart: frozenByActuals
         ? earlyStartDate
-        : workingIndexDate(cal, dataDate, reportIndex(vDisplayOwn)),
+        : placedDayOf(vDisplayInst, vDisplayOwn),
       visualEffectiveFinish: frozenByActuals
         ? earlyFinishDate
-        : workingIndexDate(cal, dataDate, reportIndex(vInclusiveFinishOwn)),
+        : placedDayOf(vDisplayInst, vInclusiveFinishOwn),
       // Two-sided now (M-D): the flag fires for a placement earlier than logic allows AND for one
       // past an explicit ceiling. A plan with a breaching placement newly reports a conflict and
       // newly appears in the ADR-0094 cycle — a deliberate change to a shipped flag, which is what
