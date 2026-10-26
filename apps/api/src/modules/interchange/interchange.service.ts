@@ -19,6 +19,7 @@ import { drawnSpanDays, packAroundCarried, packLanes, type PackItem } from '@rep
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { acquireCalendarWriteLock } from '../../common/db/calendar-advisory-lock';
 import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
@@ -49,9 +50,19 @@ import { ScheduleService } from '../schedule/schedule.service';
 import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
+import { calendarIdentityKey } from './calendar-identity';
+import {
+  resolveCalendarReuse,
+  type CalendarResolution,
+  type ReuseCandidate,
+  type SourceCalendar,
+} from './calendar-reuse';
+import { firstFreeImportedName, importedNameProbePrefix } from './imported-name';
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
 import type { UploadedInterchangeFile } from './uploaded-file';
+
+export { importedNameProbePrefix };
 
 /** Machine-readable reasons carried in an interchange {@link ValidationError}'s `details.reason`. */
 export const INTERCHANGE_ERROR = {
@@ -100,28 +111,17 @@ export interface InterchangeImportOptions {
 }
 
 /**
- * How an import disambiguates a calendar name the target tier already holds (ADR-0053 §5). An imported
- * calendar is NEVER silently reused: two calendars can share a name and have completely different
- * working weeks, so reusing one by name would silently reschedule every imported activity on it. The
- * import therefore creates its own, suffixed, and says so in the report.
+ * How an import treats a calendar the target tier already holds (ADR-0208, amending ADR-0053 §5): it
+ * REUSES one only when it is identical in working time and carries the file's name or the importer's
+ * own `(imported …)` variant of it. Anything else is created under a free, suffixed name, because two
+ * calendars can share a name and have different working weeks, and binding the wrong one would
+ * silently reschedule every imported activity. The suffix rule itself lives in `imported-name.ts`.
  */
-const IMPORTED_NAME_SUFFIX = (date: string, ordinal: number): string =>
-  ordinal <= 1 ? `(imported ${date})` : `(imported ${date}) (${ordinal})`;
-
 /** The calendar-name ceiling the calendars API enforces (`CreateCalendarDto`), honoured by the importer. */
 const CALENDAR_NAME_MAX_LENGTH = 120;
 
 /** The resource-name ceiling the resources API enforces (`CreateResourceDto`), honoured by the importer. */
 const RESOURCE_NAME_MAX_LENGTH = 200;
-
-/**
- * The prefix to probe for `name`'s taken variants. A variant clips the base to make room for its
- * suffix, so near the ceiling it no longer starts with the whole name; probing by the base clipped
- * for the longest suffix this importer will build still matches every variant. A shorter prefix only
- * widens the taken set, which is harmless: disambiguation checks exact membership.
- */
-export const importedNameProbePrefix = (name: string, maxLength: number): string =>
-  name.slice(0, maxLength - IMPORTED_NAME_SUFFIX('0000-00-00', 9999).length - 1).trimEnd();
 
 /**
  * Business logic for schedule interchange (ADR-0050, C2). This is the thin persisting layer's brain: it
@@ -182,10 +182,11 @@ export class InterchangeService {
       throw planNameTakenError();
     }
 
-    // Probe the calendar names the target tiers already hold, so the REVIEWED report already names any
-    // suffix-disambiguation the commit will apply (ADR-0053 §5). Read-only, outside any transaction —
-    // the commit re-probes inside its own transaction, which is the authoritative pass.
-    const { findings } = await this.resolveImportCalendarNames(this.prisma, project, graph);
+    // Resolve the calendars the target tiers already hold, so the REVIEWED report already names any
+    // reuse or suffix-disambiguation the commit will apply (ADR-0208, ADR-0053 §5). Read-only, outside
+    // any transaction, and the very function the commit calls — which re-resolves under its locks, the
+    // authoritative pass.
+    const { findings } = await this.resolveImportCalendars(this.prisma, project, graph);
     report.repairs.push(...findings);
 
     // Resource-name collisions are a QUESTION, not a finding, so they ride their own field — see
@@ -244,11 +245,22 @@ export class InterchangeService {
     const { organization, project } = await this.resolveTarget(principal, orgSlug, projectId);
     const { graph, report } = this.parse(file, organization.id, projectId, principal, options);
 
+    // The calendars this import expects to REUSE (ADR-0208 D3), found before the transaction so they
+    // can be locked first. Every other path that holds a calendar and an ancestor takes the calendar
+    // lock BEFORE the ancestors (`CalendarsService.restore`, `HierarchyLifecycleService`), so the
+    // import must too, or it deadlocks against a calendar restore. A candidate that appears after this
+    // read is unlocked and therefore not reused: the safe direction is a copy.
+    const predicted = await this.resolveImportCalendars(this.prisma, project, graph);
+    const lockedCalendarIds = [...predicted.resolutions.values()]
+      .flatMap((resolution) => (resolution.kind === 'reuse' ? [resolution.id] : []))
+      .sort();
+
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
     const {
       planId,
       createdCalendarIds,
+      reusedCalendarCount,
       createdResourceIds,
       unarchivedResources,
       calendarFindings,
@@ -259,15 +271,21 @@ export class InterchangeService {
       // guarantee. The calendars and plan inserted below take only `FOR KEY SHARE` on the project,
       // which a delete does not conflict with, so without it the import can land under a project
       // being deleted (`docs/TECH_DEBT.md` #531, the same race as `PlansService.create`).
+      //
+      // Calendars first, in id order, then the ancestors (see `lockedCalendarIds`). `FOR SHARE` on the
+      // rows is what a version-gated content edit waits on; the advisory lock is what a delete and a
+      // tier move wait on (neither covers the other, ADR-0208 R2).
+      for (const calendarId of lockedCalendarIds) await acquireCalendarWriteLock(tx, calendarId);
+      await this.calendars.lockActiveForShare(lockedCalendarIds, tx);
       const active = await lockActiveProjectChainForShare(tx, {
         clientId: project.clientId,
         projectId: project.id,
       });
       if (!active) throw new NotFoundError('Project not found.');
-      return this.persistGraph(tx, principal, project, graph, options);
+      return this.persistGraph(tx, principal, project, graph, options, lockedCalendarIds);
     });
 
-    // Calendar names the target tier already held, disambiguated rather than reused (ADR-0053 §5).
+    // Calendars matched to an existing one, and names the target tier already held (ADR-0208, ADR-0053 §5).
     report.repairs.push(...calendarFindings);
 
     // The resource-name collisions the planner answered, and which way. Recorded so the post-commit
@@ -301,6 +319,7 @@ export class InterchangeService {
         planId,
         userId: principal.userId,
         calendars: graph.calendars.length,
+        calendarsReused: reusedCalendarCount,
         activities: graph.activities.length,
         dependencies: graph.dependencies.length,
         resources: graph.resources.length,
@@ -371,6 +390,8 @@ export class InterchangeService {
         activityCount: graph.activities.length,
         dependencyCount: graph.dependencies.length,
         calendarCount: graph.calendars.length,
+        // How many of those were an existing calendar rather than a new one (ADR-0208 D4).
+        calendarsReused: reusedCalendarCount,
         resourceCount: graph.resources.length,
         // Scalar, deliberately: the report is a document, and `normalise()` would reduce it to a
         // type marker anyway. A count says "this import was not clean, go and read the report"
@@ -512,13 +533,17 @@ export class InterchangeService {
     project: { id: string; organizationId: string },
     graph: ImportGraph,
     options: InterchangeImportOptions,
+    lockedCalendarIds: readonly string[],
   ): Promise<{
     planId: string;
+    /** Calendars this import INSERTED — the only ones compensation may hard-delete (ADR-0208 D3). */
     createdCalendarIds: string[];
+    /** Calendars an existing one stood in for; none of them is ours to delete. */
+    reusedCalendarCount: number;
     createdResourceIds: string[];
     /** Archived library resources this import matched and auto-unarchived (CQ-4, ADR-0053 §4). */
     unarchivedResources: { id: string; name: string; code: string | null }[];
-    /** Calendar names the target tier already held, suffix-disambiguated (ADR-0053 §5). */
+    /** Calendars matched to an existing one, and names the tier already held (ADR-0208, ADR-0053 §5). */
     calendarFindings: ReportFinding[];
     /** Resource-name collisions the planner answered, and how — one `repair` finding each. */
     resourceFindings: ReportFinding[];
@@ -542,49 +567,56 @@ export class InterchangeService {
     //
     // TIER (ADR-0053 §5): each calendar lands where the pure mapper decided — `PROJECT`, pinned to the
     // import's TARGET PROJECT (the default, so a foreign file no longer writes shared tenant state and
-    // its calendars are deleted with the project), or `ORG` for the shared library. Names the target
-    // tier already holds are suffixed rather than reused, so a repeat import cannot abort on the
-    // per-tier unique.
-    const { nameByKey, findings: calendarFindings } = await this.resolveImportCalendarNames(
-      tx,
-      project,
-      graph,
-    );
+    // its calendars are deleted with the project), or `ORG` for the shared library.
+    //
+    // REUSE (ADR-0208): a calendar identical to one the tier already holds (and carrying the file's
+    // name lineage) is bound rather than copied. Only the locked candidates are eligible, so what is
+    // bound is what was just re-read under its lock. A reused id goes into `calendarIdByKey` and
+    // nowhere else: it is never inserted and never on `createdCalendarIds`, which compensation
+    // hard-deletes.
+    const { resolutions: calendarResolutions, findings: calendarFindings } =
+      await this.resolveImportCalendars(tx, project, graph, lockedCalendarIds);
     const calendarIdByKey = new Map<string, string>();
     const calendarScopeByKey = new Map<string, ImportCalendarScope>();
     const createdCalendarIds: string[] = [];
-    const calendarInputs: ImportCalendarBatchInput[] = graph.calendars.map((calendar) => {
+    const calendarInputs: ImportCalendarBatchInput[] = [];
+    let reusedCalendarCount = 0;
+    for (const calendar of graph.calendars) {
+      calendarScopeByKey.set(calendar.key, calendar.scope);
+      const resolution = calendarResolutions.get(calendar.key);
+      if (resolution === undefined) {
+        throw new ConflictError('The imported schedule names a calendar that was not resolved.', {
+          reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+        });
+      }
+      if (resolution.kind === 'reuse') {
+        calendarIdByKey.set(calendar.key, resolution.id);
+        reusedCalendarCount += 1;
+        continue;
+      }
       const id = randomUUID();
       calendarIdByKey.set(calendar.key, id);
-      calendarScopeByKey.set(calendar.key, calendar.scope);
       createdCalendarIds.push(id);
-      return {
+      const shape = this.calendarWriteShape(calendar);
+      calendarInputs.push({
         id,
         organizationId,
-        name: nameByKey.get(calendar.key) ?? calendar.name,
+        name: resolution.name,
         scope: calendar.scope,
         // The CHECK partner of `scope`: a PROJECT calendar belongs to the import's target project, an
         // ORG one to no project at all (ck_calendars_scope_parent, ADR-0053 §1).
         projectId: calendar.scope === 'PROJECT' ? project.id : null,
-        // The file's own weekly periods, verbatim — no longer flattened to a weekday mask.
-        shifts: calendar.shifts,
-        // The file's own standard working day (P6 `day_hr_cnt`, ADR-0068), falling back to the
-        // derivation from the pattern just written. Resolved through the SAME helper the calendars
-        // API uses, so an imported calendar and a hand-authored one cannot disagree about the factor.
-        hoursPerDayMinutes: resolveHoursPerDayMinutes({
-          ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
-          shifts: calendar.shifts,
-        }),
-        exceptions: calendar.exceptions.map((exception) => ({
+        shifts: shape.shifts,
+        hoursPerDayMinutes: shape.hoursPerDayMinutes,
+        exceptions: shape.exceptions.map((exception) => ({
           id: randomUUID(),
-          // The mapper emits single-day exceptions (startDate == endDate).
-          date: parseCalendarDate(exception.startDate),
+          date: exception.startDate,
           windows: exception.windows,
           label: exception.label,
         })),
         ...stamp,
-      };
-    });
+      });
+    }
     await this.calendars.createManyForImport(calendarInputs, tx);
 
     // 2. The plan (single insert), with its default calendar resolved from the graph's default key.
@@ -982,6 +1014,7 @@ export class InterchangeService {
     return {
       planId: plan.id,
       createdCalendarIds,
+      reusedCalendarCount,
       createdResourceIds,
       unarchivedResources,
       calendarFindings,
@@ -990,23 +1023,6 @@ export class InterchangeService {
     };
   }
 
-  /**
-   * Resolve the NAME each imported calendar will be created under, disambiguating any the target tier
-   * already holds (ADR-0053 §5, US-9). Returns the key → final-name map plus one `repair` finding per
-   * renamed calendar.
-   *
-   * **An import never reuses an existing calendar.** That is the deliberate decision, not an omission:
-   * two calendars can share a name and have completely different working weeks, so matching by name
-   * would silently reschedule every imported activity onto someone else's calendar — the one failure an
-   * import must never make quietly. (This is also why calendars have no unarchive-on-match rule, unlike
-   * resources' CQ-4: with no match path there is nothing to unarchive. An archived calendar still holds
-   * its name — archiving deliberately does not free it — so it is disambiguated around like any other.)
-   *
-   * Names are checked **per tier**, because uniqueness is per tier: `uq_calendars_org_name` for `ORG`,
-   * `uq_calendars_project_name` for `PROJECT`. One indexed query per tier present in the graph, plus
-   * in-memory bookkeeping — so two source calendars sharing a name inside ONE file also disambiguate
-   * against each other rather than colliding at insert time.
-   */
   /**
    * The resource-name collisions this graph would hit, so the dry-run can ask before the commit runs.
    *
@@ -1021,7 +1037,7 @@ export class InterchangeService {
    * holds its name against the unique index; omitting it here would report no collision and then fail
    * the commit anyway, which is the behaviour this method exists to remove.
    *
-   * One indexed query, mirroring `resolveImportCalendarNames`: the dry-run probes outside any
+   * One indexed query, mirroring `resolveImportCalendars`: the dry-run probes outside any
    * transaction and the commit re-probes inside its own, which is the authoritative pass.
    */
   private async findResourceCollisions(
@@ -1121,77 +1137,172 @@ export class InterchangeService {
     return nameByKey;
   }
 
-  private async resolveImportCalendarNames(
+  /**
+   * Decide, for each calendar in the file, whether the import REUSES an existing one or CREATES its
+   * own under a free name (ADR-0208, amending ADR-0053 §5). Shared by the dry-run and the commit, so
+   * the reviewed report and the persisted result come from one function (the
+   * `findGraphResourceCollisions` precedent).
+   *
+   * A source reuses a calendar only when the stored rows equal what the import would write for it
+   * (`calendarIdentityKey`) AND the name is the file's or the importer's own `(imported …)` variant of
+   * it. That is the whole of what ADR-0053 §5's never-reuse rule was protecting: a NAME match can
+   * change working time, an identity match cannot. Anything else is created, suffixed against the
+   * names the tier already holds — per tier, because uniqueness is per tier (`uq_calendars_org_name`,
+   * `uq_calendars_project_name`) — and archived rows still hold their name, so they block it.
+   *
+   * `lockedIds` is the commit's second pass: the candidates it has advisory-locked and re-reads under
+   * the lock. Absent, candidates are found by name lineage (the dry-run, and the commit's prediction).
+   * One indexed query per tier present in the graph for names, one for candidates.
+   */
+  private async resolveImportCalendars(
     db: Prisma.TransactionClient,
     project: { id: string; organizationId: string },
     graph: ImportGraph,
-  ): Promise<{ nameByKey: Map<string, string>; findings: ReportFinding[] }> {
-    const nameByKey = new Map<string, string>();
+    lockedIds?: readonly string[],
+  ): Promise<{ resolutions: Map<string, CalendarResolution>; findings: ReportFinding[] }> {
+    const resolutions = new Map<string, CalendarResolution>();
     const findings: ReportFinding[] = [];
-    if (graph.calendars.length === 0) return { nameByKey, findings };
+    if (graph.calendars.length === 0) return { resolutions, findings };
 
-    // The names already taken, per tier — one query per tier actually present in the graph.
-    // By prefix, so a variant an earlier import of the same day created is seen (as for resources).
+    // The names already taken, per tier — by prefix, so a variant an earlier import of the same day
+    // created is seen (as for resources).
     const takenByScope = new Map<ImportCalendarScope, Set<string>>();
+    const candidatesByScope = new Map<ImportCalendarScope, ReuseCandidate[]>();
+    const lockedRows =
+      lockedIds === undefined
+        ? undefined
+        : await this.calendars.findReuseCandidatesByIds(
+            lockedIds,
+            { organizationId: project.organizationId, projectId: project.id },
+            db,
+          );
     for (const scope of ['ORG', 'PROJECT'] as const) {
       const names = graph.calendars.filter((c) => c.scope === scope).map((c) => c.name);
       if (names.length === 0) continue;
-      takenByScope.set(
+      const where = {
+        organizationId: project.organizationId,
         scope,
-        await this.calendars.findTakenNamesWithPrefixes(
-          {
-            organizationId: project.organizationId,
-            scope,
-            projectId: scope === 'PROJECT' ? project.id : null,
-            prefixes: [
-              ...new Set(names.map((n) => importedNameProbePrefix(n, CALENDAR_NAME_MAX_LENGTH))),
-            ],
-          },
-          db,
-        ),
+        projectId: scope === 'PROJECT' ? project.id : null,
+        prefixes: [
+          ...new Set(names.map((n) => importedNameProbePrefix(n, CALENDAR_NAME_MAX_LENGTH))),
+        ],
+      };
+      takenByScope.set(scope, await this.calendars.findTakenNamesWithPrefixes(where, db));
+      const rows = lockedRows ?? (await this.calendars.findReuseCandidates(where, db));
+      candidatesByScope.set(
+        scope,
+        rows
+          .filter((row) => row.scope === scope)
+          .map((row) => ({
+            id: row.id,
+            name: row.name,
+            createdAt: row.createdAt,
+            identityKey: calendarIdentityKey({
+              hoursPerDayMinutes: row.hoursPerDayMinutes,
+              shifts: row.shifts,
+              exceptions: row.exceptions.map((e) => ({
+                startDate: e.startDate,
+                endDate: e.endDate,
+                label: e.label,
+                windows: e.windows,
+              })),
+            }),
+          })),
       );
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const sources: SourceCalendar[] = graph.calendars.map((calendar) => ({
+      key: calendar.key,
+      name: calendar.name,
+      scope: calendar.scope,
+      identityKey: calendarIdentityKey(this.calendarWriteShape(calendar)),
+    }));
+    const resolved = resolveCalendarReuse({
+      calendars: sources,
+      candidatesByScope,
+      takenByScope,
+      today: new Date().toISOString().slice(0, 10),
+      maxNameLength: CALENDAR_NAME_MAX_LENGTH,
+      onNoFreeName: () => {
+        // Unreachable (the loop tries more variants than there are taken names); fail loud rather
+        // than insert a name that would abort the whole transaction on the unique index.
+        throw new ConflictError('Could not find a free name for an imported record.', {
+          reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
+        });
+      },
+    });
+
     for (const calendar of graph.calendars) {
-      const taken = takenByScope.get(calendar.scope) ?? new Set<string>();
-      const name = this.disambiguateCalendarName(calendar.name, taken, today);
-      // Claim it, so a second source calendar with the same name gets the next free variant.
-      taken.add(name);
-      takenByScope.set(calendar.scope, taken);
-      nameByKey.set(calendar.key, name);
-      if (name !== calendar.name) {
+      const resolution = resolved.get(calendar.key);
+      if (resolution === undefined) continue;
+      resolutions.set(calendar.key, resolution);
+      if (resolution.kind === 'reuse') {
         findings.push({
           kind: 'repair',
           entity: 'calendar',
           sourceRef: calendar.key,
-          detail: `calendar “${calendar.name}” was created as “${name}”`,
+          detail: `calendar “${calendar.name}” was matched to the existing calendar “${resolution.existingName}”`,
           reason:
-            'a calendar of that name already exists here; an import never reuses one, because two ' +
-            'calendars sharing a name can have different working weeks (ADR-0053 §5)',
+            'it has the same working week, exceptions and hours per day, so a copy would differ ' +
+            'only in its name (ADR-0208)',
+        });
+      } else if (resolution.name !== calendar.name) {
+        findings.push({
+          kind: 'repair',
+          entity: 'calendar',
+          sourceRef: calendar.key,
+          detail: `calendar “${calendar.name}” was created as “${resolution.name}”`,
+          reason:
+            'a calendar of that name already exists here and could not be reused: an import reuses ' +
+            'only an active calendar with the same working week, exceptions and hours per day, ' +
+            'because two calendars sharing a name can have different working weeks (ADR-0208)',
         });
       }
     }
-    return { nameByKey, findings };
+    return { resolutions, findings };
   }
 
   /**
-   * The first free variant of `name` in `taken`: the name itself, else `"<name> (imported <date>)"`,
-   * else the same with an incrementing ordinal. Bounded by the candidate count, and each candidate is
-   * clipped to the calendars API's own name ceiling (the suffix is preserved — it is what makes the
-   * name unique — so the BASE is what gives way).
+   * What the import writes for one source calendar: the single definition shared by the insert and
+   * by the identity comparison, so "identical" is judged against the rows a copy would actually hold
+   * (ADR-0208 D1). Exceptions are single-day (the mapper's shape), dated through `parseCalendarDate`.
    */
-  private disambiguateCalendarName(
-    name: string,
-    taken: ReadonlySet<string>,
-    today: string,
-  ): string {
-    return this.disambiguateImportedName(name, taken, today, CALENDAR_NAME_MAX_LENGTH);
+  private calendarWriteShape(calendar: ImportGraph['calendars'][number]): {
+    hoursPerDayMinutes: number;
+    shifts: ImportCalendarBatchInput['shifts'];
+    exceptions: {
+      startDate: Date;
+      endDate: Date;
+      label: string | null;
+      windows: ImportCalendarBatchInput['exceptions'][number]['windows'];
+    }[];
+  } {
+    return {
+      // The file's own standard working day (P6 `day_hr_cnt`, ADR-0068), falling back to the
+      // derivation from the pattern just written. Resolved through the SAME helper the calendars
+      // API uses, so an imported calendar and a hand-authored one cannot disagree about the factor.
+      hoursPerDayMinutes: resolveHoursPerDayMinutes({
+        ...(calendar.hoursPerDay === undefined ? {} : { hoursPerDay: calendar.hoursPerDay }),
+        shifts: calendar.shifts,
+      }),
+      // The file's own weekly periods, verbatim — no longer flattened to a weekday mask.
+      shifts: calendar.shifts,
+      exceptions: calendar.exceptions.map((exception) => {
+        // The mapper emits single-day exceptions (startDate == endDate).
+        const date = parseCalendarDate(exception.startDate);
+        return {
+          startDate: date,
+          endDate: date,
+          label: exception.label,
+          windows: exception.windows,
+        };
+      }),
+    };
   }
 
   /**
-   * Shared by the calendar path (always disambiguates — an import never reuses a calendar) and the
-   * resource `CREATE_COPY` path (disambiguates only when the planner asked for a separate copy).
+   * The resource `CREATE_COPY` path's free name (`firstFreeImportedName`), failing loud rather than
+   * inserting a name that would abort the whole transaction on the unique index.
    */
   private disambiguateImportedName(
     name: string,
@@ -1199,17 +1310,9 @@ export class InterchangeService {
     today: string,
     maxLength: number,
   ): string {
-    if (!taken.has(name)) return name;
-    // One attempt per already-taken name, plus one — so a free variant is always reachable.
-    for (let ordinal = 1; ordinal <= taken.size + 1; ordinal += 1) {
-      const suffix = IMPORTED_NAME_SUFFIX(today, ordinal);
-      const room = maxLength - suffix.length - 1;
-      const base = room > 0 ? name.slice(0, room).trimEnd() : '';
-      const candidate = base.length > 0 ? `${base} ${suffix}` : suffix;
-      if (!taken.has(candidate)) return candidate;
-    }
-    // Unreachable (the loop tries more variants than there are taken names); fail loud rather than
-    // insert a name that would abort the whole transaction on the unique index.
+    const free = firstFreeImportedName(name, taken, today, maxLength);
+    if (free !== null) return free;
+    // Unreachable (the loop tries more variants than there are taken names).
     throw new ConflictError('Could not find a free name for an imported record.', {
       reason: INTERCHANGE_ERROR.INCONSISTENT_GRAPH,
     });

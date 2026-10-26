@@ -216,6 +216,16 @@ export function exceptionWindowRowsFor(
   return isWorking ? [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] : [];
 }
 
+/** What an import's reuse comparison reads: shifts, plus active exceptions with their windows. */
+const REUSE_INCLUDE = {
+  shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] },
+  exceptions: {
+    where: { deletedAt: null },
+    orderBy: [{ startDate: 'asc' }],
+    include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
+  },
+} satisfies Prisma.CalendarInclude;
+
 /**
  * Data-access for the working-day calendar library (ADR-0008, ADR-0024, ADR-0036).
  * Centralises the soft-delete filter so no read forgets `deletedAt: null`; write
@@ -361,6 +371,89 @@ export class CalendarRepository {
       select: { name: true },
     });
     return new Set(rows.map((row) => row.name));
+  }
+
+  /**
+   * The calendars an import could REUSE instead of copying (ADR-0208): active, UNARCHIVED, in the
+   * organisation and tier, in the target project for `PROJECT`, whose name starts with one of
+   * `prefixes` (the importer's lineage prefixes), with shifts, active exceptions and windows loaded
+   * so the caller can compare content. The caller narrows the name to exact lineage in memory.
+   *
+   * Archived rows are EXCLUDED here — the opposite of {@link findTakenNamesWithPrefixes}, which
+   * includes them because archiving keeps the name. A calendar can always fall back to a copy, so
+   * reviving a deliberately retired one would be a choice nobody asked for (ADR-0208 D2). One query
+   * per tier, never one per calendar.
+   */
+  findReuseCandidates(
+    params: {
+      organizationId: string;
+      scope: CalendarScope;
+      projectId: string | null;
+      prefixes: readonly string[];
+    },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CalendarWithExceptions[]> {
+    if (params.prefixes.length === 0) return Promise.resolve([]);
+    return db.calendar.findMany({
+      where: this.active({
+        organizationId: params.organizationId,
+        scope: params.scope,
+        projectId: params.projectId,
+        archivedAt: null,
+        OR: params.prefixes.map((prefix) => ({ name: { startsWith: prefix } })),
+      }),
+      include: REUSE_INCLUDE,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * The candidates an import has locked, read again under the lock (ADR-0208 D3). Every predicate
+   * {@link findReuseCandidates} states is stated again — a calendar archived, deleted or moved to
+   * another tier since the first read is simply absent — and the tier/project pair is restated as
+   * the only two places a candidate may live, so an id outside this organisation or project can
+   * never be returned whatever the caller passed.
+   */
+  findReuseCandidatesByIds(
+    ids: readonly string[],
+    params: { organizationId: string; projectId: string },
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CalendarWithExceptions[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return db.calendar.findMany({
+      where: this.active({
+        id: { in: [...ids] },
+        organizationId: params.organizationId,
+        archivedAt: null,
+        OR: [
+          { scope: 'ORG', projectId: null },
+          { scope: 'PROJECT', projectId: params.projectId },
+        ],
+      }),
+      include: REUSE_INCLUDE,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * Hold the reused calendars' rows `FOR SHARE` for the rest of the import's transaction.
+   * A version-gated content edit (shifts, exceptions) bumps `calendars.version`, which conflicts
+   * with this lock, so an edit that arrives mid-import waits for the commit instead of changing
+   * working time under a plan that has already bound the calendar. The advisory lock cannot do
+   * this: content edits do not take it (ADR-0208 R2). Shared locks never queue behind each other,
+   * so two imports reusing one calendar do not wait on one another.
+   */
+  async lockActiveForShare(ids: readonly string[], db: Prisma.TransactionClient): Promise<void> {
+    if (ids.length === 0) return;
+    await db.$queryRaw`
+      SELECT id
+      FROM calendars
+      WHERE id = ANY(${[...ids]}::uuid[])
+        AND deleted_at IS NULL
+        AND archived_at IS NULL
+      ORDER BY id
+      FOR SHARE
+    `;
   }
 
   /** An active calendar scoped to its organisation (anti-IDOR). */
