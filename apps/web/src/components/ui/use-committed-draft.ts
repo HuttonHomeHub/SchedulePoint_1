@@ -17,7 +17,11 @@ export type CommitVia = 'enter' | 'blur' | 'step';
  *   own step would merely change the draft; a text input does not own the vertical arrows, so taking
  *   them there would fight a host toolbar.
  * - **A shut field commits nothing** (ADR-0083): without the guard the arrow step would write to a
- *   read-only field.
+ *   read-only field. Enter is still prevented, so a commit field never submits an enclosing form.
+ * - **The hook owns `onChange`, `onBlur` and `onKeyDown`.** A caller that must observe one composes
+ *   around the returned handler rather than passing its own to the input (the hook takes no
+ *   pass-throughs, so there is one order of events to reason about); `TextField`'s commit mode
+ *   forbids the three props for that reason.
  * - **Escape discards the draft and is heard on `window`, in the capture phase — the only place early
  *   enough.** A container that closes on Escape (`usePopoverPanel`, `Menu`, `Combobox`, `Tooltip`)
  *   listens on `document` in the capture phase and moves focus at once, which blurs the field BEFORE
@@ -41,12 +45,20 @@ export function useCommittedDraft({
 }: {
   /** The committed value shown while there is no draft. */
   value: string;
-  /** Called with the raw text; parsing, clamping and notices belong to the caller. */
-  onCommit: (raw: string, via: CommitVia) => void;
+  /**
+   * Called with the raw text; parsing, clamping and notices belong to the caller. The draft is
+   * cleared after it returns, **unless it returns `'keep'`** — a caller that rejects the text (an
+   * unreadable duration beside its error) keeps what was typed on screen to be corrected.
+   */
+  onCommit: (raw: string, via: CommitVia) => void | 'keep';
   /** The arrow-key step; the arrows are handled only with `type="number"` and a finite step. */
   step?: number;
-  type?: string;
-  /** A gated (read-only) field: Enter and the arrows commit nothing. */
+  type?: React.HTMLInputTypeAttribute;
+  /**
+   * A gated field: Enter and the arrows commit nothing and a blur drops the draft. **The hook does
+   * not make the input read-only** — the caller must set `readOnly` to match (ADR-0083 D1), which is
+   * what `TextField` does.
+   */
   shut?: boolean;
   onDraftLost?: () => void;
   /** The input the Escape listener filters on. */
@@ -94,8 +106,7 @@ export function useCommittedDraft({
   }, [inputRef]);
 
   const commit = (raw: string, via: CommitVia): void => {
-    setDraft(null);
-    onCommit(raw, via);
+    setDraft(onCommit(raw, via) === 'keep' ? raw : null);
   };
 
   const stepBy = type === 'number' && step !== undefined && Number.isFinite(step) ? step : null;
@@ -108,16 +119,26 @@ export function useCommittedDraft({
       setDraft(event.target.value);
     },
     onBlur: (event) => {
-      if (draft !== null && !discarded.current) commit(event.target.value, 'blur');
+      if (shut) {
+        // A draft can only exist here if the field was shut mid-edit; it is dropped, not committed.
+        if (draft !== null) setDraft(null);
+      } else if (draft !== null && !discarded.current) {
+        commit(event.target.value, 'blur');
+      }
       discarded.current = false;
     },
     onKeyDown: (event) => {
-      if (shut) return;
       if (event.key === 'Enter') {
+        // Not while an IME is composing — the repo's convention is `isComposing` alone
+        // (`toolbar-keyboard.ts:116`). Prevented even when shut, so a commit field never submits a form.
         if (event.nativeEvent.isComposing) return;
         event.preventDefault();
-        commit(event.currentTarget.value, 'enter');
-      } else if (stepBy !== null && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        if (!shut) commit(event.currentTarget.value, 'enter');
+      } else if (
+        !shut &&
+        stepBy !== null &&
+        (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+      ) {
         event.preventDefault();
         const typed = Number(event.currentTarget.value);
         const from =
