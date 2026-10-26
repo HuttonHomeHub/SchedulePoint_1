@@ -80,7 +80,9 @@ export function useCommittedDraft({
 
   useEffect(() => {
     const onEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.target !== inputRef.current) return;
+      if (event.key !== 'Escape') return;
+      const own = inputRef.current;
+      if (event.target !== own) return;
       // `discarded` makes the blur that closing the container causes skip the commit (it is cleared
       // by the blur itself, or by the next edit if no blur arrives).
       discarded.current = draftRef.current !== null;
