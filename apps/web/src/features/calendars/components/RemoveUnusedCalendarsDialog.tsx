@@ -146,7 +146,7 @@ export function RemoveUnusedCalendarsDialog({
         ) : null}
 
         <fieldset className="flex flex-col gap-1">
-          <legend className="text-sm font-medium">Calendars to delete</legend>
+          <legend className="text-sm">Calendars to delete</legend>
           <ul className="border-border max-h-80 divide-y overflow-y-auto rounded-md border px-3">
             {calendars.map((calendar) => {
               const note = deletedReferencerNote(calendar);
