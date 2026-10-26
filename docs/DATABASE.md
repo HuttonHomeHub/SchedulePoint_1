@@ -2076,7 +2076,7 @@ keyed on a migration's `finished_at`:
   starts from, and ADR-0045 staleness reads upstream `schedule_computed_at` only, so nothing else
   would flag it. The incoming arm is already covered by the downstream extension when the upstream
   plan recalculates in the same run; it is included for a run in which that plan failed.
-- **The #539 pending read, measured** (PostgreSQL 16.15, `77 migrations` plus a hand-inserted marker, 10
+- **The #539 pending read, measured** by the database-architect on a local scratch database (PostgreSQL 16.15; production runs PostgreSQL 17, so the figures are indicative of shape, not absolute) (`77 migrations` plus a hand-inserted marker, 10
   organisations, 2,000 plans, 200,000 activities, 100 live cross-plan links from plans with no
   zero-span activity to start milestones; 5% soft-deleted, 2% never calculated, one plan in seven
   holding only a zero-duration LOE and summary; 1,710 pending, checked by hand with an independent

@@ -22,7 +22,7 @@ export interface PendingMilestonePlan {
 
 /**
  * **Re-derive, once, every plan a zero-span activity's old snap wrote dates for** (#539, ADR-0207 D1-D3;
- * the `MilestoneRederiveService` shape, whose downstream extension and ordering it keeps).
+ * the `ProgressedVisualRederiveService` shape, whose downstream extension and ordering it keeps).
  *
  * The old engine snapped a milestone or zero-duration task onto its own calendar in both passes, so
  * across calendars it pushed successors a calendar period and charged the work before it a negative
@@ -48,13 +48,13 @@ export interface PendingMilestonePlan {
  * `organization_id`: the organisation comes from the `plans` row and `recalculateAsSystem` re-reads the
  * plan scoped to it.
  *
- * **Which order, and the downstream extension.** As `MilestoneRederiveService`: per organisation,
+ * **Which order, and the downstream extension.** As `ProgressedVisualRederiveService`: per organisation,
  * upstream first over the WHOLE cross-plan graph, and a plan is also recalculated when any direct
  * upstream plan was recalculated in this run, so every plan downstream of a corrected one is corrected
  * too. It converges: the second boot finds nothing pending.
  *
  * **Four boot services can recalculate one plan.** This service, `FinishMilestoneRederiveService`,
- * `CrossPlanRederiveService` and `MilestoneRederiveService` all start at bootstrap, none is
+ * `CrossPlanRederiveService` and `ProgressedVisualRederiveService` all start at bootstrap, none is
  * awaited, and every replica runs them, so a plan pending for several may be recalculated more than
  * once. That is harmless: recalculation is idempotent and serialised by the plan advisory lock, each
  * transaction of which takes and releases its own, so no service holds two and none can deadlock.
@@ -137,6 +137,7 @@ export class MilestoneRederiveService implements OnApplicationBootstrap {
     }
 
     let done = 0;
+    const failedPlanIds: string[] = [];
     for (const [organizationId, pending] of pendingByOrg) {
       let order: string[];
       // Each plan's direct upstream plans, for the downstream propagation.
@@ -179,6 +180,7 @@ export class MilestoneRederiveService implements OnApplicationBootstrap {
         } catch (error) {
           // One plan's failure must not stop the rest; it stays in the set (if pending) and is retried
           // at the next boot, or by the planner's next edit.
+          failedPlanIds.push(planId);
           this.logger.warn(
             { event: 'schedule.milestone_rederive_plan_failed', planId, err: error },
             'milestone re-derivation skipped a plan',
@@ -192,6 +194,8 @@ export class MilestoneRederiveService implements OnApplicationBootstrap {
         event: 'schedule.milestone_rederived',
         pending: plans.length,
         recalculated: done,
+        // The plans still carrying old-rule dates after this run, retried at the next boot.
+        failedPlanIds,
         organizations: pendingByOrg.size,
         durationMs: Date.now() - startedAt,
       },

@@ -781,7 +781,9 @@ only product is its `_prisma_migrations` row, and at the first boot a service re
 affected plan once. There is nothing to reverse in the schema. **Redeploying the previous images alone
 is still wrong**, and the reason is the row:
 
-- the previous image does not remove it, and its entrypoint ignores an extra applied migration;
+- the previous image does not remove it, and its pre-migrate check ignores it (whether `prisma migrate
+deploy` tolerates an applied migration with no local directory has not been verified, which is why this
+  procedure deletes the row first and does not depend on it);
 - every plan the previous image then recalculates is stamped **after** the row's `finished_at`, with
   old-rule dates;
 - when the release is rolled forward again the row already exists and is not re-applied, so those plans
@@ -798,7 +800,11 @@ Roll back in this order:
    them.
 
 A later roll-forward then re-applies the file with a fresh `finished_at` and every affected plan is
-re-derived again, which is correct. Outside a rollback, do **not** delete the row as a "reset": the next
+re-derived again, which is correct. **What the first boot after the release costs:** it recalculates nearly
+every plan that holds a milestone or zero-duration task (or is linked across plans to one), one plan at a
+time, in the background and never awaited. A planner who opens such a plan before its turn waits at most
+one recalculation. Each API replica runs the same pass, so a plan can be recalculated once per replica; that
+is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
 deploy would repeat the whole re-derivation unasked. The #421 marker
 (`20260930120000_progressed_predecessor_visual_marker`) has the same gap and no section of its own
 (`docs/TECH_DEBT.md` #557).

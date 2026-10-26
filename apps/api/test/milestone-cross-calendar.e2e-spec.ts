@@ -126,6 +126,12 @@ describe.skipIf(!hasDatabase)('zero-span boot re-derivation (e2e)', () => {
     const deleted = await makePlan('DELETED', [{ name: 'Done', type: 'FINISH_MILESTONE' }]);
     const never = await makePlan('NEVER', [{ name: 'Done', type: 'FINISH_MILESTONE' }]);
     const fresh = await makePlan('FRESH', [{ name: 'Done', type: 'FINISH_MILESTONE' }]);
+    // No zero-span activity of their own, three ways of still being near one.
+    const incomingOnly = await makePlan('INCOMING_ONLY');
+    const deadLink = await makePlan('DEAD_LINK');
+    const deadMilestone = await makePlan('DEAD_MILESTONE', [
+      { name: 'Gone', type: 'FINISH_MILESTONE' },
+    ]);
 
     // UP has no zero-span activity of its own: its work is linked to DOWN's milestone, across plans.
     await agent
@@ -133,7 +139,51 @@ describe.skipIf(!hasDatabase)('zero-span boot re-derivation (e2e)', () => {
       .send({ predecessorActivityId: up.workId, successorActivityId: down.added[0]!.id })
       .expect(201);
 
-    for (const p of [milestone, zeroTask, hammock, up, down, deleted, fresh]) {
+    // INCOMING_ONLY has no outgoing link: its work is the successor of a milestone in FRESH, a plan the fixed
+    // engine computed, so only the incoming arm of the query can reach it.
+    await agent
+      .post('/api/v1/organizations/acme/cross-plan-dependencies')
+      .send({ predecessorActivityId: fresh.added[0]!.id, successorActivityId: incomingOnly.workId })
+      .expect(201);
+    // DEAD_LINK's work was linked out to DOWN's milestone and the link has since been deleted.
+    const dead = await agent
+      .post('/api/v1/organizations/acme/cross-plan-dependencies')
+      .send({ predecessorActivityId: deadLink.workId, successorActivityId: down.added[0]!.id })
+      .expect(201);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "cross_plan_dependencies" SET "deleted_at" = now() WHERE "id" = $1::uuid`,
+      dead.body.data.id,
+    );
+    // DEAD_MILESTONE's only milestone is soft-deleted.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "activities" SET "deleted_at" = now() WHERE "id" = $1::uuid`,
+      deadMilestone.added[0]!.id,
+    );
+    // The LOE and the WBS summary store 0 by construction; say so rather than rely on the API doing it.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "activities" SET "duration_minutes" = 0 WHERE "plan_id" = $1::uuid AND "type" IN ('LEVEL_OF_EFFORT', 'WBS_SUMMARY')`,
+      hammock.planId,
+    );
+    const stored = await prisma.$queryRawUnsafe<{ n: number }[]>(
+      `SELECT count(*)::int AS n FROM "activities" WHERE "plan_id" = $1::uuid AND "type" IN ('LEVEL_OF_EFFORT', 'WBS_SUMMARY') AND "duration_minutes" = 0`,
+      hammock.planId,
+    );
+    expect(stored[0]!.n, 'the hammock plan holds exactly its LOE and its summary, both at 0').toBe(
+      2,
+    );
+
+    for (const p of [
+      milestone,
+      zeroTask,
+      hammock,
+      up,
+      down,
+      deleted,
+      fresh,
+      incomingOnly,
+      deadLink,
+      deadMilestone,
+    ]) {
       await agent
         .post(`/api/v1/organizations/acme/plans/${p.planId}/schedule/recalculate`)
         .send({})
@@ -148,6 +198,9 @@ describe.skipIf(!hasDatabase)('zero-span boot re-derivation (e2e)', () => {
       deleted: deleted.planId,
       never: never.planId,
       fresh: fresh.planId,
+      incomingOnly: incomingOnly.planId,
+      deadLink: deadLink.planId,
+      deadMilestone: deadMilestone.planId,
     };
     // As if the old engine had computed them all (`NEVER` not at all, `FRESH` after the marker).
     await prisma.$executeRawUnsafe(
@@ -187,21 +240,24 @@ describe.skipIf(!hasDatabase)('zero-span boot re-derivation (e2e)', () => {
     const { ids } = await seed();
     expect(
       (await rederive.pendingPlans()).map((p) => p.id).sort(),
-      'a milestone, a zero-duration task, the plan linked out to a milestone, and that milestone’s plan',
-    ).toEqual([ids.milestone, ids.zeroTask, ids.up, ids.down].sort());
+      'a milestone, a zero-duration task, the plan linked out to a milestone, that milestone’s plan, and the plan linked IN from a milestone',
+    ).toEqual([ids.milestone, ids.zeroTask, ids.up, ids.down, ids.incomingOnly].sort());
 
-    // Four: each pending plan once. DOWN is also downstream of UP, but it is recalculated once only.
-    expect(await rederive.rederive()).toBe(4);
+    // Five: each pending plan once. DOWN is also downstream of UP, but it is recalculated once only.
+    expect(await rederive.rederive()).toBe(5);
 
     const at = await stamps(Object.values(ids));
     const finished = (await marker()).getTime();
-    for (const recalculated of [ids.milestone, ids.zeroTask, ids.up, ids.down]) {
+    for (const recalculated of [ids.milestone, ids.zeroTask, ids.up, ids.down, ids.incomingOnly]) {
       expect(at.get(recalculated)!.getTime(), recalculated).toBeGreaterThan(finished);
     }
     // UP is upstream of DOWN, so it was stamped first.
     expect(at.get(ids.up)!.getTime()).toBeLessThanOrEqual(at.get(ids.down)!.getTime());
     // Left exactly as they were: only derived spans, deleted, never calculated.
     expect(at.get(ids.hammock)!.toISOString().slice(0, 10)).toBe(OLD_STAMP);
+    // A deleted link and a deleted milestone leave their plans out.
+    expect(at.get(ids.deadLink)!.toISOString().slice(0, 10)).toBe(OLD_STAMP);
+    expect(at.get(ids.deadMilestone)!.toISOString().slice(0, 10)).toBe(OLD_STAMP);
     expect(at.get(ids.deleted)!.toISOString().slice(0, 10)).toBe(OLD_STAMP);
     expect(at.get(ids.never)).toBeNull();
     // Calculated after the marker by the fixed engine: not pending, so not touched again.

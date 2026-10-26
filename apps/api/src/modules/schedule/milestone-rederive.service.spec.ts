@@ -108,6 +108,7 @@ describe('MilestoneRederiveService', () => {
         event: 'schedule.milestone_rederived',
         pending: 3,
         recalculated: 3,
+        failedPlanIds: [],
         organizations: 2,
         durationMs: expect.any(Number),
       }),
@@ -162,6 +163,11 @@ describe('MilestoneRederiveService', () => {
     expect(h.calls).toEqual(['o1:a', 'o1:d']);
     expect(h.logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'schedule.milestone_rederive_plan_failed', planId: 'a' }),
+      expect.any(String),
+    );
+    // The summary names the plan left carrying old-rule dates, so an operator can find it.
+    expect(h.logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ pending: 2, recalculated: 1, failedPlanIds: ['a'] }),
       expect.any(String),
     );
   });
