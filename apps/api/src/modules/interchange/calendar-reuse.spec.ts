@@ -67,7 +67,7 @@ describe('resolveCalendarReuse (ADR-0208 D2)', () => {
     expect(out.get('c1')).toEqual({ kind: 'create', name: `Site 6-Day (imported ${TODAY})` });
   });
 
-  it('reuses the importer`s own variant of the name', async () => {
+  it('reuses the importer’s own variant of the name', async () => {
     const out = await run(
       [source('c1', 'Site 6-Day')],
       [candidate('x', 'Site 6-Day (imported 2026-10-20)')],
@@ -95,6 +95,13 @@ describe('resolveCalendarReuse (ADR-0208 D2)', () => {
     expect(oldest.get('c1')).toMatchObject({ id: 'old' });
   });
 
+  it('does not reuse an identical calendar that is not in the candidate set (the locked set)', async () => {
+    // The commit hands the resolver only the candidates it locked and re-read; one that was
+    // deleted, archived or moved since the prediction is simply absent, and so is not bound.
+    const out = await run([source('c1', 'Site 6-Day')], []);
+    expect(out.get('c1')).toEqual({ kind: 'create', name: 'Site 6-Day' });
+  });
+
   it('never reuses an unrelated name that shares the prefix', async () => {
     const out = await run([source('c1', 'Site 6-Day')], [candidate('x', 'Site 6-Day North')]);
     expect(out.get('c1')).toMatchObject({ kind: 'create' });
@@ -109,7 +116,7 @@ describe('resolveCalendarReuse (ADR-0208 D2)', () => {
     expect(out.get('c2')).toEqual({ kind: 'create', name: `Site 6-Day (imported ${TODAY})` });
   });
 
-  it('creates a source that matches nothing under today`s free name', async () => {
+  it('creates a source that matches nothing under today’s free name', async () => {
     const out = await run([source('c1', 'Crew A')], []);
     expect(out.get('c1')).toEqual({ kind: 'create', name: 'Crew A' });
   });

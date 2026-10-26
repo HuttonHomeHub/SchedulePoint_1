@@ -1215,6 +1215,8 @@ export class InterchangeService {
       takenByScope.set(scope, await this.calendars.findTakenNamesWithPrefixes(where, db));
       const headers = lockedHeaders ?? (await this.calendars.findReuseCandidates(where, db));
       for (const header of headers) headerById.set(header.id, header);
+      // Load-bearing: the locked pass reads candidates by id across BOTH tiers, so without this filter
+      // an ORG calendar could be offered to a PROJECT source (and the reverse).
       candidatesByScope.set(
         scope,
         headers.filter((header) => header.scope === scope),

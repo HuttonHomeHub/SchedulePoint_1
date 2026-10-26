@@ -5,6 +5,7 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import { acquireCalendarWriteLock } from '../src/common/db/calendar-advisory-lock';
 import type { OrganizationRole } from '../src/common/auth/principal';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
@@ -1205,7 +1206,12 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
   }
 
   /** A stored copy of a calendar under another name — what an earlier import's variant looks like. */
-  async function cloneCalendar(id: string, name: string, createdAt: Date): Promise<string> {
+  async function cloneCalendar(
+    id: string,
+    name: string,
+    createdAt: Date,
+    tier?: 'ORG' | 'PROJECT',
+  ): Promise<string> {
     const src = await prisma.calendar.findUniqueOrThrow({
       where: { id },
       include: { shifts: true, exceptions: { include: { windows: true } } },
@@ -1214,8 +1220,8 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       data: {
         organizationId: src.organizationId,
         name,
-        scope: src.scope,
-        projectId: src.projectId,
+        scope: tier ?? src.scope,
+        projectId: (tier ?? src.scope) === 'ORG' ? null : src.projectId,
         hoursPerDayMinutes: src.hoursPerDayMinutes,
         createdAt,
         shifts: {
@@ -1349,6 +1355,9 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
         'calendar “Site 6-Day” was matched to the existing calendar “Site 6-Day”',
       ]);
       expect(persisted).toEqual(reviewed);
+      expect(calendarRepairs(second.body.data.report.repairs)[0]?.reason).toBe(
+        'it has the same working week, exceptions and hours per day, so a copy would differ only in its name (ADR-0208)',
+      );
 
       // The provenance row counts the reuse (ADR-0208 D4).
       const audit = await prisma.auditEvent.findFirstOrThrow({
@@ -1417,7 +1426,7 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       ).toBe(2);
     });
 
-    it('reuses the importer`s own variant when it is the only identical calendar', async () => {
+    it('reuses the importer’s own variant when it is the only identical calendar', async () => {
       const { actor } = await adminWithOrg();
       const projectId = await makeProject(actor);
       const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
@@ -1452,11 +1461,11 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
 
       const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
       expect(plan.calendarId).not.toBe(original.calendarId);
-      expect(
-        calendarRepairs(second.body.data.report.repairs).some((f) =>
-          /was created as/.test(f.detail),
-        ),
-      ).toBe(true);
+      const renamed = calendarRepairs(second.body.data.report.repairs).filter((f) =>
+        /was created as/.test(f.detail),
+      );
+      expect(renamed).toHaveLength(1);
+      expect(renamed[0]?.reason).toMatch(/could not be reused: an import reuses only an active/);
     });
 
     it('never reuses an identical calendar that is in the bin', async () => {
@@ -1580,10 +1589,15 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
           where: { name: { startsWith: 'Site 6-Day' }, deletedAt: null },
         }),
       ).toBe(1);
-      const findings = calendarRepairs(again.body.data.report.repairs).filter((f) =>
-        /was matched to the existing calendar/.test(f.detail),
-      );
-      expect(findings.length).toBeGreaterThanOrEqual(2);
+      expect(
+        calendarRepairs(again.body.data.report.repairs)
+          .map((f) => f.detail)
+          .sort(),
+      ).toEqual([
+        'calendar “Crew Shift” was matched to the existing calendar “Crew Shift”',
+        'calendar “Enterprise 5-Day” was matched to the existing calendar “Enterprise 5-Day”',
+        'calendar “Site 6-Day” was matched to the existing calendar “Site 6-Day”',
+      ]);
     });
 
     it('leaves a non-identical resource calendar as an unbound shared copy (docs/TECH_DEBT.md #553)', async () => {
@@ -1624,6 +1638,154 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       );
     });
 
+    it('gives the exact-name candidate to the first calendar in the file and the variant to the second', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const exactId = (
+        await prisma.plan.findUniqueOrThrow({ where: { id: first.body.data.planId } })
+      ).calendarId as string;
+      const variantId = await cloneCalendar(
+        exactId,
+        'Site 6-Day (imported 2026-10-20)',
+        new Date('2026-01-01T00:00:00Z'),
+      );
+
+      const res = await importFile(actor, projectId, twoIdenticalCalendarsXer('Rev B'));
+
+      const onPlan = await prisma.activity.findMany({
+        where: { planId: res.body.data.planId },
+        select: { code: true, calendarId: true },
+        orderBy: { code: 'asc' },
+      });
+      // File order: C1 (A1000) takes the exact name, C2 (A1010) takes the next candidate.
+      expect(onPlan).toEqual([
+        { code: 'A1000', calendarId: exactId },
+        { code: 'A1010', calendarId: variantId },
+      ]);
+      expect(await prisma.calendar.count({ where: { projectId, deletedAt: null } })).toBe(2);
+    });
+
+    it('does not use an identical shared-library calendar for a project calendar', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      // Promote the only identical calendar to the shared library, as a planner can.
+      await prisma.calendar.update({
+        where: { id: original.calendarId as string },
+        data: { scope: 'ORG', projectId: null },
+      });
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).not.toBe(original.calendarId);
+      const bound = await prisma.calendar.findUniqueOrThrow({
+        where: { id: plan.calendarId as string },
+      });
+      expect(bound).toMatchObject({ scope: 'PROJECT', projectId });
+    });
+
+    it('does not use an identical project calendar for a shared-library calendar', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      // The default tier puts the file's global calendar in the project ...
+      await importFile(actor, projectId, tieredCalendarXer());
+      expect(
+        await prisma.calendar.count({
+          where: { name: 'Enterprise 5-Day', scope: 'PROJECT', projectId },
+        }),
+      ).toBe(1);
+
+      // ... so asking for the library must create a library calendar, not bind to that one.
+      await importFile(actor, projectId, tieredCalendarXer('Tiered Again'), {
+        globalCalendarScope: 'ORG',
+      });
+
+      const shared = await prisma.calendar.findMany({
+        where: { organizationId: orgId, name: 'Enterprise 5-Day', scope: 'ORG', deletedAt: null },
+      });
+      expect(shared).toHaveLength(1);
+      const task = await prisma.activity.findFirstOrThrow({
+        where: { plan: { name: 'Tiered Again' }, code: 'A110' },
+      });
+      expect(task.calendarId).toBe(shared[0]?.id);
+    });
+
+    it('re-resolves under the lock: a calendar edited after the preview is copied, not reused', async () => {
+      // The dry-run is advisory (as it is for names). The commit decides under its locks, so a
+      // candidate that changed between the two must not be bound.
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      const calendarId = original.calendarId as string;
+
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(xerWithCalendar('Rev B'), 'utf8'), 'b.xer')
+        .expect(200);
+      expect(calendarRepairs(dry.body.data.repairs)[0]?.detail).toMatch(/was matched/);
+
+      // Park the commit on the calendar's advisory lock, i.e. AFTER its prediction and BEFORE its
+      // in-transaction read, change the calendar, and let the commit through.
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let held!: () => void;
+      const parked = new Promise<void>((resolve) => (held = resolve));
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await acquireCalendarWriteLock(tx, calendarId);
+          held();
+          await gate;
+        },
+        { timeout: 60_000, maxWait: 10_000 },
+      );
+      await parked;
+      let status:
+        | Promise<{
+            status: number;
+            body: { data: { planId: string; report: { repairs: unknown } } };
+          }>
+        | undefined;
+      try {
+        status = actor.agent
+          .post(commitUrl(projectId))
+          .attach('file', Buffer.from(xerWithCalendar('Rev B'), 'utf8'), 'b.xer')
+          .then((res) => res);
+        const deadline = Date.now() + 10_000;
+        for (;;) {
+          const waiting = await prisma.$queryRaw<{ n: number }[]>`
+            SELECT count(*)::int AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event = 'advisory'
+              AND query ILIKE '%pg_advisory_xact_lock%'`;
+          if ((waiting[0]?.n ?? 0) > 0) break;
+          if (Date.now() > deadline) throw new Error('the commit never waited on the lock');
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        await prisma.calendarException.updateMany({
+          where: { calendarId },
+          data: { label: 'Edited after the preview' },
+        });
+      } finally {
+        release();
+        await holder;
+      }
+
+      const res = await (status as NonNullable<typeof status>);
+      expect(res.status).toBe(201);
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: res.body.data.planId } });
+      expect(plan.calendarId).not.toBe(calendarId);
+      expect(calendarRepairs(res.body.data.report.repairs).map((f) => f.detail)).toEqual([
+        expect.stringMatching(/was created as/),
+      ]);
+    });
+
     it('keeps a reused calendar, intact, when the recalculation fails and the import rolls back', async () => {
       const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
       const schedule = app.get(ScheduleService, { strict: false });
@@ -1661,7 +1823,7 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       expect(before.exceptions.length).toBeGreaterThan(0);
     });
 
-    it('ends a calendar delete racing a reusing import as a reuse and a 409, or as a copy: never a plan on a deleted calendar', async () => {
+    it('never leaves a plan bound to a calendar that a racing delete removed (8 rounds)', async () => {
       const { actor, orgId } = await adminWithOrg();
       const projectId = await makeProject(actor);
       const outcomes = { reused: 0, copied: 0 };

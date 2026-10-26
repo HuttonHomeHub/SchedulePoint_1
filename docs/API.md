@@ -1018,7 +1018,8 @@ file. The report's `repairs` says `calendar “<source>” was matched to the ex
 in the dry-run and in the commit, and the `interchange.imported` audit row carries `calendarsReused`. A
 name the tier holds that is **not** identical (or is archived) is created afresh as
 `"<name> (imported YYYY-MM-DD)"` and reported as `was created as` — **never reused by name alone**,
-because two calendars sharing a name can have different working weeks. Revisions that reuse a calendar
+because two calendars sharing a name can have different working weeks. The commit decides again under its own locks, so it can differ from the dry-run when a calendar
+changed in between (the post-commit report says what was done). Revisions that reuse a calendar
 share it, so editing it changes all of their dates. **Export** emits `clndr_type` from the
 stored tier, so an XER export→import round trip preserves it; MSPDI has no equivalent field and
 reports the tier as a drop.
