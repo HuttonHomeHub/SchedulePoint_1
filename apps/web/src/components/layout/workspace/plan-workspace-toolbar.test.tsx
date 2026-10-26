@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * M4 integration for the canvas-maximal, toolbar-hosted {@link ToolbarPlanWorkspace} (ADR-0031) via
@@ -1538,6 +1538,13 @@ describe('a failed swimlane list is said over the diagram, with a retry', () => 
  * so setting up and managing get a button of their own. It lives in the lens's section.
  */
 describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', () => {
+  // The dialogs are a lazy chunk. Under a loaded runner the first import can outlast `findBy`'s
+  // 1 s default (seen twice on 2026-10-26), so warm the module once; the lazy boundary then
+  // resolves at once and each test still proves the dialog opens from the command.
+  beforeAll(async () => {
+    await import('@/features/swimlanes/components/SwimlaneDialogs');
+  });
+
   function openStructure(): void {
     renderScreen();
     fireEvent.click(screen.getByRole('button', { name: /^View/ }));
