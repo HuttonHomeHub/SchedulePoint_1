@@ -54,6 +54,10 @@ const weekdays = (open: number, close: number) =>
   );
 const STANDARD = buildWorkingTimeCalendar(weekdays(0, 1440), []);
 const EIGHT_HOUR = buildWorkingTimeCalendar(weekdays(480, 960), []);
+/** The eight-hour calendar with Thursday 2026-01-08 made a holiday. */
+const EIGHT_HOUR_WITH_HOLIDAY = buildWorkingTimeCalendar(weekdays(480, 960), [
+  { startDate: '2026-01-08', endDate: '2026-01-08', windows: [] },
+]);
 const DAY = 1440;
 
 const DATA_DATE = '2026-01-05';
@@ -220,6 +224,37 @@ const FORWARD: ForwardCell[] = [
       predecessorPlacedFinish: '2026-01-11',
     }),
     expected: '2026-01-12T00:00',
+  },
+  {
+    // On a 24-hour calendar every minute works, so the end of Friday's last working minute is the
+    // midnight after it: Sat 01-10 00:00, the same as the unrolled reading (#539).
+    name: 'FS from a 24-hour finish-milestone upstream: the end of Friday, Sat 00:00',
+    edge: incoming({
+      predecessor: remoteTask({
+        type: 'FINISH_MILESTONE',
+        durationMinutes: 0,
+        calendar: allMinutesWorkCalendar,
+      }),
+      predecessorPlacedStart: '2026-01-09',
+      predecessorPlacedFinish: '2026-01-09',
+    }),
+    expected: '2026-01-10T00:00',
+  },
+  {
+    // Dated on a holiday (the eight-hour calendar with Thu 01-08 off), the day has no working time, so
+    // the milestone stands for midnight at the end of that day, Fri 01-09 00:00, not for Wednesday's
+    // close (Wed 01-07 16:00), which is before the day it is dated.
+    name: 'FS from an eight-hour finish-milestone upstream dated on a holiday: midnight at its end',
+    edge: incoming({
+      predecessor: remoteTask({
+        type: 'FINISH_MILESTONE',
+        durationMinutes: 0,
+        calendar: EIGHT_HOUR_WITH_HOLIDAY,
+      }),
+      predecessorPlacedStart: '2026-01-08',
+      predecessorPlacedFinish: '2026-01-08',
+    }),
+    expected: '2026-01-09T00:00',
   },
   {
     // A start milestone dated Wed 01-07 finishes at its start: Wed 01-07 00:00.
