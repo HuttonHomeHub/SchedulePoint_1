@@ -935,6 +935,8 @@ export class CalendarRepository {
       deletedActivities: number;
     }[]
   > {
+    // soft-delete: any-state — the cursor row only anchors the keyset position; it may have been deleted
+    // since the previous page was read and must still say where the next one starts.
     const after = params.cursor
       ? Prisma.sql`AND (c.created_at, c.id) > (SELECT k.created_at, k.id FROM calendars k WHERE k.id = ${params.cursor}::uuid)`
       : Prisma.empty;

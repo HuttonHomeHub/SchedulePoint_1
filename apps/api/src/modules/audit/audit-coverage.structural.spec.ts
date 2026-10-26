@@ -130,6 +130,7 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   //   keeps scheduling identically and refuses only NEW usages, so nothing visibly breaks and
   //   nobody is told.
   'DELETE /api/v1/organizations/:orgSlug/calendars/:calendarId': ['calendar.deleted'],
+  'POST /api/v1/organizations/:orgSlug/calendars/bulk-delete': ['calendar.deleted'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/restore': ['calendar.restored'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/archive': ['calendar.archived'],
   'POST /api/v1/organizations/:orgSlug/calendars/:calendarId/unarchive': ['calendar.unarchived'],
@@ -282,6 +283,7 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/organizations/:orgSlug/plans/:planId/shares': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/projects/:projectId': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/projects/:projectId/calendars': REASONS.READ,
+  'GET /api/v1/organizations/:orgSlug/projects/:projectId/calendars/unused': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/projects/:projectId/plans': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/resources': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/resources/:resourceId': REASONS.READ,
