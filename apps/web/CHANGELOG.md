@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.200.1
+
+### Patch Changes
+
+- [#1179](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1179) [`4c26208`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c2620898ef539e3946528f623e02adf3f6ce678) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine update of the sign-in library to 1.7.12. It carries security fixes for sign-in methods SchedulePoint does not use (social and single sign-on, web tokens); email-and-password sign-in works as before.
+
+- [#1185](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1185) [`b90e141`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b90e141a5da12f0f14cfd2135c20522fe450f84c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update the form-checking library (@hookform/resolvers) to 6.0.0. Its one breaking change affects a validation library SchedulePoint does not use, so every form checks its fields exactly as before.
+
+- [#1181](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1181) [`de17c10`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/de17c10fc03bd61df7a22fd10174f57797a7ec59) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine update of the icon library to 1.61.0. It only adds new icons; every icon the app uses looks the same.
+
+- [#1184](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1184) [`255161e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/255161e029036163ad130d05be75db54f5d24ecd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update the long-list library (@tanstack/react-virtual) to 3.14.22. Long lists such as the project tree scroll and show rows exactly as before.
+
+- [#1180](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1180) [`72fe3f2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/72fe3f21d2623ffe426874502f7c3fb1ef5ee4dc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine update of the page router to 1.170.46. Nothing a planner sees changes.
+
 ## 0.200.0
 
 ### Minor Changes
