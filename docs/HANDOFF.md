@@ -3,48 +3,48 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-25 (evening). The owner asked for **swimlanes M5** ("Gate pass and records") and
-nothing else. **The swimlanes epic is now closed:** M0 to M5 are merged and released, the last release
-being **`web` 0.199.2** and **`api` 0.101.1** (Version Packages #1151). M5 added no feature: it reviewed the
-whole epic, folded the small findings, filed **ADR-0206** and brought the records in line with what
-shipped. The owner's **hard rule** still stands: nothing that needs them to test, measure or check
-anything on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**;
-that stays the owner's call (ADR-0190).
+**Written:** 2026-10-26. The owner asked for a hand-off check, a reconciliation pass, and then a
+shortlist built to completion. **All of it is merged and released:** the reconciliation pass (#1163),
+two fixes (#550 and #371), four approved specs (#539, #495, notes through XER/MSPDI, the import
+calendar tidy), and the release **`web` 0.200.0**, **`api` 0.102.0** and **`@repo/interchange` 0.16.0**
+(Version Packages #1166). The owner's **hard rule** still stands: nothing that needs them to test,
+measure or check anything on their server or devices (a decision question is fine; a test is not).
+**1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's answers this session (2026-10-25)
+## The owner's answers this session (2026-10-26)
 
-- **The three known swimlane gaps: "None now".** #547 (the editor's Breakdown field and Dissolve do
-  not store the lane), guests seeing swimlanes on a WBS-source plan, and full membership in a
-  WBS-source XER export all stay recorded follow-ons (`docs/DECISIONS.md`, 2026-10-25). Do not build
-  them unless the owner asks.
+- **Shortlist:** build #539 and #550, and #495 and #371 too; **spec both** BACKLOG import items.
+- **The four specs** (`docs/specs/milestone-cross-calendar/`, `typed-field-commit/`,
+  `interchange-notes/`, `import-calendar-tidy/`): approved with every default.
+- **Dependabot PRs #1153 to #1162** (opened 2026-10-26): **leave for later**. They are still open; do
+  not merge them unless the owner asks.
 
 ## Where things stand
 
-- **Latest releases:** `web` 0.199.2, `api` 0.101.1 (Version Packages #1151); `@repo/interchange` is
-  still 0.15.0. Before that, `web` 0.199.1 / `api` 0.101.0 (#1148).
+- **Latest releases:** `web` 0.200.0, `api` 0.102.0, `@repo/interchange` 0.16.0 (Version Packages
+  #1166). Tags `api-v0.102.0` and `web-v0.200.0`; both publish jobs passed. `@repo/interchange` is
+  versioned but never tagged (`release.yml` tags only the two apps; it ships inside the API image).
+  Before that, `web` 0.199.2 / `api` 0.101.1 (#1151).
 - **This session's PRs, in merge order:**
-  - **#1150** M5-T1: ADR-0206 (Part A data A1 to A10, Part B frontend B1 to B12, and the boundary
-    rule's ~2:1 contrast basis), its CLAUDE.md §16 line, the ADR index and roadmap entries, amendment
-    notes on ADR-0026, 0031, 0063, 0090, 0100, 0152, 0153 and 0205, the brief's swimlane question
-    answered, BACKLOG (swimlanes closed; P6 activity codes added as the follow-on), TECH_DEBT #548 to
-    #550, the four spec documents set to `Accepted — shipped (ADR-0206)`, and the gate review's folds.
-  - **#1151** the Version Packages release.
-  - This hand-off.
-- **The gate review:** accessibility, component, UX, front-end performance, API, security and
-  back-end performance, on the whole epic (`6fe69268..4d541256`). **No blocking finding.** Folded: a
-  way forward in the WBS-source reason on the table and the Gantt cell, one "Follows the WBS" label and
-  one column-source type for both grids, the table note hidden below `lg` with its column, the
-  swimlane list's OpenAPI default (100), the DELETE's 422, and `docs/API.md`'s refusal order. Declined
-  with reasons in `docs/DECISIONS.md` (2026-10-25): naming the WBS swimlane in the table and Gantt
-  (the plan specified "Follows the WBS"), importing the guest view's constant from the feature index
-  (it would pull `features/activities` into the guest chunk), and one shared stem for the WBS sentences.
-- **Known swimlane gaps, recorded and parked by the owner's "None now":**
-  - **#547:** the editor's Breakdown field and Dissolve leave the moved activity's lane derived.
-  - **Guests see no swimlanes on a WBS-source plan** (ADR-0205 D3 and its 2026-10-25 note): a new
-    branch in `apps/api/src/modules/share/guest-swimlanes.ts`.
-  - **An XER export of a WBS-source plan writes only the source and level** (ADR-0156's amendment).
-  - **#549:** the Gantt view says nothing when the swimlane list fails to load.
-  - The Gantt swimlane list is 24 px high (a recorded coarse-pointer trade-off).
+  - **#1163** the reconciliation pass (last full pass now 2026-10-26; rows re-verified, #551 and #552
+    filed).
+  - **#1164** #550: a top-level activity create takes the plan lock (row #553 records the sibling
+    writers).
+  - **#1165** #371: `apps/web/scripts/bundle-probe.mjs`; 35 of 40 measurement scripts use it.
+  - **#1167** the four specs, approved.
+  - **#1168** calendar tidy M1: an import reuses an identical project calendar (ADR-0208; row #554).
+  - **#1169** #495: `useCommittedDraft`, `TextField commitOn="enter-or-blur"`, the critical float
+    threshold field adopts it.
+  - **#1170** the lazy-dialog warm-up for `plan-workspace-toolbar.test.tsx` (the flake seen on #1165).
+  - **#1171** #539: a milestone keeps the instant its logic gives it across calendars (ADR-0207; a
+    one-off boot recalculation of plans with a zero-span activity; rows #555 to #557).
+  - **#1172** calendar tidy M2: **Remove unused calendars…** on the project screen (row #558). Its
+    first CI run failed in all three browsers: the delete's refetch emptied the list while the modal
+    was still open, the page behind a modal is inert, and focus fell to `<body>`. Fixed by closing the
+    dialog before the hand-off, with a unit test that records whether a dialog was open at hand-off.
+  - **#1173** notes through XER and MSPDI, import and export (ADR-0209).
+  - **#1166** the Version Packages release.
+  - This hand-off (with row #559).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -105,6 +105,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-25: swimlanes M3 and M4 built to the approved spec with no new owner decisions; the
   defaults taken are recorded in ADR-0205 (guests) and the ADR-0156 amendments (XER reader and writer).
 - 2026-10-25 (evening): swimlanes M5 only; the three known gaps stay follow-ons ("None now").
+- 2026-10-26: the shortlist (#539, #550, #495, #371; spec both import items), the four specs with
+  every default, and Dependabot #1153 to #1162 left for later.
 
 ## Parked by the owner — keep, do not raise
 
@@ -147,21 +149,33 @@ owner returns to one, the steps are ready:
 
 - **New on 2026-10-25 (M5):** **#548** (`features/tsld` imports other features against ADR-0026 §8;
   ten files predate swimlanes and `model/reparent-lanes.ts` was added by M3-T2), **#549** (above),
-  **#550** (a top-level activity create does not take the plan lock, the #520 race shape; any fix
-  goes past the backend-performance reviewer first). **#536** is closed (2026-10-22); the host-steps
-  section above still calls it new because it records that day.
+  **#550** (a top-level activity create did not take the plan lock; closed 2026-10-26 by #1164).
+  **#536** is closed (2026-10-22); the host-steps section above still calls it new because it records
+  that day.
+
+- **New on 2026-10-26:** **#551** (a browser crash reaches nobody), **#552** (three small UI slips),
+  **#553** (writers that attach to an existing activity may have #550's race), **#554** (a reused
+  resource keeps its own calendar, so the file's differing copy is created and bound to nothing),
+  **#555** (the cross-plan twin has no weekend calendar), **#556** (the #421 marker has no rollback
+  section), **#557** (ADR-0196's exclusion may now be over-conservative),
+  **#558** (a labelled `CheckboxField` row is 24 px under a coarse pointer), **#559** (a new plan takes
+  the Standard calendar without the calendar lock). **#550** and **#371** are closed.
+- **Untested, no row:** dragging a milestone onto a non-working day (ADR-0207 changed how a placed
+  finish milestone reads back; only a journey can check the drag).
 
 ## Suggested next
 
-**Swimlanes is finished.** Nothing on it is owed unless the owner picks up one of the gaps above or the
-P6 activity-codes follow-on (`docs/BACKLOG.md`; it needs a spec and a database-architect pass).
+**The shortlist is finished.** Nothing on it is owed. Still open from the session:
 
-Shortlist candidates (check each row against the code first): #539 (a finish milestone after work on
-another calendar is dated wrongly: an engine defect, needs care), #495 (`SizeField` and `TextField` can
-drift), #371 (thirty measurement scripts repeat one esbuild block), #550 (small, API), and the two
-BACKLOG import items (carry notes through XER/MSPDI; clean up an import's leftover calendars). The next
-reconciliation pass when `check:reconcile-due` warns on a full clone (last pass 2026-10-19); an epic
-boundary has now passed, so it is a fair next step. Switch the session to **Sonnet** for building.
+- **Dependabot #1153 to #1162:** the owner said "leave for later". Offer them as one batch when the
+  owner asks what is next.
+- **#553 and #559** are the two lock gaps the session found; both are small API changes, and any fix
+  goes past the backend-performance reviewer first (the #520/#550 shape).
+- **#558** is a primitive change (`CheckboxField`), so it needs the ADR-0111 reviewers before release.
+- The P6 activity-codes follow-on (`docs/BACKLOG.md`) still needs a spec and a database-architect pass.
+
+The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26). Switch the
+session to **Sonnet** for building.
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -614,3 +628,27 @@ docs/TECH_DEBT.md` shows only that PR's rows.
     churn). Use the short form of the title in the index; `check:adr-coverage` reads the number.
   - **A claim that a rule "held" is checkable:** `grep` the imports on the tree before and after the
     epic. ADR-0026 §8 did not hold, and the ADR says so.
+
+- **2026-10-26 lessons (reconciliation pass and the shortlist):**
+  - **jsdom has no modal inertness.** A focus hand-off that runs while a `showModal()` dialog is open
+    passes every unit test and fails in every real browser, because `focus()` on anything outside
+    the modal does nothing. A unit test can still catch it: record whether `dialog[open]` exists at
+    the moment the hand-off calls `focus()`. TanStack v5 runs a hook-level `onSettled` (and awaits a
+    returned promise) **before** the callbacks passed to `mutate()`, so a list that refetches to empty
+    can unmount the host before its `onSuccess` closes the dialog.
+  - **Run a new journey locally before pushing it**, even when CI will run it:
+    `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium scripts/e2e-local.sh web -- e2e/<spec> --project=chromium`
+    takes about a minute. Without the variable Playwright asks for a browser build the container
+    does not have.
+  - **The Prisma transaction budget is 15 s** (`TRANSACTION_TIMEOUT_MS`, `prisma.service.ts`), not
+    5 s; a builder that stops at a guessed budget needs the real one.
+  - **Assemble stacked PRs in one scratch worktree** and rebase each with `git rebase --onto
+origin/main <old base>` after the one below merges; union the ADR lines, take ours for the counts
+    and let `check:counts` correct them, and re-add new TECH_DEBT rows numbered contiguously.
+  - **Run `pnpm check:*` plainly, never `pnpm -s`**: the silent flag turned a WARN into a FAIL for
+    `check:doc-register`. Prettier needs the repo's `node_modules` (its Tailwind plugin), so check a
+    worktree without one from the main checkout with absolute paths.
+  - **A builder's assertion can land in the wrong test when two tests end the same way.** The note
+    round-trip check went into the layout-restore test, whose last lines match the export-then-
+    reimport test's, so it read an empty list on CI. Read a builder's journey diff hunk by hunk
+    against the test it claims to extend, and run the suite locally before the PR.
