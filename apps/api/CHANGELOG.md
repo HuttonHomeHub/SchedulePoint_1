@@ -1,5 +1,46 @@
 # @repo/api
 
+## 0.102.0
+
+### Minor Changes
+
+- [#1168](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1168) [`13025e4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/13025e452727b647fe7003c9b7e4ab784beec33b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Importing a schedule into a project now reuses an existing calendar when a copy would differ only in its name, instead of creating `<name> (imported <date>)` every time. The calendar must be active, unarchived, in the same tier and project, carry the file's name or the importer's own variant of it, and match in hours per day, weekly shifts and exceptions (dates, windows and labels). The review report names each reuse as a repair, and the `interchange.imported` audit event records `calendarsReused`. A calendar that differs in anything, or is archived, is still created as before. See ADR-0208.
+
+- [#1171](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1171) [`1ca4c14`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1ca4c147212fbf4c133f51814be6705c3b693b4e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A milestone between weekend or shift work and weekday work now stays where its logic puts it, instead of
+  being pushed onto its own calendar. A milestone or zero-duration task no longer pushes the weekday work
+  after it a week, and no longer charges the work before it a false negative float. Every plan with a
+  milestone or zero-duration task (or linked across plans to one) is recalculated once, the first time this
+  release starts, so dates, float and criticality change on plans nobody has edited. What moves:
+  
+  - A finish milestone after weekend work on a weekday calendar reads the Sunday the work ends, early and
+    late, where it read the Friday before the work started.
+  - Weekday work after such a milestone starts the next working morning, not the week after.
+  - The weekend work before it carries no negative float, and the weekday work before that has the float it
+    has earned.
+  - A constraint, placement or external date on a finish milestone no longer pushes a successor on another
+    calendar a calendar period; a Friday placement after Sunday work is flagged as earlier than logic allows.
+  - A finish milestone placed on a Sunday, including one an earlier release moved there, reads Sunday where
+    it read the Friday before; a diamond drawn on the diagram moves to the end of that Sunday.
+  - A successor of a finish milestone through an elapsed (24-hour) lag can start earlier, because the lag now
+    counts from the moment the work ended.
+  - Plans linked across plans match the same plan built as one.
+  
+  A baseline captured before this release shows the correction as variance on the affected milestones and the
+  activities around them; frozen baseline dates are never rewritten. If you roll the application back, follow
+  "Rolling back past the milestone cross-calendar release" in `docs/DEPLOYMENT.md`.
+
+- [#1173](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1173) [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Exporting a plan to P6 XER or MS Project XML now includes its activity notes. Soft-deleted notes, and notes on deleted activities, are left out; plan-level notes are counted in the export report rather than written. The export report header gains the notes count.
+
+- [#1173](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1173) [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Importing a P6 XER or an MS Project file now brings its activity remarks across as activity notes. They are written in the same transaction as the plan, are authored by the person who imported (so only they can edit or delete them), and are removed with the plan if the import cannot finish. The import report gains a `mapped.notes` count, and the audit entry for an import records `noteCount`.
+
+- [#1172](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1172) [`206b3e3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/206b3e3d491dde4ec5fa5a5e3ba70f47a885055f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Two new calendar endpoints back clearing a project's leftover calendars. `GET /organizations/:orgSlug/projects/:projectId/calendars/unused` lists the project's own calendars that no active plan, activity or resource uses, with the deleted plans and activities still pointing at each. `POST /organizations/:orgSlug/calendars/bulk-delete` deletes up to 200 at once, all or nothing, under the single delete's permission and in-use rules; each calendar goes to Recently deleted in its own batch with its own audit event and can be restored alone. See ADR-0208.
+
+### Patch Changes
+
+- [#1164](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1164) [`095c85c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/095c85c1018831038bee213554c45df0b65fe1e4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Creating an activity can no longer land under a plan that is being deleted at the same moment.
+- Updated dependencies [[`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566), [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566)]:
+  - @repo/interchange@0.16.0
+
 ## 0.101.1
 
 ### Patch Changes
