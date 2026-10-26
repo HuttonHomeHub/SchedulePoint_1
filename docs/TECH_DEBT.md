@@ -9204,6 +9204,8 @@ At 320 the brand, status badge and "Plan details" toolbar are 316 px against 288
 
 ADR-0173 chose a separate field because `TextField`'s public contract has no draft, no Escape discard and no applying step, and changing it was out of scope. `SizeField` is also not a pure extraction of the Gantt's `WidthField`: Escape moved to a `window` capture listener, which changed the Gantt Columns fields' behaviour (the fix for Escape applying a draft). **Next:** decide whether `TextField` should take a `commitOn` mode so the two share one field. **Trigger:** a third typed numeric field, or a fix that has to be made in both.
 
+**Built 2026-10-26 on `feat/495-m1`, not yet merged (stays `open` until it lands):** the behaviour is one hook, `useCommittedDraft`, shared by `SizeField` and `TextField`'s `commitOn`; the Schedule settings threshold field was a third hand-rolled copy and is its first consumer (`docs/specs/typed-field-commit/`, `docs/DECISIONS.md` 2026-10-26).
+
 ### 496. The `revision-delta-m0` end-to-end spec once failed with a 401 mid-seed, and nothing has explained it
 
 **Status:** open · **Verified:** 2026-10-26 (`apps/api/test/revision-delta-m0.e2e-spec.ts`; `apps/api/vitest.e2e.config.mts:28` `fileParallelism: false`)

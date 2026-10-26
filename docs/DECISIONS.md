@@ -10,6 +10,33 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-26 — One draft-and-commit behaviour for typed fields (#495)
+
+**What was decided.** The behaviour `SizeField` found (a draft held until Enter, blur or an arrow step; Escape
+heard on `window` in the capture phase; a lost draft reported) is `useCommittedDraft`
+(`components/ui/use-committed-draft.ts`). `SizeField` is built on it unchanged, and `TextField` gains an opt-in
+`commitOn="enter-or-blur"` mode, typed so it requires `value` and `onCommit` and forbids `onChange`, `onBlur`,
+`onKeyDown` and `defaultValue`. The default mode is the same `<Input>` expression as before. The Schedule
+settings critical float threshold is the first consumer. No new ADR (Q3): an ADR-0188 Consequences line
+records it.
+
+**Why.** The threshold field had hand-rolled a third copy of the pattern with no Escape discard, and the
+Escape-before-blur fix was private to `SizeField`.
+
+**Consequences.**
+
+- Escape in the threshold field now discards a typed value. Whether it saved before was not established by reading
+  (it depends on whether closing the native `<dialog>` blurs the field before it unmounts); the new
+  `e2e/schedule.spec.ts` step measures it.
+- A blur with no typed text no longer re-commits in the threshold field (the old `onBlur={commit}` ran on every
+  blur and re-parsed the shown text). Intended and benign: nothing was typed, so nothing changes.
+- A rejected entry (`5x`) stays beside its error because `onCommit` returns `'keep'`; a save in flight shows the
+  committed text, not the old server value.
+- A gated commit field commits nothing, so a second Enter during the save is inert, where it used to re-run the
+  commit.
+
+---
+
 ## 2026-10-26 — The shortlist after the reconciliation pass: two fixes now, four specs approved with every default
 
 **What was decided.** After the 2026-10-26 reconciliation pass the product owner chose from the hand-off's shortlist:

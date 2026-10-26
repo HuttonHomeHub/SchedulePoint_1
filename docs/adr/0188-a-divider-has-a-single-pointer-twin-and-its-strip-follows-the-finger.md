@@ -121,6 +121,10 @@ the Gantt's grid width. Three facts, each read rather than assumed:
   fields' Escape behaviour changed: it now discards a draft where it used to apply it. That is the fix for a
   pre-existing defect, not a regression, and the Gantt's own suite passes unchanged. The field and `TextField`
   can drift (`docs/TECH_DEBT.md` #495).
+  **Amended 2026-10-26 (#495, `docs/specs/typed-field-commit/`):** the draft, Enter, blur, arrow-step and
+  Escape-on-`window` behaviour D2 found is now one hook, `useCommittedDraft`, used by `SizeField` and by
+  `TextField`'s opt-in `commitOn="enter-or-blur"` mode (first consumer: the Schedule settings critical float
+  threshold). The decision above stands; the drift it warned of no longer has two places to happen.
 - **Accepted, unchanged: Tab out of the field closes the box with no focus restore** (the next stop in document
   order after the portal), as `ToolbarPopover` does. Escape is the route back to the line.
 - **`CLICK_AFTER_GESTURE_MS` (500 ms) is a heuristic** that tells the click a browser fires after a press or a drag

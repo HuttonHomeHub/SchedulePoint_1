@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Input } from '@/components/ui/input';
+import { useCommittedDraft } from '@/components/ui/use-committed-draft';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { cn } from '@/lib/utils';
 
@@ -32,18 +33,14 @@ function limitedNotice(
  * Extracted from the Gantt's Columns group, where it was a private `WidthField`, so a divider's size
  * box and `View ▾` are one implementation rather than two that drift.
  *
- * **A field of its own rather than `TextField`**, deliberately: it needs a draft held between typing
- * and committing, Escape to discard it, and an arrow step that applies — none of which `TextField`'s
- * public contract has, and changing that contract is a larger decision than this.
+ * **A field of its own, on a shared hook**: its inline row, `px` suffix and `limitedNotice` are not
+ * `TextField`'s layout, but the draft/commit/Escape keyboard contract is `useCommittedDraft`'s, so a
+ * fix to it lands once rather than here and again in whatever types next (`docs/TECH_DEBT.md` #495).
  *
- * **Applies on Enter, blur or an arrow step — never per keystroke.** A field that applied as it was
- * typed would clamp the first digit of `160` to the 48 px minimum and snap the text out from under
- * the cursor. **Escape discards the draft** and the blur that closing the container causes afterwards
- * must not commit it, which is what `discarded` is for.
- *
- * The arrows are handled here rather than left to the browser's step so a step APPLIES (the browser
- * would only change the draft); the toolbar's key veto already yields ArrowUp/Down to a number input
- * (`OWNS_ALL_KEYS`), so this does not fight it.
+ * **Applies on Enter, blur or an arrow step — never per keystroke**, and Escape discards the draft
+ * even when the container closes on the same key; the hook's docblock carries the reasoning. The
+ * toolbar's key veto already yields ArrowUp/Down to a number input (`OWNS_ALL_KEYS`), so the step
+ * does not fight it.
  */
 export function SizeField({
   subject,
@@ -78,58 +75,11 @@ export function SizeField({
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }): React.ReactElement {
   const id = useId();
-  // `null` while the field shows the committed value; a string only between typing and committing.
-  const [draft, setDraft] = useState<string | null>(null);
-  const discarded = useRef(false);
-  // Escape threw the draft away on purpose; unlike `discarded` it outlives the blur that follows.
-  const escaped = useRef(false);
-  const draftRef = useRef<string | null>(null);
   const ownInputRef = useRef<HTMLInputElement>(null);
   const input = inputRef ?? ownInputRef;
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
-
-  // **A typed value is never changed silently, and that includes losing it.** Pressing outside while a
-  // draft is typed closes the container with the field still holding it; the field unmounts without a
-  // blur, so nothing was applied and nothing said so. It is not applied (an outside press is not a
-  // commit), and it is announced politely. Escape discards on purpose and says nothing.
   const announce = useAnnounce();
-  const lost = useRef({ announce, subject });
-  useEffect(() => {
-    lost.current = { announce, subject };
-  }, [announce, subject]);
-  useEffect(
-    () => () => {
-      if (draftRef.current !== null && !escaped.current) {
-        lost.current.announce(`${lost.current.subject}: the typed size was not applied.`);
-      }
-    },
-    [],
-  );
-
-  // **Escape is heard on `window`, in the capture phase, and that is the only place early enough.**
-  // A container that closes on Escape (`usePopoverPanel`) listens on `document` in the capture phase
-  // and moves focus to its trigger straight away, which blurs this field BEFORE the event reaches any
-  // React handler. A `discarded` flag set from `onKeyDown` was therefore set after the blur had
-  // already committed the draft: Escape applied what it was meant to throw away. `window` capture
-  // runs before `document` capture whichever listener registered first.
-  useEffect(() => {
-    const onEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.target !== input.current) return;
-      // Not stopped: Escape still closes the container, which is what the planner asked for. Closing
-      // blurs the field; `discarded` makes that blur skip the commit (it is cleared by the blur
-      // itself, or by the next edit if no blur arrives).
-      discarded.current = draftRef.current !== null;
-      escaped.current = true;
-      setDraft(null);
-    };
-    window.addEventListener('keydown', onEscape, true);
-    return () => window.removeEventListener('keydown', onEscape, true);
-  }, [input]);
 
   const commit = (raw: string): void => {
-    setDraft(null);
     const n = Number(raw);
     if (raw.trim() === '' || !Number.isFinite(n)) {
       onNotice(limitedNotice(subject, min, max, null, value, limitReason));
@@ -140,6 +90,15 @@ export function SizeField({
       limitedNotice(subject, min, max, asked, apply(clampSize(asked, min, max)), limitReason),
     );
   };
+  const draft = useCommittedDraft({
+    value: String(value),
+    onCommit: commit,
+    step,
+    type: 'number',
+    // A typed value is never lost silently (ADR-0173): the hook reports it, the sentence is ours.
+    onDraftLost: () => announce(`${subject}: the typed size was not applied.`),
+    inputRef: input,
+  });
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -153,30 +112,9 @@ export function SizeField({
         min={min}
         max={max}
         step={step}
-        value={draft ?? String(value)}
         aria-describedby={hintId}
         className="w-24"
-        onChange={(event) => {
-          discarded.current = false;
-          escaped.current = false;
-          setDraft(event.target.value);
-        }}
-        onBlur={(event) => {
-          if (draft !== null && !discarded.current) commit(event.target.value);
-          discarded.current = false;
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            commit(event.currentTarget.value);
-          } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-            event.preventDefault();
-            const typed = Number(event.currentTarget.value);
-            const from =
-              Number.isFinite(typed) && event.currentTarget.value.trim() !== '' ? typed : value;
-            commit(String(from + (event.key === 'ArrowUp' ? step : -step)));
-          }
-        }}
+        {...draft}
       />
       <span aria-hidden="true" className="text-muted-foreground text-sm">
         px

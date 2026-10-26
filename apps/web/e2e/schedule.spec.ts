@@ -165,6 +165,35 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await chooseComboboxOption(page, 'Calendar', 'None (all days work)');
   await chooseComboboxOption(page, 'Calendar', 'Standard');
 
+  // The critical float threshold commits on Enter or blur and **Escape discards** (TECH_DEBT #495).
+  // Escape also closes this dialog, so it is the same race `SizeField` had: closing blurs the field,
+  // and a blur that commits would save what Escape was meant to throw away. Before the field adopted
+  // `commitOn`, nothing read here establishes that Escape did not save, which is why this is a step.
+  const threshold = page
+    .getByRole('dialog', { name: 'Schedule settings' })
+    .getByLabel('Critical float threshold');
+  // Read it only once the plan calendar's hours have resolved: before then the field shows bare
+  // minutes ("0"), after it the day form ("0d"), so a value captured mid-load compares unlike with
+  // unlike after the reopen (seen on CI, chromium 3/3).
+  const settingsDialog = page.getByRole('dialog', { name: 'Schedule settings' });
+  await expect(settingsDialog.getByText(/A day is .* working hours/)).toBeVisible();
+  const thresholdBefore = await threshold.inputValue();
+  await threshold.fill('3d');
+  await threshold.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Schedule settings' })).toBeHidden();
+  await (await revealToolbarCommand(page, 'calendar')).click();
+  await expect(threshold).toHaveValue(thresholdBefore);
+  await threshold.fill('3d');
+  await threshold.press('Enter');
+  // The field shows the typed text while the save is in flight, so `3d` alone proves nothing: wait
+  // for the save to settle, then reopen the dialog and read what the plan actually holds.
+  const settings = page.getByRole('dialog', { name: 'Schedule settings' });
+  await expect(settings.getByText('Saving…')).toBeHidden();
+  await settings.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(settings).toBeHidden();
+  await (await revealToolbarCommand(page, 'calendar')).click();
+  await expect(threshold).toHaveValue('3d');
+
   // Close it: it is a modal, so it blocks the activities panel underneath.
   await page
     .getByRole('dialog', { name: 'Schedule settings' })
