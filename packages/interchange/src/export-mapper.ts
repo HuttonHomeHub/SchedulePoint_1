@@ -13,7 +13,11 @@ import type {
 } from './canonical.js';
 import type { ExportCalendar, ExportGraph, ExportPlan } from './export-graph.js';
 import type { ImportCalendarShift, ImportWorkWindow } from './import-graph.js';
-import { noteBodiesToPlainNotes, SCHEDULEPOINT_NOTES_TOPIC } from './note-text.js';
+import {
+  noteBodiesToPlainNotes,
+  SCHEDULEPOINT_NOTES_TOPIC,
+  stripInvisibleControls,
+} from './note-text.js';
 import type { ReportFinding } from './report.js';
 import { foldSwimlaneName, isSwimlaneName } from './xer-layout-fields.js';
 
@@ -287,6 +291,19 @@ function mapNotes(
   );
   if (written.length === 0) return written;
 
+  // The emitters strip direction overrides and zero-width characters (they can make a remark read
+  // differently from what it says); the report says how many notes that touched.
+  const stripped = written.filter((note) => stripInvisibleControls(note.body) !== note.body).length;
+  if (stripped > 0) {
+    findings.push({
+      kind: 'approximation',
+      entity: 'note',
+      sourceRef: null,
+      detail: `invisible direction and zero-width characters were removed from ${plural(stripped, 'note')}`,
+      reason: 'they can make a note read differently from what it says',
+    });
+  }
+
   findings.push({
     kind: 'approximation',
     entity: 'note',
@@ -312,7 +329,8 @@ function mapNotes(
     let cleaned = 0;
     for (const bodies of bodiesByActivity.values()) {
       if (bodies.length > 1) joined += 1;
-      if (noteBodiesToPlainNotes(bodies).removedForbidden) cleaned += 1;
+      // Counted after the invisible characters, which have their own finding above.
+      if (noteBodiesToPlainNotes(bodies.map(stripInvisibleControls)).removedForbidden) cleaned += 1;
     }
     if (joined > 0) {
       findings.push({

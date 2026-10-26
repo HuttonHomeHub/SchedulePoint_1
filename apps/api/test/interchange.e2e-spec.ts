@@ -1089,6 +1089,46 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(copy['A1000']).toEqual(['first & <foremost>\n\n————\n\nsecond']);
   });
 
+  it('leaves out notes on a soft-deleted activity without counting them as lost', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'kept' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'on an activity deleted behind the note’s back' })
+      .expect(201);
+    // Only the activity is soft-deleted, so its note is still `deleted_at IS NULL`: the exact shape
+    // the export read must exclude by the activity, not by the note.
+    await prisma.activity.update({ where: { id: a2 }, data: { deletedAt: new Date() } });
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((exported.body as Buffer).toString('utf8')).not.toContain('deleted behind');
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: { notes?: number };
+      drops: { entity: string }[];
+    };
+    expect(report.mapped.notes).toBe(1);
+    expect(report.drops.some((d) => d.entity === 'note')).toBe(false);
+  });
+
   it('exports a plan without notes exactly as before: no memo tables, no note finding', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);

@@ -210,6 +210,18 @@ export function htmlToText(input: string, collapseBlankLines: boolean): HtmlText
 }
 
 /**
+ * Bidirectional overrides and isolates and zero-width characters. They let a remark display differently
+ * from what it says, or hide text inside it, so they are removed on the way in and on the way out: a
+ * note written before this rule, or by another route, must not carry one into somebody else's file.
+ */
+const INVISIBLE_CONTROLS = /[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g;
+
+/** A body without {@link INVISIBLE_CONTROLS}. */
+export function stripInvisibleControls(body: string): string {
+  return body.replace(INVISIBLE_CONTROLS, '');
+}
+
+/**
  * Make text fit the note shape: normalise line breaks to `\n`, remove control characters other than
  * newline and tab (a NUL alone would make PostgreSQL refuse the row and roll the whole import back),
  * remove bidirectional overrides and isolates and zero-width characters (they let an imported remark
@@ -220,7 +232,7 @@ export function cleanNoteText(input: string): string {
   return (
     input
       .replace(/\r\n?/g, '\n')
-      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
+      .replace(INVISIBLE_CONTROLS, '')
       // The point of this call is to match control characters.
       // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, '')
@@ -344,7 +356,7 @@ export function importNoteText(raw: string, source: NoteSource, topic?: string):
 }
 
 function escapeMemoHtml(body: string): string {
-  return body
+  return stripInvisibleControls(body)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -372,7 +384,7 @@ export function noteBodiesToPlainNotes(bodies: readonly string[]): {
   readonly removedForbidden: boolean;
 } {
   const joined = bodies.join(NOTE_JOINER);
-  const text = joined
+  const text = stripInvisibleControls(joined)
     // XML 1.0 forbids these; matching them is the point.
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')

@@ -65,6 +65,22 @@ describe('exportXer — notes', () => {
     expect(result.report.mapped.notes).toBe(3);
   });
 
+  it('removes invisible direction characters and says how many notes that touched', () => {
+    const result = exportXer({
+      graph: withNotes([
+        { activityKey: 'A1', body: 'clean' },
+        { activityKey: 'A1', body: 'sneaky\u202Etext' },
+      ]),
+    });
+    if (!result.ok) throw new Error('export failed');
+    expect(text(result.bytes)).not.toContain('\u202E');
+    expect(result.report.approximations).toContainEqual(
+      expect.objectContaining({
+        detail: 'invisible direction and zero-width characters were removed from 1 note',
+      }),
+    );
+  });
+
   it('writes TASKMEMO with task_memo as its last column, after TASK', () => {
     const result = exportXer({ graph: withNotes([{ activityKey: 'A1', body: 'x' }]) });
     if (!result.ok) throw new Error('export failed');

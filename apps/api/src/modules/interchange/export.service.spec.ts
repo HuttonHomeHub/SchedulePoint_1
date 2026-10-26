@@ -16,6 +16,7 @@ import type { ResourceRepository } from '../resources/resource.repository';
 import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { EXPORT_ERROR, ExportService, slugify } from './export.service';
+import { EXPORT_NOTES_MAX_BYTES } from './interchange.constants';
 
 const ORG_ID = 'org-1';
 const USER_ID = 'user-1';
@@ -140,7 +141,7 @@ describe('ExportService.exportPlan', () => {
     assignments = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     swimlanes = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     notes = {
-      findActiveActivityNotesForExport: vi.fn().mockResolvedValue([]),
+      findActiveActivityNotesForExport: vi.fn().mockResolvedValue({ notes: [], truncated: false }),
       countActiveForPlan: vi.fn().mockResolvedValue(0),
     };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -216,11 +217,14 @@ describe('ExportService.exportPlan', () => {
   });
 
   it('reads notes once, scoped and capped, and exports those of live activities only', async () => {
-    notes.findActiveActivityNotesForExport.mockResolvedValue([
-      { activityId: 'act-1', body: 'first' },
-      { activityId: 'gone', body: 'on a deleted activity' },
-      { activityId: 'act-2', body: 'second' },
-    ]);
+    notes.findActiveActivityNotesForExport.mockResolvedValue({
+      notes: [
+        { activityId: 'act-1', body: 'first' },
+        { activityId: 'gone', body: 'on an activity not in the graph' },
+        { activityId: 'act-2', body: 'second' },
+      ],
+      truncated: false,
+    });
     notes.countActiveForPlan.mockImplementation((_org: string, _plan: string, kind: string) =>
       kind === 'PLAN' ? 2 : 3,
     );
@@ -230,7 +234,7 @@ describe('ExportService.exportPlan', () => {
     expect(notes.findActiveActivityNotesForExport).toHaveBeenCalledExactlyOnceWith(
       ORG_ID,
       PLAN_ID,
-      MAX_NOTES + 1,
+      { maxNotes: MAX_NOTES, maxBytes: EXPORT_NOTES_MAX_BYTES },
     );
     expect(report.mapped.notes).toBe(2);
     expect(report.drops.map((d) => d.detail)).toContain(
@@ -243,12 +247,13 @@ describe('ExportService.exportPlan', () => {
   });
 
   it('applies the ceiling and reports how many activity notes it left out', async () => {
-    notes.findActiveActivityNotesForExport.mockResolvedValue(
-      Array.from({ length: MAX_NOTES + 1 }, (_, i) => ({
+    notes.findActiveActivityNotesForExport.mockResolvedValue({
+      notes: Array.from({ length: MAX_NOTES }, (_, i) => ({
         activityId: 'act-1',
         body: `n${String(i)}`,
       })),
-    );
+      truncated: true,
+    });
     notes.countActiveForPlan.mockImplementation((_org: string, _plan: string, kind: string) =>
       kind === 'PLAN' ? 0 : MAX_NOTES + 7,
     );

@@ -8,9 +8,11 @@ import {
   ApiParam,
   ApiProduces,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
 import type { Principal } from '../../common/auth/principal';
@@ -32,6 +34,14 @@ import { ExportService } from './export.service';
  * a blocking pre-confirm), so a single request yields both the bytes and the honest account of what did and
  * did not come across.
  */
+/**
+ * An export reads the whole plan (and now its notes) and serialises it on the request, so one session
+ * could otherwise repeat it without limit. 20 a minute is far above a planner exporting by hand, and
+ * `ttl` is milliseconds, matching the global `ThrottlerModule`. The organisation export's limit is the
+ * precedent (`organization-export.controller.ts`).
+ */
+const PLAN_EXPORT_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
+
 @ApiTags('interchange')
 @ApiCookieAuth('schedulepoint.session_token')
 @ApiUnauthorizedResponse({ description: 'No valid session.' })
@@ -44,6 +54,7 @@ export class PlanExportController {
 
   @Get('export/:format')
   @RequirePermissions('interchange:export')
+  @Throttle(PLAN_EXPORT_THROTTLE)
   @ApiOperation({
     summary: 'Export a plan as a foreign schedule file (any member; P6 XER or MS Project MSPDI).',
     description:
@@ -69,6 +80,9 @@ export class PlanExportController {
     schema: { type: 'string', format: 'binary' },
   })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiTooManyRequestsResponse({
+    description: 'More than 20 exports in a minute from this session.',
+  })
   @ApiUnprocessableEntityResponse({
     description: 'Unsupported format, or the plan is too large to export (EXPORT_TOO_LARGE).',
   })

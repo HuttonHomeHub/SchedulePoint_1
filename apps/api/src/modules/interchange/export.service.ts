@@ -25,6 +25,7 @@ import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { INTERCHANGE_EXPORT } from './interchange-permissions';
+import { EXPORT_NOTES_MAX_BYTES } from './interchange.constants';
 
 /** Machine-readable reasons carried in an export {@link ValidationError}'s `details.reason`. */
 export const EXPORT_ERROR = {
@@ -188,8 +189,11 @@ export class ExportService {
         take: SWIMLANE_LIMIT,
       }),
       this.activities.findSwimlaneLanesForPlan(organizationId, plan.id),
-      // One more than the ceiling, so reaching it is detectable without reading the rest.
-      this.notes.findActiveActivityNotesForExport(organizationId, plan.id, MAX_NOTES + 1),
+      // Bounded in rows and bytes, and paged: a plan cannot make one export hold unbounded text.
+      this.notes.findActiveActivityNotesForExport(organizationId, plan.id, {
+        maxNotes: MAX_NOTES,
+        maxBytes: EXPORT_NOTES_MAX_BYTES,
+      }),
       // Plan notes have no field in either format; they are only counted for the report.
       this.notes.countActiveForPlan(organizationId, plan.id, 'PLAN'),
     ]);
@@ -233,14 +237,12 @@ export class ExportService {
     // Notes of the activities in this graph only, in the order read. A note whose activity is not in the
     // graph (soft-deleted) is not exported and not counted as left out: it is deleted. Past the ceiling
     // the rest is counted, so the report says how many were left out rather than truncating silently.
-    const exportNotes = noteRows
-      .filter((n): n is { activityId: string; body: string } => n.activityId !== null)
-      .filter((n) => activityIds.has(n.activityId));
-    const overLimit = noteRows.length > MAX_NOTES;
-    const unwrittenNotes = overLimit
+    const exportNotes = noteRows.notes.filter((n) => activityIds.has(n.activityId));
+    const unwrittenNotes = noteRows.truncated
       ? Math.max(
           0,
-          (await this.notes.countActiveForPlan(organizationId, plan.id, 'ACTIVITY')) - MAX_NOTES,
+          (await this.notes.countActiveForPlan(organizationId, plan.id, 'ACTIVITY')) -
+            exportNotes.length,
         )
       : 0;
 
@@ -260,9 +262,7 @@ export class ExportService {
       ...(exportNotes.length === 0
         ? {}
         : {
-            notes: exportNotes
-              .slice(0, MAX_NOTES)
-              .map((n) => ({ activityKey: n.activityId, body: n.body })),
+            notes: exportNotes.map((n) => ({ activityKey: n.activityId, body: n.body })),
           }),
       ...(planNotes === 0 ? {} : { planNoteCount: planNotes }),
       ...(unwrittenNotes === 0 ? {} : { unwrittenNoteCount: unwrittenNotes }),

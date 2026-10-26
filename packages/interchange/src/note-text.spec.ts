@@ -289,6 +289,27 @@ describe('the round trip through the XER memo', () => {
   });
 });
 
+describe('noteBodiesToMemoHtml', () => {
+  it('escapes every markup character, so a body can never add structure to the memo', () => {
+    expect(noteBodiesToMemoHtml(['<&>"\t\n'])).toBe(
+      '<html><body>&lt;&amp;&gt;&quot;&#9;<br></body></html>',
+    );
+    expect(noteBodiesToMemoHtml(['a < b', '<script>x</script>'])).toBe(
+      '<html><body>a &lt; b<hr>&lt;script&gt;x&lt;/script&gt;</body></html>',
+    );
+  });
+});
+
+describe('the export strips invisible characters too', () => {
+  it('removes direction overrides and zero-width characters from both formats', () => {
+    expect(noteBodiesToMemoHtml(['a\u202Eb\u200Bc'])).toBe('<html><body>abc</body></html>');
+    expect(noteBodiesToPlainNotes(['a\u202Eb\u200Bc'])).toEqual({
+      text: 'abc',
+      removedForbidden: true,
+    });
+  });
+});
+
 describe('noteBodiesToPlainNotes', () => {
   it('writes one note as it is and joins several with the separator', () => {
     expect(noteBodiesToPlainNotes(['one']).text).toBe('one');
