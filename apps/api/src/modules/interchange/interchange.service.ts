@@ -36,6 +36,7 @@ import { AuditService } from '../audit/audit.service';
 import {
   CalendarRepository,
   type ImportCalendarBatchInput,
+  type ReuseCandidateHeader,
 } from '../calendars/calendar.repository';
 import { resolveHoursPerDayMinutes } from '../calendars/hours-per-day';
 import { DependencyRepository } from '../dependencies/dependency.repository';
@@ -63,11 +64,7 @@ import {
   type ReuseCandidate,
   type SourceCalendar,
 } from './calendar-reuse';
-import {
-  firstFreeImportedName,
-  importedNameProbePrefix,
-  isImportedVariantOf,
-} from './imported-name';
+import { firstFreeImportedName, importedNameProbePrefix } from './imported-name';
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
 import type { UploadedInterchangeFile } from './uploaded-file';
@@ -1191,6 +1188,7 @@ export class InterchangeService {
     // created is seen (as for resources).
     const takenByScope = new Map<ImportCalendarScope, Set<string>>();
     const candidatesByScope = new Map<ImportCalendarScope, ReuseCandidate[]>();
+    const headerById = new Map<string, ReuseCandidateHeader>();
     const lockedHeaders =
       lockedIds === undefined
         ? undefined
@@ -1212,44 +1210,30 @@ export class InterchangeService {
       };
       takenByScope.set(scope, await this.calendars.findTakenNamesWithPrefixes(where, db));
       const headers = lockedHeaders ?? (await this.calendars.findReuseCandidates(where, db));
-
-      // Rule candidates out on the cheap aggregates and the name lineage BEFORE reading any content:
-      // only a header that could match some source calendar of this tier is worth loading.
-      const tierSources = sources.filter((source) => source.scope === scope);
-      const survivors = headers.filter(
-        (header) =>
-          header.scope === scope &&
-          tierSources.some((source) => {
-            const aggregate = sourceAggregates.get(source.key);
-            return (
-              aggregate !== undefined &&
-              sameAggregate(aggregate, header) &&
-              isImportedVariantOf(header.name, source.name, CALENDAR_NAME_MAX_LENGTH)
-            );
-          }),
-      );
-      const content = await this.calendars.loadReuseContent(
-        survivors.map((header) => header.id),
-        db,
-      );
-      const keys = identityKeysFromFlatRows(
-        new Map(survivors.map((header) => [header.id, header.hoursPerDayMinutes])),
-        content,
-      );
+      for (const header of headers) headerById.set(header.id, header);
       candidatesByScope.set(
         scope,
-        survivors.map((header) => ({
-          id: header.id,
-          name: header.name,
-          createdAt: header.createdAt,
-          identityKey: keys.get(header.id) ?? '',
-        })),
+        headers.filter((header) => header.scope === scope),
       );
     }
 
-    const resolved = resolveCalendarReuse({
+    // Content is read lazily and only for headers the aggregate rule has not already excluded
+    // (`couldMatch`), in preference order, a chunk at a time (see `resolveCalendarReuse`).
+    const resolved = await resolveCalendarReuse({
       calendars: sources,
       candidatesByScope,
+      couldMatch: (source, candidate) => {
+        const aggregate = sourceAggregates.get(source.key);
+        const header = headerById.get(candidate.id);
+        return aggregate !== undefined && header !== undefined && sameAggregate(aggregate, header);
+      },
+      loadKeys: async (ids) => {
+        const content = await this.calendars.loadReuseContent(ids, db);
+        return identityKeysFromFlatRows(
+          new Map(ids.map((id) => [id, headerById.get(id)?.hoursPerDayMinutes ?? 0])),
+          content,
+        );
+      },
       takenByScope,
       today: new Date().toISOString().slice(0, 10),
       maxNameLength: CALENDAR_NAME_MAX_LENGTH,
