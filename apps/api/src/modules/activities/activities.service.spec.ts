@@ -483,12 +483,20 @@ describe('ActivitiesService', () => {
       expect(locksTaken()).toContain('dependency-plan');
     });
 
-    // The cost of the fix must fall ONLY on the re-parenting path: a plan-wide lock on every
-    // ordinary create would serialise all authoring in the plan.
-    it('takes NO plan lock on a top-level create (the common path is uncontended)', async () => {
+    // #520/#550: the insert's FK `KEY SHARE` does not conflict with a plan delete's `NO KEY UPDATE`,
+    // so only the plan lock keeps a top-level row from committing under a plan being swept.
+    it('takes the plan lock on a top-level create too', async () => {
       activities.create.mockResolvedValue(activity());
       await service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T' });
-      expect(locksTaken()).not.toContain('dependency-plan');
+      expect(locksTaken()).toContain('dependency-plan');
+    });
+
+    it('is a 404 that inserts nothing when the plan is gone once the lock is held', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValueOnce(plan()).mockResolvedValueOnce(null);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, { name: 'T' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(activities.create).not.toHaveBeenCalled();
     });
 
     // One acquisition order across this service (plan → calendar) is what makes two concurrent
