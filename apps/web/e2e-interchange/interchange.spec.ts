@@ -4,14 +4,17 @@ import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { drawnSpanDays } from '@repo/layout';
 
+import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   calendarXerFile,
   layoutXerFile,
+  notesXerFile,
   onboard,
   openNewProject,
+  showActivities,
   validMspdiFile,
   validXerFile,
   zeroDurationXerFile,
@@ -77,6 +80,55 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await confirmButton.click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
+
+/**
+ * **An imported remark arrives as a note** (notes-through-interchange M1, `docs/specs/interchange-notes/`).
+ *
+ * The file carries a P6 `TASKMEMO` on A1000 holding HTML with a `<script>` element. The dry-run report
+ * counts **Notes 1** and says formatting was removed, before anything is committed. After the commit the
+ * activity's Notes tab shows the remark as plain text, authored by the person who imported, and nothing
+ * in the thread is an element the memo supplied (FC-5). The thread is read through the row's actions
+ * menu, the route `e2e-notes` drives; the selection bar's Notes button opens the same tab.
+ */
+test('an imported P6 remark arrives as a plain-text activity note', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(notesXerFile());
+
+  const mappedCounts = dialog.locator('dl[aria-label="Mapped"]');
+  await expect(mappedCounts).toBeVisible();
+  await expect(
+    mappedCounts.getByText('Notes', { exact: true }).locator('xpath=following-sibling::*[1]'),
+  ).toHaveText('1');
+  const approximations = dialog.getByRole('region', { name: /^Approximations/ });
+  await expect(approximations).toContainText('formatting was removed from 1 note');
+
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+
+  await showActivities(page);
+  await page.getByRole('button', { name: 'Actions for Mobilise' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
+  const editor = activityEditor(page);
+  await expect(editor.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
+
+  // The remark is text: the markup is gone and the script's content was never kept.
+  await expect(editor.getByText('Pour level 3', { exact: true })).toBeVisible();
+  await expect(editor.getByText('Interchange Tester', { exact: true })).toBeVisible();
+  await expect(editor.locator('b, script, p')).toHaveCount(0);
+  await expect(editor.getByText('alert(1)')).toHaveCount(0);
+
+  const axe = await new AxeBuilder({ page })
+    .include('dialog[open]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
 });
 
 /**

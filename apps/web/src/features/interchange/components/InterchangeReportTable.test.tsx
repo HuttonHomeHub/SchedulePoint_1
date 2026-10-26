@@ -58,6 +58,16 @@ describe('InterchangeReportTable', () => {
     expect(screen.getByText('Lanes').nextElementSibling).toHaveTextContent('40');
   });
 
+  it('shows the Notes count only for a file that carried notes', () => {
+    const { unmount } = render(<InterchangeReportTable report={report} />);
+    expect(screen.queryByText('Notes')).not.toBeInTheDocument();
+    unmount();
+    render(
+      <InterchangeReportTable report={{ ...report, mapped: { ...report.mapped, notes: 12 } }} />,
+    );
+    expect(screen.getByText('Notes').nextElementSibling).toHaveTextContent('12');
+  });
+
   it('shows the swimlane counts only for a file that carried swimlanes', () => {
     const { unmount } = render(<InterchangeReportTable report={report} />);
     expect(screen.queryByText('Swimlanes')).not.toBeInTheDocument();
