@@ -739,6 +739,7 @@ export class CalendarsService {
       throw new NotFoundError('Project not found.');
     }
 
+    // A cursor naming no calendar anchors nothing, so the page is empty rather than an error.
     const rows = await this.calendars.findUnusedInProject({
       organizationId: organization.id,
       projectId,
@@ -747,13 +748,14 @@ export class CalendarsService {
     });
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const deleted = await this.calendars.countDeletedReferencers(page.map((row) => row.id));
     return {
       items: page.map((row) => ({
         id: row.id,
         name: row.name,
         archived: row.archived,
         version: row.version,
-        deletedReferencers: { plans: row.deletedPlans, activities: row.deletedActivities },
+        deletedReferencers: deleted.get(row.id) ?? { plans: 0, activities: 0 },
       })),
       meta: { nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null, hasMore },
     };
@@ -784,14 +786,12 @@ export class CalendarsService {
     const deleted = await this.prisma.$transaction(async (tx) => {
       for (const calendarId of sorted) await acquireCalendarWriteLock(tx, calendarId);
 
-      const loaded: Calendar[] = [];
-      for (const calendarId of sorted) {
-        const existing = await this.calendars.findActiveByIdInOrg(calendarId, organization.id, tx);
-        if (!existing) throw new NotFoundError('Calendar not found.');
-        if (existing.scope === 'ORG') {
-          this.assertCan(principal, 'calendar:manage_org', organization.id);
-        }
-        loaded.push(existing);
+      // One read for the whole set, after the locks. A miss (unknown, deleted, or in another
+      // organisation) is a 404 for the request, and the count is how it is noticed.
+      const loaded = await this.calendars.findActiveManyByIdsInOrg(sorted, organization.id, tx);
+      if (loaded.length !== sorted.length) throw new NotFoundError('Calendar not found.');
+      if (loaded.some((calendar) => calendar.scope === 'ORG')) {
+        this.assertCan(principal, 'calendar:manage_org', organization.id);
       }
 
       const counts = await this.calendars.countActiveReferencers(sorted, tx);

@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
+
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -9,6 +12,7 @@ import type { OrganizationRole } from '../src/common/auth/principal';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * Removing a project's unused calendars (ADR-0208 D5, M2), against a real PostgreSQL + Better Auth:
@@ -39,6 +43,7 @@ interface Actor {
 describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -52,6 +57,7 @@ describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   afterAll(async () => {
@@ -61,6 +67,7 @@ describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
 
   beforeEach(async () => {
     await clearDomainData(prisma);
+    resetThrottleCounters(throttlerStorage);
   });
 
   async function signUp(email: string): Promise<Actor> {
@@ -199,6 +206,17 @@ describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
       expect(second.body.meta.hasMore).toBe(false);
     });
 
+    it('refuses a malformed cursor with a 422, and answers a cursor naming no calendar with an empty page', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await makeCalendar(actor, 'One', { projectId });
+
+      await actor.agent.get(`${unusedUrl(projectId)}?cursor=x`).expect(422);
+      const unknown = await actor.agent.get(`${unusedUrl(projectId)}?cursor=${NIL}`).expect(200);
+      expect(unknown.body.data).toEqual([]);
+      expect(unknown.body.meta).toMatchObject({ hasMore: false, nextCursor: null });
+    });
+
     it('is readable by a Viewer, and 404s a foreign, deleted or unknown project', async () => {
       const { actor, orgId } = await adminWithOrg();
       const projectId = await makeProject(actor);
@@ -328,6 +346,45 @@ describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
       expect(
         (await prisma.calendar.findUniqueOrThrow({ where: { id: shared } })).deletedAt,
       ).not.toBeNull();
+    });
+
+    it('deletes 200 calendars with exceptions in one request, inside the batch budget', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const rows = Array.from({ length: 200 }, (_, i) => ({
+        id: randomUUID(),
+        organizationId: orgId,
+        name: `Copy ${String(i)}`,
+        scope: 'PROJECT' as const,
+        projectId,
+        hoursPerDayMinutes: 480,
+      }));
+      await prisma.calendar.createMany({ data: rows });
+      await prisma.calendarException.createMany({
+        data: rows.flatMap((r) =>
+          Array.from({ length: 5 }, (_, d) => ({
+            organizationId: orgId,
+            calendarId: r.id,
+            startDate: new Date(Date.UTC(2026, 0, 1 + d)),
+            endDate: new Date(Date.UTC(2026, 0, 1 + d)),
+          })),
+        ),
+      });
+
+      const started = performance.now();
+      const res = await actor.agent
+        .post(bulkUrl)
+        .send({ ids: rows.map((r) => r.id) })
+        .expect(200);
+      const elapsed = performance.now() - started;
+      process.stderr.write(`BULK_200_MS ${elapsed.toFixed(0)}\n`);
+
+      expect(res.body.data.deleted).toHaveLength(200);
+      expect(await prisma.calendar.count({ where: { projectId, deletedAt: null } })).toBe(0);
+      expect(await prisma.auditEvent.count({ where: { action: 'calendar.deleted' } })).toBe(200);
+      // The request is one transaction under the 15 s default (`TRANSACTION_TIMEOUT_MS`). Measured at
+      // about 1.2 s for 200 calendars with five exceptions each, so no batch override is taken.
+      expect(elapsed).toBeLessThan(15_000);
     });
 
     it('validates the body: empty, over 200, duplicated and non-UUID ids are 422', async () => {

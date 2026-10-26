@@ -103,6 +103,7 @@ describe('CalendarsService', () => {
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
     softDeleteWithExceptions: ReturnType<typeof vi.fn>;
     countActiveReferencers: ReturnType<typeof vi.fn>;
+    findActiveManyByIdsInOrg: ReturnType<typeof vi.fn>;
     countActivePlansUsing: ReturnType<typeof vi.fn>;
     countActiveActivitiesUsing: ReturnType<typeof vi.fn>;
     countPlansUsingOutsideProject: ReturnType<typeof vi.fn>;
@@ -143,6 +144,7 @@ describe('CalendarsService', () => {
       updateIfVersionMatches: vi.fn(),
       softDeleteWithExceptions: vi.fn(),
       countActiveReferencers: vi.fn().mockResolvedValue(new Map()),
+      findActiveManyByIdsInOrg: vi.fn().mockResolvedValue([]),
       countActivePlansUsing: vi.fn().mockResolvedValue(0),
       countActiveActivitiesUsing: vi.fn().mockResolvedValue(0),
       countPlansUsingOutsideProject: vi.fn().mockResolvedValue(0),
@@ -836,13 +838,25 @@ describe('CalendarsService', () => {
       await expect(
         service.bulkRemove(principalWith(['calendar:read']), 'acme', IDS),
       ).rejects.toBeInstanceOf(ForbiddenError);
-      expect(calendars.findActiveByIdInOrg).not.toHaveBeenCalled();
+      expect(calendars.findActiveManyByIdsInOrg).not.toHaveBeenCalled();
+    });
+
+    it('loads the whole set in one read, in id order, after the locks', async () => {
+      calendars.findActiveManyByIdsInOrg.mockResolvedValue([
+        calendar({ id: 'cal-1' }),
+        calendar({ id: 'cal-2' }),
+      ]);
+      calendars.softDeleteWithExceptions.mockResolvedValue('batch');
+      await service.bulkRemove(principalWith(ALL), 'acme', IDS);
+      expect(calendars.findActiveManyByIdsInOrg).toHaveBeenCalledTimes(1);
+      expect(calendars.findActiveManyByIdsInOrg.mock.calls[0]?.[0]).toEqual(['cal-1', 'cal-2']);
     });
 
     it('forbids an ORG calendar without calendar:manage_org and deletes none of the set', async () => {
-      calendars.findActiveByIdInOrg
-        .mockResolvedValueOnce(calendar({ id: 'cal-1', scope: 'PROJECT', projectId: PROJECT_ID }))
-        .mockResolvedValueOnce(calendar({ id: 'cal-2', scope: 'ORG', projectId: null }));
+      calendars.findActiveManyByIdsInOrg.mockResolvedValue([
+        calendar({ id: 'cal-1', scope: 'PROJECT', projectId: PROJECT_ID }),
+        calendar({ id: 'cal-2', scope: 'ORG', projectId: null }),
+      ]);
       await expect(
         service.bulkRemove(principalWith(['calendar:read', 'calendar:delete']), 'acme', IDS),
       ).rejects.toBeInstanceOf(ForbiddenError);
@@ -851,9 +865,7 @@ describe('CalendarsService', () => {
     });
 
     it('is a 404 for the whole set when any id is missing, and writes nothing', async () => {
-      calendars.findActiveByIdInOrg
-        .mockResolvedValueOnce(calendar({ id: 'cal-1' }))
-        .mockResolvedValueOnce(null);
+      calendars.findActiveManyByIdsInOrg.mockResolvedValue([calendar({ id: 'cal-1' })]);
       await expect(service.bulkRemove(principalWith(ALL), 'acme', IDS)).rejects.toBeInstanceOf(
         NotFoundError,
       );
@@ -861,9 +873,10 @@ describe('CalendarsService', () => {
     });
 
     it('counts the referencers of the whole set in one call, and refuses all if any is used', async () => {
-      calendars.findActiveByIdInOrg
-        .mockResolvedValueOnce(calendar({ id: 'cal-1' }))
-        .mockResolvedValueOnce(calendar({ id: 'cal-2' }));
+      calendars.findActiveManyByIdsInOrg.mockResolvedValue([
+        calendar({ id: 'cal-1' }),
+        calendar({ id: 'cal-2' }),
+      ]);
       calendars.countActiveReferencers.mockResolvedValue(
         new Map([['cal-2', { plans: 1, activities: 0, resources: 0 }]]),
       );
@@ -878,9 +891,10 @@ describe('CalendarsService', () => {
     });
 
     it('deletes each calendar in its own batch, in id order, with one audit row each', async () => {
-      calendars.findActiveByIdInOrg
-        .mockResolvedValueOnce(calendar({ id: 'cal-1' }))
-        .mockResolvedValueOnce(calendar({ id: 'cal-2' }));
+      calendars.findActiveManyByIdsInOrg.mockResolvedValue([
+        calendar({ id: 'cal-1' }),
+        calendar({ id: 'cal-2' }),
+      ]);
       calendars.softDeleteWithExceptions
         .mockResolvedValueOnce('batch-1')
         .mockResolvedValueOnce('batch-2');
