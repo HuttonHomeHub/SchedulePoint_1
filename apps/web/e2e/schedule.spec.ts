@@ -172,6 +172,11 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   const threshold = page
     .getByRole('dialog', { name: 'Schedule settings' })
     .getByLabel('Critical float threshold');
+  // Read it only once the plan calendar's hours have resolved: before then the field shows bare
+  // minutes ("0"), after it the day form ("0d"), so a value captured mid-load compares unlike with
+  // unlike after the reopen (seen on CI, chromium 3/3).
+  const settingsDialog = page.getByRole('dialog', { name: 'Schedule settings' });
+  await expect(settingsDialog.getByText(/A day is .* working hours/)).toBeVisible();
   const thresholdBefore = await threshold.inputValue();
   await threshold.fill('3d');
   await threshold.press('Escape');
