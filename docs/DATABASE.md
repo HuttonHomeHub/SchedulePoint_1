@@ -2099,7 +2099,7 @@ keyed on a migration's `finished_at`:
 - **Rolling the image back must delete the marker row** (`docs/DEPLOYMENT.md` "Rolling back past the
   milestone cross-calendar release"). The previous image ignores an extra applied row, stamps the plans
   it recalculates after `finished_at`, and a later roll-forward would never re-derive them. The #421
-  marker has the same gap and no rollback section (`docs/TECH_DEBT.md` #557).
+  marker has the same gap and no rollback section (`docs/TECH_DEBT.md` #556).
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

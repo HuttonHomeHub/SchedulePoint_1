@@ -807,7 +807,7 @@ one recalculation. Each API replica runs the same pass, so a plan can be recalcu
 is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
 deploy would repeat the whole re-derivation unasked. The #421 marker
 (`20260930120000_progressed_predecessor_visual_marker`) has the same gap and no section of its own
-(`docs/TECH_DEBT.md` #557).
+(`docs/TECH_DEBT.md` #556).
 
 ### Which switches actually work on a running container, and which do not
 

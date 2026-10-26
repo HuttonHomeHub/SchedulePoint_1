@@ -28,8 +28,11 @@ day off. The frozen levelling hashes changed only on milestone instants; each wa
 commit before it was replaced.
 
 **Consequences.** Baselines show the correction as variance (Q3 A). The twin has no weekend calendar
-(`docs/TECH_DEBT.md` #556), and the #421 marker has no rollback section (#557). Whether a milestone can be
+(`docs/TECH_DEBT.md` #555), and the #421 marker has no rollback section (#556). Whether a milestone can be
 dragged onto a non-working day was not exercised and is left to a journey.
+
+---
+
 ## 2026-10-26 — One draft-and-commit behaviour for typed fields (#495)
 
 **What was decided.** The behaviour `SizeField` found (a draft held until Enter, blur or an arrow step; Escape

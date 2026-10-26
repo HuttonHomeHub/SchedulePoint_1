@@ -89,7 +89,7 @@ plan the previous image touched.
   dates are never rewritten (ADR-0155 decision 7, ADR-0125/0126) and a baseline records no rule version
   (Q3 A). The changelog says so.
 - The cross-plan twin is plain `it` in every one of its 1,728 cells; a weekend calendar is not in the
-  twin, so the row's own fixture is not split across plans anywhere (`docs/TECH_DEBT.md` #556).
+  twin, so the row's own fixture is not split across plans anywhere (`docs/TECH_DEBT.md` #555).
 - The frozen levelling hashes, the legacy levelling copy, one redundant-link counterexample and one
   hand-derived cross-plan golden were replaced, each diffed against the parent commit first.
 - A plan restored from the recycle bin keeps its old `schedule_computed_at`, so it is pending at the
