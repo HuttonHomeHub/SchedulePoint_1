@@ -248,7 +248,7 @@ describe('a zero-span activity between calendars keeps its logic instant (#539)'
       [link('P', 'M')],
     );
     expect(get('M').earlyStartOffset).toBe(0);
-    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-14T00:00');
+    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-14');
   });
 
   it('a milestone nothing drives still rolls its bound, the data date, onto its own calendar', () => {
