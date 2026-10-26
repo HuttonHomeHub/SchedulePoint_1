@@ -56,32 +56,36 @@ export function PlanCriticalFloatThresholdField({
   const setOption = useSetPlanScheduleOption(orgSlug);
   const announce = useAnnounce();
   const server = plan.criticalFloatThresholdMinutes;
-  // `null` = "showing the server's value"; a string = what the planner has typed since. Derived
-  // rather than mirrored in an effect, which matters twice over: the React Compiler rejects
-  // setState-in-effect, and an effect that re-seeds on `hoursPerDay` is EXACTLY the race that cost
-  // ADR-0070 a defect (TECH_DEBT #83) — a keystroke and the calendar list resolving are independent
-  // events, so a re-seed keyed on the factor can overwrite what was just typed. Deriving cannot:
-  // once there is a draft it wins, and when there is none the display follows the server and the
-  // factor for free.
-  const [draft, setDraft] = useState<string | null>(null);
+  // The draft between typing and committing is `TextField`'s (`commitOn`, `useCommittedDraft`), and it
+  // wins over `value` while it exists. `value` is derived rather than mirrored in an effect, which
+  // matters twice over: the React Compiler rejects setState-in-effect, and an effect that re-seeds on
+  // `hoursPerDay` is EXACTLY the race that cost ADR-0070 a defect (TECH_DEBT #83) — a keystroke and
+  // the calendar list resolving are independent events, so a re-seed keyed on the factor can
+  // overwrite what was just typed. Deriving cannot: with no draft the display follows the server and
+  // the factor for free.
+  //
+  // `saving` is what was committed and is still in flight: the hook clears its draft at commit, and
+  // without this the field would flash the OLD server value until the refetch lands.
+  const [saving, setSaving] = useState<string | null>(null);
   const [invalid, setInvalid] = useState<string | null>(null);
-  const text = draft ?? displayFor(server, hoursPerDay);
+  const text = saving ?? displayFor(server, hoursPerDay);
 
-  const commit = (): void => {
-    const parsed = parse(text, hoursPerDay);
+  const commit = (raw: string): void | 'keep' => {
+    const parsed = parse(raw, hoursPerDay);
     if (!parsed.ok) {
       const message = DURATION_PARSE_MESSAGE[parsed.reason];
       setInvalid(message);
       // Commit happens on blur, so focus has already left the control the message is attached to —
       // `aria-describedby` alone would never be read out (WCAG 4.1.3).
       announce(message);
-      return;
+      // The rejected text stays beside its error, to be corrected.
+      return 'keep';
     }
     setInvalid(null);
-    if (parsed.minutes === server) {
-      setDraft(null); // Same value, differently spelled (`120m` for `2h`) — snap back to the canonical form.
-      return;
-    }
+    // Same value, differently spelled (`120m` for `2h`) — the draft clears and the field snaps back
+    // to the canonical form.
+    if (parsed.minutes === server) return;
+    setSaving(raw);
     setOption.mutate(
       {
         planId: plan.id,
@@ -90,13 +94,13 @@ export function PlanCriticalFloatThresholdField({
       },
       {
         onSuccess: () => {
-          setDraft(null); // Follow the refetched plan rather than the text that produced it.
+          setSaving(null); // Follow the refetched plan rather than the text that produced it.
           announce(`Critical float threshold set to ${displayFor(parsed.minutes, hoursPerDay)}.`);
         },
         // Drop the draft so the field shows what the plan actually has: it is the one place a planner
         // would otherwise be left looking at a number the server rejected.
         onError: (error) => {
-          setDraft(null);
+          setSaving(null);
           announce(`Critical float threshold not saved. ${error.message}`);
         },
       },
@@ -117,7 +121,9 @@ export function PlanCriticalFloatThresholdField({
     <div className="flex max-w-xs flex-col gap-1.5">
       <TextField
         label="Critical float threshold"
+        commitOn="enter-or-blur"
         value={text}
+        onCommit={commit}
         // A gate, not the native attribute (ADR-0083 D2): an in-flight save still leaves a value
         // worth reading and copying, and it flips under a reader who is not the one causing it.
         // `reason: null` because `hintFor` already renders "Saving…" — a second sentence saying
@@ -126,16 +132,6 @@ export function PlanCriticalFloatThresholdField({
         aria-busy={setOption.isPending}
         hint={hintFor(hoursPerDay, setOption.isPending)}
         {...(message === undefined ? {} : { error: message })}
-        onChange={(event) => {
-          setDraft(event.target.value);
-        }}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            commit();
-          }
-        }}
       />
     </div>
   );

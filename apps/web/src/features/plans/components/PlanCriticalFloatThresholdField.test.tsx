@@ -119,6 +119,23 @@ describe('PlanCriticalFloatThresholdField', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it('Escape discards a typed value even when a container blurs the field first', () => {
+    renderField();
+    const closeLikeADialog = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') field().blur();
+    };
+    document.addEventListener('keydown', closeLikeADialog, true);
+    try {
+      field().focus();
+      fireEvent.change(field(), { target: { value: '9d' } });
+      fireEvent.keyDown(field(), { key: 'Escape' });
+    } finally {
+      document.removeEventListener('keydown', closeLikeADialog, true);
+    }
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(field()).not.toHaveValue('9d');
+  });
+
   it('refuses a value it cannot read, and does not save it', async () => {
     renderField();
     fireEvent.change(field(), { target: { value: '1w' } });
