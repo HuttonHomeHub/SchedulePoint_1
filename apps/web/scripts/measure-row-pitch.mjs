@@ -32,10 +32,10 @@
  * after M3-T3 made so much depend on the pitch.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 /** Band off, lanes arranged — the configuration a planner meets (decision 7). */
@@ -72,26 +72,12 @@ const WHOLE_PLAN_ZOOMS = [1, 4, 12];
  */
 const M2_OCCL_PER_LINK = { 1: 0.404, 4: 0.25, 12: 0.229 };
 
-const out = mkdtempSync(join(tmpdir(), 'sp-row-pitch-'));
-
-const bundle = (() => {
-  const file = join(out, 'probe.mjs');
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      'scripts/crossing-probe.ts',
-      '--bundle',
-      '--format=esm',
-      '--platform=node',
-      `--outfile=${file}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
-  return readFileSync(file, 'utf8');
-})();
+const { dir: out, bundle: bundleFile } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-row-pitch-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
+const bundle = readFileSync(bundleFile, 'utf8');
 
 /** One textual substitution, asserted unique — a silent miss would grade the shipped pitch twice. */
 const atPitch = (source, pitch) => {

@@ -19,10 +19,8 @@
  *  2. No segment is non-axis-aligned, which the crossing test assumes (ADR-0065).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
@@ -37,23 +35,11 @@ const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.x
  */
 const ROLL_UP = { rollUpSummaries: true };
 
-const out = mkdtempSync(join(tmpdir(), 'sp-band-'));
-const bundle = join(out, 'probe.mjs');
-
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/crossing-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-band-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 
 const { t3 } = await import(pathToFileURL(bundle).href);
 const result = t3(FIXTURE, ROLL_UP);

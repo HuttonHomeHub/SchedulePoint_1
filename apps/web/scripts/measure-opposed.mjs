@@ -9,15 +9,14 @@
  * count agreed across pans at M0, `docs/specs/links-and-labels/m0-baseline.md`), and prints each
  * pair with its kind, whether an end offset could absorb it, and each link's best escape.
  */
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { makeProbeDir, esbuildBundle, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const json = process.argv.includes('--json');
-const out = mkdtempSync(join(tmpdir(), 'sp-opposed-'));
+const out = makeProbeDir('sp-opposed-');
 const entry = join(out, 'entry.ts');
 writeFileSync(
   entry,
@@ -25,21 +24,7 @@ writeFileSync(
 export { fixtures } from ${JSON.stringify(`${process.cwd()}/scripts/attachment-probe.ts`)};
 `,
 );
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    entry,
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const bundle = esbuildBundle(entry, join(out, 'probe.mjs'), NODE_ESM);
 const probe = await import(pathToFileURL(bundle).href);
 const rows = [];
 for (const fx of probe.fixtures(FIXTURE)) {

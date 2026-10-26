@@ -24,32 +24,19 @@
  *   worker, not a reading of it.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const cwd = process.cwd();
-const out = mkdtempSync(join(tmpdir(), 'sp-route-cost-'));
+const out = makeProbeDir('sp-route-cost-');
 
 const build = (entry, outfile, platform) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      '--format=esm',
-      `--platform=${platform}`,
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, ['--format=esm', `--platform=${platform}`]);
   return outfile;
 };
 

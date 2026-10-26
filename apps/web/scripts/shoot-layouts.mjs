@@ -15,12 +15,12 @@
  * which is the one variable the comparison is about.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
@@ -47,24 +47,12 @@ const SLUG = {
   'scrambled (same height)': 'scrambled',
 };
 
-const out = mkdtempSync(join(tmpdir(), 'sp-shoot-'));
+const out = makeProbeDir('sp-shoot-');
 const build = (entry, format, outfile) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      `--format=${format}`,
-      format === 'esm' && entry.includes('crossing-probe')
-        ? '--platform=node'
-        : '--target=chrome120',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, [
+    `--format=${format}`,
+    format === 'esm' && entry.includes('crossing-probe') ? '--platform=node' : '--target=chrome120',
+  ]);
   return outfile;
 };
 

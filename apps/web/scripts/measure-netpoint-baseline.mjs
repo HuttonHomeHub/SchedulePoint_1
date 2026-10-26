@@ -41,10 +41,10 @@
  * run says whether it held.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const ROLL_UP = { rollUpSummaries: true };
@@ -52,25 +52,12 @@ const PITCHES = [52, 60];
 const ZOOMS = [1, 4, 12];
 const PANS = [0, 32, 200, 500];
 
-const out = mkdtempSync(join(tmpdir(), 'sp-netpoint-'));
-const bundle = (() => {
-  const file = join(out, 'probe.mjs');
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      'scripts/crossing-probe.ts',
-      '--bundle',
-      '--format=esm',
-      '--platform=node',
-      `--outfile=${file}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
-  return readFileSync(file, 'utf8');
-})();
+const { dir: out, bundle: bundleFile } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-netpoint-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
+const bundle = readFileSync(bundleFile, 'utf8');
 
 /** `measure-row-pitch.mjs`'s substitution, unchanged: one match asserted, BAR_PAD asserted live. */
 const atPitch = (source, pitch) => {

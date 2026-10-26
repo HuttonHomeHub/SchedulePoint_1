@@ -21,32 +21,20 @@
  * limits"; #75).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const PITCH = 60;
 const RUNS = 9;
 const MOVES = Number(process.env.MOVES ?? 1000);
 
-const out = mkdtempSync(join(tmpdir(), 'sp-netpoint-cost-'));
-const file = join(out, 'evaluate.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/netpoint-evaluate.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${file}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle: file } = bundleProbe('scripts/netpoint-evaluate.ts', {
+  prefix: 'sp-netpoint-cost-',
+  outName: 'evaluate.mjs',
+  flags: NODE_ESM,
+});
 const source = readFileSync(file, 'utf8');
 const matches = source.match(/\bvar LANE_HEIGHT = \d+;/g) ?? [];
 if (matches.length !== 1)

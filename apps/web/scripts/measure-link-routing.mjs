@@ -15,11 +15,10 @@
  * `docs/guides/measure-draw-performance.md`.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
+import { bundleProbe, BROWSER_IIFE } from './bundle-probe.mjs';
 
 const argv = process.argv.slice(2);
 const headed = argv.includes('--headed');
@@ -53,26 +52,14 @@ if (scene !== 'scale' && scene !== 'grid') {
   console.error(`Unknown scene "${scene}" — expected "scale" or "grid".`);
   process.exit(1);
 }
-const out = mkdtempSync(join(tmpdir(), 'sp-bench-'));
-const bundle = join(out, 'bench.js');
-
 // The esbuild **CLI** rather than its JS API: esbuild is a transitive dependency of Vite, not a
 // direct one, so under pnpm's strict layout this file cannot `import` it — and adding a direct
 // dependency for a hand-run measurement script would be a real cost for no gain.
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/link-routing-bench.ts',
-    '--bundle',
-    '--format=iife',
-    '--target=chrome120',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle } = bundleProbe('scripts/link-routing-bench.ts', {
+  prefix: 'sp-bench-',
+  outName: 'bench.js',
+  flags: BROWSER_IIFE,
+});
 
 // Same discovery the e2e runner uses (`scripts/e2e-local.sh`): this environment ships browsers at a
 // pinned path that need not match the Playwright build the workspace resolves, and the default

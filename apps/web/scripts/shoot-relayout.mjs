@@ -13,11 +13,11 @@
  * lanes are the ones the report recorded.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { chromium } from '@playwright/test';
+import { bundleProbe } from './bundle-probe.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -59,23 +59,11 @@ const layouts = [
   ['candidate', new Map(result.product.lanes)],
 ];
 
-const tmp = mkdtempSync(join(tmpdir(), 'sp-shoot-relayout-'));
-const bench = join(tmp, 'bench.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/gutter-pitch-bench.ts',
-    '--bundle',
-    '--format=esm',
-    '--target=chrome120',
-    `--outfile=${bench}`,
-    '--log-level=warning',
-    '--define:import.meta.env={}',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle: bench } = bundleProbe('scripts/gutter-pitch-bench.ts', {
+  prefix: 'sp-shoot-relayout-',
+  outName: 'bench.mjs',
+  flags: ['--format=esm', '--target=chrome120', '--define:import.meta.env={}'],
+});
 const tokens = readFileSync('src/styles/globals.css', 'utf8');
 const chromiumPath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??

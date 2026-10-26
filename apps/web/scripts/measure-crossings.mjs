@@ -14,10 +14,8 @@
  * cull, it removes it, so it cannot agree with itself the way a reimplementation would (ADR-0124).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
@@ -32,25 +30,13 @@ const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.x
  */
 const ROLL_UP = { rollUpSummaries: true };
 
-const out = mkdtempSync(join(tmpdir(), 'sp-cross-'));
-const bundle = join(out, 'probe.mjs');
-
 // The esbuild CLI rather than its JS API, for the reason `measure-link-routing.mjs` records: it is
 // a transitive dependency of Vite, so under pnpm's strict layout this file cannot import it.
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/crossing-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-cross-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 
 const { fc1 } = await import(pathToFileURL(bundle).href);
 const result = fc1(FIXTURE, ROLL_UP);

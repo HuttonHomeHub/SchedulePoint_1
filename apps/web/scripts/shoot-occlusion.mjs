@@ -30,12 +30,12 @@
  * photographed at all**.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const ROLL_UP = { rollUpSummaries: true };
@@ -47,24 +47,12 @@ const DPR = 1.75;
 const PX_PER_DAY = 12;
 const ORIGIN_Y = 32;
 
-const out = mkdtempSync(join(tmpdir(), 'sp-occl-shot-'));
+const out = makeProbeDir('sp-occl-shot-');
 const build = (entry, format, outfile) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      `--format=${format}`,
-      format === 'esm' && entry.includes('crossing-probe')
-        ? '--platform=node'
-        : '--target=chrome120',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, [
+    `--format=${format}`,
+    format === 'esm' && entry.includes('crossing-probe') ? '--platform=node' : '--target=chrome120',
+  ]);
   return outfile;
 };
 

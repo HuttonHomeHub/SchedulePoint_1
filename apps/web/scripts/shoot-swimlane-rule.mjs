@@ -13,29 +13,19 @@
  * boundary is printed, because that is the cost of putting the rule beneath the links (C5).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
-const out = mkdtempSync(join(tmpdir(), 'sp-swl-'));
+const out = makeProbeDir('sp-swl-');
 const build = (entry, format, outfile, node) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      `--format=${format}`,
-      node ? '--platform=node' : '--target=chrome120',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, [
+    `--format=${format}`,
+    node ? '--platform=node' : '--target=chrome120',
+  ]);
   return outfile;
 };
 

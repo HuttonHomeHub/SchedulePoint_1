@@ -21,12 +21,12 @@
  * up as a reading at the wrong pitch rather than as a plausible number.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
@@ -47,25 +47,13 @@ const ZOOMS = [4, 12];
 /** 28 is what ships. The others are the candidates FC-C3 would choose between. */
 const PITCHES = [28, 36, 44];
 
-const out = mkdtempSync(join(tmpdir(), 'sp-gutter-'));
+const out = makeProbeDir('sp-gutter-');
 
 const build = (entry, format, outfile) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      `--format=${format}`,
-      format === 'esm' && entry.includes('crossing-probe')
-        ? '--platform=node'
-        : '--target=chrome120',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, [
+    `--format=${format}`,
+    format === 'esm' && entry.includes('crossing-probe') ? '--platform=node' : '--target=chrome120',
+  ]);
   return readFileSync(outfile, 'utf8');
 };
 

@@ -9,30 +9,18 @@
  * is not what a planner's machine does (`docs/guides/measure-draw-performance.md`).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 import { chromium } from '@playwright/test';
+import { bundleProbe, BROWSER_IIFE } from './bundle-probe.mjs';
 
 const argv = process.argv.slice(2);
 const headed = argv.includes('--headed');
 const frames = Number(argv.find((a) => /^\d+$/.test(a)) ?? 120);
-const bundle = join(mkdtempSync(join(tmpdir(), 'sp-label-lod-')), 'bench.js');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/label-lod-bench.ts',
-    '--bundle',
-    '--format=iife',
-    '--target=chrome120',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/label-lod-bench.ts', {
+  prefix: 'sp-label-lod-',
+  outName: 'bench.js',
+  flags: BROWSER_IIFE,
+});
 const chromiumPath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
   execFileSync('sh', [

@@ -28,11 +28,10 @@
  * real 2D context answers the committed question with none of that surface.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
+import { bundleProbe, BROWSER_IIFE } from './bundle-probe.mjs';
 
 /** The product owner's Surface Pro: 2880x1920 at 175 % = 1646 CSS px, DPR ~1.75. */
 const WIDTH = 1646;
@@ -55,23 +54,11 @@ const ZOOMS = [
   ['Fit', WIDTH / (BUCKETS * 7)],
 ];
 
-const out = mkdtempSync(join(tmpdir(), 'sp-strip-bench-'));
-const bundle = join(out, 'bench.js');
-
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/strip-stack-bench.ts',
-    '--bundle',
-    '--format=iife',
-    '--target=chrome120',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle } = bundleProbe('scripts/strip-stack-bench.ts', {
+  prefix: 'sp-strip-bench-',
+  outName: 'bench.js',
+  flags: BROWSER_IIFE,
+});
 
 const chromiumPath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??

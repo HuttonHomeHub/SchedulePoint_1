@@ -8,29 +8,17 @@
  * human table, so the write-up quotes the run rather than a transcription.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const PART = process.env.PART ?? 'control';
-const out = mkdtempSync(join(tmpdir(), 'sp-netpoint-search-'));
-const file = join(out, 'search.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/netpoint-search.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${file}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle: file } = bundleProbe('scripts/netpoint-search.ts', {
+  prefix: 'sp-netpoint-search-',
+  outName: 'search.mjs',
+  flags: NODE_ESM,
+});
 const src = readFileSync(file, 'utf8');
 if ((src.match(/\bvar LANE_HEIGHT = \d+;/g) ?? []).length !== 1)
   throw new Error('INDETERMINATE: pitch');

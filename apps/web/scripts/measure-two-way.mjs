@@ -17,15 +17,14 @@
  *
  * The prototype is harness-only (`two-way-prototype.ts` docblock); nothing here is the design.
  */
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { makeProbeDir, esbuildBundle, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const json = process.argv.includes('--json');
-const out = mkdtempSync(join(tmpdir(), 'sp-two-way-'));
+const out = makeProbeDir('sp-two-way-');
 const entry = join(out, 'entry.ts');
 const here = process.cwd();
 writeFileSync(
@@ -34,21 +33,7 @@ writeFileSync(
 export { splitTwoWayTracks, portOffsetBounds, PROTOTYPE_PORT_OFFSET_PX } from ${JSON.stringify(`${here}/scripts/two-way-prototype.ts`)};
 `,
 );
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    entry,
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const bundle = esbuildBundle(entry, join(out, 'probe.mjs'), NODE_ESM);
 const probe = await import(pathToFileURL(bundle).href);
 probe.selfTest();
 const delta = probe.PROTOTYPE_PORT_OFFSET_PX;

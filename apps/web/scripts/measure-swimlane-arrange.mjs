@@ -5,28 +5,16 @@
  * Needs the `@repo/*` packages built (`pnpm --filter "./packages/*" build`).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
-const out = mkdtempSync(join(tmpdir(), 'sp-swimlane-arrange-'));
-const file = join(out, 'run.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/netpoint-swimlane-run.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    '--resolve-extensions=.ts,.js,.mjs,.json',
-    `--outfile=${file}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle: file } = bundleProbe('scripts/netpoint-swimlane-run.ts', {
+  prefix: 'sp-swimlane-arrange-',
+  outName: 'run.mjs',
+  flags: [...NODE_ESM, '--resolve-extensions=.ts,.js,.mjs,.json'],
+});
 const { run, renderPictures } = await import(pathToFileURL(file).href);
 console.log(
   `[swimlanes M0-T4] node ${process.version}, ${new Date().toISOString()}, commit ${execFileSync('git', ['rev-parse', 'HEAD']).toString().trim()}`,

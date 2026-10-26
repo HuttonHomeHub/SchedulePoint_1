@@ -22,12 +22,12 @@
  * count, so a silent miss shows up as two identical pictures rather than as a false conclusion.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const ROLL_UP = { rollUpSummaries: true };
@@ -37,22 +37,9 @@ const HEIGHT = 420;
 const DPR = 1.75;
 const PX_PER_DAY = 12;
 
-const out = mkdtempSync(join(tmpdir(), 'sp-dash-'));
+const out = makeProbeDir('sp-dash-');
 const build = (entry, outfile) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      '--format=esm',
-      '--platform=node',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, NODE_ESM);
   return outfile;
 };
 const probeFile = build('scripts/crossing-probe.ts', join(out, 'probe.mjs'));
