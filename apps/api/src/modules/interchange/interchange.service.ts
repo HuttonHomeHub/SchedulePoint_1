@@ -50,14 +50,24 @@ import { ScheduleService } from '../schedule/schedule.service';
 import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
-import { calendarIdentityKey } from './calendar-identity';
+import {
+  calendarIdentityKey,
+  identityAggregate,
+  identityKeysFromFlatRows,
+  sameAggregate,
+  type IdentityAggregate,
+} from './calendar-identity';
 import {
   resolveCalendarReuse,
   type CalendarResolution,
   type ReuseCandidate,
   type SourceCalendar,
 } from './calendar-reuse';
-import { firstFreeImportedName, importedNameProbePrefix } from './imported-name';
+import {
+  firstFreeImportedName,
+  importedNameProbePrefix,
+  isImportedVariantOf,
+} from './imported-name';
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
 import type { UploadedInterchangeFile } from './uploaded-file';
@@ -1164,11 +1174,24 @@ export class InterchangeService {
     const findings: ReportFinding[] = [];
     if (graph.calendars.length === 0) return { resolutions, findings };
 
+    const sources: SourceCalendar[] = [];
+    const sourceAggregates = new Map<string, IdentityAggregate>();
+    for (const calendar of graph.calendars) {
+      const shape = this.calendarWriteShape(calendar);
+      sources.push({
+        key: calendar.key,
+        name: calendar.name,
+        scope: calendar.scope,
+        identityKey: calendarIdentityKey(shape),
+      });
+      sourceAggregates.set(calendar.key, identityAggregate(shape));
+    }
+
     // The names already taken, per tier — by prefix, so a variant an earlier import of the same day
     // created is seen (as for resources).
     const takenByScope = new Map<ImportCalendarScope, Set<string>>();
     const candidatesByScope = new Map<ImportCalendarScope, ReuseCandidate[]>();
-    const lockedRows =
+    const lockedHeaders =
       lockedIds === undefined
         ? undefined
         : await this.calendars.findReuseCandidatesByIds(
@@ -1188,35 +1211,42 @@ export class InterchangeService {
         ],
       };
       takenByScope.set(scope, await this.calendars.findTakenNamesWithPrefixes(where, db));
-      const rows = lockedRows ?? (await this.calendars.findReuseCandidates(where, db));
+      const headers = lockedHeaders ?? (await this.calendars.findReuseCandidates(where, db));
+
+      // Rule candidates out on the cheap aggregates and the name lineage BEFORE reading any content:
+      // only a header that could match some source calendar of this tier is worth loading.
+      const tierSources = sources.filter((source) => source.scope === scope);
+      const survivors = headers.filter(
+        (header) =>
+          header.scope === scope &&
+          tierSources.some((source) => {
+            const aggregate = sourceAggregates.get(source.key);
+            return (
+              aggregate !== undefined &&
+              sameAggregate(aggregate, header) &&
+              isImportedVariantOf(header.name, source.name, CALENDAR_NAME_MAX_LENGTH)
+            );
+          }),
+      );
+      const content = await this.calendars.loadReuseContent(
+        survivors.map((header) => header.id),
+        db,
+      );
+      const keys = identityKeysFromFlatRows(
+        new Map(survivors.map((header) => [header.id, header.hoursPerDayMinutes])),
+        content,
+      );
       candidatesByScope.set(
         scope,
-        rows
-          .filter((row) => row.scope === scope)
-          .map((row) => ({
-            id: row.id,
-            name: row.name,
-            createdAt: row.createdAt,
-            identityKey: calendarIdentityKey({
-              hoursPerDayMinutes: row.hoursPerDayMinutes,
-              shifts: row.shifts,
-              exceptions: row.exceptions.map((e) => ({
-                startDate: e.startDate,
-                endDate: e.endDate,
-                label: e.label,
-                windows: e.windows,
-              })),
-            }),
-          })),
+        survivors.map((header) => ({
+          id: header.id,
+          name: header.name,
+          createdAt: header.createdAt,
+          identityKey: keys.get(header.id) ?? '',
+        })),
       );
     }
 
-    const sources: SourceCalendar[] = graph.calendars.map((calendar) => ({
-      key: calendar.key,
-      name: calendar.name,
-      scope: calendar.scope,
-      identityKey: calendarIdentityKey(this.calendarWriteShape(calendar)),
-    }));
     const resolved = resolveCalendarReuse({
       calendars: sources,
       candidatesByScope,

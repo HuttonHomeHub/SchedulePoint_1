@@ -7,7 +7,12 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, it } from 'vitest';
 
 import { CalendarRepository } from '../../src/modules/calendars/calendar.repository';
-import { calendarIdentityKey } from '../../src/modules/interchange/calendar-identity';
+import {
+  calendarIdentityKey,
+  identityAggregate,
+  identityKeysFromFlatRows,
+  sameAggregate,
+} from '../../src/modules/interchange/calendar-identity';
 import {
   resolveCalendarReuse,
   type ReuseCandidate,
@@ -153,31 +158,44 @@ describe.skipIf(!process.env.DATABASE_URL)('calendar reuse candidate read (measu
       await calendars.findTakenNamesWithPrefixes(where('PROJECT'));
       await calendars.findTakenNamesWithPrefixes(where('ORG'));
     };
+    // The incoming calendar. "match" is the worst case for the read: it is identical to every
+    // lineage variant, so every candidate survives the aggregate pre-filter and has its content
+    // loaded. "differ" is the common re-import of a changed calendar: the pre-filter drops them all.
+    const sourceShape = {
+      hoursPerDayMinutes: 480,
+      shifts: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, startMinute: 480, endMinute: 960 })),
+      exceptions: Array.from(
+        { length: process.env.MEASURE_SOURCE === 'differ' ? EXCEPTIONS - 1 : EXCEPTIONS },
+        (_, i) => {
+          const day = new Date(Date.UTC(2026, 0, 1 + i));
+          return { startDate: day, endDate: day, label: `Day ${i}`, windows: [] };
+        },
+      ),
+    };
+    out.source = process.env.MEASURE_SOURCE === 'differ' ? 'differ' : 'match';
     const readMs: number[] = [];
     const after = async (): Promise<void> => {
       const candidatesByScope = new Map<'PROJECT' | 'ORG', ReuseCandidate[]>();
       const takenByScope = new Map<'PROJECT' | 'ORG', Set<string>>();
+      const sourceAggregate = identityAggregate(sourceShape);
       for (const scope of ['ORG', 'PROJECT'] as const) {
         takenByScope.set(scope, await calendars.findTakenNamesWithPrefixes(where(scope)));
         const readStart = performance.now();
-        const rows = await calendars.findReuseCandidates(where(scope));
+        const headers = await calendars.findReuseCandidates(where(scope));
+        const survivors = headers.filter((h) => sameAggregate(sourceAggregate, h));
+        const content = await calendars.loadReuseContent(survivors.map((h) => h.id));
+        const keys = identityKeysFromFlatRows(
+          new Map(survivors.map((h) => [h.id, h.hoursPerDayMinutes])),
+          content,
+        );
         readMs.push(performance.now() - readStart);
         candidatesByScope.set(
           scope,
-          rows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            createdAt: row.createdAt,
-            identityKey: calendarIdentityKey({
-              hoursPerDayMinutes: row.hoursPerDayMinutes,
-              shifts: row.shifts,
-              exceptions: row.exceptions.map((e) => ({
-                startDate: e.startDate,
-                endDate: e.endDate,
-                label: e.label,
-                windows: e.windows,
-              })),
-            }),
+          survivors.map((h) => ({
+            id: h.id,
+            name: h.name,
+            createdAt: h.createdAt,
+            identityKey: keys.get(h.id) ?? '',
           })),
         );
       }
@@ -186,7 +204,7 @@ describe.skipIf(!process.env.DATABASE_URL)('calendar reuse candidate read (measu
           key: `C${i}`,
           name: c.name,
           scope: c.scope,
-          identityKey: 'none',
+          identityKey: calendarIdentityKey(sourceShape),
         })),
         candidatesByScope,
         takenByScope,

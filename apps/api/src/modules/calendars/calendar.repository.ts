@@ -216,15 +216,60 @@ export function exceptionWindowRowsFor(
   return isWorking ? [{ startMinute: 0, endMinute: MINUTES_PER_DAY }] : [];
 }
 
-/** What an import's reuse comparison reads: shifts, plus active exceptions with their windows. */
-const REUSE_INCLUDE = {
-  shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] },
+/**
+ * A reuse candidate before its content is loaded (ADR-0208): the row plus the cheap aggregates the
+ * importer compares to rule most candidates out without reading a single exception.
+ */
+export interface ReuseCandidateHeader {
+  id: string;
+  name: string;
+  scope: CalendarScope;
+  createdAt: Date;
+  hoursPerDayMinutes: number;
+  shiftCount: number;
+  shiftMinutes: number;
+  exceptionCount: number;
+  windowCount: number;
+  firstDate: string | null;
+  lastDate: string | null;
+}
+
+/** The stored rows behind a set of candidates, one flat read per table. */
+export interface ReuseCandidateContent {
+  shifts: { calendarId: string; weekday: number; startMinute: number; endMinute: number }[];
   exceptions: {
-    where: { deletedAt: null },
-    orderBy: [{ startDate: 'asc' }],
-    include: { windows: { orderBy: [{ startMinute: 'asc' }] } },
-  },
-} satisfies Prisma.CalendarInclude;
+    id: string;
+    calendarId: string;
+    startDate: Date;
+    endDate: Date;
+    label: string | null;
+  }[];
+  windows: { calendarExceptionId: string; startMinute: number; endMinute: number }[];
+}
+
+/**
+ * The candidate header select shared by both reuse reads. The WHERE it opens states the soft-delete
+ * and archive stance itself (ADR-0172), so no caller can forget it; counts include only ACTIVE
+ * exceptions, the rows the importer would compare.
+ */
+const REUSE_HEADER_SQL = Prisma.sql`
+  SELECT c.id, c.name, c.scope::text AS scope, c.created_at AS "createdAt",
+         c.hours_per_day_minutes AS "hoursPerDayMinutes",
+         (SELECT count(*)::int FROM calendar_shifts s WHERE s.calendar_id = c.id) AS "shiftCount",
+         (SELECT COALESCE(sum(s.end_minute - s.start_minute), 0)::int
+            FROM calendar_shifts s WHERE s.calendar_id = c.id) AS "shiftMinutes",
+         (SELECT count(*)::int FROM calendar_exceptions e
+           WHERE e.calendar_id = c.id AND e.deleted_at IS NULL) AS "exceptionCount",
+         (SELECT count(*)::int FROM calendar_exception_windows w
+            JOIN calendar_exceptions e ON e.id = w.calendar_exception_id
+           WHERE e.calendar_id = c.id AND e.deleted_at IS NULL) AS "windowCount",
+         (SELECT to_char(min(e.start_date), 'YYYY-MM-DD') FROM calendar_exceptions e
+           WHERE e.calendar_id = c.id AND e.deleted_at IS NULL) AS "firstDate",
+         (SELECT to_char(max(e.end_date), 'YYYY-MM-DD') FROM calendar_exceptions e
+           WHERE e.calendar_id = c.id AND e.deleted_at IS NULL) AS "lastDate"
+  FROM calendars c
+  WHERE c.deleted_at IS NULL
+    AND c.archived_at IS NULL`;
 
 /**
  * Data-access for the working-day calendar library (ADR-0008, ADR-0024, ADR-0036).
@@ -376,13 +421,16 @@ export class CalendarRepository {
   /**
    * The calendars an import could REUSE instead of copying (ADR-0208): active, UNARCHIVED, in the
    * organisation and tier, in the target project for `PROJECT`, whose name starts with one of
-   * `prefixes` (the importer's lineage prefixes), with shifts, active exceptions and windows loaded
-   * so the caller can compare content. The caller narrows the name to exact lineage in memory.
+   * `prefixes` (the importer's lineage prefixes). Returns headers with cheap aggregates only; the
+   * caller rules candidates out on those and loads content for the survivors with
+   * {@link loadReuseContent}. T1.6 measured the nested ORM include of every variant's exceptions at
+   * about 700 ms for 50 variants of 300; the aggregates are computed in this one statement.
    *
    * Archived rows are EXCLUDED here — the opposite of {@link findTakenNamesWithPrefixes}, which
    * includes them because archiving keeps the name. A calendar can always fall back to a copy, so
-   * reviving a deliberately retired one would be a choice nobody asked for (ADR-0208 D2). One query
-   * per tier, never one per calendar.
+   * reviving a deliberately retired one would be a choice nobody asked for (ADR-0208 D2). Raw SQL
+   * because the aggregates are correlated counts the ORM cannot express; `starts_with` rather than
+   * `LIKE` so a `%` or `_` in a calendar name is a character, not a wildcard.
    */
   findReuseCandidates(
     params: {
@@ -392,19 +440,18 @@ export class CalendarRepository {
       prefixes: readonly string[];
     },
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<CalendarWithExceptions[]> {
+  ): Promise<ReuseCandidateHeader[]> {
     if (params.prefixes.length === 0) return Promise.resolve([]);
-    return db.calendar.findMany({
-      where: this.active({
-        organizationId: params.organizationId,
-        scope: params.scope,
-        projectId: params.projectId,
-        archivedAt: null,
-        OR: params.prefixes.map((prefix) => ({ name: { startsWith: prefix } })),
-      }),
-      include: REUSE_INCLUDE,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+    return db.$queryRaw<ReuseCandidateHeader[]>`
+      ${REUSE_HEADER_SQL}
+        AND c.organization_id = ${params.organizationId}::uuid
+        AND c.scope::text = ${params.scope}
+        AND c.project_id IS NOT DISTINCT FROM ${params.projectId}::uuid
+        AND EXISTS (
+          SELECT 1 FROM unnest(${[...params.prefixes]}::text[]) AS p(prefix)
+          WHERE starts_with(c.name, p.prefix)
+        )
+      ORDER BY c.created_at, c.id`;
   }
 
   /**
@@ -418,21 +465,52 @@ export class CalendarRepository {
     ids: readonly string[],
     params: { organizationId: string; projectId: string },
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<CalendarWithExceptions[]> {
+  ): Promise<ReuseCandidateHeader[]> {
     if (ids.length === 0) return Promise.resolve([]);
-    return db.calendar.findMany({
-      where: this.active({
-        id: { in: [...ids] },
-        organizationId: params.organizationId,
-        archivedAt: null,
-        OR: [
-          { scope: 'ORG', projectId: null },
-          { scope: 'PROJECT', projectId: params.projectId },
-        ],
-      }),
-      include: REUSE_INCLUDE,
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+    return db.$queryRaw<ReuseCandidateHeader[]>`
+      ${REUSE_HEADER_SQL}
+        AND c.id = ANY(${[...ids]}::uuid[])
+        AND c.organization_id = ${params.organizationId}::uuid
+        AND (
+          (c.scope::text = 'ORG' AND c.project_id IS NULL)
+          OR (c.scope::text = 'PROJECT' AND c.project_id = ${params.projectId}::uuid)
+        )
+      ORDER BY c.created_at, c.id`;
+  }
+
+  /**
+   * The shifts, active exceptions and exception windows of `ids`, as three flat reads. Prisma's
+   * nested include does the same work as a loop of `IN (…)` lookups plus object assembly, which is
+   * what cost 700 ms at 15,000 exceptions; these are three statements and plain rows.
+   */
+  async loadReuseContent(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<ReuseCandidateContent> {
+    if (ids.length === 0) return { shifts: [], exceptions: [], windows: [] };
+    const list = [...ids];
+    const shifts = await db.$queryRaw<ReuseCandidateContent['shifts']>`
+      SELECT calendar_id AS "calendarId", weekday, start_minute AS "startMinute",
+             end_minute AS "endMinute"
+      FROM calendar_shifts
+      WHERE calendar_id = ANY(${list}::uuid[])
+      ORDER BY calendar_id, weekday, start_minute`;
+    const exceptions = await db.$queryRaw<ReuseCandidateContent['exceptions']>`
+      SELECT id, calendar_id AS "calendarId", start_date AS "startDate", end_date AS "endDate",
+             label
+      FROM calendar_exceptions
+      WHERE calendar_id = ANY(${list}::uuid[])
+        AND deleted_at IS NULL
+      ORDER BY calendar_id, start_date`;
+    const windows = await db.$queryRaw<ReuseCandidateContent['windows']>`
+      SELECT w.calendar_exception_id AS "calendarExceptionId", w.start_minute AS "startMinute",
+             w.end_minute AS "endMinute"
+      FROM calendar_exception_windows w
+      JOIN calendar_exceptions e ON e.id = w.calendar_exception_id
+      WHERE e.calendar_id = ANY(${list}::uuid[])
+        AND e.deleted_at IS NULL
+      ORDER BY w.calendar_exception_id, w.start_minute`;
+    return { shifts, exceptions, windows };
   }
 
   /**

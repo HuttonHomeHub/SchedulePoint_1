@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calendarIdentityKey,
+  identityAggregate,
+  identityKeysFromFlatRows,
+  sameAggregate,
   type CalendarIdentityInput,
   type IdentityException,
 } from './calendar-identity';
@@ -144,5 +147,64 @@ describe('isImportedVariantOf (ADR-0208 D1 lineage)', () => {
 
   it('refuses a variant of a different source', () => {
     expect(isImportedVariantOf('Site 5-Day (imported 2026-10-20)', SOURCE, 120)).toBe(false);
+  });
+});
+
+describe('the flat-row candidate path (ADR-0208 T1.6)', () => {
+  const windows = [
+    { startMinute: 600, endMinute: 700 },
+    { startMinute: 300, endMinute: 400 },
+  ];
+  const stored = base({
+    exceptions: [holiday('2026-12-25'), { ...holiday('2026-12-26'), windows }],
+  });
+
+  // The rows as the three flat reads return them: ids, a calendar id, windows keyed by exception.
+  const flat = (calendarId: string) => ({
+    shifts: stored.shifts.map((s) => ({ ...s, calendarId })),
+    exceptions: stored.exceptions.map((e, i) => ({
+      id: `e${String(i)}`,
+      calendarId,
+      startDate: e.startDate,
+      endDate: e.endDate,
+      label: e.label,
+    })),
+    windows: windows.map((w) => ({ ...w, calendarExceptionId: 'e1' })),
+  });
+
+  it('gives the same key as the ORM-shaped path for the same calendar', () => {
+    const keys = identityKeysFromFlatRows(new Map([['cal', 480]]), flat('cal'));
+    expect(keys.get('cal')).toBe(calendarIdentityKey(stored));
+  });
+
+  it('keeps two calendars in one read apart', () => {
+    const a = flat('a');
+    const b = flat('b');
+    const keys = identityKeysFromFlatRows(
+      new Map([
+        ['a', 480],
+        ['b', 450],
+      ]),
+      {
+        shifts: [...a.shifts, ...b.shifts],
+        exceptions: [...a.exceptions, ...b.exceptions.map((e) => ({ ...e, id: `b-${e.id}` }))],
+        windows: [...a.windows, ...b.windows.map((w) => ({ ...w, calendarExceptionId: 'b-e1' }))],
+      },
+    );
+    expect(keys.get('a')).toBe(calendarIdentityKey(stored));
+    expect(keys.get('b')).toBe(calendarIdentityKey({ ...stored, hoursPerDayMinutes: 450 }));
+  });
+
+  it('rules out on the aggregate only what the key would also rule out', () => {
+    expect(sameAggregate(identityAggregate(stored), identityAggregate(stored))).toBe(true);
+    for (const other of [
+      base({ hoursPerDayMinutes: 450 }),
+      base({ exceptions: [holiday('2026-12-25')] }),
+      base({ exceptions: [holiday('2026-12-25'), holiday('2026-12-27')] }),
+      base({ shifts: week.slice(1) }),
+    ]) {
+      expect(sameAggregate(identityAggregate(stored), identityAggregate(other))).toBe(false);
+      expect(calendarIdentityKey(other)).not.toBe(calendarIdentityKey(stored));
+    }
   });
 });
