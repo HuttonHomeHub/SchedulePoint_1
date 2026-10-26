@@ -1,5 +1,13 @@
 # @repo/interchange
 
+## 0.16.0
+
+### Minor Changes
+
+- [#1173](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1173) [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An XER or MSPDI export now writes the plan's activity notes. An XER carries one P6 notebook memo per activity under a SchedulePoint topic, which a SchedulePoint import splits back into separate notes; an MSPDI carries one task note, with several joined by a rule. Only the text travels, never the author or date. A plan without notes exports exactly the file it did before. The export report counts the notes written and says in aggregate what was left out: plan notes, notes on WBS summaries in an XER, and notes over the ceiling.
+
+- [#1173](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1173) [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Both schedule readers now carry activity notes instead of only counting them. A P6 XER `TASKMEMO` row, and an MS Project task's `<Notes>`, become plain-text notes on the activity: HTML is converted to text, entities are decoded, control characters are removed, a note over 5,000 characters is split at a paragraph or line break, and rich-text (RTF) notes are left out. The import report gains a `notes` count, and says in one line each when formatting was removed, when notes were split, and when notes were left out and why. A file with no notes reports exactly what it did before.
+
 ## 0.15.0
 
 ### Minor Changes

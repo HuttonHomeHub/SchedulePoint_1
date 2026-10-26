@@ -1,5 +1,24 @@
 # @repo/web
 
+## 0.200.0
+
+### Minor Changes
+
+- [#1173](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1173) [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The import review shows how many activity notes the file will create. A **Notes** count appears under Mapped when the file carried remarks, and the report's findings say when formatting was removed from a note, when a long note was split, and when notes were left out and why. The notes themselves open on the activity's Notes tab, as for any other note.
+
+- [#1172](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1172) [`206b3e3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/206b3e3d491dde4ec5fa5a5e3ba70f47a885055f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The project screen's Calendars section has a **Remove unused calendars…** action. It lists the project's own calendars that no plan or activity uses, ticked for deletion except any that only a deleted plan or activity still uses, and deletes the ticked ones in one confirmation. Each deleted calendar can be restored on its own from Recently deleted. This clears the copies that earlier schedule imports left behind.
+
+### Patch Changes
+
+- [#1169](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1169) [`1ad467f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1ad467f189bbeb486119ef3fa014b5bc663cf5ce) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Internal: SizeField's commit behaviour (draft, Enter, blur, arrow step, Escape, lost-draft report)
+  moved to a shared `useCommittedDraft` hook. No behaviour change.
+
+- [#1169](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1169) [`1ad467f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1ad467f189bbeb486119ef3fa014b5bc663cf5ce) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Schedule settings: pressing Escape in Critical float threshold now discards a typed value, even though it
+  also closes the dialog. A second Enter while the save is in flight no longer
+  re-runs it. `TextField` gains an opt-in commit mode; every existing field is unchanged.
+- Updated dependencies [[`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566), [`a09ffc7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a09ffc7fcf6a9ed80c996411411d650bcb6b6566)]:
+  - @repo/interchange@0.16.0
+
 ## 0.199.2
 
 ### Patch Changes
