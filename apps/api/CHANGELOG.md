@@ -1,5 +1,17 @@
 # @repo/api
 
+## 0.102.1
+
+### Patch Changes
+
+- [#1179](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1179) [`4c26208`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c2620898ef539e3946528f623e02adf3f6ce678) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine update of the sign-in library to 1.7.12. It carries security fixes for sign-in methods SchedulePoint does not use (social and single sign-on, web tokens); email-and-password sign-in works as before.
+
+- [#1183](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1183) [`3657047`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3657047909b755a3171b5da12031fe9a8891dea6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update the web-server library (express) to 5.3.0. Nothing about how the API behaves changes.
+
+- [#1175](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1175) [`909fded`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/909fdedee8315aca35a0d2f6972f8dae4107c44d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine update of the server framework (NestJS) to 12.2.0 and its API-docs module to 12.0.3. Nothing a planner sees changes.
+
+- [#1182](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1182) [`60824b3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60824b36dbe334b4a8a789da0bea6ba3f30e1d8c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update the email-sending library (nodemailer) to 10.2.1. Nothing about how mail is sent changes.
+
 ## 0.102.0
 
 ### Minor Changes
