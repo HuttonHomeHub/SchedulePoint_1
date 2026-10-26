@@ -1,7 +1,7 @@
 # Implementation Plan: Tidy up the calendars an import leaves behind
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0208
+- **Status:** Accepted — shipped (ADR-0208), 2026-10-26. Approved by the product owner the same day with every default (Q1 to Q4)
 - **Owner:** product owner (James Ewbank); built by the **builder** agent, reviewed as listed per task
 
 ## Breakdown
@@ -439,4 +439,4 @@ journey (CLAUDE.md §19.8).
 | **A1** No schema change is needed                                                                                                                                    | —                    | —      | Holds under the Q1 default. If Q1 is "content only", or T1.6 escalates, stop for **database-architect** (CLAUDE.md §19.3).                                 |
 | **A2** The existing never-reuse e2e tests express a name guarantee, not a content guarantee                                                                          | —                    | —      | Their comments say so (`interchange.e2e-spec.ts:1187-1188`); rewritten with differing content (T1.5).                                                      |
 
-**Awaiting product-owner approval before implementation.**
+**Approved and shipped (ADR-0208).**

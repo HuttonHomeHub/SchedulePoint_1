@@ -1,6 +1,6 @@
 # Feature Spec: Tidy up the calendars an import leaves behind
 
-- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0208
+- **Status:** Accepted — shipped (ADR-0208), 2026-10-26. Approved by the product owner the same day with every default (Q1 to Q4)
 - **Author(s):** feature-analyst (Claude Code), for the product owner
 - **Date:** 2026-10-26
 - **Tracking issue / epic:** `docs/BACKLOG.md:261-265` ("Tidy up the calendars an import leaves behind"), chosen by the product owner on 2026-10-26
@@ -561,4 +561,4 @@ Each has a recommended default. Everything else in this spec is a stated default
    hide exactly the copies an old revision left. Ticking them by default would make the old plan's
    restore a two-step job without the planner noticing.
 
-**Awaiting product-owner approval before implementation.**
+**Approved and shipped (ADR-0208).**

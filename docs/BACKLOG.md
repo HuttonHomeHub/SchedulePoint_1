@@ -258,12 +258,6 @@ a product idea that has not yet earned a roadmap line:
   source), and that choice is a schema question for the database-architect. Demand: the swimlanes spec
   names it as the follow-on (feature-spec §4.8); the owner has not asked for it yet.
 
-- `S` **Tidy up the calendars an import leaves behind.** Deleting an imported plan keeps the project
-  calendars its import created (`docs/API.md`: they go with the project, not the plan), so
-  re-importing revisions into one project piles up `"(imported <date>)"` copies that must be removed
-  by hand, and makes `docs/TECH_DEBT.md` #540 more likely. Options: offer to remove an import's
-  unused calendars when its plan is deleted, or let an import reuse an identical calendar.
-
 ## Platform foundations not yet built
 
 Each of these has an **accepted ADR** and no implementation — see
