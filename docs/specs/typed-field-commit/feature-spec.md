@@ -1,6 +1,6 @@
 # Feature Spec: One draft-and-commit behaviour for typed fields (`TextField` commit mode)
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 share the behaviour, Q2 yes, Q3 a DECISIONS entry and an ADR-0188 amendment line)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-10-26
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #495

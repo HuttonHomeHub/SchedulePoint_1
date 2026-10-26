@@ -1,6 +1,6 @@
 # Feature Spec: A milestone stays where its logic puts it, across calendars (#539)
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 A, Q2 A, Q3 A); the new ADR is ADR-0207
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
 - **Date:** 2026-10-26
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #539
@@ -26,12 +26,12 @@ calendar, data date Mon 2027-06-14, and FS links with no lag: `A` (5 days, weekd
 weekend, `SNET` 2027-06-26) → `M` (finish milestone) → `K` (5 days, weekday) → finish milestone with
 `FNLT` 2027-07-09.
 
-| `M`'s calendar     | Today (row, verified)                                                  |
-| ------------------ | ---------------------------------------------------------------------- |
-| Plan (weekday)     | `M` reads **Fri 06-25**, the day before `W` starts; `W` TF **−1,440**  |
-| Weekend            | `M` reads Sun 06-27, but **`K` starts Mon 07-05**, a week late         |
-| All-minutes        | correct: `M` Sun 06-27, `K` Mon 06-28, `W` TF 0                        |
-| `START_MILESTONE`  | right early date, **−1,440** float on the weekend task (full programme) |
+| `M`'s calendar    | Today (row, verified)                                                   |
+| ----------------- | ----------------------------------------------------------------------- |
+| Plan (weekday)    | `M` reads **Fri 06-25**, the day before `W` starts; `W` TF **−1,440**   |
+| Weekend           | `M` reads Sun 06-27, but **`K` starts Mon 07-05**, a week late          |
+| All-minutes       | correct: `M` Sun 06-27, `K` Mon 06-28, `W` TF 0                         |
+| `START_MILESTONE` | right early date, **−1,440** float on the weekend task (full programme) |
 
 **Why, from the code.** A zero-duration activity is snapped onto its own calendar in both passes:
 
@@ -170,22 +170,22 @@ Unchanged. The rule lives in the engine; every surface reads stored results.
 
 ### Edge cases
 
-| Case                                                       | Behaviour after the change                                                                                                                       |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Nothing drives the milestone (open start)                  | Data-date floor rolled onto its own calendar exactly as today, so a free-standing milestone does not move.                                       |
-| `SNET`/`MSO`/`SNLT` on a start milestone or zero task      | Read as today (first working minute of the day on its calendar, `instants.ts:103`).                                                              |
-| Any constraint or external date on a finish milestone      | Read as midnight at the end of that calendar day (D2); on its own calendar the same working position as today.                                   |
-| `MANDATORY_*` breaking logic                               | Unchanged produce-and-flag (ADR-0035 §7).                                                                                                        |
-| Completed milestone                                        | Frozen on actuals as today (`compute.ts:204-210`, `progress.ts:91-97`); reports actuals verbatim.                                                |
-| Started-not-finished zero-duration activity                | Its finish follows the same rule as a not-started one (`compute.ts:297`).                                                                        |
-| Expected Finish                                            | Not applicable: guarded by `duration > 0` (`compute.ts:273`).                                                                                    |
-| A task resized to zero by Expected Finish                  | Not a zero-duration activity; unchanged.                                                                                                         |
-| LOE or WBS summary collapsed to a point                    | Out of scope: derived spans, never drive (`compute.ts:533-637`).                                                                                 |
-| Placed milestone (Pass 2)                                  | Logic-earliest follows D1; a finish milestone's placement is read by D2, so a Friday placement after Sunday work is now flagged as early.        |
-| Finish milestone placed on a non-working day of its calendar | Reads back as typed (Q1 A). ADR-0155 migrated some placements to Sundays (its Consequences); those now read Sunday, not Friday. Position unchanged on its own calendar. |
-| Levelling overlay                                          | The link push and the zero-duration short-cut keep the instant (`level.ts:535`, `:733-735`); leveled dates use the D3 display.                   |
-| Data date inside the gap the off-calendar work fills       | The link instant wins when it is later than the data date, so `M` still reads the day `W` ends.                                                   |
-| 24-hour predecessor ending exactly at the weekday opening (Mon 08:00) | Reads Friday (D3's own-calendar branch). Recorded, not fixed: the instant is indistinguishable from a rolled one.                     |
+| Case                                                                  | Behaviour after the change                                                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing drives the milestone (open start)                             | Data-date floor rolled onto its own calendar exactly as today, so a free-standing milestone does not move.                                                              |
+| `SNET`/`MSO`/`SNLT` on a start milestone or zero task                 | Read as today (first working minute of the day on its calendar, `instants.ts:103`).                                                                                     |
+| Any constraint or external date on a finish milestone                 | Read as midnight at the end of that calendar day (D2); on its own calendar the same working position as today.                                                          |
+| `MANDATORY_*` breaking logic                                          | Unchanged produce-and-flag (ADR-0035 §7).                                                                                                                               |
+| Completed milestone                                                   | Frozen on actuals as today (`compute.ts:204-210`, `progress.ts:91-97`); reports actuals verbatim.                                                                       |
+| Started-not-finished zero-duration activity                           | Its finish follows the same rule as a not-started one (`compute.ts:297`).                                                                                               |
+| Expected Finish                                                       | Not applicable: guarded by `duration > 0` (`compute.ts:273`).                                                                                                           |
+| A task resized to zero by Expected Finish                             | Not a zero-duration activity; unchanged.                                                                                                                                |
+| LOE or WBS summary collapsed to a point                               | Out of scope: derived spans, never drive (`compute.ts:533-637`).                                                                                                        |
+| Placed milestone (Pass 2)                                             | Logic-earliest follows D1; a finish milestone's placement is read by D2, so a Friday placement after Sunday work is now flagged as early.                               |
+| Finish milestone placed on a non-working day of its calendar          | Reads back as typed (Q1 A). ADR-0155 migrated some placements to Sundays (its Consequences); those now read Sunday, not Friday. Position unchanged on its own calendar. |
+| Levelling overlay                                                     | The link push and the zero-duration short-cut keep the instant (`level.ts:535`, `:733-735`); leveled dates use the D3 display.                                          |
+| Data date inside the gap the off-calendar work fills                  | The link instant wins when it is later than the data date, so `M` still reads the day `W` ends.                                                                         |
+| 24-hour predecessor ending exactly at the weekday opening (Mon 08:00) | Reads Friday (D3's own-calendar branch). Recorded, not fixed: the instant is indistinguishable from a rolled one.                                                       |
 
 ### Permissions
 
@@ -199,24 +199,24 @@ None added or changed.
 
 ### Error scenarios
 
-| Scenario                                  | Detection               | User-facing result                     | Status |
-| ----------------------------------------- | ----------------------- | -------------------------------------- | ------ |
-| Boot re-derivation fails for one plan     | caught per plan, logged | plan keeps old dates until next recalc | n/a    |
-| Organisation's cross-plan graph unorderable | caught per org, logged | that org skipped, retried next boot    | n/a    |
+| Scenario                                    | Detection               | User-facing result                     | Status |
+| ------------------------------------------- | ----------------------- | -------------------------------------- | ------ |
+| Boot re-derivation fails for one plan       | caught per plan, logged | plan keeps old dates until next recalc | n/a    |
+| Organisation's cross-plan graph unorderable | caught per org, logged  | that org skipped, retried next boot    | n/a    |
 
 ## 3. Technical analysis
 
-| Area           | Impact | Notes                                                                                                                                                                                                                                                                                        |
-| -------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Area           | Impact | Notes                                                                                                                                                                                                                                                                                   |
+| -------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend       | none   | The web draws from dates; a finish milestone sits at the end of its date's day (`apps/web/src/lib/milestone-day.ts`), so a Sunday date draws at the end of Sunday. M3-T3 greps the twelve web files that name `FINISH_MILESTONE` for any working-day assumption before this is claimed. |
 | Backend        | high   | `engine/compute.ts`, `engine/instants.ts`, `engine/level.ts`, `engine/apply-levelling.ts`, `cross-plan-derivation.ts`, a new re-derivation service. `computeSchedule` stays pure.                                                                                                       |
-| Database       | low    | One marker-only migration (no statement), per `docs/DATABASE.md` "Re-derivation markers". Through database-architect (§19.3).                                                                                                                                                            |
-| API            | low    | No contract change. Response values change for affected plans.                                                                                                                                                                                                                              |
-| Security       | none   | No endpoint, no input, no scope change.                                                                                                                                                                                                                                                     |
-| Performance    | low    | Removes one calendar roll per zero-duration activity in each pass; adds one cheap check in D3. The boot re-derivation recalculates every plan holding a zero-duration activity once; backend-performance-reviewer checks the pending query.                                                                               |
-| Infrastructure | none   | —                                                                                                                                                                                                                                                                                           |
-| Observability  | low    | The service logs `schedule.milestone_rederived` with counts, like `schedule.pv_rederived`.                                                                                                                                                                                                 |
-| Testing        | high   | Engine unit, conformance, cross-plan twin, levelling, API e2e for the service. No Playwright change (no web change; §4.5).                                                                                                                                                                  |
+| Database       | low    | One marker-only migration (no statement), per `docs/DATABASE.md` "Re-derivation markers". Through database-architect (§19.3).                                                                                                                                                           |
+| API            | low    | No contract change. Response values change for affected plans.                                                                                                                                                                                                                          |
+| Security       | none   | No endpoint, no input, no scope change.                                                                                                                                                                                                                                                 |
+| Performance    | low    | Removes one calendar roll per zero-duration activity in each pass; adds one cheap check in D3. The boot re-derivation recalculates every plan holding a zero-duration activity once; backend-performance-reviewer checks the pending query.                                             |
+| Infrastructure | none   | —                                                                                                                                                                                                                                                                                       |
+| Observability  | low    | The service logs `schedule.milestone_rederived` with counts, like `schedule.pv_rederived`.                                                                                                                                                                                              |
+| Testing        | high   | Engine unit, conformance, cross-plan twin, levelling, API e2e for the service. No Playwright change (no web change; §4.5).                                                                                                                                                              |
 
 ### Dependencies
 

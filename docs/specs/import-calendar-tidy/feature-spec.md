@@ -1,11 +1,11 @@
 # Feature Spec: Tidy up the calendars an import leaves behind
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0208
 - **Author(s):** feature-analyst (Claude Code), for the product owner
 - **Date:** 2026-10-26
 - **Tracking issue / epic:** `docs/BACKLOG.md:261-265` ("Tidy up the calendars an import leaves behind"), chosen by the product owner on 2026-10-26
 - **Roadmap link:** schedule interchange (ADR-0050 follow-on); calendar library manageability (ADR-0053 follow-on)
-- **Related ADR(s):** ADR-0053 §5 (the "an import never reuses a calendar" rule — **amended** by this work), ADR-0050 (interchange pipeline and report), ADR-0068 (hours per day), ADR-0195 (library rows in the bin, per-row restore), ADR-0201 (no restore onto a deleted calendar), ADR-0096 (the bin, retention expiry — untouched), ADR-0072 / ADR-0073 (audit), ADR-0012 (RBAC + scope), ADR-0028 (the pen — not required), ADR-0081 (entry point + journey), ADR-0088 D1 (no flag), ADR-0105 (why this is full-spec work). A new **ADR-0207** is proposed (§4 "ADR").
+- **Related ADR(s):** ADR-0053 §5 (the "an import never reuses a calendar" rule — **amended** by this work), ADR-0050 (interchange pipeline and report), ADR-0068 (hours per day), ADR-0195 (library rows in the bin, per-row restore), ADR-0201 (no restore onto a deleted calendar), ADR-0096 (the bin, retention expiry — untouched), ADR-0072 / ADR-0073 (audit), ADR-0012 (RBAC + scope), ADR-0028 (the pen — not required), ADR-0081 (entry point + journey), ADR-0088 D1 (no flag), ADR-0105 (why this is full-spec work). A new **ADR-0208** is proposed (§4 "ADR").
 
 ---
 
@@ -150,7 +150,7 @@ See §6. There are four critical questions, each with a recommended default.
 >   resource reference that would have gone to the copy points at C, and the report holds one
 >   `repair` finding: _calendar “Site 6-Day” was matched to the existing calendar “Site 6-Day”_,
 >   reason _it has the same working week, exceptions and hours per day, so a copy would differ
->   only in its name (ADR-0207)_.
+>   only in its name (ADR-0208)_.
 > - **Given** the same, **when** I run the dry-run, **then** the review report already holds that
 >   finding (shared resolver, so the dry-run and the commit cannot disagree).
 > - **Given** C differs from the file in **anything** in the identity (one exception, one window
@@ -497,7 +497,7 @@ M1 has no component change.
 **ADR required: yes.** M1 overturns an accepted rule (ADR-0053 §5, "An import never REUSES a
 calendar"). Draft outline:
 
-> **ADR-0207 — An import reuses a calendar it would have copied exactly** _(Proposed; amends ADR-0053 §5)_
+> **ADR-0208 — An import reuses a calendar it would have copied exactly** _(Proposed; amends ADR-0053 §5)_
 >
 > - **Context:** F3–F6. The never-reuse rule's reason was a name match changing working time. The
 >   cost is unbounded copies per re-import, including in the ORG library.
@@ -520,14 +520,14 @@ calendar"). Draft outline:
 >   one stale. ADR-0053 §5's CQ-4 sentence for calendars ("not applicable") is restated as "reuse
 >   skips archived". `docs/API.md` §interchange rewritten.
 
-CLAUDE.md §16 gains the ADR-0207 line, and `check:adr-coverage` enforces it.
+CLAUDE.md §16 gains the ADR-0208 line, and `check:adr-coverage` enforces it.
 
 ---
 
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- Related docs updated by this change: `docs/adr/0207-…` (new), `docs/adr/0053-…md` §5 (amendment
+- Related docs updated by this change: `docs/adr/0208-…` (new), `docs/adr/0053-…md` §5 (amendment
   pointer), `CLAUDE.md` §16, `docs/API.md` (interchange calendars paragraph; M2 endpoints),
   `docs/BACKLOG.md:261-265` (item removed when M2 lands), `docs/TECH_DEBT.md` (new row for F6's
   non-identical case, if confirmed by M1's test).

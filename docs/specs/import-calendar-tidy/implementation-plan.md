@@ -1,7 +1,7 @@
 # Implementation Plan: Tidy up the calendars an import leaves behind
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0208
 - **Owner:** product owner (James Ewbank); built by the **builder** agent, reviewed as listed per task
 
 ## Breakdown
@@ -16,7 +16,7 @@ flowchart LR
   F2 --> T14[T1.4 commit: locks, insert, compensation]
   M1 --> F3[Proof + docs] --> T15[T1.5 e2e + journey]
   F3 --> T16[T1.6 measurement]
-  F3 --> T17[T1.7 ADR-0207, docs, changeset]
+  F3 --> T17[T1.7 ADR-0208, docs, changeset]
   M2 --> F4[API] --> T21[T2.1 unused list]
   F4 --> T22[T2.2 bulk delete]
   M2 --> F5[Web] --> T23[T2.3 button + dialog]
@@ -126,7 +126,7 @@ asserts that the project's calendar section lists exactly one "Site 6-Day" and n
   first, then variants by `createdAt` ascending; one claim per existing calendar per import; no
   merging inside the file; and on no match, today's `disambiguateImportedName`. Findings: today's
   "was created as" for renames, and the new
-  `calendar “<source>” was matched to the existing calendar “<existing>”` with the ADR-0207
+  `calendar “<source>” was matched to the existing calendar “<existing>”` with the ADR-0208
   reason. The dry-run calls it outside any transaction, and the commit inside (the
   `findGraphResourceCollisions` precedent, `interchange.service.ts:1046-1052`).
 - **Complexity:** M
@@ -219,7 +219,7 @@ asserts that the project's calendar section lists exactly one "Site 6-Day" and n
   `recycle-bin-library.measure.ts` (ADR-0195). One project holds 50 lineage variants of one name,
   each with 300 exceptions, plus an org at the ADR-0053 ceiling of 1,000 calendars. Measure the
   dry-run's added wall time p50/p95 over 15 runs and `EXPLAIN ANALYZE` the candidate query.
-  Record the reading in ADR-0207's ledger. **Escalation rule:** if the added p95 exceeds 50 ms (a
+  Record the reading in ADR-0208's ledger. **Escalation rule:** if the added p95 exceeds 50 ms (a
   quarter of the 200 ms read target, CLAUDE.md §15), stop and take an index or fingerprint
   proposal to **database-architect**. Do not add one on a guess.
 - **Complexity:** S
@@ -231,9 +231,9 @@ asserts that the project's calendar section lists exactly one "Site 6-Day" and n
   2. Run and record.
   3. Decide against the rule above.
 
-##### Task 1.7 — ADR-0207, docs, changeset
+##### Task 1.7 — ADR-0208, docs, changeset
 
-- **Description:** `docs/adr/0207-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`
+- **Description:** `docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`
   (outline in spec §4), with the acceptance-status ledger. A dated amendment pointer in ADR-0053
   §5 at `:373-384` and `:395-398`. The CLAUDE.md §16 line. `docs/API.md:1000-1015` rewritten.
   ADR-0050's mapping table row for calendars, if it states "always created". A changeset:
@@ -252,7 +252,7 @@ asserts that the project's calendar section lists exactly one "Site 6-Day" and n
   1. Write the ADR and the §16 line.
   2. Sweep the docblocks and docs.
   3. Add the changeset.
-  4. Set this spec's status to `Accepted — shipped (ADR-0207)` only when M2 has also shipped, or
+  4. Set this spec's status to `Accepted — shipped (ADR-0208)` only when M2 has also shipped, or
      when M2 is declined.
 
 **M1 reviewers:** security-reviewer (candidate scoping, compensation), backend-performance-reviewer
@@ -387,9 +387,9 @@ activities }` from soft-deleted plans and activities. That is **one grouped coun
 
 ##### Task 2.5 — Docs and changesets
 
-- **Description:** `docs/API.md` (two endpoints), ADR-0207 D5 ledger rows, and removal of
+- **Description:** `docs/API.md` (two endpoints), ADR-0208 D5 ledger rows, and removal of
   `docs/BACKLOG.md:261-265`. Changesets: **`@repo/api` minor** (new endpoints) and **`@repo/web`
-  minor** (new user-facing action). Set the spec status to `Accepted — shipped (ADR-0207)` and the
+  minor** (new user-facing action). Set the spec status to `Accepted — shipped (ADR-0208)` and the
   plan's status to match.
 - **Complexity:** S
 - **Dependencies:** T2.4

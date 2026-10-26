@@ -1,7 +1,7 @@
 # Implementation Plan: A milestone stays where its logic puts it, across calendars (#539)
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) (Draft — awaiting product-owner approval)
-- **Status:** Draft — awaiting product-owner approval
+- **Feature spec:** [./feature-spec.md](./feature-spec.md)
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 A, Q2 A, Q3 A); the new ADR is ADR-0207
 - **Owner:** api (builder agent for implementation; feature-analyst for this plan)
 
 Written against the recommended answers (Q1 A, Q2 A, Q3 A). Q1 B removes M3 and the D3 half of M2;
@@ -277,13 +277,13 @@ code, tests, docs, security, performance, accessibility (no UI change), Docker b
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                          | Likelihood | Impact | Mitigation                                                                                         |
-| -------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------- |
-| The lag-equivalence argument fails for some calendar shape                 | low        | high   | M2-T2 runs before M2-T1 lands; failure stops M2 and amends the spec                                |
-| A single-calendar plan's dates move unexpectedly                           | low        | high   | harness "unexplained" = 0; goldens run unedited first                                              |
-| Elapsed-lag successors of milestones move earlier (Q2 A)                   | med        | med    | accepted by Q2; changelog says so; harness counts them                                             |
-| Baselines show the correction as variance (Q3 A)                           | med        | low    | changelog sentence; frozen dates untouched                                                         |
-| Cross-plan read of a Sunday-dated weekday milestone is day-granular        | low        | low    | inside the derivation's stated limit (`cross-plan-derivation.ts:53-56`); twin case pins the common case |
-| ADR-0155-migrated Sunday placements now read Sunday                        | med        | low    | position unchanged on own calendar; changelog names it                                              |
-| `it.fails` is new to the repo                                              | low        | low    | PR explains; flipped in M2, so it lives one milestone                                              |
-| An unrelated release ships M2/M3 before M4                                 | low        | med    | release rule; worst case stale dates until next recalc                                             |
+| Risk / assumption                                                   | Likelihood | Impact | Mitigation                                                                                              |
+| ------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| The lag-equivalence argument fails for some calendar shape          | low        | high   | M2-T2 runs before M2-T1 lands; failure stops M2 and amends the spec                                     |
+| A single-calendar plan's dates move unexpectedly                    | low        | high   | harness "unexplained" = 0; goldens run unedited first                                                   |
+| Elapsed-lag successors of milestones move earlier (Q2 A)            | med        | med    | accepted by Q2; changelog says so; harness counts them                                                  |
+| Baselines show the correction as variance (Q3 A)                    | med        | low    | changelog sentence; frozen dates untouched                                                              |
+| Cross-plan read of a Sunday-dated weekday milestone is day-granular | low        | low    | inside the derivation's stated limit (`cross-plan-derivation.ts:53-56`); twin case pins the common case |
+| ADR-0155-migrated Sunday placements now read Sunday                 | med        | low    | position unchanged on own calendar; changelog names it                                                  |
+| `it.fails` is new to the repo                                       | low        | low    | PR explains; flipped in M2, so it lives one milestone                                                   |
+| An unrelated release ships M2/M3 before M4                          | low        | med    | release rule; worst case stale dates until next recalc                                                  |

@@ -1,7 +1,7 @@
 # Implementation Plan: Carry activity notes through XER and MSPDI
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (Draft, awaiting product-owner approval)
-- **Status:** Draft — awaiting product-owner approval
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0209
 - **Owner:** James Ewbank (product owner). The builder agent builds it one milestone at a time
   (CLAUDE.md §19.14). The plan is written to the defaults of the spec's Q1 to Q4.
 

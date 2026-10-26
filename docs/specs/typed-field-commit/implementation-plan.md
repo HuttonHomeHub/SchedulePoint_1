@@ -1,7 +1,7 @@
 # Implementation Plan: One draft-and-commit behaviour for typed fields
 
 - **Feature spec:** [feature-spec.md](./feature-spec.md)
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 share the behaviour, Q2 yes, Q3 a DECISIONS entry and an ADR-0188 amendment line)
 - **Owner:** web
 
 ## Breakdown
