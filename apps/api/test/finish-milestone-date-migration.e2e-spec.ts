@@ -195,9 +195,12 @@ describe.skipIf(!hasDatabase)(
       const deleted = await prisma.activity.findUniqueOrThrow({ where: { id: gone } });
       expect(deleted.visualStart?.toISOString().slice(0, 10)).toBe('2026-01-19');
 
-      // The instant is kept: the milestone reads A's last day with no conflict, and B — which would
-      // move a day if the placement had been read at its old date — starts where it always did.
-      expect(after.get('M')!.visualEffectiveStart).toBe('2026-01-09');
+      // The instant is kept: no conflict, and B — which would move a day if the placement had been read at
+      // its old date — starts where it always did. The migrated placement is a Sunday, and since #539
+      // (ADR-0207 D2) a placed finish milestone reads back the day it was placed on, so it reads Sunday
+      // 11 Jan where it read A's last day, Friday 9 Jan, before: the one visible change to a migrated
+      // placement, and only for those the migration moved onto a non-working day.
+      expect(after.get('M')!.visualEffectiveStart).toBe('2026-01-11');
       expect(after.get('M')!.visualConflict).toBe(false);
       expect(after.get('B')!.visualEffectiveStart).toBe('2026-01-12');
 
@@ -240,7 +243,7 @@ describe.skipIf(!hasDatabase)(
       expect(await rederive.rederive()).toBe(1);
       const after = await read();
       expect(after.get('M')!.earlyStart).toBe(current.get('M')!.earlyStart);
-      expect(after.get('M')!.visualEffectiveStart).toBe('2026-01-09');
+      expect(after.get('M')!.visualEffectiveStart).toBe('2026-01-11'); // as typed, since #539
 
       // Once: the recalculation stamped the plan, so it has left the set.
       expect(await rederive.pendingPlans()).toEqual([]);

@@ -402,8 +402,11 @@ export function computeSchedule(
       // The bound drives when, rolled onto the successor's calendar, it is exactly its early start.
       edgeResults.push({
         edgeId: edge.id,
-        // A zero-span successor keeps its bound unrolled (D1), so the bound itself can be its start.
-        isDriving: bound === successorStart || rollForwardToWorking(cal, bound) === successorStart,
+        // A zero-span successor keeps an instant that may sit in its calendar's non-working time (D1), so
+        // both sides are read at the position they have on its calendar: a link and a constraint that
+        // fall in the same gap are the same position, as they were when the successor was rolled. For
+        // any other successor the start is a working minute already and this is the old test.
+        isDriving: rollForwardToWorking(cal, bound) === rollForwardToWorking(cal, successorStart),
       });
     }
   }
