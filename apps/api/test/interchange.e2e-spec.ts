@@ -5,8 +5,8 @@ import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
-import { acquireCalendarWriteLock } from '../src/common/db/calendar-advisory-lock';
 import type { OrganizationRole } from '../src/common/auth/principal';
+import { acquireCalendarWriteLock } from '../src/common/db/calendar-advisory-lock';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
@@ -1777,7 +1777,7 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
         await holder;
       }
 
-      const res = await (status as NonNullable<typeof status>);
+      const res = await status;
       expect(res.status).toBe(201);
       const plan = await prisma.plan.findUniqueOrThrow({ where: { id: res.body.data.planId } });
       expect(plan.calendarId).not.toBe(calendarId);
