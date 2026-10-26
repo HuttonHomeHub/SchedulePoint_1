@@ -51,6 +51,37 @@ export class NoteRepository {
     await db.note.createMany({ data: [...rows] });
   }
 
+  /**
+   * A plan's active ACTIVITY notes, oldest first, for an export (schedule interchange). Only the two
+   * columns the file needs are read, never the author, so nothing about who wrote a note can reach a
+   * file. Ordered by `created_at, id` — the plan's `(plan_id, created_at, id)` index — so the order a
+   * thread reads in is the order the file carries, and capped at `take` so a plan with a great many
+   * notes cannot make one export unbounded.
+   */
+  findActiveActivityNotesForExport(
+    organizationId: string,
+    planId: string,
+    take: number,
+  ): Promise<{ activityId: string | null; body: string }[]> {
+    return this.prisma.note.findMany({
+      where: this.active({ organizationId, planId, entityType: 'ACTIVITY' }),
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+      select: { activityId: true, body: true },
+    });
+  }
+
+  /** How many active notes of one kind a plan holds, for the export report's "not written" counts. */
+  countActiveForPlan(
+    organizationId: string,
+    planId: string,
+    entityType: 'PLAN' | 'ACTIVITY',
+  ): Promise<number> {
+    return this.prisma.note.count({
+      where: this.active({ organizationId, planId, entityType }),
+    });
+  }
+
   /** An active note scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,

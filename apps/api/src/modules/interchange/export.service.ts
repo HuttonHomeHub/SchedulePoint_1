@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { Activity, Plan } from '@prisma/client';
 import {
   exportSchedule,
+  MAX_NOTES,
   type ExportFormat,
   type ExportGraph,
   type InterchangeReport,
@@ -15,6 +16,7 @@ import { ActivityRepository } from '../activities/activity.repository';
 import { CalendarRepository, type CalendarWithExceptions } from '../calendars/calendar.repository';
 import { MINUTES_PER_HOUR } from '../calendars/hours-per-day';
 import { DependencyRepository, type ExportEdge } from '../dependencies/dependency.repository';
+import { NoteRepository } from '../notes/note.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
@@ -82,6 +84,7 @@ export class ExportService {
     private readonly resources: ResourceRepository,
     private readonly assignments: ResourceAssignmentRepository,
     private readonly swimlanes: SwimlaneRepository,
+    private readonly notes: NoteRepository,
     @InjectPinoLogger(ExportService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -166,19 +169,30 @@ export class ExportService {
    * parentage are read from the same activity rows for the same reason.
    */
   private async readGraph(organizationId: string, plan: Plan): Promise<ExportGraph> {
-    const [activityRows, dependencyRows, assignmentRows, swimlaneRows, laneRows] =
-      await Promise.all([
-        this.activities.findAllActiveByPlan(organizationId, plan.id),
-        this.dependencies.findAllActiveByPlan(organizationId, plan.id),
-        this.assignments.findManyActiveByPlan(organizationId, plan.id),
-        // The cap is the swimlanes module's own, so one page is the whole list (it is the default page).
-        this.swimlanes.findManyActiveByPlan({
-          organizationId,
-          planId: plan.id,
-          take: SWIMLANE_LIMIT,
-        }),
-        this.activities.findSwimlaneLanesForPlan(organizationId, plan.id),
-      ]);
+    const [
+      activityRows,
+      dependencyRows,
+      assignmentRows,
+      swimlaneRows,
+      laneRows,
+      noteRows,
+      planNotes,
+    ] = await Promise.all([
+      this.activities.findAllActiveByPlan(organizationId, plan.id),
+      this.dependencies.findAllActiveByPlan(organizationId, plan.id),
+      this.assignments.findManyActiveByPlan(organizationId, plan.id),
+      // The cap is the swimlanes module's own, so one page is the whole list (it is the default page).
+      this.swimlanes.findManyActiveByPlan({
+        organizationId,
+        planId: plan.id,
+        take: SWIMLANE_LIMIT,
+      }),
+      this.activities.findSwimlaneLanesForPlan(organizationId, plan.id),
+      // One more than the ceiling, so reaching it is detectable without reading the rest.
+      this.notes.findActiveActivityNotesForExport(organizationId, plan.id, MAX_NOTES + 1),
+      // Plan notes have no field in either format; they are only counted for the report.
+      this.notes.countActiveForPlan(organizationId, plan.id, 'PLAN'),
+    ]);
 
     if (swimlaneRows.length >= SWIMLANE_LIMIT) {
       // The read is capped at the swimlanes module's own limit, as the import side's is; reaching it
@@ -216,6 +230,20 @@ export class ExportService {
     const loadedCalendarIds = new Set(calendarRows.map((c) => c.id));
     const activityIds = new Set(activityRows.map((a) => a.id));
 
+    // Notes of the activities in this graph only, in the order read. A note whose activity is not in the
+    // graph (soft-deleted) is not exported and not counted as left out: it is deleted. Past the ceiling
+    // the rest is counted, so the report says how many were left out rather than truncating silently.
+    const exportNotes = noteRows
+      .filter((n): n is { activityId: string; body: string } => n.activityId !== null)
+      .filter((n) => activityIds.has(n.activityId));
+    const overLimit = noteRows.length > MAX_NOTES;
+    const unwrittenNotes = overLimit
+      ? Math.max(
+          0,
+          (await this.notes.countActiveForPlan(organizationId, plan.id, 'ACTIVITY')) - MAX_NOTES,
+        )
+      : 0;
+
     const calendarKeyOrNull = (id: string | null): string | null =>
       id !== null && loadedCalendarIds.has(id) ? id : null;
 
@@ -229,6 +257,15 @@ export class ExportService {
         swimlaneWbsLevel: plan.swimlaneWbsLevel,
       },
       swimlanes: swimlaneRows.map((s) => ({ key: s.id, name: s.name })),
+      ...(exportNotes.length === 0
+        ? {}
+        : {
+            notes: exportNotes
+              .slice(0, MAX_NOTES)
+              .map((n) => ({ activityKey: n.activityId, body: n.body })),
+          }),
+      ...(planNotes === 0 ? {} : { planNoteCount: planNotes }),
+      ...(unwrittenNotes === 0 ? {} : { unwrittenNoteCount: unwrittenNotes }),
       calendars: calendarRows.map((c) => this.toExportCalendar(c)),
       activities: activityRows.map((a) => ({
         key: a.id,

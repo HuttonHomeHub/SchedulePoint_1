@@ -949,6 +949,174 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     });
   });
 
+  // ---- Activity notes through export, and back (notes-through-interchange M2, FC-1 and FC-2) -----------
+
+  const exportUrl = (planId: string, format: 'xer' | 'mspdi') =>
+    `/api/v1/organizations/acme/plans/${planId}/interchange/export/${format}`;
+
+  async function activityId(planId: string, code: string): Promise<string> {
+    return (await prisma.activity.findFirstOrThrow({ where: { planId, code } })).id;
+  }
+
+  /** Per activity code, the bodies of the plan's active activity notes, oldest first. */
+  async function bodiesByCode(planId: string): Promise<Record<string, string[]>> {
+    const rows = await prisma.note.findMany({
+      where: { planId, entityType: 'ACTIVITY', deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      include: { activity: { select: { code: true } } },
+    });
+    const out: Record<string, string[]> = {};
+    for (const row of rows) {
+      const code = row.activity?.code ?? '?';
+      (out[code] ??= []).push(row.body);
+    }
+    return out;
+  }
+
+  it('exports a plan’s notes to XER and re-imports them: same bodies, same order, per code (FC-1)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+
+    const bodies = [
+      'plain',
+      'A & B < C > D "quoted"',
+      'tab\there',
+      'blank\n\nlines\n\n\nand three',
+      'literal <hr> and <script>alert(1)</script>',
+      'ünïcödé — 日本語',
+      'x'.repeat(5000),
+    ];
+    for (const body of bodies) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+        .send({ body })
+        .expect(201);
+    }
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'on the second' })
+      .expect(201);
+    // A plan note and a deleted note: neither may reach the file.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${sourceId}/notes`)
+      .send({ body: 'plan level' })
+      .expect(201);
+    const doomed = await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'withdrawn' })
+      .expect(201);
+    await actor.agent
+      .delete(`/api/v1/organizations/acme/notes/${doomed.body.data.id as string}`)
+      .expect(204);
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: { notes?: number };
+      drops: { detail: string }[];
+    };
+    expect(report.mapped.notes).toBe(bodies.length + 1);
+    expect(report.drops.map((d) => d.detail)).toContain(
+      '1 plan note was not written to the exported file',
+    );
+    expect((exported.body as Buffer).toString('utf8')).not.toContain('withdrawn');
+
+    const secondProject = await makeSecondProject(actor);
+    const reimport = await actor.agent
+      .post(commitUrl(secondProject))
+      .attach('file', exported.body as Buffer, 'exported.xer')
+      .expect(201);
+    const copyId = reimport.body.data.planId as string;
+    const copy = await bodiesByCode(copyId);
+    expect(copy['A1000']).toEqual(bodies);
+    expect(copy['A1010']).toEqual(['on the second']);
+    expect(await prisma.note.count({ where: { planId: copyId, entityType: 'PLAN' } })).toBe(0);
+  });
+
+  it('exports notes to MSPDI: one note comes back as it was, several as one joined note (FC-2)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const sourceId = source.body.data.planId as string;
+    const a1 = await activityId(sourceId, 'A1000');
+    const a2 = await activityId(sourceId, 'A1010');
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'first & <foremost>' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a1}/notes`)
+      .send({ body: 'second' })
+      .expect(201);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/activities/${a2}/notes`)
+      .send({ body: 'only one\nacross lines' })
+      .expect(201);
+
+    const exported = await actor.agent
+      .get(exportUrl(sourceId, 'mspdi'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const secondProject = await makeSecondProject(actor);
+    const reimport = await actor.agent
+      .post(commitUrl(secondProject))
+      .attach('file', exported.body as Buffer, 'exported.xml')
+      .expect(201);
+    const copy = await bodiesByCode(reimport.body.data.planId as string);
+    expect(copy['A1010']).toEqual(['only one\nacross lines']);
+    expect(copy['A1000']).toEqual(['first & <foremost>\n\n————\n\nsecond']);
+  });
+
+  it('exports a plan without notes exactly as before: no memo tables, no note finding', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const source = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'source.xer')
+      .expect(201);
+    const exported = await actor.agent
+      .get(exportUrl(source.body.data.planId as string, 'xer'))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((exported.body as Buffer).toString('utf8')).not.toMatch(/MEMOTYPE|TASKMEMO/);
+    const report = JSON.parse(String(exported.headers['x-interchange-report'])) as {
+      mapped: Record<string, unknown>;
+      approximations: { entity: string }[];
+      drops: { entity: string }[];
+    };
+    expect('notes' in report.mapped).toBe(false);
+    expect([...report.approximations, ...report.drops].some((f) => f.entity === 'note')).toBe(
+      false,
+    );
+  });
+
   it('rolls back the whole transaction when a create fails mid-way (nothing created)', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);

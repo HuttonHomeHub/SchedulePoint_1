@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { importSchedule } from '@repo/interchange';
+import { importSchedule, MAX_NOTES } from '@repo/interchange';
 import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../common/err
 import type { ActivityRepository } from '../activities/activity.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { DependencyRepository } from '../dependencies/dependency.repository';
+import type { NoteRepository } from '../notes/note.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
@@ -105,6 +106,10 @@ describe('ExportService.exportPlan', () => {
   let resources: { findActiveByIdsInOrg: ReturnType<typeof vi.fn> };
   let assignments: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
   let swimlanes: { findManyActiveByPlan: ReturnType<typeof vi.fn> };
+  let notes: {
+    findActiveActivityNotesForExport: ReturnType<typeof vi.fn>;
+    countActiveForPlan: ReturnType<typeof vi.fn>;
+  };
   let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: ExportService;
   const member = principalWith(['interchange:export']);
@@ -134,6 +139,10 @@ describe('ExportService.exportPlan', () => {
     resources = { findActiveByIdsInOrg: vi.fn().mockResolvedValue([]) };
     assignments = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
     swimlanes = { findManyActiveByPlan: vi.fn().mockResolvedValue([]) };
+    notes = {
+      findActiveActivityNotesForExport: vi.fn().mockResolvedValue([]),
+      countActiveForPlan: vi.fn().mockResolvedValue(0),
+    };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     service = new ExportService(
@@ -145,6 +154,7 @@ describe('ExportService.exportPlan', () => {
       resources as unknown as ResourceRepository,
       assignments as unknown as ResourceAssignmentRepository,
       swimlanes as unknown as SwimlaneRepository,
+      notes as unknown as NoteRepository,
       logger as unknown as PinoLogger,
     );
   });
@@ -202,6 +212,50 @@ describe('ExportService.exportPlan', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 100 }),
       expect.stringContaining('swimlane limit'),
+    );
+  });
+
+  it('reads notes once, scoped and capped, and exports those of live activities only', async () => {
+    notes.findActiveActivityNotesForExport.mockResolvedValue([
+      { activityId: 'act-1', body: 'first' },
+      { activityId: 'gone', body: 'on a deleted activity' },
+      { activityId: 'act-2', body: 'second' },
+    ]);
+    notes.countActiveForPlan.mockImplementation((_org: string, _plan: string, kind: string) =>
+      kind === 'PLAN' ? 2 : 3,
+    );
+    const { bytes, report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+
+    // One read of the activity notes, org- and plan-scoped, one past the ceiling.
+    expect(notes.findActiveActivityNotesForExport).toHaveBeenCalledExactlyOnceWith(
+      ORG_ID,
+      PLAN_ID,
+      MAX_NOTES + 1,
+    );
+    expect(report.mapped.notes).toBe(2);
+    expect(report.drops.map((d) => d.detail)).toContain(
+      '2 plan notes were not written to the exported file',
+    );
+    // Not over the ceiling, so no second count of activity notes was needed.
+    expect(notes.countActiveForPlan).not.toHaveBeenCalledWith(ORG_ID, PLAN_ID, 'ACTIVITY');
+    const back = importSchedule({ content: bytes, filename: 'x.xer' });
+    expect(back.ok && back.graph.notes?.map((n) => n.body)).toEqual(['first', 'second']);
+  });
+
+  it('applies the ceiling and reports how many activity notes it left out', async () => {
+    notes.findActiveActivityNotesForExport.mockResolvedValue(
+      Array.from({ length: MAX_NOTES + 1 }, (_, i) => ({
+        activityId: 'act-1',
+        body: `n${String(i)}`,
+      })),
+    );
+    notes.countActiveForPlan.mockImplementation((_org: string, _plan: string, kind: string) =>
+      kind === 'PLAN' ? 0 : MAX_NOTES + 7,
+    );
+    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'mspdi');
+    expect(report.mapped.notes).toBe(MAX_NOTES);
+    expect(report.drops.map((d) => d.detail)).toContain(
+      '7 activity notes were not written to the exported file',
     );
   });
 

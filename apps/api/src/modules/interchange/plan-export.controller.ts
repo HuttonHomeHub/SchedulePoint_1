@@ -53,7 +53,9 @@ export class PlanExportController {
       '(compact JSON). An `xer` file also carries each activity’s hand-placed start and row as two ' +
       'SchedulePoint user-defined fields, which only SchedulePoint reads back on import; other tools show ' +
       'every activity at its computed dates. `mspdi` does not carry them and reports the placements as ' +
-      'dropped. Any other format is a 422.',
+      'dropped. Both formats carry the plan’s activity notes as text only (no author or date): an `xer` ' +
+      'as one memo per activity that a SchedulePoint import splits back, an `mspdi` as one task note with ' +
+      'several joined. Plan-level notes are counted in the report, not written. Any other format is a 422.',
   })
   @ApiParam({
     name: 'format',

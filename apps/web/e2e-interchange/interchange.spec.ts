@@ -317,12 +317,21 @@ test('a SchedulePoint .xer restores its placed starts and rows, and the option c
   expect(res.ok()).toBe(true);
   const rows = (
     (await res.json()) as {
-      data: { code: string; visualStart: string | null; laneIndex: number }[];
+      data: { id: string; code: string; visualStart: string | null; laneIndex: number }[];
     }
   ).data;
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
   expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
+
+  // The note came back on the same activity code, as text, from a different plan.
+  const copied = await page.request.get(
+    `/api/v1/organizations/${orgSlug}/activities/${(byCode['A1000'] as { id: string }).id}/notes`,
+  );
+  expect(copied.ok()).toBe(true);
+  expect(((await copied.json()) as { data: { body: string }[] }).data.map((n) => n.body)).toEqual([
+    'Crane pad to be confirmed & signed off',
+  ]);
 });
 
 // The same review→commit loop for a Microsoft Project MSPDI .xml file, proving the format-agnostic
@@ -409,6 +418,9 @@ test('a planner exports a plan to .xer from the canvas Export menu', async ({ pa
  * the downloaded bytes are imported into a second project through **Import from file…** — the two
  * entry points a planner uses, with nothing in between. The restored values are read back through
  * the API (the ADR-0070 rule), per activity code, because the two plans share no ids.
+ *
+ * It carries a **note** too (notes-through-interchange M2): one is written on A1000 through the
+ * Notes tab before the export, and after the re-import the second plan's A1000 holds the same text.
  */
 test('an exported .xer re-imports with its placed starts and lanes', async ({ page }) => {
   const stamp = Date.now();
@@ -424,6 +436,17 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   await seed.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
+  // A remark on A1000, written the way a planner writes one: the row's Notes tab, compose, post.
+  await showActivities(page);
+  await page.getByRole('button', { name: 'Actions for Mobilise' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
+  const editor = activityEditor(page);
+  await editor.getByLabel('Add a note').fill('Crane pad to be confirmed & signed off');
+  await editor.getByRole('button', { name: 'Add note' }).click();
+  await expect(editor.getByText('Crane pad to be confirmed & signed off')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+
   await page.getByRole('button', { name: /^(Share & export|Export)$/ }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
@@ -431,6 +454,7 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   ]);
   const bytes = readFileSync(await download.path());
   expect(bytes.toString('utf8')).toMatch(/^%T\tUDFVALUE$/m);
+  expect(bytes.toString('utf8')).toMatch(/^%T\tTASKMEMO$/m);
 
   // A second project, so the re-imported plan's name does not collide with the source's.
   await page.goto(projectUrl);
