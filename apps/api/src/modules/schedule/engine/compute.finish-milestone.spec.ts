@@ -2,6 +2,7 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
+import { crossCalendarNetwork, middle, runCrossCalendar } from './compute.cross-calendar.fixture';
 import type { EngineActivity, EngineEdge } from './types';
 import {
   allMinutesWorkCalendar,
@@ -160,5 +161,53 @@ describe('what the rule leaves alone', () => {
       [],
     );
     expect(get('M').earlyFinish).toBe('2026-01-02');
+  });
+});
+
+/**
+ * **A finish milestone after work on another calendar reads the day that work ends** (#539, Q1 A;
+ * `docs/specs/milestone-cross-calendar/`; amends ADR-0155 decisions 1, 3 and 4).
+ *
+ * `crossCalendarNetwork` is the row's fixture: weekend work `W` ends Sunday 2027-06-27 19:00 and the
+ * milestone sits on the weekday plan calendar. The cases that need the fix are `it.fails` until M2
+ * and M3 land (they assert the correct value; a plain `it` would put `main` red). The two plain
+ * `it` cases are controls: ADR-0155's single-calendar reading, which the fix must not move.
+ */
+describe('a finish milestone after weekend work (#539)', () => {
+  it.fails('on the plan calendar reads Sunday, the day the weekend work ends', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('M').earlyStart).toBe('2027-06-27');
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+    expect(get('M').lateFinish).toBe('2027-06-27');
+  });
+
+  it.fails(
+    'FNLT on the Friday before: W carries its whole weekend, M floats 0 and reads Sunday',
+    () => {
+      const { activities, edges } = crossCalendarNetwork(
+        middle('FINISH_MILESTONE', undefined, {
+          constraintType: 'FNLT',
+          constraintDate: '2027-06-25',
+        }),
+      );
+      const { get } = runCrossCalendar(activities, edges);
+      expect(get('W').totalFloat).toBe(-1440);
+      expect(Math.abs(get('M').totalFloat)).toBe(0);
+      expect(get('M').earlyFinish).toBe('2027-06-27');
+    },
+  );
+
+  it('control: a lead into a finish milestone at a day’s opening still reads the day before (ADR-0155)', () => {
+    // FS with a one-day lead on a 24-hour-day calendar lands at Friday 00:00, the opening of a
+    // working day on the milestone's own calendar: the day before, as ADR-0155 decided.
+    const { get } = run([A, milestone()], [{ ...fs('A', 'M'), lagMinutes: -DAY }]);
+    expect(get('M').earlyFinish).toBe('2026-01-08');
+  });
+
+  it.fails('placed on a Sunday reads Sunday, and is not early after Friday work', () => {
+    const { get } = run([A, milestone({ visualStart: '2026-01-11' })], [fs('A', 'M')]);
+    expect(get('M').visualEffectiveStart).toBe('2026-01-11');
+    expect(get('M').visualConflict).toBe(false);
   });
 });
