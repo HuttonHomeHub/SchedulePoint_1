@@ -24,6 +24,7 @@ import type {
   ExceptionFormValues,
 } from '../schemas/calendar-schemas';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { calendarKeys, deletedItemKeys } from '@/lib/query/hierarchy-keys';
 
@@ -367,13 +368,15 @@ export function useUnarchiveCalendar(orgSlug: string) {
 /**
  * The project's own calendars that nothing active uses (ADR-0208 D5). Every page is read before the
  * list is shown, so the dialog never offers a partial set that "Delete all" would then misdescribe.
- * Disabled until the section knows the viewer can write: a reader with no delete right has no use for
- * the list, and the request would be one more per project screen.
+ *
+ * **It is not refreshed by assignments.** A plan or activity that starts using a listed calendar does
+ * not invalidate this list, so a stale row can be ticked. That is safe by construction: the server
+ * counts the active referencers under the calendar's lock and answers 409 naming what is in use, and
+ * the dialog shows that.
  */
 export function useUnusedProjectCalendars(
   orgSlug: string,
   projectId: string,
-  options: { enabled?: boolean } = {},
 ): UseQueryResult<UnusedCalendar[]> {
   return useQuery({
     queryKey: calendarKeys.unused(orgSlug, projectId),
@@ -381,7 +384,7 @@ export function useUnusedProjectCalendars(
       apiFetchAllPages<UnusedCalendar>(
         `/organizations/${orgSlug}/projects/${projectId}/calendars/unused`,
       ),
-    enabled: Boolean(projectId) && (options.enabled ?? true),
+    enabled: Boolean(projectId),
   });
 }
 
@@ -406,10 +409,17 @@ export class BulkDeleteInterrupted extends Error {
 /**
  * Delete several calendars (ADR-0208 D5). Each request is all-or-nothing on the server; a set larger
  * than {@link BULK_DELETE_PAGE} goes in sequential requests, and a failure stops the walk and says
- * what is left, so the dialog can name it rather than pretend nothing happened.
+ * what is left, so the dialog can name it rather than pretend nothing happened. The walk is **not
+ * cancellable by design**: closing the dialog does not abort a request already sent, and the pages that
+ * are left still go, because stopping half-way would leave exactly the partial state this reports.
+ *
+ * **The announcement is made here, in the mutation's own `onSuccess`, and not by the caller.** The
+ * unused list refetches to empty once the last calendar is gone, which unmounts the dialog; a callback
+ * passed to `mutate()` dies with the component, while these options do not.
  */
 export function useBulkDeleteCalendars(orgSlug: string) {
   const queryClient = useQueryClient();
+  const announce = useAnnounce();
   return useMutation({
     mutationFn: async (ids: string[]): Promise<BulkDeleteCalendarsResult> => {
       const deleted: BulkDeleteCalendarsResult['deleted'] = [];
@@ -426,6 +436,12 @@ export function useBulkDeleteCalendars(orgSlug: string) {
         }
       }
       return { deleted };
+    },
+    onSuccess: (result) => {
+      const n = result.deleted.length;
+      announce(
+        `${String(n)} ${n === 1 ? 'calendar' : 'calendars'} deleted. You can restore ${n === 1 ? 'it' : 'them'} from Recently deleted.`,
+      );
     },
     // Each calendar moves INTO Recently deleted, and leaves every list that showed it.
     onSettled: () =>

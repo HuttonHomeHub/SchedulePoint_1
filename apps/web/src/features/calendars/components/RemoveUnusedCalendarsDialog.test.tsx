@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RemoveUnusedCalendarsButton } from './RemoveUnusedCalendarsButton';
 import { RemoveUnusedCalendarsDialog } from './RemoveUnusedCalendarsDialog';
 
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
@@ -156,12 +157,55 @@ describe('RemoveUnusedCalendarsDialog', () => {
     fireEvent.click(confirm(/^Delete 201 calendars$/));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('200 calendars were deleted before it stopped, and 1 remain.');
+    expect(alert).toHaveTextContent(
+      '200 calendars were deleted before it stopped, and 1 calendar remains.',
+    );
+    expect(alert).not.toHaveTextContent('Nothing was deleted');
     expect(alert).toHaveTextContent('“id-200” (1 activity)');
   });
 });
 
 describe('RemoveUnusedCalendarsButton', () => {
+  it('still announces, and hands focus on, when deleting the last calendar unmounts the dialog', async () => {
+    // The unused list refetches to empty once the delete lands, so the button, and the dialog inside
+    // it, unmount BEFORE a callback passed to `mutate()` could run. The announcement is the hook's own.
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset();
+    vi.mocked(apiFetchAllPages).mockResolvedValueOnce([COPY_A]).mockResolvedValue([]);
+    vi.mocked(apiFetch).mockResolvedValue({
+      deleted: [{ id: 'a', name: COPY_A.name, deleteBatchId: 'batch-a' }],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AnnouncerProvider>
+          <h2 tabIndex={-1}>Calendars</h2>
+          <RemoveUnusedCalendarsButton
+            orgSlug="acme"
+            projectId="proj-1"
+            projectName="Riverside"
+            focusTarget={() => screen.getByRole('heading', { name: 'Calendars' })}
+          />
+        </AnnouncerProvider>
+      </QueryClientProvider>,
+    );
+
+    const open = await screen.findByRole('button', { name: 'Remove unused calendars…' });
+    open.focus();
+    fireEvent.click(open);
+    fireEvent.click(await screen.findByRole('button', { name: /^Delete 1 calendar$/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Remove unused calendars…' })).toBeNull(),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('announcer')).toHaveTextContent(
+        '1 calendar deleted. You can restore it from Recently deleted.',
+      ),
+    );
+    expect(screen.getByRole('heading', { name: 'Calendars' })).toHaveFocus();
+  });
+
   function renderButton() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(

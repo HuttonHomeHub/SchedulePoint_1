@@ -107,6 +107,8 @@ test('a planner clears a project’s unused calendars and restores one of them (
   ).toBeAttached();
   // Nothing is left to remove, so the entry point goes, and the used calendar stays.
   await expect(page.getByRole('button', { name: 'Remove unused calendars…' })).toHaveCount(0);
+  // The button that held focus is gone, so focus is handed to the Calendars section (ADR-0135).
+  await expect(page.getByRole('region', { name: 'Calendars', exact: true })).toBeFocused();
   await expect(section.getByRole('button', { name: 'Edit Kept' })).toBeVisible();
   await expect(section.getByRole('button', { name: /imported/ })).toHaveCount(0);
 

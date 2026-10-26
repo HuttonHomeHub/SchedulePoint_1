@@ -3,7 +3,6 @@ import { useId, useState } from 'react';
 
 import { BulkDeleteInterrupted, useBulkDeleteCalendars } from '../api/use-calendars';
 
-import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -33,33 +32,49 @@ export function deletedReferencerNote(calendar: UnusedCalendar): string | null {
 const plural = (n: number, one: string, many: string): string =>
   `${String(n)} ${n === 1 ? one : many}`;
 
-/** The sentence a refused delete shows: which calendars are in use, and by how much. */
-function inUseMessage(calendars: CalendarInUseDetail[]): string {
-  const named = calendars.map((c) => {
-    const parts = [
-      c.plans > 0 ? plural(c.plans, 'plan', 'plans') : null,
-      c.activities > 0 ? plural(c.activities, 'activity', 'activities') : null,
-      c.resources > 0 ? plural(c.resources, 'resource', 'resources') : null,
-    ].filter((part): part is string => part !== null);
-    return `“${c.name}” (${parts.join(', ')})`;
-  });
-  return `Nothing was deleted. In use now: ${named.join('; ')}.`;
+/** The calendars named with what uses each: `“Copy A” (1 plan); “Copy B” (2 activities)`. */
+function inUseList(calendars: CalendarInUseDetail[]): string {
+  return calendars
+    .map((c) => {
+      const parts = [
+        c.plans > 0 ? plural(c.plans, 'plan', 'plans') : null,
+        c.activities > 0 ? plural(c.activities, 'activity', 'activities') : null,
+        c.resources > 0 ? plural(c.resources, 'resource', 'resources') : null,
+      ].filter((part): part is string => part !== null);
+      return `“${c.name}” (${parts.join(', ')})`;
+    })
+    .join('; ');
 }
 
 /** Turns a failed delete into the sentence the dialog shows. */
 function failureMessage(failure: unknown): string {
   if (failure instanceof BulkDeleteInterrupted) {
+    // The set went in several requests and an earlier one landed, so "nothing was deleted" would be
+    // false: say what happened, then why the rest stopped.
     return (
       `${plural(failure.deleted, 'calendar was', 'calendars were')} deleted before it stopped, and ` +
-      `${String(failure.remaining)} remain. ${failureMessage(failure.failure)}`
+      `${plural(failure.remaining, 'calendar remains', 'calendars remain')}. ` +
+      `${failureReason(failure.failure)}`
     );
   }
+  const reason = failureReason(failure);
+  return failure instanceof ApiFetchError && inUseOf(failure)
+    ? `Nothing was deleted. ${reason}`
+    : reason;
+}
+
+function inUseOf(failure: ApiFetchError): CalendarInUseDetail[] | null {
+  const details = failure.error.details as { calendars?: CalendarInUseDetail[] } | undefined;
+  return failure.status === 409 && details?.calendars && details.calendars.length > 0
+    ? details.calendars
+    : null;
+}
+
+/** Why one request failed, without claiming anything about earlier ones. */
+function failureReason(failure: unknown): string {
   if (failure instanceof ApiFetchError) {
-    const details = failure.error.details as { calendars?: CalendarInUseDetail[] } | undefined;
-    if (failure.status === 409 && details?.calendars && details.calendars.length > 0) {
-      return inUseMessage(details.calendars);
-    }
-    return failure.message;
+    const inUse = inUseOf(failure);
+    return inUse ? `In use now: ${inUseList(inUse)}.` : failure.message;
   }
   return failure instanceof Error && failure.message
     ? failure.message
@@ -94,7 +109,6 @@ export function RemoveUnusedCalendarsDialog({
   onDeleted: (count: number) => void;
 }): React.ReactElement {
   const bulkDelete = useBulkDeleteCalendars(orgSlug);
-  const announce = useAnnounce();
   const reasonId = useId();
   const [ticked, setTicked] = useState<ReadonlySet<string>>(
     () => new Set(calendars.filter((c) => deletedReferencerNote(c) === null).map((c) => c.id)),
@@ -119,13 +133,9 @@ export function RemoveUnusedCalendarsDialog({
     setError(null);
     const ids = calendars.filter((c) => ticked.has(c.id)).map((c) => c.id);
     bulkDelete.mutate(ids, {
-      onSuccess: (result) => {
-        const n = result.deleted.length;
-        announce(
-          `${plural(n, 'calendar', 'calendars')} deleted. You can restore ${n === 1 ? 'it' : 'them'} from Recently deleted.`,
-        );
-        onDeleted(n);
-      },
+      // The announcement is the hook's: this callback is lost if the list refetching to empty
+      // unmounts the dialog first, and only closing the dialog is left to it.
+      onSuccess: (result) => onDeleted(result.deleted.length),
       onError: (failure) => setError(failureMessage(failure)),
     });
   };
@@ -135,7 +145,7 @@ export function RemoveUnusedCalendarsDialog({
       open={open}
       onClose={onClose}
       title="Remove unused calendars"
-      description={`These calendars belong to ${projectName} and no plan or activity uses them. Deleted calendars can be restored from Recently deleted.`}
+      description={`These calendars belong to ${projectName} and no plan, activity or resource uses them. Deleted calendars can be restored from Recently deleted.`}
       size="lg"
     >
       <div className="flex flex-col gap-4">
@@ -146,8 +156,8 @@ export function RemoveUnusedCalendarsDialog({
         ) : null}
 
         <fieldset className="flex flex-col gap-1">
-          <legend className="text-sm">Calendars to delete</legend>
-          <ul className="border-border max-h-80 divide-y overflow-y-auto rounded-md border px-3">
+          <legend className="sr-only">Calendars to delete</legend>
+          <ul className="border-border divide-border max-h-80 divide-y overflow-y-auto rounded-md border px-3">
             {calendars.map((calendar) => {
               const note = deletedReferencerNote(calendar);
               return (
@@ -174,7 +184,7 @@ export function RemoveUnusedCalendarsDialog({
           </ul>
         </fieldset>
 
-        <p id={reasonId} role="status" className="text-muted-foreground text-sm">
+        <p id={reasonId} className="text-muted-foreground text-sm">
           {count === 0
             ? 'Tick at least one calendar to delete.'
             : `${plural(count, 'calendar', 'calendars')} will go to Recently deleted.`}
@@ -197,7 +207,6 @@ export function RemoveUnusedCalendarsDialog({
               }
               confirm();
             }}
-            className="aria-busy:pointer-events-none"
           >
             {pending ? 'Deleting…' : `Delete ${plural(count, 'calendar', 'calendars')}`}
           </Button>

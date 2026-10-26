@@ -11,6 +11,8 @@ import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmoun
 /**
  * **Remove unused calendars…** on the project's calendar section (ADR-0208 D5). Rendered only when
  * the project has an own calendar nothing uses; the list it reads is the same one the dialog shows.
+ * That list is not refreshed when a plan starts using a calendar, so a row can be stale; the server
+ * refuses the delete with a 409 naming what is in use, which the dialog shows.
  */
 export function RemoveUnusedCalendarsButton({
   orgSlug,
