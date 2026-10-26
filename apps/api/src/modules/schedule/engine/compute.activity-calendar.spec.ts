@@ -235,10 +235,27 @@ describe('a zero-span activity between calendars keeps its logic instant (#539)'
     expect(critical).not.toContain('A');
   });
 
+  it('a milestone DRIVEN to exactly the data date keeps the link instant, in both passes', () => {
+    // P is a zero-duration task on an every-minute calendar, so it finishes at the data date itself
+    // (Monday 00:00), and M, a start milestone on the weekend calendar, is driven by it. A bound that
+    // equals the data date is a driver, not the floor: M keeps Monday 00:00 where an undriven M rolls to
+    // Saturday 07:00 (plan offset 2,400).
+    const { get } = runCrossCalendar(
+      [
+        { id: 'P', durationMinutes: 0, type: 'TASK', calendar: allMinutesWorkCalendar },
+        middle('START_MILESTONE', WEEKEND_CAL),
+      ],
+      [link('P', 'M')],
+    );
+    expect(get('M').earlyStartOffset).toBe(0);
+    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-14T00:00');
+  });
+
   it('a milestone nothing drives still rolls its bound, the data date, onto its own calendar', () => {
     // The one bound D1 does not keep: the data date itself, so a free-standing milestone does not move.
     // Monday 00:00 is a gap on the weekend calendar; M reads the first working minute of that calendar.
     const { get } = runCrossCalendar([middle('START_MILESTONE', WEEKEND_CAL)], []);
+    expect(get('M').earlyStartOffset).toBe(5 * WEEKDAY_MINUTES);
     expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-19T07:00');
     expect(get('M').earlyStart).toBe('2027-06-19');
   });

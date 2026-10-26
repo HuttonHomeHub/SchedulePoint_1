@@ -198,6 +198,9 @@ export function computeSchedule(
     }
     const inProgress = progress.status === 'IN_PROGRESS';
     let lower = dataDateAbs; // the data date floors any (remaining) work — never before it (§2)
+    // The latest link bound that reached this activity, or -Infinity when none did. It is what tells a
+    // milestone DRIVEN to exactly the data date from one nothing drives (#539, ADR-0207 D1).
+    let linkBound = Number.NEGATIVE_INFINITY;
     for (const edge of graph.incoming.get(id)!) {
       // A Level-of-Effort predecessor never drives or bounds its successor (ADR-0035 §21): the LOE is
       // a hammock that spans its neighbours, so its own (derived) dates carry no logic downstream.
@@ -215,6 +218,7 @@ export function computeSchedule(
       const predStart = earlyStart.get(edge.predecessorId)!;
       const predFinish = earlyFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predStart, predFinish, cal, duration, planCalendar);
+      if (bound > linkBound) linkBound = bound;
       if (bound > lower) lower = bound;
     }
     // Suspend/resume (§4): a resume date floors the remaining at max(data date, resume date), so a
@@ -252,10 +256,13 @@ export function computeSchedule(
     if (withExternal > logicLower && lower === withExternal) externalDriven.set(id, true);
     // A zero-span activity keeps the instant its logic gives it (#539, ADR-0207 D1) rather than snapping
     // onto its own calendar, so a milestone between calendars is transparent: `A → M → B` gives B what
-    // `A → B` gives it. The one exception is a bound that is exactly the data date, which still rolls
-    // onto the activity's own calendar so a free-standing milestone does not move.
+    // `A → B` gives it. The one exception is the data date FLOOR with nothing driving the activity, which
+    // still rolls onto its own calendar so a free-standing milestone does not move. A link that reaches
+    // the data date exactly is a driver, and its instant wins.
     const workStart =
-      isZeroSpan(activity) && lower !== dataDateAbs ? lower : rollForwardToWorking(cal, lower);
+      isZeroSpan(activity) && (lower !== dataDateAbs || linkBound >= dataDateAbs)
+        ? lower
+        : rollForwardToWorking(cal, lower);
     // Expected Finish (§9): with the plan option on, RECOMPUTE the work remaining from `workStart` so
     // the early finish lands on the target date (its working-end boundary, like an actual finish),
     // floored at `workStart` — a target on/before the start collapses it to zero, never negative. It
@@ -313,12 +320,14 @@ export function computeSchedule(
     const cal = calendarOf(activity);
     const duration = activity.durationMinutes;
     let logicBound = dataDateAbs;
+    let pass2LinkBound = Number.NEGATIVE_INFINITY; // as Pass 1's `linkBound`
     for (const edge of graph.incoming.get(id)!) {
       // An LOE predecessor never pushes its successor in the effective-Visual pass either (§21).
       if (isLoe(graph.activities.get(edge.predecessorId)!.type)) continue;
       const predPs = visualPropStart.get(edge.predecessorId)!;
       const predPf = visualPropFinish.get(edge.predecessorId)!;
       const bound = forwardLowerBound(edge, predPs, predPf, cal, duration, planCalendar);
+      if (bound > pass2LinkBound) pass2LinkBound = bound;
       if (bound > logicBound) logicBound = bound;
     }
     const clampedEarliest = clampForwardStart(
@@ -335,9 +344,9 @@ export function computeSchedule(
       cal,
       dataDateAbs,
     );
-    // The same rule as Pass 1: a zero-span activity keeps its logic instant, bar the data date.
+    // The same rule as Pass 1: a zero-span activity keeps its logic instant, bar the undriven data date.
     const logicEarliest =
-      isZeroSpan(activity) && clampedEarliest !== dataDateAbs
+      isZeroSpan(activity) && (clampedEarliest !== dataDateAbs || pass2LinkBound >= dataDateAbs)
         ? clampedEarliest
         : rollForwardToWorking(cal, clampedEarliest);
     // A finish milestone's placement means the END of its day (#381): dropped on its predecessor's
