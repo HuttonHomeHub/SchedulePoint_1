@@ -1,4 +1,4 @@
-import { forwardRef, useId } from 'react';
+import { forwardRef, useCallback, useId, useRef } from 'react';
 import type { FieldErrors } from 'react-hook-form';
 
 import { Alert } from '@/components/ui/alert';
@@ -13,6 +13,7 @@ import { Input, type InputProps } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, type SelectProps } from '@/components/ui/select';
 import { Textarea, type TextareaProps } from '@/components/ui/textarea';
+import { useCommittedDraft, type CommitVia } from '@/components/ui/use-committed-draft';
 import { cn } from '@/lib/utils';
 
 /**
@@ -62,7 +63,7 @@ function FieldLabel({
   );
 }
 
-export interface TextFieldProps extends InputProps, GatedFieldProps {
+interface TextFieldBaseProps extends InputProps, GatedFieldProps {
   label: string;
   /** Validation message for this field, if any (from React Hook Form). */
   error?: string | undefined;
@@ -71,10 +72,93 @@ export interface TextFieldProps extends InputProps, GatedFieldProps {
 }
 
 /**
+ * Commit mode: the field holds a draft between typing and committing (`useCommittedDraft`). The
+ * type forbids half-configuring it — `value` and `onCommit` are required, and the per-keystroke and
+ * uncontrolled props (`onChange`, `defaultValue`) and the handlers the hook owns (`onBlur`,
+ * `onKeyDown`) are errors, because a draft is internal and a second writer would fight it.
+ */
+interface TextFieldCommitProps {
+  commitOn: 'enter-or-blur';
+  /** The committed value shown while there is no draft. */
+  value: string;
+  onCommit: (raw: string, via: CommitVia) => void | 'keep';
+  /** Called once if the field unmounts holding a typed value that was never committed. */
+  onDraftLost?: () => void;
+  onChange?: never;
+  onBlur?: never;
+  onKeyDown?: never;
+  defaultValue?: never;
+}
+
+interface TextFieldDefaultProps {
+  commitOn?: undefined;
+  onCommit?: never;
+  onDraftLost?: never;
+}
+
+export type TextFieldProps = TextFieldBaseProps & (TextFieldDefaultProps | TextFieldCommitProps);
+
+/**
+ * The input of a commit-mode {@link TextField}. A component of its own so the default path calls no
+ * extra hook and registers no `window` listener — a conditional hook call would break the rules of
+ * hooks, and `TextField`'s default branch stays the expression it always was.
+ */
+const CommitInput = forwardRef<
+  HTMLInputElement,
+  Omit<InputProps, 'value' | 'onChange' | 'onBlur' | 'onKeyDown' | 'defaultValue'> & {
+    value: string;
+    onCommit: (raw: string, via: CommitVia) => void | 'keep';
+    commitOn?: 'enter-or-blur' | undefined;
+    onDraftLost?: (() => void) | undefined;
+    shut: boolean;
+  }
+>(function CommitInput(
+  { commitOn: _commitOn, value, onCommit, onDraftLost, shut, step, type, ...props },
+  ref,
+) {
+  const own = useRef<HTMLInputElement | null>(null);
+  const setRef = useCallback(
+    (node: HTMLInputElement | null): void => {
+      own.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+  const draft = useCommittedDraft({
+    value,
+    onCommit,
+    inputRef: own,
+    shut,
+    ...(type === undefined ? {} : { type }),
+    ...(step === undefined ? {} : { step: Number(step) }),
+    ...(onDraftLost === undefined ? {} : { onDraftLost }),
+  });
+  return (
+    <Input
+      ref={setRef}
+      {...props}
+      {...(type === undefined ? {} : { type })}
+      {...(step === undefined ? {} : { step })}
+      {...draft}
+      // The gate is the last word here too (ADR-0083 D1).
+      {...(shut ? { readOnly: true } : {})}
+    />
+  );
+});
+
+/**
  * Accessible labelled text field: binds the label to the control, exposes
  * validation state via `aria-invalid`, and links the error/hint text with
  * `aria-describedby` so screen readers announce it. Forwards its ref so React
  * Hook Form's `register()` can be spread directly onto it.
+ *
+ * **Two modes.** The default passes every prop through to the `<Input>` and is what `register()`
+ * drives: uncontrolled, per keystroke. `commitOn="enter-or-blur"` is the draft-and-commit contract
+ * of `useCommittedDraft` (keystrokes edit a draft; Enter or blur commits it; Escape discards it,
+ * even when it also closes the container). `register()` cannot drive commit mode — it owns
+ * `onChange`/`onBlur` and a value in the DOM, where commit mode owns a draft in state — so a commit
+ * field takes `value` and `onCommit` instead. Fixed for the life of a field: changing it remounts.
  */
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
   { label, error, hint, gate, id, className, 'aria-describedby': ariaDescribedBy, ...props },
@@ -97,21 +181,33 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   return (
     <div className="flex flex-col gap-1.5">
       <FieldLabel htmlFor={fieldId} label={label} shut={shut} />
-      <Input
-        ref={ref}
-        id={fieldId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy}
-        className={className}
-        {...props}
-        // AFTER the caller's props, deliberately: a legitimate `readOnly={false}` further up the
-        // spread would otherwise silently unlock a gated field. The gate is the last word.
-        //
-        // `readOnly`, never `aria-disabled`: the field IS operable — focusable, caret-placeable,
-        // selectable, copyable — and saying otherwise would be a false statement of the kind this
-        // repo has now twice shipped and twice had to remove (ADR-0083 D1).
-        {...(shut ? { readOnly: true } : {})}
-      />
+      {props.commitOn === undefined ? (
+        <Input
+          ref={ref}
+          id={fieldId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={className}
+          {...props}
+          // AFTER the caller's props, deliberately: a legitimate `readOnly={false}` further up the
+          // spread would otherwise silently unlock a gated field. The gate is the last word.
+          //
+          // `readOnly`, never `aria-disabled`: the field IS operable — focusable, caret-placeable,
+          // selectable, copyable — and saying otherwise would be a false statement of the kind this
+          // repo has now twice shipped and twice had to remove (ADR-0083 D1).
+          {...(shut ? { readOnly: true } : {})}
+        />
+      ) : (
+        <CommitInput
+          ref={ref}
+          id={fieldId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={className}
+          shut={shut}
+          {...props}
+        />
+      )}
       {error ? (
         <p id={errorId} className="text-destructive-text text-sm">
           {error}

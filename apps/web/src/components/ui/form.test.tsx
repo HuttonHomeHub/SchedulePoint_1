@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CheckboxField, SelectField, TextField, TextareaField } from './form';
 
@@ -201,5 +201,144 @@ describe('SelectField', () => {
       </SelectField>,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load calendars.');
+  });
+});
+
+/**
+ * `TextField`'s default mode is every existing caller's (70 uses), so what makes it "unchanged" is
+ * pinned: per-keystroke `onChange`, the caller's handlers, `register()`'s ref and no `window` listener.
+ */
+describe('TextField default mode', () => {
+  it('fires onChange per keystroke and forwards onBlur and onKeyDown', () => {
+    const onChange = vi.fn();
+    const onBlur = vi.fn();
+    const onKeyDown = vi.fn();
+    render(<TextField label="Name" onChange={onChange} onBlur={onBlur} onKeyDown={onKeyDown} />);
+    const input = screen.getByLabelText('Name');
+    fireEvent.change(input, { target: { value: 'a' } });
+    fireEvent.change(input, { target: { value: 'ab' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onKeyDown).toHaveBeenCalledOnce();
+    expect(onBlur).toHaveBeenCalledOnce();
+  });
+
+  it('binds a register()-style ref to the input and adds no window keydown listener', () => {
+    const ref = createRef<HTMLInputElement>();
+    const add = vi.spyOn(window, 'addEventListener');
+    try {
+      render(<TextField label="Name" ref={ref} />);
+      expect(ref.current).toBe(screen.getByLabelText('Name'));
+      expect(add.mock.calls.filter(([type]) => type === 'keydown')).toEqual([]);
+    } finally {
+      add.mockRestore();
+    }
+  });
+
+  it('keeps a gated field read-only after the caller’s props', () => {
+    render(<TextField label="Name" readOnly={false} gate={{ writable: false, reason: null }} />);
+    expect(screen.getByLabelText('Name')).toHaveAttribute('readonly');
+  });
+});
+
+describe('TextField commit mode', () => {
+  it('wires the label and description as the default mode does, and leaks no mode prop', () => {
+    render(
+      <TextField
+        label="Threshold"
+        hint="Days or hours."
+        commitOn="enter-or-blur"
+        value="2h"
+        onCommit={vi.fn()}
+      />,
+    );
+    const input = screen.getByLabelText('Threshold');
+    expect(input).toHaveValue('2h');
+    expect(input).toHaveAccessibleDescription('Days or hours.');
+    expect(input).not.toHaveAttribute('commiton');
+  });
+
+  it('commits on Enter and on blur with a draft, never per keystroke', () => {
+    const onCommit = vi.fn();
+    render(<TextField label="Threshold" commitOn="enter-or-blur" value="2h" onCommit={onCommit} />);
+    const input = screen.getByLabelText('Threshold');
+    fireEvent.change(input, { target: { value: '3d' } });
+    expect(onCommit).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCommit).toHaveBeenLastCalledWith('3d', 'enter');
+    fireEvent.change(input, { target: { value: '4d' } });
+    fireEvent.blur(input);
+    expect(onCommit).toHaveBeenLastCalledWith('4d', 'blur');
+  });
+
+  it('Escape discards a draft even when a container blurs the field first', () => {
+    const onCommit = vi.fn();
+    render(<TextField label="Threshold" commitOn="enter-or-blur" value="2h" onCommit={onCommit} />);
+    const input = screen.getByLabelText('Threshold');
+    const closeLikeADialog = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') input.blur();
+    };
+    document.addEventListener('keydown', closeLikeADialog, true);
+    try {
+      input.focus();
+      fireEvent.change(input, { target: { value: '9d' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+    } finally {
+      document.removeEventListener('keydown', closeLikeADialog, true);
+    }
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(input).toHaveValue('2h');
+  });
+
+  it('a gated commit field is read-only and does not commit on Enter', () => {
+    const onCommit = vi.fn();
+    render(
+      <TextField
+        label="Threshold"
+        commitOn="enter-or-blur"
+        value="2h"
+        onCommit={onCommit}
+        gate={{ writable: false, reason: null }}
+      />,
+    );
+    const input = screen.getByLabelText('Threshold');
+    expect(input).toHaveAttribute('readonly');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('still binds a forwarded ref to the input', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(
+      <TextField
+        label="Threshold"
+        commitOn="enter-or-blur"
+        value="2h"
+        onCommit={vi.fn()}
+        ref={ref}
+      />,
+    );
+    expect(ref.current).toBe(screen.getByLabelText('Threshold'));
+  });
+
+  it('is typed so commit mode needs value and onCommit and forbids onChange', () => {
+    // Never called: the point is that this file compiles only if each directive is an error.
+    const types = (): React.ReactElement[] => [
+      // @ts-expect-error commit mode without onCommit
+      <TextField key="a" label="x" commitOn="enter-or-blur" value="" />,
+      // @ts-expect-error commit mode without value
+      <TextField key="b" label="x" commitOn="enter-or-blur" onCommit={vi.fn()} />,
+      // @ts-expect-error commit mode forbids a per-keystroke onChange
+      <TextField
+        key="c"
+        label="x"
+        commitOn="enter-or-blur"
+        value=""
+        onCommit={vi.fn()}
+        onChange={vi.fn()}
+      />,
+    ];
+    expect(typeof types).toBe('function');
   });
 });
