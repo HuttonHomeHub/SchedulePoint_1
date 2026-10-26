@@ -178,13 +178,46 @@ const FORWARD: ForwardCell[] = [
     expected: '2026-01-06T00:00',
   },
   {
-    // A finish milestone dated Fri 01-09 means the end of Friday rolled to the next working
-    // minute (ADR-0155): Mon 01-12 00:00. FS lag 0 ⇒ that instant.
-    name: 'FS from a finish-milestone upstream: the end of its day, rolled',
+    // A finish milestone dated Fri 01-09 means midnight at the end of Friday (ADR-0155), and since
+    // #539 (ADR-0207 D2) that is not rolled onto the milestone's calendar: Sat 01-10 00:00. FS lag 0
+    // ⇒ that instant, which the successor rolls onto its own calendar.
+    name: 'FS from a finish-milestone upstream: the end of its day, unrolled',
     edge: incoming({
       predecessor: remoteTask({ type: 'FINISH_MILESTONE', durationMinutes: 0 }),
       predecessorPlacedStart: '2026-01-09',
       predecessorPlacedFinish: '2026-01-09',
+    }),
+    expected: '2026-01-10T00:00',
+  },
+  {
+    // A finish milestone on the eight-hour calendar dated Fri 01-09 stands for where the work before it
+    // ended, the end of Friday's working time (#539): Fri 16:00, which is where one plan keeps it, not
+    // the midnight after (8 hours, a third of a Standard day, later).
+    name: 'FS from an eight-hour finish-milestone upstream: the end of its last working minute',
+    edge: incoming({
+      predecessor: remoteTask({
+        type: 'FINISH_MILESTONE',
+        durationMinutes: 0,
+        calendar: EIGHT_HOUR,
+      }),
+      predecessorPlacedStart: '2026-01-09',
+      predecessorPlacedFinish: '2026-01-09',
+    }),
+    expected: '2026-01-09T16:00',
+  },
+  {
+    // Dated Sun 01-11, a day with no working time (the milestone closes weekend work on another
+    // calendar), it stands for midnight at the end of Sunday: Mon 01-12 00:00, which a weekday
+    // successor then rolls to Monday 08:00 exactly as in one plan.
+    name: 'FS from an eight-hour finish-milestone upstream dated on a Sunday: midnight at its end',
+    edge: incoming({
+      predecessor: remoteTask({
+        type: 'FINISH_MILESTONE',
+        durationMinutes: 0,
+        calendar: EIGHT_HOUR,
+      }),
+      predecessorPlacedStart: '2026-01-11',
+      predecessorPlacedFinish: '2026-01-11',
     }),
     expected: '2026-01-12T00:00',
   },
@@ -299,18 +332,18 @@ const BACKWARD: BackwardCell[] = [
     expected: '2026-02-12T00:00',
   },
   // ---- Added after the table above, when the mixed-calendar axis (M2-T6) found 96 red cells. ----
-  // The engine's backward pass holds every late FINISH at the pre-gap end boundary
-  // (`compute.ts`: `finish = rollBackwardToWorking(cal, dataDateAbs, upper)`) and a zero-duration
-  // activity's late START at that same instant (`duration === 0 ? finish : …`). So a late date
-  // read on the backward side means the END of that day's working time, never the next working
-  // minute after it. The two are one position on the remote activity's own calendar and differ by
-  // the non-working gap on any other, which is exactly when a lag or the local calendar sees it.
+  // The engine's backward pass used to hold every late FINISH at the pre-gap end boundary, and a
+  // zero-duration activity's late START at that same instant, so a late date read on the backward side
+  // meant the end of that day's working time. Since #539 (ADR-0207 D1) a zero-span activity keeps the
+  // instant its logic gives it, and a date given for a finish milestone is midnight at the end of its
+  // day (D2): the clamp the one-plan twin pins the successor with. The cross-plan read is that same
+  // instant, so a milestone's late date and its early date are no longer read alike (the early side is
+  // where the work before it ended, `finishMilestoneRemoteInstant`).
   {
-    // A finish milestone on the eight-hour calendar dated Wed 02-11: its working day ends Wed
-    // 16:00, which is where the engine holds its late finish and (zero duration) its late start.
-    // FS lag 0 on Standard ⇒ Wed 16:00. The post-gap reading, Thu 08:00, is 960 Standard
-    // minutes later.
-    name: 'FS into an eight-hour finish milestone reads the END of its working day, not Thu 08:00',
+    // A finish milestone on the eight-hour calendar dated Wed 02-11 is read as midnight at the end
+    // of Wednesday: Thu 02-12 00:00. FS lag 0 on Standard ⇒ that instant. The pre-#539 reading, Wed
+    // 16:00, is 480 Standard minutes earlier; Thu 08:00 (the old post-gap reading) 480 later.
+    name: 'FS into an eight-hour finish milestone reads midnight at the end of its day',
     edge: outgoing({
       successor: remoteTask({
         type: 'FINISH_MILESTONE',
@@ -320,7 +353,7 @@ const BACKWARD: BackwardCell[] = [
       successorLateStart: '2026-02-11',
       successorLateFinish: '2026-02-11',
     }),
-    expected: '2026-02-11T16:00',
+    expected: '2026-02-12T00:00',
   },
   {
     // A Standard finish milestone dated Fri 02-13: its working day ends Sat 02-14 00:00 (Standard

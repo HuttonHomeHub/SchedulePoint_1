@@ -9,6 +9,7 @@ import {
   startDateInstant,
 } from './instants';
 import {
+  absMinutesToInstant,
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
   fullDayWeek,
@@ -29,10 +30,28 @@ const EIGHT_HOUR = buildWorkingTimeCalendar(
   [],
 );
 const STANDARD = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
+/** Mon–Fri 22:00 to 06:00 the next morning: each night is two adjacent-day windows (ADR-0036). */
+const NIGHT_SHIFT = buildWorkingTimeCalendar(
+  Array.from({ length: 7 }, (_, w) =>
+    w < 5
+      ? [
+          { startMinute: 0, endMinute: 360 },
+          { startMinute: 1320, endMinute: 1440 },
+        ]
+      : [],
+  ),
+  [],
+);
+const WITH_HOLIDAY = buildWorkingTimeCalendar(
+  Array.from({ length: 7 }, (_, w) => (w < 5 ? [{ startMinute: 480, endMinute: 960 }] : [])),
+  [{ startDate: '2026-01-07', endDate: '2026-01-08', windows: [] }],
+);
 const CALENDARS: readonly [string, WorkingTimeCalendar][] = [
   ['24-hour', allMinutesWorkCalendar],
   ['Standard (full-day Mon–Fri)', STANDARD],
   ['eight-hour (Mon–Fri 08:00–16:00)', EIGHT_HOUR],
+  ['night shift across midnight', NIGHT_SHIFT],
+  ['eight-hour with a holiday', WITH_HOLIDAY],
 ];
 /** Mon 2026-01-05 to Sun 2026-01-11: every weekday and both weekend days. */
 const DATES = [
@@ -69,7 +88,8 @@ describe('the readers return what the inline expressions they replaced returned'
     duration: number,
   ): { startAbs: number; finishAbs: number } {
     if (type === 'FINISH_MILESTONE') {
-      const at = finishMilestoneDateInstant(cal, date);
+      // Midnight at the end of the day, unrolled since #539 (D2); it was rolled onto `cal` before.
+      const at = instantToAbsMinutes(nextDay(date));
       return { startAbs: at, finishAbs: at };
     }
     const startAbs = rollForwardToWorking(cal, instantToAbsMinutes(date));
@@ -140,5 +160,29 @@ describe("the finish reader's anchor", () => {
       instantToAbsMinutes('2026-01-09T16:00'),
     );
     expect(finishDateInstant(EIGHT_HOUR, saturday, '2026-01-10', 'TASK', DAY)).toBe(saturday);
+  });
+});
+
+describe('a finish milestone date is midnight at the end of its day, unrolled (#539 D2)', () => {
+  for (const [name, cal] of CALENDARS) {
+    it(`on the ${name} calendar it is zero working minutes from the rolled reading it replaced`, () => {
+      for (const date of DATES) {
+        const midnight = finishMilestoneDateInstant(date);
+        expect(midnight, date).toBe(instantToAbsMinutes(nextDay(date)));
+        const rolled = rollForwardToWorking(cal, midnight);
+        // Same position on the milestone's own calendar, which is why its own offsets, float and date
+        // do not change; the two differ only to another calendar.
+        expect(
+          cal.workingTimeBetween(absMinutesToInstant(midnight), absMinutesToInstant(rolled)),
+          date,
+        ).toBe(0);
+      }
+    });
+  }
+
+  it('reads a timed value as the instant it names, with no roll', () => {
+    expect(finishMilestoneDateInstant('2026-01-09T16:30')).toBe(
+      instantToAbsMinutes('2026-01-09T16:30'),
+    );
   });
 });

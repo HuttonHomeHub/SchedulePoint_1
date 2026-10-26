@@ -889,6 +889,14 @@ export function computeSchedule(
       activity.type === 'FINISH_MILESTONE'
         ? finishMilestoneReportedDate(cal, dataDate, dataDateAbs, inst)
         : workingIndexDate(cal, dataDate, ownOffset);
+    // A finish milestone the planner placed reads back the day they typed (#539, ADR-0207 D2): its
+    // instant is the end of that day, which on a Sunday is the Monday opening and would read Friday.
+    const placedDayOf = (inst: number, ownOffset: number): string =>
+      activity.type === 'FINISH_MILESTONE' &&
+      activity.visualStart != null &&
+      activity.visualStart.length === 10
+        ? activity.visualStart
+        : dayOf(inst, ownOffset);
     const earlyStartDate = started ? activity.actualStart! : dayOf(esInst, esOwn);
     const earlyFinishDate = isComplete ? activity.actualFinish! : dayOf(esInst, inclusiveFinishOwn);
     // A milestone with no negative float sits where its early position is on its own calendar, so a
@@ -1006,10 +1014,12 @@ export function computeSchedule(
        * A placed AND started activity is a real combination and the actual wins — a reader will
        * assume it goes the other way, so `compute.visual.spec.ts` asserts it.
        */
-      visualEffectiveStart: frozenByActuals ? earlyStartDate : dayOf(vDisplayInst, vDisplayOwn),
+      visualEffectiveStart: frozenByActuals
+        ? earlyStartDate
+        : placedDayOf(vDisplayInst, vDisplayOwn),
       visualEffectiveFinish: frozenByActuals
         ? earlyFinishDate
-        : dayOf(vDisplayInst, vInclusiveFinishOwn),
+        : placedDayOf(vDisplayInst, vInclusiveFinishOwn),
       // Two-sided now (M-D): the flag fires for a placement earlier than logic allows AND for one
       // past an explicit ceiling. A plan with a breaching placement newly reports a conflict and
       // newly appears in the ADR-0094 cycle — a deliberate change to a shipped flag, which is what

@@ -9,7 +9,7 @@ import {
   type EngineEdge,
   type WorkingTimeCalendar,
 } from './engine';
-import { rollBackwardToWorking } from './engine/instants';
+import { finishMilestoneDateInstant, rollBackwardToWorking } from './engine/instants';
 import { instantToAbsMinutes } from './engine/working-time-calendar';
 
 /**
@@ -33,7 +33,7 @@ import { instantToAbsMinutes } from './engine/working-time-calendar';
  *
  * 1. Each remote date is read as an **instant** on the remote activity's own scheduling calendar by
  *    the engine's date readers (`startDateInstant`, `finishDateInstant`): a finish is the exclusive
- *    end of that day's working time, a finish milestone's date the end of its day (ADR-0155), a
+ *    end of that day's working time, a finish milestone's date midnight at the end of its day (ADR-0155, unrolled since #539), a
  *    zero-duration activity finishes at its start. `finishDateInstant` is anchored at the remote
  *    plan's data date, the anchor the engine itself used (M1's finding: the reader returns an anchor
  *    that falls after the result but before the day's end, so any other anchor can differ).
@@ -211,6 +211,29 @@ function localOf(
   return activity;
 }
 
+/**
+ * **The instant a stored finish-milestone date stands for** (#539, ADR-0207 D2). The engine reads a date
+ * GIVEN for a finish milestone as midnight at the end of its day, but the date a plan STORES for one is
+ * the day its kept instant falls on, and that instant is where the work before it ended: the end of that
+ * day's last working minute on the milestone's calendar when it has one (Wed 16:00 on an eight-hour
+ * calendar), else, on a day with no working time (a Sunday after weekend work), the end of the day. A
+ * date carries no time of day (the derivation's stated limit), so this is the closest instant a day can
+ * name, and the one that makes the common cases match one plan.
+ */
+function finishMilestoneRemoteInstant(
+  calendar: CrossPlanRemoteEndpoint['calendar'],
+  anchor: number,
+  date: string,
+  pass: 'forward' | 'backward',
+): number {
+  const midnight = finishMilestoneDateInstant(date);
+  // A late date is a bound some later logic or a constraint gave, which is what a date given for a
+  // finish milestone means: midnight at the end of its day, exactly as the one-plan clamp reads it.
+  if (pass === 'backward') return midnight;
+  const lastWorking = rollBackwardToWorking(calendar, anchor, midnight);
+  return lastWorking > instantToAbsMinutes(date) ? lastWorking : midnight;
+}
+
 /** The remote end's start and finish instants, or null when a date the edge type needs is null. */
 function remoteInstants(
   remote: CrossPlanRemoteEndpoint,
@@ -223,21 +246,19 @@ function remoteInstants(
   if (date === null) return null;
   const anchor = instantToAbsMinutes(remote.dataDate);
   const read =
-    needs === 'start'
-      ? startDateInstant(remote.calendar, date, remote.type)
-      : finishDateInstant(remote.calendar, anchor, date, remote.type, remote.durationMinutes);
-  // **A late date is the END of that day's working time** (found by the M2-T6 mixed-calendar axis).
-  // The engine's backward pass holds every late finish at the pre-gap end boundary
-  // (`compute.ts`: `finish = rollBackwardToWorking(cal, dataDateAbs, upper)`) and a zero-duration
-  // activity's late start at that same instant. The date readers are the constraint clamps' and
-  // read a finish milestone's date, and a zero-duration start, as the NEXT working minute: the same
-  // position on the remote activity's own calendar, and a different one on any calendar with working
-  // time in the gap (an eight-hour milestone's Wed 16:00 against Thu 08:00 is 960 Standard minutes).
-  // A task's late start is a real start (`advanceWorking(finish, −duration)`), so it is left as read;
-  // a finish read by `finishDateInstant` is already an end boundary, so rolling it back is a no-op.
-  const onBackwardSide =
-    pass === 'backward' && (needs === 'finish' || remote.durationMinutes === 0);
-  const instant = onBackwardSide ? rollBackwardToWorking(remote.calendar, anchor, read) : read;
+    remote.type === 'FINISH_MILESTONE'
+      ? finishMilestoneRemoteInstant(remote.calendar, anchor, date, pass)
+      : needs === 'start'
+        ? startDateInstant(remote.calendar, date, remote.type)
+        : finishDateInstant(remote.calendar, anchor, date, remote.type, remote.durationMinutes);
+  // **A zero-duration remote's late date is read as its instant, with no roll** (#539, ADR-0207 D1).
+  // This once rolled such a date back onto the remote's calendar to mirror `compute.ts`, whose backward
+  // pass held a zero-duration activity's late start at its calendar's pre-gap end boundary. The engine
+  // now keeps the instant its logic gives (D1) and reads a finish milestone's date as midnight at the end
+  // of its day (D2), so reading the stored date as it is gives the bound one plan gives. A task's late
+  // finish was already an end boundary (`finishDateInstant` rolls back from the next midnight), so the
+  // roll was a no-op for it.
+  const instant = read;
   // Only the date the edge type reads is read. The other is NaN, which the bound function for that
   // type never consults (FS/FF read the finish, SS/SF the start), so a null there is not a miss.
   return needs === 'start'

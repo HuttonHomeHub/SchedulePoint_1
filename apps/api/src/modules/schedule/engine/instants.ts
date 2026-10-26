@@ -60,14 +60,19 @@ export function offsetFromDataDate(
  * its last day. Reading the milestone's own dates (placement, constraints, external dates) as the
  * START of their day put it a day before that moment: a planner who dropped it on its predecessor's
  * last day got "placed earlier than logic allows", and an `FNLT` on that day gave a false day of
- * negative float. The end of day D is the start of day D+1, rolled forward to the next working minute
- * — exactly where the engine puts a finish milestone after a task ending on D.
+ * negative float. The end of day D is midnight at the start of day D+1.
+ *
+ * **It is not rolled onto the milestone's calendar** (#539, ADR-0207 D2). A milestone keeps the instant
+ * its logic gives it (D1), so a date given for it is an instant too: rolled to the next working minute
+ * it would be Monday 08:00 for a Friday on a weekday calendar, which another calendar reads as a
+ * weekend later than the moment the planner typed. On the milestone's own calendar nothing changes, as
+ * no working minute lies between midnight and the minute it was rolled to.
  *
  * A date carrying a time of day is already an instant and is read as one.
  */
-export function finishMilestoneDateInstant(cal: WorkingTimeCalendar, date: string): number {
+export function finishMilestoneDateInstant(date: string): number {
   const abs = instantToAbsMinutes(date);
-  return rollForwardToWorking(cal, date.length > 10 ? abs : abs + MINUTES_PER_DAY);
+  return date.length > 10 ? abs : abs + MINUTES_PER_DAY;
 }
 
 /**
@@ -148,7 +153,7 @@ export function startDateInstant(
   date: string,
   type: ActivityType,
 ): number {
-  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(date);
   return rollForwardToWorking(cal, instantToAbsMinutes(date));
 }
 
@@ -175,7 +180,7 @@ export function finishDateInstant(
   type: ActivityType,
   durationMinutes: number,
 ): number {
-  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(date);
   if (durationMinutes === 0) return rollForwardToWorking(cal, instantToAbsMinutes(date));
   return rollBackwardToWorking(cal, anchorAbs, instantToAbsMinutes(nextCalendarDay(date)));
 }

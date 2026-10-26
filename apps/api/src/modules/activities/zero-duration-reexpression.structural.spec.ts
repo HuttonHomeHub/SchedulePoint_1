@@ -15,7 +15,7 @@ import { REEXPRESSED_DATE_FIELDS } from './zero-duration-reexpression';
  * `finishMilestoneDateInstant` reads a date as the END of its day, and since #385 (ADR-0161 D3) the
  * two date readers `startDateInstant` and `finishDateInstant` apply it whenever the activity is a
  * finish milestone. This gate collects every call to any of the three in a non-test engine file and
- * maps the DATE argument (the second for `finishMilestoneDateInstant` and `startDateInstant`, the
+ * maps the DATE argument (the first for `finishMilestoneDateInstant`, the second for `startDateInstant`, the
  * third for `finishDateInstant`) to the activity field it reads. The readers' own bodies, which pass
  * their `date` parameter straight to `finishMilestoneDateInstant`, are the convention itself, not
  * callers of it, and are skipped.
@@ -42,7 +42,7 @@ const ENGINE = join(__dirname, '..', 'schedule', 'engine');
 
 /** Which argument of each reader is the date it reads. */
 const DATE_ARGUMENT: Readonly<Record<string, number>> = {
-  finishMilestoneDateInstant: 1,
+  finishMilestoneDateInstant: 0,
   startDateInstant: 1,
   finishDateInstant: 2,
 };

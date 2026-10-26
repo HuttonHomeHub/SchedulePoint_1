@@ -157,10 +157,10 @@ describe('per-activity calendars (M5, ADR-0037)', () => {
  * calendar) or reads the day before the weekend work and charges it a weekend of negative float
  * (milestone on the plan calendar). The network and its dates are `compute.cross-calendar.fixture.ts`.
  *
- * **Every case here passes since M2 (D1) except the FNLT one, which is `it.fails` until M3 (D2):** it
- * needs a date given for a finish milestone to be read as midnight at the end of its day. `it.fails`
- * passes while the engine is wrong and fails the moment it is right, which forces whoever fixes it to
- * flip it. The all-minutes control passed before M2 and is a plain `it`: the same network with no
+ * **Every case here passes since M2 (D1) except the FNLT one, which needed M3 (D2):** a date given for
+ * a finish milestone is read as midnight at the end of its day. The cases began as `it.fails` (they
+ * asserted the correct values while the engine was wrong, so `main` stayed green and the fix had to
+ * flip them). The all-minutes control passed before M2 and is a plain `it`: the same network with no
  * calendar seam at `M`.
  */
 describe('a zero-span activity between calendars keeps its logic instant (#539)', () => {
@@ -243,18 +243,15 @@ describe('a zero-span activity between calendars keeps its logic instant (#539)'
     expect(get('M').earlyStart).toBe('2027-06-19');
   });
 
-  it.fails(
-    'FNLT on the Friday after W: W carries its whole weekend, M reads Sunday and floats 0',
-    () => {
-      const { activities, edges } = crossCalendarNetwork(
-        middle('FINISH_MILESTONE', undefined, FNLT_FRIDAY),
-      );
-      const { get } = runCrossCalendar(activities, edges);
-      expect(get('W').totalFloat).toBe(-1440);
-      expect(Math.abs(get('M').totalFloat)).toBe(0);
-      expect(get('M').earlyFinish).toBe('2027-06-27');
-    },
-  );
+  it('FNLT on the Friday after W: W carries its whole weekend, M reads Sunday and floats 0', () => {
+    const { activities, edges } = crossCalendarNetwork(
+      middle('FINISH_MILESTONE', undefined, FNLT_FRIDAY),
+    );
+    const { get } = runCrossCalendar(activities, edges);
+    expect(get('W').totalFloat).toBe(-1440);
+    expect(Math.abs(get('M').totalFloat)).toBe(0);
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+  });
 
   it('the mirror: weekday work → a milestone on the weekend calendar → weekend work', () => {
     // L is a long weekday task that sets the project finish well past W's FNLT, so A and W have room.
