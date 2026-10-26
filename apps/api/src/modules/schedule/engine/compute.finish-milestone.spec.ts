@@ -169,12 +169,14 @@ describe('what the rule leaves alone', () => {
  * `docs/specs/milestone-cross-calendar/`; amends ADR-0155 decisions 1, 3 and 4).
  *
  * `crossCalendarNetwork` is the row's fixture: weekend work `W` ends Sunday 2027-06-27 19:00 and the
- * milestone sits on the weekday plan calendar. The cases that need the fix are `it.fails` until M2
- * and M3 land (they assert the correct value; a plain `it` would put `main` red). The two plain
- * `it` cases are controls: ADR-0155's single-calendar reading, which the fix must not move.
+ * milestone sits on the weekday plan calendar. The first case passes since M2 (D1 and D3). The two `it.fails` cases need
+ * a date given for a finish milestone (a constraint, a placement) read as midnight at the end of its day,
+ * which is M3 (D2); they assert the correct value and fail the moment the engine is right, which forces
+ * whoever fixes it to flip them. The plain `it` control is ADR-0155's single-calendar reading, which the
+ * fix must not move.
  */
 describe('a finish milestone after weekend work (#539)', () => {
-  it.fails('on the plan calendar reads Sunday, the day the weekend work ends', () => {
+  it('on the plan calendar reads Sunday, the day the weekend work ends', () => {
     const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
     const { get } = runCrossCalendar(activities, edges);
     expect(get('M').earlyStart).toBe('2027-06-27');

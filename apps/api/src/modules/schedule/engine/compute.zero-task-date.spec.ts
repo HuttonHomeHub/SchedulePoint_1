@@ -165,15 +165,28 @@ describe('(a) an FS-reached and an SS-reached zero-duration task at the same ins
 
   it('gets identical offsets, floats and dates', () => {
     // A (5 days) ends Friday 9 Jan; B (FS after A) starts Monday 12 Jan. `Zfs` is FS after A,
-    // `Zss` is SS after B: an FS bound is A's exclusive finish, an SS bound is B's start, and both
-    // are rolled forward to Monday 00:00. Both are open ends, so their late side is the same too.
+    // `Zss` is SS after B: an FS bound is A's exclusive finish (Saturday 00:00), an SS bound is B's
+    // start (Monday 00:00). Since #539 (D1) each keeps its own instant instead of both being rolled to
+    // Monday, so what they pass on differs by the weekend between them; everything a reader sees is
+    // still identical, because a zero-duration task is dated by the day its next working minute opens.
+    // Both are open ends, so their late side is the same too.
     const out = computeSchedule(
       [act('A', 5 * DAY), act('B', 2 * DAY), act('Zfs', 0), act('Zss', 0)],
       [edge('A', 'B'), edge('A', 'Zfs'), edge('B', 'Zss', 'SS')],
       { dataDate: DATA_DATE, calendar: FIVE_DAY },
     );
-    const { activityId: _fs, ...zfs } = byId(out, 'Zfs');
-    const { activityId: _ss, ...zss } = byId(out, 'Zss');
+    const {
+      activityId: _fs,
+      passOnStartInstant: _fsStart,
+      passOnFinishInstant: _fsFinish,
+      ...zfs
+    } = byId(out, 'Zfs');
+    const {
+      activityId: _ss,
+      passOnStartInstant: _ssStart,
+      passOnFinishInstant: _ssFinish,
+      ...zss
+    } = byId(out, 'Zss');
     expect(zss).toEqual(zfs);
     expect(zss.earlyStart).toBe('2026-01-12');
     // The discriminating fact: the two really are reached by different logic.

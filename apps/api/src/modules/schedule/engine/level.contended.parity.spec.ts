@@ -25,6 +25,13 @@ import type { WorkingTimeCalendar } from './working-time-calendar';
  * time), milestones, priorities, links with and without Pass C, and both float modes. A hash that stops
  * matching means levelling's OUTPUT moved. If the generator is changed on purpose, regenerate the hashes
  * from a tree that still has the old engine, never from the one under test.
+ *
+ * **Seeds 12, 52 and 57 were regenerated on purpose by #539 M2 (ADR-0207 D1)**, which stops snapping a
+ * zero-span activity onto its own calendar. Each was diffed against the engine at the parent commit
+ * before its hash was replaced, and the only rows that differ are milestones (START_MILESTONE) and what
+ * the backward pass carries from them: their pass-on and levelled start instants (seeds 12, 57), and,
+ * in seed 52, the late offsets of a milestone on its own calendar, the float of its predecessor and the
+ * levelled starts that float bounds. No other seed's hash moved.
  */
 
 const FROZEN: Record<number, string> = {
@@ -39,7 +46,7 @@ const FROZEN: Record<number, string> = {
   9: '48947b7ac772ba4b23d2ee682f794cd0e1730f6fbc17e2aec049fa6fb48a7756',
   10: '1558b38e4768c14f3dc2682d364e4f495ce4490c3c7ed60fd65bfbfd34654f74',
   11: 'a31ac874cd53e50abe18c5a1491c49f840bcd494a4940c97e1e3974f7f5bfb63',
-  12: 'de198634fd37e4ff2bacf56bb48a76a6565b0ef5fca3f1f9092c49788a9ccf5d',
+  12: '8ab14bea932f5a6aa241b79d6a7865a533941000ad7fe3ebd4095fee447cccde',
   13: '9172a8be552bb406387e1cd3e2356d29b7329f6daa8c66e1a927cb912fd3d847',
   14: 'f822d192c6941abbc82d69295788b150fec1de4f2ae3e3aef94cfffbae6d8440',
   15: '901f8273207571388d31f6a015199a82a09113ce763ea1b006ea82734ecc7a19',
@@ -79,12 +86,12 @@ const FROZEN: Record<number, string> = {
   49: 'd6a125d2d0ad662084c1de5e86e29974381cdbe90b5dd6a3776e29bd942a62cd',
   50: 'fadc4f61fc4a563cac6bfcb69b9f180a852fbe4f7f2f143ccaf8eda5f962081e',
   51: '3d10bda559bc2fe2f020da8ce5b774aae7876e06724a0e02fb5142b7193ae2c1',
-  52: '7ae9841eb3497769505dfbea4768671f5224743e12e12bd024a6a7947985710b',
+  52: 'acbfbc127b477388123ebf29c4934e2f61cf9c6f8c7a756e24d582c84c255cff',
   53: '36af82514ae69bb9a7a1b97761f35bc7e0222528dc510d0e31b37ef106d1338a',
   54: '24e488356da02cb3af3820c5e39ab79055b9475afb0d3ce75d50b5eafc608512',
   55: 'fba3322379608889167c4368c3f77a4b8f9afc4f4c2dab6134ccd8f77e1025f9',
   56: '7770ac76621f6b5d4c8f3cb5fb82e5bb8d57fce4fe94ea1859f6f28cfb2d4e22',
-  57: '04de12866274449039d957deb63e6242a4397d9eb30b26553800d9689e4fe3a2',
+  57: '881affe0074f94ad43e5d33ab585455cf8b38db2d724aff4aa2ca40c5e41e26c',
   58: 'e5010e5ebc4ee5ee065854900686be59026d1af01d737383dc95548e7c623a94',
   59: '65c2ad3854c32290688905d8fa23bfdd0877650df2022ac90f37f9a785753900',
   60: '81a19855cbaafafcaa960b7e5f9661a6f6fadf23eb10caa5e5803a1c2c983468',

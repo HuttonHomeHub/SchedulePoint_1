@@ -52,6 +52,16 @@ export function isMilestone(type: ActivityType): boolean {
 }
 
 /**
+ * A **zero-span** activity (#539, ADR-0207 D1): zero input duration and not a derived span (an LOE or a
+ * WBS summary has an always-zero input and a span read from its neighbours). Covers a start milestone,
+ * a finish milestone and a zero-duration task alike, because the fault is the zero span and not the
+ * type. The passes keep such an activity's logic instant instead of snapping it onto its own calendar.
+ */
+export function isZeroSpan(activity: { type: ActivityType; durationMinutes: number }): boolean {
+  return activity.durationMinutes === 0 && !isLoe(activity.type) && !isSummary(activity.type);
+}
+
+/**
  * A **Level-of-Effort** type (ADR-0035 §21) — a hammock whose duration is *derived* from the span of
  * its SS-predecessor's start to its FF-successor's finish, rather than an input. An LOE **never drives
  * a successor, never appears on the critical path, and never inherits negative float**: the engine

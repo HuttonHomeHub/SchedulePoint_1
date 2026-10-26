@@ -196,13 +196,20 @@ describe('every exclusion is necessary (M0-T3)', () => {
   });
 
   it('CE2 W2: an intermediate left at its start (the backward pass alone)', () => {
-    // C is late on a Saturday; B's calendar is shut then, so the SS round trip lands B on Monday and
-    // the chain bounds A less tightly than the direct link does. Only A's late dates move.
+    // C is a full-day task on the plan calendar and is late from midnight; B's office calendar only opens
+    // at 08:00, so the SS round trip lands B's finish eight working hours into that day and the chain
+    // bounds A less tightly than the direct link does. Only A's late dates move.
+    //
+    // This was a different plan until #539 (ADR-0207 D1): C was late on a Saturday and B's calendar was
+    // shut then, which held only because the milestone below rolled C's late finish back onto the
+    // Monday-to-Friday plan calendar and charged the weekend work in front of it a weekend of negative
+    // float. The milestone now keeps the instant its links give it, so that plan no longer diverges and
+    // this one, found by searching the same family, does.
     const p = plan(
       [
         task('A', 60),
         task('B', 480, { calendar: 'OFFICE' }),
-        task('C', DAY, { calendar: 'MON_SAT' }),
+        task('C', DAY),
         task('E', 6 * DAY, { calendar: 'MON_SAT' }),
         task('M', 0, { type: 'FINISH_MILESTONE' }),
       ],

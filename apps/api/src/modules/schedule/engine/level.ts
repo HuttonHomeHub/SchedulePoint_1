@@ -1,11 +1,12 @@
-import { isLoe, isMandatory, isMilestone, isSummary } from './constraints';
+import { isLoe, isMandatory, isMilestone, isSummary, isZeroSpan } from './constraints';
 import { forwardLowerBound } from './edge-bounds';
 import { buildGraph } from './graph';
 import {
   advanceWorking,
-  finishMilestoneDisplayIndex,
+  finishMilestoneReportedDate,
   offsetFromDataDate,
   rollForwardToWorking,
+  workingIndexDate,
 } from './instants';
 import { ResourceProfile, type Blackout, type PlacedInterval } from './level-profile';
 import type {
@@ -532,7 +533,10 @@ export function levelSchedule(
 
     const r = resultById.get(id)!;
     const anchorInst = instOfOffset(accessors.startOffset(r));
-    const earliest = rollForwardToWorking(cal, Math.max(anchorInst, floorL));
+    // A zero-span activity keeps the instant its link gives it, as in `compute.ts` (#539, ADR-0207 D1):
+    // rolling it onto its own calendar here would push a weekday milestone a calendar period.
+    const linkInst = Math.max(anchorInst, floorL);
+    const earliest = isZeroSpan(a) ? linkInst : rollForwardToWorking(cal, linkInst);
     const existing = overlayById.get(id);
     if ((existing ? existing.leveledStartInstant : anchorInst) >= earliest) continue;
 
@@ -730,9 +734,10 @@ function earliestFeasibleStart(
   perResource: readonly ResourceContention[],
   gapMemo: GapMemo,
 ): { start: number; finish: number } {
+  // A milestone (zero duration) occupies no span, so no resource can ever block it. It keeps the
+  // instant it was given (#539, ADR-0207 D1), as the passes in `compute.ts` do.
+  if (d === 0) return { start: esAbs, finish: esAbs };
   const start0 = rollForwardToWorking(cal, esAbs);
-  // A milestone (zero duration) occupies no span, so no resource can ever block it.
-  if (d === 0) return { start: start0, finish: start0 };
 
   // With every lag at zero the candidates are the blackout ends themselves, in the order the walk finds
   // them, and a run of known length either fits in the first gap or is pushed past the blackout that
@@ -846,14 +851,11 @@ function leveledDate(
   isFinish: boolean,
   type: EngineActivity['type'],
 ): string {
+  // A finish milestone is reported on the day it closes (#381, #539), start and finish alike, read from
+  // the instant exactly as `compute.ts` dates its own; every other type reads its own offset.
+  if (type === 'FINISH_MILESTONE') {
+    return finishMilestoneReportedDate(cal, dataDate, dataDateAbs, inst);
+  }
   const own = offsetFromDataDate(cal, dataDateAbs, inst);
-  // A finish milestone is reported on the day it closes (#381), start and finish alike, exactly as
-  // `compute.ts` dates its own; every other type reads its own offset.
-  const reported = type === 'FINISH_MILESTONE' ? finishMilestoneDisplayIndex(own) : own;
-  const index = isFinish && durationMinutes > 0 ? reported - 1 : reported;
-  const endBoundary = cal.addWorkingTime(dataDate, index + 1);
-  const iso = endBoundary.length > 10 ? `${endBoundary}:00Z` : `${endBoundary}T00:00:00Z`;
-  const instant = new Date(iso);
-  instant.setUTCMinutes(instant.getUTCMinutes() - 1);
-  return instant.toISOString().slice(0, 10);
+  return workingIndexDate(cal, dataDate, isFinish && durationMinutes > 0 ? own - 1 : own);
 }

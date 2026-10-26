@@ -3,15 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import { computeSchedule } from './compute';
 import {
+  CROSS_DATA_DATE,
   crossCalendarNetwork,
   link,
   middle,
   runCrossCalendar,
+  WEEKDAY_CAL,
   WEEKDAY_MINUTES,
   WEEKEND_CAL,
 } from './compute.cross-calendar.fixture';
 import type { EngineActivity, EngineEdge, EngineResult } from './types';
 import {
+  absMinutesToInstant,
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
   fullDayWeek,
@@ -154,10 +157,11 @@ describe('per-activity calendars (M5, ADR-0037)', () => {
  * calendar) or reads the day before the weekend work and charges it a weekend of negative float
  * (milestone on the plan calendar). The network and its dates are `compute.cross-calendar.fixture.ts`.
  *
- * **These cases are `it.fails` until the fix lands (M2).** They assert the CORRECT values and the
- * engine is wrong today, so a plain `it` would put `main` red; `it.fails` passes while the engine is
- * wrong and fails the moment it is right, which forces whoever fixes it to flip them. The all-minutes
- * control passes today and is a plain `it`: the same network with no calendar seam at `M`.
+ * **Every case here passes since M2 (D1) except the FNLT one, which is `it.fails` until M3 (D2):** it
+ * needs a date given for a finish milestone to be read as midnight at the end of its day. `it.fails`
+ * passes while the engine is wrong and fails the moment it is right, which forces whoever fixes it to
+ * flip it. The all-minutes control passed before M2 and is a plain `it`: the same network with no
+ * calendar seam at `M`.
  */
 describe('a zero-span activity between calendars keeps its logic instant (#539)', () => {
   const FNLT_FRIDAY = { constraintType: 'FNLT', constraintDate: '2027-06-25' } as const;
@@ -178,46 +182,65 @@ describe('a zero-span activity between calendars keeps its logic instant (#539)'
     expect(get('M').earlyFinish).toBe('2027-06-27');
   });
 
-  it.fails(
-    'FINISH_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Sunday',
-    () => {
-      const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
-      const { get } = runCrossCalendar(activities, edges);
-      expectedFixtureOutcome(get);
-      expect(get('M').earlyStart).toBe('2027-06-27');
-      expect(get('M').earlyFinish).toBe('2027-06-27');
-      expect(get('M').lateFinish).toBe('2027-06-27');
-    },
-  );
+  it('FINISH_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Sunday', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyStart).toBe('2027-06-27');
+    expect(get('M').earlyFinish).toBe('2027-06-27');
+    expect(get('M').lateFinish).toBe('2027-06-27');
+  });
 
-  it.fails('FINISH_MILESTONE on the weekend calendar: K starts Monday, not a week later', () => {
+  it('FINISH_MILESTONE on the weekend calendar: K starts Monday, not a week later', () => {
     const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE', WEEKEND_CAL));
     const { get } = runCrossCalendar(activities, edges);
     expectedFixtureOutcome(get);
     expect(get('M').earlyFinish).toBe('2027-06-27');
   });
 
-  it.fails(
-    'START_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Monday',
-    () => {
-      const { activities, edges } = crossCalendarNetwork(middle('START_MILESTONE'));
-      const { get } = runCrossCalendar(activities, edges);
-      expectedFixtureOutcome(get);
-      expect(get('M').earlyStart).toBe('2027-06-28');
-    },
-  );
+  it('START_MILESTONE on the plan calendar: K starts Monday, W float 0, M reads Monday', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('START_MILESTONE'));
+    const { get } = runCrossCalendar(activities, edges);
+    expectedFixtureOutcome(get);
+    expect(get('M').earlyStart).toBe('2027-06-28');
+  });
 
-  it.fails('START_MILESTONE on the weekend calendar: K starts Monday, W float 0', () => {
+  it('START_MILESTONE on the weekend calendar: K starts Monday, W float 0', () => {
     const { activities, edges } = crossCalendarNetwork(middle('START_MILESTONE', WEEKEND_CAL));
     const { get } = runCrossCalendar(activities, edges);
     expectedFixtureOutcome(get);
   });
 
-  it.fails('a zero-duration TASK in M’s place: K starts Monday, W float 0', () => {
+  it('a zero-duration TASK in M’s place: K starts Monday, W float 0', () => {
     const { activities, edges } = crossCalendarNetwork(middle('TASK'));
     const { get } = runCrossCalendar(activities, edges);
     expectedFixtureOutcome(get);
     expect(get('M').earlyStart).toBe('2027-06-28');
+  });
+
+  it('an edge into a milestone between calendars drives it, and the longest path runs through it', () => {
+    const { activities, edges } = crossCalendarNetwork(middle('FINISH_MILESTONE'));
+    const out = computeSchedule(activities, edges, {
+      dataDate: CROSS_DATA_DATE,
+      calendar: WEEKDAY_CAL,
+      criticalDefinition: 'LONGEST_PATH',
+    });
+    const driving = new Map(out.edges.map((e) => [e.edgeId, e.isDriving]));
+    // W → M: the bound IS M's kept start (Sunday 19:00), which M's own calendar would roll to Monday.
+    expect(driving.get('W-M')).toBe(true);
+    expect(driving.get('M-K')).toBe(true);
+    const critical = out.results.filter((r) => r.isCritical).map((r) => r.activityId);
+    expect(critical).toEqual(expect.arrayContaining(['W', 'M', 'K', 'F']));
+    // A has the five weekdays of slack before W's SNET, so the chain does not reach back through it.
+    expect(critical).not.toContain('A');
+  });
+
+  it('a milestone nothing drives still rolls its bound, the data date, onto its own calendar', () => {
+    // The one bound D1 does not keep: the data date itself, so a free-standing milestone does not move.
+    // Monday 00:00 is a gap on the weekend calendar; M reads the first working minute of that calendar.
+    const { get } = runCrossCalendar([middle('START_MILESTONE', WEEKEND_CAL)], []);
+    expect(absMinutesToInstant(get('M').passOnStartInstant)).toBe('2027-06-19T07:00');
+    expect(get('M').earlyStart).toBe('2027-06-19');
   });
 
   it.fails(
@@ -233,7 +256,7 @@ describe('a zero-span activity between calendars keeps its logic instant (#539)'
     },
   );
 
-  it.fails('the mirror: weekday work → a milestone on the weekend calendar → weekend work', () => {
+  it('the mirror: weekday work → a milestone on the weekend calendar → weekend work', () => {
     // L is a long weekday task that sets the project finish well past W's FNLT, so A and W have room.
     const { get } = runCrossCalendar(
       [
