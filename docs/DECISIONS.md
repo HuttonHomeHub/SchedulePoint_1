@@ -10,6 +10,37 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-26 — The shortlist after the reconciliation pass: two fixes now, four specs approved with every default
+
+**What was decided.** After the 2026-10-26 reconciliation pass the product owner chose from the hand-off's shortlist:
+
+- **Build now, no spec needed:** #550 (every activity create takes the plan lock and re-checks the plan; the
+  backend-performance review added the re-check) and #371 (one shared esbuild helper for the measurement scripts).
+- **Specify first, then approved the same morning with every recommended default:**
+  - **#539**, `docs/specs/milestone-cross-calendar/`: a zero-duration activity keeps its driving bound as an instant
+    in both passes; a finish milestone in its calendar's time off shows the day the work ends (Q1 A); a lag on
+    another calendar is walked from the kept instant (Q2 A); frozen baselines show the correction and the changelog
+    says so (Q3 A). New ADR-0207.
+  - **#495**, `docs/specs/typed-field-commit/`: one committed-draft behaviour shared by `SizeField` and `TextField`'s
+    new opt-in `commitOn` (Q1); the Schedule settings threshold field adopts it (Q2); recorded here and as an
+    ADR-0188 amendment line, not a new ADR (Q3).
+  - **Notes through XER and MSPDI**, `docs/specs/interchange-notes/`: the importer is an imported note's author (Q1);
+    one memo per activity under one SchedulePoint topic (Q2); notes over 5,000 characters are split, not cut (Q3);
+    every export carries notes (Q4). New ADR-0209.
+  - **Leftover imported calendars**, `docs/specs/import-calendar-tidy/`: an import reuses a calendar only when its
+    content and name lineage match (Q1); revisions sharing a reused calendar stay linked, with no "always copy"
+    option (Q2); the same rule in the organisation library (Q3); "Remove unused calendars…" is built now, with
+    calendars only a deleted plan uses listed unticked (Q4). New ADR-0208, amending ADR-0053 §5.
+- **Not now:** the ten Dependabot pull requests opened on 2026-10-26 (#1153 to #1162) are left for a later session.
+
+**Why.** #539 and #550 are real defects; the notes gap had real demand on 2026-10-22; the calendar pile-up is
+clutter every re-import adds. #495 and #371 are cheap now and only get dearer.
+
+**Consequences.** ADR numbers are reserved in build order: 0207 (#539), 0208 (calendars), 0209 (notes). #539's plan
+forbids a release between its M2 and M4, so no Version Packages pull request is merged while it is half-built.
+
+---
+
 ## 2026-10-26 — Reconciliation pass: the agents had not heard of swimlanes, and the register's pointers had drifted
 
 **What was done.** The pass in `docs/RECONCILE.md` at the swimlanes epic boundary (ADR-0204 to ADR-0206, the 43
