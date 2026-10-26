@@ -119,9 +119,12 @@ test('an imported P6 remark arrives as a plain-text activity note', async ({ pag
   await expect(editor.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
 
   // The remark is text: the markup is gone and the script's content was never kept.
-  await expect(editor.getByText('Pour level 3', { exact: true })).toBeVisible();
+  const body = editor.getByText('Pour level 3', { exact: true });
+  await expect(body).toBeVisible();
   await expect(editor.getByText('Interchange Tester', { exact: true })).toBeVisible();
-  await expect(editor.locator('b, script, p')).toHaveCount(0);
+  // The note body is the app's own paragraph; the memo's `<p>`, `<b>` and `<script>` made nothing.
+  await expect(body.locator('*')).toHaveCount(0);
+  await expect(editor.locator('b, script')).toHaveCount(0);
   await expect(editor.getByText('alert(1)')).toHaveCount(0);
 
   const axe = await new AxeBuilder({ page })
@@ -317,21 +320,12 @@ test('a SchedulePoint .xer restores its placed starts and rows, and the option c
   expect(res.ok()).toBe(true);
   const rows = (
     (await res.json()) as {
-      data: { id: string; code: string; visualStart: string | null; laneIndex: number }[];
+      data: { code: string; visualStart: string | null; laneIndex: number }[];
     }
   ).data;
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
   expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
-
-  // The note came back on the same activity code, as text, from a different plan.
-  const copied = await page.request.get(
-    `/api/v1/organizations/${orgSlug}/activities/${(byCode['A1000'] as { id: string }).id}/notes`,
-  );
-  expect(copied.ok()).toBe(true);
-  expect(((await copied.json()) as { data: { body: string }[] }).data.map((n) => n.body)).toEqual([
-    'Crane pad to be confirmed & signed off',
-  ]);
 });
 
 // The same review→commit loop for a Microsoft Project MSPDI .xml file, proving the format-agnostic
@@ -480,12 +474,21 @@ test('an exported .xer re-imports with its placed starts and lanes', async ({ pa
   expect(res.ok()).toBe(true);
   const rows = (
     (await res.json()) as {
-      data: { code: string; visualStart: string | null; laneIndex: number }[];
+      data: { id: string; code: string; visualStart: string | null; laneIndex: number }[];
     }
   ).data;
   const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
   expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
   expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
+
+  // The note came back on the same activity code, as text, from a different plan.
+  const copied = await page.request.get(
+    `/api/v1/organizations/${orgSlug}/activities/${(byCode['A1000'] as { id: string }).id}/notes`,
+  );
+  expect(copied.ok()).toBe(true);
+  expect(((await copied.json()) as { data: { body: string }[] }).data.map((n) => n.body)).toEqual([
+    'Crane pad to be confirmed & signed off',
+  ]);
 });
 
 /**
