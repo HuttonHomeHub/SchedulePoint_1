@@ -135,10 +135,17 @@ would compute by hand.
 > - **Given** the row's fixture with `M` on any calendar **when** the plan recalculates **then** `K`
 >   starts Mon 2027-06-28 and `W` has total float 0.
 > - **Given** a `START_MILESTONE` in `M`'s place **then** `W` has total float 0 and the milestone
->   reads Mon 2027-06-28.
+>   reads Mon 2027-06-28 **when `M` is on the plan calendar**. On the weekend calendar the same
+>   milestone reads Sat 2027-07-03, because a start milestone is dated by the day its next working
+>   minute opens on ITS OWN calendar (ADR-0035 §22, unchanged); `K` and `W` are right in both. (This
+>   bullet said the milestone "reads Mon 06-28" without the calendar until M2; M1's red run showed
+>   Sat 07-03 today and the rule leaves it there.)
 > - **Given** the mirror case (a weekday task → a milestone on the weekend calendar → weekend work)
->   **then** the weekday task's float is not reduced by a weekend (**predicted** negative today from
->   `compute.ts:510`; M1-T1 confirms).
+>   **and a longer task elsewhere in the plan that sets the project finish** **then** the weekday
+>   task's float is not reduced by a weekend: `A` 2,400, `W` 1,440 (measured negative today, `A` 0).
+>   **Without that longer task every activity is on the finish and has float 0 whatever the fix does**,
+>   which is why this bullet's first M1 draft predicted a number the network cannot give; the M1 case
+>   carries the longer task `L`.
 
 > **US-2** — As a Planner, I want the finish milestone to read the day its work ended (Q1 A).
 >
@@ -312,13 +319,22 @@ constraints (`constraints.ts:106-113`), external dates (`constraints.ts:225`, `:
 levelling apply (`apply-levelling.ts:160`) change together. Without D2, D1 leaves the same week-long
 push reachable through `FNET`, `MFO`, a placement or an external date on a weekday milestone, and a
 Friday placement after Sunday work is not flagged as early (today it reads Mon 08:00, which logic
-also reaches).
+also reaches). **M2 alone leaves the cross-plan twin red on 40 rows** (a finish milestone as the local
+end, or a finish-milestone remote, across calendars): the engine's one-plan answer changed and the
+derivation's did not. They are `it.fails` in `cross-plan-twin.characterisation.spec.ts` until M3-T2,
+which is why the release rule ships M2 and M3 together.
 
 **D3 — How a finish milestone is dated (Q1 A).** If its instant is the start of a working minute on
 its own calendar, the day of the working minute before it (ADR-0155 decision 1, today's
 `finishMilestoneDisplayIndex`). Otherwise, the instant sits in its own calendar's non-working time,
 which only another calendar's work, an elapsed lag or a date given for it can put it in; it is dated
-by the day of the real minute before it. Never earlier than the data date (ADR-0155 decision 2). One
+by the day of the real minute before it. Never earlier than the data date (ADR-0155 decision 2).
+**Late dates carry one more clause (found building M2).** A finish milestone's LATE instant is the
+opening of the work it leads to (Mon 08:00 in the fixture), which the first branch dates Friday, so
+the fixture's late date read Fri 06-25 beside an early date of Sun 06-27, and no instant rule can
+tell the two apart. A finish milestone whose float on its own calendar is not negative therefore
+never reads a late date before its early date: with no working minute between them the two are the
+same moment on its calendar. Negative float keeps the plain rule, so a miss still reads earlier. One
 helper in `instants.ts`, read from the instant (not the offset) at all six sites in `compute.ts`
 (`:892-901`, `:997`, `:1000`) and `leveledDate` (`level.ts:852`). A start milestone and a zero-duration
 task keep today's rule (the day their next working minute opens), which already reads Mon 06-28 for
@@ -328,6 +344,20 @@ Why the two branches, rather than "the real minute before" everywhere: on one ca
 milestone can sit at a day's opening (a lead, an `SS` link into it), where ADR-0155 dates it the day
 before; a single real-minute rule would move that label. With the branches, every single-calendar
 case reads as today except Q1's own subject.
+
+**Project finish date (found building M2).** The project finish date is decided among the activities
+by their position on the finish axis (`compute.ts`, `inclusiveFinishInstant`). A zero-span activity is
+ranked at the position it was ranked at before D1, rolled onto its own calendar, even though its
+reported instant is now kept; ranked by the kept instant, a zero-duration task beat the finish
+milestone at the same moment and moved the project finish to the Monday after (the
+`capability-types-and-wbs` plan, 2026-03-13 to 03-16, in the harness's first run).
+
+**What D1 also moves, in memory.** `passOnStartInstant`, `passOnFinishInstant` and a levelled
+milestone's `leveledStartInstant` are instants the engine hands to levelling and never persists. They
+change for every zero-span activity whose bound was not already a working minute, seam or no seam, so
+they are not "reported outputs" in the success criterion above; the frozen levelling hashes
+(`level.contended.parity.spec.ts`, `level.hot-resource.parity.spec.ts`) and the legacy levelling copy
+carry that change, each diffed against the parent commit before it was replaced.
 
 **Cross-plan (ADR-0161).** `remoteInstants` rolls a zero-duration remote's late date back onto its
 calendar (`cross-plan-derivation.ts:229-240`) to mirror the old `compute.ts:510`. With D1 the engine no

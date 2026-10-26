@@ -19,6 +19,10 @@
  * - `lag-calendar`: a zero-span activity beside an edge whose lag is walked on a calendar other than
  *   the zero-span activity's own (Q2: the anchor is the kept instant, so these can move), or the rows
  *   that follow from it.
+ * - `zero-span-instant`: a zero-span activity with no seam at all (so not in the class above) whose only
+ *   moved fields are in-memory instants (`passOn*`, `leveledStartInstant`): D1 keeps the instant of every
+ *   zero-span activity, so those change wherever its bound was not a working minute, and no reported
+ *   field follows. Counted separately so it cannot hide a reported move.
  * - `fm-date`: a finish milestone given a placement, constraint or external date that falls on a
  *   non-working day of its own calendar (D2/D3), or the rows that follow from it.
  *
@@ -47,6 +51,7 @@ import { capabilitySpecs } from '../../seed-cli/src/capabilities/index.js';
 import { referenceSpecs } from '../../seed-cli/src/references/index.js';
 import { adaptFixture } from '../src/modules/schedule/conformance/adapter.js';
 import { toCalendarDay } from '../src/modules/schedule/conformance/type-map.js';
+import { isZeroSpan } from '../src/modules/schedule/engine/constraints.js';
 import { computeSchedule, type ComputeOptions } from '../src/modules/schedule/engine/index.js';
 import {
   CROSS_DATA_DATE,
@@ -74,6 +79,8 @@ type MovementClass = (typeof CLASSES)[number];
 
 /** Fields only the backward pass (or the flags it feeds) writes; every other field is forward-pass. */
 const BACKWARD_FIELD = /late|float|critical|driv|path/i;
+/** In-memory instants a result carries for levelling; never persisted and never on a response. */
+const IN_MEMORY_INSTANT = /^(passOn(Start|Finish)Instant|leveledStartInstant)$/;
 
 function networks(): Network[] {
   const out: Network[] = [];
@@ -112,10 +119,6 @@ function networks(): Network[] {
     options: { dataDate: CROSS_DATA_DATE, calendar: WEEKDAY_CAL },
   });
   return out;
-}
-
-function isZeroSpan(a: EngineActivity): boolean {
-  return a.durationMinutes === 0 && a.type !== 'LEVEL_OF_EFFORT' && a.type !== 'WBS_SUMMARY';
 }
 
 /** Rows that seed each class, from the engine input alone. */
@@ -179,7 +182,11 @@ interface Explanation {
 }
 
 /** Which class, if any, explains a move of each activity in the forward and the backward pass. */
-function explain(net: Network): { why: Explanation; census: Record<MovementClass, number> } {
+function explain(net: Network): {
+  why: Explanation;
+  census: Record<MovementClass, number>;
+  zeroSpanIds: Set<string>;
+} {
   const successors = new Map<string, string[]>();
   const predecessors = new Map<string, string[]>();
   for (const e of net.edges) {
@@ -227,6 +234,7 @@ function explain(net: Network): { why: Explanation; census: Record<MovementClass
   }
   return {
     why: { forward, backward },
+    zeroSpanIds: new Set(net.activities.filter(isZeroSpan).map((a) => a.id)),
     census: {
       'zero-span': found['zero-span'].size,
       'lag-calendar': found['lag-calendar'].size,
@@ -282,17 +290,18 @@ it('measures the cross-calendar milestone rule over the catalogue', () => {
 
   const before = JSON.parse(readFileSync(file, 'utf8')) as Snapshot;
   const lines: string[] = [];
-  const byClass: Record<MovementClass | 'unexplained', number> = {
+  const byClass: Record<MovementClass | 'zero-span-instant' | 'unexplained', number> = {
     'zero-span': 0,
     'lag-calendar': 0,
     'fm-date': 0,
+    'zero-span-instant': 0,
     unexplained: 0,
   };
   const unexplained: string[] = [];
   for (const [plan, after] of Object.entries(now)) {
     const was = before[plan];
     if (!was) throw new Error(`${plan} missing from the baseline`);
-    const why = explained.get(plan)!.why;
+    const { why, zeroSpanIds } = explained.get(plan)!;
     const planLines: string[] = [];
     for (const [id, result] of Object.entries(after.results)) {
       const prior = was.results[id] as Record<string, unknown> | undefined;
@@ -306,7 +315,15 @@ it('measures the cross-calendar milestone rule over the catalogue', () => {
       const classes = changed.map((k) =>
         (BACKWARD_FIELD.test(k) ? why.backward : why.forward).get(id),
       );
-      const cls = classes.every((c) => c !== undefined) ? classes[0]! : undefined;
+      // D1 keeps the instant of EVERY zero-span activity, seam or not, so a single-calendar milestone
+      // whose bound was not a working minute passes on a different in-memory instant. When that is all
+      // that moved, no date, offset or float did: its own class, so it is counted rather than hidden.
+      const inMemoryOnly = zeroSpanIds.has(id) && changed.every((k) => IN_MEMORY_INSTANT.test(k));
+      const cls = inMemoryOnly
+        ? ('zero-span-instant' as const)
+        : classes.every((c) => c !== undefined)
+          ? classes[0]!
+          : undefined;
       byClass[cls ?? 'unexplained'] += 1;
       if (cls === undefined) unexplained.push(`${plan}/${id}`);
       planLines.push(
@@ -337,7 +354,7 @@ it('measures the cross-calendar milestone rule over the catalogue', () => {
   console.log(lines.join('\n'));
   console.log(
     `\nrows moved by class: zero-span ${byClass['zero-span']}, lag-calendar ${byClass['lag-calendar']}, ` +
-      `fm-date ${byClass['fm-date']}; UNEXPLAINED ${byClass.unexplained}` +
+      `fm-date ${byClass['fm-date']}, zero-span-instant ${byClass['zero-span-instant']}; UNEXPLAINED ${byClass.unexplained}` +
       (unexplained.length > 0 ? `\n  ${unexplained.join('\n  ')}` : ''),
   );
 
