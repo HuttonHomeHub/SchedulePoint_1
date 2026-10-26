@@ -110,6 +110,43 @@ export function zeroDurationXerFile(): { name: string; mimeType: string; buffer:
   };
 }
 
+/**
+ * A calendar-bearing XER (ADR-0208): one project calendar "Site 6-Day" (Mon–Fri 08:00–16:00, one
+ * New-Year exception) used by two tasks. `projectName` is the only thing a second revision changes,
+ * so two files differ in their plan name and not in their calendar. Mirrors the API suite's
+ * `xerWithCalendar()` (`apps/api/test/interchange.e2e-spec.ts`).
+ */
+export function calendarXerFile(projectName: string): {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+} {
+  const workDay = (day: number): string => `(0||${day}()( (0||0(s|08:00|f|16:00)) ))`;
+  const restDay = (day: number): string => `(0||${day}()())`;
+  const days = [restDay(1), ...[2, 3, 4, 5, 6].map(workDay), restDay(7)].join('');
+  // 46023 is 2026-01-01 in Excel/OLE serial form: a non-working exception.
+  const data = `(0||CalendarData()( (0||DaysOfWeek()( ${days} )) (0||Exceptions()( (0||d|46023()()) )) ))`;
+  const text = [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00\tC1`,
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
+    `%R\tC1\tSite 6-Day\tY\t8\t${data}`,
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    '%R\tT1\tP1\tC1\tA1000\tMobilise\tTT_Task\t40',
+    '%R\tT2\tP1\tC1\tA1010\tDesign\tTT_Task\t80',
+    '%E',
+  ].join('\n');
+  return {
+    name: `${projectName}.xer`,
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
 /** The `.xer` fixture as bytes, ready for `Locator.setInputFiles`. */
 export function validXerFile(): { name: string; mimeType: string; buffer: Buffer } {
   return {
