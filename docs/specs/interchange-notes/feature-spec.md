@@ -1,6 +1,6 @@
 # Feature Spec: Carry activity notes through XER and MSPDI
 
-- **Status:** Approved — by the product owner, 2026-10-26, with every default (Q1 to Q4); the new ADR is ADR-0209
+- **Status:** Accepted — shipped (ADR-0209)
 - **Author(s):** feature-analyst (Claude), for James Ewbank (product owner)
 - **Date:** 2026-10-26
 - **Tracking issue / epic:** `docs/BACKLOG.md` "Carry activity notes through XER and MSPDI"; follows
