@@ -27,11 +27,12 @@ import type { WorkingTimeCalendar } from './working-time-calendar';
  * from a tree that still has the old engine, never from the one under test.
  *
  * **Seeds 12, 52 and 57 were regenerated on purpose by #539 M2 (ADR-0207 D1)**, which stops snapping a
- * zero-span activity onto its own calendar. Each was diffed against the engine at the parent commit
- * before its hash was replaced, and the only rows that differ are milestones (START_MILESTONE) and what
- * the backward pass carries from them: their pass-on and levelled start instants (seeds 12, 57), and,
- * in seed 52, the late offsets of a milestone on its own calendar, the float of its predecessor and the
- * levelled starts that float bounds. No other seed's hash moved.
+ * zero-span activity onto its own calendar. The evidence is `docs/specs/milestone-cross-calendar/
+ * levelling-hash-evidence.md`, produced by `scripts/measure-milestone-levelling-movement.mts` against the
+ * parent engine: of the 60 seeds exactly these three differ. Seeds 12 and 52 each hold a start milestone on
+ * its own calendar beside plan-calendar activities (a seam, the case the change is for): its late offsets,
+ * its predecessor's float and the levelled starts that float bounds move. Seed 57 has no seam and moves
+ * only in-memory instants. No row without a seam moved a reported field.
  */
 
 const FROZEN: Record<number, string> = {

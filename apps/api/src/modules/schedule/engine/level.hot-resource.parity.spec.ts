@@ -26,7 +26,7 @@ import { computeSchedule, levelSchedule, type EngineAssignment } from './index';
 /*
  * **All eight were regenerated on purpose by #539 M2 (ADR-0207 D1)**, which stops snapping a zero-span
  * activity onto its own calendar. Each shape was diffed against the engine at the parent commit before
- * its hash was replaced. What differs is only in-memory instants on this plan's 14 milestones (11 start,
+ * its hash was replaced (`docs/specs/milestone-cross-calendar/levelling-hash-evidence.md`). What differs is only in-memory instants on this plan's 14 milestones (11 start,
  * 3 finish): `passOnStartInstant` and `passOnFinishInstant` with Pass C off, and with it on also
  * `leveledStartInstant`. No date, offset, float, flag or summary moved in any of the eight.
  */
