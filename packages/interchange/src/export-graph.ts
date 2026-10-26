@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import {
   importActivitySchema,
   importAssignmentSchema,
@@ -10,7 +12,6 @@ import {
   type ImportAssignment,
   type ImportCalendar,
   type ImportDependency,
-  type ImportGraph,
   type ImportPlan,
   type ImportResource,
 } from './import-graph.js';
@@ -65,5 +66,17 @@ export type ExportPlan = ImportPlan;
  * export graph is assumed consistent (unique codes, resolvable endpoints, an acyclic DAG); the exporter
  * still defends with the strict schema before serialising (Task 4a.4).
  */
-export const exportGraphSchema = importGraphSchema;
-export type ExportGraph = ImportGraph;
+export const exportGraphSchema = importGraphSchema.extend({
+  /**
+   * Plan-level notes the plan holds. Neither format has a place for one, so they are only counted, and
+   * the reader of the export report is told how many were left out. The API supplies it: the pure
+   * package never sees a plan note.
+   */
+  planNoteCount: z.number().int().min(0).optional(),
+  /**
+   * Activity notes the plan holds beyond the export ceiling (`MAX_NOTES`), which the API did not read.
+   * Counted so the report can say how many were left out rather than exporting a silent truncation.
+   */
+  unwrittenNoteCount: z.number().int().min(0).optional(),
+});
+export type ExportGraph = z.infer<typeof exportGraphSchema>;

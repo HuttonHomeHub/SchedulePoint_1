@@ -108,7 +108,10 @@ export function exportMspdi(input: ExportMspdiInput): ExportMspdiResult {
   }
 
   // 3. Map export graph → canonical model (the same format-agnostic mapper the XER path uses).
-  const mapped = mapExportGraphToCanonical(graph, { carriesDerivedDuration: true });
+  const mapped = mapExportGraphToCanonical(graph, {
+    carriesDerivedDuration: true,
+    notesFormat: 'MSPDI',
+  });
 
   // 4. Emit the canonical model → the MSPDI <Project> element tree.
   const emitted = emitMspdiFromCanonical(mapped.model);
@@ -141,6 +144,7 @@ export function exportMspdi(input: ExportMspdiInput): ExportMspdiResult {
       ...(constraints > 0 ? { constraints } : {}),
       ...(graph.resources.length > 0 ? { resources: graph.resources.length } : {}),
       ...(graph.assignments.length > 0 ? { assignments: graph.assignments.length } : {}),
+      ...(mapped.model.notes === undefined ? {} : { notes: mapped.model.notes.length }),
     },
     approximations,
     repairs,

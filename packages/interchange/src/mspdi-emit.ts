@@ -13,6 +13,7 @@ import type {
   CanonicalWorkWeek,
 } from './canonical.js';
 import { branch, leaf, type MspdiNode } from './mspdi-serialiser.js';
+import { noteBodiesToPlainNotes } from './note-text.js';
 import type { ReportFinding } from './report.js';
 
 /**
@@ -442,6 +443,15 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
     else list.push(relationship);
   }
 
+  // Activity notes, joined per task (a task has one Notes field). Summaries keep theirs: MSPDI carries a
+  // note on any task.
+  const bodiesByTask = new Map<string, string[]>();
+  for (const note of model.notes ?? []) {
+    const list = bodiesByTask.get(note.activityId);
+    if (list === undefined) bodiesByTask.set(note.activityId, [note.body]);
+    else list.push(note.body);
+  }
+
   // --- Tasks (WBS summaries + real activities, in outline order) -------------------------------------
   const taskNodes: MspdiNode[] = [];
   for (const { activity, level } of orderActivitiesForOutline(model.activities)) {
@@ -485,8 +495,11 @@ export function emitMspdiFromCanonical(model: CanonicalModel): MspdiEmitResult {
     if (activity.calendarId !== null) children.push(leaf('CalendarUID', activity.calendarId));
 
     // Constraints + progress ride the real-activity <Task>s (a summary carries neither).
+    if (!isSummary) children.push(...constraintNodes(activity, findings));
+    const noteBodies = bodiesByTask.get(activity.id);
+    if (noteBodies !== undefined)
+      children.push(leaf('Notes', noteBodiesToPlainNotes(noteBodies).text));
     if (!isSummary) {
-      children.push(...constraintNodes(activity, findings));
       if (activity.progress !== null)
         children.push(...progressNodes(activity, activity.progress, findings));
     }

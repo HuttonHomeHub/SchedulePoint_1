@@ -11,6 +11,7 @@ import type {
   CanonicalResourceKind,
   CanonicalWorkWeek,
 } from './canonical.js';
+import { noteBodiesToMemoHtml, SCHEDULEPOINT_NOTES_TOPIC } from './note-text.js';
 import type { ReportFinding } from './report.js';
 import { encodeLayoutFields } from './xer-layout-fields.js';
 import type { XerTableData } from './xer-serialiser.js';
@@ -253,6 +254,17 @@ const TASKPRED_FIELDS = [
   'lag_hr_cnt',
 ] as const;
 const RSRC_FIELDS = ['rsrc_id', 'rsrc_short_name', 'rsrc_name', 'rsrc_type', 'clndr_id'] as const;
+/**
+ * The notebook topic SchedulePoint's notes are written under. The column names are an **assumption**:
+ * this repository has never read a P6 file with a notebook topic, so `memo_type_id`/`memo_type` and the
+ * `TASKMEMO` columns are the minimum the importer reads back (notes-through-interchange, FC-7). The id is
+ * ours; the label is the exact string the importer recognises as SchedulePoint's own.
+ */
+const SCHEDULEPOINT_MEMO_TYPE_ID = 'SPNOTES';
+/** `task_memo` is LAST: the XER reader re-attaches a continuation line to the final column of a row. */
+const MEMOTYPE_FIELDS = ['memo_type_id', 'memo_type'] as const;
+const TASKMEMO_FIELDS = ['memo_id', 'proj_id', 'task_id', 'memo_type_id', 'task_memo'] as const;
+
 const TASKRSRC_FIELDS = [
   'taskrsrc_id',
   'task_id',
@@ -464,6 +476,36 @@ export function emitXerFromCanonical(model: CanonicalModel): XerEmitResult {
   }
   if (taskRsrcRows.length > 0) {
     tables.push({ name: 'TASKRSRC', fields: [...TASKRSRC_FIELDS], rows: taskRsrcRows });
+  }
+  // Activity notes (notes-through-interchange M2): one memo per task that has any, bodies oldest first.
+  // Only when a note exists, so a plan without notes serialises to the bytes it always did.
+  const bodiesByTask = new Map<string, string[]>();
+  for (const note of model.notes ?? []) {
+    const list = bodiesByTask.get(note.activityId);
+    if (list === undefined) bodiesByTask.set(note.activityId, [note.body]);
+    else list.push(note.body);
+  }
+  if (bodiesByTask.size > 0) {
+    tables.push({
+      name: 'MEMOTYPE',
+      fields: [...MEMOTYPE_FIELDS],
+      rows: [{ memo_type_id: SCHEDULEPOINT_MEMO_TYPE_ID, memo_type: SCHEDULEPOINT_NOTES_TOPIC }],
+    });
+    let memoNumber = 0;
+    tables.push({
+      name: 'TASKMEMO',
+      fields: [...TASKMEMO_FIELDS],
+      rows: [...bodiesByTask].map(([taskId, bodies]) => {
+        memoNumber += 1;
+        return {
+          memo_id: `SPM${String(memoNumber)}`,
+          proj_id: projId,
+          task_id: taskId,
+          memo_type_id: SCHEDULEPOINT_MEMO_TYPE_ID,
+          task_memo: noteBodiesToMemoHtml(bodies),
+        };
+      }),
+    });
   }
   // SchedulePoint's own layout, as P6 user-defined fields (layout-interchange, spec §4.4). Last,
   // after every table whose rows the values point at, and written by the one module that names the
