@@ -84,6 +84,8 @@ interface TextFieldCommitProps {
   onCommit: (raw: string, via: CommitVia) => void | 'keep';
   /** Called once if the field unmounts holding a typed value that was never committed. */
   onDraftLost?: () => void;
+  /** Called when a typed draft is thrown away uncommitted (Escape, a shut-field blur). */
+  onDiscard?: () => void;
   onChange?: never;
   onBlur?: never;
   onKeyDown?: never;
@@ -94,6 +96,7 @@ interface TextFieldDefaultProps {
   commitOn?: undefined;
   onCommit?: never;
   onDraftLost?: never;
+  onDiscard?: never;
 }
 
 export type TextFieldProps = TextFieldBaseProps & (TextFieldDefaultProps | TextFieldCommitProps);
@@ -110,10 +113,11 @@ const CommitInput = forwardRef<
     onCommit: (raw: string, via: CommitVia) => void | 'keep';
     commitOn?: 'enter-or-blur' | undefined;
     onDraftLost?: (() => void) | undefined;
+    onDiscard?: (() => void) | undefined;
     shut: boolean;
   }
 >(function CommitInput(
-  { commitOn: _commitOn, value, onCommit, onDraftLost, shut, step, type, ...props },
+  { commitOn: _commitOn, value, onCommit, onDraftLost, onDiscard, shut, step, type, ...props },
   ref,
 ) {
   const own = useRef<HTMLInputElement | null>(null);
@@ -131,8 +135,10 @@ const CommitInput = forwardRef<
     inputRef: own,
     shut,
     ...(type === undefined ? {} : { type }),
+    // `step="any"` becomes NaN, which the hook deliberately treats as no arrow step.
     ...(step === undefined ? {} : { step: Number(step) }),
     ...(onDraftLost === undefined ? {} : { onDraftLost }),
+    ...(onDiscard === undefined ? {} : { onDiscard }),
   });
   return (
     <Input

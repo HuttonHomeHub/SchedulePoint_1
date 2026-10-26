@@ -786,6 +786,8 @@ separator's drag and arrow handlers would act on the field's events.
   | ArrowUp / ArrowDown  | `type="number"` with a finite `step` only: commits draft-or-value ± step                              |
   | Escape               | heard on `window` in the capture phase; discards the draft; neither stopped nor prevented             |
   | Unmount with a draft | `onDraftLost()` (latest callback) unless Escaped                                                      |
+  | Draft discarded      | `onDiscard()` on Escape or a shut-field blur, so a caller can clear an error that described kept text |
+  | Blur on kept text    | text the caller rejected with `'keep'` and that is unchanged is not re-committed on blur              |
   | `shut`               | Enter and the arrows commit nothing, a blur drops the draft; the caller must set `readOnly` to match  |
 
   `onCommit` may return `'keep'` to retain the typed text (a rejected entry shown beside its error); any other

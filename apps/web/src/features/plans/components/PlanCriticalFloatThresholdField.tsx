@@ -124,6 +124,10 @@ export function PlanCriticalFloatThresholdField({
         commitOn="enter-or-blur"
         value={text}
         onCommit={commit}
+        // The kept text has reverted, so the error that described it must go with it.
+        onDiscard={() => {
+          setInvalid(null);
+        }}
         // A gate, not the native attribute (ADR-0083 D2): an in-flight save still leaves a value
         // worth reading and copying, and it flips under a reader who is not the one causing it.
         // `reason: null` because `hintFor` already renders "Saving…" — a second sentence saying

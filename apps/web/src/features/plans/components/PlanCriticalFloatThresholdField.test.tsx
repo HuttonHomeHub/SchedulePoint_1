@@ -153,6 +153,22 @@ describe('PlanCriticalFloatThresholdField', () => {
     );
   });
 
+  it('keeps a rejected entry beside its error, and Escape clears both', async () => {
+    renderField();
+    fireEvent.change(field(), { target: { value: '1w' } });
+    fireEvent.blur(field());
+    await waitFor(() => expect(field()).toHaveAttribute('aria-invalid', 'true'));
+    expect(field()).toHaveValue('1w');
+    // A second blur with the text unchanged does not re-announce the same error.
+    announceSpy.mockClear();
+    fireEvent.blur(field());
+    expect(announceSpy).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    await waitFor(() => expect(field()).not.toHaveAttribute('aria-invalid'));
+    expect(field()).not.toHaveValue('1w');
+  });
+
   it('announces the saved value', async () => {
     renderField();
     fireEvent.change(field(), { target: { value: '5d' } });

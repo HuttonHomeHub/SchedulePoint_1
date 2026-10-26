@@ -180,6 +180,13 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await expect(threshold).toHaveValue(thresholdBefore);
   await threshold.fill('3d');
   await threshold.press('Enter');
+  // The field shows the typed text while the save is in flight, so `3d` alone proves nothing: wait
+  // for the save to settle, then reopen the dialog and read what the plan actually holds.
+  const settings = page.getByRole('dialog', { name: 'Schedule settings' });
+  await expect(settings.getByText('Saving…')).toBeHidden();
+  await settings.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(settings).toBeHidden();
+  await (await revealToolbarCommand(page, 'calendar')).click();
   await expect(threshold).toHaveValue('3d');
 
   // Close it: it is a modal, so it blocks the activities panel underneath.

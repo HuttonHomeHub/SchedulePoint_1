@@ -338,6 +338,35 @@ describe('TextField commit mode', () => {
         onCommit={vi.fn()}
         onChange={vi.fn()}
       />,
+      // @ts-expect-error commit mode forbids onBlur: the hook owns it
+      <TextField
+        key="d"
+        label="x"
+        commitOn="enter-or-blur"
+        value=""
+        onCommit={vi.fn()}
+        onBlur={vi.fn()}
+      />,
+      // @ts-expect-error commit mode forbids onKeyDown: the hook owns it
+      <TextField
+        key="e"
+        label="x"
+        commitOn="enter-or-blur"
+        value=""
+        onCommit={vi.fn()}
+        onKeyDown={vi.fn()}
+      />,
+      // @ts-expect-error commit mode forbids defaultValue: the draft is internal
+      <TextField
+        key="f"
+        label="x"
+        commitOn="enter-or-blur"
+        value=""
+        onCommit={vi.fn()}
+        defaultValue=""
+      />,
+      // @ts-expect-error default mode has no onCommit
+      <TextField key="g" label="x" onCommit={vi.fn()} />,
     ];
     expect(typeof types).toBe('function');
   });

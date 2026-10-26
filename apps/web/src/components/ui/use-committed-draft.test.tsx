@@ -221,6 +221,48 @@ describe('useCommittedDraft', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('onDiscard fires when Escape or a shut-field blur throws a draft away, not otherwise', () => {
+    const onDiscard = vi.fn();
+    const Wrapper = (props: { shut?: boolean }): React.ReactElement => {
+      const ref = useRef<HTMLInputElement>(null);
+      const draft = useCommittedDraft({
+        value: '300',
+        onCommit: () => 'keep',
+        onDiscard,
+        inputRef: ref,
+        ...(props.shut ? { shut: true } : {}),
+      });
+      return <input ref={ref} aria-label="Field" {...draft} />;
+    };
+    const view = render(<Wrapper />);
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(onDiscard).not.toHaveBeenCalled();
+    fireEvent.change(field(), { target: { value: 'x' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    fireEvent.keyDown(field(), { key: 'Escape' });
+    expect(onDiscard).toHaveBeenCalledTimes(1);
+    expect(field()).toHaveValue('300');
+
+    fireEvent.change(field(), { target: { value: 'y' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    view.rerender(<Wrapper shut />);
+    fireEvent.blur(field());
+    expect(onDiscard).toHaveBeenCalledTimes(2);
+    expect(field()).toHaveValue('300');
+  });
+
+  it('a blur does not re-commit text the caller kept and that has not changed', () => {
+    const onCommit = vi.fn((): 'keep' => 'keep');
+    render(<Harness onCommit={onCommit} type="text" />);
+    fireEvent.change(field(), { target: { value: 'x' } });
+    fireEvent.blur(field());
+    fireEvent.blur(field());
+    expect(onCommit).toHaveBeenCalledOnce();
+    fireEvent.change(field(), { target: { value: 'xy' } });
+    fireEvent.blur(field());
+    expect(onCommit).toHaveBeenCalledTimes(2);
+  });
+
   it('reports a lost draft through the latest callback', () => {
     const first = vi.fn();
     const second = vi.fn();
