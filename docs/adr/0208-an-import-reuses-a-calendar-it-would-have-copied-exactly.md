@@ -104,7 +104,7 @@ same working week, exceptions and hours per day, so a copy would differ only in 
   project; the report names every reuse (Q2).
 - A reused resource still gets a copy of its calendar when the file's differs: the resource is matched by
   code and keeps its own calendar, and the file's non-identical `ORG` calendar is created bound to nothing
-  (`docs/TECH_DEBT.md` #553; pinned by an e2e).
+  (`docs/TECH_DEBT.md` #554; pinned by an e2e).
 - A hand-authored calendar whose exceptions are one multi-day range never matches a file that lists single
   days. That is conservative by design.
 - `docs/API.md` (interchange) is rewritten; ADR-0053 §5 points here.
@@ -165,4 +165,4 @@ matters, the remedy is a content fingerprint, which is a schema change and goes 
 - ADR-0053 §5 (amended), ADR-0050 (pipeline and report), ADR-0068 (hours per day), ADR-0172 (soft-delete
   stance on every read), ADR-0195 (the archived-filter masking observation), ADR-0201, ADR-0081, ADR-0088
   D1, ADR-0105
-- `docs/TECH_DEBT.md` #540 (closed), #553 (a reused resource's non-identical calendar)
+- `docs/TECH_DEBT.md` #540 (closed), #554 (a reused resource's non-identical calendar)

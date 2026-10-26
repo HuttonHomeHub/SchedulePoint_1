@@ -1600,7 +1600,7 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       ]);
     });
 
-    it('leaves a non-identical resource calendar as an unbound shared copy (docs/TECH_DEBT.md #553)', async () => {
+    it('leaves a non-identical resource calendar as an unbound shared copy (docs/TECH_DEBT.md #554)', async () => {
       const { actor, orgId } = await adminWithOrg();
       const projectId = await makeProject(actor);
       await importFile(actor, projectId, tieredCalendarXer());
