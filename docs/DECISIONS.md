@@ -10,6 +10,26 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-26 — #539 built: a milestone keeps its instant, and what building it found
+
+**What was decided.** The approved spec ([`docs/specs/milestone-cross-calendar/`](specs/milestone-cross-calendar/),
+[ADR-0207](adr/0207-a-milestone-stays-where-its-logic-puts-it.md)) was built in four milestones on one branch. Beyond
+the spec: a placed finish milestone reads back the day typed (a Sunday placement cannot be dated from its
+instant); the cross-plan read of a remote finish milestone is two rules, the end of its last working minute
+early and midnight late; the pending set gained the plans at either end of a cross-plan link to a zero-span
+activity (the database-architect found the upstream plan the spec's first draft missed); and a rollback must
+delete the marker row.
+
+**Why it is recorded.** Four things the spec said were wrong or incomplete, each found by running the code:
+the mirror case needs a longer parallel task or every activity floats 0; a finish milestone's late date needs a
+clause or it can never read Sunday; ranking the project finish by kept instants moved a plan's finish a Monday
+(zero-span rows are ranked rolled); and a single "midnight" read left twelve cross-plan twin rows a third of a
+day off. The frozen levelling hashes changed only on milestone instants; each was diffed against the parent
+commit before it was replaced.
+
+**Consequences.** Baselines show the correction as variance (Q3 A). The twin has no weekend calendar
+(`docs/TECH_DEBT.md` #556), and the #421 marker has no rollback section (#557). Whether a milestone can be
+dragged onto a non-working day was not exercised and is left to a journey.
 ## 2026-10-26 — One draft-and-commit behaviour for typed fields (#495)
 
 **What was decided.** The behaviour `SizeField` found (a draft held until Enter, blur or an arrow step; Escape

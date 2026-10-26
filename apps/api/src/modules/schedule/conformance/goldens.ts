@@ -57,6 +57,15 @@ const ALL_DAYS_DATA_DATE = '2026-06-01';
 /** Monday 2026-01-05 — the anchor for the weekday-mask cases (so weekend skips are visible). */
 const MONDAY_DATA_DATE = '2026-01-05';
 const monFri = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
+/** Mon-Fri 08:00-16:00 and Sat-Sun 07:00-19:00: the two calendars of the #539 golden. */
+const officeCalendar = buildWorkingTimeCalendar(
+  [0, 1, 2, 3, 4, 5, 6].map((day) => (day < 5 ? [{ startMinute: 480, endMinute: 960 }] : [])),
+  [],
+);
+const weekendCalendar = buildWorkingTimeCalendar(
+  [0, 1, 2, 3, 4, 5, 6].map((day) => (day >= 5 ? [{ startMinute: 420, endMinute: 1140 }] : [])),
+  [],
+);
 
 const task = (id: string, durationMinutes: number): EngineActivity => ({
   id,
@@ -574,6 +583,74 @@ export const GOLDEN_CASES: GoldenCase[] = [
       },
     },
     projectFinish: '2026-06-03',
+  },
+  {
+    name: 'finish-milestone-between-weekday-and-weekend-calendars',
+    description:
+      '#539 (ADR-0207): weekend work W (Sat-Sun 07:00-19:00, SNET Sat 06-26, 1 440 min) between weekday work A and K (Mon-Fri 08:00-16:00, 5 days each), joined by a finish milestone M on the PLAN calendar. M keeps the instant W ends (Sun 19:00) in both passes, so K starts Monday morning, W carries no float and M reads Sunday; the weekday work before W has the five weekdays of slack its SNET leaves. The old engine rolled M to Monday 08:00 forward and back to Friday 16:00, giving W -1 440.',
+    activities: [
+      { id: 'A', durationMinutes: 5 * 480, type: 'TASK' },
+      {
+        id: 'W',
+        durationMinutes: 1440,
+        type: 'TASK',
+        calendar: weekendCalendar,
+        constraintType: 'SNET',
+        constraintDate: '2027-06-26',
+      },
+      { id: 'M', durationMinutes: 0, type: 'FINISH_MILESTONE' },
+      { id: 'K', durationMinutes: 5 * 480, type: 'TASK' },
+    ],
+    edges: [
+      { id: 'e1', predecessorId: 'A', successorId: 'W', type: 'FS', lagMinutes: 0 },
+      { id: 'e2', predecessorId: 'W', successorId: 'M', type: 'FS', lagMinutes: 0 },
+      { id: 'e3', predecessorId: 'M', successorId: 'K', type: 'FS', lagMinutes: 0 },
+    ],
+    options: { dataDate: '2027-06-14', calendar: officeCalendar },
+    expected: {
+      // Hand-derived from the passes. Forward: A Mon 06-14 08:00 to Fri 06-18 16:00; W starts at its
+      // SNET, Sat 06-26 07:00, and works 720 + 720 minutes to Sun 06-27 19:00; M keeps that instant;
+      // K rolls it onto the weekday calendar, Mon 06-28 08:00, and works to Fri 07-02 16:00.
+      // Backward from the project finish (K, Fri 07-02): K is critical; M's late instant is K's late
+      // start, Mon 06-28 08:00, with no weekday working minute between it and Sun 19:00, so M floats
+      // 0 and reads Sunday late as well as early; W's late finish is that instant rolled back on its own
+      // calendar, Sun 19:00, so its float is 0; A's late finish is W's late start, Sat 06-26 07:00,
+      // rolled back on the weekday calendar to Fri 06-25 16:00: 5 weekdays (2 400 min) after its early
+      // finish.
+      A: {
+        earlyStart: '2027-06-14',
+        earlyFinish: '2027-06-18',
+        lateStart: '2027-06-21',
+        lateFinish: '2027-06-25',
+        totalFloat: 5 * 480,
+        isCritical: false,
+      },
+      W: {
+        earlyStart: '2027-06-26',
+        earlyFinish: '2027-06-27',
+        lateStart: '2027-06-26',
+        lateFinish: '2027-06-27',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      M: {
+        earlyStart: '2027-06-27',
+        earlyFinish: '2027-06-27',
+        lateStart: '2027-06-27',
+        lateFinish: '2027-06-27',
+        totalFloat: 0,
+        isCritical: true,
+      },
+      K: {
+        earlyStart: '2027-06-28',
+        earlyFinish: '2027-07-02',
+        lateStart: '2027-06-28',
+        lateFinish: '2027-07-02',
+        totalFloat: 0,
+        isCritical: true,
+      },
+    },
+    projectFinish: '2027-07-02',
   },
 ];
 

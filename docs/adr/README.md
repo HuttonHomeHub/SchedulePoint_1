@@ -230,4 +230,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0204](0204-a-shaded-control-says-why-to-every-input.md)                                        | A shaded control says why, to every input                                                  | Accepted           |
 | [0205](0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md)                              | A guest sees the swimlanes the diagram is drawn in                                         | Accepted           |
 | [0206](0206-a-swimlane-is-a-projection-of-lanes.md)                                             | A swimlane is a projection of lanes                                                        | Accepted           |
+| [0207](0207-a-milestone-stays-where-its-logic-puts-it.md)                                       | A milestone stays where its logic puts it, across calendars                                | Accepted           |
 | [0208](0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)                        | An import reuses a calendar it would have copied exactly                                   | Proposed           |

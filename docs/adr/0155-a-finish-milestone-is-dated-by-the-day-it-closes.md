@@ -3,6 +3,8 @@
 - **Status:** Accepted (product owner, 2026-09-23: Q1 A, Q2 A, Q3 moot — no baselines captured)
 - **Date:** 2026-09-23
 - **Deciders:** James Ewbank (with Claude Code)
+- **Amended by:** [ADR-0207](./0207-a-milestone-stays-where-its-logic-puts-it.md) (decisions 1, 3 and 4,
+  and the first rejected alternative, across calendars).
 - **Amends:** [ADR-0023](./0023-cpm-scheduling-date-convention.md) §4 (the milestone rule).
   Notes against ADR-0035 §22, ADR-0125/0126 (how frozen dates are read) and ADR-0148 (how a
   placement is read).
@@ -117,6 +119,15 @@ calendar day later than a task ending at T". Three things were not costed when t
   ADR and is `docs/TECH_DEBT.md` #383.
 
 ## Corrections recorded
+
+- **Amended by ADR-0207 (2026-10-26), across calendars.** Decision 1 holds on a milestone's own calendar
+  and gains a second branch for an instant in its calendar's non-working time (the real minute before it).
+  Decision 3's "end of that day" is now midnight, no longer rolled onto the milestone's calendar. Decision 4,
+  "engine instants are not changed", is replaced: a zero-span activity keeps the instant its logic gives it
+  instead of the next working minute. The first rejected alternative (keeping the predecessor's instant)
+  was rejected for a 24-hour lag moving successors; ADR-0207 reverses it for the reason that the
+  rolled instant moved successors a calendar period when the predecessor was on another calendar, and
+  accepts the lag effect under its Q2 A.
 
 - **The spec never covered the stale engine-owned dates** (decision 9). The database-architect
   agent's review of the migration raised it; before that, the plan would have shipped every existing
