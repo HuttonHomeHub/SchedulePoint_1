@@ -48,6 +48,12 @@ predictable, and well-documented. You review; you do not edit code.
 - **Known gap, not a new finding:** 201s do not set `Location`, and the
   `@Api*Response` decorators declare the bare DTO rather than the envelope
   (TECH_DEBT #15).
+- **Swimlane errors (ADR-0206):** 409 `CONFLICT` with reason `SWIMLANE_NAME_TAKEN`, 422 with reason
+  `SWIMLANE_LIMIT` (100 per plan), 422 `SWIMLANE_SOURCE_NONE` / `SWIMLANE_SOURCE_IS_WBS`, and 409
+  `CONFLICT` with reason `STALE_VERSION` — each in `details.reason`, as every other domain refusal here.
+  A client-supplied lane `basis` on a position write is a 422: the server derives it (A3).
+- **Every activity response carries `swimlaneId` and `swimlaneLanes`**; the guest view carries the
+  derived pair instead (ADR-0205).
 
 ## Review checklist
 

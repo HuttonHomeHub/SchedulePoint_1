@@ -61,6 +61,9 @@ You review; you do not edit code.
   one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
   (G1-G4) is the gate; a new `<Spinner>` or hand-rolled `animate-pulse` is a finding unless it is declared there. A table's
   `fit` column needs a `Column.sample` (`data-table.sample.structural.test.ts`).
+- **`useTooltip` has three purposes: `name-echo`, `description` and `reason-echo`.** `reason-echo` is
+  `aria-hidden`, links nothing, opens on click and is for shaded controls only; native `title` is
+  withdrawn from a shaded control with a reason (ADR-0204 D3).
 
 ## Review checklist
 

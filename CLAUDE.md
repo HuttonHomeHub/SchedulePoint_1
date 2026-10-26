@@ -126,7 +126,7 @@ SchedulePoint/
 │   ├── seed-http/            # The seeder as an ordinary REST client (ADR-0066)
 │   └── types/                # Shared cross-boundary types/DTOs (@repo/types)
 ├── docs/                     # Architecture, guides, ADRs, roadmap, decisions
-├── scripts/                  # Repo automation (bootstrap, etc.)
+├── scripts/                  # Repo automation (setup, prepush, e2e-local, the `check-*` gates)
 ├── .claude/agents/           # Specialised review/design subagents
 ├── .github/                  # CI/CD workflows, issue/PR templates, CODEOWNERS
 ├── .changeset/               # Release/versioning state

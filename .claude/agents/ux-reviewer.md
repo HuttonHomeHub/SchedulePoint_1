@@ -42,6 +42,11 @@ review; you do not edit code.
   action keeps a `Spinner`; everything else is `Skeleton` material inside a `LoadingShape`, which speaks
   one sentence and never sits inside an `aria-busy` subtree. `loading-states.structural.test.ts`
   (G1-G4) is the gate; a spinner on a list, table or panel whose rows are known in advance is the finding.
+- **Every shaded control states why, to mouse, keyboard and finger (ADR-0204 D1);** a toolbar control
+  uses the `reason-echo` tooltip, which also opens on a click (D3).
+- **The Swimlanes lens is a checkbox in View ▸ Structure and never opens a dialog;** "Swimlanes…" is a
+  separate command (ADR-0206 B7). Under a WBS source the table and Gantt column read "Follows the WBS"
+  with the way forward (B12).
 
 ## Review checklist
 

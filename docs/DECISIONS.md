@@ -10,6 +10,57 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-26 — Reconciliation pass: the agents had not heard of swimlanes, and the register's pointers had drifted
+
+**What was done.** The pass in `docs/RECONCILE.md` at the swimlanes epic boundary (ADR-0204 to ADR-0206, the 43
+commits since 2026-10-19). On a full clone `check:reconcile-due` reads 3 ADRs since against a threshold of 8, so the
+trigger was the epic boundary, not the count. Every computed gate was green before it started (`check:counts`,
+`check:claims`, `check:adr-coverage`, `check:debt-status`, `check:doc-links`, `check:spec-status`, `check:flags`,
+`check:playbook`, `check:doc-register`, `check:format`). For the first time since 2026-10-05, **step 4 covered every
+open row** (131 rows, read against the code in four batches), and steps 5a and 7 were run.
+
+**What was found wrong.**
+
+- **The agents, a fourth time.** `grep -c 'ADR-0204\|ADR-0205\|ADR-0206\|swimlane' .claude/agents/*.md` returned 0
+  for all fifteen files, after an epic that added a table, a guest widening, a refusal order and a sub-3:1 boundary
+  rule by decision. Nine now carry one or two lines each: `security-` (the swimlane refusal order; what guests do
+  and never see), `api-` (the swimlane error codes; the derived `basis`), `backend-performance-` (the plan lock and
+  `FOR SHARE`), `accessibility-` (the ~2:1 rule is deliberate; a shaded item's reason), `ux-` and `component-reviewer`
+  (ADR-0204's reason-echo), `database-architect` (lane rows per basis, the restore exception, the expiry order),
+  `test-engineer` (the seeds and the `afterAll` clear) and `ui-architect` (the projection seam and #548).
+- **The register's pointers.** No open row was found resolved, but about forty cite a line, a count or a file that
+  has moved: the plan lock has 18 call sites in six modules, not 14 in five (swimlanes added two); `toolbar-band.tsx`
+  is deleted (#149); thirty measurement scripts are now forty (#371). Partly resolved and rewritten to what is left:
+  #204 (c) is closed by ADR-0135; #245 (a test now exists for A11); #268 (eleven suites share `throttle-reset.ts`);
+  #312 (the backfill is done; the citation gate is not); #320 (d) (the diagnostics and export routes do set a
+  timeout); #329 (the rows share `RowSubject`). #306 has a fourth consumer, `SwimlaneGutter`.
+- **`CLAUDE.md` §4 called `scripts/` "bootstrap, etc."**; there is no bootstrap. **`FRONTEND_ARCHITECTURE.md` said
+  cross-feature reuse lives in shared layers** without the `features/tsld` exception ADR-0206 recorded (#548). A
+  measurement script's docblock claimed it bulk-inserts dependencies (#330), and `e2e-local.sh` said a seeding pass is
+  covered by a lock only the script itself takes.
+- **Step 5a's own query needs a full clone.** On the shallow clone it reported all 2,343 files as single-commit,
+  dated 2026-10-22; `RECONCILE.md` now says so.
+
+**New rows.** #551 (a browser render crash is only logged to the console; the telemetry facade the TODO names was
+never written) and #552 (three small UI slips: "Retry" in two places where every other screen says "Try again", a
+hand-rolled button in the Gantt error state, and dark-theme fallbacks in the painter's palette).
+
+**Negative results.** All gated counts agree (27 modules, 38 models, 77 migrations, 1807 files, 49 suites, 206 ADRs;
+50 playbook plans); the four unbuilt ADRs are still unbuilt (no `bullmq`, `ioredis`, `redis`, `@aws-sdk` or
+`@opentelemetry` in any manifest); all eleven manifest descriptions are accurate; `API.md`'s swimlane routes,
+limits, permissions, audit actions, guest fields and XER labels match the code; the agents' model pins match §19.14;
+the three `REFERENCE_FEATURE.md` exemplars still exist and still fit. Step 5a read the global policy files of both
+apps (bootstrap, filters, interceptors, guard order, query client, providers, auth client, theme) and found them
+sound apart from #551. Step 7 reviewed the four pull requests between the last pass and the swimlanes gate review
+(#1103, #1107, #1109, #1110): nothing blocking. The swimlane UI uses one name throughout and sets no colour inline.
+
+**Scope, stated honestly.** Rows whose evidence needs the owner's server or devices (#75, #100, #154, #261, #283,
+#293, #401, #502, #509 and the hardware halves of others) were not judged, by the hard rule. Arbitrary Tailwind sizes
+in `TsldPanel.tsx`, `TsldLegend.tsx` and `activity-bottom-panel.tsx` were noticed and not checked against the sizing
+ratchet. The four pre-swimlane pull requests were reviewed by reading, not with a browser keyboard pass.
+
+---
+
 ## 2026-10-25 — Swimlanes are closed at the gate pass, and the three known gaps stay follow-ons
 
 **Recorded at swimlanes M5** ([ADR-0206](adr/0206-a-swimlane-is-a-projection-of-lanes.md)). Seven

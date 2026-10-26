@@ -42,6 +42,9 @@ not edit code.
   bounded ILIKE with the measurement recorded (0.21 ms default page, 2.9 ms
   worst-case at 5,000 rows); `pg_trgm` GIN is the documented next step, not a
   finding. Same posture for recycle-bin indexes (ADR-0057-era decision).
+- **Swimlane writes (the 100-per-plan cap check, reorder, lane writes) run under the plan advisory
+  lock**, and membership is read `FOR SHARE` in the writing transaction (ADR-0206 A3). A lane write
+  materialises every derived member in the same batch (A4).
 
 ## Review checklist
 

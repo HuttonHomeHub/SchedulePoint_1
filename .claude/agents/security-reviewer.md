@@ -123,6 +123,13 @@ review; you do not edit code. Assume an adversarial user.
   in-process memory, per-replica (TECH_DEBT #49); the keyset cursor is resolved
   before the scope filter, which is a cosmetic anchor issue and leaks no rows
   (#20).
+- **Swimlanes (ADR-0206):** reads need `swimlane:read`; writes need Planner or Org Admin and the pen. The
+  refusal order is 404 (foreign org, then another plan's, deleted or missing swimlane), then 403, then
+  423, and the 409 never echoes a stored name. Only delete and restore are audited.
+- **Guests widen `SCHEDULE_READ` by name (ADR-0205 D1–D2, D5):** the plan view gains
+  `swimlanes: {id,name}[]` (empty unless the source is `MANUAL`) and each activity a derived
+  `memberOfSwimlaneId` / `swimlaneLaneIndex`. Never the raw `swimlaneId`/`swimlaneLanes`, the source or
+  level, `position`/`version`, WBS `parentId` or lane-row `updatedAt`; `guest-dto.spec.ts` pins the lists.
 
 ## Review checklist
 

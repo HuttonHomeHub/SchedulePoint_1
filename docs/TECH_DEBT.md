@@ -255,7 +255,7 @@ rules exist because that is true of any machine nobody chose.
 
 ### 70. The API e2e harness cannot reproduce a same-plan write race
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 > **The first remedy LANDED 2026-09-11 for the single-activity re-parent path, which is the one
 > this row was opened on.** `apps/api/test/wbs-reparent-race.e2e-spec.ts` drives two direct
@@ -275,7 +275,7 @@ rules exist because that is true of any machine nobody chose.
 >
 > **Reclassified `open` → `deferred`, not closed**, and the distinction is exact: the technique is
 > now proven and written down, but it has only been applied to `update`. `updateParents` (the WBS
-> membership batch) takes the same lock at `activities.service.ts:891` and still has no below-HTTP
+> membership batch) takes the same lock at `activities.service.ts:1378` and still has no below-HTTP
 > race test, and so do the dependency-DAG and resource-tree paths this row's own text compares
 > itself to. The trigger is **the next change to any of those locks**, at which point the pattern to
 > copy exists. **The standing rule below still stands unchanged**: do not add another "serialises
@@ -348,7 +348,7 @@ can.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-26
 
 > **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
 > when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
@@ -365,9 +365,11 @@ can.
 > a statement count and a citation to ADR-0053 M6's measurement of the same shape — neither is a
 > reading taken on this path. That measurement is the whole of what remains.
 
-**Fourteen** call sites across five modules now serialise on the same per-plan advisory key —
-`activities.service.ts` (6), `baselines.service.ts` (3), `plan-lock.service.ts` (3),
-`dependency.repository.ts` (1) and `schedule.repository.ts` (1). If recalculate's hold time were to
+**Eighteen** call sites across six modules now serialise on the same per-plan advisory key —
+`activities.service.ts` (8), `baselines.service.ts` (3), `plan-lock.service.ts` (3),
+`swimlanes.service.ts` (2, at `:95` and `:309`), `dependency.repository.ts` (1) and
+`schedule.repository.ts` (1); the two 60 s `BATCH_TRANSACTION_TIMEOUT_MS` overrides are at
+`activities.service.ts:1928` and `hierarchy-expiry.service.ts:291` (re-counted 2026-10-26). If recalculate's hold time were to
 approach the transaction timeout, a batch WBS write queued behind it would fail with a P2028 rather
 than waiting cleanly.
 
@@ -1803,21 +1805,31 @@ fails and therefore what to do about it: a periodic re-derivation pass cannot fi
 never right, and will keep finding the same class forever unless the ordering changes at the point of
 writing.
 
-### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
+### 245. Only A11 of `check-debt-status.mjs`'s assertions has re-runnable coverage
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
 **Owner:** repo
+
+**PARTLY RESOLVED, 2026-10-26: this row is now about what is left.** `scripts/check-debt-status.test.mjs`
+exists (added with A11 in #837 and extended in #1088): it drives `runGate(root)` over a throwaway
+tree, and every **A11** case names the edit to the gate that turns it red, plus a pinned positive
+case and a run over the real register. What it states it does **not** do (its own header): A1–A10
+are exercised only through that positive case and the real register, **not** made to fail by a
+fixture. So A9's field limb, both A10 limbs, the `CANONICAL` regex and the ledger/compact
+classification are still covered only by the document below, and `check-advisory-agreement.mjs`,
+the family's other exception, still has no test file at all. The seam question under "Why it is
+not a quick win" is unchanged.
 
 `scripts/lib/doc-register.test.mjs` opens by calling itself _"the ONLY safety net both gates have"_,
 and it covers the shared **module** — `sections`, `fieldValue`, `stripFences`, `tableRows`, `report`.
 **Re-verified 2026-09-10, and the gap has become an ASYMMETRY rather than an absence.** `scripts/`
 now holds `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs` — both written after this
 row — while `check-debt-status.mjs`, the gate with the most assertions and the one this row names,
-still has none. So the pattern of a gate owning its own test file is established and this file is
-the exception, which is a stronger argument for closing it than the row could make when filed.
+had none _(superseded for A11 above)_. So the pattern of a gate owning its own test file is
+established, which was a stronger argument for closing it than the row could make when filed.
 
-It does not cover the assertions that live in `check-debt-status.mjs` itself: A9's field limb, both
-A10 limbs, the `CANONICAL` regex and the ledger/compact classification.
+Before the A11 suite, nothing covered the assertions that live in `check-debt-status.mjs` itself:
+A9's field limb, both A10 limbs, the `CANONICAL` regex and the ledger/compact classification.
 
 Those were verified — against real revisions, each made to fail first — but the verification lives in
 `docs/specs/gate-conventions/m0-measurement.md`, **a document rather than a re-runnable gate**. An
@@ -1861,7 +1873,7 @@ adds to and does not replace.
 
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 **(b) closed 2026-09-11 by writing it where its reader is; the row is `deferred` on (a)'s own
 trigger.** (b) was never owed work — it is a caveat on a measurement, and a caveat kept in the debt
@@ -1923,7 +1935,9 @@ it did not have.
 >   that fetch, which makes the "a small fraction of #238's fetch" reasoning **stronger**, not weaker.
 >
 > The claims that decide anything are unchanged: `batchRestoreAnchor` still reads every member to
-> pick one id (`activities.service.ts:1402-1411`, then a `Set` filter with no raw SQL), and
+> pick one id (the member `findMany` and the `batchRestoreAnchor(members)` call in
+> `ActivitiesService.restoreDeleteBatch`, then a `Set` filter with no raw SQL; cited by name because
+> the lines it was cited at, `:1402-1411`, have drifted), and
 > `cascade-restore-scale.e2e-spec.ts` still seeds 2,000 flat `TASK` children of one summary with no
 > logic, notes, steps, assignments or baselines.
 
@@ -2058,7 +2072,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ### 101. `check:claims` completeness has structural blind spots
 
-**Status:** open · **Verified:** 2026-09-13 · (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
+**Status:** open · **Verified:** 2026-10-26 · (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
 **Narrowed:** 2026-08-08 (W5 M2-T4)
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
@@ -2104,6 +2118,12 @@ read the field the gate reads — `claims[].path` — and not the file.
    claim, cited in `CLAUDE.md` at a line range that differs from the register's) and one more that is
    `CLAUDE.md`'s own worked example of this notation. Both need a human, which is exactly the cost
    this item describes.
+
+   **Re-read 2026-10-26: limitation 2 is closed except root markdown.** The loop at
+   `check-claims.mjs:367-381` now scans `docs`, `scripts`, `packages`, `apps/api/src`,
+   `apps/api/test`, `apps/web/src`, `apps/seed-cli` and every `apps/web/e2e*` directory, derived
+   from the directory listing rather than listed; the four-directory wording above and the
+   `:360-365` range in the dated notes below describe a gate that no longer exists.
 
 3. **A dotted dependency basename was truncated.** _(Found 2026-08-08, fixed the same day — a third
    hole, not one of the two above.)_ The basename class was `[a-z0-9-]+`, so
@@ -2175,7 +2195,7 @@ number attached.
 
 ### 105. Two follow-ups from the canvas status & feedback gate pass
 
-**Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+**Status:** open · **Verified:** 2026-10-26 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -2198,9 +2218,10 @@ blocked the epic.
 
 1. **`ToolbarItemRenderApi` does not expose the resolved `busy`.** M5 widened the registry with
    `isBusy?: (ctx) => boolean`, resolved once in `resolveItems` and read by `ToolbarButton` — but the
-   `render` escape-hatch's api object still carries only `disabled`/`disabledReason`/`active`/
-   `activeKind`/`itemProps` _(five fields, not the four this row listed: `activeKind` joined at
-   ADR-0133 and nobody swept the row — re-derived 2026-09-11)_. No `render` item declares `isBusy` today, so this is latent rather than broken. The
+   `render` escape-hatch's api object still carries `disabled`/`disabledReason`/`active`/
+   `activeKind`/`itemProps` plus `labelState`/`quietIcons` _(five fields, not the four this row listed: `activeKind` joined at
+   ADR-0133 and nobody swept the row — re-derived 2026-09-11; **seven** on 2026-10-26, `labelState`
+   and `quietIcons` having joined: `toolbar-registry.ts:146-188`)_. No `render` item declares `isBusy` today, so this is latent rather than broken. The
    trap is that `ToolbarItem.isBusy`'s docblock reads as a general contract and does not scope itself
    to plain-button items: the first Tier-2 popover trigger that wants a busy state will silently have
    no way to read it and will re-derive it from `ctx`, which is the two-derivations-of-one-fact
@@ -2231,7 +2252,7 @@ blocked the epic.
    > so the caveat at the top of this row does not apply to the 2026-09-13 date the way it applies
    > to the 2026-09-10 one. Item 1: `ToolbarItemRenderApi` still carries exactly five fields and no
    > `busy`, and the sentence quoted above is still on `activeKind` word for word. Item 2:
-   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:159`), and
+   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:234`, 2026-10-26), and
    > `wbsGroupLabelById` / `composeListboxRowText` are both still single producers with two
    > consumers each, so the contrast the item draws still holds. Nothing changed; the value is that
    > the date now means what a reader will take it to mean.
@@ -2288,7 +2309,7 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 
 ### 117. CSP report delivery is unverified end to end
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 > **Reclassified `open` → `deferred` on 2026-09-11, on the row's own "How to close it".** That
 > sentence is an **observation on the deployed host** — visit a page and read
@@ -2311,6 +2332,12 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 > _(tense corrected 2026-09-11: this read "is filed separately as #231" for nine days after that row
 > closed, which is a filing that reads as pending and is done)_. This line closes the hole the gate
 > could not report.
+
+> **Pointers re-read 2026-10-26; the row is otherwise unchanged.** The read route is now
+> `staff.controller.ts:196`; the content-type registration is `app-setup.ts:168-178`
+> (`jsonTypes`, three types); and `e2e-csp/csp.spec.ts` states the "cannot prove delivery" limit
+> at `:213-221` and points back here at `:234`. The `:166`, `:69` and `:175-181` figures in the
+> 2026-09-10 note below have drifted for that reason alone.
 
 **Found:** 2026-08-09, while writing the gate that was supposed to verify it (staff console M4).
 
@@ -2562,11 +2589,11 @@ same place. Recorded here so the next reader meets the conflict rather than the 
 
 ### 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
 
-**Status:** standing · **Verified:** 2026-09-09
+**Status:** standing · **Verified:** 2026-10-26
 
 > **Restatused to `standing` on 2026-09-09 for the same reason as #118a: a recorded consequence, not
-> owed work.** Still exactly true — `retention-policy.ts:72-73` sweeps on `last_seen_at` at 30 days
-> with the consequence stated in its own docblock at `:58-71`, and the guard against "tightening" it
+> owed work.** Still exactly true — `retention-policy.ts:74-75` sweeps on `last_seen_at` at 30 days
+> with the consequence stated in its own docblock at `:60-73` (re-read 2026-10-26), and the guard against "tightening" it
 > is live as a test: `retention-sweep.e2e-spec.ts:97`, _"KEEPS a violation that is old but still
 > being reported"_.
 
@@ -2590,7 +2617,7 @@ bounds a sustained flood and the sweep bounds the residue after one stops.
 
 ### 123. One create-dialog earned-value case failed once in a full run and has not repeated
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 > **Reclassified `open` → `deferred` on 2026-09-11, and the evidence for it is this row's own
 > history.** It has now drawn **three** separate re-verification passes (2026-09-01, 2026-09-10, and
@@ -2653,18 +2680,20 @@ double-submit apart from a slow one. Left open rather than guessed at.
 
 > **Attempt 27, 2026-09-10: no reproduction.** The file was run in isolation — 4 passed of 4 — and
 > both halves of the row hold exactly: the case name is unchanged at
-> `ActivityCreateDialog.earned-value.test.tsx:113`, and the call-count assertion added on 2026-09-01
-> is present on **both** submitting cases (`:143`, `:160`) with the comment at `:136` distinguishing
-> a slow submit from a double one. An intermittent claim cannot be falsified by a passing run, only
+> `ActivityCreateDialog.earned-value.test.tsx` ("creates an activity carrying the %-complete type
+> and expense (major → minor)"), and the call-count assertion added on 2026-09-01 is present on
+> **both** submitting cases (`expect(apiFetch, 'a second submit reached the API')`, now at `:95`
+> and `:112`; cite the assertion message, since line numbers here drift) with the comment above it
+> distinguishing a slow submit from a double one. An intermittent claim cannot be falsified by a passing run, only
 > given one more datum, and this is that. Nothing to change; the row stays open by design.
 
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-26
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
-whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
-`dependencies.spec.ts` (×2), `schedule.spec.ts` (×2) — run with `penManaged: false`: the client pen
+whole base journey, so its eight editing tests — `activities.spec.ts` (×1), `baselines.spec.ts`
+(×3), `dependencies.spec.ts` (×2), `schedule.spec.ts` (×2) — run with `penManaged: false`: the client pen
 inert, gating by role alone.
 
 **No shipped bundle can be in that configuration.** Both flags are compiled on and unreachable by any
@@ -2677,12 +2706,17 @@ D4 keeps both permanently (they are one line of production code each), which mea
 before the flag is deleted" would never fire. Hence this row: the conversion is owned here, with a
 trigger of its own.
 
-**What to do:** convert the six specs to acquire the pen, and drop the two pins from
+**What to do:** convert the eight tests to acquire the pen, and drop the two pins from
 `playwright.config.ts`. The gating _logic_ is already safe either way —
 `plan-gating.test.ts` unit-tests `derivePlanGating({ penManaged: false, … })` as a pure function
 taking a boolean as data rather than through the env module, so it survives whatever happens to the
 flags. What needs re-hosting is the end-to-end proof against a real API, which no unit test replaces
 (the ADR-0067 modal-in-top-layer and ADR-0079 native-listener-race defects are both of that class).
+
+_(Re-counted 2026-10-26: `baselines.spec.ts` now holds three tests, not one, so eight in all; the pins
+are at `playwright.config.ts:76-77` and the `derivePlanGating(` call is
+`components/layout/workspace/use-plan-workspace-model.ts:267`. Earlier "six" and `:180`, `:65-68`
+figures below were true on their dates.)_
 
 **Trigger:** the next epic that touches plan editing end to end, or the next time a base-journey
 editing spec needs changing for any reason — whichever comes first. Not a date: ADR-0088 supersedes
@@ -2807,7 +2841,7 @@ what `RUN_CAP` exists for.
 
 ### 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
-**Status:** open · **Verified:** 2026-09-01
+**Status:** open · **Verified:** 2026-10-26
 
 > **2026-09-12 — NOT a sixth occurrence, and it is filed here because it is this row's COST rather
 > than its subject.** Do not add it to the count of five: the signature is different in every
@@ -2885,6 +2919,10 @@ what `RUN_CAP` exists for.
 > creates none to leave behind, and it lives under `test/pairwise/**`, which
 > `apps/api/vitest.e2e.config.mts:18` excludes from the default e2e set. **No sixth occurrence is
 > waiting in the current tree.**
+>
+> _(Re-counted 2026-10-26: **38** `*.e2e-spec.ts` files call `plan.deleteMany()` and **37** sweep
+> baselines, the exception still being the pairwise spec; the exclusion is now
+> `vitest.e2e.config.mts:21`; `clearBaselineTree` appears in 20 files.)_
 >
 > _(A first pass grepped only `baseline.deleteMany|clearDomainData` and reported NINE gaps. Eight of
 > the nine call `clearBaselineTree`. Recorded because this row's whole history is people
@@ -3082,13 +3120,13 @@ calendar-factor change is not a schedule change. Nothing today distinguishes the
 
 ### 313. One Firefox-only base-journey sign-up failure is unexplained, and its trace was never read
 
-**Status:** open · **Verified:** 2026-10-21 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
 
 **Corrected and narrowed to `open` 2026-10-21 (owner's decision); everything below the next two paragraphs is
 the 2026-09-13 record, kept as written.** The heading read "widened at 4 of 61" until 2026-09-13 and
 "4 of 64" until today; both are stale. Re-counted on `46edeb5` from `apps/web`:
-`grep -rn "create your organisation" e2e*/` returns **73** sites, and
-`grep -rn -A1 "create your organisation" e2e*/ | grep -c 15_000` returns **71** carrying
+`grep -rn "create your organisation" e2e*/` returned **73** sites (**74** on 2026-10-26), and
+`grep -rn -A1 "create your organisation" e2e*/ | grep -c 15_000` returned **71** (**72** on 2026-10-26) carrying
 `{ timeout: 15_000 }` on the next line. **All 13 base-journey sites** in `e2e/*.spec.ts` are widened
 (same pipeline over that glob: 13). The two that are not are **not waits at all**: line 296 of
 `e2e-public/support.ts` is `toBeHidden()` and line 656 of `e2e-staff/staff.spec.ts` is
@@ -3097,7 +3135,7 @@ positive wait is widened, and the ten un-widened neighbours this row counted on 
 The multi-line-locator site it mentions is also gone as a non-assertion: lines 120, 150, 184 and 244
 of `e2e-account/verification.spec.ts` are positive `expect`s with the timeout on the following line.
 A mechanical aside from the same count: the shared `onboard(` helper the remedy paragraph proposes
-now exists in **35** files under `apps/web/e2e*/` (`grep -rln "async function onboard("`), five of
+now exists in **35** files (**36** on 2026-10-26) under `apps/web/e2e*/` (`grep -rln "async function onboard("`), five of
 them base-journey specs (`navigator-crud`, `baselines`, `recently-deleted`, `schedule`, `tsld`).
 
 **What is left is one thing:** `e2e/dependencies.spec.ts` failed three consecutive times at 15 s on
@@ -3248,7 +3286,7 @@ remains is reading one trace, and a test-side fix would be an edit to one spec.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 **Reclassified `open` → `deferred` on 2026-09-11, having walked all five.** Three are closed. The
 `localStorage` item's remedy is _measure before debouncing_ — a condition, not a task — and the
@@ -3266,7 +3304,7 @@ verified red first. What follows is what was deliberately **not** folded, with t
 - ~~**`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.**~~ **CLOSED 2026-09-01,
   and the resolution was not the one this item weighed.** The item chose between keeping the prop,
   a name-agnostic passthrough and a rename. It never asked whether anything used it: **zero call
-  sites**. So the prop was deleted rather than debated, and `menu.tsx:344` now records why, and the
+  sites**. So the prop was deleted rather than debated, and `menu.tsx:384` now records why, and the
   condition for bringing it back — a caller that actually wants a stable per-row locator. An item
   that argues three ways to shape an API for "one caller" is worth a `grep` before it is worth an
   argument; this one had none.
@@ -3288,6 +3326,9 @@ verified red first. What follows is what was deliberately **not** folded, with t
   behind **both** the Project Explorer rail and the plan workspace's activity panel" seven consumers
   later. The remedy is unchanged — measure before debouncing — but a reader costing it from the old
   number is costing it from 2026-08-20.
+  > _(Re-counted 2026-10-26: **seven** call sites of `useResizablePanelPrefs(`, each in its own
+  > `use-*-prefs` adapter, unchanged since the count below.)_
+  >
   > **The 2026-09-09 correction was itself wrong, and this is the fourth miscount of this shape in
   > this register** (2026-09-11). It said **nine**, then named **eight** — and one of those eight, the
   > legend, only _mentions_ the hook in a comment (`use-legend-panel-prefs.ts:56`, "matches the shared
@@ -3307,9 +3348,11 @@ verified red first. What follows is what was deliberately **not** folded, with t
   item set changes without a dependency the effect could key on, and `observe()` on an
   already-observed node is a no-op per spec. `Toolbar` no longer owns an observer at all: ADR-0091 M7
   moved the measurement up to one `ToolbarBandProvider` per band, because a row's own `clientWidth`
-  is leftover width the moment anything sits beside it. That effect's dependency array is **empty**
-  (`toolbar-band.tsx:62-75`), so it observes **once** for the band's lifetime — the concern is gone
-  structurally, not argued away. The item's closing sentence ("it now iterates the union of what were
+  is leftover width the moment anything sits beside it. That effect's dependency array was **empty**,
+  so it observed **once** for the band's lifetime — the concern was gone structurally, not argued
+  away. _(Re-read 2026-10-26: `toolbar-band.tsx` no longer exists. The provider, which nothing
+  read after ADR-0109 D1, was deleted under #193; the comment at `app-header.tsx:208-211` says so.
+  The closure stands, and the file cite it used to carry went with the file.)_ The item's closing sentence ("it now iterates the union of what were
   two rows' `render` items") describes a pass ADR-0109 D1 deleted.
 - **The status bar says nothing when a computed plan has no critical activities.** Suggested as an
   inconsistency with `Finish`'s "Not calculated". Left alone, and the reason is that the state is
@@ -3383,13 +3426,13 @@ with the Phase 2 report so the row has an owner outside this environment.
 
 ### 155. The minimap M4 gate pass's non-blocking findings
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 **Reclassified `open` → `deferred` on 2026-09-11, having walked all five against the code.** Items 1
 and 3 carry **named triggers** (first-contact feedback; if the empty state ever surfaces in use),
 item 2's decision stands and its own note now records that the regime it argued about no longer
 exists, and item 5 is a record. **Item 4 is a decision the code already states in its own
-comment** — `TsldMinimap.tsx:109-112` says a doubly-unusable chain is unreachable because
+comment** — `TsldMinimap.tsx:107-119` (the `handleClose` comment and its fallback; was `:109-112`) says a doubly-unusable chain is unreachable because
 `TsldPanel` always wires the listbox ref, and that if a future host omits it _"focus stays where it
 is rather than being flung somewhere surprising"_, which is the better behaviour rather than a
 missing one. It is also §19.13 territory (a shared close-chain contract wants a review before
@@ -3597,7 +3640,7 @@ repository had no hyphenated output anywhere to copy from.
 
 ### 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
-**Status:** open · **Verified:** 2026-09-14
+**Status:** open · **Verified:** 2026-10-26
 
 > **Measured 2026-09-14, and the number is the argument for the schema change this row keeps
 > deferring.** One routine bump — zod 4.4.3 → 4.6.5, react-hook-form 7.86 → 7.88, and the three
@@ -3612,8 +3655,9 @@ repository had no hyphenated output anywhere to copy from.
 > this row already scopes, and doing half of it inside a dependency bump is the shared-gate change
 > ADR-0105 exists to stop.
 
-> **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:382` builds the
-> ref from **basename + line range only** and `:393-395` matches on that string alone; no claim in
+> **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:390` builds the
+> ref from **basename + line range only** and `:403` matches on that string alone (re-read
+> 2026-10-26; the register then held **166 claims across 26 packages**); no claim in
 > `scripts/dependency-claims.json` carries a `version`, and `verifiedAgainst` holds one version per
 > package. The row says "all 78 entries" and its 2026-09-03 sweep said 97; **on 2026-09-09** the
 > register held **96 claims across 15 packages** — dated rather than stated flat, because it was
@@ -3704,7 +3748,7 @@ then be changing underneath the citations it is checking.
 
 ### 184. Unsaved-work guard: the findings its gate pass did not block on
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-10-26
 
 **Reclassified `open` → `deferred` on 2026-09-11, having walked all seven.** Five are closed. The
 two that survive are not folds and say so themselves: the CONFIRM-path focus gap is _"a systemic
@@ -3742,7 +3786,7 @@ rest, recorded rather than carried in someone's head._
   registry changes, and the effect's dependency array could not move while a confirmation stood. It
   could fire only if something unrelated happened to re-render the component. Verified: with the
   pre-fix effect restored, `proceed` is not called at all in the new case.
-  The fix gives `useUnsavedWorkReports` its **first production caller** (`navigation-guard.tsx:91`)
+  The fix gives `useUnsavedWorkReports` its **first production caller** (`components/layout/unsaved-work/navigation-guard.tsx:91`)
   — the subscribing reader this register recorded on 2026-08-31 as having none, kept "for a future
   consumer"; this is that consumer. _(For eight days the export's **own** docblock went on saying
   "Dormant: nothing in the application calls this", citing this row and a `rg` from 2026-08-31. The
@@ -3794,7 +3838,7 @@ rest, recorded rather than carried in someone's head._
   > which is a bigger finding than the gap it was filed as.** Enumerated: there are **four**
   > registrants (`ActivityEditorDialog`, `ActivityCreateDialog`, `CalendarFormDialog`,
   > `CalendarExceptionsEditor`, the last rendered inside the third), and **every one of them lives
-  > inside a modal `<dialog>`** — `dialog.tsx:70` calls `showModal()`. A modal dialog puts
+  > inside a modal `<dialog>`** — `dialog.tsx` calls `showModal()` through `useNativeModal` (`use-native-modal.ts:37`). A modal dialog puts
   > everything behind it in the browser's top layer and makes it `inert`, so while any of them holds
   > unsaved work there is **no in-app link a planner or a test can reach**. ADR-0108 recorded
   > exactly this about the editor ("never reachable while it was open — for a test or a planner")
@@ -3880,7 +3924,7 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ### 191. The local pre-push gate is one expensive step, and it is `pnpm test`
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-26
 
 > **The title said "8 minutes and 96% of it is two steps" until 2026-09-09, and that is now false.**
 > `eslint --cache --cache-strategy content` landed in all nine lint scripts (`apps/web/package.json`,
@@ -3909,6 +3953,8 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 > **The conclusion is unchanged and is kept:** nineteen gates still cost seconds between them, so
 > the standing advice stands. Only the population moved. Confirmed from a real run rather than from
 > the manifest — `prepush` executed all **19** on 2026-09-13.
+>
+> **And 22 on 2026-10-26** (`grep -o '"check:[a-z0-9-]*"' package.json | wc -l`); the advice stands.
 
 _Filed 2026-08-25 by the reconciliation pass, at the product owner's request to check whether we
 over-test locally._
@@ -4149,7 +4195,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 
 ### 197. Three rules with two or three implementations each, agreeing by discipline
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-26
 
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
 already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
@@ -4188,12 +4234,14 @@ Take them in the order above.
 
 > **Both surviving counts re-derived and both exact** (2026-09-13). Item 3 is still **four**
 > implementations of the capture-phase Escape + outside-pointerdown contract — `menu.tsx`,
-> `combobox.tsx`, `use-popover-panel.tsx`, `tooltip.tsx`, and no others in `apps/web/src`. Item 2 is
+> `combobox.tsx`, `use-popover-panel.tsx`, `tooltip.tsx`, and no others in `apps/web/src`
+> (`use-popover-panel.tsx` lives in `components/ui/toolbar/`, re-checked 2026-10-26). Item 2 is
 > still **three** reason-first `aria-describedby` compositions; `ToolbarPopover` and `scope-save-bar`
 > carry the dangling-reference guard but compose no ordering, so they are not a fourth and a fifth.
 >
 > **One thing checked because it looked like a defect and is not.** `ToolbarButton` composes twice —
-> reason-first at `:97`, then joins the tooltip's own description **ahead** of that at `:140`, which
+> reason-first at `:97` (now `:122`-`:131`), then joins the tooltip's own description **ahead** of
+> that at `:140` (now `:181`-`:182`), which
 > would invert the rule this item states as load-bearing. It cannot be reached: `tipPurpose` carries
 > `&& !disabled`, and the reason id is set only when `disabled`, so the tooltip description and the
 > reason are mutually exclusive by construction. Recorded so the next reader does not re-open it.
@@ -4264,7 +4312,7 @@ the better pattern sitting one directory over.
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-10-26
 
 **Five of the six are resolved; one remains, and it is spec-gated** (swept 2026-09-11, item by
 item). (b), (c) and (d) closed between 2026-08-31 and 2026-09-09, (e) closed as stale and (f) was
@@ -4453,7 +4501,7 @@ Not re-filed here, because the same finding in two places is how a register star
 itself. _(This said "already filed as #204(b)" until 2026-09-09, which overstates it: #204(b) names
 `hover:bg-accent/60` and `bg-warning/15` and does **not** name `bg-foreground/5`. The reasoning
 transfers and the utility does not, so the honest word is the class. It is still live, at
-`toolbar-styles.ts:119`, consumed by `selection-actions.tsx:1005` and `Deck.tsx:237`.)_
+`toolbar-styles.ts:112` (was `:119`), consumed by `selection-actions.tsx:1005` and `Deck.tsx:237`.)_
 
 **Not worth a test either, and that is the decisive half.** The row concedes 1.4.11 does not apply
 to the card; a contrast assertion asserts a **floor**, and a floor on a 5 % decorative wash would
@@ -4462,7 +4510,7 @@ the chrome scope's existing text pairs.
 
 ### 204. Four things the foot-row-and-deck epic found and did not fix
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-10-26
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
 narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
@@ -4474,6 +4522,9 @@ work._
 Five specialist reviews over the epic's diff. Accessibility passed with nothing blocking; ux and
 component blocked on findings that were folded in the milestone. These four are recorded rather
 than rushed.
+
+**State on 2026-10-26: (a) and (c) are CLOSED, (d) is a record, and what is left is (b)'s residue,
+`bg-foreground/5` alone.** `hover:bg-accent/60` is no longer in `toolbar-styles.ts`.
 
 **(a) An icon-only object action names itself only on hover, and the object bar is a new surface for
 that gap.** _CLOSED 2026-08-28 (fix-slice M-B, ADR-0117), with the premise corrected: it had
@@ -4499,7 +4550,9 @@ surface: `#131`'s scope names the deck and not the docked object bar. Either wid
 is a shared-primitive change, so it wants its own spec (ADR-0105).
 
 **(b) `hover:bg-accent/60` now composites against the chrome scope on the object bar, and the
-contrast matrix structurally cannot see it.** `token-contrast.test.ts` computes ratios between
+contrast matrix structurally cannot see it.** _(2026-10-26: `hover:bg-accent/60` is gone from
+`toolbar-styles.ts`; only `bg-foreground/5` remains, at `toolbar-styles.ts:112`, and the question
+is the one in the half-closed note below.)_ `token-contrast.test.ts` computes ratios between
 declared token pairs; an alpha-composited utility (`toolbar-styles.ts`, `Badge`'s
 `bg-warning/15`) is not a pair and is invisible to it — the file's own docblock records that lesson
 from `hover:bg-destructive/90` shipping unchecked. Both classes already rendered on `chrome` via
@@ -4515,7 +4568,7 @@ composited value, not a matrix entry.
 > shape, so **the `Badge` half is gated**.
 >
 > **The toolbar half is live, and the reason is the discriminator rather than an oversight.**
-> `toolbar-styles.ts:203` (`hover:bg-accent/60`) and `:119` (`bg-foreground/5`) carry **no `text-`
+> `toolbar-styles.ts:203` (`hover:bg-accent/60`, since removed) and `:119` (`bg-foreground/5`, now `:112`) carry **no `text-`
 > token in the same class string**, so `findAlphaPairs` reaches `if (!fill || !ink) continue` and
 > skips both. That is the gate working as designed — it asserts a **contrast pair**, and a
 > decorative wash with no ink on it is not one. So this item is not "add two entries to a gate"; it
@@ -4525,7 +4578,12 @@ composited value, not a matrix entry.
 > measures one, so no instrument in the repository sees `hover:bg-accent/60` in any scope.
 
 **(c) A scheduling-mode flip while focus sits on `Clear visual start` may drop focus to `<body>`.**
-M1 makes that control `isVisible: false` outside Visual mode, so a mode change unmounts it.
+_CLOSED 2026-10-26 by ADR-0135: `useFocusHandoff` (`components/ui/toolbar/use-focus-handoff.ts`)
+hands focus to the surrounding selection bar and says why, from the registry's `lostReason`; the
+real-browser proof is `e2e-workspace-chrome/peer-unmount-focus.spec.ts`. The probe the notes below
+call `measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts` no longer exists, and the
+scheduling-mode route it exercised went with the mode collapse (the replacement spec's header explains, and now drives a peer turning the selection into a summary). The
+notes are kept as the record of how the defect was established._ M1 makes that control `isVisible: false` outside Visual mode, so a mode change unmounts it.
 `Toolbar`'s roving-tabindex repair reassigns which item is `tabIndex=0`; it does not move
 `document.activeElement`. Whether the case is reachable depends on whether a mode change can happen
 without also clearing the selection (which would take the whole bar with it and make the question
@@ -4658,7 +4716,7 @@ claims in documents and this was a claim in a **choice**, and nothing currently 
 
 ### 206. Health-check review suggestions consciously not folded at the M5 gate pass
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-10-26
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. The print-header convention spans two print
 documents and wants one decision, not a fold; the Badge swap changes a shipped panel's look (a ux
@@ -4704,7 +4762,9 @@ all six are live:
   > it cannot be the discriminator on its own.
   >
   > **The seventh: the printed report rendered NO per-row caveat at all.** `caveatSentence` reached
-  > the panel (`ScheduleHealthPanel.tsx:360-361`) and nothing in `HealthPrintDocument.tsx`, so
+  > the panel (`ScheduleHealthPanel.tsx:360-361`, now `features/schedule-health/components/
+ScheduleHealthPanel.tsx:364-365`) and nothing in `HealthPrintDocument.tsx`
+  > (`features/schedule-health/print/`), so
   > metric 10's narrowing survived the handover only through the footer's role-invariance clause,
   > and metric 12's injection figures — the ones ADR-0116 M6 added so the verdict is reproducible
   > by hand from the sentence alone — did not survive it at all. A **Scope notes** section now
@@ -4712,7 +4772,7 @@ all six are live:
   > with a pinned negative (no heading when no row carries a note).
   >
   > **Left alone deliberately**: the footer still restates the narrowing in prose
-  > (`HealthPrintDocument.tsx:127`). Its subject is G4 role-invariance and the narrowing is cited
+  > (the `<footer>` of `HealthPrintDocument.tsx`; it was `:127`). Its subject is G4 role-invariance and the narrowing is cited
   > there as the REASON, not as a scope caveat — rewriting a deliberate G4 sentence to close a
   > second-copy risk is a larger change than the risk. It is the remaining hardcoded statement of
   > that fact.
@@ -4750,7 +4810,7 @@ all six are live:
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
@@ -4774,7 +4834,8 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   > Second, the toolbar's live members are **narrower than "every icon-only control"**: nothing in
   > `apps/web/src` sets `showLabel: 'never'` (both matches are comments recording the option being
   > measured and rejected), so `ToolbarButton`'s icon-only tooltip branch is **dormant** and the one
-  > live toolbar consumer is the bespoke undo/redo pair at `tsld-toolbar-items.tsx:1984`. With
+  > live toolbar consumer is the bespoke undo/redo pair, `UndoRedoControl` in `tsld-toolbar-items.tsx` (its `useTooltip({` was
+  > `:1984` on 2026-09-11 and is `:2624` on 2026-10-26). With
   > `HierarchyTree`'s row-menu long-press that makes **two** live members, both named — the same
   > count this row already reached, arrived at from the other side. The finding is unchanged; its
   > blast radius is now a number rather than a category.
@@ -4816,6 +4877,11 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   > will not find it), `export-image.test.ts:286-298` is the `it('reserves EXPORT_MARKER_ROW by
 default, in both extents')` case down to the phrase this row quotes, and
   > `tsld-toolbar-items.tsx:1984` is the `useTooltip({` of the bespoke undo/redo pair.
+  >
+  > _(Re-read 2026-10-26, the cites having drifted: `<PlanShortcutsHelp` is at
+  > `plan-workspace-toolbar.tsx:2556`; the `markerRow` default is at
+  > `features/tsld/export/render-export-image.ts:344`; the undo/redo pair's `useTooltip({` is at
+  > `tsld-toolbar-items.tsx:2624`. The conclusions above are unchanged.)_
 
 - **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
   `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
@@ -4960,7 +5026,7 @@ question, and the trigger is what to look at.
 
 ### 228. Stacked-histogram gate-pass suggestions, consciously not folded
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -5004,12 +5070,12 @@ its reason rather than quietly dropped.
   > **Costed 2026-09-11 and NOT done, because it fires an ADR-0105 trigger.** `w-42` is 168 px
   > exactly, so the arithmetic is free. What is not free is the shape: the width reaches the DOM
   > through `StackLegend`'s optional `width?: number` prop, applied as an inline style in its
-  > `column` branch only (`StackLegend.tsx:33-34,46`). Moving it to a class means **removing that
+  > `column` branch only (`StackLegend.tsx:34,47`; was `:33-34,46`). Moving it to a class means **removing that
   > prop** — the width belongs to the layout, which is what that component's own docblock already
   > says ("a 168 px column beside a 72 px strip") — and removing a prop is a **component
   > public-contract change**, which ADR-0105 lists flatly as a trigger whatever the blast radius.
   > Measured blast radius, so the next reader does not have to: **two** consumers
-  > (`ResourceStackChart.tsx:62` passes it, `resource-strip-panel.tsx:299` does not, being `row`),
+  > (`ResourceStackChart.tsx:66` passes it, `resource-strip-panel.tsx:375` does not, being `row`; both re-read 2026-10-26),
   > and the prop has no other reader. Small, and still the decision the trigger exists to catch.
 - ~~**The plan describes a third stacking mode, `Kind`, that was never built.**~~ **BUILT
   2026-09-01.** `StackBy` is `'resource' | 'group' | 'kind'`; the invariance gate now compares all
@@ -5056,7 +5122,7 @@ nothing saying which.
 
 ### 268. An e2e suite's coverage was bounded by a throttle counter it shared between tests
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
 
 `apps/api/test/staff.e2e-spec.ts` reached the ceiling of `StaffController`'s
 `@Throttle({ default: { limit: 30, ttl: 60_000 } })` and nobody knew, because the symptom does not
@@ -5147,6 +5213,14 @@ trap is set exactly where the row says, and one file is still inoculated against
 >
 > The remedy is unchanged: both candidates still change how every API e2e suite is set up, so
 > ADR-0105 still fires and this still wants a spec rather than three more `beforeEach` edits.
+>
+> **2026-10-26 — the helper exists and eleven suites use it; the three rows marked "no" above are
+> still no.** `apps/api/test/throttle-reset.ts` is imported by 11 `*.e2e-spec.ts` suites
+> (`grep -rl throttle-reset apps/api/test`, two further `measure/` files aside), so the condition
+> is no longer one file's. What is left is the half this row argues for: `csp-report.e2e-spec.ts`,
+> `schedule.e2e-spec.ts` (`float-paths`) and `schedule-health-check.e2e-spec.ts` do not import it,
+> and nothing DETECTS a suite that needs it. The earlier "ONLY suite" and "zero references" counts
+> above were true on their dates. The remedy and its ADR-0105 trigger are unchanged.
 
 **Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
 other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
@@ -5165,7 +5239,7 @@ change that looks like a remedy, sits in the tree, and does nothing.
 
 ### 365. `#364`'s 420 px, and every Part A lane figure, were measured on summaries at day 0
 
-**Status:** open · **Verified:** 2026-09-22 (re-taken with the rollup: the Unit 300 fixture reports
+**Status:** open · **Verified:** 2026-10-26 (re-taken with the rollup: the Unit 300 fixture reports
 **4 summary-only lanes of 21 — 112 px**, against the 13 of 27 / 420 px `#364` records) ·
 **Raised:** 2026-09-22 (found by looking at a rendered picture while producing Part C's M-C0
 artefacts, after every figure in that file had already been taken)
@@ -5174,7 +5248,7 @@ artefacts, after every figure in that file had already been taken)
 `durationMinutes` and its dependencies. A `WBS_SUMMARY` carries **no logic** (ADR-0038) and a stored
 duration of **zero** on this fixture, so all eighteen land at day 0 as invisible points. The engine
 does the opposite: it **derives** a summary's span from its children — earliest early-start to latest
-early-finish over its direct children, deepest-first (`apps/api/src/modules/schedule/engine/compute.ts:545`,
+early-finish over its direct children, deepest-first (`apps/api/src/modules/schedule/engine/compute.ts:578`,
 ADR-0035 §24) — and `computeLaneArrangement` packs the dates the engine wrote. So every lane figure
 taken with that harness describes a plan SchedulePoint does not produce.
 
@@ -5760,7 +5834,7 @@ is how a figure survives six weeks past being wrong.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
-**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-10-26 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
 
 **Reclassified `open` → `deferred` on 2026-09-11, on this row's own last sentence.** The five
 orderings are fixed; what remains is a design question the row deliberately files rather than
@@ -5774,6 +5848,10 @@ deliberately preserve rows, and a cycle in the FK graph) it already names.
 **17** files use the `clearBaselineTree` helper #253 created — so the shared helper covers its one
 parent and the hand-written topological sort of everything else survives in the rest, exactly as
 this row describes.
+
+_(Re-counted 2026-10-26, of 99 `*.e2e-spec.ts` files in `apps/api/test`: **48** call `deleteMany`
+directly, and `clearBaselineTree` appears in **20** files — 19 callers and the helper's own
+`clear-baseline-tree.ts`. Both moved up with the suite; the shape is unchanged.)_
 
 #253 removed the duplication for **one** parent (`baseline`) by asking `Prisma.dmmf` for its
 children. The rest of each reset is still a hand-written topological sort of the whole schema, one
@@ -5832,7 +5910,7 @@ that deliberately preserve rows, and a cycle in the FK graph) are design questio
 
 ### 257. ADR-0086 D6 records a staff write that was never built
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
 
 `docs/adr/0086-staff-principal.md:143-145` states, in an **Accepted** ADR:
 
@@ -5844,7 +5922,7 @@ There is no `@Post`, `@Put`, `@Patch` or `@Delete` anywhere in `apps/api/src/mod
 controller has six `@Get` routes and nothing else. Verified by grep, 2026-09-07.
 
 **That paragraph went stale the same week and the row's claim did not — 2026-09-10.** The staff
-module now has a write: `staff.controller.ts:252`, `@Post('probe-results')`, shipped by ADR-0128 as
+module now has a write: `staff.controller.ts:324` (was `:252`), `@Post('probe-results')`, shipped by ADR-0128 as
 the console's canvas benchmark. So "no `@Post` anywhere" is false, while **the row's actual subject
 — the "send a test message" route ADR-0086 D6 describes as existing — is still not built**. The
 distinction matters because the stale sentence is the one a reader would run, and finding a `@Post`
@@ -5876,7 +5954,7 @@ write nobody reviewed on its own terms.
 
 ### 255. Six non-blocking findings from the revision-compare gate pass
 
-**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-10-26 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
 
 > **Reclassified `open` → `deferred` on 2026-09-11, after the item-by-item walk below.** Three of
 > the six are done. The **whole remainder is a decision somebody else takes**, and each names whose:
@@ -5956,14 +6034,14 @@ incidentally. One had been, halfway, which is the case that caveat exists for.
 
 **Still open, each verified against the code today:**
 
-- **3** stands (`TsldPanel.tsx:260-271` — the five props are still separate). **Not done here
+- **3** stands (`TsldPanel.tsx:269-296` — the five `compare*` props are still separate; was `:260-271`, re-read 2026-10-26). **Not done here
   because it is a component's public contract**, which ADR-0105 makes a spec-and-approval change
   whatever its size.
 - **4** stands. It is a **visual design decision** — choosing a treatment that separates
   "incident to my selection" from "changed in the comparison" without reaching for colour alone —
   and not a defect with one right answer.
 - **5** stands, and the verification is exact: `setRevisionFrom` has **one** caller in the whole
-  file, the picker's `onFromChange` (`plan-workspace-toolbar.tsx:1510`). Nothing clears the pair on
+  file, the picker's `onFromChange` (`plan-workspace-toolbar.tsx:2107`; was `:1510`). Nothing clears the pair on
   close. **Not done because the remedy is a product decision**: clear the pair on close, which
   removes an overlay a planner may have opened deliberately, or keep it and caption it. ADR-0127
   D8b made the overlay default-on, which makes that choice sharper rather than easier.
@@ -6381,7 +6459,7 @@ than having to remember to look.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -6478,7 +6556,7 @@ standing caveat.
 **(e)** ~~`docs/API.md`'s **existing, untouched** description of the plan-nested route's
 `ghosts`/`links` says "Neither is capped"~~ — **CLOSED 2026-09-11.** The claim was verified against
 the code rather than taken from this row: `revision-ghosts.ts:151,225` both `slice(0, cap)` and
-return the pre-cap `total`, and `schedule.service.ts:227` sets `REVISION_ROW_CAP = 200`. So the
+return the pre-cap `total`, and `schedule.service.ts:270` sets `REVISION_ROW_CAP = 200` (was `:227`). So the
 paragraph described the state that shipped for one review cycle before two independent reviews
 caught it, which that file's own docblock records. `docs/API.md:1193` now names the cap, names the
 two total fields (`ghostsTotal`/`linksTotal`), and carries the correction's date and reason rather
@@ -6518,7 +6596,7 @@ component, but a planner may expect to click through from the list they were tol
 **(i)** ~~The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
 terms even when reached through the cross-plan picker, where the planner chose a _plan_~~ —
 **CLOSED 2026-10-20.** The literal symptom was already gone: `hasRevisionPair` counts a chosen plan
-(`plan-workspace-toolbar.tsx:315`), so the cross-plan path meets no refusal. What remained was
+(`plan-workspace-toolbar.tsx:376`, was `:315`), so the cross-plan path meets no refusal. What remained was
 "two revisions" when one choice suffices and a plan is also a valid choice; it now reads "Choose
 what to compare in Compare revisions… first", pinned negatively in `compare-overlay-refusal.test.ts`.
 
@@ -6636,10 +6714,15 @@ re-derive the diagnosis from four confusing failures.
 > this date would assert something this block says it did not do. Recorded because the opposite
 > reading is the obvious one: see `#302`, where the general rule was measured, drafted, and then
 > rejected on exactly this row.
+>
+> _(Re-read 2026-10-26: the port guard's loop is now `scripts/e2e-local.sh:214`, and
+> `apps/web/package.json` declares **51** `test:e2e:*` scripts beside the base journey, so the
+> `43 of 44` denominator would read 51 of 52 today. The line cite and count above were exact on
+> their date.)_
 
 ### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
 
-**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-09-13 ·
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-10-26 ·
 **Size:** S · **Owner:** api
 
 **The two defects this row was raised for are fixed** (product-owner decisions, 2026-09-09). It is
@@ -6693,18 +6776,18 @@ asserts no performance **bar**. It produces a report nobody reads on a run nobod
 > `expect(lastChanges, 'the two sides must genuinely differ, or this measures the fastest path')`;
 > `expect(routeMatched, 'the route must actually have matched both sides')`; plus
 > `expect(planB).not.toBe(planC)`. What it no longer asserts is the **250 ms bar** — `P2_BAR_MS`
-> survives only inside report strings (`:359`, `:370`, `:423`) and never in an `expect`.
+> survives only inside report strings (`:364`, `:375`, `:428`; were `:359`, `:370`, `:423`) and never in an `expect`.
 >
 > **It also contradicted this row sixteen lines above**, which says of the fix that "the
 > non-vacuity assertions stay". Those assertions are the only thing standing between a green run
 > and a vacuous one, and this row asks for the probe to be moved out of the default set — so the
 > move must carry them with it. A reader who believed "asserts nothing at all" would not know to.
 >
-> Everything else in the paragraph re-derived exact on 2026-09-13: `}, 900_000)` at `:425`,
+> Everything else in the paragraph re-derived exact on 2026-09-13: `}, 900_000)` at `:425` (now `:430`),
 > `ITERATIONS = 25`, `ROUTE_ITERATIONS = 21`, the two 2,000-activity generations, and — the claim
 > worth checking rather than assuming — that it really does run on **every** pull request:
-> `apps/api/vitest.e2e.config.mts:14` includes `test/**/*.e2e-spec.ts` and `:18` excludes only
-> `test/pairwise/**`, so this file matches the include and is excluded by nothing. The option
+> `apps/api/vitest.e2e.config.mts:14` includes `test/**/*.e2e-spec.ts` and `:21` (was `:18`) excludes
+> `test/pairwise/**` and `test/backup-fixture/**`, so this file matches the include and is excluded by nothing. The option
 > costed and not taken was to give it its own script and CI step the way the ADR-0066 pairwise
 > differential has one, so it runs deliberately and its wall-clock is attributed to a step a reader can
 > see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
@@ -6752,10 +6835,11 @@ moment anybody re-armed a gate on it.
 
 ### 271. The probe history is one capped page and says so only in words, because the read returns no total
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
 
-`staff-probe.service.ts:136-141` reads the newest 50 rows — `take: DEFAULT_LIMIT`, `DEFAULT_LIMIT`
-being 50 at `:14` — with **no total, no cursor and no more-pages flag**. So a client cannot tell
+`list()` (`staff-probe.service.ts:143`) reads the newest 50 rows — `take: limit`, defaulting to
+`DEFAULT_LIMIT`, 50 at `:14` — with **no cursor and no more-pages flag**, and no total until the
+2026-10-17 note at the end of this row (the paragraph below describes the page as filed). So a client cannot tell
 "fifty is everything" from "fifty is a page", and on an installation that has taken more than fifty
 readings the oldest sittings simply stop being listed.
 
@@ -6882,7 +6966,7 @@ a mechanism that explains everything explains nothing.
 
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
 
 **#118 item 4 asked for a per-pair scope filter. Specced properly, the answer is that the mechanism
 this repository already decided on was never built** — and the filter is a way of writing down a hole
@@ -6935,7 +7019,7 @@ That is why #118 item 4 reads as one missing row and is not.
 **One claim in the spec is OVERSTATED and is corrected here rather than inherited.** It calls the
 1.04:1 pair "not hypothetical" on the strength of `tabs.tsx:169` writing `bg-card text-foreground`.
 That line is real; the containment is not. **There is exactly one `<Tabs` consumer in the product** —
-`ActivityEditorDialog.tsx:650` — and it is a modal `<Dialog>`, which sits in the browser's top layer
+`ActivityEditorSession.tsx:728` (was `ActivityEditorDialog.tsx:650`) — and it is a modal `<Dialog>`, which sits in the browser's top layer
 and is inside no surface scope at all. So every one of the 34 is **latent**, which is what #118 item
 4 concluded and what `surface.tsx:62-65` already says in its own words ("latent rather than live
 only because no `<Card>` currently renders inside a `<Surface>`"). The correction strengthens that
@@ -6965,8 +7049,8 @@ inability to run anything.
 > and it is why "latent" is a measurement of today rather than a property.
 
 **What IS live, and passes by luck:** `CreateActivityPopover` paints `bg-card` (`:73`) with
-`text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:2946`, **inside** the
-`<Surface tone="canvas">` opened at `:2864`. It measures 6.00:1 and is asserted nowhere.
+`text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:3718`, **inside** the
+`<Surface tone="canvas">` opened at `:3312` (re-read 2026-10-26; were `:2946` and `:2864`). It measures 6.00:1 and is asserted nowhere.
 
 **The allow-list's stated reason was wrong for three of its entries, and is corrected.**
 `reset-fills.structural.test.ts` grouped `combobox`, `TsldLegendPanel` and `CreateActivityPopover`
@@ -7228,7 +7312,7 @@ mechanism).
 ### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** M ·
-**Owner:** repo · **Verified:** 2026-10-20 (by reading `apps/api/src/modules/staff/dto/create-probe-result.dto.ts` and the schema, neither of which has a power-state field)
+**Owner:** repo · **Verified:** 2026-10-26 (by reading `apps/api/src/modules/staff/dto/create-probe-result.dto.ts` and the schema, neither of which has a power-state field)
 
 > **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
 > nothing currently depends on the explanation. #75's question is answered: §9's gate is **met** at
@@ -7249,7 +7333,8 @@ mechanism).
 > Recording the trigger is the point: ADR-0085's rule is that an unconditioned item stays exactly one
 > priority below whatever is being done, forever.
 
-`apps/web/src/features/perf-probe/model/device.ts:61-71` captures viewport, DPR, GPU renderer, thread
+`readDeviceFacts()` in `apps/web/src/features/perf-probe/model/device.ts` (`:58`; the function the
+rest of this row calls `readDevice()`) captures viewport, DPR, GPU renderer, thread
 count, device memory, display interval, attention and motion preference. It does not capture whether
 the machine is on mains, and there is no `getBattery()` call anywhere under `features/perf-probe/`.
 
@@ -7282,7 +7367,7 @@ alone is unremarkable. It is not a rounding term; it is the same size as the lar
 quantity in #75.
 
 **The instrument already knows this matters and delegates it to memory.** The panel's free-text note
-carries the placeholder _"the Dell, docked, on mains"_ (`ui/performance-probe-panel.tsx:644`), so
+carries the placeholder _"the Dell, docked, on mains"_ (`ui/probe-controls.tsx:149`; the panel file the placeholder was first cited in no longer holds it), so
 the field exists to hold the fact and nothing requires or captures it. The 2026-08-03 set records
 "mains" because a person typed it. The 2026-09-08 and 2026-09-10 sets do not record it at all — and
 #75 item 6 turns on a 10.81 ms residual between two of those sittings that this variable could
@@ -7359,7 +7444,17 @@ readings incomparable), ADR-0128 (the decision the column serves).
 
 ### 312. The Closed-numbers ledger has holes, and nothing checks that a cited number resolves
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** M · **Owner:** repo
+
+**State on 2026-10-26: the backfill is done, and what is left is the citation gate alone.** Every
+number this row found dangling — `#19`, `#22`, `#24`, `#25`, `#26`, `#27`, `#36`, `#39`, `#44`,
+`#50`, `#52`, `#54`, `#55`, `#61` and `#31` — now has a line in the Closed-numbers ledger
+(`grep -c "^| N *|"` is 1 for each), and `#60`, the reused number, is a live row. A11 of
+`check:debt-status` (every number from 1 to the highest in use is a live row or a ledger line)
+stops a _deletion_ going unledgered from here on. **Not built, and still ADR-0105's shared-gate
+trigger:** a check that every `#N` cited in `docs/` or `CLAUDE.md` resolves, which needs the five
+decisions below (the `#83` collision, quoted historical sentences, the PR-number discriminator,
+lettered citations, markdown anchors). Read the rest as the record of how the holes were found.
 
 **Two numbers resolved to nothing, and the ledger's own preamble names this failure in its own
 words** — _"It also keeps inbound references resolvable. ADRs are never rewritten (CLAUDE.md §6) and
@@ -7814,9 +7909,9 @@ installed versions, and a `ref` carrying no version — both live here: the `loa
 `defaultPendingComponent` line is **672** in 1.171.28 and **666** in 1.171.22, so this citation is
 version-sensitive and the register cannot say so).
 
-### 306. `useToolbarFocusHandoff` has a third consumer, and neither its name nor its gate knows
+### 306. `useToolbarFocusHandoff` has a fourth consumer, and neither its name nor its gate knows
 
-**Status:** open · **Verified:** 2026-10-21 · **Raised:** 2026-09-12 (the component review of #305's fix, which measured both halves) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-12 (the component review of #305's fix, which measured both halves) · **Size:** S · **Owner:** web
 
 `#305` was fixed by adopting `components/ui/toolbar/use-focus-handoff.ts` on the Project Explorer's
 `role="tree"` container. That was the right call — ADR-0135 D1 exists because "was focus dropped, and
@@ -7853,6 +7948,16 @@ deleting `{...focusHandoff}` from each: the two new behavioural cases fail (prev
 behavioural case stayed green), and so do the structural spread assertions — 6 failures across the
 three files; deleting it from `HierarchyTree.tsx` fails the structural spread case for the tree.
 
+**A fourth consumer arrived with the swimlanes epic (2026-10-26).**
+`features/tsld/components/SwimlaneGutter.tsx` (ADR-0206 B9, a vertical roving toolbar with one tab
+stop) imports the hook too, outside `components/ui/` and outside `features/navigator`, so the
+"three production components" below and the imprecise name now cost four call sites. The derived
+roster in `focus-handoff-seam.structural.test.ts` finds it without help, as designed; but its floor
+assertion, `it('finds the three known consumers')`, still names only `Deck`, `Toolbar` and
+`HierarchyTree`. **Add `SwimlaneGutter.tsx` to that list** the next time the file is open: it is a
+floor, so nothing is wrong today, and a roster that has silently grown past its floor is the
+beginning of the drift the floor exists to catch.
+
 **What remains is (a) alone, and it is declined, not forgotten.** Renaming to `useFocusHandoff` /
 `containerLabel` and moving it under `components/ui/` changes an exported hook's public contract —
 the ADR-0105 spec trigger — for no behavioural gain, and leaves a forwarding shim or touches three
@@ -7861,7 +7966,7 @@ is the cost, and the derived roster above means the move can no longer hide a co
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
 
 > **Status corrected from `unverified` to `open`, 2026-09-11 overnight sweep — and the correction is
 > itself a finding.** The row carried `**Status:** unverified` **beside** `**Verified:**
@@ -7885,6 +7990,10 @@ first member. Nothing is uncovered: CI runs the chain. It is the "prose stops de
 shape this epic's own gates exist to catch, one level up, raised by the M5 test-engineer review.
 The remedy is a name and probably a split (`check:gates`?), which touches the roster gate's own
 population and `prepush.sh`'s derived list — a shared-gate change, hence a row.
+
+_(Re-counted 2026-10-26: the chain is now **17** suites, from `doc-register.test.mjs` through
+`prepush-output.test.mjs` — `grep -o '"check:doc-register": "[^"]*"' package.json` — still
+named for the first; the shape and the remedy are unchanged.)_
 
 **(b) `apps/web/vitest.config.ts` restricts `include` to `src/**`, so nothing under
 `apps/web/scripts/`can be tested there.** This is why`scripts/check-bundle-size.test.mjs`lives
@@ -8000,7 +8109,7 @@ name.
 
 ### 320. Four findings the diagnostics gate pass recorded rather than folded
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
 
 Six specialists reviewed the diagnostics epic and sixteen defects were folded with regression tests.
 These four were not, each for a reason, and they are here rather than in the gate-pass write-up so
@@ -8037,7 +8146,13 @@ unit specs, not the API e2e, not the journey. Only the _client's_ `isError` bran
 a mock. So "the panel handles a failure" is proved and "the API produces one that looks like the
 others" is not.
 
-**(d) There is no statement timeout on any raw query in this application.** ADR-0140 D6 establishes
+**(d) Only two raw queries have a statement timeout, and every other `$queryRaw` has none.**
+_(Narrowed 2026-10-26: this read "no statement timeout on any raw query" until then. Two now set
+`SET LOCAL statement_timeout` inside their transaction — the diagnostics route's `'3s'`
+(`staff-diagnostics.repository.ts:63`) and the organisation export's `'30s'`
+(`organization-export.repository.ts:243`) — so the diagnostics tail this item worried about is
+bounded. What is left is the rest of the application's raw SQL, and the decision about a default.)_
+ADR-0140 D6 establishes
 that the diagnostics route sequentially scans by design and its cost is untested past ~102,000
 activities. A per-query `statement_timeout` would bound the unmeasured tail, and it is a change to
 how every `$queryRaw` in the product executes — a shared mechanism, so it gets its own decision
@@ -8181,7 +8296,7 @@ hole is reachable, and the one moment somebody is already in the file.
 
 ### 323. The minimap at scale is compressed by the DAY axis, and no lane remedy touches it
 
-**Status:** deferred · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (minimap-visual M6) · **Size:** M · **Owner:** web
+**Status:** deferred · **Verified:** 2026-10-26 · **Raised:** 2026-09-14 (minimap-visual M6) · **Size:** M · **Owner:** web
 
 **This row exists so the next reader starts from the measurement rather than from the intuition
 that has now been wrong twice.** ADR-0142 D1 carries the decision; this is the number and the
@@ -8196,7 +8311,8 @@ approved on that reading and **neither survived being measured before it was bui
   lanes up to 163; and it removes the 14 LOE bars, which are the only visible thing in that region.
 - **Map by occupied-lane rank** (approved, then withdrawn — §15). It collapses **zero** lanes on
   every one of the eight seeded plans, and structurally so: `packLanes`
-  (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane only when no existing lane is free, so a
+  (via `packGroup`, `packages/layout/src/pack-lanes.ts:97`, whose `laneEnds` bookkeeping starts at
+  `:106`; `:78-84` is only the partition step) opens a lane only when no existing lane is free, so a
   packer cannot leave an empty one. It is not universally inert — it would help a plan the packer
   never reached, i.e. an import whose best-effort phase 3 failed (ADR-0069), or one whose lanes have
   been emptied by deletion or hand-placement — but none of those is the plan the complaint was about.
@@ -8272,27 +8388,33 @@ signal that the moment has arrived.
 
 ### 329. Three overview rows repeat the same plan-identity block
 
-**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, component review) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-15 (organisation-landing M6, component review) · **Size:** S · **Owner:** web
 
-`JumpBackInSection.tsx`, `RecentlyChangedRow.tsx` and `PlanStandingRow.tsx` now each render the same
-two things by hand: a plan-name `Link` carrying `rowLinkClass` with an optional `Draft` badge beside
-it, and a `<p className="text-muted-foreground truncate text-sm">{projectName} · {clientName}</p>`
-subtitle. The subtitle line is **verbatim in all three**; the name-and-badge block is verbatim in two.
+**PARTLY RESOLVED, 2026-10-26: what was filed as three hand-written blocks is now three uses of the
+shared row primitives, and this row is about the three small things still repeated.**
+`JumpBackInSection.tsx`, `RecentlyChangedRow.tsx` and `PlanStandingRow.tsx` all render through
+`ListRow` and `RowSubject` from `@/components/ui/page` (the `context=` and `badge=` slots), so the
+`<p className="text-muted-foreground truncate text-sm">` subtitle element and its truncation rule
+live in one place. Still written out at each site:
+
+- the context string `` `${projectName} · ${clientName}` `` (`JumpBackInSection.tsx:59`,
+  `RecentlyChangedRow.tsx:89`, `PlanStandingRow.tsx:78`) — three copies of one separator and one
+  order;
+- the `DRAFT` badge, `status === 'DRAFT' ? <Badge size="sm">Draft</Badge> : null`
+  (`RecentlyChangedRow.tsx:88`, `PlanStandingRow.tsx:77`) — two copies, and the third row does not
+  mark a draft at all; and
+- `rowLinkClass` on the plan-name `Link` (all three rows, as the primitive intends).
 
 Nothing is wrong today, which is the point — this is the ADR-0065/ADR-0121 shape, where two or three
 implementations of one rule each look correct alone and the drift is invisible because only somebody
-comparing the three would ever see it. A change to the truncation rule, or to how a `DRAFT` plan is
-marked, currently has no way of reaching the other call sites.
+comparing the three would ever see it. A change to how a `DRAFT` plan is marked, or to the context
+separator, currently has no way of reaching the other call sites.
 
-`ListRow`'s own docblock records `rowLinkClass` being extracted for exactly this reason — "the same
-four declarations were repeated at every row call site" — so the precedent for pulling it out is one
-layer down in the same file. The natural move is a shared row-identity element taking
-`{ orgSlug, planId, planName, projectName, clientName, status? }`.
-
-It is a row rather than a commit because the third copy arrived in this epic and a fourth has not:
-extracting a primitive on the strength of three call sites, in an epic's last milestone, is the
-shared-change-late-in-an-epic move ADR-0105 exists to stop. **The trigger is a fourth call site, or
-the first change to either treatment.**
+The natural move is a shared row-identity element taking
+`{ orgSlug, planId, planName, projectName, clientName, status? }` — or, smaller, a
+`planContext(projectName, clientName)` helper and a `DraftBadge` beside `rowLinkClass`. Either is
+a component's public contract, hence a row rather than a commit. **The trigger is a fourth call
+site, or the first change to either treatment.**
 
 ### 330. The landing benchmark seeds no dependencies and no baselines
 
@@ -8353,7 +8475,7 @@ has become a tripwire.
 
 ### 342. A client's plan count was built, measured, and withdrawn — two remedies, neither applied
 
-**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-20 (by reading `ClientDetail` in `packages/types/src/index.ts:257-261`, which carries `projectCount` and no `planCount`)
+**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-26 (by reading `ClientDetail` in `packages/types/src/index.ts:300-303`, which carries `projectCount` and no `planCount`)
 
 `ClientDetail` carries `projectCount` and deliberately **no** plan count, because a count of plans
 across a client's projects has no stable query plan. Measured on a diluted local estate (500
@@ -8463,19 +8585,20 @@ diff the two bodies property by property rather than by eye.
 
 ### 346. Three of the four page-composition sweeps still carry hand-written screen lists
 
-**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found by the M5 component
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-19 (found by the M5 component
 review of #344) · **Size:** S · **Owner:** web
 
 `apps/web/e2e-page-composition/screen-roster.ts` was written to replace four independent per-screen
-rosters with one declaration, and **it replaced one**. The wrap sweep
-(`composition.spec.ts:291`) consumes `SWEPT`; three sweeps in the same file still hardcode their
+rosters with one declaration, and **it replaced one**. _(Lines re-read 2026-10-26: the table's
+`Line` column gives the list literal, and the consumer of `SWEPT` is `:365`.)_ The wrap sweep
+(`composition.spec.ts:365`) consumes `SWEPT`; three sweeps in the same file still hardcode their
 own list:
 
 | Sweep                                                          | Line   | List                                                |
 | -------------------------------------------------------------- | ------ | --------------------------------------------------- |
-| `every list screen is as wide as the organisation landing`     | `:523` | `clients, calendars, resources, members, audit-log` |
-| `no list screen overflows a 320px viewport`                    | `:743` | `calendars, resources, clients, recently-deleted`   |
-| `every list screen shows its first row above the fold at 1646` | `:783` | a `SETTLED` array of five `[path, marker]` pairs    |
+| `every list screen is as wide as the organisation landing`     | `:593` | `clients, calendars, resources, members, audit-log` |
+| `no list screen overflows a 320px viewport`                    | `:762` | `calendars, resources, clients, recently-deleted`   |
+| `every list screen shows its first row above the fold at 1646` | `:803` | a `SETTLED` array of five `[path, marker]` pairs    |
 
 **There is no live blind spot today** — two of the three already include `members` and the third
 excludes it for a stated `fit`-column reason — which is exactly why this is a register row and not
@@ -8495,7 +8618,7 @@ change with a design question in it, not a mechanical substitution.
 
 ### 358. A rule cited nine times, which the file citing it most already breaks
 
-**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-I,
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-21 (one-planning-surface M-I,
 incidentally — the milestone was verifying its own premise) · **Size:** M · **Owner:** web
 
 Nine comments across seven files state, as a rule with a citation, that **`features/tsld` imports no
@@ -8506,6 +8629,13 @@ apps/web/src/features/tsld/components/TsldPanel.tsx:106  import … from '@/feat
 apps/web/src/features/tsld/components/TsldPanel.tsx:107  import … from '@/features/plan-actions/build-selection-context';
 apps/web/src/features/tsld/components/TsldPanel.tsx:108  import … from '@/features/wbs';
 ```
+
+_(Re-read 2026-10-26. The same imports are now `TsldPanel.tsx:150-153`: `ACTIVITY_TYPE_LABELS`, the
+type-only `ScopeGate` from `features/activities/lib/activity-editor-gating`, `buildSelectionBarContext`
+and the `features/wbs` band helpers — **four**, not three. The comments now number **12 sites in 9
+files** (`grep -rn "imports no other feature" apps/web/src`), the swimlanes epic having added
+`project-swimlanes.ts`, a second `TsldCanvas.tsx` site and more. The wider census of sideways imports,
+by file, is **#548**; this row is the rule being false, that one is the imports.)_
 
 `TsldPanel.tsx:329` asserts the rule 221 lines below those three imports. `TsldCanvas.tsx:414` is
 sharper still: it explains that a derivation lives in `features/wbs` **"because the tsld feature
@@ -8550,7 +8680,7 @@ than opportunistically, because the cheap half — correcting nine comments to m
 
 ### 366. Four findings from the Part C gate pass that are not defects in the diff
 
-**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
+**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
 accessibility / UX / component reviews) · **Size:** S · **Owner:** web
 
 Each was raised as non-blocking against the `Arrange` offer (ADR-0149 D6) and each is really about
@@ -8558,7 +8688,7 @@ something the offer sits next to rather than about the offer. Kept together beca
 share one cause.
 
 **(a) Two simultaneously-visible controls both named exactly "Arrange."** The dock strip's button
-and the command-surface item (`tsld-toolbar-items.tsx:2918`) do the same thing to the same plan and
+and the command-surface item (`tsld-toolbar-items.tsx:3501`) do the same thing to the same plan and
 carry the same accessible name, which is not a WCAG failure — both names describe both controls
 correctly — but it is what `docs/UX_STANDARDS.md:160-168` and ADR-0145 D6 exist to prevent. The
 strip's name is the honest one for its sentence; the command's would have to change, and it is
@@ -8566,19 +8696,19 @@ shared with the Gantt. Deliberately not renamed inside the epic that introduced 
 
 **(b) The offer is omitted from a Planner who has simply not taken the pen**, which is right for a
 Viewer and wrong for them. `canEdit` fuses role and pen into one boolean before `TsldPanel` sees it
-(`TsldPanel.tsx:296,300-301`), so the strip **cannot** distinguish "your role forbids this" from
+(`TsldPanel.tsx:301,322-326`), so the strip **cannot** distinguish "your role forbids this" from
 "take the pen first" and therefore cannot write the second sentence. That is #114.1 reaching a
 second consumer: the sibling Deck command shades with `scheduleRefusal('auto-arrange')` because it
 has the unfused facts. Fixing (b) means fixing #114.1; shading without them would put a false
 sentence on screen, which is the defect #114 records shipping.
 
 **(c) "Dismissed for the session" is really "dismissed for this mount."** Switching to the Gantt and
-back remounts `TsldPanel` (`plan-workspace-toolbar.tsx:1319-1443`) and the offer returns.
+back remounts `TsldPanel` (mounted at `plan-workspace-toolbar.tsx:1418`) and the offer returns.
 `PlacementMigrationNotice` solves the same problem with `localStorage`, per plan per user. Not
 obviously wrong — the offer is a live fact about the current layout and a returning planner may want
 it again — but the docblock should say _mount_ until somebody decides which it is.
 
-**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:476`) is looser than its own
+**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:604`) is looser than its own
 docblock claims ("editing **and** an `onAutoArrange` handler") and looser than
 `arrangeOfferAvailable`, which also folds in `!lateOverlayActive`. No live defect: in the one real
 host both handlers are unconditionally defined. It is the "one correct pattern applied to a control
@@ -8611,10 +8741,11 @@ performance review confirmed each pass is bounded by the **culled** set and not 
 visible bar for the glyph and label work, which would also have made #371's owed reading partly
 answerable without waiting on hardware.
 
-### 371. Thirty measurement scripts repeat the same esbuild-to-tempdir block
+### 371. Forty measurement scripts repeat the same esbuild-to-tempdir block
 
-**Status:** open · **Verified:** 2026-09-23 (reconciliation pass: **30** files under
-`apps/web/scripts/` contain both `mkdtemp` and an `'esbuild'` exec, against **23** at the commit that
+**Status:** open · **Verified:** 2026-10-26 (reconciliation pass: **30** files under
+`apps/web/scripts/` contain both `mkdtemp` and an `'esbuild'` exec — **40** on 2026-10-26, by
+`cd apps/web/scripts && grep -l mkdtemp *.* | xargs grep -l "'esbuild'" | wc -l`; against **23** at the commit that
 filed this row, `3c84bfc0` — the NetPoint-layout epic added seven more the day after it was filed,
 so the title said twenty-three while the count grew) · **Raised:** 2026-09-22 (logic-legibility M6
 gate pass, component review) · **Size:** S · **Owner:** web
@@ -8881,12 +9012,14 @@ M6-T0 harness on a large levelled plan and keep or lower the limit from the numb
 
 ### 409. Every `react-hooks/*` suppression turns off the React Compiler's analysis for its function
 
-**Status:** open (informational) · **Verified:** 2026-09-28 (hook-deps-gate M0-T3) · **Raised:**
+**Status:** open (informational) · **Verified:** 2026-10-26 (hook-deps-gate M0-T3) · **Raised:**
 2026-09-20 · **Size:** XS · **Owner:** web
 
 `eslint-plugin-react-hooks@7.1.1`'s `DEFAULT_ESLINT_SUPPRESSIONS` lists `react-hooks/exhaustive-deps`
 among the rules whose suppression disables the compiler's own diagnostics for the enclosing
-function. `apps/web` carries 44 such directives, each now with a written reason (ADR-0164 D3). This is
+function. `apps/web` carries about 40 such directives (**40** on 2026-10-26: `grep -rn
+"eslint-disable.*react-hooks/" apps/web/src --include=*.ts --include=*.tsx | wc -l`, tests included; this
+said 44), each now with a written reason (ADR-0164 D3). This is
 a standing cost the reasons justify, not a to-do; M0-T3's probe could not reproduce the scope the
 spec predicted (`react-hooks/refs` fired in both tested placements), so read the cost as real but
 unmeasured.
@@ -8939,7 +9072,7 @@ measurement. **Trigger:** the next epic touching canvas selection, or a reading 
 
 ### 429. The plan-calendar picker's popup closed between "visible" and the click, once on CI
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-11 (not reproduced on demand in the container, below; `e2e/combobox.ts`, `use-optimistic-select.ts` and `PlanCalendarPicker.tsx` read) ·
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (not reproduced on demand in the container, below; `e2e/combobox.ts`, `use-optimistic-select.ts` and `PlanCalendarPicker.tsx` read) ·
 **Raised:** 2026-10-01 (reading the csp evidence for #420) · **Size:** S · **Owner:** web
 
 `e2e/schedule.spec.ts:128` "a planner picks the plan calendar and recalculates on it (accessible)" failed
@@ -8948,7 +9081,7 @@ It timed out inside `e2e/combobox.ts:51`: the `Standard` option resolved and was
 click found it "not stable", then "not visible" for the rest of the 30 s — so the listbox **closed after
 it was shown**, without the click landing. Seen on 2026-10-01 (run `36823079172`, web shard 1) and on
 2026-10-03 (run `37150846578`, #770, Chromium); neither run's trace is any longer available, because traces are
-kept `on-first-retry` (`playwright.config.ts:16`) and uploaded with `retention-days: 7` (`ci.yml:1169-1176`).
+kept `on-first-retry` (`playwright.config.ts:16`) and uploaded with `retention-days: 7` (`ci.yml:1291`, in the shard-named upload step; was `:1169-1176`).
 
 **Reading the code (a hypothesis, not a finding):** `chooseComboboxOption` retries only the _open_ inside
 `toPass` (`combobox.ts:45-48`), then asserts and clicks the option as separate, un-retried steps (`:50-51`),
@@ -9009,7 +9142,7 @@ D7's ~800 ms at roughly 250,000–300,000 rows, so the entries' own re-arm obser
 
 ### 445. A history entry keeps a deleted neighbour's name, and an xlink entry keeps the other plan's name
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-11 (`activity-history.recorder.ts:378-404` and `:444-458` snapshot the names; `hierarchy-expiry.service.ts:197-267` selects only clients, projects and plans) ·
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`activity-history.recorder.ts:378-404` and `:444-458` snapshot the names; `hierarchy-expiry.service.ts:197-267` selects only clients, projects and plans). _Pointers re-read 2026-10-26: the name snapshots are `activity-history/activity-history.recorder.ts:107-122` (the `code`/`name`/`planName` fields and `ProbedNames.others`) and the select at `:586`; the expiry service is `apps/api/src/common/hierarchy/hierarchy-expiry.service.ts`._ ·
 **Raised:** 2026-10-04 (M2 review) · **Size:** S · **Owner:** api
 
 A knock-on entry (a link lost because the other end was deleted) and a dissolve entry copy the deleted
@@ -9027,7 +9160,7 @@ permissions being introduced. Related theme: #118a.
 
 ### 446. The throttler counts per address, so an office behind one NAT shares one bucket per handler
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-04 (`app-setup.ts:80` keys the throttler on `req.ip`; the stock `ThrottlerGuard` buckets per key and per handler; the census figures are from `docs/specs/e2e-throttle-visibility/`) ·
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`app-setup.ts:102-104` — the trust-proxy comment saying the global `ThrottlerGuard` keys on `req.ip`; was `:80`; the stock `ThrottlerGuard` buckets per key and per handler; the census figures are from `docs/specs/e2e-throttle-visibility/`) ·
 **Raised:** 2026-10-04 (closing the throttle visibility epic, spec §4's observation) · **Size:** M · **Owner:** api
 
 The API's `ThrottlerGuard` allows 100 requests per 60 s per IP per handler. Users behind one office NAT or
@@ -9088,7 +9221,7 @@ ADR-0173 chose a separate field because `TextField`'s public contract has no dra
 
 ### 496. The `revision-delta-m0` end-to-end spec once failed with a 401 mid-seed, and nothing has explained it
 
-**Status:** open · **Verified:** 2026-10-13 (`apps/api/test/revision-delta-m0.e2e-spec.ts`; `apps/api/vitest.e2e.config.mts:25` `fileParallelism: false`)
+**Status:** open · **Verified:** 2026-10-26 (`apps/api/test/revision-delta-m0.e2e-spec.ts`; `apps/api/vitest.e2e.config.mts:28` `fileParallelism: false`)
 **Raised:** 2026-10-11 (driving #926) · **Narrowed:** 2026-10-13 · **Size:** S · **Owner:** api
 
 This row was "the spec fails intermittently" and named three failures. Two are **cured** and the third is not reproduced.
@@ -9219,10 +9352,10 @@ A ZIP writes its entries one after another, so a table's JSON file and its CSV f
 
 ### 517. The organisation export's throttle is per address and runs before sign-in, and a slow client holds a snapshot
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-14 (`apps/api/src/app.module.ts:158-161`, guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`apps/api/src/app.module.ts:160-163`, guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
 **Raised:** 2026-10-14 (organisation export M2 review) · **Size:** S · **Owner:** api
 
-Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:159-160`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
+Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:161-162`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
 
 **Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.
 
@@ -9253,9 +9386,9 @@ The early dates suggest a milestone's instant is re-snapped to its own calendar 
 
 ### 544. A project-calendar restore racing a delete of its project fails now and then under CPU load
 
-**Status:** open · **Verified:** 2026-10-23, by running `apps/api/test/hierarchy-parent-lock-race.e2e-spec.ts` alone more than 50 times (all passed) and then beside four CPU busy-loop processes (one failure) · **Raised:** 2026-10-23 (swimlanes M1-T1, a full local API e2e run) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-10-26, by running `apps/api/test/hierarchy-parent-lock-race.e2e-spec.ts` alone more than 50 times (all passed) and then beside four CPU busy-loop processes (one failure) · **Raised:** 2026-10-23 (swimlanes M1-T1, a full local API e2e run) · **Size:** S · **Owner:** api
 
-The case "a project-calendar restore against a delete of its project ends with both deleted" (`hierarchy-parent-lock-race.e2e-spec.ts`, near line 266) failed once in a full local run with `expected 'rejected' to be 'fulfilled'`: the restore was refused with a 404 instead of finishing before or after the delete. It is not caused by the swimlanes work: the code it exercises is unchanged on `main`, and every CI run since has passed it. The likely cause is the test's timing assumption about which side takes the project's row lock first, which a busy machine can reverse, but that has not been proved.
+The case "a project-calendar restore against a delete of its project ends with both deleted" (`hierarchy-parent-lock-race.e2e-spec.ts:250`) failed once in a full local run with `expected 'rejected' to be 'fulfilled'`: the restore was refused with a 404 instead of finishing before or after the delete. It is not caused by the swimlanes work: the code it exercises is unchanged on `main`, and every CI run since has passed it. The likely cause is the test's timing assumption about which side takes the project's row lock first, which a busy machine can reverse, but that has not been proved.
 
 **Next:** read the restore's lock order against the delete's, and either make the test accept both orders when the end state is "both deleted", or fix the restore if a 404 there is wrong. **Trigger:** the next time it fails, on CI or in a local full run.
 
@@ -9285,11 +9418,11 @@ When the plan's swimlanes come from the WBS, `useReparentActivities` stores the 
 
 ### 548. `features/tsld` imports eleven files' worth of other features, against ADR-0026 §8
 
-**Status:** open · **Verified:** 2026-10-25, by `grep -rnE "from '@/features/(activities|wbs|plan-actions|gantt)" apps/web/src/features/tsld` (tests excluded) on `4d541256`, against the same grep on `6fe69268`, the tree before swimlanes · **Raised:** 2026-10-25 (swimlanes M5, `ui-architecture.md` C8) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-10-26, by `grep -rnE "from '@/features/(activities|wbs|plan-actions|gantt)" apps/web/src/features/tsld` (tests excluded) on `4d541256`, against the same grep on `6fe69268`, the tree before swimlanes · **Raised:** 2026-10-25 (swimlanes M5, `ui-architecture.md` C8) · **Size:** M · **Owner:** web
 
 ADR-0026 §8 says `features/tsld` "imports **no** other feature". Ten non-test files did before the swimlanes epic: `TsldPanel.tsx` (`activities`, `plan-actions`, `wbs`), `export-csv.ts` (`activities`), and eight under `toolbar/` (`activities`, `plan-actions`, `gantt`), the toolbar ones re-exporting or reading view state that has no neutral home yet. The epic moved the two `features/wbs` band imports into one place, `model/derive-diagram-source.ts` (M2-T1), and added one, `model/reparent-lanes.ts` (M3-T2: it reads WBS membership to plan the lane a re-filed bar takes). Nothing is wrong at run time; the cost is that the rule reads as held while the tree says otherwise, and each slip makes the next look like precedent (ADR-0206 B3 says so).
 
-**Next:** either move the shared pieces to a neutral tier (`lib/` or a `features/plan-model` the host composes) so the imports point down, or amend ADR-0026 §8 to name the dependencies it accepts. Decide per import; the toolbar ones are the bulk. **Trigger:** the next PR that adds a sideways import into `features/tsld`, or a reconciliation pass.
+**Next:** either move the shared pieces to a neutral tier (`lib/` or a `features/plan-model` the host composes) so the imports point down, or amend ADR-0026 §8 to name the dependencies it accepts. Decide per import; the toolbar ones are the bulk. **#358 is the same finding from the other side:** it records that twelve comments in nine files still state the rule as true, and says the cheap half of the fix (correcting the comments) is the wrong half until this row's decision is taken. Decide the two together. **Trigger:** the next PR that adds a sideways import into `features/tsld`, or a reconciliation pass.
 
 ### 549. The Gantt view says nothing when the swimlane list fails to load, and its Swimlane column disappears
 
@@ -9306,3 +9439,25 @@ On the diagram, a failed swimlane list shows a warning strip with **Try again** 
 A plan delete holds the plan advisory lock across its sweep. Swimlane create and restore take the same lock, because an insert after the sweep read would be active under a deleted plan, and the foreign key's `KEY SHARE` does not conflict with the cascade's `NO KEY UPDATE`. Activity create takes it only for a child, so a top-level activity created in the instant a plan is deleted can commit as a live row under a deleted plan: unseen while the plan is in the bin, and back with it on restore. It is the race #520 closed for project calendars.
 
 **Next:** take the plan advisory lock on every activity create (it is already taken for a child), with an API e2e that races a create against a plan delete. Run it past the backend-performance reviewer, since every create would then serialise on the plan lock. **Trigger:** a live activity found under a deleted plan, or the next change to activity create.
+
+### 551. A render crash in the browser reaches nobody
+
+**Status:** open · **Verified:** 2026-10-26, by reading `apps/web/src/components/error-boundary.tsx` (`componentDidCatch` logs with `console.error` under `TODO(telemetry): report to the telemetry facade once wired`), by `ls apps/web/src/lib/telemetry*` (nothing), and by `docs/DECISIONS.md` (it records that `lib/telemetry.ts` was listed in the docs and never written) · **Raised:** 2026-10-26 (the post-swimlanes reconciliation pass) · **Size:** S · **Owner:** web
+
+When a component throws while rendering, the error boundary shows its fallback and writes the error to the browser console (`error-boundary.tsx:26-27`). The console is on the reader's own machine, so a crash that every planner on the deployed host meets is seen by nobody who can fix it. The `TODO(telemetry)` beside it points at a "telemetry facade" that does not exist: `lib/telemetry.ts` was never written, and ADR-0013 (OpenTelemetry with Pino) is one of the four accepted ADRs with no implementation (row #3). The comment therefore promises a destination no row owns.
+
+The application already collects one browser-side signal: the CSP report sink (`POST` from the browser to the API, rate-limited, read on the staff console). So a crash report is not unprecedented plumbing, only an unmade decision.
+
+**Next:** decide whether a crash report rides the CSP-style sink (a small unauthenticated, throttled endpoint, a table with retention, a staff panel; that is a schema change and a new endpoint, so it goes through database-architect and a spec) or waits for ADR-0013. Until then, reword the `TODO` to cite this row so it stops pointing at nothing. **Trigger:** a reported blank screen that nobody could diagnose, or the next change to the error boundary.
+
+### 552. Three small UI-consistency slips found by the 2026-10-26 pass
+
+**Status:** open · **Verified:** 2026-10-26, by reading each cited file at the cited line · **Raised:** 2026-10-26 (the post-swimlanes reconciliation pass) · **Size:** S · **Owner:** web
+
+None is a defect a user would report; each is a place the shared pattern was copied by hand and drifted.
+
+- **(a) "Retry" where every other error state says "Try again".** `features/overview/components/RecentlyChangedSection.tsx:76` and `features/float-paths/components/FloatPathsPanel.tsx:238` label the button "Retry"; `components/ui/query-error-state.tsx:45` and the rest of the product say "Try again". The Playwright suites contain no `Retry` button locator for either (`grep -rn "Retry" apps/web/e2e*/` finds only `X-Retry-After` and "Retry recording"), but check that again before renaming, and note `FloatPathsPanel.test.tsx:165` finds the button by the name `Retry`.
+- **(b) The Gantt hand-rolls its retry button.** `features/gantt/components/GanttPanel.tsx` (the load-error branch, `Try again` at `:1112`) writes the button's classes inline rather than using the shared `Button` or `QueryErrorState`, so it will not follow a change to either.
+- **(c) The canvas palette falls back to dark-theme literals.** `features/tsld/render/palette.ts:149-162` (and the entries after it) read each colour from a CSS token and fall back to a hard-coded value such as `#14161c` when the token is missing, though the product has one light theme (ADR-0097). The fallback is reachable only when a token is absent (jsdom, a broken stylesheet), so it paints nothing wrong today; it would paint a dark canvas under a light page.
+
+**Next:** fix the three together: (a) rename both buttons to "Try again" and update any test that finds them by name; (b) render the Gantt's error through `QueryErrorState` or `Button`; (c) make a missing token a loud failure in development, or fall back to the light values. **Trigger:** the next change to any of the three files.

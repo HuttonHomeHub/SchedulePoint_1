@@ -10,8 +10,9 @@
  * ADR-0098's own, taken from
  * `prisma/migrations/20260818220000_overview_recently_changed_indexes/migration.sql:16-20` rather
  * than invented — a benchmark over shapes somebody chose to be convenient says nothing. Clients,
- * projects and the organisations themselves are created through the public REST API; **the plans,
- * activities and dependencies are bulk-inserted in SQL**, because 3,000 plans × 40 activities is
+ * projects and the organisations themselves are created through the public REST API; **the plans
+ * and activities are bulk-inserted in SQL** (no dependencies or baselines are seeded at all —
+ * `docs/TECH_DEBT.md` #330), because 3,000 plans × 40 activities is
  * ~123,000 REST writes and a harness that takes three hours is a harness nobody re-runs. Those rows
  * are therefore NOT proof that a write path works — nothing here claims they are. They exist to give
  * the planner a table to plan against, which is what FC-2 and FC-3 are about.
