@@ -941,6 +941,12 @@ discriminators. Each becomes a spec/plan before build:
   swimlane-free picture exactly. The Activities table and the Gantt have a Swimlane column, the export and
   print carry them, and a SchedulePoint XER keeps them. The engine never sees them. P6 activity codes as a
   source are the `docs/BACKLOG.md` follow-on.
+- **An import reuses a calendar it would have copied exactly** — **in progress** (approved 2026-10-26,
+  [ADR-0208](adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md); spec and plan at
+  [`docs/specs/import-calendar-tidy/`](specs/import-calendar-tidy/)): a re-imported revision binds the
+  calendar the project already holds when its working week, exceptions and hours per day are identical,
+  and the report says so. Milestone 1 is built; Milestone 2, removing unused project calendars from the
+  project screen, is not.
 - **A share link shows the plan's swimlanes** — **shipped** (with swimlanes M4)
   ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
   [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list

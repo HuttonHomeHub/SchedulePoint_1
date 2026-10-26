@@ -393,8 +393,8 @@ export class CalendarRepository {
    *
    * ARCHIVED rows are deliberately included: archiving does NOT free the name (ADR-0053 §4), so an
    * archived calendar still blocks the insert and must still be disambiguated around. That is also why
-   * calendars have no unarchive-on-match rule — an import never REUSES a calendar (see the service), so
-   * there is nothing to unarchive.
+   * calendars have no unarchive-on-match rule — an import reuses only an UNARCHIVED calendar
+   * (`findReuseCandidates`, ADR-0208), so there is nothing to unarchive.
    */
   async findTakenNamesWithPrefixes(
     params: {
