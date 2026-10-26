@@ -16,12 +16,13 @@ measure or check anything on their server or devices (a decision question is fin
 - **Shortlist:** build #539 and #550, and #495 and #371 too; **spec both** BACKLOG import items.
 - **The four specs** (`docs/specs/milestone-cross-calendar/`, `typed-field-commit/`,
   `interchange-notes/`, `import-calendar-tidy/`): approved with every default.
-- **Dependabot PRs #1153 to #1162** (opened 2026-10-26): **leave for later**. They are still open; do
-  not merge them unless the owner asks.
+- **Dependabot PRs #1153 to #1162** (opened 2026-10-26): first "leave for later", then later the same
+  day **"merge the Dependabot PRs now"**. All ten are merged (as #1175 and #1177 to #1185) and released.
 
 ## Where things stand
 
-- **Latest releases:** `web` 0.200.0, `api` 0.102.0, `@repo/interchange` 0.16.0 (Version Packages
+- **Latest releases:** `web` 0.200.1 and `api` 0.102.1 (Version Packages #1176, the Dependabot
+  batch). Tags `api-v0.102.1` and `web-v0.200.1`. Before that `web` 0.200.0, `api` 0.102.0, `@repo/interchange` 0.16.0 (Version Packages
   #1166). Tags `api-v0.102.0` and `web-v0.200.0`; both publish jobs passed. `@repo/interchange` is
   versioned but never tagged (`release.yml` tags only the two apps; it ships inside the API image).
   Before that, `web` 0.199.2 / `api` 0.101.1 (#1151).
@@ -44,7 +45,14 @@ measure or check anything on their server or devices (a decision question is fin
     dialog before the hand-off, with a unit test that records whether a dialog was open at hand-off.
   - **#1173** notes through XER and MSPDI, import and export (ADR-0209).
   - **#1166** the Version Packages release.
-  - This hand-off (with row #559).
+  - This hand-off (with row #559), merged as #1174.
+  - **The Dependabot batch**, one replacement PR per Dependabot PR (pushing to Dependabot's branches
+    was refused): #1175 NestJS 12.2 (PSF-2.0 allowed for `argparse`), #1177 typescript-eslint 8.72, #1178
+    the dev-tools group, #1179 better-auth 1.7.12, #1180 react-router 1.170.46, #1181 lucide 1.61,
+    #1182 nodemailer 10.2.1, #1183 express 5.3.0, #1184 react-virtual 3.14.22 (a test stub for
+    `clientHeight`), #1185 @hookform/resolvers 6. Dependabot closed its own ten.
+  - **#1186** put back the two package versions and 11 ranges the batch had lowered (see the
+    2026-10-26 lessons), then **#1176** released `api` 0.102.1 and `web` 0.200.1.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -106,7 +114,7 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   defaults taken are recorded in ADR-0205 (guests) and the ADR-0156 amendments (XER reader and writer).
 - 2026-10-25 (evening): swimlanes M5 only; the three known gaps stay follow-ons ("None now").
 - 2026-10-26: the shortlist (#539, #550, #495, #371; spec both import items), the four specs with
-  every default, and Dependabot #1153 to #1162 left for later.
+  every default, and Dependabot #1153 to #1162 left for later; then "merge the Dependabot PRs now".
 
 ## Parked by the owner — keep, do not raise
 
@@ -167,8 +175,6 @@ owner returns to one, the steps are ready:
 
 **The shortlist is finished.** Nothing on it is owed. Still open from the session:
 
-- **Dependabot #1153 to #1162:** the owner said "leave for later". Offer them as one batch when the
-  owner asks what is next.
 - **#553 and #559** are the two lock gaps the session found; both are small API changes, and any fix
   goes past the backend-performance reviewer first (the #520/#550 shape).
 - **#558** is a primitive change (`CheckboxField`), so it needs the ADR-0111 reviewers before release.
@@ -411,6 +417,18 @@ docs/TECH_DEBT.md` shows only that PR's rows.
   - **A PR title must stay at or under ~92 characters** before GitHub's ` (#NNNN)` suffix; #1052 failed at 94.
   - **The Version Packages branch is rebuilt about a minute after each merge**; wait for its SHA to change
     (`git ls-remote origin refs/heads/changeset-release/main`) before merging it, then pin that SHA.
+
+- **2026-10-26 lessons (the second Dependabot batch):**
+  - **Never copy a whole `package.json` from a Dependabot branch.** Its branch is cut from an older
+    `main`, so the copy brings old content with it. Doing that for #1177 to #1185 set `@repo/api` back to
+    0.101.1 and `@repo/web` to 0.199.2 (below the `api-v0.102.0` / `web-v0.200.0` tags), and each
+    later copy lowered ranges an earlier one had raised. The lockfile kept every resolved version, so
+    nothing installed changed, but Version Packages proposed **0.101.2 / 0.199.3**. #1186 fixed it.
+    Edit only the lines the Dependabot PR changes (`git diff origin/main...origin/<branch>`).
+  - **Before merging Version Packages, compare its versions with the latest tags**
+    (`git ls-remote --tags origin`). A release must never propose a version below one already tagged.
+  - **virtual-core 3.19 reads the scroller's `clientHeight`**; a jsdom test that stubs only
+    `offsetHeight` renders no rows.
 
 - **2026-10-19 lessons (the Dependabot batch):**
   - **Regenerate a rebased bump's lockfile with lowest-direct resolution.** Taking `main`'s lockfile and
