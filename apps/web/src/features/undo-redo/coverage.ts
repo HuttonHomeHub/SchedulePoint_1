@@ -124,6 +124,7 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useAddException: excluded(REASON.calendarLibrary),
   useCreateCalendar: excluded(REASON.calendarLibrary),
   useDeleteCalendar: excluded(REASON.calendarLibrary),
+  useBulkDeleteCalendars: excluded(REASON.calendarLibrary),
   useMoveCalendarScope: excluded(REASON.calendarLibrary),
   useRemoveException: excluded(REASON.calendarLibrary),
   useUpdateCalendar: excluded(REASON.calendarLibrary),

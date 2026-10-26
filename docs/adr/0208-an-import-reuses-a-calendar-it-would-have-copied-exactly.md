@@ -1,7 +1,6 @@
 # ADR-0208: An import reuses a calendar it would have copied exactly
 
-- **Status:** Proposed. D1 to D4 and D6 are built (M1, 2026-10-26); D5 (bulk delete of unused project
-  calendars) is M2 and is not built. This becomes Accepted when M2 ships, or when the owner declines it.
+- **Status:** Accepted. M1 (D1 to D4, D6) shipped 2026-10-26 and M2 (D5) with it.
 - **Date:** 2026-10-26
 - **Deciders:** Product owner (spec approved 2026-10-26 with every default, Q1 to Q4)
 - **Amends:** ADR-0053 §5 (the "an import never REUSES a calendar" paragraph, and its CQ-4 sentence for
@@ -72,9 +71,20 @@ same working week, exceptions and hours per day, so a copy would differ only in 
   `was created as`, with a reason that no longer says "never reuses". `interchange.imported`'s `after`
   gains `calendarsReused`, and the commit log line likewise. The dry-run and the commit call one resolver,
   so the reviewed sentence and the persisted one are the same function's output.
-- **D5. Unused project calendars can be deleted in bulk from the project screen** (M2, not built): each
-  under its own batch, with the single delete's gates, all-or-nothing. Recorded here so the decision is
-  one record; it is specified in the spec and has no code yet.
+- **D5. Unused project calendars can be deleted in bulk from the project screen.**
+  `GET …/projects/:projectId/calendars/unused` lists the project's own calendars that nothing active uses
+  (the single delete's predicate, so "unused" has one definition), with the deleted plans and activities
+  still pointing at each. `POST …/calendars/bulk-delete` deletes a set with the single delete's rules, all
+  or nothing in one transaction: ids in ascending order under each calendar's advisory lock (the order
+  `lockBatchCalendars` takes), every id loaded in the organisation (any miss is a 404 for the request),
+  `calendar:manage_org` for a shared-library row, then the active referencers counted under the locks
+  (three grouped counts for the set) and a 409 naming each calendar in use. **Each calendar gets its own
+  delete batch** and its own audit row, because one shared batch would form a Recently-deleted group whose
+  Restore brings back one calendar while the group implies all of them (spec F10), and the retention
+  expiry works by project ownership, never by batch. The project's calendar section gains **Remove unused
+  calendars…**, a dialog with a checkbox per calendar, every row ticked except one that only Recently
+  deleted still uses (it says restoring that plan will ask for the calendar first, spec Q4). The confirm
+  button is shaded with its reason at zero ticks (ADR-0204).
 - **D6. No flag, no schema change, no engine change.** ADR-0088 D1: the rollback is the commit. The
   engine is untouched (ADR-0034): a reused calendar's rows equal, after normalisation, the rows a copy
   would have held, and `buildPlanCalendar` sorts both shifts and windows, so it receives equal input.
@@ -158,6 +168,13 @@ the transaction and holds no lock; a cap on candidates was considered and not ad
 
 No index and no fingerprint column was added: the SQL was never the cost. If the adversarial case ever
 matters, the remedy is a content fingerprint, which is a schema change and goes to database-architect.
+
+**Bulk delete, red-first (M2):** (a) one shared batch id for the set made `deletes each calendar under its
+own batch …` red; (b) skipping the in-use count made `deletes nothing, and names the calendar, when one is
+used by an active plan` red; (c) loading by id with no organisation scope made `deletes nothing when one
+id belongs to another organisation` red. The in-use count runs under the calendar locks, so a plan bound
+to a ticked calendar between the list and the confirm is a 409 and not a dangling reference; the
+deterministic form of that test is the 409 above, and no timing race was attempted.
 
 ## References
 

@@ -445,7 +445,7 @@ export class CalendarRepository {
     return db.$queryRaw<ReuseCandidateHeader[]>`
       ${REUSE_HEADER_SQL}
         AND c.organization_id = ${params.organizationId}::uuid
-        AND c.scope::text = ${params.scope}
+        AND c.scope = ${params.scope}::"CalendarScope"
         AND c.project_id IS NOT DISTINCT FROM ${params.projectId}::uuid
         AND EXISTS (
           SELECT 1 FROM unnest(${[...params.prefixes]}::text[]) AS p(prefix)
@@ -910,6 +910,134 @@ export class CalendarRepository {
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
       include: { shifts: { orderBy: [{ weekday: 'asc' }, { startMinute: 'asc' }] } },
     });
+  }
+
+  /**
+   * A page of the project's OWN calendars that nothing active uses (ADR-0208 D5): PROJECT tier in
+   * `projectId`, archived or not, with no active plan, activity or resource pointing at it. This is
+   * the predicate of the single delete's in-use guard, so "unused" has one definition. Each
+   * `NOT EXISTS` is served by the partial `idx_*_calendar_id` index on live rows. Oldest first, keyset
+   * by id like the other calendar lists. The deleted referencers come from
+   * {@link countDeletedReferencers}, over this page's ids only.
+   */
+  async findUnusedInProject(params: {
+    organizationId: string;
+    projectId: string;
+    take: number;
+    cursor?: string;
+  }): Promise<{ id: string; name: string; archived: boolean; version: number }[]> {
+    // soft-delete: any-state — the cursor row only anchors the keyset position; it may have been deleted
+    // since the previous page was read and must still say where the next one starts.
+    const after = params.cursor
+      ? Prisma.sql`AND (c.created_at, c.id) > (SELECT k.created_at, k.id FROM calendars k WHERE k.id = ${params.cursor}::uuid)`
+      : Prisma.empty;
+    return this.prisma.$queryRaw`
+      SELECT c.id, c.name, (c.archived_at IS NOT NULL) AS archived, c.version
+      FROM calendars c
+      WHERE c.deleted_at IS NULL
+        AND c.organization_id = ${params.organizationId}::uuid
+        AND c.scope = 'PROJECT'::"CalendarScope"
+        AND c.project_id = ${params.projectId}::uuid
+        AND NOT EXISTS (SELECT 1 FROM plans p
+                         WHERE p.calendar_id = c.id AND p.deleted_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM activities a
+                         WHERE a.calendar_id = c.id AND a.deleted_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM resources r
+                         WHERE r.calendar_id = c.id AND r.deleted_at IS NULL)
+        ${after}
+      ORDER BY c.created_at, c.id
+      LIMIT ${params.take}`;
+  }
+
+  /**
+   * How many DELETED plans and activities still point at each of `ids` — one grouped count per
+   * table over the page's ids, not a correlated count per calendar: the partial indexes on
+   * `calendar_id` only hold live rows, so a deleted referencer is found by the grouped scan of the
+   * page's ids and not by an index probe per calendar. A calendar with none is absent from the map.
+   */
+  async countDeletedReferencers(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, { plans: number; activities: number }>> {
+    const list = [...ids];
+    const [plans, activities] = await Promise.all([
+      db.plan.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: { not: null } },
+        _count: { _all: true },
+      }),
+      db.activity.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const counts = new Map<string, { plans: number; activities: number }>();
+    const slot = (id: string) => {
+      const existing = counts.get(id) ?? { plans: 0, activities: 0 };
+      counts.set(id, existing);
+      return existing;
+    };
+    for (const row of plans) if (row.calendarId) slot(row.calendarId).plans = row._count._all;
+    for (const row of activities)
+      if (row.calendarId) slot(row.calendarId).activities = row._count._all;
+    return counts;
+  }
+
+  /**
+   * Every one of `ids` that is an active calendar in `organizationId`, ordered by id — the bulk
+   * delete's single load, run after its locks. A caller detects a miss by comparing the count.
+   */
+  findActiveManyByIdsInOrg(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Calendar[]> {
+    return db.calendar.findMany({
+      where: this.active({ id: { in: [...ids] }, organizationId }),
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /**
+   * The ACTIVE plans, activities and resources using each of `ids`, as three grouped counts — the
+   * bulk delete's in-use guard for a whole set at once (the single delete counts the same three
+   * tables for one id). A calendar with no referencer is absent from the map.
+   */
+  async countActiveReferencers(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, { plans: number; activities: number; resources: number }>> {
+    const list = [...ids];
+    const [plans, activities, resources] = await Promise.all([
+      db.plan.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      db.activity.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      db.resource.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+    ]);
+    const counts = new Map<string, { plans: number; activities: number; resources: number }>();
+    const slot = (id: string) => {
+      const existing = counts.get(id) ?? { plans: 0, activities: 0, resources: 0 };
+      counts.set(id, existing);
+      return existing;
+    };
+    for (const row of plans) if (row.calendarId) slot(row.calendarId).plans = row._count._all;
+    for (const row of activities)
+      if (row.calendarId) slot(row.calendarId).activities = row._count._all;
+    for (const row of resources)
+      if (row.calendarId) slot(row.calendarId).resources = row._count._all;
+    return counts;
   }
 
   /**

@@ -9464,3 +9464,11 @@ A comment-only marker's row is the whole of its state. Rolling the images back l
 ADR-0196's exclusion list keeps a link out of the redundant set when its intermediate is entered at its start across calendars, and CE2 is the counterexample that justified the entry. That counterexample depended on the old engine rolling a milestone's late finish back a weekend (ADR-0207 D1 removed it). A replacement counterexample in the same family was found by searching a grid of calendars and durations (336 variants diverged; A on the plan calendar, B on the office calendar, C a full-day plan task), so the exclusion still has a witness, but the witness is narrower than the entry's description and the exclusion may now withhold a flag the engine would not contradict.
 
 **Next:** run the oracle's seeded population (`generatePlan`, 150 seeds) with the SS-intermediate exclusion lifted, and either narrow the exclusion to the shape the replacement witnesses or keep it with the replacement named as its case. **Trigger:** the next change to `redundant-links.rule.ts` or to the oracle.
+
+### 558. A labelled `CheckboxField` row is 24 px tall under a coarse pointer
+
+**Status:** open · **Verified:** 2026-10-26, by reading `apps/web/src/components/ui/form.tsx` (the label is `flex min-h-6 items-center gap-2 py-1 text-sm`; only the `labelHidden` square grows to `--control-h` under `pointer-coarse`) against ADR-0118 D2 (a target meets `--control-h`, 44 px, on a coarse pointer) · **Raised:** 2026-10-26 (the accessibility review of the Remove unused calendars… dialog) · **Size:** S · **Owner:** web
+
+The labelled checkbox row clears WCAG 2.2 SC 2.5.8 (24 px) but not the house rule for a finger. Every list of `CheckboxField` rows has it: the new Remove unused calendars… dialog, the WBS member panel and the toolbar popovers. It is the primitive's gap, not the dialog's, so it is recorded here rather than fixed in the dialog with a one-off class.
+
+**Next:** give the labelled row the same coarse-pointer growth the `labelHidden` square has (`pointer-coarse:min-h-(--control-h)`), then check the member panel and toolbar popover rows still fit their containers (ADR-0118 D1 names the fixed-height exceptions). **Trigger:** a touch report of mis-taps in a checkbox list, or the next change to `CheckboxField`.

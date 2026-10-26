@@ -1,5 +1,5 @@
 import { WorkingWeekdays } from '@repo/types';
-import type { CalendarSummary } from '@repo/types';
+import type { CalendarSummary, UnusedCalendar } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,11 +54,18 @@ function renderSection({
   canWrite = true,
   canManageOrg = true,
   rows = [ORG_CALENDAR, OWN_CALENDAR],
-}: { canWrite?: boolean; canManageOrg?: boolean; rows?: CalendarSummary[] } = {}) {
+  unused = [],
+}: {
+  canWrite?: boolean;
+  canManageOrg?: boolean;
+  rows?: CalendarSummary[];
+  unused?: UnusedCalendar[];
+} = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } },
   });
   queryClient.setQueryData(calendarKeys.forProject('acme', 'proj-1'), rows);
+  queryClient.setQueryData(calendarKeys.unused('acme', 'proj-1'), unused);
   return render(
     <QueryClientProvider client={queryClient}>
       <ProjectCalendarsSection
@@ -104,6 +111,31 @@ describe('ProjectCalendarsSection', () => {
 
     revealInherited();
     expect(screen.getByText(ORG_CALENDAR.name)).toBeInTheDocument();
+  });
+
+  describe('Remove unused calendars… (ADR-0208 D5)', () => {
+    const UNUSED: UnusedCalendar = {
+      id: 'cal-own',
+      name: 'Site shutdown',
+      archived: false,
+      version: 1,
+      deletedReferencers: { plans: 0, activities: 0 },
+    };
+
+    it('is offered to a writer when the project has an unused calendar of its own', () => {
+      renderSection({ unused: [UNUSED] });
+      expect(screen.getByRole('button', { name: 'Remove unused calendars…' })).toBeInTheDocument();
+    });
+
+    it('is absent when nothing is unused, and for a reader who cannot write', () => {
+      renderSection({ unused: [] });
+      expect(screen.queryByRole('button', { name: /Remove unused calendars/ })).toBeNull();
+    });
+
+    it('is absent for a reader even when something is unused', () => {
+      renderSection({ canWrite: false, unused: [UNUSED] });
+      expect(screen.queryByRole('button', { name: /Remove unused calendars/ })).toBeNull();
+    });
   });
 
   it('lists the calendars usable in the project, badged by tier', () => {

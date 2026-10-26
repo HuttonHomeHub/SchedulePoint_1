@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Calendar, type CalendarScope } from '@prisma/client';
-import { CALENDAR_ERROR, LIBRARY_RESTORE_REASON, type PageMeta } from '@repo/types';
+import {
+  CALENDAR_ERROR,
+  LIBRARY_RESTORE_REASON,
+  type BulkDeleteCalendarsResult,
+  type CalendarInUseDetail,
+  type PageMeta,
+  type UnusedCalendar,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -713,6 +720,124 @@ export class CalendarsService {
       { organizationId: organization.id, calendarId, userId: principal.userId },
       'calendar deleted (with exceptions)',
     );
+  }
+
+  /**
+   * The project's own calendars that nothing active uses (ADR-0208 D5), for the "Remove unused
+   * calendars…" dialog. Read-only (`calendar:read`); the project is resolved active and in this
+   * organisation first, so a foreign or deleted id is a 404 and not an oracle.
+   */
+  async listUnusedForProject(
+    principal: Principal,
+    orgSlug: string,
+    projectId: string,
+    query: { limit: number; cursor?: string },
+  ): Promise<{ items: UnusedCalendar[]; meta: PageMeta }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:read', organization.id);
+    if (!(await this.projects.findActiveByIdInOrg(projectId, organization.id))) {
+      throw new NotFoundError('Project not found.');
+    }
+
+    // A cursor naming no calendar anchors nothing, so the page is empty rather than an error.
+    const rows = await this.calendars.findUnusedInProject({
+      organizationId: organization.id,
+      projectId,
+      take: query.limit + 1,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+    });
+    const hasMore = rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const deleted = await this.calendars.countDeletedReferencers(page.map((row) => row.id));
+    return {
+      items: page.map((row) => ({
+        id: row.id,
+        name: row.name,
+        archived: row.archived,
+        version: row.version,
+        deletedReferencers: deleted.get(row.id) ?? { plans: 0, activities: 0 },
+      })),
+      meta: { nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null, hasMore },
+    };
+  }
+
+  /**
+   * Delete several calendars at once, all or nothing (ADR-0208 D5). It is the single delete's rules
+   * applied to a set, in one transaction: ids in ascending order under each calendar's advisory
+   * lock (the order `lockBatchCalendars` takes, so it cannot deadlock a hierarchy restore), every id
+   * loaded in this organisation (any miss is a 404 for the whole request, so an unknown id and a
+   * foreign one are indistinguishable), `calendar:manage_org` for an ORG row, then the active
+   * referencers counted UNDER the locks. Only after every gate has passed does anything write.
+   *
+   * Each calendar gets its **own** delete batch and its own audit row, shaped exactly like the single
+   * delete's. One shared batch would make a Recently-deleted group whose Restore brings back one
+   * calendar while the group implies all of them (ADR-0208 F10).
+   */
+  async bulkRemove(
+    principal: Principal,
+    orgSlug: string,
+    ids: readonly string[],
+    context?: RequestContext,
+  ): Promise<BulkDeleteCalendarsResult> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'calendar:delete', organization.id);
+    const sorted = [...ids].sort();
+
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      for (const calendarId of sorted) await acquireCalendarWriteLock(tx, calendarId);
+
+      // One read for the whole set, after the locks. A miss (unknown, deleted, or in another
+      // organisation) is a 404 for the request, and the count is how it is noticed.
+      const loaded = await this.calendars.findActiveManyByIdsInOrg(sorted, organization.id, tx);
+      if (loaded.length !== sorted.length) throw new NotFoundError('Calendar not found.');
+      if (loaded.some((calendar) => calendar.scope === 'ORG')) {
+        this.assertCan(principal, 'calendar:manage_org', organization.id);
+      }
+
+      const counts = await this.calendars.countActiveReferencers(sorted, tx);
+      const inUse: CalendarInUseDetail[] = [];
+      for (const calendar of loaded) {
+        const used = counts.get(calendar.id);
+        if (used && used.plans + used.activities + used.resources > 0) {
+          inUse.push({ id: calendar.id, name: calendar.name, ...used });
+        }
+      }
+      if (inUse.length > 0) {
+        throw new ConflictError(
+          `${inUse.length} of these calendars ${inUse.length === 1 ? 'is' : 'are'} in use, so none was deleted.`,
+          { reason: CALENDAR_CONFLICT.CALENDAR_IN_USE, count: inUse.length, calendars: inUse },
+        );
+      }
+
+      const result: BulkDeleteCalendarsResult['deleted'] = [];
+      for (const calendar of loaded) {
+        const batchId = await this.calendars.softDeleteWithExceptions(
+          calendar.id,
+          principal.userId,
+          tx,
+        );
+        await this.audit.record(
+          {
+            action: 'calendar.deleted',
+            outcome: 'SUCCESS',
+            organizationId: organization.id,
+            subjectType: 'CALENDAR',
+            subjectId: calendar.id,
+            subjectLabel: calendar.name,
+            before: { name: calendar.name, scope: calendar.scope, deleteBatchId: batchId },
+            ...auditActor(principal, context),
+          },
+          tx,
+        );
+        result.push({ id: calendar.id, name: calendar.name, deleteBatchId: batchId });
+      }
+      return result;
+    });
+    this.logger.info(
+      { organizationId: organization.id, userId: principal.userId, calendarIds: sorted },
+      'calendars deleted in bulk (with exceptions)',
+    );
+    return { deleted };
   }
 
   async addException(

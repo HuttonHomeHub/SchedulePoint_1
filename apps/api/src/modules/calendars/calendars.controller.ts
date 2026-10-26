@@ -21,9 +21,11 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -32,6 +34,10 @@ import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 
 import { CalendarsService } from './calendars.service';
+import {
+  BulkDeleteCalendarsDto,
+  BulkDeleteCalendarsResponseDto,
+} from './dto/bulk-delete-calendars.dto';
 import { CalendarListQueryDto } from './dto/calendar-list-query.dto';
 import {
   CalendarDetailResponseDto,
@@ -42,6 +48,15 @@ import { CreateCalendarExceptionDto } from './dto/create-calendar-exception.dto'
 import { CreateCalendarDto } from './dto/create-calendar.dto';
 import { UpdateCalendarExceptionDto } from './dto/update-calendar-exception.dto';
 import { UpdateCalendarDto } from './dto/update-calendar.dto';
+
+/**
+ * The bulk delete's budget: **10 requests / minute**, per client address and for this route alone (the
+ * throttler keys per handler). One request deletes up to 200 calendars in a single transaction, so the
+ * global 100 / 60 s would let one session start a hundred of those a minute. Sized for a person
+ * clearing a project's leftovers, not for a loop; the export route (3 / 10 min) is the precedent for
+ * tightening a heavy write below the default.
+ */
+const BULK_DELETE_THROTTLE = { default: { ttl: 60_000, limit: 10 } } as const;
 
 /**
  * Working-day calendar library HTTP surface, nested under the organisation scope
@@ -109,6 +124,75 @@ export class CalendarsController {
     @Body() dto: CreateCalendarDto,
   ): Promise<CalendarDetailResponseDto> {
     return CalendarDetailResponseDto.fromDetail(await this.service.create(principal, orgSlug, dto));
+  }
+
+  @Post('bulk-delete')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(BULK_DELETE_THROTTLE)
+  @ApiOperation({
+    summary: 'Delete several calendars at once, all or nothing (Planner or Org Admin).',
+    description:
+      'The single delete’s rules applied to a set (ADR-0208 D5): `calendar:delete` for every id, ' +
+      'plus `calendar:manage_org` for a shared-library one. Each calendar gets its own delete ' +
+      'batch and its own audit row and can be restored alone from Recently deleted. A POST per ' +
+      'the activities bulk-delete precedent.',
+  })
+  @ApiOkResponse({ type: BulkDeleteCalendarsResponseDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for a shared-library calendar.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Any id is unknown, already deleted, or in another organisation. Nothing is deleted.',
+  })
+  @ApiConflictResponse({
+    description:
+      'Any calendar is still used by an active plan, activity or resource (CALENDAR_IN_USE); ' +
+      '`details.calendars` names each with its counts. Nothing is deleted.',
+    schema: {
+      type: 'object',
+      properties: {
+        error: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', example: 'CONFLICT' },
+            message: { type: 'string' },
+            details: {
+              type: 'object',
+              properties: {
+                reason: { type: 'string', example: 'CALENDAR_IN_USE' },
+                count: { type: 'integer', description: 'How many calendars are in use.' },
+                calendars: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      name: { type: 'string' },
+                      plans: { type: 'integer' },
+                      activities: { type: 'integer' },
+                      resources: { type: 'integer' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiTooManyRequestsResponse({ description: 'More than 10 requests in a minute.' })
+  @ApiUnprocessableEntityResponse({
+    description: '`ids` is empty, has more than 200, repeats an id, or holds a non-UUID.',
+  })
+  async bulkDelete(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: BulkDeleteCalendarsDto,
+    @RequestContext() context: RequestContext,
+  ): Promise<BulkDeleteCalendarsResponseDto> {
+    return this.service.bulkRemove(principal, orgSlug, dto.ids, context);
   }
 
   @Get(':calendarId')

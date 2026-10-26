@@ -1625,6 +1625,33 @@ export const CALENDAR_ERROR = {
   CALENDAR_ARCHIVED: 'This calendar is archived. Unarchive it to use it again.',
 } as const;
 
+/**
+ * A project calendar nothing active uses (ADR-0208 D5): the row the project screen's "Remove unused
+ * calendars…" dialog lists. `deletedReferencers` counts plans and activities that still point at it
+ * from Recently deleted, which is why a calendar used only by a deleted plan is listed but not ticked.
+ */
+export interface UnusedCalendar {
+  id: string;
+  name: string;
+  archived: boolean;
+  version: number;
+  deletedReferencers: { plans: number; activities: number };
+}
+
+/** The result of deleting several calendars at once (ADR-0208 D5): one batch id per calendar. */
+export interface BulkDeleteCalendarsResult {
+  deleted: { id: string; name: string; deleteBatchId: string }[];
+}
+
+/** One calendar a bulk delete refused because something active still uses it (409 `details`). */
+export interface CalendarInUseDetail {
+  id: string;
+  name: string;
+  plans: number;
+  activities: number;
+  resources: number;
+}
+
 /** A machine-readable calendar-scope error reason (a key of {@link CALENDAR_ERROR}). */
 export type CalendarErrorReason = keyof typeof CALENDAR_ERROR;
 

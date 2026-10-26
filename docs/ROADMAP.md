@@ -947,12 +947,12 @@ discriminators. Each becomes a spec/plan before build:
   milestone or zero-duration task between weekend or shift work and weekday work no longer pushes its
   successors a calendar period or charges the work before it a false negative float, and existing plans are
   recalculated once at the first boot.
-- **An import reuses a calendar it would have copied exactly** — **in progress** (approved 2026-10-26,
+- **An import reuses a calendar it would have copied exactly** — **shipped** (2026-10-26,
   [ADR-0208](adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md); spec and plan at
   [`docs/specs/import-calendar-tidy/`](specs/import-calendar-tidy/)): a re-imported revision binds the
   calendar the project already holds when its working week, exceptions and hours per day are identical,
-  and the report says so. Milestone 1 is built; Milestone 2, removing unused project calendars from the
-  project screen, is not.
+  and the report says so. The project's calendar section gains **Remove unused calendars…** to clear the
+  copies that already exist, each restorable alone from Recently deleted.
 - **A share link shows the plan's swimlanes** — **shipped** (with swimlanes M4)
   ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
   [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list

@@ -12,6 +12,7 @@ import { formatWorkingWeekdays } from '../schemas/calendar-schemas';
 import { CalendarFormDialog } from './CalendarFormDialog';
 import { CalendarScopeBadge } from './CalendarScopeBadge';
 import { CreateCalendarButton } from './CreateCalendarButton';
+import { RemoveUnusedCalendarsButton } from './RemoveUnusedCalendarsButton';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
@@ -240,13 +241,21 @@ export function ProjectCalendarsSection({
       }
       action={
         canWrite ? (
-          <CreateCalendarButton
-            orgSlug={orgSlug}
-            canManageOrg={canManageOrg}
-            projectId={projectId}
-            projectName={projectName}
-            label="New calendar"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <RemoveUnusedCalendarsButton
+              orgSlug={orgSlug}
+              projectId={projectId}
+              projectName={projectName}
+              focusTarget={() => regionRef.current}
+            />
+            <CreateCalendarButton
+              orgSlug={orgSlug}
+              canManageOrg={canManageOrg}
+              projectId={projectId}
+              projectName={projectName}
+              label="New calendar"
+            />
+          </div>
         ) : null
       }
       /* **`flush`, like its two sibling sections — and the reason is a measurement, not symmetry.**

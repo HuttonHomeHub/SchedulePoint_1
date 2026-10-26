@@ -1,11 +1,13 @@
 import type {
   ArchivedFilter,
+  BulkDeleteCalendarsResult,
   CalendarDetail,
   CalendarExceptionSummary,
   CalendarScope,
   CalendarShift,
   CalendarSummary,
   CalendarWindow,
+  UnusedCalendar,
 } from '@repo/types';
 import {
   keepPreviousData,
@@ -22,6 +24,7 @@ import type {
   ExceptionFormValues,
 } from '../schemas/calendar-schemas';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { calendarKeys, deletedItemKeys } from '@/lib/query/hierarchy-keys';
 
@@ -360,6 +363,93 @@ export function useArchiveCalendar(orgSlug: string) {
 /** Return an archived calendar to the library and the pickers. */
 export function useUnarchiveCalendar(orgSlug: string) {
   return useSetCalendarArchived(orgSlug, false);
+}
+
+/**
+ * The project's own calendars that nothing active uses (ADR-0208 D5). Every page is read before the
+ * list is shown, so the dialog never offers a partial set that "Delete all" would then misdescribe.
+ *
+ * **It is not refreshed by assignments.** A plan or activity that starts using a listed calendar does
+ * not invalidate this list, so a stale row can be ticked. That is safe by construction: the server
+ * counts the active referencers under the calendar's lock and answers 409 naming what is in use, and
+ * the dialog shows that.
+ */
+export function useUnusedProjectCalendars(
+  orgSlug: string,
+  projectId: string,
+): UseQueryResult<UnusedCalendar[]> {
+  return useQuery({
+    queryKey: calendarKeys.unused(orgSlug, projectId),
+    queryFn: () =>
+      apiFetchAllPages<UnusedCalendar>(
+        `/organizations/${orgSlug}/projects/${projectId}/calendars/unused`,
+      ),
+    enabled: Boolean(projectId),
+  });
+}
+
+/** The most calendars one request deletes; the API refuses more (422). */
+export const BULK_DELETE_PAGE = 200;
+
+/**
+ * A bulk delete that stopped part-way: `deleted` pages of calendars are already gone, `remaining`
+ * are not. Only reachable above {@link BULK_DELETE_PAGE}, where the set goes in several requests.
+ */
+export class BulkDeleteInterrupted extends Error {
+  constructor(
+    readonly deleted: number,
+    readonly remaining: number,
+    readonly failure: unknown,
+  ) {
+    super(failure instanceof Error ? failure.message : 'The calendars were not deleted.');
+    this.name = 'BulkDeleteInterrupted';
+  }
+}
+
+/**
+ * Delete several calendars (ADR-0208 D5). Each request is all-or-nothing on the server; a set larger
+ * than {@link BULK_DELETE_PAGE} goes in sequential requests, and a failure stops the walk and says
+ * what is left, so the dialog can name it rather than pretend nothing happened. The walk is **not
+ * cancellable by design**: closing the dialog does not abort a request already sent, and the pages that
+ * are left still go, because stopping half-way would leave exactly the partial state this reports.
+ *
+ * **The announcement is made here, in the mutation's own `onSuccess`, and not by the caller.** The
+ * unused list refetches to empty once the last calendar is gone, which unmounts the dialog; a callback
+ * passed to `mutate()` dies with the component, while these options do not.
+ */
+export function useBulkDeleteCalendars(orgSlug: string) {
+  const queryClient = useQueryClient();
+  const announce = useAnnounce();
+  return useMutation({
+    mutationFn: async (ids: string[]): Promise<BulkDeleteCalendarsResult> => {
+      const deleted: BulkDeleteCalendarsResult['deleted'] = [];
+      for (let at = 0; at < ids.length; at += BULK_DELETE_PAGE) {
+        try {
+          const page = await apiFetch<BulkDeleteCalendarsResult>(
+            `/organizations/${orgSlug}/calendars/bulk-delete`,
+            { method: 'POST', body: JSON.stringify({ ids: ids.slice(at, at + BULK_DELETE_PAGE) }) },
+          );
+          deleted.push(...page.deleted);
+        } catch (failure) {
+          if (deleted.length === 0) throw failure;
+          throw new BulkDeleteInterrupted(deleted.length, ids.length - deleted.length, failure);
+        }
+      }
+      return { deleted };
+    },
+    onSuccess: (result) => {
+      const n = result.deleted.length;
+      announce(
+        `${String(n)} ${n === 1 ? 'calendar' : 'calendars'} deleted. You can restore ${n === 1 ? 'it' : 'them'} from Recently deleted.`,
+      );
+    },
+    // Each calendar moves INTO Recently deleted, and leaves every list that showed it.
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarKeys.list(orgSlug) }),
+        queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) }),
+      ]),
+  });
 }
 
 export function useDeleteCalendar(orgSlug: string) {
