@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ActivitiesModule } from '../activities/activities.module';
 import { CalendarsModule } from '../calendars/calendars.module';
 import { DependenciesModule } from '../dependencies/dependencies.module';
+import { NotesModule } from '../notes/notes.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
@@ -44,6 +45,7 @@ import { PlanExportController } from './plan-export.controller';
     CalendarsModule,
     ActivitiesModule,
     DependenciesModule,
+    NotesModule,
     ResourcesModule,
     ScheduleModule,
     PlanLockModule,

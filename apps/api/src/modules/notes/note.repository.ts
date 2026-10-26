@@ -36,6 +36,21 @@ export class NoteRepository {
     return db.note.create({ data });
   }
 
+  /**
+   * Insert a batch of brand-new notes inside the caller's transaction (the schedule-interchange commit,
+   * ADR-0050). Ids and `createdAt` are supplied so the caller can order the thread deterministically; all
+   * rows are new, so there is no optimistic-lock or audit ceremony beyond the create defaults. One
+   * `createMany` keeps the statement count independent of the number of notes — the import runs inside a
+   * single interactive transaction with a time budget.
+   */
+  async createManyForImport(
+    rows: readonly Prisma.NoteCreateManyInput[],
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    await db.note.createMany({ data: [...rows] });
+  }
+
   /** An active note scoped to its organisation (anti-IDOR). */
   findActiveByIdInOrg(
     id: string,

@@ -105,6 +105,7 @@ describe('InterchangeService.dryRun', () => {
       unused,
       unused,
       unused,
+      unused,
       logger as unknown as PinoLogger,
     );
   });
@@ -249,6 +250,7 @@ describe('InterchangeService.dryRun — swimlanes', () => {
       unused,
       unused,
       unused,
+      unused,
       { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger,
     );
   };
@@ -321,6 +323,7 @@ describe('InterchangeService — laying out swimlane members', () => {
         upsertSwimlaneLanes: upsert,
       } as unknown as ActivityRepository,
       { findEdgesForPlan: vi.fn().mockResolvedValue(edges) } as unknown as DependencyRepository,
+      unused,
       unused,
       unused,
       unused,
