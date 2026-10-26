@@ -531,9 +531,8 @@ activities` that skips the lock.
   plan row does not conflict with the cascade's `NO KEY UPDATE`, so the FK does not catch it. The
   lock also serialises the cap count. Restore takes ancestors before the advisory lock, as
   `hierarchy-row-lock.ts:35-38` requires.
-  - _Noted, not changed:_ activity create takes the plan lock only when `parentId` is set
-    (`activities.service.ts:363`), so the same race exists there today. It is out of scope; it
-    is named here so the precedent is not read as permission.
+  - _Fixed 2026-10-26 (#550):_ activity create took the plan lock only when `parentId` was set, so
+    the same race existed there. It now takes the lock on every create and re-checks the plan.
 - **WBS basis reads take no lock.** A summary reparented concurrently yields a row written
   against a basis that changes a moment later. The next projection reads it as a mismatch and
   derives a lane: benign, and stated rather than locked.

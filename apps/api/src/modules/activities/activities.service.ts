@@ -440,11 +440,19 @@ export class ActivitiesService {
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
-        // Serialise the WBS parent-tree read-then-write per plan (ADR-0038 invariant (a)) — see
-        // `assertValidParent`. Taken ONLY when a parent is actually being set, so the overwhelmingly
-        // common top-level create never contends for a plan-wide lock; and taken FIRST, before the
-        // calendar guard's own lock, to keep this service's acquisition order plan → calendar.
-        if (parentId !== null) await acquirePlanWriteLock(tx, plan.id);
+        // The plan lock is the transaction's first statement on EVERY create (#520/#550): a plan delete
+        // holds it across its sweep, and this insert's FK `KEY SHARE` on the plan row does not conflict
+        // with the cascade's `NO KEY UPDATE`, so without it a row could commit live under a plan whose
+        // sweep had already read. It also serialises the WBS parent-tree read-then-write per plan
+        // (ADR-0038 invariant (a)). Taken before the calendar guard's own lock to keep this service's
+        // acquisition order plan → calendar.
+        await acquirePlanWriteLock(tx, plan.id);
+        // The pre-transaction read may predate a delete that held the lock; re-read now that it is ours.
+        // A plain read, not `FOR SHARE`, which would conflict with `markScheduleInputsChanged`'s later
+        // `FOR NO KEY UPDATE` on the same row.
+        if (!(await this.plans.findActiveByIdInOrg(plan.id, organization.id, tx))) {
+          throw new NotFoundError('Plan not found.');
+        }
         // Validate a specific calendar through THE shared scope guard before the insert
         // (ADR-0037 + ADR-0053 §2): active + in-org (404 otherwise) AND usable by this
         // activity's PROJECT — an ORG calendar anywhere, a PROJECT calendar only inside its
