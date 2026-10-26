@@ -31,8 +31,9 @@ would then move successors; it did not consider a predecessor on another calenda
 duration and not a Level-of-Effort or WBS summary (`isZeroSpan`): a start milestone, a finish milestone
 and a zero-duration task alike, because the fault is the zero span and not the type. Forward (Pass 1 and
 Pass 2), its start and finish are its binding lower bound as an instant; backward, its late finish and
-start are its binding upper bound. The one exception is a bound equal to the data date, which still rolls
-onto its calendar so a free-standing milestone does not move. Its neighbours still roll onto their own
+start are its binding upper bound. The one exception is the data date FLOOR with nothing driving the activity, which still rolls onto its
+calendar so a free-standing milestone does not move; a link whose bound is exactly the data date is a
+driver and its instant wins (`compute.ts` tracks the latest link bound, in both forward passes). Its neighbours still roll onto their own
 calendars, so `A → M → B` schedules `B` as `A → B` does. A lag is measured on the calendar its edge
 resolves to, from the kept instant; on the milestone's own calendar this equals the rolled anchor
 (`edge-bounds.lag-anchor.spec.ts`, measured on 5-day, 24-hour, night-shift and holiday calendars). The
@@ -100,3 +101,33 @@ plan the previous image touched.
 - `apps/api/src/modules/schedule/engine/` (`compute.ts`, `instants.ts`, `constraints.ts`, `level.ts`,
   `apply-levelling.ts`), `cross-plan-derivation.ts`, `milestone-rederive.service.ts`
 - `apps/api/scripts/measure-milestone-cross-calendar.mts` (the movement harness)
+
+## Verification ledger: mutations the new tests were killed by
+
+Each row is a change made to the code, the spec it turned red, and the restore that turned it green. All
+were run on 2026-10-26 against the tree at the commit that added the test.
+
+| Mutation                                                                              | Red in                                                             |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Pass 1 keeps the instant unless it equals the data date (the first draft's rule)      | `compute.activity-calendar.spec` "driven to exactly the data date" |
+| Pass 2 the same                                                                       | the same case                                                      |
+| Pass 1 rolls every zero-span activity (D1 off, forward)                               | `compute.milestone-instant.spec`: 6 cases                          |
+| The backward pass rolls every zero-span activity (D1 off, backward)                   | `compute.milestone-instant.spec`: 4 cases                          |
+| The late date of a finish milestone is lifted to its early date whatever the float    | the negative-float case                                            |
+| `rankInst` removed from the project-finish ranking                                    | "a zero-duration task ... outranks a finish milestone"             |
+| The date reader rolls onto the milestone's calendar again (D2 off)                    | `compute.finish-milestone.spec`: FNLT, FNET and placement cases    |
+| `leveledDate` reads the working-minute offset again                                   | `level.milestone-cross-calendar.spec` plan-calendar case           |
+| The levelling link push rolls a zero-span activity                                    | `level.milestone-cross-calendar.spec` first case                   |
+| `targetDateFor` reports `placed > levelled` again                                     | `apply-levelling.spec` Friday-close case                           |
+| Remote finish milestone early read is always midnight                                 | `cross-plan-derivation.spec` eight-hour Friday cell                |
+| Remote finish milestone early read ignores the dated day                              | the eight-hour holiday cell and the Sunday cell                    |
+| The late read is the last working minute                                              | "FS into an eight-hour finish milestone"                           |
+| Pending query: outgoing arm dropped                                                   | `milestone-cross-calendar.e2e-spec` main case                      |
+| Pending query: incoming arm dropped                                                   | the same case (the INCOMING_ONLY plan)                             |
+| Pending query: LOE and summary counted as zero-span                                   | the main case and the hammock assertion                            |
+| Pending query: `deleted_at` dropped on `plans`, on `activities`, on the outgoing link | the main case, each                                                |
+| Pending query: the milestone-type disjunct dropped                                    | "a milestone stored with a non-zero duration"                      |
+
+The `check:engine-parity` gate is skipped (no declaration file exists) and this change declares none: the
+engine change is the subject, and its parity evidence is the golden and conformance suites, the cross-plan
+twin, and the movement harness's classified diff (`scripts/measure-milestone-cross-calendar.mts`).

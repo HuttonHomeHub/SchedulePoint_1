@@ -282,9 +282,12 @@ with `durationMinutes === 0` that is not an LOE or WBS summary:
 
 - **Forward (Pass 1 and Pass 2):** the start and finish are the binding lower bound **as an instant**
   (after the external and constraint clamps, `compute.ts:252-259`, `:332-348`), not
-  `rollForwardToWorking` of it. The single exception is a bound that is exactly the data date
-  (`compute.ts:213`), which is rolled onto the activity's own calendar as today, so an open-start
-  milestone is unchanged.
+  `rollForwardToWorking` of it. The single exception is the data date FLOOR with nothing driving
+  the activity (`compute.ts:213`), which is rolled onto the activity's own calendar as today, so an
+  open-start milestone is unchanged. (This said "a bound that is exactly the data date" until the review
+  of the built change: that wording cannot tell a link that reaches the data date from the floor, and the
+  link instant is the one that wins. The code now tracks the latest link bound and keeps the instant when
+  it is at or after the data date.)
 - **Backward:** the late finish and late start are the binding upper bound as an instant, whether it
   came from a successor, the project-finish seed (`compute.ts:481`) or a clamp, not
   `rollBackwardToWorking` of it (`compute.ts:510`).
