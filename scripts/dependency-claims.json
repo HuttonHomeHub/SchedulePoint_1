@@ -8,7 +8,7 @@
     "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.90.0",
     "react-dom": "19.3.1",
-    "lucide-react": "1.58.0",
+    "lucide-react": "1.61.0",
     "axe-core": "4.14.0",
     "@axe-core/playwright": "4.14.0",
     "@tanstack/react-router": "1.170.46",
@@ -981,7 +981,7 @@
       "ref": "lucide-react.d.ts:342",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "354",
+      "lines": "341",
       "anchor": "declare const AlignHorizontalJustifyStart:",
       "citedBy": ["docs/specs/workspace-modes/feature-spec.md"]
     },
@@ -989,7 +989,7 @@
       "ref": "lucide-react.d.ts:4306",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "4358",
+      "lines": "4410",
       "anchor": "declare const ChartColumnStacked: LucideIcon;",
       "citedBy": [
         "docs/specs/toolbar-redesign/feature-spec.md",

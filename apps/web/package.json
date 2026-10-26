@@ -1,6 +1,6 @@
 {
   "name": "@repo/web",
-  "version": "0.200.0",
+  "version": "0.199.2",
   "private": true,
   "description": "SchedulePoint web client — React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
   "license": "MIT",
@@ -85,13 +85,13 @@
     "@repo/seed": "workspace:*",
     "@repo/types": "workspace:*",
     "@tanstack/react-query": "^5.104.1",
-    "@tanstack/react-router": "^1.170.46",
+    "@tanstack/react-router": "^1.170.44",
     "@tanstack/react-virtual": "^3.14.14",
-    "better-auth": "^1.7.10",
+    "better-auth": "^1.7.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
-    "lucide-react": "^1.58.0",
+    "lucide-react": "^1.61.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-hook-form": "^7.90.0",
@@ -117,7 +117,7 @@
     "rimraf": "^6.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
-    "vite": "^8.3.5",
+    "vite": "^8.3.4",
     "vitest": "^5.0.5",
     "vitest-axe": "^0.1.0"
   }
