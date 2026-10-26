@@ -12,6 +12,7 @@ import {
   type CanonicalRelationshipType,
   type CanonicalResourceKind,
 } from './canonical.js';
+import { MAX_NOTES, NOTE_BODY_MAX } from './note-text.js';
 
 /**
  * The **SchedulePoint import graph** (ADR-0050 mapper output).
@@ -269,6 +270,19 @@ export const importAssignmentSchema = z
   .strict();
 export type ImportAssignment = z.infer<typeof importAssignmentSchema>;
 
+/**
+ * An activity note → a SchedulePoint `Note` (ADR-0046) on the activity named by `activityKey`. The body
+ * is plain text of 1 to 5,000 characters, the shape `ck_notes_body_length` enforces; the persisting layer
+ * writes it verbatim, in array order.
+ */
+export const importNoteSchema = z
+  .object({
+    activityKey: z.string().min(1),
+    body: z.string().min(1).max(NOTE_BODY_MAX),
+  })
+  .strict();
+export type ImportNote = z.infer<typeof importNoteSchema>;
+
 /** A dependency → a SchedulePoint `ActivityDependency`. `lagMinutes` is signed working-minutes (lead = negative). */
 export const importDependencySchema = z
   .object({
@@ -319,6 +333,8 @@ export const importGraphSchema = z
     assignments: z.array(importAssignmentSchema),
     /** The hand-made swimlanes to create, in display order; absent on a foreign import. */
     swimlanes: z.array(importSwimlaneSchema).max(100).optional(),
+    /** Activity notes in source order; absent when the file carried none. */
+    notes: z.array(importNoteSchema).max(MAX_NOTES).optional(),
   })
   .strict();
 export type ImportGraph = z.infer<typeof importGraphSchema>;

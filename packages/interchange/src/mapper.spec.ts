@@ -281,3 +281,56 @@ describe('importXer — CALENDAR.day_hr_cnt is the calendar’s standard working
     expect(importOk(xer).graph.calendars[0]).not.toHaveProperty('hoursPerDay');
   });
 });
+
+describe('mapCanonicalToImportGraph — notes', () => {
+  const activity = (id: string): CanonicalModel['activities'][number] => ({
+    id,
+    code: id,
+    name: id,
+    type: 'TASK',
+    durationMinutes: 480,
+    calendarId: null,
+    parentId: null,
+    constraintType: null,
+    constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
+    scheduleAsLateAsPossible: false,
+    progress: null,
+  });
+
+  it('maps a note onto its activity key, in order', () => {
+    const { graph, findings } = mapCanonicalToImportGraph({
+      ...model([]),
+      activities: [activity('A'), activity('B')],
+      notes: [
+        { activityId: 'B', body: 'second' },
+        { activityId: 'A', body: 'first' },
+      ],
+    });
+    expect(graph.notes).toEqual([
+      { activityKey: 'B', body: 'second' },
+      { activityKey: 'A', body: 'first' },
+    ]);
+    expect(findings).toEqual([]);
+  });
+
+  it('drops and counts a note whose activity is not in the model', () => {
+    const { graph, findings } = mapCanonicalToImportGraph({
+      ...model([]),
+      activities: [activity('A')],
+      notes: [
+        { activityId: 'A', body: 'kept' },
+        { activityId: 'GONE', body: 'orphan' },
+      ],
+    });
+    expect(graph.notes).toEqual([{ activityKey: 'A', body: 'kept' }]);
+    expect(findings).toEqual([
+      expect.objectContaining({ kind: 'drop', entity: 'note', detail: '1 note was not imported' }),
+    ]);
+  });
+
+  it('gives a model without notes a graph without a notes key', () => {
+    expect('notes' in mapCanonicalToImportGraph(model([])).graph).toBe(false);
+  });
+});

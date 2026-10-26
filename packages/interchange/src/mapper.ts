@@ -14,6 +14,7 @@ import type {
   ImportDependency,
   ImportGraph,
   ImportResource,
+  ImportNote,
   ImportSwimlane,
   ImportWorkWindow,
 } from './import-graph.js';
@@ -260,6 +261,26 @@ export function mapCanonicalToImportGraph(
     actualUnits: assignment.actualUnits,
   }));
 
+  // A note names its activity by id; one whose activity this model does not hold has nowhere to go. The
+  // adapters already filter, so this is the mapper's own backstop and reports it the same way.
+  const activityIds = new Set(model.activities.map((activity) => activity.id));
+  const notes: ImportNote[] = [];
+  let orphanedNotes = 0;
+  for (const note of model.notes ?? []) {
+    if (activityIds.has(note.activityId))
+      notes.push({ activityKey: note.activityId, body: note.body });
+    else orphanedNotes += 1;
+  }
+  if (orphanedNotes > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'note',
+      sourceRef: null,
+      detail: `${String(orphanedNotes)} ${orphanedNotes === 1 ? 'note was' : 'notes were'} not imported`,
+      reason: 'the note belongs to an activity this import did not take',
+    });
+  }
+
   const graph: ImportGraph = {
     plan: {
       name: model.project.name,
@@ -275,6 +296,7 @@ export function mapCanonicalToImportGraph(
     resources,
     assignments,
     ...(swimlanes === undefined ? {} : { swimlanes }),
+    ...(notes.length === 0 ? {} : { notes }),
   };
 
   return { graph, findings };

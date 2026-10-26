@@ -170,6 +170,8 @@ export function importMspdi(input: ImportMspdiInput): ImportMspdiResult {
     0,
   );
 
+  const noteCount = g.notes?.length ?? 0;
+
   // Activities imported faithfully that the planner probably wants to convert (ADR-0162).
   const advisories = zeroDurationAdvisories(g);
 
@@ -185,6 +187,7 @@ export function importMspdi(input: ImportMspdiInput): ImportMspdiResult {
       ...(constraints > 0 ? { constraints } : {}),
       ...(g.resources.length > 0 ? { resources: g.resources.length } : {}),
       ...(g.assignments.length > 0 ? { assignments: g.assignments.length } : {}),
+      ...(noteCount > 0 ? { notes: noteCount } : {}),
     },
     approximations,
     repairs,

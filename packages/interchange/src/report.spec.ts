@@ -20,7 +20,7 @@ const REPORT: InterchangeReport = {
   detectedFormat: 'MSPDI',
   sourceVersion: null,
   sourceFilename: 'riverside.xml',
-  mapped: { activities: 2, relationships: 1, calendars: 0, placements: 1 },
+  mapped: { activities: 2, relationships: 1, calendars: 0, placements: 1, notes: 3 },
   approximations: [
     { kind: 'approximation', entity: 'calendar', sourceRef: null, detail: 'coerced to 24/7' },
   ],

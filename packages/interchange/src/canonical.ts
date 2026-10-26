@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { NOTE_BODY_MAX } from './note-text.js';
+
 /**
  * The **format-agnostic canonical interchange model** (ADR-0050).
  *
@@ -382,6 +384,20 @@ export const canonicalSwimlanesSchema = z
   .strict();
 export type CanonicalSwimlanes = z.infer<typeof canonicalSwimlanesSchema>;
 
+/**
+ * One activity note (ADR-0046), already plain text and within the note shape: 1 to 5,000 characters.
+ * A remark longer than that arrives as consecutive notes, so a model never carries one the database
+ * would refuse.
+ */
+export const canonicalNoteSchema = z
+  .object({
+    /** The id of the activity the note belongs to (a real activity or a WBS summary). */
+    activityId: z.string().min(1),
+    body: z.string().min(1).max(NOTE_BODY_MAX),
+  })
+  .strict();
+export type CanonicalNote = z.infer<typeof canonicalNoteSchema>;
+
 /** Provenance of a parsed model — echoed into the `InterchangeReport`. */
 export const canonicalSourceMetaSchema = z
   .object({
@@ -410,6 +426,8 @@ export const canonicalModelSchema = z
     assignments: z.array(canonicalAssignmentSchema),
     /** Present only when a SchedulePoint file carried swimlanes; absent for every foreign file. */
     swimlanes: canonicalSwimlanesSchema.optional(),
+    /** In source order. Present only when the file carried a readable note, so a file without any is unchanged. */
+    notes: z.array(canonicalNoteSchema).optional(),
   })
   .strict();
 export type CanonicalModel = z.infer<typeof canonicalModelSchema>;

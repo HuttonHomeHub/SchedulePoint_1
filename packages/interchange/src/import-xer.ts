@@ -236,6 +236,8 @@ export function importXer(input: ImportXerInput): ImportXerResult {
   const swimlanes = g.swimlanes?.length ?? 0;
   const swimlaneMembers = g.activities.filter((a) => a.swimlaneKey != null).length;
 
+  const noteCount = g.notes?.length ?? 0;
+
   // Activities imported faithfully that the planner probably wants to convert (ADR-0162).
   const advisories = zeroDurationAdvisories(g);
 
@@ -255,6 +257,7 @@ export function importXer(input: ImportXerInput): ImportXerResult {
       ...(lanes > 0 ? { lanes } : {}),
       ...(swimlanes > 0 ? { swimlanes } : {}),
       ...(swimlaneMembers > 0 ? { swimlaneMembers } : {}),
+      ...(noteCount > 0 ? { notes: noteCount } : {}),
     },
     approximations,
     repairs,

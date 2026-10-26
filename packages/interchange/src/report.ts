@@ -144,6 +144,8 @@ export function buildReportSchemas(mode: ReportSchemaMode) {
     swimlanes: z.number().int().min(0).optional(),
     /** Activities placed in one of those swimlanes; absent = 0. */
     swimlaneMembers: z.number().int().min(0).optional(),
+    /** Activity notes created, after any splitting (ADR-0046); absent = 0. */
+    notes: z.number().int().min(0).optional(),
   });
 
   /** One advisory line: which activity, by its source code, and a sentence saying what to do. */
