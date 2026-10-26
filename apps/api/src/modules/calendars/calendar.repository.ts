@@ -913,6 +913,95 @@ export class CalendarRepository {
   }
 
   /**
+   * A page of the project's OWN calendars that nothing active uses (ADR-0208 D5): PROJECT tier in
+   * `projectId`, archived or not, with no active plan, activity or resource pointing at it. This is
+   * the predicate of the single delete's in-use guard, so "unused" has one definition. Each row also
+   * counts the plans and activities that still reference it from Recently deleted, as correlated
+   * counts in this one statement (served by `idx_plans_calendar_id` / `idx_activities_calendar_id`),
+   * never one query per calendar. Oldest first, keyset by id like the other calendar lists.
+   */
+  async findUnusedInProject(params: {
+    organizationId: string;
+    projectId: string;
+    take: number;
+    cursor?: string;
+  }): Promise<
+    {
+      id: string;
+      name: string;
+      archived: boolean;
+      version: number;
+      deletedPlans: number;
+      deletedActivities: number;
+    }[]
+  > {
+    const after = params.cursor
+      ? Prisma.sql`AND (c.created_at, c.id) > (SELECT k.created_at, k.id FROM calendars k WHERE k.id = ${params.cursor}::uuid)`
+      : Prisma.empty;
+    return this.prisma.$queryRaw`
+      SELECT c.id, c.name, (c.archived_at IS NOT NULL) AS archived, c.version,
+             (SELECT count(*)::int FROM plans p
+               WHERE p.calendar_id = c.id AND p.deleted_at IS NOT NULL) AS "deletedPlans",
+             (SELECT count(*)::int FROM activities a
+               WHERE a.calendar_id = c.id AND a.deleted_at IS NOT NULL) AS "deletedActivities"
+      FROM calendars c
+      WHERE c.deleted_at IS NULL
+        AND c.organization_id = ${params.organizationId}::uuid
+        AND c.scope::text = 'PROJECT'
+        AND c.project_id = ${params.projectId}::uuid
+        AND NOT EXISTS (SELECT 1 FROM plans p
+                         WHERE p.calendar_id = c.id AND p.deleted_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM activities a
+                         WHERE a.calendar_id = c.id AND a.deleted_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM resources r
+                         WHERE r.calendar_id = c.id AND r.deleted_at IS NULL)
+        ${after}
+      ORDER BY c.created_at, c.id
+      LIMIT ${params.take}`;
+  }
+
+  /**
+   * The ACTIVE plans, activities and resources using each of `ids`, as three grouped counts — the
+   * bulk delete's in-use guard for a whole set at once (the single delete counts the same three
+   * tables for one id). A calendar with no referencer is absent from the map.
+   */
+  async countActiveReferencers(
+    ids: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, { plans: number; activities: number; resources: number }>> {
+    const list = [...ids];
+    const [plans, activities, resources] = await Promise.all([
+      db.plan.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      db.activity.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      db.resource.groupBy({
+        by: ['calendarId'],
+        where: { calendarId: { in: list }, deletedAt: null },
+        _count: { _all: true },
+      }),
+    ]);
+    const counts = new Map<string, { plans: number; activities: number; resources: number }>();
+    const slot = (id: string) => {
+      const existing = counts.get(id) ?? { plans: 0, activities: 0, resources: 0 };
+      counts.set(id, existing);
+      return existing;
+    };
+    for (const row of plans) if (row.calendarId) slot(row.calendarId).plans = row._count._all;
+    for (const row of activities)
+      if (row.calendarId) slot(row.calendarId).activities = row._count._all;
+    for (const row of resources)
+      if (row.calendarId) slot(row.calendarId).resources = row._count._all;
+    return counts;
+  }
+
+  /**
    * Count the plans using `calendarId` that live OUTSIDE `projectId`, active OR deleted — the
    * narrowing guard (ADR-0053 §2, W2). Narrowing an ORG calendar to one project is only safe when
    * no referencer sits outside it; plans inside the target project keep working, so they are

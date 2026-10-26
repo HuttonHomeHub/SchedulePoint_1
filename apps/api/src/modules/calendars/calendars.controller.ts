@@ -32,6 +32,10 @@ import { ArchiveActionDto } from '../../common/dto/archive-action.dto';
 import { Paginated } from '../../common/dto/paginated';
 
 import { CalendarsService } from './calendars.service';
+import {
+  BulkDeleteCalendarsDto,
+  BulkDeleteCalendarsResponseDto,
+} from './dto/bulk-delete-calendars.dto';
 import { CalendarListQueryDto } from './dto/calendar-list-query.dto';
 import {
   CalendarDetailResponseDto,
@@ -109,6 +113,41 @@ export class CalendarsController {
     @Body() dto: CreateCalendarDto,
   ): Promise<CalendarDetailResponseDto> {
     return CalendarDetailResponseDto.fromDetail(await this.service.create(principal, orgSlug, dto));
+  }
+
+  @Post('bulk-delete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete several calendars at once, all or nothing (Planner or Org Admin).',
+    description:
+      'The single delete’s rules applied to a set (ADR-0208 D5): `calendar:delete` for every id, ' +
+      'plus `calendar:manage_org` for a shared-library one. Each calendar gets its own delete ' +
+      'batch and its own audit row and can be restored alone from Recently deleted. A POST per ' +
+      'the batch-delete precedent.',
+  })
+  @ApiOkResponse({ type: BulkDeleteCalendarsResponseDto })
+  @ApiForbiddenResponse({
+    description: 'Insufficient role, or no `calendar:manage_org` for a shared-library calendar.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Any id is unknown, already deleted, or in another organisation. Nothing is deleted.',
+  })
+  @ApiConflictResponse({
+    description:
+      'Any calendar is still used by an active plan, activity or resource (CALENDAR_IN_USE); ' +
+      '`details.calendars` names each with its counts. Nothing is deleted.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description: '`ids` is empty, has more than 200, repeats an id, or holds a non-UUID.',
+  })
+  async bulkDelete(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Body() dto: BulkDeleteCalendarsDto,
+    @RequestContext() context: RequestContext,
+  ): Promise<BulkDeleteCalendarsResponseDto> {
+    return this.service.bulkRemove(principal, orgSlug, dto.ids, context);
   }
 
   @Get(':calendarId')

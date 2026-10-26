@@ -11,10 +11,12 @@ import {
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Paginated } from '../../common/dto/paginated';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 import { CalendarsService } from './calendars.service';
 import { ProjectCalendarListQueryDto } from './dto/calendar-list-query.dto';
 import { CalendarResponseDto } from './dto/calendar-response.dto';
+import { UnusedCalendarResponseDto } from './dto/unused-calendar-response.dto';
 
 /**
  * The calendars USABLE IN a project (ADR-0053 §1), nested under the project — its own
@@ -37,6 +39,30 @@ import { CalendarResponseDto } from './dto/calendar-response.dto';
 @Controller({ path: 'organizations/:orgSlug/projects/:projectId/calendars', version: '1' })
 export class ProjectCalendarsController {
   constructor(private readonly service: CalendarsService) {}
+
+  @Get('unused')
+  @ApiOperation({
+    summary: "List the project's own calendars that nothing active uses.",
+    description:
+      'The calendars the "Remove unused calendars…" action offers (ADR-0208 D5): PROJECT tier in ' +
+      'this project, archived included, with no active plan, activity or resource. Each row says ' +
+      'how many deleted plans and activities still point at it. Oldest first; cursor-paginated.',
+  })
+  @ApiOkResponse({ type: UnusedCalendarResponseDto, isArray: true })
+  async listUnused(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: PaginationQueryDto,
+  ): Promise<Paginated<UnusedCalendarResponseDto>> {
+    const { items, meta } = await this.service.listUnusedForProject(
+      principal,
+      orgSlug,
+      projectId,
+      query,
+    );
+    return new Paginated(items, meta);
+  }
 
   @Get()
   @ApiOperation({
