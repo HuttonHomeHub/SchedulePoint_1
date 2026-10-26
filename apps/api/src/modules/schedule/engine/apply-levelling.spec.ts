@@ -988,3 +988,23 @@ describe('targetDateFor: a calendar that never yields a placement is refused, no
     });
   });
 });
+
+describe('targetDateFor: a finish milestone is rounded only by working time it loses (#539 D2)', () => {
+  // Mon–Fri 08:00–16:00.
+  const EIGHT_HOUR = buildWorkingTimeCalendar(
+    [0, 1, 2, 3, 4, 5, 6].map((day) => (day < 5 ? [{ startMinute: 480, endMinute: 960 }] : [])),
+    [],
+  );
+
+  it('a levelled instant at the close of Friday is Friday, not rounded', () => {
+    expect(
+      targetDateFor(EIGHT_HOUR, 'FINISH_MILESTONE', instantToAbsMinutes('2026-01-09T16:00')),
+    ).toEqual({ date: '2026-01-09', rounded: false });
+  });
+
+  it('a levelled instant in the middle of Friday is rounded up to its close', () => {
+    expect(
+      targetDateFor(EIGHT_HOUR, 'FINISH_MILESTONE', instantToAbsMinutes('2026-01-09T12:00')),
+    ).toEqual({ date: '2026-01-09', rounded: true });
+  });
+});

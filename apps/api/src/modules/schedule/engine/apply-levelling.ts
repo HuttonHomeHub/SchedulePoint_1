@@ -168,7 +168,16 @@ export function targetDateFor(
     }
     for (;;) {
       const placed = placementOf(date);
-      if (placed >= levelled) return { date, rounded: placed > levelled };
+      if (placed >= levelled) {
+        // Midnight at the end of the day is not rolled onto the calendar (#539 D2), so a Friday 16:00
+        // levelled instant on an eight-hour calendar sits at Friday's close with the placement 8 hours
+        // later and no working time between: nothing was lost, so nothing was rounded.
+        const lost = cal.workingTimeBetween(
+          absMinutesToInstant(levelled),
+          absMinutesToInstant(placed),
+        );
+        return { date, rounded: lost > 0 };
+      }
       date = shifted(date, 1);
       steps = stepOrThrow(steps, levelled);
     }

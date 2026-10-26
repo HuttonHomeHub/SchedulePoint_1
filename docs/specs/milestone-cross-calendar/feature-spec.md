@@ -367,6 +367,34 @@ Mon 00:00, which a local weekday successor rolls to Mon 08:00 and a local weeken
 to Sun 19:00, matching one plan. The derivation's stated limit stands: persisted dates carry no time of
 day (`:53-56`).
 
+**What building M3 found (the spec said otherwise or nothing).**
+
+- **A placed finish milestone reads back the day typed.** D3 alone cannot do it: a Sunday placement is
+  the instant Monday 00:00, which opens a working minute on a weekday calendar and so dates Friday.
+  Reading a placed milestone's `visualEffective*` as its `visualStart` is the table's "reads back as
+  typed" row and is what `compute.ts` now does; a conflicted placement still reads where it was put.
+- **A timed value is the instant it names.** D2's reader no longer rolls a `YYYY-MM-DDTHH:MM` either;
+  the cross-plan derivation hands the engine such values.
+- **The cross-plan read of a remote finish milestone is not one rule but two.** The date a plan stores
+  for one is the day its kept instant falls on, and the instant is where the work before it ended, so the
+  EARLY read is the end of that day's last working minute on its calendar (Wed 16:00 on an eight-hour
+  calendar; the twin and the hand-derived golden both need it), or midnight at the end of the day when it
+  has no working time (a Sunday). The LATE read is a bound some later logic or a constraint gave, which
+  is what a date given for the milestone means, so it is midnight at the end of the day (the twin pins
+  the remote with `FNLT`). The spec's single "read by D2 as Mon 00:00" matched only the second and the
+  weekend case. The hand-derived golden "FS into an eight-hour finish milestone" moved from Wed 16:00 to
+  Thu 00:00 for that reason; a late date that was in fact derived from an opening reads up to eight
+  hours looser than one plan, inside the day-granular limit the derivation already states.
+- **The frozen cross-plan twin is plain `it` again, all 1,728 cells.** Its 40 rows were `it.fails` after
+  M2 and the list is gone.
+- **Web (M3-T3).** No file assumes a finish milestone's date is a working day of its calendar:
+  `lib/milestone-day.ts` shifts a reported day by one calendar day (a Sunday date draws at the end of
+  Sunday), `type-change-dates.ts` re-expresses by calendar day, and the others only name the type
+  (copy, menus, gates, geometry). The working-day span snapping in `tsld/render/snap.ts`
+  (`drawnSpanPlacement`) is a task-creation rule and was read, not changed; whether a milestone DRAG can
+  land on a non-working day was not exercised, which is a journey question for the orchestrator.
+  No web change, so no `@repo/web` changeset.
+
 **Levelling apply.** `targetDateFor` reports `rounded` when the placement instant is later than the
 levelled one (`apply-levelling.ts:171`). With D2, a Friday placement (Sat 00:00) is later than a
 Friday 16:00 levelled instant with no working time between, so `rounded` is decided by working time
