@@ -772,6 +772,37 @@ The migration test (`apps/api/test/cross-plan-lag-migration.e2e-spec.ts`) runs b
 **as written in this file**, asserts that each carries the migration's `resolved` CTE verbatim, and
 proves each check can fail.
 
+### Rolling back past the milestone cross-calendar release
+
+That release (`docs/specs/milestone-cross-calendar/`, `docs/TECH_DEBT.md` #539, ADR-0207) changes what
+the engine writes for a milestone or zero-duration task that sits between calendars. Its migration
+`20261026120000_milestone_cross_calendar_marker` has **no statement and changes no stored input**: its
+only product is its `_prisma_migrations` row, and at the first boot a service recalculates every
+affected plan once. There is nothing to reverse in the schema. **Redeploying the previous images alone
+is still wrong**, and the reason is the row:
+
+- the previous image does not remove it, and its entrypoint ignores an extra applied migration;
+- every plan the previous image then recalculates is stamped **after** the row's `finished_at`, with
+  old-rule dates;
+- when the release is rolled forward again the row already exists and is not re-applied, so those plans
+  are **never re-derived** and nothing flags them.
+
+Roll back in this order:
+
+1. Stop the API container (leave the database running).
+2. Delete the marker row, as the finish-milestone reverse does at its step 3:
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261026120000_milestone_cross_calendar_marker';"`
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
+   stay that way until each plan's next recalculation; the previous image has no boot service to revert
+   them.
+
+A later roll-forward then re-applies the file with a fresh `finished_at` and every affected plan is
+re-derived again, which is correct. Outside a rollback, do **not** delete the row as a "reset": the next
+deploy would repeat the whole re-derivation unasked. The #421 marker
+(`20260930120000_progressed_predecessor_visual_marker`) has the same gap and no section of its own
+(`docs/TECH_DEBT.md` #557).
+
 ### Which switches actually work on a running container, and which do not
 
 This distinction is not obvious from `.env.example`, where both kinds sit in one list
