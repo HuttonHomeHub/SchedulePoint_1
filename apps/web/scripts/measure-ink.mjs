@@ -20,10 +20,8 @@
  * bar-versus-link and not a share of all ink.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const ROLL_UP = { rollUpSummaries: true };
@@ -32,22 +30,11 @@ const HEIGHT = 820;
 /** 4 px/day puts Unit 300's whole 391-day span on screen; 12 is the working zoom. */
 const ZOOMS = [4, 12];
 
-const out = mkdtempSync(join(tmpdir(), 'sp-ink-'));
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/crossing-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-ink-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 const probe = await import(pathToFileURL(bundle).href);
 
 const commit = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();

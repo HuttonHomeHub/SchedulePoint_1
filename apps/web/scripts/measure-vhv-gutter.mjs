@@ -12,10 +12,9 @@
  * from an `undefined` because the edit that was supposed to supply the number had silently failed.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const counts = (process.argv[2] ?? '500,2000').split(',').map((n) => Number(n.trim()));
 if (counts.some((n) => !Number.isFinite(n) || n <= 0)) {
@@ -23,25 +22,13 @@ if (counts.some((n) => !Number.isFinite(n) || n <= 0)) {
   process.exit(1);
 }
 
-const out = mkdtempSync(join(tmpdir(), 'sp-vhv-'));
-const bundle = join(out, 'probe.mjs');
-
 // The esbuild CLI rather than its JS API, for the reason `measure-link-routing.mjs` records: it is
 // a transitive dependency of Vite, so under pnpm's strict layout this file cannot import it.
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/vhv-gutter-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle } = bundleProbe('scripts/vhv-gutter-probe.ts', {
+  prefix: 'sp-vhv-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 
 try {
   const { probe } = await import(pathToFileURL(bundle).href);

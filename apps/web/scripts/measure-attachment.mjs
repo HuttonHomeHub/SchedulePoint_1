@@ -17,30 +17,17 @@
  * after M2 would mean nothing.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const json = process.argv.includes('--json');
 
-const out = mkdtempSync(join(tmpdir(), 'sp-attach-'));
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/attachment-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/attachment-probe.ts', {
+  prefix: 'sp-attach-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 const probe = await import(pathToFileURL(bundle).href);
 probe.selfTest();
 const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD']).toString().trim();

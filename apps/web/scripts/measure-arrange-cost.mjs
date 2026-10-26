@@ -32,17 +32,17 @@
  * because `packLanes` reads spans and lanes and has never seen a critical path.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { makeProbeDir, esbuildBundle, NODE_ESM } from './bundle-probe.mjs';
 
 /** FC-C8's third limb. One frame. */
 const BUDGET_MS = 16;
 const SIZES = [500, 2000];
 const REPEATS = 9;
 
-const out = mkdtempSync(join(tmpdir(), 'sp-arrange-'));
+const out = makeProbeDir('sp-arrange-');
 const entry = join(out, 'entry.ts');
 writeFileSync(
   entry,
@@ -50,21 +50,7 @@ writeFileSync(
 export { summariseLaneArrangement } from ${JSON.stringify(process.cwd() + '/src/features/tsld/model/arrange-lanes.ts')};
 `,
 );
-const bundle = join(out, 'bench.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    entry,
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const bundle = esbuildBundle(entry, join(out, 'bench.mjs'), NODE_ESM);
 const { scaleScene, summariseLaneArrangement } = await import(pathToFileURL(bundle).href);
 
 const commit = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();

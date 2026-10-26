@@ -9,28 +9,17 @@
  * verdict if two stacked labels do not count as one collision.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
-const out = mkdtempSync(join(tmpdir(), 'sp-netpoint-row-'));
-const file = join(out, 'row.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/netpoint-row-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${file}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle: file } = bundleProbe('scripts/netpoint-row-probe.ts', {
+  prefix: 'sp-netpoint-row-',
+  outName: 'row.mjs',
+  flags: NODE_ESM,
+});
 const src = readFileSync(file, 'utf8');
 if ((src.match(/\bvar LANE_HEIGHT = \d+;/g) ?? []).length !== 1)
   throw new Error('INDETERMINATE: pitch');

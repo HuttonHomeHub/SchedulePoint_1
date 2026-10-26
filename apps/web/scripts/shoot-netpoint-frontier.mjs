@@ -12,12 +12,12 @@
  * shows them rather than cropping them off.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { makeProbeDir, esbuildBundle } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 const PITCH = 60;
@@ -25,22 +25,9 @@ const WIDTH = 1646;
 const DPR = 1;
 const PX_PER_DAY = 4;
 
-const out = mkdtempSync(join(tmpdir(), 'sp-shoot-netpoint-'));
+const out = makeProbeDir('sp-shoot-netpoint-');
 const build = (entry, node, outfile) => {
-  execFileSync(
-    'pnpm',
-    [
-      'exec',
-      'esbuild',
-      entry,
-      '--bundle',
-      '--format=esm',
-      node ? '--platform=node' : '--target=chrome120',
-      `--outfile=${outfile}`,
-      '--log-level=warning',
-    ],
-    { stdio: 'inherit' },
-  );
+  esbuildBundle(entry, outfile, ['--format=esm', node ? '--platform=node' : '--target=chrome120']);
   const src = readFileSync(outfile, 'utf8');
   if ((src.match(/\bvar LANE_HEIGHT = \d+;/g) ?? []).length !== 1) {
     throw new Error(`INDETERMINATE: ${entry} does not declare LANE_HEIGHT exactly once`);

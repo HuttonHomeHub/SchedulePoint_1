@@ -22,12 +22,12 @@
  * here for a smoke run and the verdict says which it was.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
+import { bundleProbe, esbuildBundle, NODE_ESM, BROWSER_IIFE } from './bundle-probe.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -61,26 +61,11 @@ if (preset !== 'week' && preset !== 'fit') {
 // `src/features/perf-probe/model/judge.ts` and are imported below with the judge itself. They were
 // duplicated here until M1; the linter is what noticed, once the arithmetic that used them moved.
 
-const out = mkdtempSync(join(tmpdir(), 'sp-revdiff-'));
-const bundle = join(out, 'bench.js');
-const judgeBundle = join(out, 'judge.mjs');
-
-// The esbuild CLI rather than its JS API, for the reason `measure-link-routing.mjs` records:
-// esbuild is a transitive dependency of Vite here, not a direct one, so this file cannot import it.
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/revision-diff-bench.ts',
-    '--bundle',
-    '--format=iife',
-    '--target=chrome120',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle } = bundleProbe('scripts/revision-diff-bench.ts', {
+  prefix: 'sp-revdiff-',
+  outName: 'bench.js',
+  flags: BROWSER_IIFE,
+});
 
 // **The judge is bundled too, and that is the point of M1** — this driver used to hold its own
 // copy of the verdict arithmetic (lines 153-243, before the extraction). Two copies of a judgement
@@ -90,19 +75,10 @@ execFileSync(
 // file compiles the same module for Node rather than reimplementing it.
 //
 // ESM rather than the bench's IIFE: this one is `import()`ed here, not injected into a page.
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'src/features/perf-probe/model/probe-cli-exports.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${judgeBundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
+const judgeBundle = esbuildBundle(
+  'src/features/perf-probe/model/probe-cli-exports.ts',
+  join(out, 'judge.mjs'),
+  NODE_ESM,
 );
 
 const { judgeRun, NothingToJudgeError, scenarioById, isGated, SATURATED_CAVEAT } = await import(

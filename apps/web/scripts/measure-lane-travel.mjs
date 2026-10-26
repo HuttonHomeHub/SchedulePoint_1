@@ -11,28 +11,16 @@
  * nothing to judge** (ADR-0130).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
-const out = mkdtempSync(join(tmpdir(), 'sp-lanes-'));
-const bundle = join(out, 'probe.mjs');
-
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/lane-travel-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { dir: out, bundle } = bundleProbe('scripts/lane-travel-probe.ts', {
+  prefix: 'sp-lanes-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 
 try {
   const { probe } = await import(pathToFileURL(bundle).href);

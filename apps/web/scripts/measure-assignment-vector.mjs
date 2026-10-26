@@ -37,32 +37,19 @@
  * whole-plan and the link-population control runs before any number is printed.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 /** FC-L6, verbatim. */
 const IMPROVE = 0.2;
 const WORSEN = 0.1;
 
-const out = mkdtempSync(join(tmpdir(), 'sp-vector-'));
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/crossing-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-vector-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 const { assignmentCandidates, readVector } = await import(pathToFileURL(bundle).href);
 
 const { asap, shipped, candidates } = assignmentCandidates(FIXTURE);

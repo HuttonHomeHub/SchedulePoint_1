@@ -57,29 +57,16 @@
  *                  that says whether height is a lever for occlusion at all.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bundleProbe, NODE_ESM } from './bundle-probe.mjs';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
-const out = mkdtempSync(join(tmpdir(), 'sp-occl-'));
-const bundle = join(out, 'probe.mjs');
-execFileSync(
-  'pnpm',
-  [
-    'exec',
-    'esbuild',
-    'scripts/crossing-probe.ts',
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    `--outfile=${bundle}`,
-    '--log-level=warning',
-  ],
-  { stdio: 'inherit' },
-);
+const { bundle } = bundleProbe('scripts/crossing-probe.ts', {
+  prefix: 'sp-occl-',
+  outName: 'probe.mjs',
+  flags: NODE_ESM,
+});
 const { unit300Layouts, readBoth } = await import(pathToFileURL(bundle).href);
 
 // `rollUpSummaries: true` is mandatory for every Part C/D reading: the harness otherwise places
