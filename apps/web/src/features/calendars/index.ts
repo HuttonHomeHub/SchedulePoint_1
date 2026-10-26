@@ -7,6 +7,8 @@ export {
   useCreateCalendar,
   useUpdateCalendar,
   useDeleteCalendar,
+  useUnusedProjectCalendars,
+  useBulkDeleteCalendars,
   useMoveCalendarScope,
   useArchiveCalendar,
   useUnarchiveCalendar,

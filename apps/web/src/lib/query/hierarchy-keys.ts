@@ -183,6 +183,12 @@ export const calendarKeys = {
     projectId,
     ...libraryFilterSegments(filters),
   ],
+  /**
+   * A project's unused own calendars (ADR-0208 D5). Nested under {@link calendarKeys.list} so every
+   * calendar write that invalidates the lists sweeps it too, and a bulk delete needs no key of its own.
+   */
+  unused: (orgSlug: string, projectId: string) =>
+    [...calendarKeys.list(orgSlug), 'unused', projectId] as const,
   detail: (orgSlug: string, calendarId: string) =>
     [...calendarKeys.all(orgSlug), 'detail', calendarId] as const,
 };
