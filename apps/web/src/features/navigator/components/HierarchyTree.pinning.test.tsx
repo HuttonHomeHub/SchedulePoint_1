@@ -46,6 +46,7 @@ const listeners = new Set<() => void>();
 const realMatchMedia = window.matchMedia;
 const realScrollTo = Element.prototype.scrollTo;
 const realOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+const realClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
 const scrollTo = vi.fn();
 
 function setPointer(next: boolean): void {
@@ -67,21 +68,29 @@ beforeEach(() => {
     addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
     removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
   })) as unknown as typeof window.matchMedia;
-  // The virtualizer sizes its window from the scroller's `offsetHeight` (jsdom: 0, which would
-  // window every row out) and `Element.prototype.scrollTo` (jsdom: absent).
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
-    configurable: true,
-    get: () => 600,
-  });
+  // The virtualizer sizes its window from the scroller's height (jsdom: 0, which would window
+  // every row out) and `Element.prototype.scrollTo` (jsdom: absent). Both heights are stubbed:
+  // @tanstack/virtual-core reads `offsetHeight` for an item and, since 3.19, `clientHeight` for
+  // the scroller's own rect.
+  for (const property of ['offsetHeight', 'clientHeight'] as const) {
+    Object.defineProperty(HTMLElement.prototype, property, {
+      configurable: true,
+      get: () => 600,
+    });
+  }
   Element.prototype.scrollTo = scrollTo;
 });
 
 afterEach(() => {
   window.matchMedia = realMatchMedia;
   Element.prototype.scrollTo = realScrollTo;
-  if (realOffsetHeight)
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', realOffsetHeight);
-  else Reflect.deleteProperty(HTMLElement.prototype, 'offsetHeight');
+  for (const [property, real] of [
+    ['offsetHeight', realOffsetHeight],
+    ['clientHeight', realClientHeight],
+  ] as const) {
+    if (real) Object.defineProperty(HTMLElement.prototype, property, real);
+    else Reflect.deleteProperty(HTMLElement.prototype, property);
+  }
 });
 
 const crud: NavigatorCrudApi = {
