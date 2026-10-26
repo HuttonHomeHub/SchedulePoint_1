@@ -772,7 +772,30 @@ separator's drag and arrow handlers would act on the field's events.
 - **`SizeField`** (`components/ui/size-field.tsx`) is the shared typed size, and `useSizeNotice` the polite status
   beside it. It applies on Enter, blur or an arrow step, never per keystroke; Escape discards a draft (heard on
   `window` in the capture phase, because a container that closes on Escape blurs the field first); a limited
-  value is said in words and never changed silently. Use it for any typed pixel size rather than `TextField`.
+  value is said in words and never changed silently. **Decision rule:** a typed pixel size with the inline `px`
+  row is `SizeField`; any other field that must hold a draft until Enter or blur is `TextField` in commit mode;
+  both are `useCommittedDraft`, so the keyboard contract is never written a third time (TECH_DEBT #495).
+- **`useCommittedDraft`** (`components/ui/use-committed-draft.ts`) is the draft-and-commit contract, one `it` per
+  row in `use-committed-draft.test.tsx`:
+
+  | Input                | Behaviour                                                                                             |
+  | -------------------- | ----------------------------------------------------------------------------------------------------- |
+  | Keystroke            | updates the draft only                                                                                |
+  | Enter                | prevented always (never submits a form); commits with or without a draft; ignored while `isComposing` |
+  | Blur                 | commits only a draft, unless Escape discarded it                                                      |
+  | ArrowUp / ArrowDown  | `type="number"` with a finite `step` only: commits draft-or-value ± step                              |
+  | Escape               | heard on `window` in the capture phase; discards the draft; neither stopped nor prevented             |
+  | Unmount with a draft | `onDraftLost()` (latest callback) unless Escaped                                                      |
+  | `shut`               | Enter and the arrows commit nothing, a blur drops the draft; the caller must set `readOnly` to match  |
+
+  `onCommit` may return `'keep'` to retain the typed text (a rejected entry shown beside its error); any other
+  return clears the draft. The hook owns `onChange`, `onBlur` and `onKeyDown` and takes no pass-throughs: a
+  caller that must observe one composes around the returned handler.
+
+- **`TextField` `commitOn="enter-or-blur"`** hosts that contract: `value` and `onCommit` are required, `onChange`,
+  `onBlur`, `onKeyDown` and `defaultValue` are type errors, and it cannot be driven by `register()` (which owns
+  per-keystroke `onChange` and a DOM value). The default mode is unchanged. A gated commit field is read-only
+  and commits nothing.
 - **`usePointerDrag`** reports a press through `onPress` and then withholds `onValue` until the pointer passes the
   slop; a handle that passes no `onPress` is unchanged.
 
