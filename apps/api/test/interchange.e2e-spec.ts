@@ -50,7 +50,9 @@ function validXer(): string {
  * one non-working New-Year exception (Excel/OLE serial). Mirrors the pure package's fixture so the commit
  * e2e can exercise calendar creation without importing the package's (non-barrel) test helpers.
  */
-function standardClndrData(): string {
+function standardClndrData(
+  options: { saturdayWorks?: boolean; exceptionSerial?: number } = {},
+): string {
   const workDay = (day: number): string => `(0||${day}()( (0||0(s|08:00|f|16:00)) ))`;
   const restDay = (day: number): string => `(0||${day}()())`;
   const days = [
@@ -60,10 +62,10 @@ function standardClndrData(): string {
     workDay(4),
     workDay(5),
     workDay(6),
-    restDay(7),
+    options.saturdayWorks === true ? workDay(7) : restDay(7),
   ].join('');
   // 46023 === 2026-01-01 (Excel/OLE serial, base 1899-12-30) — a non-working exception.
-  const exc = `(0||d|46023()())`;
+  const exc = `(0||d|${options.exceptionSerial ?? 46023}()())`;
   return `(0||CalendarData()( (0||DaysOfWeek()( ${days} )) (0||Exceptions()( ${exc} )) ))`;
 }
 
@@ -71,9 +73,11 @@ function standardClndrData(): string {
  * A valid XER with a named calendar (NOT "Standard", to avoid colliding with the org-seeded calendar),
  * two tasks on it, and one FS link — the calendar-bearing happy-path fixture for commit. The project
  * name is parameterised so two files can be imported into ONE project (plan names are unique per
- * project) while deliberately sharing a CALENDAR name — the ADR-0053 §5 collision case.
+ * project) while deliberately sharing a CALENDAR name — the ADR-0053 §5 collision case. `clndrData`
+ * lets a second file carry the SAME name with a DIFFERENT working week (ADR-0208: same name is not
+ * enough to reuse; identical content is).
  */
-function xerWithCalendar(projectName = 'Imported'): string {
+function xerWithCalendar(projectName = 'Imported', clndrData = standardClndrData()): string {
   return [
     'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
     '%T\tPROJECT',
@@ -81,7 +85,7 @@ function xerWithCalendar(projectName = 'Imported'): string {
     `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00\tC1`,
     '%T\tCALENDAR',
     '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
-    `%R\tC1\tSite 6-Day\tY\t8\t${standardClndrData()}`,
+    `%R\tC1\tSite 6-Day\tY\t8\t${clndrData}`,
     '%T\tTASK',
     '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
     '%R\tT1\tP1\tC1\tA1000\tMobilise\tTT_Task\t40',
@@ -89,6 +93,26 @@ function xerWithCalendar(projectName = 'Imported'): string {
     '%T\tTASKPRED',
     '%F\ttask_pred_id\ttask_id\tpred_task_id\tpred_type\tlag_hr_cnt',
     '%R\tR1\tT2\tT1\tPR_FS\t0',
+    '%E',
+  ].join('\n');
+}
+
+/** Two project calendars of ONE name and identical content, each used by a task (ADR-0208 claim rule). */
+function twoIdenticalCalendarsXer(projectName: string): string {
+  const data = standardClndrData();
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00\tC1`,
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tdefault_flag\tday_hr_cnt\tclndr_data',
+    `%R\tC1\tSite 6-Day\tY\t8\t${data}`,
+    `%R\tC2\tSite 6-Day\tN\t8\t${data}`,
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    '%R\tT1\tP1\tC1\tA1000\tMobilise\tTT_Task\t40',
+    '%R\tT2\tP1\tC2\tA1010\tDesign\tTT_Task\t80',
     '%E',
   ].join('\n');
 }
@@ -234,18 +258,18 @@ function collidingResourceXer(): string {
  * a P6 GLOBAL (`CA_Base`) calendar, and a RESOURCE (`CA_Rsrc`) calendar an imported labour resource
  * holds. The three land at three different places, which is the whole point of the M5 mapping.
  */
-function tieredCalendarXer(): string {
+function tieredCalendarXer(planName = 'Tiered', clndrData = standardClndrData()): string {
   const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
   return [
     'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
     '%T\tPROJECT',
     '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
-    row('P1', 'Tiered', '2026-01-05 00:00', '2026-01-04 00:00', 'C1'),
+    row('P1', planName, '2026-01-05 00:00', '2026-01-04 00:00', 'C1'),
     '%T\tCALENDAR',
     '%F\tclndr_id\tclndr_name\tclndr_type\tdefault_flag\tday_hr_cnt\tclndr_data',
-    row('C1', 'Site 6-Day', 'CA_Project', 'Y', '8', standardClndrData()),
-    row('C2', 'Enterprise 5-Day', 'CA_Base', 'N', '8', standardClndrData()),
-    row('C3', 'Crew Shift', 'CA_Rsrc', 'N', '8', standardClndrData()),
+    row('C1', 'Site 6-Day', 'CA_Project', 'Y', '8', clndrData),
+    row('C2', 'Enterprise 5-Day', 'CA_Base', 'N', '8', clndrData),
+    row('C3', 'Crew Shift', 'CA_Rsrc', 'N', '8', clndrData),
     '%T\tTASK',
     '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
     row('T1', 'P1', 'C1', 'A100', 'Mobilise', 'TT_Task', '40'),
@@ -1161,22 +1185,76 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       .expect(422);
   });
 
-  it('suffixes (never reuses) a calendar name the project already holds, and reports the rename', async () => {
+  /** The `repair` findings the commit/dry-run report carries about calendars. */
+  const calendarRepairs = (repairs: unknown): { detail: string; reason: string }[] =>
+    (repairs as { entity: string; detail: string; reason: string }[]).filter(
+      (f) => f.entity === 'calendar',
+    );
+
+  const SIX_DAY = () => standardClndrData({ saturdayWorks: true });
+
+  async function importFile(
+    actor: Actor,
+    projectId: string,
+    xer: string,
+    fields: Record<string, string> = {},
+  ) {
+    let req = actor.agent.post(commitUrl(projectId));
+    for (const [name, value] of Object.entries(fields)) req = req.field(name, value);
+    return req.attach('file', Buffer.from(xer, 'utf8'), 'rev.xer').expect(201);
+  }
+
+  /** A stored copy of a calendar under another name — what an earlier import's variant looks like. */
+  async function cloneCalendar(id: string, name: string, createdAt: Date): Promise<string> {
+    const src = await prisma.calendar.findUniqueOrThrow({
+      where: { id },
+      include: { shifts: true, exceptions: { include: { windows: true } } },
+    });
+    const copy = await prisma.calendar.create({
+      data: {
+        organizationId: src.organizationId,
+        name,
+        scope: src.scope,
+        projectId: src.projectId,
+        hoursPerDayMinutes: src.hoursPerDayMinutes,
+        createdAt,
+        shifts: {
+          create: src.shifts.map((s) => ({
+            weekday: s.weekday,
+            startMinute: s.startMinute,
+            endMinute: s.endMinute,
+          })),
+        },
+        exceptions: {
+          create: src.exceptions.map((e) => ({
+            organizationId: src.organizationId,
+            startDate: e.startDate,
+            endDate: e.endDate,
+            label: e.label,
+            windows: {
+              create: e.windows.map((w) => ({
+                startMinute: w.startMinute,
+                endMinute: w.endMinute,
+              })),
+            },
+          })),
+        },
+      },
+    });
+    return copy.id;
+  }
+
+  it('suffixes a same-named calendar whose working week differs, and reports the rename', async () => {
     const { actor, orgId } = await adminWithOrg();
     const projectId = await makeProject(actor);
 
-    await actor.agent
-      .post(commitUrl(projectId))
-      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
-      .expect(201);
+    await importFile(actor, projectId, xerWithCalendar());
 
-    // A SECOND file into the SAME project, carrying a calendar of the SAME name (only the source
-    // project name differs, because plan names are unique per project). Before M5 this aborted the
-    // whole commit on the calendar unique; it now succeeds with a disambiguated name.
-    const res = await actor.agent
-      .post(commitUrl(projectId))
-      .attach('file', Buffer.from(xerWithCalendar('Imported Again'), 'utf8'), 'again.xer')
-      .expect(201);
+    // A SECOND file into the SAME project, carrying a calendar of the SAME name but a DIFFERENT
+    // working week (Saturday worked). Name alone never reuses a calendar (ADR-0208): reusing this one
+    // would silently reschedule the import. Only the source project name differs, because plan names
+    // are unique per project.
+    const res = await importFile(actor, projectId, xerWithCalendar('Imported Again', SIX_DAY()));
 
     const calendars = await prisma.calendar.findMany({
       where: { organizationId: orgId, projectId, deletedAt: null },
@@ -1184,29 +1262,28 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     });
     expect(calendars).toHaveLength(2);
     expect(calendars[0]?.name).toBe('Site 6-Day');
-    // A second, INDEPENDENT calendar — never a silent reuse of the first (two calendars sharing a
-    // name can have different working weeks, so reuse would silently reschedule the import).
     expect(calendars[1]?.name).toMatch(/^Site 6-Day \(imported \d{4}-\d{2}-\d{2}\)/);
     expect(calendars[1]?.id).not.toBe(calendars[0]?.id);
 
-    const repairs = res.body.data.report.repairs as { entity: string; detail: string }[];
-    expect(repairs.some((f) => f.entity === 'calendar' && /was created as/.test(f.detail))).toBe(
-      true,
-    );
+    const findings = calendarRepairs(res.body.data.report.repairs);
+    expect(findings.some((f) => /was created as/.test(f.detail))).toBe(true);
+    expect(findings.some((f) => /was matched to the existing calendar/.test(f.detail))).toBe(false);
   });
 
-  it('imports the same calendar three times into one project on one day, each under a free name', async () => {
+  it('imports same-named calendars of differing content three times into one project, each under a free name', async () => {
     // Regression for #540: the second import took the "(imported <date>)" variant, so the third
-    // probed only the base name, picked that same variant and aborted on the calendar unique.
+    // probed only the base name, picked that same variant and aborted on the calendar unique. The
+    // content differs on purpose (ADR-0208): identical files would now reuse instead of suffixing.
     const { actor, orgId } = await adminWithOrg();
     const projectId = await makeProject(actor);
 
-    for (const planName of ['Rev A', 'Rev B', 'Rev C']) {
-      await actor.agent
-        .post(commitUrl(projectId))
-        .attach('file', Buffer.from(xerWithCalendar(planName), 'utf8'), 'rev.xer')
-        .expect(201);
-    }
+    await importFile(actor, projectId, xerWithCalendar('Rev A'));
+    await importFile(actor, projectId, xerWithCalendar('Rev B', SIX_DAY()));
+    await importFile(
+      actor,
+      projectId,
+      xerWithCalendar('Rev C', standardClndrData({ exceptionSerial: 46024 })),
+    );
 
     const calendars = await prisma.calendar.findMany({
       where: { organizationId: orgId, projectId, deletedAt: null },
@@ -1217,25 +1294,423 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(names).toContain('Site 6-Day');
   });
 
-  it('names the coming rename in the DRY-RUN report, so the planner reviews what will happen', async () => {
+  it('names the coming rename in the DRY-RUN report when the content differs', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);
-    await actor.agent
-      .post(commitUrl(projectId))
-      .attach('file', Buffer.from(xerWithCalendar(), 'utf8'), 'imported.xer')
-      .expect(201);
+    await importFile(actor, projectId, xerWithCalendar());
 
     // A different plan name: the same one is refused before any report (#541).
     const res = await actor.agent
       .post(dryRunUrl(projectId))
-      .attach('file', Buffer.from(xerWithCalendar('Imported Again'), 'utf8'), 'again.xer')
+      .attach(
+        'file',
+        Buffer.from(xerWithCalendar('Imported Again', SIX_DAY()), 'utf8'),
+        'again.xer',
+      )
       .expect(200);
 
-    const repairs = res.body.data.repairs as { entity: string; detail: string }[];
-    expect(repairs.some((f) => f.entity === 'calendar' && /was created as/.test(f.detail))).toBe(
-      true,
-    );
+    expect(
+      calendarRepairs(res.body.data.repairs).some((f) => /was created as/.test(f.detail)),
+    ).toBe(true);
     // A dry run is still stateless — nothing was created by looking.
     expect(await prisma.plan.count({ where: { projectId } })).toBe(1);
+  });
+
+  describe('calendar reuse (ADR-0208)', () => {
+    it('reuses an identical calendar: one row, both plans bound to it, and the dry-run said so first', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(xerWithCalendar('Rev B'), 'utf8'), 'b.xer')
+        .expect(200);
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const calendars = await prisma.calendar.findMany({
+        where: { organizationId: orgId, projectId, deletedAt: null },
+      });
+      expect(calendars).toHaveLength(1);
+      const planA = await prisma.plan.findUniqueOrThrow({ where: { id: first.body.data.planId } });
+      const planB = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(planA.calendarId).toBe(calendars[0]?.id);
+      expect(planB.calendarId).toBe(calendars[0]?.id);
+      expect(
+        await prisma.activity.count({
+          where: { planId: planB.id, calendarId: planB.calendarId as string },
+        }),
+      ).toBe(2);
+
+      // The reviewed report and the persisted one carry the same sentence (one shared resolver).
+      const reviewed = calendarRepairs(dry.body.data.repairs).map((f) => f.detail);
+      const persisted = calendarRepairs(second.body.data.report.repairs).map((f) => f.detail);
+      expect(reviewed).toEqual([
+        'calendar “Site 6-Day” was matched to the existing calendar “Site 6-Day”',
+      ]);
+      expect(persisted).toEqual(reviewed);
+
+      // The provenance row counts the reuse (ADR-0208 D4).
+      const audit = await prisma.auditEvent.findFirstOrThrow({
+        where: { action: 'interchange.imported', subjectId: planB.id },
+      });
+      expect((audit.changes as { after?: unknown } | null)?.after).toMatchObject({
+        calendarsReused: 1,
+      });
+    });
+
+    it('persists the same dates on a reused calendar as on a fresh copy of it', async () => {
+      const { actor } = await adminWithOrg();
+      const projectA = await makeProject(actor);
+      const projectB = await makeSecondProject(actor);
+
+      await importFile(actor, projectA, xerWithCalendar('Rev A'));
+      const reused = await importFile(actor, projectA, xerWithCalendar('Rev B'));
+      const copied = await importFile(actor, projectB, xerWithCalendar('Rev B'));
+
+      // A is a reuse and B a copy: the same bytes must schedule identically either way.
+      expect(await prisma.calendar.count({ where: { projectId: projectA, deletedAt: null } })).toBe(
+        1,
+      );
+      const datesOf = async (planId: string) =>
+        prisma.activity.findMany({
+          where: { planId },
+          orderBy: { code: 'asc' },
+          select: {
+            code: true,
+            earlyStart: true,
+            earlyFinish: true,
+            lateStart: true,
+            lateFinish: true,
+            totalFloat: true,
+          },
+        });
+      const onReuse = await datesOf(reused.body.data.planId);
+      const onCopy = await datesOf(copied.body.data.planId);
+      expect(onReuse).toHaveLength(2);
+      expect(onReuse.every((a) => a.earlyStart !== null && a.lateFinish !== null)).toBe(true);
+      expect(onReuse).toEqual(onCopy);
+    });
+
+    it('prefers the exact name over an older variant', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const exactId = (
+        await prisma.plan.findUniqueOrThrow({ where: { id: first.body.data.planId } })
+      ).calendarId as string;
+      // An identical variant that is OLDER than the exact one: a "oldest first" rule alone picks it.
+      await cloneCalendar(
+        exactId,
+        'Site 6-Day (imported 2026-10-20)',
+        new Date('2026-01-01T00:00:00Z'),
+      );
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).toBe(exactId);
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, projectId, deletedAt: null },
+        }),
+      ).toBe(2);
+    });
+
+    it('reuses the importer`s own variant when it is the only identical calendar', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      await prisma.calendar.update({
+        where: { id: original.calendarId as string },
+        data: { name: 'Site 6-Day (imported 2026-10-20)' },
+      });
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).toBe(original.calendarId);
+      expect(await prisma.calendar.count({ where: { projectId, deletedAt: null } })).toBe(1);
+    });
+
+    it('never reuses an identical calendar that is archived', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      await prisma.calendar.update({
+        where: { id: original.calendarId as string },
+        data: { archivedAt: new Date() },
+      });
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).not.toBe(original.calendarId);
+      expect(
+        calendarRepairs(second.body.data.report.repairs).some((f) =>
+          /was created as/.test(f.detail),
+        ),
+      ).toBe(true);
+    });
+
+    it('never reuses an identical calendar that is in the bin', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      await prisma.plan.update({ where: { id: original.id }, data: { deletedAt: new Date() } });
+      await prisma.activity.updateMany({
+        where: { planId: original.id },
+        data: { deletedAt: new Date() },
+      });
+      await prisma.calendar.update({
+        where: { id: original.calendarId as string },
+        data: { deletedAt: new Date() },
+      });
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).not.toBe(original.calendarId);
+    });
+
+    it('never reuses an identical calendar from another project', async () => {
+      const { actor } = await adminWithOrg();
+      const projectA = await makeProject(actor);
+      const projectB = await makeSecondProject(actor);
+      const inB = await importFile(actor, projectB, xerWithCalendar('Rev A'));
+      const bCalendar = (
+        await prisma.plan.findUniqueOrThrow({ where: { id: inB.body.data.planId } })
+      ).calendarId;
+
+      const inA = await importFile(actor, projectA, xerWithCalendar('Rev A'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: inA.body.data.planId } });
+      expect(plan.calendarId).not.toBe(bCalendar);
+      const own = await prisma.calendar.findUniqueOrThrow({
+        where: { id: plan.calendarId as string },
+      });
+      expect(own.projectId).toBe(projectA);
+    });
+
+    it('never reuses an identical shared calendar from another organisation', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const other = await signUp('other@example.com');
+      const otherOrg = await other.agent
+        .post('/api/v1/organizations')
+        .send({ name: 'Other' })
+        .expect(201);
+      const otherSlug = otherOrg.body.data.slug as string;
+      const otherClient = await other.agent
+        .post(`/api/v1/organizations/${otherSlug}/clients`)
+        .send({ name: 'Elsewhere' })
+        .expect(201);
+      const otherProject = await other.agent
+        .post(`/api/v1/organizations/${otherSlug}/clients/${otherClient.body.data.id}/projects`)
+        .send({ name: 'Elsewhere' })
+        .expect(201);
+      await other.agent
+        .post(
+          `/api/v1/organizations/${otherSlug}/projects/${otherProject.body.data.id}/interchange/commit`,
+        )
+        .field('globalCalendarScope', 'ORG')
+        .attach('file', Buffer.from(tieredCalendarXer(), 'utf8'), 'tiered.xer')
+        .expect(201);
+
+      await importFile(actor, projectId, tieredCalendarXer(), { globalCalendarScope: 'ORG' });
+
+      const mine = await prisma.calendar.findMany({
+        where: { name: 'Enterprise 5-Day', scope: 'ORG', deletedAt: null },
+      });
+      expect(mine).toHaveLength(2);
+      expect(mine.map((c) => c.organizationId).sort()).toEqual(
+        [orgId, otherOrg.body.data.id as string].sort(),
+      );
+      const task = await prisma.activity.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'A110' },
+      });
+      const bound = await prisma.calendar.findUniqueOrThrow({
+        where: { id: task.calendarId as string },
+      });
+      expect(bound.organizationId).toBe(orgId);
+    });
+
+    it('never reuses a calendar whose only difference is an exception label', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      const touched = await prisma.calendarException.updateMany({
+        where: { calendarId: original.calendarId as string },
+        data: { label: 'Renamed by hand' },
+      });
+      expect(touched.count).toBeGreaterThan(0);
+
+      const second = await importFile(actor, projectId, xerWithCalendar('Rev B'));
+
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: second.body.data.planId } });
+      expect(plan.calendarId).not.toBe(original.calendarId);
+    });
+
+    it('reuses an identical shared-library calendar for a resource, per tier', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, tieredCalendarXer());
+
+      const again = await importFile(actor, projectId, tieredCalendarXer('Tiered Again'));
+
+      expect(
+        await prisma.calendar.count({
+          where: { name: { startsWith: 'Crew Shift' }, deletedAt: null },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.calendar.count({
+          where: { name: { startsWith: 'Site 6-Day' }, deletedAt: null },
+        }),
+      ).toBe(1);
+      const findings = calendarRepairs(again.body.data.report.repairs).filter((f) =>
+        /was matched to the existing calendar/.test(f.detail),
+      );
+      expect(findings.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('leaves a non-identical resource calendar as an unbound shared copy (docs/TECH_DEBT.md, F6)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, tieredCalendarXer());
+
+      // The resource is reused by code and keeps its own calendar, so the file's differing copy of
+      // that calendar is created in the shared library and bound to nothing.
+      await importFile(actor, projectId, tieredCalendarXer('Tiered Again', SIX_DAY()));
+
+      const copy = await prisma.calendar.findFirstOrThrow({
+        where: {
+          organizationId: orgId,
+          name: { startsWith: 'Crew Shift (imported' },
+          deletedAt: null,
+        },
+      });
+      expect(await prisma.resource.count({ where: { calendarId: copy.id } })).toBe(0);
+      expect(await prisma.activity.count({ where: { calendarId: copy.id } })).toBe(0);
+    });
+
+    it('creates the second of two identical source calendars as a copy when one candidate exists', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, xerWithCalendar('Rev A'));
+
+      const res = await importFile(actor, projectId, twoIdenticalCalendarsXer('Rev B'));
+
+      // One existing calendar is claimed by one source calendar; the other is created.
+      const calendars = await prisma.calendar.findMany({
+        where: { organizationId: orgId, projectId, deletedAt: null },
+      });
+      expect(calendars).toHaveLength(2);
+      const findings = calendarRepairs(res.body.data.report.repairs).map((f) => f.detail);
+      expect(findings.filter((d) => /was matched to the existing calendar/.test(d))).toHaveLength(
+        1,
+      );
+    });
+
+    it('keeps a reused calendar, intact, when the recalculation fails and the import rolls back', async () => {
+      const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+      const schedule = app.get(ScheduleService, { strict: false });
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, xerWithCalendar('Rev A'));
+      const original = await prisma.plan.findUniqueOrThrow({
+        where: { id: first.body.data.planId },
+      });
+      const calendarId = original.calendarId as string;
+      const before = await prisma.calendar.findUniqueOrThrow({
+        where: { id: calendarId },
+        include: { shifts: true, exceptions: { include: { windows: true } } },
+      });
+
+      vi.spyOn(schedule, 'recalculate').mockRejectedValue(new Error('recalculation failed'));
+      await actor.agent
+        .post(commitUrl(projectId))
+        .attach('file', Buffer.from(xerWithCalendar('Rev B'), 'utf8'), 'rev.xer')
+        .expect(500);
+
+      // The failed plan is gone; the calendar it had bound, and everything under it, is not.
+      expect(await prisma.plan.count({ where: { projectId, name: 'Rev B' } })).toBe(0);
+      const after = await prisma.calendar.findUniqueOrThrow({
+        where: { id: calendarId },
+        include: { shifts: true, exceptions: { include: { windows: true } } },
+      });
+      expect(after.deletedAt).toBeNull();
+      expect(after.shifts).toHaveLength(before.shifts.length);
+      expect(after.exceptions).toHaveLength(before.exceptions.length);
+      expect(after.exceptions.flatMap((e) => e.windows)).toHaveLength(
+        before.exceptions.flatMap((e) => e.windows).length,
+      );
+      expect(before.shifts.length).toBeGreaterThan(0);
+      expect(before.exceptions.length).toBeGreaterThan(0);
+    });
+
+    it('ends a calendar delete racing a reusing import as a reuse and a 409, or as a copy: never a plan on a deleted calendar', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const outcomes = { reused: 0, copied: 0 };
+
+      for (let round = 0; round < 8; round += 1) {
+        const seed = await importFile(actor, projectId, xerWithCalendar(`Seed ${round}`));
+        const seeded = await prisma.plan.findUniqueOrThrow({
+          where: { id: seed.body.data.planId },
+        });
+        const calendarId = seeded.calendarId as string;
+        // Unused, so the delete may win: the seeding plan leaves the live set.
+        await prisma.activity.updateMany({
+          where: { planId: seeded.id },
+          data: { deletedAt: new Date() },
+        });
+        await prisma.plan.update({ where: { id: seeded.id }, data: { deletedAt: new Date() } });
+
+        const [del, imp] = await Promise.all([
+          actor.agent.delete(`/api/v1/organizations/acme/calendars/${calendarId}`),
+          actor.agent
+            .post(commitUrl(projectId))
+            .attach('file', Buffer.from(xerWithCalendar(`Race ${round}`), 'utf8'), 'rev.xer'),
+        ]);
+
+        expect(imp.status).toBe(201);
+        const plan = await prisma.plan.findUniqueOrThrow({ where: { id: imp.body.data.planId } });
+        const bound = await prisma.calendar.findUniqueOrThrow({
+          where: { id: plan.calendarId as string },
+        });
+        expect(bound.deletedAt).toBeNull();
+        if (plan.calendarId === calendarId) {
+          expect(del.status).toBe(409);
+          outcomes.reused += 1;
+        } else {
+          expect([204, 409]).toContain(del.status);
+          outcomes.copied += 1;
+        }
+
+        await prisma.activity.updateMany({
+          where: { planId: plan.id },
+          data: { deletedAt: new Date() },
+        });
+        await prisma.plan.update({ where: { id: plan.id }, data: { deletedAt: new Date() } });
+        await prisma.calendar.updateMany({
+          where: { organizationId: orgId, projectId, deletedAt: null },
+          data: { deletedAt: new Date() },
+        });
+      }
+      expect(outcomes.reused + outcomes.copied).toBe(8);
+    });
   });
 });

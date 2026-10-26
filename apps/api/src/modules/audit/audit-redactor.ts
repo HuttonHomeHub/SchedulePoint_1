@@ -183,6 +183,7 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
     'activityCount',
     'dependencyCount',
     'calendarCount',
+    'calendarsReused',
     'resourceCount',
     'findingCount',
   ],
