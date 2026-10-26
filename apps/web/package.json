@@ -79,7 +79,7 @@
     "shoot": "node --experimental-strip-types scripts/shoot.mjs"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.9.1",
+    "@hookform/resolvers": "^6.0.0",
     "@repo/interchange": "workspace:*",
     "@repo/layout": "workspace:*",
     "@repo/seed": "workspace:*",
