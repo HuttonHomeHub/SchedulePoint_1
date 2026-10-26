@@ -212,12 +212,15 @@ export function htmlToText(input: string, collapseBlankLines: boolean): HtmlText
 /**
  * Make text fit the note shape: normalise line breaks to `\n`, remove control characters other than
  * newline and tab (a NUL alone would make PostgreSQL refuse the row and roll the whole import back),
- * remove unpaired surrogates, and trim.
+ * remove bidirectional overrides and isolates and zero-width characters (they let an imported remark
+ * display differently from what it says, or hide text inside it, and a foreign file has no reason to
+ * carry one), remove unpaired surrogates, and trim.
  */
 export function cleanNoteText(input: string): string {
   return (
     input
       .replace(/\r\n?/g, '\n')
+      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g, '')
       // The point of this call is to match control characters.
       // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, '')
@@ -233,6 +236,8 @@ export function cleanNoteText(input: string): string {
  * Pieces are trimmed and blank ones dropped, so only whitespace at a cut is lost.
  */
 export function splitNoteBody(text: string, max: number = NOTE_BODY_MAX): string[] {
+  // A window of one unit cannot hold a surrogate pair, so the cut could never advance past one.
+  if (max < 2) throw new RangeError('splitNoteBody needs a window of at least 2 units');
   const pieces: string[] = [];
   let position = 0;
   while (text.length - position > max) {

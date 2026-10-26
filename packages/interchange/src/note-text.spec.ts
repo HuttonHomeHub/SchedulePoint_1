@@ -127,6 +127,17 @@ describe('cleanNoteText', () => {
     expect(cleanNoteText('a\u0000b\u0001c\td\u007fe\u0085f\nɡ')).toBe('abc\tdef\nɡ');
   });
 
+  it('removes bidirectional overrides and isolates and zero-width characters', () => {
+    expect(cleanNoteText('a\u202Eb\u202Ac\u2066d\u2069e\u200Bf\u200Dg\uFEFFh')).toBe('abcdefgh');
+  });
+
+  it('removes them when they arrive as numeric references, which is how a file smuggles one in', () => {
+    expect(importNoteText('right&#8238;left &#x200B;gap', 'XML_TEXT')).toMatchObject({
+      bodies: ['rightleft gap'],
+    });
+    expect(importNoteText('<p>x&#8238;y</p>', 'XER_FOREIGN')).toMatchObject({ bodies: ['xy'] });
+  });
+
   it('removes unpaired surrogates and keeps pairs', () => {
     expect(cleanNoteText('a\uD800b\uDC00c\u{1F600}')).toBe('abc\u{1F600}');
   });
@@ -134,6 +145,12 @@ describe('cleanNoteText', () => {
 
 describe('splitNoteBody', () => {
   const paragraph = (n: number) => `${'w'.repeat(n)}`;
+
+  it('refuses a window too small to advance', () => {
+    expect(() => splitNoteBody('abc', 1)).toThrow(RangeError);
+    expect(() => splitNoteBody('abc', 0)).toThrow(RangeError);
+    expect(splitNoteBody('abcd', 2)).toEqual(['ab', 'cd']);
+  });
 
   it('leaves 4,999 and 5,000 characters whole', () => {
     expect(splitNoteBody(paragraph(4999))).toEqual([paragraph(4999)]);

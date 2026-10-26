@@ -565,6 +565,10 @@ Every finding is aggregate, never one per note, following #543. The existing
   is 14.1 MB and it took p50 5.6 s, max 5.9 s (5.0, 5.1, 5.6, 5.8, 5.9). The whole request, including
   parse and the phase-2 recalculation, was p50 7.7 s, max 8.1 s. The notes add about 3 s, which is
   below half of the 15 s budget (7.5 s) with the shared, noisy container as the caveat.
+- **Chunking.** `note.createMany` is one call, and the splitting of its parameters across statements is
+  delegated to Prisma (PostgreSQL allows 32,767 bind parameters per statement, so about 3,600 rows of
+  this table go in each). The 20,000-row reading above exercised that path; an API e2e with 4,000
+  notes keeps it exercised in CI.
 - **Decision (product owner's coordinator): keep one atomic transaction and `MAX_NOTES` = 20,000.** No
   phase 1b and no new timeout. The fallbacks above stay documented for the day a measurement says
   otherwise.

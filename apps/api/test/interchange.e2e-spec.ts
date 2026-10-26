@@ -742,6 +742,8 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       .post(dryRunUrl(projectId))
       .attach('file', Buffer.from(xer, 'utf8'), 'memos.xer')
       .expect(200);
+    // A preview creates nothing: no plan and so no note.
+    expect(await prisma.note.count()).toBe(0);
     const res = await planner.agent
       .post(commitUrl(projectId))
       .attach('file', Buffer.from(xer, 'utf8'), 'memos.xer')
@@ -837,6 +839,32 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(stored.map((n) => n.body)).toEqual(['link ab']);
     expect(stored[0]!.body).not.toContain('<script');
     expect(stored[0]!.body).not.toContain('\u0000');
+  });
+
+  it('inserts more notes than one statement can bind in a single batch', async () => {
+    // PostgreSQL binds at most 32,767 parameters per statement, so this table's `createMany` is split by
+    // Prisma at roughly 3,600 rows. 4,000 notes pin that the batched insert crosses the boundary intact.
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const memos = Array.from({ length: 4000 }, (_, i): [string, string] => [
+      i % 2 === 0 ? 'T1' : 'T2',
+      `Remark ${String(i)}`,
+    ]);
+    const res = await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(xerWithMemos(memos), 'utf8'), 'many.xer')
+      .expect(201);
+
+    expect(res.body.data.report.mapped.notes).toBe(4000);
+    const planId = res.body.data.planId as string;
+    expect(await prisma.note.count({ where: { planId } })).toBe(4000);
+    const stored = await prisma.note.findMany({
+      where: { planId },
+      orderBy: { createdAt: 'asc' },
+      select: { body: true },
+    });
+    expect(stored[0]?.body).toBe('Remark 0');
+    expect(stored[3999]?.body).toBe('Remark 3999');
   });
 
   it('splits a memo over 5,000 characters into notes that each satisfy the CHECK, and reports it', async () => {

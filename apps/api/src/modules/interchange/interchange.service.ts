@@ -266,6 +266,7 @@ export class InterchangeService {
 
     // Phase 1 — persist the whole graph atomically via the existing repositories (each accepts `tx`),
     // mirroring how the domain services compose repository writes inside a single `$transaction`.
+    const persistStarted = performance.now();
     const {
       planId,
       createdCalendarIds,
@@ -339,6 +340,9 @@ export class InterchangeService {
         assignments: graph.assignments.length,
         // A count, never a body: a note is a customer's own words.
         notes: graph.notes?.length ?? 0,
+        // The transaction's whole wall time, so the note volume's cost against the 15 s budget shows in
+        // production and not only in the one measurement the spec records.
+        persistMs: Math.round(performance.now() - persistStarted),
       },
       'interchange commit persisted a plan',
     );

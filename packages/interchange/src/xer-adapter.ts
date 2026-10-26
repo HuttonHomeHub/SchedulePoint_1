@@ -644,6 +644,9 @@ export function adaptXerToCanonical(
     }
     const typeId = field(row, 'memo_type_id');
     const topic = typeId === undefined ? undefined : topicById.get(typeId);
+    // The topic label is a convention, not proof the file is ours: anyone can write it. The only thing it
+    // changes is how the memo is cut (on `<hr>`, with no prefix), and every note still passes the same
+    // text step, so a forged label gains nothing a plain memo does not have.
     if (topic === SCHEDULEPOINT_NOTES_TOPIC) collector.add(taskId, memo, 'XER_SCHEDULEPOINT');
     else collector.add(taskId, memo, 'XER_FOREIGN', topic);
   }
