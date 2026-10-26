@@ -6659,7 +6659,7 @@ docblock names. Harness only, never shipped, and it inflates the very figure (a)
 
 ### 264. A contended sweep produced four false failures, and then a contended re-run confirmed three of them
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
 
 The ADR-0129 gate pass ran `scripts/e2e-sweep.sh` and got four failures: `account`, `audit`,
 `designed-chrome`, `narrow-shell`. Every one was an artefact of contention, and the way that was
@@ -6709,7 +6709,7 @@ re-derive the diagnosis from four confusing failures.
 > `test:e2e:*` list is PR #476, well before that epic. **Not re-checked:** the `e2e-undo`
 > non-reproducing failure, which needs a sweep to observe.
 >
-> **Its `**Verified:**` header was deliberately left at 2026-09-10 (the 2026-10-26 pass re-read the cites and counts and moved it).** This block is an avowed
+> **Its `**Verified:**` header is deliberately left at 2026-09-10.** This block is an avowed
 > partial re-check, and `**Verified:**` is a claim about the WHOLE row — so moving it to match
 > this date would assert something this block says it did not do. Recorded because the opposite
 > reading is the obvious one: see `#302`, where the general rule was measured, drafted, and then
