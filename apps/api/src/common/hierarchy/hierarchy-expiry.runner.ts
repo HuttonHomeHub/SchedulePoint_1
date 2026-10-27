@@ -67,6 +67,10 @@ export interface ExpiryCounts {
   activityHistoryEntries: number;
   /** Counted for the same reason; see LANE_ROWS_PER_ACTIVITY. */
   activitySwimlaneLanes: number;
+  /** Counted for the same reason; see ASSIGNMENT_ROWS_PER_ACTIVITY. */
+  codeValueAssignments: number;
+  /** Charged at LANE_ROWS_PER_ACTIVITY, as the swimlane lanes beside them are. */
+  codeSwimlaneLanes: number;
 }
 
 /**
@@ -143,6 +147,17 @@ export async function deleteExpiredScope(
   const activitySwimlaneLaneCount = await deleteChunked(activityIds, (chunk) =>
     tx.activitySwimlaneLane.deleteMany({ where: { activityId: { in: chunk } } }),
   );
+  // The P6 activity code lanes and assignments (database-design §8.1). Both carry `plan_id`, and the
+  // composite keys guarantee every row naming a plan's activity or type carries that plan's id, so
+  // the plan-keyed delete through the unique index's leading column is complete. They hold RESTRICT
+  // keys into activities, code values and code types, so they go before all three. Counted rather
+  // than cascaded for the ADR-0174 D8 reason: the budget needs the number.
+  const codeSwimlaneLaneCount = await deleteChunked(planIds, (chunk) =>
+    tx.codeSwimlaneLane.deleteMany({ where: { planId: { in: chunk } } }),
+  );
+  const codeValueAssignmentCount = await deleteChunked(planIds, (chunk) =>
+    tx.codeValueAssignment.deleteMany({ where: { planId: { in: chunk } } }),
+  );
   if (planIds.length > 0) {
     // ADR-0046 denormalises `plan_id` onto EVERY note, including an activity's — so one pass
     // covers both kinds and no activity-keyed pass is needed.
@@ -203,6 +218,35 @@ export async function deleteExpiredScope(
   await deleteChunked(planIds, (chunk) =>
     tx.swimlane.deleteMany({ where: { planId: { in: chunk } } }),
   );
+  // The plan's swimlane pointer and its code types are a RESTRICT cycle (`plans` → `code_types` by
+  // `swimlane_code_type_id`, `code_types` → `plans` by `plan_id`): no order of deletes satisfies
+  // both, so the pointer is cleared first. This is the one edge `EXEMPT_EDGES` carries as
+  // `Plan→CodeType`, and `hierarchy-expiry.structural.spec.ts` checks this statement precedes the
+  // type delete. The source is reset with it because `ck_plans_swimlane_source_level` refuses an
+  // ACTIVITY_CODE plan with no type; the plan is deleted a few statements below, in this transaction.
+  await deleteChunked(planIds, (chunk) =>
+    tx.plan.updateMany({
+      where: { id: { in: chunk }, swimlaneCodeTypeId: { not: null } },
+      data: { swimlaneSource: 'NONE', swimlaneCodeTypeId: null },
+    }),
+  );
+  // Values by type id, one statement per chunk whatever the tree depth (ADR-0096 D7); the type ids are
+  // resolved as the baseline ids are. Neither table is charged to the budget (at most 100 types and
+  // 100,000 values per plan).
+  const codeTypeIds: string[] = [];
+  for (const chunk of chunkIds(planIds)) {
+    const rows = await tx.codeType.findMany({
+      where: { planId: { in: chunk } },
+      select: { id: true },
+    });
+    codeTypeIds.push(...rows.map((t) => t.id));
+  }
+  await deleteChunked(codeTypeIds, (chunk) =>
+    tx.codeValue.deleteMany({ where: { codeTypeId: { in: chunk } } }),
+  );
+  await deleteChunked(planIds, (chunk) =>
+    tx.codeType.deleteMany({ where: { planId: { in: chunk } } }),
+  );
   const planCount = await deleteChunked(planIds, (chunk) =>
     tx.plan.deleteMany({ where: { id: { in: chunk } } }),
   );
@@ -241,5 +285,7 @@ export async function deleteExpiredScope(
     activities: activityCount,
     activityHistoryEntries: activityHistoryEntryCount,
     activitySwimlaneLanes: activitySwimlaneLaneCount,
+    codeValueAssignments: codeValueAssignmentCount,
+    codeSwimlaneLanes: codeSwimlaneLaneCount,
   };
 }

@@ -49,14 +49,30 @@ export const HISTORY_ROWS_PER_ACTIVITY = 5;
 export const LANE_ROWS_PER_ACTIVITY = 2;
 
 /**
+ * How many code value assignments cost as much, in the activity budget, as one activity.
+ *
+ * **Measured 2026-10-27 at landing** (`docs/specs/p6-activity-codes/m2-record.md` §3, a plan of 5,000
+ * activities carrying 30 types, 150,000 assignments): an assignment's own delete plus the dead index
+ * entries the value and type deletes then walk costs 1.8–2.3 µs warm and 3.1 µs on the first, cold
+ * repetition, against a history row's 2.7–3.0 µs on that harness. Scaling the calibrated
+ * `HISTORY_ROWS_PER_ACTIVITY` by that ratio gives 5.8–8.2 warm and 4.4–4.9 cold; the lower reading is
+ * taken, because charging too little overruns the 60 s batch transaction and charging too much only
+ * slows a backlog. Code lanes cost about 0.5 µs a row and ride `LANE_ROWS_PER_ACTIVITY`. Code types
+ * and values (100 and 100,000 per plan at most) are not charged. TECH_DEBT #443 covers re-measuring
+ * cold on the deployed host.
+ */
+export const ASSIGNMENT_ROWS_PER_ACTIVITY = 4;
+
+/**
  * What one expired scope costs the run's activity budget: its activities plus its history rows
- * plus its swimlane lane rows.
+ * plus its swimlane and code lane rows plus its code value assignments.
  */
 function budgetCharge(counts: ExpiryCounts): number {
   return (
     counts.activities +
     Math.ceil(counts.activityHistoryEntries / HISTORY_ROWS_PER_ACTIVITY) +
-    Math.ceil(counts.activitySwimlaneLanes / LANE_ROWS_PER_ACTIVITY)
+    Math.ceil((counts.activitySwimlaneLanes + counts.codeSwimlaneLanes) / LANE_ROWS_PER_ACTIVITY) +
+    Math.ceil(counts.codeValueAssignments / ASSIGNMENT_ROWS_PER_ACTIVITY)
   );
 }
 
