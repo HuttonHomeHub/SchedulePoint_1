@@ -33,10 +33,12 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ORG_SCOPED_JSON_LIMIT } from '../../common/http/body-limits';
 
 import { ActivitiesService } from './activities.service';
+import { ActivityCodesService } from './activity-codes.service';
 import { ActivityResponseDto } from './dto/activity-response.dto';
 import { BulkDeleteActivitiesDto } from './dto/bulk-delete-activities.dto';
 import { BulkDeleteResultDto } from './dto/bulk-delete-result.dto';
 import { CreateActivityDto } from './dto/create-activity.dto';
+import { UpdateActivityCodesDto } from './dto/update-activity-codes.dto';
 import { UpdateParentsDto } from './dto/update-parents.dto';
 import { UpdatePlacementsDto } from './dto/update-placements.dto';
 import { UpdatePositionsDto } from './dto/update-positions.dto';
@@ -58,7 +60,10 @@ const BATCH_BODY_TOO_LARGE = `The JSON body exceeds the ${ORG_SCOPED_JSON_LIMIT}
 })
 @Controller({ path: 'organizations/:orgSlug/plans/:planId/activities', version: '1' })
 export class PlanActivitiesController {
-  constructor(private readonly service: ActivitiesService) {}
+  constructor(
+    private readonly service: ActivitiesService,
+    private readonly codes: ActivityCodesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "List a plan's activities (cursor-paginated)." })
@@ -182,6 +187,45 @@ export class PlanActivitiesController {
       dto,
     );
     return items.map((activity) => ActivityResponseDto.from(activity, canReadCost));
+  }
+
+  @Patch('codes')
+  @ApiOperation({
+    summary: 'Set or clear code values on activities (Planner or Org Admin). All-or-nothing.',
+    description:
+      'An ordinary activity write (p6-activity-codes): it needs `activity:update` and the pen, ' +
+      'bumps each named activity’s `version` and is recorded in its history as a `code:<codeTypeId>` ' +
+      'item. A row states only the types it means to touch (`codeValueId: null` clears one); every ' +
+      'other type the activity carries is left alone. Not a schedule input, so computed dates are ' +
+      'not made stale. Returns the written activities at their fresh versions, with `codes`.',
+  })
+  @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
+  @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
+  @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
+  @ApiNotFoundResponse({
+    description:
+      'The organisation or plan is not found, a row names an activity id not in the plan, or a ' +
+      'row names a code type or value that is unknown, deleted (a type) or another plan’s.',
+  })
+  @ApiConflictResponse({
+    description: 'A stale version — the whole batch is rejected and nothing changes.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The same activity (DUPLICATE_CODES_ACTIVITY_ID) or the same code type within an activity ' +
+      '(DUPLICATE_CODES_TYPE_ID) appears twice, a value belongs to another code type of the plan ' +
+      '(CODE_VALUE_WRONG_TYPE) or was deleted (CODE_VALUE_DELETED), or a field fails validation.',
+  })
+  @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
+  async updateCodes(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Body() dto: UpdateActivityCodesDto,
+  ): Promise<ActivityResponseDto[]> {
+    const { items, canReadCost } = await this.codes.write(principal, orgSlug, planId, dto);
+    const decorated = await this.service.decorateWithCodes(items);
+    return decorated.map((activity) => ActivityResponseDto.from(activity, canReadCost));
   }
 
   @Post('bulk-delete')

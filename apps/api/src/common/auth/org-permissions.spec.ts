@@ -12,6 +12,7 @@ const READ = [
   'calendar:read',
   'baseline:read',
   'swimlane:read',
+  'code:read',
 ] as const;
 const WRITE = [
   'client:create',
@@ -31,6 +32,10 @@ const WRITE = [
   'swimlane:update',
   'swimlane:delete',
   'swimlane:restore',
+  'code:create',
+  'code:update',
+  'code:delete',
+  'code:restore',
   'calendar:create',
   'calendar:update',
   'calendar:delete',

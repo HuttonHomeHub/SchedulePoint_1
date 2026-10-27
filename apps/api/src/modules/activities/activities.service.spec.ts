@@ -210,6 +210,8 @@ describe('ActivitiesService', () => {
     activity: { findMany: ReturnType<typeof vi.fn> };
     resourceAssignment: { groupBy: ReturnType<typeof vi.fn> };
     activitySwimlaneLane: { findMany: ReturnType<typeof vi.fn> };
+    codeType: { findFirst: ReturnType<typeof vi.fn> };
+    $queryRaw: ReturnType<typeof vi.fn>;
   };
   // Driving-assignment access on the tx client (ADR-0040 activity-path recompute). Default: no
   // driving assignment, so the triad is inert and every prior activity test stays byte-identical.
@@ -316,6 +318,10 @@ describe('ActivitiesService', () => {
       resourceAssignment: { groupBy: vi.fn().mockResolvedValue([]) },
       // The lanes stored per swimlane basis, loaded once per response page. Default: none placed.
       activitySwimlaneLane: { findMany: vi.fn().mockResolvedValue([]) },
+      // The codes of a response page (p6-activity-codes): the plan has no live code type, so the
+      // response carries no `codes` key and the assignments read finds nothing.
+      codeType: { findFirst: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,

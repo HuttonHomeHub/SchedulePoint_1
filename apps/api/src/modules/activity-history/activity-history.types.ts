@@ -39,7 +39,16 @@ export interface StoredAssignmentItem {
   to: ActivityHistoryAssignmentState | null;
 }
 
-export type StoredItem = StoredFieldItem | StoredLinkItem | StoredAssignmentItem;
+/**
+ * A code value set, changed or cleared: the CODE VALUE ids either side, `null` for "no value". The
+ * code type is the item key's (`code:<codeTypeId>`), so the item carries no name and goes stale never.
+ */
+export interface StoredCodeItem {
+  from: string | null;
+  to: string | null;
+}
+
+export type StoredItem = StoredFieldItem | StoredLinkItem | StoredAssignmentItem | StoredCodeItem;
 
 /** One entry's `changes`: an object keyed by item, so merge is "keep `from`, overwrite `to`". */
 export type StoredChanges = Record<string, StoredItem>;

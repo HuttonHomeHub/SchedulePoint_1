@@ -22,6 +22,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { BaselinesModule } from './modules/baselines/baselines.module';
 import { CalendarsModule } from './modules/calendars/calendars.module';
 import { ClientsModule } from './modules/clients/clients.module';
+import { CodesModule } from './modules/codes/codes.module';
 import { CrossPlanDependenciesModule } from './modules/cross-plan-dependencies/cross-plan-dependencies.module';
 import { CspModule } from './modules/csp/csp.module';
 import { DependenciesModule } from './modules/dependencies/dependencies.module';
@@ -130,6 +131,7 @@ function isPrettyLoggingAvailable(): boolean {
     CrossPlanDependenciesModule,
     NotesModule,
     SwimlanesModule,
+    CodesModule,
     ScheduleModule,
     CalendarsModule,
     ResourcesModule,

@@ -105,15 +105,18 @@ export const ACTIVITY_HISTORY_KEY_PREFIXES = {
   /** A cross-plan link (`cross_plan_dependencies`): recorded on both endpoints, each in its own plan. */
   crossPlanLink: 'xlink:',
   assignment: 'assignment:',
+  /** A code value (P6 activity codes); the id after the prefix is the CODE TYPE's. */
+  code: 'code:',
 } as const;
 
-export type ActivityHistoryItemKind = 'field' | 'link' | 'xlink' | 'assignment';
+export type ActivityHistoryItemKind = 'field' | 'link' | 'xlink' | 'assignment' | 'code';
 
 /** Which family a stored key belongs to. A field key never contains `:`. */
 export function activityHistoryItemKind(key: string): ActivityHistoryItemKind {
   if (key.startsWith(ACTIVITY_HISTORY_KEY_PREFIXES.link)) return 'link';
   if (key.startsWith(ACTIVITY_HISTORY_KEY_PREFIXES.crossPlanLink)) return 'xlink';
   if (key.startsWith(ACTIVITY_HISTORY_KEY_PREFIXES.assignment)) return 'assignment';
+  if (key.startsWith(ACTIVITY_HISTORY_KEY_PREFIXES.code)) return 'code';
   return 'field';
 }
 
@@ -188,11 +191,22 @@ export interface ActivityHistoryAssignmentChange {
   to: ActivityHistoryAssignmentState | null;
 }
 
+/**
+ * A code value set, changed or cleared (`code:<codeTypeId>`, scope `DEFINITION`). `from` and `to` are
+ * code VALUE ids, `null` for "no value"; the type is the key's. Ids rather than names: the web already
+ * holds the plan's code types, and a name stored here would go stale the day it is renamed.
+ */
+export interface ActivityHistoryCodeChange {
+  from: string | null;
+  to: string | null;
+}
+
 export type ActivityHistoryChange =
   | ActivityHistoryFieldChange
   | ActivityHistoryDescriptionChange
   | ActivityHistoryLinkChange
-  | ActivityHistoryAssignmentChange;
+  | ActivityHistoryAssignmentChange
+  | ActivityHistoryCodeChange;
 
 export interface ActivityHistoryActor {
   id: string;
@@ -211,7 +225,7 @@ export interface ActivityHistoryEntry {
   /** Set for a multi-activity write: how many entries the one write made. */
   batch: { id: string; size: number } | null;
   origin: ActivityHistoryOrigin | null;
-  /** Keyed by item: a field key, `link:<id>` or `assignment:<id>` (`xlink:<id>` for a cross-plan link). */
+  /** Keyed by item: a field key, `link:<id>`, `assignment:<id>` or `code:<codeTypeId>` (`xlink:<id>` for a cross-plan link). */
   changes: Record<string, ActivityHistoryChange>;
 }
 

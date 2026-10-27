@@ -72,6 +72,13 @@ const SITES: Record<string, Site> = {
     reason: 'Batch re-parent: one entry per activity, scope PLACEMENT.',
     recordedBy: [`${ACTIVITIES}::updateParents`],
   },
+  'modules/activities/activity.repository.ts::bumpVersions::activities.UPDATE': {
+    status: 'recorded',
+    reason:
+      'The activity-side half of a code write: the version bump that locks its assignments. The ' +
+      'change is a `code:<codeTypeId>` item in a DEFINITION batch entry.',
+    recordedBy: ['modules/activities/activity-codes.service.ts::write'],
+  },
   'modules/activities/activity.repository.ts::create::activity.create': {
     status: 'exempt',
     reason: "A create is shown from the activity's own created_by / created_at, not as an entry.",

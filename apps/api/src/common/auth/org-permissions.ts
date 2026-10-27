@@ -151,6 +151,15 @@ export type OrgPermission =
   | 'swimlane:update'
   | 'swimlane:delete'
   | 'swimlane:restore'
+  // P6 activity codes — a plan's code types and their values (p6-activity-codes spec §2 Permissions).
+  // The same split as swimlanes: reading is every member, the writes are Planner + Org Admin and each
+  // also needs the plan edit-lock pen in the service. Setting a value on an ACTIVITY is not a code
+  // permission: an assignment is an activity write and rides on `activity:update`.
+  | 'code:read'
+  | 'code:create'
+  | 'code:update'
+  | 'code:delete'
+  | 'code:restore'
   // Schedule interchange — importing a foreign schedule file (P6 XER now; MSPDI later) as a new plan
   // (ADR-0050, C2). `interchange:import` is granted to **Planner + Org Admin only** — it creates a plan
   // plus its activities, logic and calendars (a hierarchy-write capability), so it follows the same
@@ -198,6 +207,7 @@ const HIERARCHY_READ: readonly OrgPermission[] = [
   'resource:read',
   'note:read',
   'swimlane:read',
+  'code:read',
 ];
 
 /** Mutate the hierarchy (create/update/delete/restore) — Planner + Org Admin. */
@@ -243,6 +253,10 @@ const HIERARCHY_WRITE: readonly OrgPermission[] = [
   'swimlane:update',
   'swimlane:delete',
   'swimlane:restore',
+  'code:create',
+  'code:update',
+  'code:delete',
+  'code:restore',
 ];
 
 /**

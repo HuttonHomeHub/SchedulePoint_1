@@ -21,6 +21,8 @@ import {
   assignmentKey,
   assignmentState,
   changedReferenceIds,
+  codeItem,
+  codeKey,
   changedSwimlaneIds,
   diffActivity,
   diffFields,
@@ -537,6 +539,31 @@ export class ActivityHistoryRecorder {
               { ...NO_NAMES, ...(names.swimlanes ? { swimlanes: names.swimlanes } : {}) },
             ),
         },
+      };
+    });
+  }
+
+  /**
+   * One write per activity whose code values a codes write changed: a `code:<codeTypeId>` item per type
+   * that moved, holding the value ids either side. A pair whose two sides are equal yields no item, so a
+   * row that re-sent the value it already had records nothing. Ids carry no name, so the item needs no
+   * name read (scope `DEFINITION`, a batch: the entries never merge).
+   */
+  codeWrites(
+    planId: string,
+    rows: ReadonlyArray<{
+      id: string;
+      changes: ReadonlyArray<{ codeTypeId: string; from: string | null; to: string | null }>;
+    }>,
+  ): RecordedActivityWrite[] {
+    return rows.map(({ id, changes }) => {
+      const moved = changes.filter((c) => c.from !== c.to);
+      return {
+        activityId: id,
+        planId,
+        changes: fixedChanges(
+          Object.fromEntries(moved.map((c) => [codeKey(c.codeTypeId), codeItem(c.from, c.to)])),
+        ),
       };
     });
   }
