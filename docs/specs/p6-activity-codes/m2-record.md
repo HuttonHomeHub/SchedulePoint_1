@@ -134,7 +134,19 @@ them**, against `EXPORT_TRANSACTION_TIMEOUT_MS` (ten minutes) and a 30 s `statem
 (the slowest page took 0.16 s). The existing `m2-measurements.md` put a ten-plan organisation at 25 s, so
 the four new files add roughly half again at this size. Not measured: serialising the rows to JSON and
 CSV and zipping them (the same cost per row as every other file), the response over a network, and a
-cold cache. The query plan was not inspected.
+cold cache. These timings were taken with the earlier `(organization_id)` index; see the plan check below.
+
+**The organisation index is `(organization_id, id)`** on `code_value_assignments` and
+`code_swimlane_lanes` (performance review, before release), so the export's keyset page is an index range
+scan in `id` order with no sort. One index each, and `organization_id` still leads, so the organisation
+key's RESTRICT check is served as before. Checked with `EXPLAIN (ANALYZE, BUFFERS)` on a copy of the table (`CREATE TABLE … LIKE`, with its
+indexes, no foreign keys) holding **505,000 rows** over 101 organisations of about 5,000 each (random
+UUID ids, the worst case for heap locality), `ANALYZE`d. The exact page shape (`WHERE organization_id = …
+AND id > $last ORDER BY id LIMIT 1000`) at the fourth page: `Index Scan using …_organization_id_id_idx`
+with the index condition on both columns and **no Sort node**, **1,000 rows visited, 1,012 shared
+buffers, 1.1 ms** (about one heap page per row, all cache hits); the first page (no `id` bound) the same
+plan, 1,012 buffers, 1.2 ms. The lanes table has the same columns and index and was not run separately.
+The scratch schema was dropped.
 
 ## 8. What the builder's half of M2-T3 changed (2026-10-27)
 
@@ -159,6 +171,9 @@ cold cache. The query plan was not inspected.
   `cross-plan-revision-compare`, `hierarchy-expiry`, `interchange-roundtrip`, `pairwise-differential`,
   `redundant-links`, `revision-compare`, `revision-delta-m0`, `schedule`, `schedule-health-check`,
   `share`, `share-guest`. The two `test/measure/` scripts delete by organisation id and were left alone.
+- **Owed by M2-T4 (security review S1):** every service that creates a code type, value, assignment or
+  lane sets `organizationId` from the resolved plan, never from the request, and a test sends a foreign
+  `organizationId` and checks the stored row carries the plan's.
 - **Left for M2-T4:** `UpdatePlanDto` admitting `swimlaneCodeTypeId`, which removes the named allowance
   in `schedule-inputs.structural.spec.ts`; the cascade and restore of types and values
   (database-design §8.2), which no route can reach until the module exists.

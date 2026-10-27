@@ -9120,6 +9120,11 @@ on its own harness arm, `docs/specs/tidy-and-tests-sweep/m3-measurement.md` §1)
 is not "a performance pass on the write paths", and counting it as one would unlock this row with another's work. The
 next count of H-1 `examined` is due on or after 2026-11-01.
 
+**`ASSIGNMENT_ROWS_PER_ACTIVITY = 4` joined the same three constants on 2026-10-27**
+(`docs/specs/p6-activity-codes/m2-record.md` §3, warm and one cold repetition). Not measured: the extreme of
+100 types over 5,000 activities (500,000 assignments in one plan), and a cold-cache expiry of code rows on the
+deployed host; the `hierarchy_expiry.batch` line is the passive source for both.
+
 **Next:** none that anybody can perform without a shell; the write-cost attribution and the cold expiry
 re-measure (`apps/api/test/measure/activity-history.measure.ts`, `hierarchy-expiry-history.measure.ts`,
 `m3-measurement.md`) wait on the trigger. The constant `HISTORY_ROWS_PER_ACTIVITY = 5` still rests on a

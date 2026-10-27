@@ -965,6 +965,9 @@ Rows: every row of the organisation. Files `json/activity-swimlane-lanes.json` a
 
 ### `code-types`
 
+Code type names, short codes and descriptions (this file and the next two) are free text a planner types, so
+like activity names they may carry personal data ([ADR-0085](adr/0085-privacy-operations.md)).
+
 Rows: every row of the organisation. Files `json/code-types.json` and `csv/code-types.csv`.
 
 | Column           | Type    | Notes                                                          |

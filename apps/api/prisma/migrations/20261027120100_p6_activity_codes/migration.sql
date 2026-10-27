@@ -35,7 +35,11 @@
 -- value NULL); the replaced CHECKs scan `plans` and `baselines`; ck_baseline_activities_code_lane_pair
 -- scans `baseline_activities`, the largest table touched (every row NULL, so it only reads). Not
 -- CONCURRENTLY and not NOT VALID + VALIDATE: neither buys anything inside one transaction with no
--- traffic.
+-- traffic. ROLLING DEPLOY: while the new image migrates, the previous image's containers may still
+-- be serving, and they wait on two locks for the length of the file, measured under a second at
+-- 500,000 activities and 2,000,000 baseline_activities rows (MEASUREMENTS 1): the SHARE lock on
+-- `activities` (readers proceed, writers wait) and the ACCESS EXCLUSIVE lock the CHECK takes on
+-- `baseline_activities` (everything on that table waits).
 --
 -- LOCK ORDER THE APPLICATION MUST KEEP (database-design §15; enforced in services, not here): the plan
 -- advisory lock → activities in id order FOR NO KEY UPDATE → code types → code values in id order
@@ -284,7 +288,7 @@ CREATE UNIQUE INDEX "uq_code_value_assignments_plan_activity_type" ON "code_valu
 -- without it the expiry of one large plan does not finish in the run's transaction.
 CREATE INDEX "idx_code_value_assignments_type_value" ON "code_value_assignments"("code_type_id", "code_value_id");
 
-CREATE INDEX "code_value_assignments_organization_id_idx" ON "code_value_assignments"("organization_id");
+CREATE INDEX "code_value_assignments_organization_id_id_idx" ON "code_value_assignments"("organization_id", "id");
 
 -- 6. code_swimlane_lanes: an activity's lane inside a code swimlane, per (type, value). A table of
 -- its own rather than two columns on activity_swimlane_lanes: see the header.
@@ -323,7 +327,7 @@ CREATE UNIQUE INDEX "uq_code_swimlane_lanes_basis" ON "code_swimlane_lanes"("pla
 -- The type and value FK RESTRICT checks when expiry deletes values and types. See the header.
 CREATE INDEX "idx_code_swimlane_lanes_type_value" ON "code_swimlane_lanes"("code_type_id", "code_value_id");
 
-CREATE INDEX "code_swimlane_lanes_organization_id_idx" ON "code_swimlane_lanes"("organization_id");
+CREATE INDEX "code_swimlane_lanes_organization_id_id_idx" ON "code_swimlane_lanes"("organization_id", "id");
 
 -- Mirrors ck_activity_swimlane_lanes_lane_index_nonneg; the 10,000 ceiling stays in the DTO.
 ALTER TABLE "code_swimlane_lanes" ADD CONSTRAINT "ck_code_swimlane_lanes_lane_index_nonneg" CHECK ("lane_index" >= 0);

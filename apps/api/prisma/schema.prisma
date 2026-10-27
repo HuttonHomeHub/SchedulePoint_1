@@ -4223,8 +4223,9 @@ model CodeValueAssignment {
   // "Activities by value of type T", the per-value counts, and the (plan_id, code_type_id) and
   // (code_type_id, code_value_id) FK RESTRICT checks when expiry deletes types and values.
   @@index([codeTypeId, codeValueId], map: "idx_code_value_assignments_type_value")
-  // Backs the organization FK's RESTRICT check and the export `org` read.
-  @@index([organizationId])
+  // Backs the organization FK's RESTRICT check (organization_id leads) and the export `org` keyset read
+  // (organization_id = $1 AND id > $last ORDER BY id LIMIT 1000), which this serves without a sort.
+  @@index([organizationId, id])
   @@map("code_value_assignments")
 }
 
@@ -4264,8 +4265,9 @@ model CodeSwimlaneLane {
   @@unique([planId, activityId, codeTypeId, codeValueId], map: "uq_code_swimlane_lanes_basis")
   // The type and value FK RESTRICT checks when expiry deletes values and types.
   @@index([codeTypeId, codeValueId], map: "idx_code_swimlane_lanes_type_value")
-  // Backs the organization FK's RESTRICT check and the export `org` read.
-  @@index([organizationId])
+  // Backs the organization FK's RESTRICT check (organization_id leads) and the export `org` keyset read
+  // (organization_id = $1 AND id > $last ORDER BY id LIMIT 1000), which this serves without a sort.
+  @@index([organizationId, id])
   @@map("code_swimlane_lanes")
 }
 

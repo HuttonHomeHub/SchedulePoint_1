@@ -819,6 +819,12 @@ swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, thre
 `baseline_activities` and one index on `activities`. Both are forward-only (`docs/DATABASE.md`
 "Migrations"). What running the **previous** images after both have applied does:
 
+- **During a rolling deploy** the second migration holds a `SHARE` lock on `activities` (readers proceed,
+  writers wait) and an `ACCESS EXCLUSIVE` lock on `baseline_activities` (everything on it waits), for
+  under a second at 500,000 activities and 2,000,000 `baseline_activities` rows
+  (`docs/specs/p6-activity-codes/m2-record.md` §1). Containers still running the previous image queue
+  behind them for that long and then carry on.
+
 - **Before anybody uses a code as the swimlane source, it works with no database step.** The previous
   image's Prisma client selects named columns and never sees the new tables or columns; the new
   `activities` index costs it nothing; and its swimlane lane upsert is untouched, which is why code lanes
