@@ -112,9 +112,58 @@ by `uq_code_types_plan_name`; `'Étage'` then `'éTAGE'` in one type refused `23
 `uq_code_values_type_short_code`. `test/code-schema.e2e-spec.ts` asserts both on CI's own
 `postgres:17-alpine` database.
 
+## 7. The organisation export reads (item 7)
+
+Taken 2026-10-27 by the builder, on the same machine and PostgreSQL as above. Two organisations of five
+plans each; every plan 5,000 activities, 30 types × 50 values and every activity carrying every type, so
+**1,500,000 assignments** (750,000 per organisation), 150,000 code lanes, 15,000 values and 300 types
+in the database; v7-shaped keys minted in SQL, `ANALYZE`d. The four new files' `org` reads of one
+organisation, exactly the `findMany` the repository issues (`organizationId = …`, `id > last`,
+`ORDER BY id`, 1,000 rows, the registry's columns), inside a read-only repeatable-read transaction.
+Two repetitions; the first figure is the first.
+
+| File                     | Rows    | Pages | Total (s) | Page p50 | Page max   |
+| ------------------------ | ------- | ----- | --------- | -------- | ---------- |
+| `code-types`             | 150     | 1     | 0.006     | 6 ms     | 6 ms       |
+| `code-values`            | 7,500   | 8     | 0.11–0.13 | 14–17 ms | 23–26 ms   |
+| `code-value-assignments` | 750,000 | 751   | 11.1–11.4 | 13–14 ms | 139–155 ms |
+| `code-swimlane-lanes`    | 75,000  | 76    | 1.2–1.3   | 14–15 ms | 44–49 ms   |
+
+**About 12.5 s of query time to read one organisation's 750,000 assignments and everything beside
+them**, against `EXPORT_TRANSACTION_TIMEOUT_MS` (ten minutes) and a 30 s `statement_timeout` per page
+(the slowest page took 0.16 s). The existing `m2-measurements.md` put a ten-plan organisation at 25 s, so
+the four new files add roughly half again at this size. Not measured: serialising the rows to JSON and
+CSV and zipping them (the same cost per row as every other file), the response over a network, and a
+cold cache. The query plan was not inspected.
+
+## 8. What the builder's half of M2-T3 changed (2026-10-27)
+
+- **Export `2.2`, kept.** The newest api tag is `api-v0.102.1` and it does not contain the commit that
+  introduced `2.2` (the tags containing `12f532b5` are none), so `2.2` has not shipped and migration B's
+  files and columns join its entry. Four new files (35 in all), `plans.swimlaneCodeTypeId`,
+  `baselines.swimlaneCodeTypeId` and `.codeSnapshotLevel`, and three appended `baseline-activities`
+  columns; no `parentId` (Q5), and no DB-2 files (Q1 fallback).
+- **Expiry.** The runner deletes code lanes and assignments by plan id after the swimlane lanes, clears
+  the plan's pointer, then values (by type id), types, and the plan. `Plan→CodeType` is the second
+  `EXEMPT_EDGES` entry, paid for by a source-order assertion. The budget charges assignments at
+  `ASSIGNMENT_ROWS_PER_ACTIVITY = 4` and code lanes with the swimlane lanes at
+  `LANE_ROWS_PER_ACTIVITY`. The `hierarchy.expired` audit row does not carry the new counts (it carries
+  no lane count today either).
+- **Compensation.** `InterchangeService.compensate` deletes code lanes, assignments, then clears the
+  pointer and deletes values and types. Its e2e seeds the rows inside the mocked recalculation, as the
+  swimlane case does.
+- **Test harness.** `clearActivityTree` 7 → 9 children; `clearBaselineTree` stays at 5;
+  `clearDomainData` clears the pointer, values and types; a new DMMF-derived `clearPlanTree`
+  (`test/clear-plan-tree.ts`) replaces the hand-listed `plan.deleteMany()` in the twelve specs that reset
+  by deleting plans without `clearDomainData` (the design counted eleven): `calendar-scope`,
+  `cross-plan-revision-compare`, `hierarchy-expiry`, `interchange-roundtrip`, `pairwise-differential`,
+  `redundant-links`, `revision-compare`, `revision-delta-m0`, `schedule`, `schedule-health-check`,
+  `share`, `share-guest`. The two `test/measure/` scripts delete by organisation id and were left alone.
+- **Left for M2-T4:** `UpdatePlanDto` admitting `swimlaneCodeTypeId`, which removes the named allowance
+  in `schedule-inputs.structural.spec.ts`; the cascade and restore of types and values
+  (database-design §8.2), which no route can reach until the module exists.
+
 ## Not measured here
 
 - **Item 2**, the import commit of a 5,000-activity, 30-type file through the real write path: there is
   no write path yet (M5).
-- **Item 7**, the export of 1.5 M assignments across two organisations: the export reads arrive with the
-  builder's half of M2-T3.
