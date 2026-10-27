@@ -52,6 +52,9 @@ const TABLE = {
   // Activity notes (ADR-0046): one row per memo, optionally named by a `MEMOTYPE` notebook topic.
   taskMemo: 'TASKMEMO',
   memoType: 'MEMOTYPE',
+  // P6's classification codes (ADR-0050): read for the report only, until the plan can hold them.
+  actvType: 'ACTVTYPE',
+  taskActv: 'TASKACTV',
 } as const;
 
 /**
@@ -186,6 +189,67 @@ function isoDateField(row: ReadonlyMap<string, string>, name: string): string | 
 
 function rowsOf(document: XerDocument, name: string): ReadonlyArray<ReadonlyMap<string, string>> {
   return document.tables.get(name)?.rows ?? [];
+}
+
+/** How many type names the codes finding spells out before it says "and N more". */
+const CODE_TYPE_NAMES_SHOWN = 5;
+
+/**
+ * The one `drop` for P6's classification codes (`ACTVTYPE` / `TASKACTV`), which the plan cannot hold yet.
+ * Until this existed they were dropped without a word, against ADR-0050's rule that nothing is lost
+ * unreported. Only `actv_code_type_id`, `actv_code_type` and `proj_id` are read, all named in public
+ * sources (`docs/specs/p6-activity-codes/m0-record.md` says how many each has), and each degrades to a
+ * count or an id when the file spells it differently. The value table `ACTVCODE` is not read at all,
+ * because its column names are unconfirmed and are not guessed (ADR-0071 §5).
+ *
+ * A type is named when this project's activities carry a value of it, or when it is scoped to this
+ * project; a global type nothing here uses is not, since every export lists all of them. A row with no
+ * `proj_id` counts as this project's, mirroring the TASK loop. No finding when there is nothing to name,
+ * so a file without codes reports exactly what it reported before.
+ */
+function reportUnreadCodes(document: XerDocument, projId: string): ReportFinding[] {
+  const isThisProject = (row: ReadonlyMap<string, string>): boolean => {
+    const rowProject = field(row, 'proj_id');
+    return rowProject === undefined || rowProject === projId;
+  };
+
+  const used = new Set<string>();
+  let carried = 0;
+  for (const row of rowsOf(document, TABLE.taskActv)) {
+    if (!isThisProject(row)) continue;
+    carried += 1;
+    const typeId = field(row, 'actv_code_type_id');
+    if (typeId !== undefined) used.add(typeId);
+  }
+
+  // A Map, not an object: type names come from the file and one may be `__proto__`.
+  const names = new Map<string, string>();
+  for (const row of rowsOf(document, TABLE.actvType)) {
+    const typeId = field(row, 'actv_code_type_id');
+    if (typeId === undefined) continue;
+    const ownedHere = field(row, 'proj_id') === projId;
+    if (!used.has(typeId) && !ownedHere) continue;
+    names.set(typeId, field(row, 'actv_code_type') ?? typeId);
+  }
+  for (const typeId of used) if (!names.has(typeId)) names.set(typeId, typeId);
+
+  if (carried === 0 && names.size === 0) return [];
+
+  const listed = [...names.values()];
+  const shown = listed.slice(0, CODE_TYPE_NAMES_SHOWN).join(', ');
+  const more = listed.length - CODE_TYPE_NAMES_SHOWN;
+  const typeCount = `${String(names.size)} code type${names.size === 1 ? '' : 's'}`;
+  return [
+    {
+      kind: 'drop',
+      entity: 'code type',
+      sourceRef: null,
+      detail:
+        `P6 activity codes were not imported: ${String(carried)} value${carried === 1 ? '' : 's'} set on ` +
+        `activities, under ${typeCount} (${shown}${more > 0 ? ` and ${String(more)} more` : ''})`,
+      reason: 'SchedulePoint does not keep P6 activity codes yet (ADR-0050)',
+    },
+  ];
 }
 
 /**
@@ -814,6 +878,8 @@ export function adaptXerToCanonical(
         'this repository has verified no P6 export carrying an assignment lag, so the XER column name and units are unknown and will not be guessed (ADR-0071 §5)',
     });
   }
+
+  findings.push(...reportUnreadCodes(document, projId));
 
   const model: CanonicalModel = {
     source: {

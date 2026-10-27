@@ -111,6 +111,34 @@ export function zeroDurationXerFile(): { name: string; mimeType: string; buffer:
 }
 
 /**
+ * {@link validXer} plus P6's classification codes, with the columns public sources confirm and nothing
+ * else (`docs/specs/p6-activity-codes/m0-record.md`): two code types ("Area", "Trade") and three values
+ * set on activities. The import cannot keep them yet, so the report must name them under Dropped.
+ */
+export function codesXerFile(): { name: string; mimeType: string; buffer: Buffer } {
+  const text = validXer().replace(
+    /%E$/,
+    [
+      '%T\tACTVTYPE',
+      '%F\tactv_code_type_id\tactv_code_type\tproj_id\tactv_code_type_scope',
+      '%R\t1\tArea\t\tAS_Global',
+      '%R\t2\tTrade\tP1\tAS_Project',
+      '%T\tTASKACTV',
+      '%F\ttask_id\tactv_code_type_id\tactv_code_id\tproj_id',
+      '%R\tT1\t1\t10\tP1',
+      '%R\tT2\t1\t11\tP1',
+      '%R\tT2\t2\t20\tP1',
+      '%E',
+    ].join('\n'),
+  );
+  return {
+    name: 'schedule-with-codes.xer',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
+/**
  * A calendar-bearing XER (ADR-0208): one project calendar "Site 6-Day" (Mon–Fri 08:00–16:00, one
  * New-Year exception) used by two tasks. `projectName` is the only thing a second revision changes,
  * so two files differ in their plan name and not in their calendar. Mirrors the API suite's

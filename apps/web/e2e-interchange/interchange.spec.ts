@@ -10,6 +10,7 @@ import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   calendarXerFile,
+  codesXerFile,
   layoutXerFile,
   notesXerFile,
   onboard,
@@ -132,6 +133,39 @@ test('an imported P6 remark arrives as a plain-text activity note', async ({ pag
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();
   expect(axe.violations).toEqual([]);
+});
+
+/**
+ * **An import that carries P6 activity codes says so** (p6-activity-codes M1, ADR-0050).
+ *
+ * The file sets two code types ("Area", "Trade") on its activities. The plan cannot keep them yet, and
+ * the report used to say nothing: the Dropped section now names the types and counts the values, before
+ * anything is committed, so a planner is not told a lossy import was clean.
+ */
+test('an import that carries P6 activity codes names them as not imported', async ({ page }) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(codesXerFile());
+
+  const dropped = dialog.getByRole('region', { name: 'Dropped (1)' });
+  await expect(dropped).toBeVisible();
+  await expect(dropped.getByRole('listitem')).toHaveCount(1);
+  await expect(dropped).toContainText(
+    'P6 activity codes were not imported: 3 values set on activities, under 2 code types (Area, Trade)',
+  );
+
+  const axe = await new AxeBuilder({ page })
+    .include('dialog[open]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+
+  // The file is still importable: the codes are named, not a reason to refuse.
+  await expect(dialog.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
 });
 
 /**
