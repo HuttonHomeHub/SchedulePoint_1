@@ -69,8 +69,10 @@ describe('the scheduling-input classification', () => {
     //
     // Classified AHEAD of its DTO field, and only these: `plans.swimlane_code_type_id` landed with
     // the P6 activity codes schema (migration 20261027120100_p6_activity_codes, plan M2-T3), and
-    // UpdatePlanDto admits it with the codes API (M2-T4), which deletes it from this list. A key
-    // here that the DTO has gained fails the check below, so the allowance cannot outlive its use.
+    // UpdatePlanDto admits it with the swimlane source switch (M4-T1), which deletes it from this
+    // list: the switch needs the 1-to-100-values-in-use rule and the plan lock, so the codes API of
+    // M2-T4 deliberately does not take it. A key here that the DTO has gained fails the check below,
+    // so the allowance cannot outlive its use.
     const classifiedAheadOfDto = ['swimlaneCodeTypeId'];
     const planDtoKeys = dtoKeys('plans/dto/update-plan.dto.ts', ['version']);
     for (const key of classifiedAheadOfDto) expect(planDtoKeys).not.toContain(key);

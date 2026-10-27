@@ -154,6 +154,20 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'POST /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId/restore': [
     'swimlane.restored',
   ],
+  // — P6 activity codes: as swimlanes, only the delete and its restore earn a row. Create, rename and
+  // reorder are durably attributed by the row; an assignment is an activity edit (PLAN_CONTENT).
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId': [
+    'code_type.deleted',
+  ],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId/restore': [
+    'code_type.restored',
+  ],
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/code-values/:codeValueId': [
+    'code_value.deleted',
+  ],
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/code-values/:codeValueId/restore': [
+    'code_value.restored',
+  ],
 };
 
 /**
@@ -327,6 +341,18 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/order': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId':
     REASONS.DURABLY_ATTRIBUTED,
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/code-types': REASONS.READ,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/code-types': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/code-types/order': REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId':
+    REASONS.DURABLY_ATTRIBUTED,
+  'POST /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId/values':
+    REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId/values/order':
+    REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/code-values/:codeValueId':
+    REASONS.DURABLY_ATTRIBUTED,
+  'PATCH /api/v1/organizations/:orgSlug/plans/:planId/activities/codes': REASONS.PLAN_CONTENT,
 };
 
 const METHOD_NAMES = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD', 'SEARCH'];

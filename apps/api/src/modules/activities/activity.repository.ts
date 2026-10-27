@@ -529,4 +529,46 @@ export class ActivityRepository {
         AND a.deleted_at IS NULL
     `;
   }
+
+  /**
+   * Bump `version`, `updated_at` and `updated_by` of each `{id, version}` in ONE `unnest` statement,
+   * matching by id AND `version` and re-asserting the plan/org/active scope: the activity-side half of
+   * a code write (p6-activity-codes database-design §5.4), where the assignments live in their own
+   * table and the activity's version is the optimistic lock for them. Writes no other column. Returns
+   * rows changed; the caller compares it to the batch size and rolls back on a shortfall.
+   *
+   * The rows are locked in id order first, as every multi-row activity writer's are (`docs/TECH_DEBT.md`
+   * #440); the codes write has locked them already to check the versions, so this is a re-take of locks
+   * it holds. The caller holds the plan advisory lock.
+   */
+  async bumpVersions(
+    organizationId: string,
+    planId: string,
+    rows: readonly { id: string; version: number }[],
+    updatedBy: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (rows.length === 0) return 0;
+    await lockActivityRowsInIdOrder(
+      db,
+      organizationId,
+      planId,
+      rows.map((r) => r.id),
+    );
+    return db.$executeRaw`
+      UPDATE activities AS a
+      SET version = a.version + 1,
+          updated_by = ${updatedBy}::text,
+          updated_at = now()
+      FROM unnest(
+        ${rows.map((r) => r.id)}::uuid[],
+        ${rows.map((r) => r.version)}::int[]
+      ) AS v(id, version)
+      WHERE a.id = v.id
+        AND a.version = v.version
+        AND a.plan_id = ${planId}::uuid
+        AND a.organization_id = ${organizationId}::uuid
+        AND a.deleted_at IS NULL
+    `;
+  }
 }

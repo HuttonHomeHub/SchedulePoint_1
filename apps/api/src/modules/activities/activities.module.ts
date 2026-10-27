@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { HierarchyModule } from '../../common/hierarchy/hierarchy.module';
 import { ActivityHistoryModule } from '../activity-history/activity-history.module';
 import { CalendarsModule } from '../calendars/calendars.module';
+import { CodesModule } from '../codes/codes.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
@@ -10,6 +11,7 @@ import { SwimlanesModule } from '../swimlanes/swimlanes.module';
 
 import { ActivitiesController } from './activities.controller';
 import { ActivitiesService } from './activities.service';
+import { ActivityCodesService } from './activity-codes.service';
 import { ActivityStepRepository } from './activity-step.repository';
 import { ActivityStepsController } from './activity-steps.controller';
 import { ActivityStepsService } from './activity-steps.service';
@@ -32,9 +34,16 @@ import { PlanActivitiesController } from './plan-activities.controller';
     CalendarsModule,
     ActivityHistoryModule,
     SwimlanesModule,
+    CodesModule,
   ],
   controllers: [PlanActivitiesController, ActivitiesController, ActivityStepsController],
-  providers: [ActivitiesService, ActivityRepository, ActivityStepsService, ActivityStepRepository],
+  providers: [
+    ActivitiesService,
+    ActivityCodesService,
+    ActivityRepository,
+    ActivityStepsService,
+    ActivityStepRepository,
+  ],
   exports: [ActivityRepository],
 })
 export class ActivitiesModule {}

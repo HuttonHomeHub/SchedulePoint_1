@@ -333,6 +333,11 @@ function itemText(
       return linkLine(change as ActivityHistoryLinkChange, ctx, origin);
     case 'assignment':
       return assignmentLine(change as ActivityHistoryAssignmentChange, ctx);
+    // The item carries value ids, not names (ADR-0174 vocabulary, p6-activity-codes D7); the web names
+    // them once the plan's code types are loaded here (M3-T3), so until then the line says only that
+    // a code moved.
+    case 'code':
+      return 'Code changed';
     case 'field': {
       if (!(key in ACTIVITY_HISTORY_FIELDS)) return `${key} changed`;
       const field = key as ActivityHistoryFieldKey;

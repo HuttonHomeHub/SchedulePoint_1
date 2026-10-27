@@ -151,6 +151,12 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   'baseline.deleted': ['name', 'planName', 'deleteBatchId'],
   'swimlane.deleted': ['name', 'planName', 'deleteBatchId'],
   'swimlane.restored': ['name', 'planName', 'deleteBatchId'],
+  // — P6 activity codes. `valueCount` is the values a type's delete swept (and its restore brought
+  //   back): one row for the type, never one per value, the rule family D applies to a summary.
+  'code_type.deleted': ['name', 'planName', 'deleteBatchId', 'valueCount'],
+  'code_type.restored': ['name', 'planName', 'deleteBatchId', 'valueCount'],
+  'code_value.deleted': ['shortCode', 'typeName', 'planName', 'deleteBatchId'],
+  'code_value.restored': ['shortCode', 'typeName', 'planName', 'deleteBatchId'],
   // — Library governance (ADR-0073 family F). `scope` is on the delete because a shared-library
   //   calendar going away is a different event from a project one, and the row is the only place
   //   that distinction survives the deletion.

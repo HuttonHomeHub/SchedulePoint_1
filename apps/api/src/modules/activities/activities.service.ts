@@ -11,7 +11,7 @@ import {
   type SwimlaneSource,
 } from '@prisma/client';
 import type { WbsNode } from '@repo/layout';
-import type { PageMeta, ProgressWarning } from '@repo/types';
+import type { ActivityCodeAssignment, PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -46,6 +46,7 @@ import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
+import { loadActivityCodes } from '../codes/code-assignment.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -139,7 +140,10 @@ function deriveStatus(
  * An activity as every response carries it: its day factor, its live assignment count and the lanes
  * stored against each swimlane basis it has been placed on.
  */
-export type DecoratedActivity = WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>>;
+export type DecoratedActivity = WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>> & {
+  /** The activity's code values; absent, not empty, when its plan has no live code type (SC-2). */
+  codes?: ActivityCodeAssignment[];
+};
 
 @Injectable()
 export class ActivitiesService {
@@ -391,7 +395,32 @@ export class ActivitiesService {
     const hasMore = rows.length > query.limit;
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items: await this.withDayFactors(items), meta: { nextCursor, hasMore }, canReadCost };
+    return {
+      items: await this.decorateWithCodes(items),
+      meta: { nextCursor, hasMore },
+      canReadCost,
+    };
+  }
+
+  /**
+   * {@link withDayFactors} plus the rows' code values, for the responses that carry them (the list and
+   * the codes write). **One plan's rows**: the assignments are read per plan, in one statement for the
+   * whole page, and `codes` is left off every row when the plan has no live code type, so such a plan
+   * answers byte for byte as before (p6-activity-codes SC-2).
+   */
+  async decorateWithCodes(rows: readonly Activity[]): Promise<DecoratedActivity[]> {
+    const first = rows[0];
+    if (first === undefined) return [];
+    const [decorated, codes] = await Promise.all([
+      this.withDayFactors(rows),
+      loadActivityCodes(
+        this.prisma,
+        { organizationId: first.organizationId, planId: first.planId },
+        rows.map((r) => r.id),
+      ),
+    ]);
+    if (codes === null) return decorated;
+    return decorated.map((row) => ({ ...row, codes: codes.get(row.id) ?? [] }));
   }
 
   async get(

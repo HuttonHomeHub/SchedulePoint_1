@@ -25,6 +25,7 @@ import type {
   LatestEntry,
   StoredAssignmentItem,
   StoredChanges,
+  StoredCodeItem,
   StoredFieldItem,
   StoredFieldValue,
   StoredItem,
@@ -226,6 +227,13 @@ export function assignmentState(
 export const linkKey = (id: string): string => `${ACTIVITY_HISTORY_KEY_PREFIXES.link}${id}`;
 export const assignmentKey = (id: string): string =>
   `${ACTIVITY_HISTORY_KEY_PREFIXES.assignment}${id}`;
+/** The key of a code item: the CODE TYPE's id, because an activity carries one value per type. */
+export const codeKey = (codeTypeId: string): string =>
+  `${ACTIVITY_HISTORY_KEY_PREFIXES.code}${codeTypeId}`;
+
+export function codeItem(from: string | null, to: string | null): StoredCodeItem {
+  return { from, to };
+}
 
 export function linkItem(
   dir: 'IN' | 'OUT',
@@ -277,6 +285,10 @@ export function isNetZero(key: string, item: StoredItem): boolean {
     const field = ACTIVITY_HISTORY_FIELDS[key as ActivityHistoryFieldKey];
     const { from, to } = item as StoredFieldItem;
     return fieldValuesEqual(field.kind, from, to);
+  }
+  if (activityHistoryItemKind(key) === 'code') {
+    const { from, to } = item as StoredCodeItem;
+    return from === to;
   }
   const { from, to } = item as StoredLinkItem | StoredAssignmentItem;
   return statesEqual(from, to);

@@ -9480,3 +9480,21 @@ A note insert whose parent was swept between the read and the insert commits a l
 `TOGGLE_ROW` is a hand-written copy of the old checkbox row string and styles the Zoom level and Colour-by radio rows, so after #558 the checkbox rows beside them are 44 px under a finger and these are 24 px: they clear WCAG 2.2 SC 2.5.8 and not the house rule for a finger. It was not grown with #558 because it does not fit: the Diagram `View ▾` panel is 402 px in its default state under a coarse pointer (382 before #558) against SC-13's 420 px bar, and with these rows grown it measured 462 px, 42 px over, with the Gantt's at 538 of 600. The panel is height-capped and scrolls inside itself (`usePopoverPanel`), so nothing runs off the viewport; the cost is the bar, not reachability.
 
 **Next:** grow the radio rows only together with a decision on the bar (a taller coarse bar in `assertViewPanelFitsTheFloor`, or folding Zoom and Colour-by by default), so the 44 px target and the 420 px bar are settled at once rather than one breaking the other. **Trigger:** the next change to the radio rows in `tsld-toolbar-items.tsx`, or a mis-tap report on Zoom or Colour-by.
+
+### 562. The codes API ships with eight deferred review findings
+
+**Status:** open · **Verified:** 2026-10-27, by reading `apps/api/src/modules/codes/` and `activity-codes.service.ts`, and by `test/measure/codes-reads.measure.ts` (100 types × 1,000 values lists in about 2.3 s; a 2,000-row write ranged 1.0 to 2.6 s across runs) · **Raised:** 2026-10-27 (M2-T4 security, API and backend-performance reviews, none blocking) · **Owner:** api
+
+Deferred on purpose, each cheap to add and none worth building before a screen binds to the routes:
+
+- The type list nests every live value and does not page them, so the 100 × 1,000 cap case is about 100,000 rows. A values-on-demand read, `GET code-types/:id/values` with a cursor and a `?values=none` on the list, would bound it.
+- `?include=deleted` reads every deleted value of the page's types with no bound.
+- The codes write answers with all of each activity's codes, not only the types it touched.
+- `ActivityRepository.bumpVersions` re-takes row locks the codes write already holds (the id-order lock gate requires the call there); one redundant statement.
+- The 2.6 s history-batch time of one 2,000-row write was not isolated: re-measure on a clean database with `EXPLAIN (ANALYZE, BUFFERS)` and a bloat check on `activity_history_entries`.
+- An `ActivityWithCodesResponseDto` with a required `codes` would make the list and the write contracts exact; `codes` is optional on the shared response today.
+- The pen is checked outside the transaction before the locks (inherited from the swimlane and re-parent writes, review S3).
+- A malformed `cursor` is not validated (inherited, #20).
+- When M2-T5's cascade lands, re-check the lock order and whether `plans (id, swimlane_code_type_id)` needs a reverse-lookup index for the type delete's source check.
+
+**Next:** take the first four together as one change with the screen that needs them, and the rest at the M2-T5 review. **Trigger:** before M3 binds a screen to `GET code-types`, or any report of a slow plan open with many codes.

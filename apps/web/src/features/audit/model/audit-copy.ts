@@ -68,6 +68,10 @@ const TITLES: Record<AuditAction, string> = {
   'dependency.deleted': 'Link removed',
   'swimlane.deleted': 'Swimlane deleted',
   'swimlane.restored': 'Swimlane restored',
+  'code_type.deleted': 'Code type deleted',
+  'code_type.restored': 'Code type restored',
+  'code_value.deleted': 'Code value deleted',
+  'code_value.restored': 'Code value restored',
   // "Scheduling settings", not "Plan updated": the row exists precisely because these fields are
   // not an ordinary edit, and a title that sounds like one invites a reader to skip it.
   'plan.settings_changed': 'Scheduling settings changed',
@@ -227,7 +231,11 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       return type === null ? `${from} to ${to}` : `${from} to ${to} (${type})`;
     }
     case 'swimlane.deleted':
-    case 'swimlane.restored': {
+    case 'swimlane.restored':
+    case 'code_type.deleted':
+    case 'code_type.restored':
+    case 'code_value.deleted':
+    case 'code_value.restored': {
       const plan = field(changes?.before, 'planName') ?? field(changes?.after, 'planName');
       return plan === null ? null : `In ${plan}`;
     }

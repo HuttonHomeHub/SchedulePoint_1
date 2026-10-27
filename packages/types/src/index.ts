@@ -251,6 +251,50 @@ export interface SwimlaneSummary {
 }
 
 /**
+ * One value of a code type (P6 activity codes, p6-activity-codes spec §4.7). `description` is `null`
+ * when the planner gave none. `deletedAt` is `null` on every live value and set only on the rows
+ * `?include=deleted` returns for a restore.
+ */
+export interface CodeValueSummary {
+  id: string;
+  codeTypeId: string;
+  shortCode: string;
+  description: string | null;
+  /** Zero-based order key; the API reads it as `ORDER BY position, id`. */
+  position: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/**
+ * One code type of a plan ("Area", "Trade"). `values` is present on the list and on a restore, which
+ * return a type with its values, and absent on the single-row writes (create, rename).
+ */
+export interface CodeTypeSummary {
+  id: string;
+  planId: string;
+  name: string;
+  /** Zero-based order key; the API reads it as `ORDER BY position, id`. */
+  position: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  values?: CodeValueSummary[];
+}
+
+/**
+ * The value an activity carries for one code type. "No value" is the absence of an entry, so there is
+ * no `null` here. A deleted value or type reads as absent, and a restore brings the entry back.
+ */
+export interface ActivityCodeAssignment {
+  codeTypeId: string;
+  codeValueId: string;
+}
+
+/**
  * How the CPM engine decides which activities are **critical** (M6, ADR-0035 §17–§20). `TOTAL_FLOAT`
  * (the P6 default) marks an activity critical when its total float ≤ the plan's `criticalFloatThresholdMinutes`;
  * `LONGEST_PATH` marks the contiguous chain of driving ties back from the latest-finishing activities.
@@ -642,6 +686,12 @@ export interface ActivitySummary {
    * §4.4). A basis with no entry means "never placed there"; the projection derives a lane.
    */
   swimlaneLanes: ActivitySwimlaneLaneSummary[];
+  /**
+   * The activity's code values, one per code type (P6 activity codes). **Absent, not empty, when the
+   * plan has no code types**, so a plan that never used codes answers byte for byte as before. Sent
+   * by the activity list and by the codes write only; any other activity response omits it.
+   */
+  codes?: ActivityCodeAssignment[];
   /**
    * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
    * activity renders at its late-based position; it never changes early/late/float. False by default.
@@ -2632,6 +2682,13 @@ export const AUDIT_ACTIONS = [
   // create, rename and reorder are durably attributed by the row and change nobody else's work.
   'swimlane.deleted',
   'swimlane.restored',
+  // A code type or value (P6 activity codes). Like a swimlane, only the delete and its restore earn a
+  // row: create, rename and reorder are durably attributed by the row, and an assignment is an
+  // activity edit that the activity's history records.
+  'code_type.deleted',
+  'code_type.restored',
+  'code_value.deleted',
+  'code_value.restored',
   // — The rules other people's work is judged by (ADR-0073 family E). These are UPDATES, and they
   //   earn their row on the second test rather than the first: a plan's data date or a shared
   //   calendar's working time re-dates work that other people own, so `updated_by` on the row
@@ -2788,6 +2845,10 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   'dependency.deleted': 'deletions',
   'swimlane.deleted': 'deletions',
   'swimlane.restored': 'deletions',
+  'code_type.deleted': 'deletions',
+  'code_type.restored': 'deletions',
+  'code_value.deleted': 'deletions',
+  'code_value.restored': 'deletions',
   // Not a deletion — a rearrangement. `activity.dissolved` removes a summary but PROMOTES its
   // children rather than deleting them, so filing it under "what disappeared" would tell a reader
   // looking for lost work that forty activities went away. Its subject is the shape of the plan.

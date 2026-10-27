@@ -142,6 +142,14 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
     disposition: 'withheld',
     reason: 'Server-kept rows keyed to the source activity; the clone has none until it is placed.',
   },
+  codes: {
+    disposition: 'withheld',
+    reason:
+      'Code values are set by a write of their own (`PATCH …/activities/codes`), not by the create ' +
+      'DTO, and are sent only by the list. Within one plan a copy will carry them, and across plans ' +
+      'drop and count them (p6-activity-codes design §15 D9); that is the codes milestone M3-T3, so ' +
+      'until then a clone has none.',
+  },
   parentId: {
     disposition: 'transformed',
     reason:

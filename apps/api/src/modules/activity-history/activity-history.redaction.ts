@@ -12,6 +12,7 @@ import { statesEqual } from './activity-history.diff';
 import type {
   StoredAssignmentItem,
   StoredChanges,
+  StoredCodeItem,
   StoredFieldItem,
   StoredLinkItem,
 } from './activity-history.types';
@@ -49,6 +50,9 @@ export function redactChanges(
     } else if (kind === 'assignment') {
       const redacted = redactAssignment(item as StoredAssignmentItem, canReadCost);
       if (redacted) out[key] = redacted;
+    } else if (kind === 'code') {
+      // Value ids only, nothing a cost reader's absence could hide.
+      out[key] = item as StoredCodeItem;
     } else {
       out[key] = item as StoredLinkItem;
     }

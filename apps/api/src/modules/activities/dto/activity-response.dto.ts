@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   AccrualType,
   ActivityStatus,
@@ -10,6 +10,7 @@ import {
   type Activity,
 } from '@prisma/client';
 import type {
+  ActivityCodeAssignment,
   ActivitySummary,
   ActivitySwimlaneLaneSummary,
   SwimlaneLaneBasis as SwimlaneLaneBasisUnion,
@@ -67,6 +68,15 @@ export class ActivitySwimlaneLaneResponseDto implements ActivitySwimlaneLaneSumm
     description: 'When the lane was last written; the tie-break when two placed members collide.',
   })
   updatedAt!: string;
+}
+
+/** The value an activity carries for one code type (p6-activity-codes). */
+export class ActivityCodeResponseDto implements ActivityCodeAssignment {
+  @ApiProperty({ format: 'uuid' })
+  codeTypeId!: string;
+
+  @ApiProperty({ format: 'uuid' })
+  codeValueId!: string;
 }
 
 /**
@@ -292,6 +302,18 @@ export class ActivityResponseDto implements ActivitySummary {
       'with no entry was never placed; the client derives a lane for it.',
   })
   swimlaneLanes!: ActivitySwimlaneLaneResponseDto[];
+
+  @ApiPropertyOptional({
+    type: ActivityCodeResponseDto,
+    isArray: true,
+    description:
+      'The code value the activity carries for each code type, ordered by type id; a type with no ' +
+      'value has no entry, and a deleted value or type reads as no value. **Absent, not empty, ' +
+      'when the plan has no live code type.** Sent by the activity list and by `PATCH ' +
+      '…/activities/codes` only; any other activity response omits it, so a client must not replace a ' +
+      'cached activity’s `codes` with one that has none.',
+  })
+  codes?: ActivityCodeResponseDto[];
 
   @ApiProperty({ enum: ActivityStatus })
   status!: ActivityStatus;
@@ -542,7 +564,9 @@ export class ActivityResponseDto implements ActivitySummary {
    * leak). The %-complete measures stay in every read (they are not commercially sensitive money).
    */
   static from(
-    entity: WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>>,
+    entity: WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>> & {
+      codes?: ActivityCodeAssignment[];
+    },
     canReadCost: boolean,
   ): ActivityResponseDto {
     const day = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
@@ -574,6 +598,7 @@ export class ActivityResponseDto implements ActivitySummary {
       laneIndex: entity.laneIndex,
       swimlaneId: entity.swimlaneId,
       swimlaneLanes: entity.swimlaneLanes,
+      ...(entity.codes === undefined ? {} : { codes: entity.codes }),
       scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
       percentComplete: entity.percentComplete,

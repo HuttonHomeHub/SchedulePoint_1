@@ -89,6 +89,21 @@
   "activities/replace-steps.weight": {
     "surface": "components/ui/toolbar/toolbar-styles.ts"
   },
+  "activities/update-activity-codes.activities": {
+    "gap": "docs/specs/p6-activity-codes/ M2-T4. No client yet: the Codes dialog, the bulk Set command and the activity editor's Codes group land in M3-T1 and M3-T3; the API ships first and dark (plan.md M2 'Ships dark: API only'). Recorded as a gap so the milestone that opens the first screen has to close it."
+  },
+  "activities/update-activity-codes.codeTypeId": {
+    "gap": "docs/specs/p6-activity-codes/ M2-T4. No client yet: the Codes dialog, the bulk Set command and the activity editor's Codes group land in M3-T1 and M3-T3; the API ships first and dark (plan.md M2 'Ships dark: API only'). Recorded as a gap so the milestone that opens the first screen has to close it."
+  },
+  "activities/update-activity-codes.codeValueId": {
+    "gap": "docs/specs/p6-activity-codes/ M2-T4. No client yet: the Codes dialog, the bulk Set command and the activity editor's Codes group land in M3-T1 and M3-T3; the API ships first and dark (plan.md M2 'Ships dark: API only'). Recorded as a gap so the milestone that opens the first screen has to close it."
+  },
+  "activities/update-activity-codes.codes": {
+    "gap": "docs/specs/p6-activity-codes/ M2-T4. No client yet: the Codes dialog, the bulk Set command and the activity editor's Codes group land in M3-T1 and M3-T3; the API ships first and dark (plan.md M2 'Ships dark: API only'). Recorded as a gap so the milestone that opens the first screen has to close it."
+  },
+  "activities/update-activity-codes.id": {
+    "gap": "docs/specs/p6-activity-codes/ M2-T4. No client yet: the Codes dialog, the bulk Set command and the activity editor's Codes group land in M3-T1 and M3-T3; the API ships first and dark (plan.md M2 'Ships dark: API only'). Recorded as a gap so the milestone that opens the first screen has to close it."
+  },
   "activities/update-activity-progress.actualFinish": {
     "surface": "features/share/guest-api.ts"
   },

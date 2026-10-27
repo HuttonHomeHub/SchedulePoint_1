@@ -120,7 +120,11 @@ describe('the clone field census', () => {
     // 65 -> 67 on 2026-10-23: `swimlaneId` and `swimlaneLanes` (swimlanes M1-T3). Where a clone sits
     // among the swimlanes is the paste destination's decision, owned by the swimlane milestones, and
     // the lane rows are server-kept against the source activity. Both classified `withheld`.
-    expect(entries.length).toBe(67);
+    //
+    // 67 -> 68 on 2026-10-27: `codes` (P6 activity codes, M2-T4). Sent by the list and the codes write
+    // only, and set by a write of its own, never by the create DTO; carrying it within a plan is
+    // M3-T3's. Classified `withheld`.
+    expect(entries.length).toBe(68);
   });
 
   it('sends nothing the census withholds', () => {
