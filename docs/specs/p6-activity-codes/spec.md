@@ -1,6 +1,6 @@
 # Feature Spec: P6 activity codes, kept in the plan
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — approved by the product owner on 2026-10-27, with the answers recorded below
 - **Author(s):** Feature Analyst (Claude Code), for James Ewbank (product owner)
 - **Date:** 2026-10-27 (revised twice the same day: the owner chose to keep the codes in the plan; then
   the database design landed and is folded in, §7)
@@ -28,7 +28,12 @@ swimlane name = the value's description, else its short code; no real P6 file ye
 depends on an unconfirmed P6 column waits for M0. These set this draft's direction; they are not
 approval of the spec.
 
-Still open. Each has a recommended answer; "yes to all recommendations" is a complete reply.
+**Answered and approved (2026-10-27, product owner):** the spec and plan are approved. Q1 is **yes, on
+the condition in the table** (one baseline of the largest plan adds at most 1 second; otherwise
+baselines remember only the swimlane code). Q2 is **per plan**. Q3 to Q11 take **every recommended
+answer** as written. Building starts with M1, then M2; M5 and M6 wait for a real P6 file (M0).
+
+The table below keeps the questions and their recommended answers as asked.
 
 | #       | Question (plain English)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Recommended answer                                                                                                                                                                                                           |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,7 +1,7 @@
 # Implementation Plan: P6 activity codes, kept in the plan
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft
+- **Status:** Approved (product owner, 2026-10-27; see the spec header)
 - **Owner:** James Ewbank (product owner); built by the **builder** agent once approved (CLAUDE.md §19.14)
 - **Schema:** [`./database-design.md`](./database-design.md) (database-architect, Draft, 2026-10-27). It is
   the authority; every schema task below implements it exactly and any change goes back through the
