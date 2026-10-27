@@ -231,7 +231,7 @@ override needs `plan:override_lock` (Org Admin).
 
 **Gated writes.** The structural write endpoints — activity
 create/update/delete/restore, `…/activities/positions`, `…/activities/parents`,
-`…/activities/placements`, `…/activities/bulk-delete`, `…/activities/restore-batch/:batchId`, dependency
+`…/activities/placements`, `…/activities/codes`, `…/activities/bulk-delete`, `…/activities/restore-batch/:batchId`, code type and value create/update/delete/restore, dependency
 create/update/delete, cross-plan dependency create/delete (on the **successor**
 plan), and `…/schedule/recalculate` — additionally require holding the pen and
 return **423 `PLAN_EDIT_LOCK_REQUIRED`** otherwise (distinct from the 409 version
@@ -752,6 +752,66 @@ swimlane's unplaced members sends them in the same batch. A move into another sw
 one with `null`, is recorded in the activity's history; a lane written inside the swimlane the
 activity is already in is not.
 
+### Codes (p6-activity-codes spec §4.7)
+
+A **code type** ("Area", "Trade") is a plan's own classification, and a **code value** ("L1", "MECH") is
+one of its choices, as in a P6 activity code. This is **not** the activity's `code` (its identifier,
+P6's Activity ID). A type and its values belong to one plan; there is no organisation-wide library.
+Reading needs **`code:read`** (every member); the writes need **`code:create` / `update` / `delete` /
+`restore`** (**Planner and Org Admin**) and are **structural**: each also needs the plan edit-lock pen
+(**423**). Types and values are plan content, so they are soft-deleted on their own and never listed in
+Recently deleted. Values are flat in this release (no parent value).
+
+| Method | Path                                                  | Notes                                                                                                                                                                                                                               |
+| ------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/plans/:planId/code-types`                          | The plan's live types, `ORDER BY position, id`, each with its live `values` (one query for the page). Cursor-paginated; the default page is the 100-type cap. `?include=deleted` adds deleted rows, **403** without `code:restore`. |
+| POST   | `…/plans/:planId/code-types`                          | `{ name }` → 201 · 409 `CODE_TYPE_NAME_TAKEN` · 422 bad name or `CODE_TYPE_LIMIT`.                                                                                                                                                  |
+| PATCH  | `…/plans/:planId/code-types/order`                    | `{ order: [{ id, version }] }` naming every live type once → 200 with the new order · 409 `STALE_VERSION` · 404 unknown or foreign id · 422 duplicate.                                                                              |
+| PATCH  | `…/plans/:planId/code-types/:codeTypeId`              | Rename: `{ name, version }` → 200 · 409 `STALE_VERSION` or `CODE_TYPE_NAME_TAKEN`.                                                                                                                                                  |
+| DELETE | `…/plans/:planId/code-types/:codeTypeId`              | Soft delete with its live values in one batch → 204. Optional `?version=N` → 409 `STALE_VERSION`. **409 `CODE_TYPE_IS_SWIMLANE_SOURCE`** while the plan's swimlanes are made from it. Audited as `code_type.deleted`.               |
+| POST   | `…/plans/:planId/code-types/:codeTypeId/restore`      | → 200 with the type and the values its delete took · 409 `PARENT_DELETED` (plan still deleted) or `CODE_TYPE_NAME_TAKEN` · 422 `CODE_TYPE_LIMIT`. Audited as `code_type.restored`.                                                  |
+| POST   | `…/plans/:planId/code-types/:codeTypeId/values`       | `{ shortCode, description? }` → 201, last in order · 409 `CODE_VALUE_TAKEN` · 422 bad field or `CODE_VALUE_LIMIT`.                                                                                                                  |
+| PATCH  | `…/plans/:planId/code-types/:codeTypeId/values/order` | `{ order: [{ id, version }] }` naming every live value of the type once → 200 · 409 `STALE_VERSION` · 404 · 422 duplicate.                                                                                                          |
+| PATCH  | `…/plans/:planId/code-values/:codeValueId`            | `{ shortCode?, description?, version }` (`description: null` clears; nothing to change is 422) → 200 · 409 `STALE_VERSION` or `CODE_VALUE_TAKEN`.                                                                                   |
+| DELETE | `…/plans/:planId/code-values/:codeValueId`            | Soft delete → 204; optional `?version=N`. Audited as `code_value.deleted`.                                                                                                                                                          |
+| POST   | `…/plans/:planId/code-values/:codeValueId/restore`    | → 200 · 409 `PARENT_DELETED` (the plan **or the type** is deleted; the message names which: "Restore Area first.") or `CODE_VALUE_TAKEN` · 422 `CODE_VALUE_LIMIT`. Audited as `code_value.restored`.                                |
+
+A **type name** and a **short code** are trimmed, 1 to 80 characters, with no control characters; a
+**description** is null or 1 to 255 (a blank one is stored as null). A name is unique among the plan's
+live types, and a short code among the type's live values, **ignoring case** (a deleted one does not
+block reuse). At most **100** live types per plan and **1,000** live values per type, counted under the
+plan advisory lock; the 422 says what to do ("Delete one you no longer use first."). `organizationId`
+is never accepted: it is copied from the plan, and an unknown property is a 422. Anti-IDOR is uniform:
+another organisation's plan is a **404** before anything else; inside the organisation the role is
+checked next (**403**), and then another plan's type or value, a deleted one, or a missing plan is a
+**404**, answered before 423. A 409 on a name echoes only the name the caller sent. Create, rename,
+edit and reorder write no audit row; delete and restore do (ADR-0073). Deleting a **value** is allowed
+while it is in use: the activities that carry it read as having no value, and restoring it brings them
+back. Deleting a **type** takes its values in the same batch, and a restore brings back exactly those.
+
+**Setting a value on an activity** is an ordinary activity write. `PATCH …/plans/:planId/activities/codes`
+takes `{ activities: [{ id, version, codes: [{ codeTypeId, codeValueId }] }] }`: one to 2,000 activities,
+each with the `version` it was read at, and for each the types it means to touch (a type at most once;
+`codeValueId: null` clears it, and the field is required, so a typo is never a silent clear). It needs
+**`activity:update`** and the pen, takes the plan advisory lock, locks the activities in id order and
+the named types and values `FOR SHARE`, and is **all or nothing**: a stale version is **409
+`STALE_VERSION`**, an unknown or other plan's activity, type or value is **404** (never told apart), a
+value of another type of the plan is **422 `CODE_VALUE_WRONG_TYPE`** ("That value does not belong to
+Area."), a deleted value is **422 `CODE_VALUE_DELETED`**, and a repeated activity or type is **422
+`DUPLICATE_CODES_ACTIVITY_ID`** / **`DUPLICATE_CODES_TYPE_ID`**. Every named activity's `version` moves,
+and the answer is the activities at their new versions with `codes`. The write is not a schedule input,
+so computed dates are not made stale. The activity's history records a **`code:<codeTypeId>`** item
+holding `{ from, to }` as code **value ids** (`null` for none) under scope `DEFINITION`, one entry per
+activity sharing a `batch`.
+
+**`codes` on the activity list.** `GET …/plans/:planId/activities` and the codes write add
+**`codes`**: `[{ codeTypeId, codeValueId }]` ordered by type id, loaded once per page. A type the
+activity has no value for has no entry, and a deleted value or type reads as no value. The key is
+**absent, not empty, when the plan has no live code type**, so a plan that never used codes answers
+exactly as before; once it has one, an activity with no value carries `[]`. **Every other activity
+response omits `codes`**, so a client must not replace a cached activity's codes with a response that
+has none. An External Guest never receives a code field.
+
 ### Activity change history (ADR-0174)
 
 "Who changed this, and when?" for one activity's own fields, its **links** (recorded on both ends)
@@ -781,7 +841,8 @@ changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `
 - `changes` is an object **keyed by item**: a field name (`durationMinutes`, `name`, …) holding
   `{ from, to }`; `link:<id>` holding `{ dir: 'IN' | 'OUT', other: { id, code, name }, from, to }`;
   `xlink:<id>` for a **cross-plan** link, the same shape with `other` also carrying `planId` and
-  `planName`; and `assignment:<id>` holding `{ resource: { id, code, name }, from, to }`. For a link or assignment,
+  `planName`; `code:<codeTypeId>` holding `{ from, to }` as code value ids (a code set or cleared); and
+  `assignment:<id>` holding `{ resource: { id, code, name }, from, to }`. For a link or assignment,
   `from: null` means **added** and `to: null` means **removed**, and the other end or resource is
   named **as it was when recorded** — a later rename never rewrites an entry. Quantities on an
   assignment are canonical fixed-4 decimal **strings** (`"40.0000"`). A description is `{ changed: true }`

@@ -19,7 +19,7 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 27 API modules
+> **Current stage: the application is substantially built.** 28 API modules
 > (`apps/api/src/modules/`), 42 Prisma models across 80 migrations, 1812 web
 > source files with 49 Playwright suites beside the base journey, and
 > 209 ADRs.
@@ -111,7 +111,7 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   27 feature modules
+│   │   ├── src/modules/      #   28 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
 │   │   ├── prisma/           #   Schema (42 models) + 80 migrations

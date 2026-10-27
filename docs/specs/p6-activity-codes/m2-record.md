@@ -174,11 +174,98 @@ The scratch schema was dropped.
 - **Owed by M2-T4 (security review S1):** every service that creates a code type, value, assignment or
   lane sets `organizationId` from the resolved plan, never from the request, and a test sends a foreign
   `organizationId` and checks the stored row carries the plan's.
-- **Left for M2-T4:** `UpdatePlanDto` admitting `swimlaneCodeTypeId`, which removes the named allowance
-  in `schedule-inputs.structural.spec.ts`; the cascade and restore of types and values
-  (database-design §8.2), which no route can reach until the module exists.
+- **Left for M2-T4:** `UpdatePlanDto` admitting `swimlaneCodeTypeId`; the cascade and restore of types
+  and values (database-design §8.2). Both are settled in §9 below: the first moved to M4-T1, the second is
+  M2-T5.
 
 ## Not measured here
 
 - **Item 2**, the import commit of a 5,000-activity, 30-type file through the real write path: there is
   no write path yet (M5).
+
+## 9. What M2-T4 built (2026-10-27, the builder)
+
+**Routes** (all under `/api/v1/organizations/:orgSlug/plans/:planId`, `docs/API.md` "Codes"):
+`GET|POST code-types`, `PATCH code-types/order`, `PATCH|DELETE code-types/:id`, `POST code-types/:id/restore`,
+`POST code-types/:id/values`, `PATCH code-types/:id/values/order`, `PATCH|DELETE code-values/:id`,
+`POST code-values/:id/restore`, and `PATCH activities/codes`. The activity list gains `codes`.
+
+**Decisions this milestone took that the spec left open** (each is additive or a naming, and none changes a
+decided behaviour):
+
+- **The write route's body** is `{ activities: [{ id, version, codes: [{ codeTypeId, codeValueId | null }] }] }`.
+  An activity row states only the types it touches; `codeValueId` is required-but-nullable, so a typo is
+  never a silent clear. One to 2,000 activities, at most 100 types a row (the body cap is 512 KB).
+- **The write lives in the activities module** (`ActivityCodesService`), not the codes module, because it
+  is an activity write (version bump, history). It imports the codes repositories; the codes module does
+  not import the activities module.
+- **Errors:** a foreign, deleted or unknown activity, type or value is 404 (never told apart); a value of
+  another type of the plan is 422 `CODE_VALUE_WRONG_TYPE`; a deleted value is 422 `CODE_VALUE_DELETED`
+  (the spec's "409 / 422, api-reviewer picks one": 422, because the request names a value that cannot be
+  assigned, not a state clash on the activity). Delete of the source type: 409 `CODE_TYPE_IS_SWIMLANE_SOURCE`
+  with the owner's sentence.
+- **History item** `code:<codeTypeId>` holds `{ from, to }` as code VALUE ids (design §15 D7), recorded in a
+  `DEFINITION` batch (one entry per activity, never merging). Names are not stored, so the web resolves
+  them from the plan's code types; `format-history-item.ts` says only "Code changed" until M3-T3 does.
+- **`codes` is on the list and the codes write only.** Other activity responses omit it, so a client must
+  not overwrite a cached activity's codes with one. Putting it in `withDayFactors` would cost every write
+  response two statements; M3 decides if that is wanted.
+- **`UpdatePlanDto` does not admit `swimlaneCodeTypeId`.** `m2-record.md` §8 and the allowance comment
+  said M2-T4 would; the spec (§4.7, "existing plan update") and plan.md M4-T1 put the source switch in M4,
+  with its 1-to-100-values-in-use rule and its plan-lock. The allowance in `schedule-inputs.structural.spec.ts`
+  stays, its comment now naming M4-T1. The source-delete refusal is tested by writing the pointer with
+  Prisma, as the migration's own probes did.
+- **Values are flat** (no `parent_id`, Q5), so a value's "live subtree" is itself and `PARENT_DELETED` on a
+  value restore means a deleted type or plan.
+- **Insert-after is not offered** for types or values (append, then reorder); swimlanes have it, and it
+  can be added without a contract change.
+- **Cascade, restore stamping and the seed catalogue are M2-T5 and M2-T6** and untouched; so is the
+  activity-history statement budget (`activity-history-statements.e2e-spec.ts` unchanged and green).
+
+**Obligations of §8 met.** Security review S1: `organizationId` is never accepted (a body carrying one is
+422 on every write route) and every row is created with the loaded plan's. Tests send a foreign
+`organizationId` and then check the stored rows. The D-P1 gate (`nested-relation-writes.structural.spec.ts`)
+passes: every write is through plain columns, and the assignment upsert is raw `INSERT … ON CONFLICT`.
+
+**Declarations the gates now pin.** `soft-delete-filter.structural.spec.ts` 52 → 59 declarations, 144 → 151
+calls covered: the two any-state lookups for restore, two restore-picker lists, two project-to-client reads
+for the top-down ancestor lock (the swimlanes precedent) and the assignment lock's deleted-or-not question.
+The history coverage census gains `ActivityRepository.bumpVersions`, recorded by `ActivityCodesService.write`.
+
+### Read and write timings (SC-5, reads)
+
+`apps/api/test/measure/codes-reads.measure.ts`, run on the local PostgreSQL 16.15 in the shared container
+(not the deployed host), warm, through the real application over HTTP, ids v4 (`gen_random_uuid()`, the
+worst case for index locality). One plan of 5,000 activities with 30 types of 50 values and every activity
+holding every type (150,000 assignments, the import cap); a second plan of 5,000 with none.
+
+| Request                                                      | p50    | p95    |
+| ------------------------------------------------------------ | ------ | ------ |
+| list 100 activities, plan with no code type                  | 30 ms  | 46 ms  |
+| list 100 activities, 30 types, every activity coded          | 51 ms  | 60 ms  |
+| list 100 activities (a later page), same plan                | 47 ms  | 58 ms  |
+| `PATCH …/activities/codes`: 1 activity, 1 type               | 39 ms  | 53 ms  |
+| `PATCH`: 100 activities, 1 type                              | 98 ms  | 118 ms |
+| `PATCH`: 100 activities, 30 types (3,000 changes)            | 351 ms | 391 ms |
+| `PATCH`: 2,000 activities, 1 type (2,000 changes)            | 1.05 s | 1.26 s |
+| comparator, `PATCH …/placements`, 2,000 activities, a change | 543 ms | 585 ms |
+| `GET code-types`: 30 types × 50 values (1,500 values)        | 57 ms  | 73 ms  |
+| `GET code-types`: 100 types × 1,000 values (100,000 values)  | 2.9 s  | 3.4 s  |
+
+- **The page's codes cost about 20 ms over a plan without codes** (3,000 triples serialised for 100
+  activities), end to end, inside the p95 < 200 ms target (CLAUDE.md §15). The database probe's
+  6 ms per 200 activities (design §5.4) is the statement alone.
+- **The 2,000-row write is about twice the placements batch.** An isolated 2,000-row write profiled at
+  0.74 s: 40 ms of locks and checks, 80 ms for the assignment upsert (three foreign-key checks a row), 70 ms
+  for the version bump, 150 ms for the history batch and commit, 140 ms to re-read the rows and 270 ms to
+  decorate and map the answer. **An earlier run of the same harness measured 2.6 s for this row**, with the
+  time in the history batch (0.05 s on the first write, 2.9 s by the fifth) after earlier runs had churned
+  `activity_history_entries`; a later run on the same database read 1.05 s. That cost is the recorder's own
+  (ADR-0174) and was not isolated here, so 1.0 to 2.6 s is what a 2,000-row write can take, and the web
+  should send far fewer (a selection, not a plan).
+- **The type list at the caps is not cheap**: 100 types × 1,000 values is 100,000 rows and about 3 s. The
+  typical plan (1,500 values) is 57 ms. The list nests every live value of the page's types in one query
+  and does not page them. If M3 shows a plan near the cap, the remedy is a values-on-demand read per type,
+  which is additive; nothing is built for it now (ADR-0142: measured before it is built).
+- **Not measured here:** the membership read for a swimlane source (M4-T1's endpoint does not exist) and
+  `loadActivityCodes` on the deployed host.

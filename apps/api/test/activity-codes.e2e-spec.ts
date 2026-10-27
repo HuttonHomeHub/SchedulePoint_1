@@ -553,6 +553,34 @@ describe.skipIf(!hasDatabase)('Activity codes API (e2e, pen enforced)', () => {
     });
   });
 
+  describe('External Guests', () => {
+    it('never see a code field, a code type or a value, on the plan or the activities', async () => {
+      const { actor, planId, area, l1, a } = await seed();
+      await actor.agent
+        .patch(codesUrl(planId))
+        .send({ activities: [row(a, [{ codeTypeId: area.id, codeValueId: l1.id }])] })
+        .expect(200);
+      const share = await actor.agent
+        .post(`${planUrl(planId)}/shares`)
+        .send({})
+        .expect(201);
+      const token = (share.body.data.url as string).split('#')[1] as string;
+      const guestGet = (path: string) =>
+        request(server()).get(path).set('Authorization', `Bearer ${token}`);
+
+      const plan = await guestGet('/api/v1/share/plan').expect(200);
+      const activities = await guestGet('/api/v1/share/activities').expect(200);
+      for (const body of [plan.body, activities.body]) {
+        const text = JSON.stringify(body);
+        expect(text).not.toMatch(/codes|codeType|codeValue|swimlaneCodeTypeId/);
+        expect(text).not.toContain(area.id);
+        expect(text).not.toContain(l1.id);
+      }
+      // The guest still sees the activity.
+      expect((activities.body.data as { id: string }[]).map((x) => x.id)).toContain(a.id);
+    });
+  });
+
   describe('the activity history', () => {
     it('records a code:<codeTypeId> item with the value ids either side, scope DEFINITION', async () => {
       const { actor, planId, area, l1, l2, a } = await seed();
