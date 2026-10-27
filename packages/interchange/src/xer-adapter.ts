@@ -16,7 +16,7 @@ import type {
   CanonicalResourceKind,
 } from './canonical.js';
 import { NoteCollector } from './note-import.js';
-import { SCHEDULEPOINT_NOTES_TOPIC } from './note-text.js';
+import { cleanNoteText, SCHEDULEPOINT_NOTES_TOPIC } from './note-text.js';
 import type { ReportFinding } from './report.js';
 import { fallbackWorkWeek, parseClndrData } from './xer-calendar.js';
 import { decodeLayoutFields } from './xer-layout-fields.js';
@@ -194,6 +194,9 @@ function rowsOf(document: XerDocument, name: string): ReadonlyArray<ReadonlyMap<
 /** How many type names the codes finding spells out before it says "and N more". */
 const CODE_TYPE_NAMES_SHOWN = 5;
 
+/** The longest code-type name the report spells out, in characters. */
+const CODE_TYPE_NAME_MAX = 100;
+
 /**
  * The one `drop` for P6's classification codes (`ACTVTYPE` / `TASKACTV`), which the plan cannot hold yet.
  * Until this existed they were dropped without a word, against ADR-0050's rule that nothing is lost
@@ -222,34 +225,59 @@ function reportUnreadCodes(document: XerDocument, projId: string): ReportFinding
     if (typeId !== undefined) used.add(typeId);
   }
 
-  // A Map, not an object: type names come from the file and one may be `__proto__`.
-  const names = new Map<string, string>();
+  // A Map, not an object: type names come from the file and one may be `__proto__`. A type whose name
+  // is missing, or empty once cleaned, maps to `undefined`: its id is an internal counter, not shown.
+  const names = new Map<string, string | undefined>();
   for (const row of rowsOf(document, TABLE.actvType)) {
     const typeId = field(row, 'actv_code_type_id');
     if (typeId === undefined) continue;
     const ownedHere = field(row, 'proj_id') === projId;
     if (!used.has(typeId) && !ownedHere) continue;
-    names.set(typeId, field(row, 'actv_code_type') ?? typeId);
+    names.set(typeId, displayName(field(row, 'actv_code_type')));
   }
-  for (const typeId of used) if (!names.has(typeId)) names.set(typeId, typeId);
+  for (const typeId of used) if (!names.has(typeId)) names.set(typeId, undefined);
 
   if (carried === 0 && names.size === 0) return [];
 
   const listed = [...names.values()];
-  const shown = listed.slice(0, CODE_TYPE_NAMES_SHOWN).join(', ');
+  const allNamed = listed.every((name) => name !== undefined);
   const more = listed.length - CODE_TYPE_NAMES_SHOWN;
   const typeCount = `${String(names.size)} code type${names.size === 1 ? '' : 's'}`;
+  const typePhrase = allNamed
+    ? `${typeCount} (${listed.slice(0, CODE_TYPE_NAMES_SHOWN).join(', ')}${more > 0 ? ` and ${String(more)} more` : ''})`
+    : typeCount;
+  const valuePhrase = `${String(carried)} value${carried === 1 ? '' : 's'} set on activities`;
+  let detail: string;
+  if (names.size === 0) detail = `${valuePhrase} were not imported`;
+  else if (carried > 0) detail = `${typePhrase} and ${valuePhrase} were not imported`;
+  else {
+    detail = `${typePhrase} ${names.size === 1 ? 'was' : 'were'} not imported; no activity uses ${names.size === 1 ? 'it' : 'them'}`;
+  }
   return [
     {
       kind: 'drop',
-      entity: 'code type',
+      entity: 'P6 activity codes',
       sourceRef: null,
-      detail:
-        `P6 activity codes were not imported: ${String(carried)} value${carried === 1 ? '' : 's'} set on ` +
-        `activities, under ${typeCount} (${shown}${more > 0 ? ` and ${String(more)} more` : ''})`,
-      reason: 'SchedulePoint does not keep P6 activity codes yet (ADR-0050)',
+      detail,
+      reason:
+        'SchedulePoint cannot keep these yet. Your activities, dates, logic and WBS are unaffected, and the codes stay in the original file (ADR-0050)',
     },
   ];
+}
+
+/**
+ * A code type's name as the report shows it: invisible and control characters removed (the note rule,
+ * `cleanNoteText`), runs of whitespace folded, and cut at {@link CODE_TYPE_NAME_MAX} characters with an
+ * ellipsis so one long name cannot crowd the others out of the report's detail budget.
+ */
+function displayName(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const clean = cleanNoteText(raw).replace(/\s+/g, ' ');
+  if (clean === '') return undefined;
+  const chars = Array.from(clean);
+  return chars.length > CODE_TYPE_NAME_MAX
+    ? `${chars.slice(0, CODE_TYPE_NAME_MAX - 1).join('')}…`
+    : clean;
 }
 
 /**

@@ -155,7 +155,7 @@ test('an import that carries P6 activity codes names them as not imported', asyn
   await expect(dropped).toBeVisible();
   await expect(dropped.getByRole('listitem')).toHaveCount(1);
   await expect(dropped).toContainText(
-    'P6 activity codes were not imported: 3 values set on activities, under 2 code types (Area, Trade)',
+    '2 code types (Area, Trade) and 3 values set on activities were not imported',
   );
 
   const axe = await new AxeBuilder({ page })

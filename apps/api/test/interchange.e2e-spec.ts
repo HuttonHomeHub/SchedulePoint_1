@@ -510,11 +510,11 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(res.body.data.drops).toEqual([
       {
         kind: 'drop',
-        entity: 'code type',
+        entity: 'P6 activity codes',
         sourceRef: null,
-        detail:
-          'P6 activity codes were not imported: 2 values set on activities, under 1 code type (Area)',
-        reason: 'SchedulePoint does not keep P6 activity codes yet (ADR-0050)',
+        detail: '1 code type (Area) and 2 values set on activities were not imported',
+        reason:
+          'SchedulePoint cannot keep these yet. Your activities, dates, logic and WBS are unaffected, and the codes stay in the original file (ADR-0050)',
       },
     ]);
   });

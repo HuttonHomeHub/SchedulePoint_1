@@ -1009,7 +1009,8 @@ describe('importXer — P6 activity codes are named in the report, not silently 
     fields: ASSIGN_FIELDS,
     rows,
   });
-  const codeDrops = (drops: ReportFinding[]) => drops.filter((f) => f.entity === 'code type');
+  const codeDrops = (drops: ReportFinding[]) =>
+    drops.filter((f) => f.entity === 'P6 activity codes');
 
   it('reports one drop naming the types and counting the values set on activities', () => {
     const { graph, report } = importOk(
@@ -1028,11 +1029,11 @@ describe('importXer — P6 activity codes are named in the report, not silently 
     expect(codeDrops(report.drops)).toEqual([
       {
         kind: 'drop',
-        entity: 'code type',
+        entity: 'P6 activity codes',
         sourceRef: null,
-        detail:
-          'P6 activity codes were not imported: 3 values set on activities, under 2 code types (Area, Trade)',
-        reason: 'SchedulePoint does not keep P6 activity codes yet (ADR-0050)',
+        detail: '2 code types (Area, Trade) and 3 values set on activities were not imported',
+        reason:
+          'SchedulePoint cannot keep these yet. Your activities, dates, logic and WBS are unaffected, and the codes stay in the original file (ADR-0050)',
       },
     ]);
     expect(importGraphSchema.safeParse(graph).success).toBe(true);
@@ -1068,21 +1069,21 @@ describe('importXer — P6 activity codes are named in the report, not silently 
       ]),
     );
     const [drop] = codeDrops(report.drops);
-    expect(drop?.detail).toBe(
-      'P6 activity codes were not imported: 1 value set on activities, under 1 code type (Area)',
-    );
+    expect(drop?.detail).toBe('1 code type (Area) and 1 value set on activities were not imported');
   });
 
   it('names a project-scoped type that no activity uses yet, with no values to count', () => {
     const { report } = importOk(withTables([types([['2', 'Trade', 'P1', 'AS_Project']])]));
     expect(codeDrops(report.drops)[0]?.detail).toBe(
-      'P6 activity codes were not imported: 0 values set on activities, under 1 code type (Trade)',
+      '1 code type (Trade) was not imported; no activity uses it',
     );
   });
 
-  it('falls back to the type id when ACTVTYPE is absent, and caps the names listed', () => {
+  it('never shows a bare id when ACTVTYPE is absent, and caps the names listed', () => {
     const noTypes = importOk(withTables([assigned([['T1', '7', '1', 'P1']])]));
-    expect(codeDrops(noTypes.report.drops)[0]?.detail).toContain('under 1 code type (7)');
+    expect(codeDrops(noTypes.report.drops)[0]?.detail).toBe(
+      '1 code type and 1 value set on activities were not imported',
+    );
 
     const many = importOk(
       withTables([
@@ -1090,7 +1091,7 @@ describe('importXer — P6 activity codes are named in the report, not silently 
       ]),
     );
     expect(codeDrops(many.report.drops)[0]?.detail).toContain(
-      'under 8 code types (Type 0, Type 1, Type 2, Type 3, Type 4 and 3 more)',
+      '8 code types (Type 0, Type 1, Type 2, Type 3, Type 4 and 3 more)',
     );
   });
 
@@ -1105,7 +1106,49 @@ describe('importXer — P6 activity codes are named in the report, not silently 
       ]),
     );
     expect(codeDrops(report.drops)[0]?.detail).toBe(
-      'P6 activity codes were not imported: 1 value set on activities, under 2 code types (__proto__, constructor)',
+      '2 code types (__proto__, constructor) and 1 value set on activities were not imported',
+    );
+  });
+
+  it('cuts one very long type name at 100 characters so it cannot crowd out the others', () => {
+    const long = 'x'.repeat(5000);
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', long, 'P1', 'AS_Project'],
+          ['2', 'Trade', 'P1', 'AS_Project'],
+        ]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    const detail = codeDrops(report.drops)[0]?.detail;
+    expect(detail).toBe(
+      `2 code types (${'x'.repeat(99)}…, Trade) and 1 value set on activities were not imported`,
+    );
+  });
+
+  it('removes bidi overrides, zero-width and control characters from a type name', () => {
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', 'A‮r​e⁦a﻿\u0007', 'P1', 'AS_Project'],
+          ['2', '​‮', 'P1', 'AS_Project'],
+        ]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    // The second name is empty once cleaned, so the list is withheld rather than showing a blank.
+    expect(codeDrops(report.drops)[0]?.detail).toBe(
+      '2 code types and 1 value set on activities were not imported',
+    );
+    const named = importOk(
+      withTables([
+        types([['1', 'A‮r​e⁦a﻿\u0007', 'P1', 'AS_Project']]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    expect(codeDrops(named.report.drops)[0]?.detail).toBe(
+      '1 code type (Area) and 1 value set on activities were not imported',
     );
   });
 });
