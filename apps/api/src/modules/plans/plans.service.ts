@@ -100,12 +100,20 @@ export class PlansService {
     this.assertCan(principal, 'plan:create', organization.id);
     const project = await this.loadActiveProject(projectId, organization.id);
 
-    // New plans default to the org's seeded Standard calendar (ADR-0024). If the org
-    // has no active Standard (renamed/deleted), fall back to null (all-days-work).
-    const standard = await this.calendars.findActiveByNameInOrg(
-      project.organizationId,
-      STANDARD_CALENDAR_NAME,
-    );
+    // New plans default to the org's seeded Standard calendar (ADR-0024), looked up in the ORG
+    // tier only: a bare by-name read could return another project's "Standard", which the
+    // calendar-scope guard would then refuse. This read is an unlocked hint at the id; the
+    // guard below re-reads it under the calendar lock. An archived Standard is not bound — an
+    // archived calendar refuses every new binding (ADR-0053 §4) — and none at all falls back to
+    // null (all-days-work).
+    const standardHint = await this.calendars.findActiveHoldingNameInTier({
+      organizationId: project.organizationId,
+      name: STANDARD_CALENDAR_NAME,
+      scope: 'ORG',
+      projectId: null,
+    });
+    const standardHintId =
+      standardHint && standardHint.archivedAt === null ? standardHint.id : null;
 
     try {
       // The read above is the 404 and the organisation check; the lock below is the guarantee. The
@@ -118,6 +126,31 @@ export class PlansService {
           projectId: project.id,
         });
         if (!active) throw new NotFoundError('Project not found.');
+
+        // The Standard binding is a `calendar_id` write seam, so it goes through the same guard as
+        // every other (`docs/TECH_DEBT.md` #559): the calendar advisory lock the CALENDAR_IN_USE
+        // delete takes, then a re-read as active. Lock order is the project chain FOR SHARE first,
+        // THEN the calendar advisory lock — deliberately NOT restore/import's order (advisory
+        // first). Advisory-first would let a plan create hold the calendar lock while it waits on a
+        // project share that a project delete blocks, and that can cycle with an activity create
+        // (plan lock, then calendar). It relies on a new FOR SHARE proceeding past a queued
+        // FOR NO KEY UPDATE waiter in Postgres; that was reasoned from the lock-conflict table,
+        // not measured. Only NotFoundError means "the Standard is gone": a ValidationError (wrong
+        // scope) is a real defect and must surface.
+        let standardId: string | null = null;
+        if (standardHintId) {
+          try {
+            const standard = await assertCalendarUsableBy(tx, this.calendars, {
+              calendarId: standardHintId,
+              organizationId: project.organizationId,
+              projectId: project.id,
+              currentCalendarId: null,
+            });
+            standardId = standard.id;
+          } catch (error) {
+            if (!(error instanceof NotFoundError)) throw error;
+          }
+        }
         return this.plans.create(
           {
             // Copy the organisation id from the parent project, never from input.
@@ -128,7 +161,7 @@ export class PlansService {
             ...(dto.status ? { status: dto.status } : {}),
             // Required (ADR-0033 M1): the DTO guarantees a valid calendar date.
             plannedStart: parseCalendarDate(dto.plannedStart),
-            ...(standard ? { calendarId: standard.id } : {}),
+            ...(standardId ? { calendarId: standardId } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
