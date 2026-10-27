@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.200.2
+
+### Patch Changes
+
+- [#1192](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1192) [`fdabb72`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fdabb72fbdd2d2057aea3e4fd55e6a25cb4e906f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Labelled checkboxes are now a full finger-sized row to tap on touch screens.
+
 ## 0.200.1
 
 ### Patch Changes
