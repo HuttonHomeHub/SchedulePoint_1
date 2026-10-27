@@ -718,19 +718,6 @@ export class CalendarRepository {
   }
 
   /**
-   * An active calendar in an org by name (case-sensitive) — used to resolve the
-   * seeded `Standard` calendar that new plans default to (Task C1). Returns null if
-   * the org has no active calendar with that name (e.g. it was renamed/deleted).
-   */
-  findActiveByNameInOrg(
-    organizationId: string,
-    name: string,
-    db: Prisma.TransactionClient = this.prisma,
-  ): Promise<Calendar | null> {
-    return db.calendar.findFirst({ where: this.active({ organizationId, name }) });
-  }
-
-  /**
    * The ARCHIVED calendar holding `name` in the tier a create/rename was aiming at, if any
    * (ADR-0053 §4). An archived row deliberately keeps its name — the partial uniques stay
    * predicated on `deleted_at IS NULL` alone so that unarchive, an unguarded version-gated

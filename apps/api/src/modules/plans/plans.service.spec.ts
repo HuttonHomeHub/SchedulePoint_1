@@ -112,7 +112,7 @@ describe('PlansService', () => {
     updateIfVersionMatches: ReturnType<typeof vi.fn>;
   };
   let calendars: {
-    findActiveByNameInOrg: ReturnType<typeof vi.fn>;
+    findActiveHoldingNameInTier: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
   };
   let lifecycle: {
@@ -147,8 +147,16 @@ describe('PlansService', () => {
     };
     calendars = {
       // By default the org has a seeded Standard calendar new plans default to.
-      findActiveByNameInOrg: vi.fn().mockResolvedValue({ id: 'cal-standard' }),
-      findActiveByIdInOrg: vi.fn(),
+      findActiveHoldingNameInTier: vi
+        .fn()
+        .mockResolvedValue({ id: 'cal-standard', name: 'Standard', archivedAt: null }),
+      // The guard's locked re-read; by default the Standard is still active and ORG-scoped.
+      findActiveByIdInOrg: vi.fn().mockResolvedValue({
+        id: 'cal-standard',
+        scope: 'ORG',
+        projectId: null,
+        archivedAt: null,
+      }),
     };
     lifecycle = {
       cascadeSoftDelete: vi.fn().mockResolvedValue({ batchId: 'b1', counts: {} }),
@@ -212,7 +220,7 @@ describe('PlansService', () => {
     });
 
     it('defaults calendarId to null when the org has no active Standard calendar', async () => {
-      calendars.findActiveByNameInOrg.mockResolvedValue(null);
+      calendars.findActiveHoldingNameInTier.mockResolvedValue(null);
       plans.create.mockResolvedValue(plan());
       await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
         name: 'NoCal',
@@ -220,6 +228,78 @@ describe('PlansService', () => {
       });
       const arg = plans.create.mock.calls[0]?.[0] as Record<string, unknown>;
       expect('calendarId' in arg).toBe(false);
+    });
+
+    it('looks the Standard up in the ORG tier only, so another project\'s "Standard" is never a candidate', async () => {
+      plans.create.mockResolvedValue(plan());
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+        name: 'Tier',
+        plannedStart: '2026-01-01',
+      });
+      expect(calendars.findActiveHoldingNameInTier).toHaveBeenCalledWith({
+        organizationId: ORG_ID,
+        name: 'Standard',
+        scope: 'ORG',
+        projectId: null,
+      });
+    });
+
+    it('locks the project chain, then the calendar, then inserts (docs/TECH_DEBT.md #559)', async () => {
+      plans.create.mockResolvedValue(plan());
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+        name: 'Order',
+        plannedStart: '2026-01-01',
+      });
+      const calendarLock = txExecuteRaw.mock.invocationCallOrder[0];
+      const chainLock = txQueryRaw.mock.invocationCallOrder[0];
+      const insert = plans.create.mock.invocationCallOrder[0];
+      expect(chainLock).toBeDefined();
+      expect(calendarLock).toBeDefined();
+      expect(insert).toBeDefined();
+      expect(chainLock!).toBeLessThan(calendarLock!);
+      expect(calendarLock!).toBeLessThan(insert!);
+    });
+
+    it('binds nothing when the Standard is archived, and never takes its lock', async () => {
+      calendars.findActiveHoldingNameInTier.mockResolvedValue({
+        id: 'cal-standard',
+        name: 'Standard',
+        archivedAt: new Date(),
+      });
+      plans.create.mockResolvedValue(plan());
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+        name: 'Archived',
+        plannedStart: '2026-01-01',
+      });
+      const arg = plans.create.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect('calendarId' in arg).toBe(false);
+    });
+
+    it('omits the calendar when the Standard is deleted between the hint and the lock', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue(null);
+      plans.create.mockResolvedValue(plan());
+      await service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+        name: 'Gone',
+        plannedStart: '2026-01-01',
+      });
+      const arg = plans.create.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect('calendarId' in arg).toBe(false);
+    });
+
+    it('does not swallow a scope rejection from the guard', async () => {
+      calendars.findActiveByIdInOrg.mockResolvedValue({
+        id: 'cal-standard',
+        scope: 'PROJECT',
+        projectId: 'other-project',
+        archivedAt: null,
+      });
+      await expect(
+        service.create(principalWith(ALL), 'acme', PROJECT_ID, {
+          name: 'Wrong',
+          plannedStart: '2026-01-01',
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(plans.create).not.toHaveBeenCalled();
     });
 
     it('converts plannedStart (YYYY-MM-DD) to a UTC-midnight Date and passes status', async () => {
