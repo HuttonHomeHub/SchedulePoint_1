@@ -52,6 +52,17 @@ describe('CheckboxField density', () => {
     expect(label).toHaveClass('min-h-6', 'py-1');
   });
 
+  it.each(['default', 'compact'] as const)(
+    'grows the %s labelled row to the control height under a coarse pointer (ADR-0118 D2)',
+    (density) => {
+      render(<CheckboxField label="Weekends" density={density} />);
+      expect(screen.getByRole('checkbox', { name: 'Weekends' }).closest('label')).toHaveClass(
+        'min-h-6',
+        'pointer-coarse:min-h-(--control-h)',
+      );
+    },
+  );
+
   it('names the control from rich label content, notes included', () => {
     render(
       <CheckboxField
@@ -81,14 +92,14 @@ describe('CheckboxField label modes', () => {
   it('renders the default shape unchanged when no new prop is passed', () => {
     const { container } = render(<CheckboxField label="Today" />);
     expect(container.innerHTML).toMatch(
-      /^<div class="flex flex-col gap-1\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm font-medium"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
+      /^<div class="flex flex-col gap-1\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm pointer-coarse:min-h-\(--control-h\) font-medium"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
     );
   });
 
   it('renders the compact default shape unchanged when no new prop is passed', () => {
     const { container } = render(<CheckboxField label="Today" density="compact" />);
     expect(container.innerHTML).toMatch(
-      /^<div class="flex flex-col gap-0\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm font-normal"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
+      /^<div class="flex flex-col gap-0\.5"><label for="([^"]+)" class="flex min-h-6 items-center gap-2 py-1 text-sm pointer-coarse:min-h-\(--control-h\) font-normal"><input id="\1" class="accent-primary size-4" type="checkbox">Today<\/label><\/div>$/,
     );
   });
 

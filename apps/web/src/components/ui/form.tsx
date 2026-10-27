@@ -386,7 +386,7 @@ export interface CheckboxFieldProps extends Omit<InputProps, 'type'>, GatedField
 /**
  * Accessible labelled checkbox — the boolean sibling of {@link TextField}. The `&lt;label&gt;` wraps the
  * native `&lt;input type="checkbox"&gt;` and its text (so the accessible name never depends on `aria-label`),
- * clears the WCAG 2.2 SC 2.5.8 ≥24px hit target (`min-h-6` + `py-1`; with `labelHidden`, a `size-6` square that grows to `--control-h` under a coarse pointer), and links any error/hint via
+ * clears the WCAG 2.2 SC 2.5.8 ≥24px hit target (`min-h-6` + `py-1`, growing to `--control-h` under a coarse pointer, ADR-0118 D2; with `labelHidden`, a `size-6` square that does the same), and links any error/hint via
  * `aria-describedby`. Forwards its ref so `register()` can be spread directly onto it. Centralises the
  * checkbox chrome so it isn't hand-rolled per feature (DESIGN_SYSTEM.md — no one-off styling).
  */
@@ -428,7 +428,7 @@ export const CheckboxField = forwardRef<HTMLInputElement, CheckboxFieldProps>(
           className={cn(
             labelHidden
               ? 'flex size-6 cursor-pointer items-center justify-center pointer-coarse:size-(--control-h)'
-              : 'flex min-h-6 items-center gap-2 py-1 text-sm',
+              : 'flex min-h-6 items-center gap-2 py-1 text-sm pointer-coarse:min-h-(--control-h)',
             !labelHidden && (density === 'compact' ? 'font-normal' : 'font-medium'),
           )}
         >
