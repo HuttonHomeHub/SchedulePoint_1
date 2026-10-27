@@ -212,6 +212,8 @@ describe('DependenciesService', () => {
   // The scheduling-input stamp is the only `$executeRaw` here; the plan ids it names are its second
   // parameter (the first is the organisation).
   let txExecuteRaw: ReturnType<typeof vi.fn>;
+  // The endpoints re-read under the plan lock (`docs/TECH_DEBT.md` #553); defaults to both live.
+  let txActivityFindMany: ReturnType<typeof vi.fn>;
   const stampedPlanIds = (): string[][] =>
     txExecuteRaw.mock.calls
       .filter((call) => String(call[0]).includes('schedule_inputs_changed_at'))
@@ -246,10 +248,15 @@ describe('DependenciesService', () => {
     // The history reads the link inside the update's transaction (ADR-0174 D4); the stub recorder
     // below ignores what they return, so a plain dependency row will do.
     txExecuteRaw = vi.fn().mockResolvedValue(1);
+    txActivityFindMany = vi.fn().mockResolvedValue([
+      { id: PRED_ID, type: 'TASK' },
+      { id: SUCC_ID, type: 'TASK' },
+    ]);
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: txExecuteRaw,
+          activity: { findMany: txActivityFindMany },
           activityDependency: {
             findFirst: vi.fn().mockResolvedValue(dependency()),
             findFirstOrThrow: vi.fn().mockResolvedValue(dependency()),
@@ -329,6 +336,43 @@ describe('DependenciesService', () => {
       activities.findActiveByIdInOrg
         .mockResolvedValueOnce(activity(PRED_ID, { type: 'WBS_SUMMARY' }))
         .mockResolvedValueOnce(activity(SUCC_ID));
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(deps.create).not.toHaveBeenCalled();
+    });
+
+    it('404s and inserts nothing when the plan was deleted while it waited for the lock (#553)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValueOnce(plan()).mockResolvedValueOnce(null);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(deps.lockPlanForWrite).toHaveBeenCalled();
+      expect(deps.create).not.toHaveBeenCalled();
+    });
+
+    it('404s and inserts nothing when an endpoint was deleted while it waited for the lock (#553)', async () => {
+      txActivityFindMany.mockResolvedValue([{ id: PRED_ID, type: 'TASK' }]);
+      await expect(
+        service.create(principalWith(ALL), 'acme', PLAN_ID, {
+          predecessorId: PRED_ID,
+          successorId: SUCC_ID,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(deps.create).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the WBS-summary rule on the endpoints it reads under the lock (#553)', async () => {
+      txActivityFindMany.mockResolvedValue([
+        { id: PRED_ID, type: 'WBS_SUMMARY' },
+        { id: SUCC_ID, type: 'TASK' },
+      ]);
       await expect(
         service.create(principalWith(ALL), 'acme', PLAN_ID, {
           predecessorId: PRED_ID,
