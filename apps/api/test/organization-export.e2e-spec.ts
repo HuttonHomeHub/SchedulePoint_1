@@ -143,7 +143,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
   }
 
   /**
-   * An organisation with a row in every one of the 31 exported tables, and a second organisation
+   * An organisation with a row in every one of the 35 exported tables, and a second organisation
    * beside it whose every name carries a marker the export must never contain.
    */
   async function seedFixture(): Promise<Fixture> {
@@ -365,6 +365,84 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       .post(`${base}/plans/${chain.planId}/baselines`)
       .send({ name: 'ACME-SWIMLANE-BASELINE' })
       .expect(201);
+
+    // — Activity codes: no route writes them yet (M2-T4), so they are written directly. One type with
+    // a live and a soft-deleted value, an activity carrying the live one, its code lane and a "no
+    // value" lane, the plan taking its swimlanes from the type, and the newest baseline frozen the way
+    // a capture will freeze it (the source type's value and lane per activity).
+    const codeType = await prisma.codeType.create({
+      data: { organizationId, planId: chain.planId, name: 'ACME-CODE-TYPE', position: 0 },
+    });
+    const codeValue = await prisma.codeValue.create({
+      data: {
+        organizationId,
+        codeTypeId: codeType.id,
+        shortCode: 'L1',
+        description: 'ACME-CODE-VALUE',
+        position: 0,
+      },
+    });
+    await prisma.codeValue.create({
+      data: {
+        organizationId,
+        codeTypeId: codeType.id,
+        shortCode: 'L2',
+        position: 1,
+        deletedAt: new Date('2026-10-01T00:00:00.000Z'),
+      },
+    });
+    await prisma.codeValueAssignment.create({
+      data: {
+        organizationId,
+        planId: chain.planId,
+        activityId: a.id,
+        codeTypeId: codeType.id,
+        codeValueId: codeValue.id,
+      },
+    });
+    for (const [activityId, codeValueId, laneIndex] of [
+      [a.id, codeValue.id, 3],
+      [c.id, null, 1],
+    ] as const) {
+      await prisma.codeSwimlaneLane.create({
+        data: {
+          organizationId,
+          planId: chain.planId,
+          activityId,
+          codeTypeId: codeType.id,
+          codeValueId,
+          laneIndex,
+        },
+      });
+    }
+    await prisma.plan.update({
+      where: { id: chain.planId },
+      data: {
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneWbsLevel: null,
+        swimlaneCodeTypeId: codeType.id,
+      },
+    });
+    const codedBaseline = await prisma.baseline.findFirstOrThrow({
+      where: { organizationId, name: 'ACME-SWIMLANE-BASELINE' },
+    });
+    await prisma.baseline.update({
+      where: { id: codedBaseline.id },
+      data: {
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneWbsLevel: null,
+        swimlaneCodeTypeId: codeType.id,
+        codeSnapshotLevel: 'SWIMLANE_TYPE',
+      },
+    });
+    await prisma.baselineActivity.updateMany({
+      where: { baselineId: codedBaseline.id, sourceActivityId: a.id },
+      data: {
+        codeValueId: codeValue.id,
+        codeLaneIndex: 3,
+        codeLaneUpdatedAt: new Date('2026-10-02T00:00:00.000Z'),
+      },
+    });
 
     // — The three records written by one-off migrations (no route makes them). ---------------------
     await prisma.placementMigration.create({
@@ -615,6 +693,10 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       notes: await prisma.note.count({ where }),
       swimlanes: await prisma.swimlane.count({ where }),
       'activity-swimlane-lanes': await prisma.activitySwimlaneLane.count({ where }),
+      'code-types': await prisma.codeType.count({ where }),
+      'code-values': await prisma.codeValue.count({ where }),
+      'code-value-assignments': await prisma.codeValueAssignment.count({ where }),
+      'code-swimlane-lanes': await prisma.codeSwimlaneLane.count({ where }),
       'audit-events': await prisma.auditEvent.count({ where }),
     };
     const { files } = await exportOf(admin);
@@ -665,6 +747,42 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     );
     expect(
       jsonRows(files, 'json/invitations.json').filter((i) => i.status === 'REVOKED'),
+    ).toHaveLength(1);
+  });
+
+  it('exports the activity codes: the types, values (deleted ones too), assignments, lanes and the frozen columns', async () => {
+    const { admin } = await seedFixture();
+    const { files } = await exportOf(admin);
+
+    const [type] = jsonRows(files, 'json/code-types.json');
+    expect(type).toMatchObject({ name: 'ACME-CODE-TYPE', position: 0, deletedAt: null });
+    expect(type).not.toHaveProperty('version');
+    expect(type).not.toHaveProperty('deleteBatchId');
+
+    const values = jsonRows(files, 'json/code-values.json');
+    expect(values.map((v) => v.shortCode).sort()).toEqual(['L1', 'L2']);
+    expect(values.filter((v) => v.deletedAt !== null)).toHaveLength(1);
+
+    const lanes = jsonRows(files, 'json/code-swimlane-lanes.json');
+    expect(lanes.map((l) => [l.laneIndex, l.codeValueId === null]).sort()).toEqual([
+      [1, true],
+      [3, false],
+    ]);
+    expect(jsonRows(files, 'json/code-value-assignments.json')).toHaveLength(1);
+
+    const planWithCodes = jsonRows(files, 'json/plans.json').filter(
+      (p) => p.swimlaneCodeTypeId !== null,
+    );
+    expect(planWithCodes.map((p) => [p.swimlaneSource, p.swimlaneCodeTypeId])).toEqual([
+      ['ACTIVITY_CODE', type!.id],
+    ]);
+    expect(
+      jsonRows(files, 'json/baselines.json')
+        .filter((b) => b.codeSnapshotLevel === 'SWIMLANE_TYPE')
+        .map((b) => b.swimlaneCodeTypeId),
+    ).toEqual([type!.id]);
+    expect(
+      jsonRows(files, 'json/baseline-activities.json').filter((b) => b.codeValueId !== null),
     ).toHaveLength(1);
   });
 

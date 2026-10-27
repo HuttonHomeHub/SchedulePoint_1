@@ -84,7 +84,7 @@ const ACCOUNT_STATE =
 const AUDIT_NETWORK =
   'Never shown on the Audit log screen (ADR-0072): a colleague’s address and browser are a privacy cost with no matching benefit.';
 
-/** The 31 files, in the order the ZIP lists them. */
+/** The 35 files, in the order the ZIP lists them. */
 export const EXPORT_FILES: readonly ExportFile[] = [
   {
     model: 'User',
@@ -251,6 +251,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       // 2.1 — appended (swimlanes), by position like `derivedDurationMinutes` below.
       'swimlaneSource:enum',
       'swimlaneWbsLevel:int',
+      // 2.2 — appended (swimlanes made from activity codes): the code type the swimlanes come from.
+      'swimlaneCodeTypeId:text',
     ),
     withheld: {
       version: VERSION,
@@ -506,6 +508,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'swimlaneSnapshotLevel:enum',
       'swimlaneSource:enum',
       'swimlaneWbsLevel:int',
+      // 2.2 — appended (activity codes frozen at capture): the code type, and how much of it was recorded.
+      'swimlaneCodeTypeId:text',
+      'codeSnapshotLevel:enum',
     ),
     withheld: {
       version: VERSION,
@@ -555,6 +560,11 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'deletedAt:instant',
       // 2.1 — appended (swimlanes frozen at capture): the activity's own swimlane at capture.
       'swimlaneId:text',
+      // 2.2 — appended (activity codes frozen at capture): the activity's value and code lane for the
+      // baseline's swimlane code type, empty unless that type was frozen.
+      'codeValueId:text',
+      'codeLaneIndex:int',
+      'codeLaneUpdatedAt:instant',
     ),
     withheld: {
       version: VERSION,
@@ -891,6 +901,93 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'swimlaneId:text',
       'summaryActivityId:text',
       'wbsLevel:int',
+      'laneIndex:int',
+      'createdAt:instant',
+      'updatedAt:instant',
+    ),
+    withheld: {},
+  },
+  {
+    model: 'CodeType',
+    table: 'code_types',
+    file: 'code-types',
+    stability: 'promised',
+    read: 'org',
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'planId:text',
+      'name:text',
+      'position:int',
+      'createdAt:instant',
+      'updatedAt:instant',
+      'createdBy:text',
+      'updatedBy:text',
+      'deletedAt:instant',
+    ),
+    withheld: {
+      version: VERSION,
+      deleteBatchId: DELETE_BATCH,
+    },
+  },
+  {
+    model: 'CodeValue',
+    table: 'code_values',
+    file: 'code-values',
+    stability: 'promised',
+    read: 'org',
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'codeTypeId:text',
+      'shortCode:text',
+      'description:text',
+      'position:int',
+      'createdAt:instant',
+      'updatedAt:instant',
+      'createdBy:text',
+      'updatedBy:text',
+      'deletedAt:instant',
+    ),
+    withheld: {
+      version: VERSION,
+      deleteBatchId: DELETE_BATCH,
+    },
+  },
+  {
+    model: 'CodeValueAssignment',
+    table: 'code_value_assignments',
+    file: 'code-value-assignments',
+    stability: 'promised',
+    read: 'org',
+    // Which value each activity carries for each type. Nothing is withheld.
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'planId:text',
+      'activityId:text',
+      'codeTypeId:text',
+      'codeValueId:text',
+      'createdAt:instant',
+      'updatedAt:instant',
+    ),
+    withheld: {},
+  },
+  {
+    model: 'CodeSwimlaneLane',
+    table: 'code_swimlane_lanes',
+    file: 'code-swimlane-lanes',
+    stability: 'promised',
+    read: 'org',
+    // The planner's layout, exported as `activity-swimlane-lanes` is. `codeValueId` is empty for the
+    // "no value of this type" swimlane. Nothing is withheld.
+    columns: columns(
+      'id:text',
+      'organizationId:text',
+      'planId:text',
+      'activityId:text',
+      'codeTypeId:text',
+      'codeValueId:text',
       'laneIndex:int',
       'createdAt:instant',
       'updatedAt:instant',
