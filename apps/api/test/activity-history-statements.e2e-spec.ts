@@ -60,7 +60,8 @@ const LINK_RECORDER_STATEMENTS = 3;
 // delete), so they all pay it; a lane-only or rename-only save would not.
 const OWN_ACTIVITY_PATCH = 6;
 const OWN_ASSIGNMENT_PATCH = 3;
-const OWN_LINK_CREATE = 8;
+// A link create pays two reads the lock now guards (the plan, and both ends re-read after the plan lock, #553).
+const OWN_LINK_CREATE = 10;
 const OWN_LINK_EDIT = 4;
 const OWN_LINK_REMOVE = 4;
 // The batch paths' own statements, measured 2026-10-04 with forty rows and independent of that
