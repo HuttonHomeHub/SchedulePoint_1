@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +11,7 @@ import { acquireCalendarWriteLock } from '../src/common/db/calendar-advisory-loc
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * End-to-end tests for the schedule-interchange dry-run endpoint (ADR-0050, C2, Task 1.4). Covers a
@@ -320,6 +322,7 @@ function largeXer(nTasks: number, nSkip: number): string {
 describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -333,6 +336,7 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   async function resetDatabase(): Promise<void> {
@@ -372,6 +376,9 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
 
   beforeEach(async () => {
     await resetDatabase();
+    // Per-route throttle counters are shared across the file's tests inside one 60 s window; adding the
+    // code compensation case tipped the 8-round calendar race into a 429. Isolation, not a weaker bound.
+    resetThrottleCounters(throttlerStorage);
   });
 
   afterEach(() => {
@@ -684,6 +691,65 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(await prisma.activity.count()).toBe(0);
     expect(await prisma.swimlane.count()).toBe(0);
     expect(await prisma.activitySwimlaneLane.count()).toBe(0);
+  });
+
+  it('removes code rows and clears the swimlane pointer when the recalculation fails (compensation)', async () => {
+    // No import writes activity codes yet (M5), so they are placed on the new plan the way the
+    // swimlane case above places swimlanes: inside the mocked recalculation, after the commit. The
+    // plan names its own code type as its swimlane source, which is the RESTRICT cycle a compensation
+    // that skipped the pointer, or deleted the types before clearing it, would leave behind (23503).
+    const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+    const schedule = app.get(ScheduleService, { strict: false });
+    const { actor, orgId } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    let seededPlanId: string | undefined;
+    vi.spyOn(schedule, 'recalculate').mockImplementation(async (_principal, _slug, planId) => {
+      seededPlanId = planId;
+      const activity = await prisma.activity.findFirstOrThrow({ where: { planId } });
+      const type = await prisma.codeType.create({
+        data: { organizationId: orgId, planId, name: 'Area', position: 0 },
+      });
+      const value = await prisma.codeValue.create({
+        data: { organizationId: orgId, codeTypeId: type.id, shortCode: 'L1', position: 0 },
+      });
+      await prisma.codeValueAssignment.create({
+        data: {
+          organizationId: orgId,
+          planId,
+          activityId: activity.id,
+          codeTypeId: type.id,
+          codeValueId: value.id,
+        },
+      });
+      await prisma.codeSwimlaneLane.createMany({
+        data: [value.id, null].map((codeValueId, laneIndex) => ({
+          organizationId: orgId,
+          planId,
+          activityId: activity.id,
+          codeTypeId: type.id,
+          codeValueId,
+          laneIndex,
+        })),
+      });
+      await prisma.plan.update({
+        where: { id: planId },
+        data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: type.id },
+      });
+      throw new Error('recalculation failed');
+    });
+
+    await actor.agent
+      .post(commitUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(500);
+
+    expect(seededPlanId).toBeDefined();
+    expect(await prisma.plan.count({ where: { id: seededPlanId as string } })).toBe(0);
+    expect(await prisma.activity.count()).toBe(0);
+    expect(await prisma.codeSwimlaneLane.count()).toBe(0);
+    expect(await prisma.codeValueAssignment.count()).toBe(0);
+    expect(await prisma.codeValue.count()).toBe(0);
+    expect(await prisma.codeType.count()).toBe(0);
   });
 
   it('commits a plain multi-activity XER → 201 with matching counts (no calendars)', async () => {

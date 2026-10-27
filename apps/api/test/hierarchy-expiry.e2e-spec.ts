@@ -22,6 +22,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents, clearDomainData } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * **The retention expiry against a real Postgres** (ADR-0096 D2/D5/D7).
@@ -96,7 +97,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.planShare.deleteMany();
     await clearActivityTree(prisma);
     await prisma.swimlane.deleteMany();
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.resource.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
@@ -274,6 +275,56 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.swimlane.create({
       data: { organizationId: orgId, planId: otherPlanId, name: 'Live lane', position: 0 },
     });
+    // P6 activity codes: a type with a live and a deleted value, two assignments and three code lanes
+    // (one of them "no value"), and the plan taking its swimlanes from the type. The plan's pointer and
+    // the type close a RESTRICT cycle, so the runner must clear the pointer before it deletes the type;
+    // the live plan keeps a type and value of its own.
+    const codeType = await prisma.codeType.create({
+      data: { organizationId: orgId, planId, name: 'Area', position: 0 },
+      select: { id: true },
+    });
+    const codeValues = await Promise.all(
+      [
+        ['L1', null],
+        ['L2', new Date('2026-02-01T10:00:00.000Z')],
+      ].map(([shortCode, deletedAt], position) =>
+        prisma.codeValue.create({
+          data: {
+            organizationId: orgId,
+            codeTypeId: codeType.id,
+            shortCode: shortCode as string,
+            position,
+            deletedAt: deletedAt as Date | null,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
+    const [live, removed] = codeValues as [{ id: string }, { id: string }];
+    await prisma.codeValueAssignment.createMany({
+      data: [
+        { activityId, codeValueId: live.id },
+        { activityId: summaryId, codeValueId: removed.id },
+      ].map((row) => ({ organizationId: orgId, planId, codeTypeId: codeType.id, ...row })),
+    });
+    await prisma.codeSwimlaneLane.createMany({
+      data: [
+        { activityId, codeValueId: live.id, laneIndex: 1 },
+        { activityId, codeValueId: null, laneIndex: 0 },
+        { activityId: summaryId, codeValueId: removed.id, laneIndex: 2 },
+      ].map((row) => ({ organizationId: orgId, planId, codeTypeId: codeType.id, ...row })),
+    });
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: codeType.id },
+    });
+    const liveType = await prisma.codeType.create({
+      data: { organizationId: orgId, planId: otherPlanId, name: 'Live area', position: 0 },
+      select: { id: true },
+    });
+    await prisma.codeValue.create({
+      data: { organizationId: orgId, codeTypeId: liveType.id, shortCode: 'L1', position: 0 },
+    });
 
     await actor.agent.delete(`/api/v1/organizations/acme/clients/${clientId}`).expect(204);
 
@@ -288,10 +339,20 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       activities: 2,
       activityHistoryEntries: 2,
       activitySwimlaneLanes: 3,
+      codeValueAssignments: 2,
+      codeSwimlaneLanes: 3,
     });
     expect(await prisma.activitySwimlaneLane.count()).toBe(0);
     expect(await prisma.swimlane.findMany({ select: { name: true } })).toEqual([
       { name: 'Live lane' },
+    ]);
+    expect(await prisma.codeValueAssignment.count()).toBe(0);
+    expect(await prisma.codeSwimlaneLane.count()).toBe(0);
+    expect(await prisma.codeValue.findMany({ select: { shortCode: true } })).toEqual([
+      { shortCode: 'L1' },
+    ]);
+    expect(await prisma.codeType.findMany({ select: { name: true } })).toEqual([
+      { name: 'Live area' },
     ]);
     expect(await prisma.activityHistoryEntry.count()).toBe(0);
     expect(await prisma.client.findUnique({ where: { id: clientId } })).toBeNull();

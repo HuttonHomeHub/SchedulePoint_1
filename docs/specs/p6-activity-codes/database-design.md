@@ -578,10 +578,10 @@ row per activity), at the cost of the Area-to-Trade case above.
 | `idx_code_values_parent_fk`                           | `(parent_id)`                                                    | partial                     | the self-key RESTRICT check at expiry (`WHERE parent_id IS NOT NULL`); also the subtree walk for a value delete. Only if the parent column is kept (§5.3)                                        |
 | `uq_code_value_assignments_plan_activity_type`        | `(plan_id, activity_id, code_type_id)`                           | full unique                 | one value per (activity, type); upsert arbiter; `(plan_id, activity_id)` FK check; plan load (65 ms / 150,000 rows); page load (5.7 ms / 200 activities); expiry and compensation delete by plan |
 | `idx_code_value_assignments_type_value`               | `(code_type_id, code_value_id)`                                  | full                        | "activities by value of type T" (§9.2); per-value counts; the `(plan_id, code_type_id)` and `(code_type_id, code_value_id)` FK checks. 14 MB at 1.5 M rows                                       |
-| `code_value_assignments_organization_id_idx`          | `(organization_id)`                                              | full                        | org FK; export keyset (via the PK); 10 MB at 1.5 M rows                                                                                                                                          |
+| `code_value_assignments_organization_id_id_idx`       | `(organization_id, id)`                                          | full                        | org FK; export keyset (via the PK); 10 MB at 1.5 M rows                                                                                                                                          |
 | `uq_code_swimlane_lanes_basis`                        | `(plan_id, activity_id, code_type_id, code_value_id)`            | unique `NULLS NOT DISTINCT` | one row per basis; upsert arbiter; activity FK check; "lanes of these activities" load. Declared plain `@@unique`                                                                                |
 | `idx_code_swimlane_lanes_type_value`                  | `(code_type_id, code_value_id)`                                  | full                        | the type and value FK checks when expiry deletes values and types                                                                                                                                |
-| `code_swimlane_lanes_organization_id_idx`             | `(organization_id)`                                              | full                        | org FK; export                                                                                                                                                                                   |
+| `code_swimlane_lanes_organization_id_id_idx`          | `(organization_id, id)`                                          | full                        | org FK; export                                                                                                                                                                                   |
 | `uq_baseline_code_value_assignments_activity_type`    | `(baseline_id, source_activity_id, code_type_id)`                | full unique                 | DB-2 only: freeze-once; `baseline_id` FK check (the swimlanes §13.7 lesson: without it the baselines delete scanned the table, ~45× slower); load                                                |
 | `baseline_code_value_assignments_organization_id_idx` | `(organization_id)`                                              | full                        | DB-2 only: org FK; export                                                                                                                                                                        |
 | `uq_baseline_code_swimlane_lanes_basis`               | `(baseline_id, source_activity_id, code_type_id, code_value_id)` | unique `NULLS NOT DISTINCT` | DB-2 only: as above                                                                                                                                                                              |
@@ -1078,3 +1078,35 @@ planId_activityId_codeTypeId_codeValueId: { …, codeValueId: null } } })` is re
 - **D-P5.** Migration B is generated with `prisma migrate diff`, then hand-edited. The generator puts
   `uq_activities_plan_id_id` after the four `CREATE TABLE`s and before every foreign key. That order is
   valid. Reorder to §10.1's order only if it makes the file easier to read; nothing depends on it.
+
+---
+
+## 17. Landed: migration B (M2-T3, 2026-10-27)
+
+`20261027120100_p6_activity_codes`, by the database-architect. The figures are in the migration header
+and [`./m2-record.md`](./m2-record.md). Where the landed schema differs from §5–§13, the landed schema
+is the truth and this section says why.
+
+- **No `code_values.parent_id`** (Q5; `m0-record.md` finds `parent_actv_code_id` in one public source
+  only). So no `CodeValue.parent`/`children`, no `ck_code_values_parent_not_self` and no
+  `idx_code_values_parent_fk`. Adding them later is expand-only: a nullable column, the composite
+  self-key of §5.3, the partial index and the CHECK.
+- **DB-2 took the fallback** (Q1). Copying every type of a 5,000 × 30 plan added 2.4–2.8 s to one
+  capture, over the 1 s ceiling, and the row write alone was over 1 s with no keys or indexes. So
+  `baseline_code_value_assignments` and `baseline_code_swimlane_lanes` do **not** exist. Instead each
+  captured activity's value and lane for the frozen swimlane source type are three nullable columns on
+  `baseline_activities` (`code_value_id`, `code_lane_index`, `code_lane_updated_at`, with
+  `ck_baseline_activities_code_lane_pair`), and `CodeSnapshotLevel` is `NONE | SWIMLANE_TYPE` rather
+  than `NONE | FULL`, pinned to `swimlane_snapshot_level = 'FULL'` by `ck_baselines_code_snapshot_shape`.
+  Model count 38 → **42**, enums 30 → 31. §11's two DB-2 export files do not exist; the export gains
+  three appended `baseline_activities` columns and one `baselines` enum column instead. §8.1's runner
+  order loses its two DB-2 tables, and §8.5's `clearBaselineTree` pin stays at 5.
+- **`ASSIGNMENT_ROWS_PER_ACTIVITY = 4`** (§8.1), from the expiry measurement.
+- **Both FK-check indexes on the assignment and lane tables are required**, not merely useful: without
+  `idx_code_value_assignments_type_value` one plan's values delete took 177 s.
+- **The D-P1 gate** is `apps/api/src/common/query/nested-relation-writes.structural.spec.ts`. It covers
+  every relation into or out of the four code models, and `Activity.swimlane` / `Swimlane.members`
+  (D-P2).
+- **`swimlaneCodeTypeId` is classified `NOT_INPUT`** in `PLAN_FIELD_CLASS` and joins `PlanPatch`; it is
+  allowed into the classification ahead of `UpdatePlanDto` by a named allowance in
+  `schedule-inputs.structural.spec.ts`, which M2-T4 removes when the DTO admits it.

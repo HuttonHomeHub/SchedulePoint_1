@@ -1670,11 +1670,25 @@ export class InterchangeService {
       // they are named for the same reason as history. Lanes before activities, swimlanes after
       // them (activities.swimlane_id is RESTRICT) and before the plan.
       await tx.activitySwimlaneLane.deleteMany({ where: { activity: { planId } } });
+      // The P6 activity codes (database-design §8.4). Unlike the swimlane lines above these run on
+      // every failed import of a file that carried codes, and they are RESTRICT into activities,
+      // code values and code types: lanes and assignments first, by the plan id both carry.
+      await tx.codeSwimlaneLane.deleteMany({ where: { planId } });
+      await tx.codeValueAssignment.deleteMany({ where: { planId } });
       // Notes are RESTRICT into activities and the plan, so they go first or this raises 23503 and
       // leaves a half-imported plan behind.
       await tx.note.deleteMany({ where: { planId } });
       await tx.activity.deleteMany({ where: { planId } });
       await tx.swimlane.deleteMany({ where: { planId } });
+      // The plan's swimlane pointer and its code types are a RESTRICT cycle, so the pointer is cleared
+      // before the types go (the source with it: ck_plans_swimlane_source_level refuses ACTIVITY_CODE
+      // with no type). Values, then types, then the plan below.
+      await tx.plan.updateMany({
+        where: { id: planId, swimlaneCodeTypeId: { not: null } },
+        data: { swimlaneSource: 'NONE', swimlaneCodeTypeId: null },
+      });
+      await tx.codeValue.deleteMany({ where: { codeType: { planId } } });
+      await tx.codeType.deleteMany({ where: { planId } });
       // The pen we took for the recalc is released best-effort before this runs; clear any residual
       // lock row too so the plan delete can't FK-fail on plan_lock.
       await tx.planLock.deleteMany({ where: { planId } });

@@ -225,6 +225,13 @@ model Organization {
   // longer type does not realign the list above.
   baselineLanes BaselineActivitySwimlaneLane[]
 
+  // A plan's P6 activity codes (docs/specs/p6-activity-codes/database-design.md §5).
+  // organization_id is copied from the plan or activity inside the write, never from the request.
+  codeTypes            CodeType[]
+  codeValues           CodeValue[]
+  codeValueAssignments CodeValueAssignment[]
+  codeSwimlaneLanes    CodeSwimlaneLane[]
+
   @@map("organizations")
 }
 
@@ -773,6 +780,32 @@ enum SwimlaneSnapshotLevel {
   FULL
 }
 
+// WHAT A BASELINE FROZE OF THE P6 ACTIVITY CODES — the seventh amendment to ADR-0025's
+// snapshot-copy model (docs/specs/p6-activity-codes/database-design.md §6.2). The owner's Q1
+// (2026-10-27): freeze every type IF one capture of the largest plan adds at most 1 s, otherwise only
+// the swimlane source type. Copying every type of a 5,000-activity, 30-type plan measured 2.4-2.8 s
+// (migration 20261027120100_p6_activity_codes, m2-record.md), so this is the fallback shape. The
+// SwimlaneSnapshotLevel docblock carries the general argument.
+//
+//   NONE           nothing about codes was recorded: the constant DEFAULT and the permanent truth
+//                  of every baseline captured before the capture path writes codes.
+//   SWIMLANE_TYPE  the capture recorded, on every captured baseline_activities row, the activity's
+//                  value and code lane for the frozen swimlane code type
+//                  (baselines.swimlane_code_type_id). Requires swimlane_snapshot_level FULL. When the
+//                  frozen source is not ACTIVITY_CODE there is no such type, the three columns are
+//                  NULL, and that is complete rather than unrecorded.
+//
+// What it cannot do, stated rather than hidden: a plan that switches its swimlanes from one code
+// type to another after the baseline cannot place that baseline's REMOVED work in the new type's
+// swimlanes; it is counted instead. `NONE` IS PERMANENT: a capture cannot be re-run, and a backfill
+// would stamp today's codes as history. A later "every type" level is a new label (two migrations).
+// MUST stay in lock-step with the `CodeSnapshotLevel` union in @repo/types when the comparison
+// surfaces it.
+enum CodeSnapshotLevel {
+  NONE
+  SWIMLANE_TYPE
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -1078,6 +1111,13 @@ model Plan {
   /// otherwise. Enforced by the fail-closed ck_plans_swimlane_source_level (raw SQL, migration
   /// only). `NOT_INPUT`, no index, for the reasons above.
   swimlaneWbsLevel                      Int?                    @map("swimlane_wbs_level") @db.SmallInt
+  /// The code type whose live values are this plan's swimlanes: set iff swimlane_source =
+  /// 'ACTIVITY_CODE' (ck_plans_swimlane_source_level). Same plan BY THE DATABASE: the key is
+  /// (id, swimlane_code_type_id) → code_types (plan_id, id). `NOT_INPUT`, no index (the key's
+  /// referencing side is this table's primary key). WRITE IT AS A SCALAR ONLY (database-design §16,
+  /// D-P1, enforced by nested-relation-writes.structural.spec.ts): `swimlaneCodeType: { connect }`
+  /// rewrites plans.id and `{ disconnect: true }` is silently dropped.
+  swimlaneCodeTypeId                    String?                 @map("swimlane_code_type_id") @db.Uuid
   version                               Int                     @default(1)
   createdAt                             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1089,6 +1129,15 @@ model Plan {
   organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
   calendar            Calendar?               @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  // The swimlane-source code type (see swimlaneCodeTypeId). ON DELETE RESTRICT closes a cycle with
+  // code_types.plan_id, so every hard-delete path clears this pointer before deleting code types
+  // (database-design §5.7; the expiry census exempts Plan→CodeType for that reason). ON UPDATE
+  // RESTRICT: plans.id is part of the key. Do NOT `include` it: a to-one include is outside the
+  // ADR-0172 gate.
+  swimlaneCodeType    CodeType?               @relation("PlanSwimlaneCodeType", fields: [id, swimlaneCodeTypeId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  // This plan's P6 activity code types. RESTRICT; hard-deleted only with the plan (expiry) or by
+  // import compensation, after the pointer above is cleared.
+  codeTypes           CodeType[]              @relation("PlanCodeTypes")
   activities          Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies        ActivityDependency[]
@@ -1715,6 +1764,16 @@ model Activity {
   // Lane rows whose basis is THIS activity as a WBS_SUMMARY group. RESTRICT, same reason.
   summaryLanes  ActivitySwimlaneLane[] @relation("ActivitySwimlaneSummaryLanes")
 
+  // This activity's P6 activity code values and its lanes inside code swimlanes. Both reach it
+  // through the composite (plan_id, activity_id) key, so the database refuses a row of another
+  // plan. RESTRICT: every hard-delete path names both tables before deleting activities.
+  codeValueAssignments CodeValueAssignment[]
+  codeSwimlaneLanes    CodeSwimlaneLane[]
+
+  // The composite FK target for code_value_assignments and code_swimlane_lanes (plan_id,
+  // activity_id), and nothing else (migration 20261027120100_p6_activity_codes). plan_id and id
+  // never change, so it costs an insert and nothing on update.
+  @@unique([planId, id], map: "uq_activities_plan_id_id")
   // Activity name (and, when present, code) are unique per PLAN among ACTIVE rows
   // — partial uniques (uq_activities_plan_name, uq_activities_plan_code WHERE
   // deleted_at IS NULL [AND code IS NOT NULL]), raw SQL in the migration.
@@ -2316,6 +2375,18 @@ model Baseline {
   swimlaneSnapshotLevel SwimlaneSnapshotLevel @default(NONE) @map("swimlane_snapshot_level")
   swimlaneSource        SwimlaneSource?       @map("swimlane_source")
   swimlaneWbsLevel      Int?                  @map("swimlane_wbs_level") @db.SmallInt
+  /// The plan's `swimlane_code_type_id` AT CAPTURE: set iff the frozen source is ACTIVITY_CODE
+  /// (ck_baselines_swimlane_snapshot_shape, the live ck_plans_swimlane_source_level verbatim). A
+  /// correlation id with NO foreign key (ADR-0025), no index (read with its own row). Mandatory
+  /// whatever DB-2 said: without it the first capture of a code-sourced plan fails 23514
+  /// (database-design §6.1).
+  swimlaneCodeTypeId    String?               @map("swimlane_code_type_id") @db.Uuid
+  /// WHAT this baseline froze of the P6 activity codes (the CodeSnapshotLevel docblock). Constant
+  /// DEFAULT 'NONE' ⇒ metadata-only ADD COLUMN; written SWIMLANE_TYPE unconditionally by every capture
+  /// once the capture path is taught the codes, and then immutable. SWIMLANE_TYPE requires
+  /// `swimlaneSnapshotLevel` FULL (ck_baselines_code_snapshot_shape), because the frozen swimlane
+  /// source is what says which type baseline_activities.code_value_id belongs to.
+  codeSnapshotLevel     CodeSnapshotLevel     @default(NONE) @map("code_snapshot_level")
 
   /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
   ///
@@ -2618,6 +2689,23 @@ model BaselineActivity {
   /// level tells them apart. No CHECK (the live column has only its FK) and no index (read only with
   /// its own row when a comparison loads a whole baseline). IMMUTABLE after capture.
   swimlaneId String? @map("swimlane_id") @db.Uuid
+
+  /// THE ACTIVITY'S P6 ACTIVITY CODE FOR THE FROZEN SWIMLANE SOURCE TYPE (the CodeSnapshotLevel
+  /// docblock; database-design §6.2's fallback, taken because copying every type measured over the
+  /// owner's 1 s ceiling — migration 20261027120100_p6_activity_codes). Meaningful only when the
+  /// baseline's `code_snapshot_level` is SWIMLANE_TYPE and its frozen `swimlane_source` is
+  /// ACTIVITY_CODE; then:
+  ///   * `codeValueId` is the activity's code_value_assignments value for
+  ///     `baselines.swimlane_code_type_id` at capture, NULL meaning "no value of that type";
+  ///   * `codeLaneIndex` / `codeLaneUpdatedAt` are its code_swimlane_lanes row for (that type, that
+  ///     value or "no value") at capture, NULL meaning "never placed there" (both or neither,
+  ///     ck_baseline_activities_code_lane_pair). updated_at is the projection's collision tie-break.
+  /// Otherwise all three are NULL. Correlation ids with NO foreign key (ADR-0025); no index (read
+  /// with their own row). IMMUTABLE after capture. One value per activity, so the capture writes no
+  /// extra rows: the three columns ride the baseline_activities createMany it already makes.
+  codeValueId       String?   @map("code_value_id") @db.Uuid
+  codeLaneIndex     Int?      @map("code_lane_index")
+  codeLaneUpdatedAt DateTime? @map("code_lane_updated_at") @db.Timestamptz(3)
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -3999,6 +4087,188 @@ model ActivitySwimlaneLane {
   // Backs the organization FK's RESTRICT check and the export `org` read.
   @@index([organizationId])
   @@map("activity_swimlane_lanes")
+}
+
+// ---------------------------------------------------------------------------
+// P6 ACTIVITY CODES (docs/specs/p6-activity-codes/spec.md; schema:
+// docs/specs/p6-activity-codes/database-design.md, which holds the reasoning; migration
+// 20261027120100_p6_activity_codes holds the measurements). Plan-scoped (DB-1): every P6 code type,
+// whatever its P6 scope, is the plan's own. Every composite key carries its scope column, so the
+// DATABASE refuses a code of another plan or a value of another type.
+//
+// WRITE EVERY RELATION BELOW THROUGH ITS SCALAR COLUMNS (database-design §16, D-P1). Prisma's nested
+// writes on these composite shapes misbehave silently: `connect` on two relations sharing
+// code_type_id keeps the last one, so a planner asking for Trade gets Area, and the stored row is
+// consistent, so no key refuses it. nested-relation-writes.structural.spec.ts fails the build on a
+// nested write to any of them.
+// ---------------------------------------------------------------------------
+
+/// A plan's P6 activity code type ("Area", "Trade"). Plan content, like a swimlane: soft-deleted on
+/// its own (sweeping its live values into the same batch), swept into its plan's batch by the plan
+/// cascade, hard-deleted only with its plan (ADR-0096 expiry) or by import compensation. Never listed
+/// in Recently deleted. Not a scheduling input. Joins the ADR-0172 soft-delete gate's subject.
+///
+/// Raw SQL (migration only, not declared): uq_code_types_plan_name (plan_id, lower(name)) WHERE
+/// deleted_at IS NULL; idx_code_types_delete_batch_id; ck_code_types_name_shape;
+/// ck_code_types_position_nonneg.
+model CodeType {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the plan inside the create transaction, never client input. RESTRICT.
+  organizationId String    @map("organization_id") @db.Uuid
+  planId         String    @map("plan_id") @db.Uuid
+  // 1-80 chars, trimmed, no control characters (ck_code_types_name_shape). Unique per plan among
+  // live rows IGNORING CASE (uq_code_types_plan_name); a soft-deleted name does not block reuse.
+  name           String
+  // Order key, read as ORDER BY position, id. Deliberately NOT unique (the swimlanes Q1 reasoning).
+  // >= 0 (ck_code_types_position_nonneg). The cap of 100 live types per plan is a service count.
+  position       Int
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?   @map("delete_batch_id") @db.Uuid
+
+  organization  Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan          Plan                  @relation("PlanCodeTypes", fields: [planId], references: [id], onDelete: Restrict)
+  swimlanePlans Plan[]                @relation("PlanSwimlaneCodeType")
+  values        CodeValue[]
+  assignments   CodeValueAssignment[]
+  lanes         CodeSwimlaneLane[]
+
+  // The composite FK target for plans, assignments and lanes. Its leftmost prefix also backs the
+  // plan_id FK, the plan's type list (≤ 100 live, sorted in memory), the cascade sweep and the
+  // expiry delete, so there is no separate (plan_id) index.
+  @@unique([planId, id], map: "uq_code_types_plan_id_id")
+  // Backs the organization FK's RESTRICT check, IDOR loads and the export `org` read.
+  @@index([organizationId])
+  @@map("code_types")
+}
+
+/// One value of a code type ("L1", described "Level 1 East"). Soft-deleted on its own, swept with
+/// its type and with its plan. An assignment may name a SOFT-DELETED value: that activity reads as
+/// having no value for the type, and comes back when the value is restored (the ADR-0206 A8 rule for
+/// swimlanes). A NEW assignment to a deleted value is refused by the service. Flat: no parent column
+/// until a real P6 export confirms ACTVCODE carries one (Q5; m0-record.md). Joins the ADR-0172 gate.
+///
+/// Raw SQL (migration only, not declared): uq_code_values_type_short_code (code_type_id,
+/// lower(short_code)) WHERE deleted_at IS NULL; idx_code_values_delete_batch_id;
+/// ck_code_values_short_code_shape; ck_code_values_description_shape; ck_code_values_position_nonneg.
+model CodeValue {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the type inside the create transaction, never client input. RESTRICT.
+  organizationId String    @map("organization_id") @db.Uuid
+  codeTypeId     String    @map("code_type_id") @db.Uuid
+  // 1-80 chars, trimmed, no control characters (ck_code_values_short_code_shape; provisional, Q5).
+  // Unique per type among live rows IGNORING CASE (uq_code_values_type_short_code).
+  shortCode      String    @map("short_code")
+  // NULL or 1-255 chars, trimmed, no control characters (ck_code_values_description_shape;
+  // provisional, Q5). Empty is stored as NULL, never ''.
+  description    String?
+  // ORDER BY position, id; not unique; >= 0 (ck_code_values_position_nonneg). Cap 1,000 live per
+  // type is a service count.
+  position       Int
+  version        Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy      String?   @map("created_by")
+  updatedBy      String?   @map("updated_by")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId  String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  codeType     CodeType              @relation(fields: [codeTypeId], references: [id], onDelete: Restrict)
+  assignments  CodeValueAssignment[]
+  lanes        CodeSwimlaneLane[]
+
+  // The composite FK target for assignments and lanes. Its leftmost prefix also backs the
+  // code_type_id FK, a type's value list (≤ 1,000 live, sorted in memory), the sweeps and the expiry
+  // delete.
+  @@unique([codeTypeId, id], map: "uq_code_values_type_id_id")
+  // Backs the organization FK's RESTRICT check and the export `org` read.
+  @@index([organizationId])
+  @@map("code_values")
+}
+
+/// Which value an activity carries for a code type: at most one per (activity, type); "no value" is
+/// the absence of a row. A join row: no deleted_at, no version, no actor columns (the
+/// ActivitySwimlaneLane precedent). Written only inside an activity write that holds the activity
+/// row lock (id order) and bumps activities.version, so the activity's version is the optimistic
+/// lock for its codes and its updated_by and history (ADR-0174) say who changed them. Soft-deleting
+/// the activity leaves the rows; unassigning deletes the row; changing the value updates it in place.
+///
+/// plan_id and code_type_id are denormalised so the three composite keys can refuse an activity of
+/// another plan, a type of another plan and a value of another type (23503). Do NOT `include` the
+/// codeValue or codeType: a to-one include is outside the ADR-0172 gate and would return a deleted
+/// row as live; read the type's value list separately with deletedAt: null.
+model CodeValueAssignment {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  planId         String   @map("plan_id") @db.Uuid
+  activityId     String   @map("activity_id") @db.Uuid
+  codeTypeId     String   @map("code_type_id") @db.Uuid
+  codeValueId    String   @map("code_value_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  activity     Activity     @relation(fields: [planId, activityId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  codeType     CodeType     @relation(fields: [planId, codeTypeId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  codeValue    CodeValue    @relation(fields: [codeTypeId, codeValueId], references: [codeTypeId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One value per (activity, type); the upsert arbiter; the (plan_id, activity_id) FK RESTRICT check
+  // (leftmost two columns); the plan load and the page load; expiry and compensation delete by plan.
+  @@unique([planId, activityId, codeTypeId], map: "uq_code_value_assignments_plan_activity_type")
+  // "Activities by value of type T", the per-value counts, and the (plan_id, code_type_id) and
+  // (code_type_id, code_value_id) FK RESTRICT checks when expiry deletes types and values.
+  @@index([codeTypeId, codeValueId], map: "idx_code_value_assignments_type_value")
+  // Backs the organization FK's RESTRICT check (organization_id leads) and the export `org` keyset read
+  // (organization_id = $1 AND id > $last ORDER BY id LIMIT 1000), which this serves without a sort.
+  @@index([organizationId, id])
+  @@map("code_value_assignments")
+}
+
+/// An activity's lane inside a swimlane made from a code type, kept per (type, value) so switching
+/// between code types, moving between values and restoring a deleted value each return the exact lane
+/// last written there (ADR-0206 A1-A2, for code swimlanes). code_value_id NULL is the "no value of this
+/// type" swimlane: the real absence of a value, not a sentinel (ADR-0139). A table of its own, not two
+/// columns on activity_swimlane_lanes: widening that table's unique would break the previous image's
+/// lane upsert on every plan (42P10), making the release unsafe to roll back. Lifecycle as
+/// ActivitySwimlaneLane: no version, no deleted_at, no actor columns; written only under the activity
+/// row lock in a write that bumps activities.version.
+///
+/// Raw SQL (migration only): the NULLS NOT DISTINCT clause on the unique below (declared as a plain
+/// @@unique, the docs/DATABASE.md rule); ck_code_swimlane_lanes_lane_index_nonneg. The upsert must be
+/// raw INSERT … ON CONFLICT: a compound-unique `where` cannot name a NULL (database-design §16.2 item 6).
+model CodeSwimlaneLane {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  planId         String   @map("plan_id") @db.Uuid
+  activityId     String   @map("activity_id") @db.Uuid
+  codeTypeId     String   @map("code_type_id") @db.Uuid
+  codeValueId    String?  @map("code_value_id") @db.Uuid
+  // >= 0 (ck_code_swimlane_lanes_lane_index_nonneg); the 10,000 ceiling is the DTO's.
+  laneIndex      Int      @map("lane_index")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // The projection's collision tie-break, as on activity_swimlane_lanes.
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  activity     Activity     @relation(fields: [planId, activityId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  codeType     CodeType     @relation(fields: [planId, codeTypeId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  codeValue    CodeValue?   @relation(fields: [codeTypeId, codeValueId], references: [codeTypeId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // DECLARED as a plain unique so prisma:check-drift stays empty; the migration adds NULLS NOT
+  // DISTINCT so the "no value" row is one per (activity, type). The upsert arbiter, the activity FK
+  // RESTRICT check (leftmost prefix) and the "lanes of these activities" load.
+  @@unique([planId, activityId, codeTypeId, codeValueId], map: "uq_code_swimlane_lanes_basis")
+  // The type and value FK RESTRICT checks when expiry deletes values and types.
+  @@index([codeTypeId, codeValueId], map: "idx_code_swimlane_lanes_type_value")
+  // Backs the organization FK's RESTRICT check (organization_id leads) and the export `org` keyset read
+  // (organization_id = $1 AND id > $last ORDER BY id LIMIT 1000), which this serves without a sort.
+  @@index([organizationId, id])
+  @@map("code_swimlane_lanes")
 }
 
 // A Note — one authored, timestamped entry in an entity's append-accumulating

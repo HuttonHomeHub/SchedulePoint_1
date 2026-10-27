@@ -101,6 +101,8 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'activityStep',
       'activityHistoryEntry',
       'activitySwimlaneLane',
+      'codeSwimlaneLane',
+      'codeValueAssignment',
       'note',
       'baselineAssignment',
       'baselineDependency',
@@ -110,6 +112,8 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
       'planShare',
       'activity',
       'swimlane',
+      'codeValue',
+      'codeType',
       'plan',
       'calendarException',
       'calendar',
@@ -151,6 +155,12 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
    * table: `Resource` is exempt only for its edge into `Calendar`, so a future `resources.plan_id`
    * would still fail here.
    *
+   * The SECOND stated exemption is `Plan→CodeType` (P6 activity codes, database-design §8.1):
+   * `plans.swimlane_code_type_id` is a RESTRICT key into a table the sweep deletes, while
+   * `code_types.plan_id` is the reverse RESTRICT key, so no order of deletes satisfies both. The
+   * runner clears the plan's pointer in an `updateMany` first, and an exemption must be paid for by
+   * a check rather than a comment, so the test below asserts that statement precedes the type delete.
+   *
    * **The pinned positive case is not decoration.** "Every required model appears" passes
    * perfectly over an empty derived set — the green-for-having-found-nothing failure this
    * repository keeps recording — so the census first asserts it found a substantial set including
@@ -163,8 +173,8 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
     const order = raw.filter((name, i) => name !== raw[i - 1]);
     const positionOf = new Map(order.map((name, i) => [name, i]));
 
-    /** `Resource` is exempt for its edge into `Calendar` ONLY — see the docblock. */
-    const EXEMPT_EDGES = new Set(['Resource→Calendar']);
+    /** Each exempt for ONE edge only — see the docblock. `Plan→CodeType` is paid for by the next test. */
+    const EXEMPT_EDGES = new Set(['Resource→Calendar', 'Plan→CodeType']);
 
     const required: string[] = [];
     const missing: string[] = [];
@@ -201,6 +211,10 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
     expect(required).toContain('Swimlane→Plan');
     expect(required).toContain('Activity→Swimlane');
     expect(required).toContain('ActivitySwimlaneLane→Activity');
+    expect(required).toContain('CodeValueAssignment→Activity');
+    expect(required).toContain('CodeSwimlaneLane→Activity');
+    expect(required).toContain('CodeType→Plan');
+    expect(required).toContain('CodeValue→CodeType');
 
     expect(
       missing,
@@ -208,6 +222,21 @@ describe('the hierarchy expiry cannot reach what it must not', () => {
         'the sweep will raise 23503 and retry the batch hourly, forever',
     ).toEqual([]);
     expect(misordered, 'a referencing table is deleted AFTER the table it references').toEqual([]);
+  });
+
+  it('clears the plan’s swimlane pointer before it deletes a code type (the Plan→CodeType exemption)', () => {
+    // The census exempts the pair because no order satisfies both keys; this is what the exemption
+    // costs. Without the update, `DELETE FROM code_types` raises 23503 on every plan whose swimlanes
+    // come from a code, and the batch is retried hourly forever.
+    const source = code(RUNNER);
+    const clear = source.indexOf('tx.plan.updateMany');
+    const deleteTypes = source.indexOf('tx.codeType.deleteMany');
+    expect(clear, 'the runner clears the pointer').toBeGreaterThan(-1);
+    expect(deleteTypes, 'the runner deletes code types').toBeGreaterThan(-1);
+    expect(clear).toBeLessThan(deleteTypes);
+    expect(source.slice(clear, deleteTypes)).toContain('swimlaneCodeTypeId: null');
+    // And it is the plan's own pointer, not the plan: the plan is deleted after the types.
+    expect(source.indexOf('tx.plan.deleteMany')).toBeGreaterThan(deleteTypes);
   });
 
   it('is not exported from its module, and no controller can call it', () => {

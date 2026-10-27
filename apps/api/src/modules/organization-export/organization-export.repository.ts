@@ -119,6 +119,10 @@ export const EXPORT_STRATEGY: Readonly<Record<string, { read: ExportRead; parent
     Note: { read: 'per-plan' },
     Swimlane: { read: 'org' },
     ActivitySwimlaneLane: { read: 'org' },
+    CodeType: { read: 'org' },
+    CodeValue: { read: 'org' },
+    CodeValueAssignment: { read: 'org' },
+    CodeSwimlaneLane: { read: 'org' },
     AuditEvent: { read: 'org' },
   };
 
@@ -203,6 +207,14 @@ function readPage(db: Db, model: string, q: PageQuery, select: Select): Promise<
       return db.swimlane.findMany({ where: org, ...page });
     case 'ActivitySwimlaneLane':
       return db.activitySwimlaneLane.findMany({ where: org, ...page });
+    case 'CodeType':
+      return db.codeType.findMany({ where: org, ...page });
+    case 'CodeValue':
+      return db.codeValue.findMany({ where: org, ...page });
+    case 'CodeValueAssignment':
+      return db.codeValueAssignment.findMany({ where: org, ...page });
+    case 'CodeSwimlaneLane':
+      return db.codeSwimlaneLane.findMany({ where: org, ...page });
     case 'Note':
       return db.note.findMany({ where: { ...org, planId: plan(q) }, ...page });
     // Exactly the rows the Audit log screen reads: this organisation's, and none of the

@@ -8,6 +8,7 @@ import * as runner from './hierarchy-expiry.runner';
 import {
   HISTORY_ROWS_PER_ACTIVITY,
   HierarchyExpiryService,
+  ASSIGNMENT_ROWS_PER_ACTIVITY,
   LANE_ROWS_PER_ACTIVITY,
 } from './hierarchy-expiry.service';
 
@@ -121,6 +122,8 @@ beforeEach(() => {
     activities: 10,
     activityHistoryEntries: 4,
     activitySwimlaneLanes: 0,
+    codeValueAssignments: 0,
+    codeSwimlaneLanes: 0,
   });
 });
 
@@ -312,6 +315,8 @@ describe('the budget and the failure path', () => {
       activities: 20_000,
       activityHistoryEntries: 0,
       activitySwimlaneLanes: 0,
+      codeValueAssignments: 0,
+      codeSwimlaneLanes: 0,
     });
     const { service } = build({ clients: [client('c1'), client('c2'), client('c3')] });
     await service.sweepNow(NOW);
@@ -328,6 +333,8 @@ describe('the budget and the failure path', () => {
       activities: 100,
       activityHistoryEntries: 19_900 * HISTORY_ROWS_PER_ACTIVITY,
       activitySwimlaneLanes: 0,
+      codeValueAssignments: 0,
+      codeSwimlaneLanes: 0,
     });
     const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);
@@ -342,6 +349,42 @@ describe('the budget and the failure path', () => {
       activities: 100,
       activityHistoryEntries: 0,
       activitySwimlaneLanes: 19_900 * LANE_ROWS_PER_ACTIVITY,
+      codeValueAssignments: 0,
+      codeSwimlaneLanes: 0,
+    });
+    const { service } = build({ clients: [client('c1'), client('c2')] });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('charges code value assignments to the activity budget, not only the activities', async () => {
+    deleteScope.mockResolvedValue({
+      clients: 1,
+      projects: 0,
+      plans: 1,
+      activities: 100,
+      activityHistoryEntries: 0,
+      activitySwimlaneLanes: 0,
+      codeValueAssignments: 19_900 * ASSIGNMENT_ROWS_PER_ACTIVITY,
+      codeSwimlaneLanes: 0,
+    });
+    const { service } = build({ clients: [client('c1'), client('c2')] });
+    await service.sweepNow(NOW);
+    expect(deleteScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('charges code lane rows at the swimlane lane rate, together with the swimlane lanes', async () => {
+    // Half the 19,900 equivalents as swimlane lanes and half as code lanes: summed, they reach the
+    // budget; charged on their own they would not.
+    deleteScope.mockResolvedValue({
+      clients: 1,
+      projects: 0,
+      plans: 1,
+      activities: 100,
+      activityHistoryEntries: 0,
+      activitySwimlaneLanes: 9_950 * LANE_ROWS_PER_ACTIVITY,
+      codeValueAssignments: 0,
+      codeSwimlaneLanes: 9_950 * LANE_ROWS_PER_ACTIVITY,
     });
     const { service } = build({ clients: [client('c1'), client('c2')] });
     await service.sweepNow(NOW);
@@ -384,6 +427,8 @@ describe('the budget and the failure path', () => {
               activities: 1,
               activityHistoryEntries: 0,
               activitySwimlaneLanes: 0,
+              codeValueAssignments: 0,
+              codeSwimlaneLanes: 0,
             });
         }),
     );
@@ -413,6 +458,8 @@ describe('the budget and the failure path', () => {
       activities: 0,
       activityHistoryEntries: 0,
       activitySwimlaneLanes: 0,
+      codeValueAssignments: 0,
+      codeSwimlaneLanes: 0,
     });
     const plans = Array.from({ length: 2_100 }, (_, i) => plan(`p${i}`, `proj-${i}`));
     const { service } = build({ plans });

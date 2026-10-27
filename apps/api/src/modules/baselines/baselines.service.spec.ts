@@ -28,6 +28,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     organizationId: ORG_ID,
     swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
     projectId: 'proj-1',
     name: 'Baseline plan',
     description: null,
@@ -88,6 +89,8 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     swimlaneSnapshotLevel: 'NONE',
     swimlaneSource: null,
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
+    codeSnapshotLevel: 'NONE',
     // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
     // unknown, which is what a baseline captured before the freeze shipped should say.
     criticalPathDefinition: null,

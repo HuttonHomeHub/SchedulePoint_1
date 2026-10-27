@@ -12,6 +12,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * End-to-end tests for the revision comparison (revision M1-T4):
@@ -63,7 +64,7 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     await prisma.activityStep.deleteMany();
     await clearActivityTree(prisma);
     await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();
