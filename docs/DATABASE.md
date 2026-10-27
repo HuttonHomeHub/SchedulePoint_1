@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 38
-> models across 78 committed migrations — is the single source of truth for the data model.
+> models across 79 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1655,7 +1655,10 @@ holds the reasoning; migration `20261023120000_swimlanes` holds the measurements
   where ADR-0201 refuses one onto a deleted calendar.
 - **`plans.swimlane_source`** (`NONE`/`MANUAL`/`WBS`, default `NONE`) and **`swimlane_wbs_level`**
   (1–3 iff `WBS`) are pinned by the fail-closed `ck_plans_swimlane_source_level`. Neither is a
-  scheduling input.
+  scheduling input. The enum also has `ACTIVITY_CODE` (P6 activity codes, migration A,
+  `20261027120000_swimlane_source_activity_code`), added alone because a CHECK cannot name a label in
+  the transaction that added it; until the codes migration gives both swimlane CHECKs a branch for it,
+  `ELSE false` keeps every `plans` and `baselines` row from holding it.
 - **`activity_swimlane_lanes`** keeps an activity's in-swimlane lane **per basis**
   (`SwimlaneLaneBasis`: a swimlane, "No swimlane", a WBS summary, or "No WBS group" at a level),
   pinned by the fail-closed `ck_activity_swimlane_lanes_basis_shape`. "Never placed against this

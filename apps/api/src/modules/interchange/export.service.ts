@@ -255,7 +255,10 @@ export class ExportService {
         dataDate: formatCalendarDate(plan.plannedStart),
         defaultCalendarKey: calendarKeyOrNull(plan.calendarId),
         // Where the plan's swimlanes come from; the pure mapper decides whether and how to write them.
-        swimlaneSource: plan.swimlaneSource,
+        // ACTIVITY_CODE cannot be stored yet (20261027120000_swimlane_source_activity_code) and the
+        // XER/MSPDI layout fields have no form for it; it travels as NONE until the codes export
+        // milestone gives it one.
+        swimlaneSource: plan.swimlaneSource === 'ACTIVITY_CODE' ? 'NONE' : plan.swimlaneSource,
         swimlaneWbsLevel: plan.swimlaneWbsLevel,
       },
       swimlanes: swimlaneRows.map((s) => ({ key: s.id, name: s.name })),

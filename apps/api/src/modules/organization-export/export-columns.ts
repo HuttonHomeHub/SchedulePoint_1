@@ -974,7 +974,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '2.1';
+export const EXPORT_FORMAT_VERSION = '2.2';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';

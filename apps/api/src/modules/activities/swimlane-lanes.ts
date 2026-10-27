@@ -115,5 +115,12 @@ export function deriveLaneBasis(
           }
         : { basis: 'NO_WBS_SUMMARY', swimlaneId: null, summaryActivityId: null, wbsLevel: level };
     }
+    case 'ACTIVITY_CODE':
+      // Unreachable: the label exists in the database before anything can store it
+      // (20261027120000_swimlane_source_activity_code). ck_plans_swimlane_source_level has no
+      // ACTIVITY_CODE branch yet and ends ELSE false, and UpdatePlanDto does not admit it. Code lanes
+      // are designed to live in their own table rather than under a SwimlaneLaneBasis
+      // (p6-activity-codes database-design.md §5.5); the codes milestones decide how they are written.
+      throw new Error('A plan whose swimlanes come from an activity code has no lane basis here.');
   }
 }

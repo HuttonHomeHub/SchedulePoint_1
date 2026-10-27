@@ -25,7 +25,12 @@ describe('swimlane enums', () => {
   it('match @repo/types member for member', () => {
     expect(sourceLockStep).toBe(true);
     expect(basisLockStep).toBe(true);
-    expect(Object.values(PrismaSwimlaneSource).sort()).toEqual(['MANUAL', 'NONE', 'WBS']);
+    expect(Object.values(PrismaSwimlaneSource).sort()).toEqual([
+      'ACTIVITY_CODE',
+      'MANUAL',
+      'NONE',
+      'WBS',
+    ]);
     expect(Object.values(PrismaSwimlaneLaneBasis).sort()).toEqual([
       'NO_SWIMLANE',
       'NO_WBS_SUMMARY',

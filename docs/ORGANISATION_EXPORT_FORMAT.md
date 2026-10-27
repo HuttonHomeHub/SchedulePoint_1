@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `2.1`
+- **Version:** `2.2`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "2.1",
+  "formatVersion": "2.2",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,6 +145,12 @@ version.
 
 Changes since `1.0`:
 
+- **`2.2`** — swimlanes made from activity codes, first part. `plans.swimlaneSource` and
+  `baselines.swimlaneSource` gain the value `ACTIVITY_CODE`: the swimlanes are the values of one of the
+  plan's activity codes ("Area", "Trade"). Nothing can hold it yet, so no export so far contains it; it is
+  listed now because the product's list of values has it. The files that hold the codes themselves are
+  added under this same version if they ship in the same release. Nothing is renamed or retyped, so a
+  reader written for `2.1` reads `2.2`.
 - **`2.1`** — swimlanes. Three new files, `swimlanes`, `activity-swimlane-lanes` and
   `baseline-activity-swimlane-lanes`, and seven appended columns: `plans.swimlaneSource`,
   `plans.swimlaneWbsLevel`, `activities.swimlaneId`, `baselines.swimlaneSnapshotLevel`,
@@ -199,7 +205,7 @@ The values each enum column may hold today, by `file.column`. A newer minor vers
 - `plans.eacMethod`: CPI, REMAINING_AT_BUDGET, CPI_TIMES_SPI
 - `plans.scheduleCriticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
 - `plans.scheduleTotalFloatMode`: START, FINISH, SMALLEST
-- `plans.swimlaneSource`: NONE, MANUAL, WBS
+- `plans.swimlaneSource`: NONE, MANUAL, WBS, ACTIVITY_CODE
 - `activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
 - `activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
@@ -219,7 +225,7 @@ The values each enum column may hold today, by `file.column`. A newer minor vers
 - `baselines.criticalPathDefinition`: TOTAL_FLOAT, LONGEST_PATH
 - `baselines.totalFloatMode`: START, FINISH, SMALLEST
 - `baselines.swimlaneSnapshotLevel`: NONE, FULL
-- `baselines.swimlaneSource`: NONE, MANUAL, WBS
+- `baselines.swimlaneSource`: NONE, MANUAL, WBS, ACTIVITY_CODE
 - `baseline-activities.type`: TASK, START_MILESTONE, FINISH_MILESTONE, HAMMOCK, LEVEL_OF_EFFORT, WBS_SUMMARY, RESOURCE_DEPENDENT
 - `baseline-activities.constraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH
 - `baseline-activities.secondaryConstraintType`: SNET, SNLT, FNET, FNLT, MSO, MFO, MANDATORY_START, MANDATORY_FINISH

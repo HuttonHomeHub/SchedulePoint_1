@@ -721,6 +721,11 @@ enum SwimlaneSource {
   NONE
   MANUAL
   WBS
+  /// swimlanes are the live values of a code type (P6 activity codes, database-design.md §5.1).
+  /// Added alone by 20261027120000_swimlane_source_activity_code; NO row can hold it until the
+  /// next migration gives ck_plans_swimlane_source_level an ACTIVITY_CODE branch, and the API's
+  /// UpdatePlanDto does not admit it.
+  ACTIVITY_CODE
 }
 
 /// What an activity's in-swimlane lane was written against (spec §4.4, "lane basis";

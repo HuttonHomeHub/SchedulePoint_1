@@ -132,6 +132,18 @@ describe.skipIf(!hasDatabase)('Swimlane tables (e2e)', () => {
     ).rejects.toMatchObject({ code: 'P2003' });
   });
 
+  it('refuses ACTIVITY_CODE on a plan that names no code type (fail-closed CHECK)', async () => {
+    // 20261027120000_swimlane_source_activity_code adds the label alone, and the fail-closed
+    // ck_plans_swimlane_source_level (ELSE false) keeps every row from holding it. Once the codes
+    // schema gives the CHECK an ACTIVITY_CODE branch, this row is still refused: it names no type.
+    const { planId } = await setup();
+    await expect(
+      prisma.plan.update({ where: { id: planId }, data: { swimlaneSource: 'ACTIVITY_CODE' } }),
+    ).rejects.toThrow(/ck_plans_swimlane_source_level/);
+    const after = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(after.swimlaneSource).toBe('NONE');
+  });
+
   it('stamps a plan’s swimlanes into its delete batch and restores them with it', async () => {
     const { agent, orgId, planId, activityId } = await setup();
     const swimlane = await prisma.swimlane.create({
