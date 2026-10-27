@@ -68,6 +68,15 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   // Swimlanes are RESTRICT-referenced by `activities.swimlane_id` (and by their lane rows, which
   // `clearActivityTree` has already removed), so they go after the activities and before the plan.
   await prisma.swimlane.deleteMany();
+  // Code types are RESTRICT-referenced by the plan's swimlane pointer (a cycle: the plan also owns
+  // them), by their values, and by assignments and lanes (already gone with the activities). So the
+  // pointer is cleared first, then values, then types, all before the plan.
+  await prisma.plan.updateMany({
+    where: { swimlaneCodeTypeId: { not: null } },
+    data: { swimlaneSource: 'NONE', swimlaneCodeTypeId: null },
+  });
+  await prisma.codeValue.deleteMany();
+  await prisma.codeType.deleteMany();
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.
   await clearBaselineTree(prisma);

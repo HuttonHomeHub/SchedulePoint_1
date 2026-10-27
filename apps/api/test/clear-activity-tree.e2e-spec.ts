@@ -17,6 +17,8 @@ describe('clearActivityTree', () => {
       'ActivityHistoryEntry',
       'ActivityStep',
       'ActivitySwimlaneLane',
+      'CodeSwimlaneLane',
+      'CodeValueAssignment',
       'CrossPlanDependency',
       'Note',
       'ResourceAssignment',
@@ -36,6 +38,8 @@ describe('clearActivityTree', () => {
       activityHistoryEntry: delegate('ActivityHistoryEntry'),
       activityStep: delegate('ActivityStep'),
       activitySwimlaneLane: delegate('ActivitySwimlaneLane'),
+      codeSwimlaneLane: delegate('CodeSwimlaneLane'),
+      codeValueAssignment: delegate('CodeValueAssignment'),
       crossPlanDependency: delegate('CrossPlanDependency'),
       note: delegate('Note'),
       resourceAssignment: delegate('ResourceAssignment'),
@@ -44,13 +48,15 @@ describe('clearActivityTree', () => {
 
     await clearActivityTree(stub);
 
-    expect(calls).toHaveLength(8);
+    expect(calls).toHaveLength(10);
     expect(calls.at(-1)).toBe('Activity');
-    expect(calls.slice(0, 7).sort()).toEqual([
+    expect(calls.slice(0, 9).sort()).toEqual([
       'ActivityDependency',
       'ActivityHistoryEntry',
       'ActivityStep',
       'ActivitySwimlaneLane',
+      'CodeSwimlaneLane',
+      'CodeValueAssignment',
       'CrossPlanDependency',
       'Note',
       'ResourceAssignment',

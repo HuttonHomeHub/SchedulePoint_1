@@ -11,6 +11,7 @@ import { computeSchedule } from '../../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { clearAuditEvents } from '../audit-reset';
 import { clearActivityTree } from '../clear-activity-tree';
+import { clearPlanTree } from '../clear-plan-tree';
 
 import { COMPARED_FIELDS, formatDivergences, type Divergence } from './divergence';
 import { specToEngineInput } from './spec-to-engine';
@@ -114,7 +115,7 @@ describe.skipIf(!hasDatabase)('Pairwise differential (e2e)', () => {
     await prisma.note.deleteMany();
     await clearActivityTree(prisma);
     await prisma.planLock.deleteMany();
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();

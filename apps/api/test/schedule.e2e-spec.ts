@@ -12,6 +12,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 import { EV_UNPLACED_GOLDEN } from './fixtures/ev-unplaced-golden';
 
 /**
@@ -88,7 +89,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // sharing, and takes 145 unrelated tests down with it. Five other suites already delete these;
     // this one was written before ADR-0051 and never caught up.
     await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();

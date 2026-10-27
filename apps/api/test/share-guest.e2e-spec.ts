@@ -11,6 +11,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 import { resetThrottleCounters } from './throttle-reset';
 
 /**
@@ -107,7 +108,7 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
     await clearActivityTree(prisma);
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();

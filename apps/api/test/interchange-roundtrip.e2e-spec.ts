@@ -13,6 +13,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * **Seed → export XER → re-import → diff** (ADR-0066 M5.4).
@@ -117,7 +118,7 @@ describe.skipIf(!hasDatabase)('Interchange round-trip fidelity (e2e)', () => {
     // from another suite, not from this one.
     await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarExceptionWindow.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendarShift.deleteMany();

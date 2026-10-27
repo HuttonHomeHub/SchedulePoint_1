@@ -11,6 +11,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * End-to-end tests for the External-Guest share-link MANAGEMENT API (Stage F,
@@ -102,7 +103,7 @@ describe.skipIf(!hasDatabase)('Share links API (e2e)', () => {
     // Ordering it correctly costs nothing on the runs where the table is empty.
     await prisma.crossPlanDependency.deleteMany();
     await clearActivityTree(prisma);
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarException.deleteMany();
     await prisma.calendar.deleteMany();
     await prisma.project.deleteMany();

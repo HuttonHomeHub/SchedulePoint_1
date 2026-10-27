@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * The P6 activity codes schema's database guarantees (migration 20261027120100_p6_activity_codes;
@@ -28,23 +29,6 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
 
-  /**
-   * The code rows, in the only order the RESTRICT keys allow: the plan pointer cleared first (it
-   * closes a cycle with code_types.plan_id), then lanes and assignments, values, types. Until the
-   * shared `clearDomainData` learns these tables (the M2-T3 test-helper task), this spec cleans its
-   * own rows before calling it.
-   */
-  async function clearCodes(): Promise<void> {
-    await prisma.plan.updateMany({
-      where: { swimlaneCodeTypeId: { not: null } },
-      data: { swimlaneSource: 'NONE', swimlaneCodeTypeId: null },
-    });
-    await prisma.codeSwimlaneLane.deleteMany();
-    await prisma.codeValueAssignment.deleteMany();
-    await prisma.codeValue.deleteMany();
-    await prisma.codeType.deleteMany();
-  }
-
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
     const { AppModule } = await import('../src/app.module');
@@ -60,13 +44,11 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
   });
 
   afterAll(async () => {
-    await clearCodes();
     await clearDomainData(prisma);
     await app?.close();
   });
 
   beforeEach(async () => {
-    await clearCodes();
     await clearDomainData(prisma);
   });
 
@@ -370,6 +352,67 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
       });
       await prisma.codeType.deleteMany({ where: { planId: w.planA } });
       expect(await prisma.codeType.count({ where: { planId: w.planA } })).toBe(0);
+    });
+  });
+
+  describe('the test sweeps that delete plans', () => {
+    // The pointer, the assignments, the lanes, the values and the types all hold RESTRICT keys into
+    // rows a plain `plan.deleteMany()` removes (database-design §8.5): a coded, code-sourced plan is
+    // the case every spec that resets by deleting plans must survive.
+    async function codedPlan(w: World): Promise<void> {
+      const area = await makeType(w, w.planA, 'Area');
+      const l1 = await makeValue(w, area.id, 'L1');
+      await prisma.codeValueAssignment.create({
+        data: {
+          organizationId: w.orgId,
+          planId: w.planA,
+          activityId: w.activityA,
+          codeTypeId: area.id,
+          codeValueId: l1.id,
+        },
+      });
+      await prisma.codeSwimlaneLane.create({
+        data: {
+          organizationId: w.orgId,
+          planId: w.planA,
+          activityId: w.activityA,
+          codeTypeId: area.id,
+          codeValueId: l1.id,
+          laneIndex: 0,
+        },
+      });
+      await prisma.plan.update({
+        where: { id: w.planA },
+        data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: area.id },
+      });
+    }
+
+    const counts = async () => [
+      await prisma.plan.count(),
+      await prisma.activity.count(),
+      await prisma.codeType.count(),
+      await prisma.codeValue.count(),
+      await prisma.codeValueAssignment.count(),
+      await prisma.codeSwimlaneLane.count(),
+    ];
+
+    it('clearPlanTree removes a coded plan and everything under it', async () => {
+      const w = await setup();
+      await codedPlan(w);
+      expect(await counts()).toEqual([2, 2, 1, 1, 1, 1]);
+
+      await clearPlanTree(prisma);
+
+      expect(await counts()).toEqual([0, 0, 0, 0, 0, 0]);
+    });
+
+    it('clearDomainData removes a coded plan and everything under it', async () => {
+      const w = await setup();
+      await codedPlan(w);
+
+      await clearDomainData(prisma);
+
+      expect(await counts()).toEqual([0, 0, 0, 0, 0, 0]);
     });
   });
 

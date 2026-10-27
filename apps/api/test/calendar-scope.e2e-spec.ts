@@ -11,6 +11,7 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearAuditEvents } from './audit-reset';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
+import { clearPlanTree } from './clear-plan-tree';
 
 /**
  * End-to-end tests for the CALENDAR SCOPE TIER (M1 of the library-scoping epic, ADR-0053),
@@ -83,7 +84,7 @@ describe.skipIf(!hasDatabase)('Calendar scope tiers (e2e)', () => {
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
     await clearActivityTree(prisma);
-    await prisma.plan.deleteMany();
+    await clearPlanTree(prisma);
     await prisma.calendarExceptionWindow.deleteMany();
     await prisma.calendarException.deleteMany();
     await prisma.calendarShift.deleteMany();
