@@ -35,6 +35,8 @@ function makeTx() {
     note: model(),
     planShare: model(),
     swimlane: model(),
+    codeType: model(),
+    codeValue: model(),
     calendar: model(),
     calendarException: model(),
   };
@@ -73,6 +75,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
       // Activities deleted are those under the client's active plans.
@@ -168,6 +172,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
     });
@@ -191,6 +197,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -286,6 +294,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
     });
@@ -352,6 +362,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
     });
@@ -529,6 +541,36 @@ describe('HierarchyLifecycleService', () => {
       expect(tx.swimlane.updateMany).not.toHaveBeenCalled();
     });
 
+    it("sweeps a plan's code types, then their values, into the batch, and not on an activity delete", async () => {
+      tx.plan.updateMany.mockResolvedValue({ count: 1 });
+      tx.codeType.updateMany.mockResolvedValue({ count: 2 });
+      tx.codeValue.updateMany.mockResolvedValue({ count: 9 });
+      const result = await service.cascadeSoftDelete(asTx(), 'plan', 'pl1', ACTOR);
+      expect(result.counts).toMatchObject({ codeTypes: 2, codeValues: 9 });
+      const data = expect.objectContaining({ deleteBatchId: result.batchId, updatedBy: ACTOR });
+      expect(tx.codeType.updateMany).toHaveBeenCalledWith({
+        where: { planId: { in: ['pl1'] }, deletedAt: null },
+        data,
+      });
+      expect(tx.codeValue.updateMany).toHaveBeenCalledWith({
+        where: { codeType: { planId: { in: ['pl1'] } }, deletedAt: null },
+        data,
+      });
+      // The order every codes writer locks in: types before values.
+      expect(tx.codeType.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+        tx.codeValue.updateMany.mock.invocationCallOrder[0] ?? 0,
+      );
+
+      tx.codeType.updateMany.mockClear();
+      tx.codeValue.updateMany.mockClear();
+      tx.activity.findMany.mockResolvedValue([]);
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+      const leaf = await service.cascadeSoftDelete(asTx(), 'activity', 'a1', ACTOR);
+      expect(leaf.counts).toMatchObject({ codeTypes: 0, codeValues: 0 });
+      expect(tx.codeType.updateMany).not.toHaveBeenCalled();
+      expect(tx.codeValue.updateMany).not.toHaveBeenCalled();
+    });
+
     it('does NOT sweep share links on a single-activity delete (they are plan-scoped)', async () => {
       tx.activity.findMany.mockResolvedValue([]); // leaf subtree = { a1 }
       tx.activity.updateMany.mockResolvedValue({ count: 1 });
@@ -632,6 +674,8 @@ describe('HierarchyLifecycleService', () => {
         notes: 0,
         planShares: 0,
         swimlanes: 0,
+        codeTypes: 0,
+        codeValues: 0,
         calendars: 0,
       });
       expect(tx.activity.updateMany).toHaveBeenCalledWith({
@@ -754,6 +798,36 @@ describe('HierarchyLifecycleService', () => {
         where: { deleteBatchId: 'batch-p' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
+    });
+
+    it("restores the batch's code types and values with their plan, by batch id alone", async () => {
+      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: 'batch-p', projectId: 'pr1' });
+      tx.project.findFirst.mockResolvedValue({ id: 'pr1', clientId: 'c1' });
+      tx.$queryRaw.mockResolvedValue([{ id: 'pr1' }]);
+      tx.codeType.updateMany.mockResolvedValue({ count: 2 });
+      tx.codeValue.updateMany.mockResolvedValue({ count: 9 });
+
+      const counts = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR);
+
+      expect(counts).toMatchObject({ codeTypes: 2, codeValues: 9 });
+      const args = {
+        where: { deleteBatchId: 'batch-p' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      };
+      expect(tx.codeType.updateMany).toHaveBeenCalledWith(args);
+      expect(tx.codeValue.updateMany).toHaveBeenCalledWith(args);
+    });
+
+    it('issues no code statement when an activity or dependency batch is restored', async () => {
+      tx.activity.findFirst.mockResolvedValue({ deleteBatchId: 'batch-a', planId: 'pl1' });
+      tx.plan.findFirst.mockResolvedValue({ id: 'pl1' });
+      tx.activity.updateMany.mockResolvedValue({ count: 1 });
+
+      const counts = await service.restoreBatch(asTx(), 'activity', 'a1', ACTOR);
+
+      expect(counts).toMatchObject({ codeTypes: 0, codeValues: 0 });
+      expect(tx.codeType.updateMany).not.toHaveBeenCalled();
+      expect(tx.codeValue.updateMany).not.toHaveBeenCalled();
     });
 
     it("restores the batch's project calendars and their exceptions (ADR-0053 §2)", async () => {

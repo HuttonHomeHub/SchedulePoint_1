@@ -9495,6 +9495,6 @@ Deferred on purpose, each cheap to add and none worth building before a screen b
 - An `ActivityWithCodesResponseDto` with a required `codes` would make the list and the write contracts exact; `codes` is optional on the shared response today.
 - The pen is checked outside the transaction before the locks (inherited from the swimlane and re-parent writes, review S3).
 - A malformed `cursor` is not validated (inherited, #20).
-- When M2-T5's cascade lands, re-check the lock order and whether `plans (id, swimlane_code_type_id)` needs a reverse-lookup index for the type delete's source check.
+- ~~When M2-T5's cascade lands, re-check the lock order and the reverse-lookup index.~~ Done 2026-10-27 (M2-T5, `m2-record.md` §10): the cascade stamps types then values under the plan lock, and the reverse lookup is served by `plans_pkey`, so no index is owed.
 
 **Next:** take the first four together as one change with the screen that needs them, and the rest at the M2-T5 review. **Trigger:** before M3 binds a screen to `GET code-types`, or any report of a slow plan open with many codes.

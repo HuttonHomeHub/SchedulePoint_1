@@ -271,3 +271,35 @@ holding every type (150,000 assignments, the import cap); a second plan of 5,000
   which is additive; nothing is built for it now (ADR-0142: measured before it is built).
 - **Not measured here:** the membership read for a swimlane source (M4-T1's endpoint does not exist) and
   `loadActivityCodes` on the deployed host.
+
+## 10. What M2-T5 built (2026-10-27, the builder)
+
+**Cascade and restore** (`hierarchy-lifecycle.service.ts`, database-design §8.2). A plan, project or client
+delete stamps the plans' live code types and then their live values with the delete batch id, after the
+swimlane sweep and before the plan stamp (`CascadeCounts.codeTypes`, `.codeValues`). The batch restore
+reactivates them by batch id beside the swimlanes, and is skipped for activity and dependency batches. Assignments are
+join rows and are not rewritten: they read as "no value" while their value is deleted and come back with it.
+`activity-history-statements.e2e-spec.ts` is unchanged and green, and a unit test pins that an activity
+restore issues no code statement.
+
+- **Batch semantics hold.** A value or type deleted on its own keeps its own batch id, so the plan restore does not
+  revive it (`test/code-cascade.e2e-spec.ts`, for plan, project and client). The swimlane-source pointer survives
+  a delete and restore of its plan.
+- **No restore guard is added to the batch path.** A plan batch holds types and values swept together; a value
+  whose type was deleted earlier was itself deleted in that type's batch, so no value can be in this batch under
+  a type that is not. The `PARENT_DELETED` refusals of design §8.2 stay on the single type/value restore routes (M2-T4).
+- **Lock order.** The cascade takes the plan advisory lock and the plan's activity rows in id order
+  (`lockPlansForCascade`), then stamps types, then values, which is the order the codes writer takes its row locks in
+  (plan lock, activities, types `FOR SHARE`, values `FOR SHARE`, history last). Every creating or assigning codes route
+  (and every restore) takes the plan lock and re-reads the live plan under it; rename, reorder and update routes only touch live
+  rows by `deletedAt: null`, so none can add a live row under a deleted plan. The race is driven in
+  `code-cascade.e2e-spec.ts`: a test-owned transaction holds the plan lock and runs the real cascade, and a type
+  create, a value create and an assignment write started against the held lock are each held, then refused
+  `NotFoundError`, with no live code row left under the plan.
+- **No index is owed for the reverse lookup** (#562's last bullet). The pointer's key is
+  `plans (id, swimlane_code_type_id) → code_types (plan_id, id)`; deleting a type checks `plans` with
+  `WHERE id = $plan AND swimlane_code_type_id = $type`, and `EXPLAIN` (with sequential scans disabled, on empty
+  tables) shows `Index Scan using plans_pkey` with the pointer as a filter on at most one row. The sweep's
+  statements use `uq_code_types_plan_id_id` and `uq_code_values_type_id_id`.
+- **Not measured:** the sweep at the 100 × 1,000 cap on a loaded database; the plan chosen on realistic
+  statistics may differ from the empty-table plans above.
