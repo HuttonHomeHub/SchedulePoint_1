@@ -206,10 +206,11 @@ export class BaselinesService {
             swimlaneWbsLevel: true,
           },
         });
-        // Soft-deleted between the check above and this lock. The hierarchy cascade does NOT take
-        // the plan write lock, so this is reachable — and 404 is both the honest answer and the
-        // thing that stops an ACTIVE baseline being inserted under a plan already in a delete
-        // batch, which no restore would reactivate and no recycle bin would show.
+        // Soft-deleted between the check above and this lock. The hierarchy cascade takes the plan
+        // write lock (`hierarchy-lifecycle.service.ts`, `acquirePlanWriteLocks`) and commits before
+        // we get it, so this is reachable — and 404 is both the honest answer and the thing that
+        // stops an ACTIVE baseline being inserted under a plan already in a delete batch, which no
+        // restore would reactivate and no recycle bin would show.
         if (!mirrors) throw new NotFoundError('Plan not found.');
 
         const criticalityRule: CriticalityRule | null =

@@ -247,6 +247,28 @@ export class DependenciesService {
         // Assert the pen INSIDE the advisory lock (ADR-0028): a graph write is
         // serialised, so a steal can't slip between the check and the insert.
         await this.editLock.assertHoldsPen(principal, plan.id, organization.id, tx);
+        // Everything read before this transaction is stale once the lock is ours: a plan or
+        // activity delete that held the lock sweeps its links and commits first, and the insert's
+        // FK only takes KEY SHARE, which the sweep's NO KEY UPDATE does not block. Without this
+        // re-read the create lands a live link under a deleted endpoint, which the engine's graph
+        // build then throws on (`docs/TECH_DEBT.md` #553, the sibling of #550).
+        const livePlan = await this.plans.findActiveByIdInOrg(planId, organization.id, tx);
+        if (!livePlan) throw new NotFoundError('Plan not found.');
+        const liveEndpoints = await tx.activity.findMany({
+          where: {
+            id: { in: [dto.predecessorId, dto.successorId] },
+            planId: plan.id,
+            organizationId: organization.id,
+            deletedAt: null,
+          },
+          select: { id: true, type: true },
+        });
+        if (liveEndpoints.length !== 2) throw new NotFoundError('Activity not found in this plan.');
+        if (liveEndpoints.some((endpoint) => endpoint.type === 'WBS_SUMMARY')) {
+          throw new ValidationError(DEPENDENCY_CONFLICT_MESSAGES.SUMMARY_NO_LOGIC, {
+            reason: DEPENDENCY_CONFLICT.SUMMARY_HAS_NO_LOGIC,
+          });
+        }
         const edges = await this.dependencies.findActiveEdgesByPlan(organization.id, plan.id, tx);
         if (wouldCreateCycle(edges, dto.predecessorId, dto.successorId)) {
           throw new ConflictError(DEPENDENCY_CONFLICT_MESSAGES.CYCLE, {
