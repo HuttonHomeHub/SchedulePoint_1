@@ -312,7 +312,10 @@ export class CodeValuesService {
           principal.userId,
           tx,
         );
-        if (changed === 0) throw new ConflictError('This code value was changed elsewhere.');
+        if (changed === 0)
+          throw new ConflictError('This code value was changed elsewhere.', {
+            reason: CODE_CONFLICT.STALE_VERSION,
+          });
         await this.audit.record(
           {
             action: 'code_value.restored',

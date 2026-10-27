@@ -198,7 +198,9 @@ export class CodeTypesController {
       'The plan is still deleted (PARENT_DELETED), or the name was taken meanwhile ' +
       '(CODE_TYPE_NAME_TAKEN).',
   })
-  @ApiUnprocessableEntityResponse({ description: 'The plan already has 100 code types.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The plan already has 100 code types (CODE_TYPE_LIMIT).',
+  })
   @ApiLockedResponse(PEN)
   async restore(
     @CurrentUser() principal: Principal,
@@ -226,7 +228,8 @@ export class CodeTypesController {
     description: 'Another live value has this short code, ignoring case (CODE_VALUE_TAKEN).',
   })
   @ApiUnprocessableEntityResponse({
-    description: 'An invalid short code or description, or the type already has 1,000 values.',
+    description:
+      'An invalid short code or description, or the type already has 1,000 values (CODE_VALUE_LIMIT).',
   })
   @ApiLockedResponse(PEN)
   async createValue(

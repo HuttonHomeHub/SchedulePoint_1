@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type CodeType, type CodeValue } from '@prisma/client';
+import { Prisma, type CodeType } from '@prisma/client';
 import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -23,7 +23,7 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { CodeTypeRepository } from './code-type.repository';
-import { CodeValueRepository } from './code-value.repository';
+import { CodeValueRepository, type ListedCodeValue } from './code-value.repository';
 import { CODE_CONFLICT, CODE_TYPE_LIMIT } from './codes.constants';
 import type { CodeTypeListQueryDto } from './dto/code-type-list-query.dto';
 import type { CreateCodeTypeDto } from './dto/create-code-type.dto';
@@ -33,7 +33,7 @@ import type { UpdateCodeTypeDto } from './dto/update-code-type.dto';
 /** A code type with the values it carries in a response. */
 export interface CodeTypeWithValues {
   type: CodeType;
-  values: CodeValue[];
+  values: ListedCodeValue[];
 }
 
 /**
@@ -88,7 +88,7 @@ export class CodeTypesService {
     const valueRows = includeDeleted
       ? await this.values.findManyAllByTypes(organization.id, typeIds)
       : await this.values.findManyActiveByTypes(organization.id, typeIds);
-    const byType = new Map<string, CodeValue[]>();
+    const byType = new Map<string, ListedCodeValue[]>();
     for (const value of valueRows) {
       const list = byType.get(value.codeTypeId);
       if (list) list.push(value);
@@ -328,7 +328,10 @@ export class CodeTypesService {
           principal.userId,
           tx,
         );
-        if (changed === 0) throw new ConflictError('This code type was changed elsewhere.');
+        if (changed === 0)
+          throw new ConflictError('This code type was changed elsewhere.', {
+            reason: CODE_CONFLICT.STALE_VERSION,
+          });
         if (existing.deleteBatchId !== null) {
           valueCount = await this.values.restoreByBatch(
             codeTypeId,

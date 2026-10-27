@@ -5,6 +5,25 @@ import { Prisma, type CodeValue } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
+/**
+ * The nine columns a value response emits. The list reads up to 100,000 values, so it selects these
+ * and not the actor stamps and the organisation id the response drops.
+ */
+const LISTED_VALUE = {
+  id: true,
+  codeTypeId: true,
+  shortCode: true,
+  description: true,
+  position: true,
+  version: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+} as const;
+
+/** A value as the list reads it: the columns of {@link LISTED_VALUE}. */
+export type ListedCodeValue = Prisma.CodeValueGetPayload<{ select: typeof LISTED_VALUE }>;
+
 /** A locked code value row's identity, order key and version (the reorder's read). */
 export interface LockedCodeValue {
   id: string;
@@ -71,10 +90,11 @@ export class CodeValueRepository {
     organizationId: string,
     typeIds: readonly string[],
     db: Prisma.TransactionClient = this.prisma,
-  ): Promise<CodeValue[]> {
+  ): Promise<ListedCodeValue[]> {
     if (typeIds.length === 0) return Promise.resolve([]);
     return db.codeValue.findMany({
       where: this.active({ organizationId, codeTypeId: { in: [...typeIds] } }),
+      select: LISTED_VALUE,
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
   }
@@ -84,10 +104,14 @@ export class CodeValueRepository {
    *
    * soft-delete: any-state — the picker lists the deleted rows beside the live ones on purpose.
    */
-  findManyAllByTypes(organizationId: string, typeIds: readonly string[]): Promise<CodeValue[]> {
+  findManyAllByTypes(
+    organizationId: string,
+    typeIds: readonly string[],
+  ): Promise<ListedCodeValue[]> {
     if (typeIds.length === 0) return Promise.resolve([]);
     return this.prisma.codeValue.findMany({
       where: { organizationId, codeTypeId: { in: [...typeIds] } },
+      select: LISTED_VALUE,
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
   }

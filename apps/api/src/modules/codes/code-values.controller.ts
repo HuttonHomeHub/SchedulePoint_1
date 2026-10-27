@@ -114,7 +114,9 @@ export class CodeValuesController {
       'The plan or the code type is still deleted (PARENT_DELETED; restore it first), or the ' +
       'short code was taken meanwhile (CODE_VALUE_TAKEN).',
   })
-  @ApiUnprocessableEntityResponse({ description: 'The type already has 1,000 values.' })
+  @ApiUnprocessableEntityResponse({
+    description: 'The type already has 1,000 values (CODE_VALUE_LIMIT).',
+  })
   @ApiLockedResponse(PEN)
   async restore(
     @CurrentUser() principal: Principal,

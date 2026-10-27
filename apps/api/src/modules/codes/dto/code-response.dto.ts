@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { CodeType, CodeValue } from '@prisma/client';
+import type { CodeType } from '@prisma/client';
+
+import type { ListedCodeValue } from '../code-value.repository';
 
 /** Public representation of a code value (p6-activity-codes spec §4.7). */
 export class CodeValueResponseDto {
@@ -35,7 +37,7 @@ export class CodeValueResponseDto {
   })
   deletedAt!: string | null;
 
-  static from(value: CodeValue): CodeValueResponseDto {
+  static from(value: ListedCodeValue): CodeValueResponseDto {
     return {
       id: value.id,
       codeTypeId: value.codeTypeId,
@@ -89,7 +91,7 @@ export class CodeTypeResponseDto {
   })
   values?: CodeValueResponseDto[];
 
-  static from(type: CodeType, values?: readonly CodeValue[]): CodeTypeResponseDto {
+  static from(type: CodeType, values?: readonly ListedCodeValue[]): CodeTypeResponseDto {
     return {
       id: type.id,
       planId: type.planId,

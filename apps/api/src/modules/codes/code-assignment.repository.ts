@@ -41,7 +41,6 @@ export async function loadActivityCodes(
       WHERE cva.plan_id = ${scope.planId}::uuid
         AND cva.organization_id = ${scope.organizationId}::uuid
         AND cva.activity_id IN (SELECT u FROM unnest(${[...activityIds]}::uuid[]) AS u)
-      ORDER BY cva.activity_id, cva.code_type_id
     `,
   ]);
   if (anyType === null) return null;
@@ -50,6 +49,11 @@ export async function loadActivityCodes(
     byActivity
       .get(row.activityId)
       ?.push({ codeTypeId: row.codeTypeId, codeValueId: row.codeValueId });
+  }
+  // Ordered by type id here, not by the statement: the page's rows come back in index order and the
+  // sort is over at most 100 entries an activity, which the database need not do for 100 activities.
+  for (const list of byActivity.values()) {
+    list.sort((a, b) => (a.codeTypeId < b.codeTypeId ? -1 : a.codeTypeId > b.codeTypeId ? 1 : 0));
   }
   return byActivity;
 }

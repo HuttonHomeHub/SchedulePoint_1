@@ -804,6 +804,13 @@ so computed dates are not made stale. The activity's history records a **`code:<
 holding `{ from, to }` as code **value ids** (`null` for none) under scope `DEFINITION`, one entry per
 activity sharing a `batch`.
 
+**The batch bound.** `maxItems: 2000` is not the real limit of `PATCH …/activities/codes`: the 512 KB
+organisation body limit is, and a body with many types per activity reaches it first (about 4,000
+entries). Send a selection, not a plan. **The type list at the caps is a large payload**: 100 types of
+1,000 values is about 100,000 values and measured about 2.3 s (a typical 1,500 values, 45 ms). Its
+default `limit` is 100, a deliberate exception to the repository's 20, because the cap makes the whole
+set one page and a screen needs all of it; `m2-record.md` §9 has the figures.
+
 **`codes` on the activity list.** `GET …/plans/:planId/activities` and the codes write add
 **`codes`**: `[{ codeTypeId, codeValueId }]` ordered by type id, loaded once per page. A type the
 activity has no value for has no entry, and a deleted value or type reads as no value. The key is

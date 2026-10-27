@@ -40,6 +40,35 @@ describe('code DTOs', () => {
     expect(ok(CreateCodeValueDto, { shortCode: 'L', description: 'A\u0000B' })).toBe(false);
   });
 
+  it.each([
+    ['U+0000', '\u0000'],
+    ['U+001F', '\u001F'],
+    ['U+007F', '\u007F'],
+    ['U+0085', '\u0085'],
+    ['U+009F', '\u009F'],
+    ['U+2028', '\u2028'],
+    ['U+2029', '\u2029'],
+    ['U+FFF9', '\uFFF9'],
+    ['U+FFFA', '\uFFFA'],
+    ['U+FFFB', '\uFFFB'],
+  ])(
+    'refuse %s in every text field, as the shape CHECK does (422, never a raw 500)',
+    (_label, ch) => {
+      expect(ok(CreateCodeTypeDto, { name: `A${ch}B` })).toBe(false);
+      expect(ok(UpdateCodeTypeDto, { name: `A${ch}B`, version: 1 })).toBe(false);
+      expect(ok(CreateCodeValueDto, { shortCode: `A${ch}B` })).toBe(false);
+      expect(ok(CreateCodeValueDto, { shortCode: 'L', description: `A${ch}B` })).toBe(false);
+      expect(ok(UpdateCodeValueDto, { shortCode: `A${ch}B`, version: 1 })).toBe(false);
+      expect(ok(UpdateCodeValueDto, { description: `A${ch}B`, version: 1 })).toBe(false);
+    },
+  );
+
+  it('still accept ordinary text beside them', () => {
+    for (const ch of ['x', 'é', '-']) {
+      expect(ok(CreateCodeTypeDto, { name: `A${ch}B` })).toBe(true);
+    }
+  });
+
   it('read a blank description as none, never as the stored empty string the CHECK refuses', () => {
     expect(as(CreateCodeValueDto, { shortCode: 'L', description: '   ' }).description).toBeNull();
     expect(ok(CreateCodeValueDto, { shortCode: 'L', description: '   ' })).toBe(true);

@@ -234,6 +234,8 @@ The history coverage census gains `ActivityRepository.bumpVersions`, recorded by
 
 ### Read and write timings (SC-5, reads)
 
+Re-taken after the review folds: the value list now selects the nine columns it emits and the per-page codes read has no SQL `ORDER BY`. The first set read the 100,000-value list at 2.9 s p50 and 3.4 s p95; the narrow select brings it to 2.3 s and 2.6 s. The table below is the second set.
+
 `apps/api/test/measure/codes-reads.measure.ts`, run on the local PostgreSQL 16.15 in the shared container
 (not the deployed host), warm, through the real application over HTTP, ids v4 (`gen_random_uuid()`, the
 worst case for index locality). One plan of 5,000 activities with 30 types of 50 values and every activity
@@ -241,16 +243,16 @@ holding every type (150,000 assignments, the import cap); a second plan of 5,000
 
 | Request                                                      | p50    | p95    |
 | ------------------------------------------------------------ | ------ | ------ |
-| list 100 activities, plan with no code type                  | 30 ms  | 46 ms  |
-| list 100 activities, 30 types, every activity coded          | 51 ms  | 60 ms  |
-| list 100 activities (a later page), same plan                | 47 ms  | 58 ms  |
-| `PATCH …/activities/codes`: 1 activity, 1 type               | 39 ms  | 53 ms  |
-| `PATCH`: 100 activities, 1 type                              | 98 ms  | 118 ms |
-| `PATCH`: 100 activities, 30 types (3,000 changes)            | 351 ms | 391 ms |
-| `PATCH`: 2,000 activities, 1 type (2,000 changes)            | 1.05 s | 1.26 s |
-| comparator, `PATCH …/placements`, 2,000 activities, a change | 543 ms | 585 ms |
-| `GET code-types`: 30 types × 50 values (1,500 values)        | 57 ms  | 73 ms  |
-| `GET code-types`: 100 types × 1,000 values (100,000 values)  | 2.9 s  | 3.4 s  |
+| list 100 activities, plan with no code type                  | 30 ms  | 39 ms  |
+| list 100 activities, 30 types, every activity coded          | 47 ms  | 67 ms  |
+| list 100 activities (a later page), same plan                | 48 ms  | 60 ms  |
+| `PATCH …/activities/codes`: 1 activity, 1 type               | 40 ms  | 48 ms  |
+| `PATCH`: 100 activities, 1 type                              | 102 ms | 129 ms |
+| `PATCH`: 100 activities, 30 types (3,000 changes)            | 329 ms | 352 ms |
+| `PATCH`: 2,000 activities, 1 type (2,000 changes)            | 1.00 s | 2.03 s |
+| comparator, `PATCH …/placements`, 2,000 activities, a change | 498 ms | 586 ms |
+| `GET code-types`: 30 types × 50 values (1,500 values)        | 45 ms  | 59 ms  |
+| `GET code-types`: 100 types × 1,000 values (100,000 values)  | 2.3 s  | 2.6 s  |
 
 - **The page's codes cost about 20 ms over a plan without codes** (3,000 triples serialised for 100
   activities), end to end, inside the p95 < 200 ms target (CLAUDE.md §15). The database probe's
