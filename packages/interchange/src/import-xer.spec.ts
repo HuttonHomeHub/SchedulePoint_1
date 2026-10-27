@@ -987,3 +987,168 @@ describe('importXer — activity notes (TASKMEMO) become notes', () => {
     });
   });
 });
+
+describe('importXer — P6 activity codes are named in the report, not silently dropped', () => {
+  // Only the columns public sources confirm (docs/specs/p6-activity-codes/m0-record.md); `ACTVCODE`
+  // is deliberately absent, because its column names are unconfirmed.
+  const TYPE_FIELDS = ['actv_code_type_id', 'actv_code_type', 'proj_id', 'actv_code_type_scope'];
+  const ASSIGN_FIELDS = ['task_id', 'actv_code_type_id', 'actv_code_id', 'proj_id'];
+
+  function withTables(tables: XerTableSpec[]): string {
+    const base = cleanXer();
+    const extra = buildXer(tables).split('\n').slice(1, -1);
+    return `${base.replace(/\n%E$/, '')}\n${[...extra, '%E'].join('\n')}`;
+  }
+  const types = (rows: string[][]): XerTableSpec => ({
+    name: 'ACTVTYPE',
+    fields: TYPE_FIELDS,
+    rows,
+  });
+  const assigned = (rows: string[][]): XerTableSpec => ({
+    name: 'TASKACTV',
+    fields: ASSIGN_FIELDS,
+    rows,
+  });
+  const codeDrops = (drops: ReportFinding[]) =>
+    drops.filter((f) => f.entity === 'P6 activity codes');
+
+  it('reports one drop naming the types and counting the values set on activities', () => {
+    const { graph, report } = importOk(
+      withTables([
+        types([
+          ['1', 'Area', '', 'AS_Global'],
+          ['2', 'Trade', 'P1', 'AS_Project'],
+        ]),
+        assigned([
+          ['T1', '1', '10', 'P1'],
+          ['T2', '1', '11', 'P1'],
+          ['T2', '2', '20', 'P1'],
+        ]),
+      ]),
+    );
+    expect(codeDrops(report.drops)).toEqual([
+      {
+        kind: 'drop',
+        entity: 'P6 activity codes',
+        sourceRef: null,
+        detail: '2 code types (Area, Trade) and 3 values set on activities were not imported',
+        reason:
+          'SchedulePoint cannot keep these yet. Your activities, dates, logic and WBS are unaffected, and the codes stay in the original file (ADR-0050)',
+      },
+    ]);
+    expect(importGraphSchema.safeParse(graph).success).toBe(true);
+    expect(interchangeReportStrictSchema.safeParse(report).success).toBe(true);
+  });
+
+  it('says nothing for a file without the tables, and nothing changes in the rest of the report', () => {
+    const base = importOk(cleanXer());
+    expect(codeDrops(base.report.drops)).toEqual([]);
+    // Tables whose rows all belong to another project and name no type of this one: byte-identical.
+    const other = importOk(
+      withTables([
+        types([['9', 'Elsewhere', 'P9', 'AS_Project']]),
+        assigned([['T9', '9', '90', 'P9']]),
+      ]),
+    );
+    expect(other.report).toEqual(base.report);
+    expect(other.graph).toEqual(base.graph);
+  });
+
+  it('ignores another project’s rows and a global type nothing here uses', () => {
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', 'Area', '', 'AS_Global'],
+          ['2', 'Unused global', '', 'AS_Global'],
+          ['3', 'Theirs', 'P9', 'AS_Project'],
+        ]),
+        assigned([
+          ['T1', '1', '10', 'P1'],
+          ['T9', '3', '30', 'P9'],
+        ]),
+      ]),
+    );
+    const [drop] = codeDrops(report.drops);
+    expect(drop?.detail).toBe('1 code type (Area) and 1 value set on activities were not imported');
+  });
+
+  it('names a project-scoped type that no activity uses yet, with no values to count', () => {
+    const { report } = importOk(withTables([types([['2', 'Trade', 'P1', 'AS_Project']])]));
+    expect(codeDrops(report.drops)[0]?.detail).toBe(
+      '1 code type (Trade) was not imported; no activity uses it',
+    );
+  });
+
+  it('never shows a bare id when ACTVTYPE is absent, and caps the names listed', () => {
+    const noTypes = importOk(withTables([assigned([['T1', '7', '1', 'P1']])]));
+    expect(codeDrops(noTypes.report.drops)[0]?.detail).toBe(
+      '1 code type and 1 value set on activities were not imported',
+    );
+
+    const many = importOk(
+      withTables([
+        types(Array.from({ length: 8 }, (_, i) => [String(i), `Type ${i}`, 'P1', 'AS_Project'])),
+      ]),
+    );
+    expect(codeDrops(many.report.drops)[0]?.detail).toContain(
+      '8 code types (Type 0, Type 1, Type 2, Type 3, Type 4 and 3 more)',
+    );
+  });
+
+  it('treats hostile type names as inert text', () => {
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', '__proto__', 'P1', 'AS_Project'],
+          ['2', 'constructor', 'P1', 'AS_Project'],
+        ]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    expect(codeDrops(report.drops)[0]?.detail).toBe(
+      '2 code types (__proto__, constructor) and 1 value set on activities were not imported',
+    );
+  });
+
+  it('cuts one very long type name at 100 characters so it cannot crowd out the others', () => {
+    const long = 'x'.repeat(5000);
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', long, 'P1', 'AS_Project'],
+          ['2', 'Trade', 'P1', 'AS_Project'],
+        ]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    const detail = codeDrops(report.drops)[0]?.detail;
+    expect(detail).toBe(
+      `2 code types (${'x'.repeat(99)}…, Trade) and 1 value set on activities were not imported`,
+    );
+  });
+
+  it('removes bidi overrides, zero-width and control characters from a type name', () => {
+    const { report } = importOk(
+      withTables([
+        types([
+          ['1', 'A‮r​e⁦a﻿\u0007', 'P1', 'AS_Project'],
+          ['2', '​‮', 'P1', 'AS_Project'],
+        ]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    // The second name is empty once cleaned, so the list is withheld rather than showing a blank.
+    expect(codeDrops(report.drops)[0]?.detail).toBe(
+      '2 code types and 1 value set on activities were not imported',
+    );
+    const named = importOk(
+      withTables([
+        types([['1', 'A‮r​e⁦a﻿\u0007', 'P1', 'AS_Project']]),
+        assigned([['T1', '1', '10', 'P1']]),
+      ]),
+    );
+    expect(codeDrops(named.report.drops)[0]?.detail).toBe(
+      '1 code type (Area) and 1 value set on activities were not imported',
+    );
+  });
+});

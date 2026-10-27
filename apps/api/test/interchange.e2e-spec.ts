@@ -484,6 +484,41 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     ).toBe(true);
   });
 
+  it('names P6 activity codes as dropped instead of losing them silently (still 200)', async () => {
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    // Confirmed columns only (docs/specs/p6-activity-codes/m0-record.md); no value table.
+    const xer = validXer().replace(
+      /%E$/,
+      [
+        '%T\tACTVTYPE',
+        '%F\tactv_code_type_id\tactv_code_type\tproj_id\tactv_code_type_scope',
+        '%R\t1\tArea\tP1\tAS_Project',
+        '%T\tTASKACTV',
+        '%F\ttask_id\tactv_code_type_id\tactv_code_id\tproj_id',
+        '%R\tT1\t1\t10\tP1',
+        '%R\tT2\t1\t11\tP1',
+        '%E',
+      ].join('\n'),
+    );
+
+    const res = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(xer, 'utf8'), 'codes.xer')
+      .expect(200);
+
+    expect(res.body.data.drops).toEqual([
+      {
+        kind: 'drop',
+        entity: 'P6 activity codes',
+        sourceRef: null,
+        detail: '1 code type (Area) and 2 values set on activities were not imported',
+        reason:
+          'SchedulePoint cannot keep these yet. Your activities, dates, logic and WBS are unaffected, and the codes stay in the original file (ADR-0050)',
+      },
+    ]);
+  });
+
   it('422s an unrecognised/garbage file (nothing created)', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);
