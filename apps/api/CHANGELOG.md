@@ -1,5 +1,17 @@
 # @repo/api
 
+## 0.102.2
+
+### Patch Changes
+
+- [#1190](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1190) [`ad52ea7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ad52ea7fd99f2c4d1a38c159243512a085153c11) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Creating a dependency can no longer land a live link on an activity, or in a plan, that was deleted while the request waited for the plan lock.
+
+- [#1193](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1193) [`40c3bae`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/40c3bae1788f92ea2f5c0109ef1c85a871b6ea52) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Importing a Primavera P6 file that carries activity codes now says so in the import report: the Dropped section names the code types in use and counts the values set on activities, instead of leaving them out without a word. The codes themselves are still not kept.
+
+- [#1188](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1188) [`c8af199`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8af1998033a90c8d16ce0235d82431b601a2b8c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Creating a plan can no longer bind the organisation's Standard calendar while that calendar is being deleted, and it no longer binds an archived or project-scoped calendar named Standard.
+
+- [#1194](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1194) [`12f532b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/12f532b57c8af1e6734e21eeded31af7611a4a9d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Prepares the database for swimlanes drawn from activity codes; nothing changes for existing plans. The organisation export is now format 2.2, which only adds the new swimlane source to the list of values a plan or baseline may hold.
+
 ## 0.102.1
 
 ### Patch Changes
