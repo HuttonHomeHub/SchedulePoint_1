@@ -809,6 +809,16 @@ deploy would repeat the whole re-derivation unasked. The #421 marker
 (`20260930120000_progressed_predecessor_visual_marker`) has the same gap and no section of its own
 (`docs/TECH_DEBT.md` #556).
 
+### Rolling back past the P6 activity codes release
+
+The P6 activity codes schema (`docs/specs/p6-activity-codes/database-design.md` §13) lands in two
+migrations. So far only the first has shipped: `20261027120000_swimlane_source_activity_code` adds the
+value `ACTIVITY_CODE` to the `SwimlaneSource` enum and nothing else. **Redeploying the previous images
+needs no database step.** No plan or baseline can hold the value yet (both swimlane CHECKs refuse it, and
+the API does not accept it), so the previous image never reads it. Do not try to remove the value:
+PostgreSQL cannot drop an enum value, and an unused one costs nothing. When the second migration ships,
+this section gains the steps it needs.
+
 ### Which switches actually work on a running container, and which do not
 
 This distinction is not obvious from `.env.example`, where both kinds sit in one list

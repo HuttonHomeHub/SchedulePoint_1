@@ -4,13 +4,13 @@ import {
   EacMethod,
   PlanStatus,
   ProgressRecalcMode,
-  SwimlaneSource,
   TotalFloatMode,
 } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -24,6 +24,16 @@ import {
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
 import { UUID_REGEX } from '../../../common/validation/uuid';
+
+/**
+ * The swimlane sources a client may write. `ACTIVITY_CODE` is in the database enum
+ * (20261027120000_swimlane_source_activity_code) before any plan can hold it:
+ * ck_plans_swimlane_source_level has no branch for it yet, so admitting it here would turn a 422
+ * into the CHECK's 500. The P6 activity codes milestones widen this list with the column that
+ * names the code type.
+ */
+const WRITABLE_SWIMLANE_SOURCES = ['NONE', 'MANUAL', 'WBS'] as const;
+type WritableSwimlaneSource = (typeof WRITABLE_SWIMLANE_SOURCES)[number];
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -188,16 +198,15 @@ export class UpdatePlanDto {
   calendarId?: string | null;
 
   @ApiPropertyOptional({
-    enum: SwimlaneSource,
-    enumName: 'SwimlaneSource',
+    enum: WRITABLE_SWIMLANE_SOURCES,
     description:
       'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL (hand-made) or WBS ' +
       '(the summaries at `swimlaneWbsLevel`). A presentation field: changing it never marks the plan ' +
       'as edited since calculated. WBS needs a level (422 otherwise).',
   })
   @IsOptional()
-  @IsEnum(SwimlaneSource)
-  swimlaneSource?: SwimlaneSource;
+  @IsIn(WRITABLE_SWIMLANE_SOURCES)
+  swimlaneSource?: WritableSwimlaneSource;
 
   @ApiPropertyOptional({
     minimum: 1,

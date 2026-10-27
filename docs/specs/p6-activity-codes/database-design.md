@@ -15,7 +15,7 @@
   type, every activity carrying every type (1,500,000 assignments). Ids were `gen_random_uuid()` (v4),
   which makes index inserts slower than the real UUID v7 keys would, so insert timings are an upper bound.
   **Prisma itself was not run** (`apps/api/node_modules` is not installed in this checkout); every claim
-  about what Prisma accepts is marked **unprobed** and is owed in M1.
+  about what Prisma accepts is marked **unprobed** and is owed in M1. (Probed 2026-10-27: §16.)
 - **Naming.** The spec's vocabulary rule (§0 rule 2) says identifiers are `codeType*` / `codeValue*`, never
   `activityCode*`. The models and tables below follow it: `CodeType` / `code_types`, `CodeValue` /
   `code_values`, `CodeValueAssignment` / `code_value_assignments`, `CodeSwimlaneLane` /
@@ -444,7 +444,7 @@ keys. `plan_id` and `id` never change, so it costs nothing on update, only on in
   codeTypes          CodeType[] @relation("PlanCodeTypes")
 ```
 
-- The key uses the plan's own `id` as its first column, so a type of another plan is refused **(probed: 23503)**. Prisma accepting `id` inside a relation's `fields` is **unprobed**; if `prisma validate`
+- The key uses the plan's own `id` as its first column, so a type of another plan is refused **(probed: 23503)**. Prisma accepting `id` inside a relation's `fields` was **unprobed** here (accepted, with two write-API hazards: §16); if `prisma validate`
   refuses it, the fallback is a single-column key `swimlane_code_type_id → code_types (id)` plus the
   service's same-plan check, and this document's same-plan claim narrows to the service for this one
   column.
@@ -987,3 +987,94 @@ Plan advisory lock → activities in id order (`FOR NO KEY UPDATE`) → code typ
 already takes plan then activities. Type delete and the swimlane source switch both take the plan
 advisory lock, which serialises DB-3's check. Restore takes ancestors `FOR SHARE` top-down, then the
 plan advisory lock, then the rows. No calendar locks.
+
+---
+
+## 16. M2-T1 probe result (2026-10-27)
+
+By the database-architect, on branch `feat/p6-codes-m2-schema-probe` from `origin/main` `fdabb72f`. The
+owner's answers (Q1 baselines yes if ≤ 1 s, Q2 per plan, Q3 refuse deleting the source type, Q4 100 /
+1,000, Q5 provisional 80 / 255 and no parent value yet) are not reopened here.
+
+**Setup.** Prisma CLI and `@prisma/client` **6.19.3**, Node 22.22.0. A scratch copy of `schema.prisma`
+(not committed) with §5.1–§5.7's declarations added verbatim: the `ACTIVITY_CODE` label, the four models,
+`Activity`'s `@@unique([planId, id])` and back-relations, and `Plan.swimlaneCodeTypeId` with its composite
+relation. The `parent_id` column was included for the probe only; Q5 leaves it out of migration B.
+Database: the local **PostgreSQL 16.15**, not `postgres:17-alpine`; this container has no Docker daemon.
+CI's run of this branch is the PostgreSQL 17 reading for migration A; migration B's own CI run is the
+reading for the rest. Scratch databases `p6probe` and `p6fresh` were dropped afterwards.
+
+### 16.1 The three shapes
+
+| Probe                                                                                                                                                                                                                                                                   | Result                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) `Plan.swimlaneCodeType`, `fields: [id, swimlaneCodeTypeId]` → `CodeType (planId, id)`                                                                                                                                                                               | `prisma validate`: **valid**. Generated FK `plans_id_swimlane_code_type_id_fkey`, `RESTRICT`/`RESTRICT`                                                                         |
+| (b) `CodeValue.parent`, `fields: [codeTypeId, parentId]` → `CodeValue (codeTypeId, id)`                                                                                                                                                                                 | **valid**. FK `code_values_code_type_id_parent_id_fkey`                                                                                                                         |
+| (c) assignments and lanes each with three relations, two sharing `codeTypeId`                                                                                                                                                                                           | **valid**. Six composite FKs generated as designed                                                                                                                              |
+| `prisma generate` on the scratch schema                                                                                                                                                                                                                                 | **succeeds**                                                                                                                                                                    |
+| API `tsc --noEmit` against that client                                                                                                                                                                                                                                  | Only the expected errors: test fixtures typed `Plan` lack `swimlaneCodeTypeId` (8 spec files), and the `SwimlaneSource` sites that migration A fixes. No production write broke |
+| `migrate deploy` from empty: the 78 real migrations, then A (label), then B (generated by `prisma migrate diff`, hand-edited with `NULLS NOT DISTINCT`, the partial `uq_code_types_plan_name`, the partial `idx_code_values_parent_fk`, and the §5.7 CHECK replacement) | **All applied**                                                                                                                                                                 |
+| `prisma migrate diff --from-url … --to-schema-datamodel … --exit-code` (the `prisma:check-drift` command)                                                                                                                                                               | **No difference detected**. The `NULLS NOT DISTINCT` unique declared as a plain `@@unique` and the two undeclared partial indexes cause no drift                                |
+
+**(a) is accepted, so the fallback of §5.7 (a single-column key plus a same-plan check in the service) is
+not taken.** The database keeps the same-plan guarantee for the swimlane pointer.
+
+### 16.2 What the generated client does with these relations (probed against the scratch database)
+
+The database answers as §5 says. Prisma's **nested-relation write API** does not, and that is the
+finding to carry into M2-T3 and M2-T4:
+
+1. **`swimlaneCodeType: { connect }` rewrites the plan's primary key.** The emitted statement is
+   `UPDATE "plans" SET "id" = $1, "swimlane_code_type_id" = $2 …`. For a type of the same plan, `id` is
+   set to its own value, which is harmless. For a type of another plan, Prisma sets `id` to the other
+   plan's id and is refused `P2002` on `plans.id`. It cannot move the plan, but it never reaches the
+   foreign key either.
+2. **`swimlaneCodeType: { disconnect: true }` is silently dropped.** Prisma cannot null `id`, so it
+   leaves both columns out of the UPDATE. In the probe only `ck_plans_swimlane_source_level` caught it,
+   because the same write moved the source to `NONE` (`23514`). Without that CHECK the disconnect would
+   have done nothing.
+3. **Checked `connect` on two relations that share a column: the last one wins, without an error.** An
+   assignment created with `codeType: { connect: Trade }` and `codeValue: { connect: <a value of Area> }`
+   was stored with `code_type_id = Area`. A value created with `codeType: { connect: Trade }` and
+   `parent: { connect: <a value of Area> }` was stored under Area. Both rows are consistent, so the
+   composite keys cannot refuse them. The planner asked for Trade and got Area.
+4. The **unchecked (scalar) form** behaves as designed in every case: same-plan pointer ok; another plan's
+   type `P2003` (`plans_id_swimlane_code_type_id_fkey`); deleting the type the pointer names `P2003`;
+   `ACTIVITY_CODE` with no type `23514`; parent of another type `P2003`; a second value for the same
+   (activity, type) `P2002`; a value of another type `P2003`; an activity of another plan `P2003`.
+   `include: { swimlaneCodeType, children, codeType, codeValue, activity }` all resolve.
+5. **`PlanCreateInput` (the checked create) no longer has an `id` field**, because `id` is now a relation
+   scalar. `PlanUncheckedCreateInput` keeps it. No plan create in `src/` passes an `id` through the
+   checked form (the tsc run above found none), so nothing breaks today.
+6. **A compound-unique `where` cannot name a NULL.** `codeSwimlaneLane.upsert({ where: {
+planId_activityId_codeTypeId_codeValueId: { …, codeValueId: null } } })` is refused by the client
+   ("Argument `codeValueId` must not be null"). `createMany({ skipDuplicates: true })` twice for the
+   same "no value" row leaves **one** row, so `NULLS NOT DISTINCT` works. The code lane upsert must be raw
+   `INSERT … ON CONFLICT (plan_id, activity_id, code_type_id, code_value_id)`, as the existing lane upsert
+   is (`activity.repository.ts:453`).
+
+### 16.3 Decisions this adds to migration B and the codes module
+
+- **D-P1. Write these relations only through their scalar columns.** `plans.swimlane_code_type_id`,
+  `code_values.code_type_id` / `parent_id`, and every column of `code_value_assignments` and
+  `code_swimlane_lanes` are written with the unchecked input, never with `connect`, `disconnect`, `set`
+  or a nested `create` on `swimlaneCodeType`, `CodeValue.parent` / `codeType`, or the assignment and lane
+  relations. M2-T3 adds a structural spec (the `soft-delete-filter.structural.spec.ts` style) that fails
+  on a nested write to any of those relation fields. A review rule alone is not enough, because the two
+  silent failures above pass every test that checks the stored row is consistent.
+- **D-P2.** The `Activity.swimlane` relation (`fields: [planId, swimlaneId]`) has the same shape. No code
+  uses a nested write on it today (searched `apps/api` for `swimlane: { connect|disconnect`: no match).
+  The D-P1 spec should cover it too.
+- **D-P3. §2's sentence "every foreign key is `ON DELETE RESTRICT ON UPDATE RESTRICT`" is corrected.**
+  It holds for the composite keys, which declare `onUpdate: Restrict`. The single-column keys of §5
+  (`organization_id`, `code_types.plan_id`, `code_values.code_type_id`) generate `ON UPDATE CASCADE`, the
+  Prisma default, which is what `swimlanes` and `activity_swimlane_lanes` already have. Ids never change,
+  so this is kept as the house default and not hand-edited.
+- **D-P4. Organisation export version.** Migration A already adds `ACTIVITY_CODE` to the enum, and
+  `export-format-doc.structural.spec.ts` reads the values from the Prisma enum. So the M2-T2 PR lists the
+  value for `plans.swimlaneSource` and `baselines.swimlaneSource` and starts format **`2.2`** (an enum value
+  is a minor change). §11's files and columns go under that same `2.2` entry if migration B ships in the
+  same release. If a release is cut between the two PRs, migration B's PR makes it **`2.3`**.
+- **D-P5.** Migration B is generated with `prisma migrate diff`, then hand-edited. The generator puts
+  `uq_activities_plan_id_id` after the four `CREATE TABLE`s and before every foreign key. That order is
+  valid. Reorder to §10.1's order only if it makes the file easier to read; nothing depends on it.

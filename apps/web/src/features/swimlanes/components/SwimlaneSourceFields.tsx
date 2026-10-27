@@ -9,8 +9,11 @@ import {
   type WbsSwimlaneLevels,
 } from '@/features/wbs';
 
-/** The two sources a planner can choose between. `NONE` is the absence of a choice, not a choice. */
-export type ChosenSource = Exclude<SwimlaneSource, 'NONE'>;
+/**
+ * The two sources a planner can choose between. `NONE` is the absence of a choice, not a choice;
+ * `ACTIVITY_CODE` is not offered until the P6 activity codes swimlanes ship (the API refuses it).
+ */
+export type ChosenSource = Exclude<SwimlaneSource, 'NONE' | 'ACTIVITY_CODE'>;
 
 const groups = (n: number): string => (n === 1 ? '1 group' : `${String(n)} groups`);
 

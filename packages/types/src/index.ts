@@ -205,8 +205,12 @@ export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUA
  * Where a plan's swimlanes come from (swimlanes spec §4.6): none, hand-made, or the plan's WBS
  * summaries at `swimlaneWbsLevel`. MUST stay in lock-step with the API's Prisma `SwimlaneSource`
  * enum, which `apps/api/src/modules/plans/swimlane-enums.spec.ts` checks in both directions.
+ *
+ * `ACTIVITY_CODE` (P6 activity codes, database-design.md §5.1) is in the database enum before
+ * anything can store or write it: no plan holds it until the codes schema lands, and the API does
+ * not accept it. The web draws no swimlanes for it (`use-swimlane-scene.ts` admits MANUAL and WBS).
  */
-export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS';
+export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
 
 /**
  * What an activity's in-swimlane lane was written against (swimlanes spec §4.4, schema-design

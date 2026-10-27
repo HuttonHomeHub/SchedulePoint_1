@@ -205,6 +205,8 @@ describe.skipIf(!hasDatabase)('Swimlane placement (e2e, pen enforced)', () => {
       ['level 0', { swimlaneSource: 'WBS', swimlaneWbsLevel: 0 }],
       ['level 4', { swimlaneSource: 'WBS', swimlaneWbsLevel: 4 }],
       ['an unknown source', { swimlaneSource: 'GRID' }],
+      // In the database enum before any plan can hold it (P6 activity codes migration A).
+      ['ACTIVITY_CODE, which no plan can hold yet', { swimlaneSource: 'ACTIVITY_CODE' }],
     ])('refuses %s with 422', async (_label, body) => {
       const { actor, planId } = await setup();
       const res = await setSource(actor, planId, body);

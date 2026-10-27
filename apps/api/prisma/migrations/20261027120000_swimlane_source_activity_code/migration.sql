@@ -1,0 +1,36 @@
+-- P6 ACTIVITY CODES, migration A of 2: the ACTIVITY_CODE swimlane source label, alone.
+--
+-- Spec: docs/specs/p6-activity-codes/spec.md; plan M2-T2; schema:
+-- docs/specs/p6-activity-codes/database-design.md §5.1, §10.1, §13 (designed by the
+-- database-architect agent, CLAUDE.md §19.3). Approved by the product owner 2026-10-27.
+--
+-- WHY THIS IS ITS OWN FILE, AND MUST STAY ITS OWN FILE (the 20260725130000_resource_group_kind
+-- precedent). `ALTER TYPE … ADD VALUE` is transactional on PostgreSQL 12+, so Prisma Migrate's
+-- per-file transaction is fine. What still applies is that the new label CANNOT BE USED in the
+-- transaction that added it: PostgreSQL raises `unsafe use of new value "ACTIVITY_CODE" of enum type
+-- "SwimlaneSource"` (probed for this design, database-design.md §3 item 4). Migration B
+-- (`<this timestamp + 100>_p6_activity_codes`) re-adds ck_plans_swimlane_source_level and
+-- ck_baselines_swimlane_snapshot_shape with an ACTIVITY_CODE branch, which names the label, so it
+-- must land in a LATER, separately committed file. `prisma migrate deploy` commits each file before
+-- the next, including under the self-migrating entrypoint (ADR-0018), so the split is sufficient.
+--
+-- THE LABEL IS UNUSABLE UNTIL MIGRATION B, AND THAT IS INTENDED. Both CHECKs as they stand end
+-- `ELSE false` with no ACTIVITY_CODE branch (20261023120000_swimlanes, 20261023160000_baselines_
+-- freeze_swimlanes), so no `plans` or `baselines` row can hold this value: a write that tried would
+-- be refused with 23514. The API refuses it earlier still (UpdatePlanDto admits NONE, MANUAL and WBS
+-- only), so nothing reaches the CHECK.
+--
+-- ADDITIVE, NO DATA MIGRATION. A catalogue-only insert into pg_enum: no rewrite, no scan, no lock on
+-- `plans` or `baselines`. Appended LAST, so every existing label keeps its sort position. Every row
+-- keeps its value. A pristine database and a populated one run the same statement (ADR-0107).
+--
+-- ROLLBACK (docs/DEPLOYMENT.md, "Rolling back past the P6 activity codes release"). Harmless to the
+-- previous image while no row holds the label, which the CHECKs guarantee until migration B. Do not
+-- try to remove it: PostgreSQL has no `ALTER TYPE … DROP VALUE`, and an unused label costs nothing.
+--
+-- NOT A SCHEDULING INPUT. `plans.swimlane_source` is already classified NOT_INPUT
+-- (common/schedule-inputs/schedule-input-fields.ts); a new value of it changes nothing the engine reads.
+
+-- AddEnumValue: swimlanes made from the live values of plans.swimlane_code_type_id (migration B).
+-- MUST stay in lock-step with the SwimlaneSource union in @repo/types.
+ALTER TYPE "SwimlaneSource" ADD VALUE 'ACTIVITY_CODE';
