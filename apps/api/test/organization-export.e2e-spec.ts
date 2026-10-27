@@ -983,7 +983,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(row.changes).toEqual({
       before: {},
       after: {
-        formatVersion: '2.2',
+        formatVersion: '2.3',
         files: EXPORT_FILES.length * 2,
         rows: manifest.files.filter((f) => f.kind === 'json').reduce((n, f) => n + f.rows, 0),
         bytes: raw.length,
@@ -1039,7 +1039,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(rows[0]).toMatchObject({ outcome: 'FAILURE', actorUserId: admin.userId });
     expect((rows[0]!.changes as { after: Json }).after).toMatchObject({
       reason: 'client_aborted',
-      formatVersion: '2.2',
+      formatVersion: '2.3',
     });
 
     // The snapshot and its lock ended with the connection: the next export goes through.

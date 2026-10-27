@@ -138,9 +138,9 @@ cold cache. The query plan was not inspected.
 
 ## 8. What the builder's half of M2-T3 changed (2026-10-27)
 
-- **Export `2.2`, kept.** The newest api tag is `api-v0.102.1` and it does not contain the commit that
-  introduced `2.2` (the tags containing `12f532b5` are none), so `2.2` has not shipped and migration B's
-  files and columns join its entry. Four new files (35 in all), `plans.swimlaneCodeTypeId`,
+- **Export `2.3`.** `2.2` shipped in `api-v0.102.2` (release 1, which carried migration A's `ACTIVITY_CODE`
+  label), so migration B's additions are a new minor, which the format document allows for new files,
+  columns and enum values (database-design D-P4). Four new files (35 in all), `plans.swimlaneCodeTypeId`,
   `baselines.swimlaneCodeTypeId` and `.codeSnapshotLevel`, and three appended `baseline-activities`
   columns; no `parentId` (Q5), and no DB-2 files (Q1 fallback).
 - **Expiry.** The runner deletes code lanes and assignments by plan id after the swimlane lanes, clears

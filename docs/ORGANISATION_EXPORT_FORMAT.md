@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `2.2`
+- **Version:** `2.3`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "2.2",
+  "formatVersion": "2.3",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,17 +145,22 @@ version.
 
 Changes since `1.0`:
 
-- **`2.2`** — swimlanes made from activity codes. Four new files, `code-types`, `code-values`,
-  `code-value-assignments` and `code-swimlane-lanes`, and six appended columns:
+- **`2.3`** — swimlanes made from activity codes, the codes themselves. Four new files, `code-types`,
+  `code-values`, `code-value-assignments` and `code-swimlane-lanes`, and six appended columns:
   `plans.swimlaneCodeTypeId`, `baselines.swimlaneCodeTypeId`, `baselines.codeSnapshotLevel` and
   `baseline-activities.codeValueId`, `.codeLaneIndex` and `.codeLaneUpdatedAt`. A plan's activity codes are
   its own named types ("Area", "Trade") with values ("L1"); `code-value-assignments` says which value each
   activity carries for each type, and `code-swimlane-lanes` is the lane it was last placed on in each
-  value's swimlane, as `activity-swimlane-lanes` is for hand-made swimlanes. `plans.swimlaneSource` and
-  `baselines.swimlaneSource` gain the value `ACTIVITY_CODE`: the swimlanes are the values of the code type
-  named by `swimlaneCodeTypeId`. A baseline freezes the value and lane of that one type only
-  (`codeSnapshotLevel` is `SWIMLANE_TYPE` when it did, `NONE` otherwise and for every baseline captured
-  before). Nothing is renamed or retyped, so a reader written for `2.1` reads `2.2`.
+  value's swimlane, as `activity-swimlane-lanes` is for hand-made swimlanes. A plan whose
+  `swimlaneSource` is `ACTIVITY_CODE` names its type in `swimlaneCodeTypeId`. A baseline freezes the
+  value and lane of that one type only (`codeSnapshotLevel` is `SWIMLANE_TYPE` when it did, `NONE`
+  otherwise and for every baseline captured before). Nothing is renamed or retyped, so a reader written
+  for `2.2` reads `2.3`.
+- **`2.2`** — swimlanes made from activity codes, first part. `plans.swimlaneSource` and
+  `baselines.swimlaneSource` gain the value `ACTIVITY_CODE`: the swimlanes are the values of one of the
+  plan's activity codes ("Area", "Trade"). Nothing could hold it yet, so no export of this version
+  contains it; it was listed because the product's list of values had it. Nothing is renamed or retyped,
+  so a reader written for `2.1` reads `2.2`.
 - **`2.1`** — swimlanes. Three new files, `swimlanes`, `activity-swimlane-lanes` and
   `baseline-activity-swimlane-lanes`, and seven appended columns: `plans.swimlaneSource`,
   `plans.swimlaneWbsLevel`, `activities.swimlaneId`, `baselines.swimlaneSnapshotLevel`,
@@ -396,7 +401,7 @@ Rows: every row of the organisation. Files `json/plans.json` and `csv/plans.csv`
 | `deletedAt`                             | instant |                                                            |
 | `swimlaneSource`                        | enum    | since 2.1                                                  |
 | `swimlaneWbsLevel`                      | int     | 1 to 3 when the source is WBS, else empty; since 2.1       |
-| `swimlaneCodeTypeId`                    | text    | the code type, when the source is ACTIVITY_CODE; since 2.2 |
+| `swimlaneCodeTypeId`                    | text    | the code type, when the source is ACTIVITY_CODE; since 2.3 |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -618,8 +623,8 @@ Rows: every row of the organisation. Files `json/baselines.json` and `csv/baseli
 | `swimlaneSnapshotLevel`         | enum    | FULL when swimlanes were recorded; since 2.1                             |
 | `swimlaneSource`                | enum    | the plan's source at capture, empty when NONE; since 2.1                 |
 | `swimlaneWbsLevel`              | int     | 1 to 3 when that source is WBS, else empty; since 2.1                    |
-| `swimlaneCodeTypeId`            | text    | the code type, when that source is ACTIVITY_CODE; since 2.2              |
-| `codeSnapshotLevel`             | enum    | SWIMLANE_TYPE when that type's values and lanes were recorded; since 2.2 |
+| `swimlaneCodeTypeId`            | text    | the code type, when that source is ACTIVITY_CODE; since 2.3              |
+| `codeSnapshotLevel`             | enum    | SWIMLANE_TYPE when that type's values and lanes were recorded; since 2.3 |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -664,9 +669,9 @@ Rows: every row of the organisation. Files `json/baseline-activities.json` and `
 | `updatedBy`               | text    |                                                                                                       |
 | `deletedAt`               | instant |                                                                                                       |
 | `swimlaneId`              | text    | hand-made swimlane at capture, empty for none or unknown (since 2.1)                                  |
-| `codeValueId`             | text    | the activity's value of the baseline's code type at capture, empty for none or unrecorded (since 2.2) |
-| `codeLaneIndex`           | int     | its lane within that value's swimlane at capture, from 0; empty when unrecorded (since 2.2)           |
-| `codeLaneUpdatedAt`       | instant | when that lane was last written; empty when unrecorded (since 2.2)                                    |
+| `codeValueId`             | text    | the activity's value of the baseline's code type at capture, empty for none or unrecorded (since 2.3) |
+| `codeLaneIndex`           | int     | its lane within that value's swimlane at capture, from 0; empty when unrecorded (since 2.3)           |
+| `codeLaneUpdatedAt`       | instant | when that lane was last written; empty when unrecorded (since 2.3)                                    |
 
 Not exported: `version`, `deleteBatchId`.
 

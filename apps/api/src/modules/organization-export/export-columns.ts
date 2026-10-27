@@ -251,7 +251,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       // 2.1 — appended (swimlanes), by position like `derivedDurationMinutes` below.
       'swimlaneSource:enum',
       'swimlaneWbsLevel:int',
-      // 2.2 — appended (swimlanes made from activity codes): the code type the swimlanes come from.
+      // 2.3 — appended (swimlanes made from activity codes): the code type the swimlanes come from.
       'swimlaneCodeTypeId:text',
     ),
     withheld: {
@@ -508,7 +508,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'swimlaneSnapshotLevel:enum',
       'swimlaneSource:enum',
       'swimlaneWbsLevel:int',
-      // 2.2 — appended (activity codes frozen at capture): the code type, and how much of it was recorded.
+      // 2.3 — appended (activity codes frozen at capture): the code type, and how much of it was recorded.
       'swimlaneCodeTypeId:text',
       'codeSnapshotLevel:enum',
     ),
@@ -560,7 +560,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'deletedAt:instant',
       // 2.1 — appended (swimlanes frozen at capture): the activity's own swimlane at capture.
       'swimlaneId:text',
-      // 2.2 — appended (activity codes frozen at capture): the activity's value and code lane for the
+      // 2.3 — appended (activity codes frozen at capture): the activity's value and code lane for the
       // baseline's swimlane code type, empty unless that type was frozen.
       'codeValueId:text',
       'codeLaneIndex:int',
@@ -1071,7 +1071,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '2.2';
+export const EXPORT_FORMAT_VERSION = '2.3';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';
