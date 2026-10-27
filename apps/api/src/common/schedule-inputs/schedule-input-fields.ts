@@ -71,6 +71,8 @@ export const PLAN_FIELD_CLASS: Record<keyof PlanPatch, InputClass> = {
   calendarId: 'INPUT',
   swimlaneSource: 'NOT_INPUT',
   swimlaneWbsLevel: 'NOT_INPUT',
+  // P6 activity codes (spec SC-3): which code type the swimlanes are drawn from. Presentation only.
+  swimlaneCodeTypeId: 'NOT_INPUT',
 };
 
 /** The DTO's `editedField` is a control field for the triad recompute, not persisted state. */

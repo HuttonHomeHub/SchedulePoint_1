@@ -47,6 +47,13 @@ export interface PlanPatch {
   swimlaneSource?: SwimlaneSource;
   /** WBS level 1 to 3 when the source is WBS, null otherwise (`ck_plans_swimlane_source_level`). */
   swimlaneWbsLevel?: number | null;
+  /**
+   * The code type the swimlanes are made from, set iff the source is ACTIVITY_CODE
+   * (`ck_plans_swimlane_source_level`; P6 activity codes). A scalar, never `swimlaneCodeType:
+   * { connect }` (database-design §16 D-P1). No write path sets it yet: UpdatePlanDto does not admit
+   * ACTIVITY_CODE until the codes module does.
+   */
+  swimlaneCodeTypeId?: string | null;
 }
 
 /**

@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 38
-> models across 79 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 42
+> models across 80 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -32,7 +32,7 @@
   **checks:** `ck_<table>_<rule>`.
 - **Enums:** `PascalCase` Prisma type (`ConstraintType`, `SchedulingMode`), `SCREAMING_SNAKE_CASE`
   values. A new enum follows that and carries **no** `@@map`, so its Postgres type is the
-  PascalCase name. Four of the schema's 30 enums predate the pattern and carry an `@@map` to a
+  PascalCase name. Four of the schema's 31 enums predate the pattern and carry an `@@map` to a
   `snake_case` database type — `ActivityHistoryScope` (`activity_history_scope`),
   `ActivityHistoryOrigin` (`activity_history_origin`), `AuditActorType` (`audit_actor_type`) and
   `AuditOutcome` (`audit_outcome`). Existing enum types are not renamed: a rename is a migration
@@ -1299,6 +1299,36 @@ and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 | `uq_baseline_activity_swimlane_lanes_basis`            | `(baseline_id, source_activity_id, …)` | unique | `(baseline_id, source_activity_id, basis, swimlane_id, summary_activity_id, wbs_level)` **`NULLS NOT DISTINCT`**: freeze-once per basis, the `baseline_id` FK RESTRICT check, the load |
 | `baseline_activity_swimlane_lanes_organization_id_idx` | `(organization_id)`                    | full   | `organization_id` FK (RESTRICT) + the export `org` read                                                                                                                                |
 
+#### The code snapshot — a baseline freezes the swimlane code type's values
+
+ADR-0025's **seventh** amendment (P6 activity codes, migration `20261027120100_p6_activity_codes`).
+The owner's rule (Q1, 2026-10-27) was to freeze **every** code type of every captured activity if that
+added at most 1 s to one capture of the largest plan, and only the swimlane source type otherwise.
+Copying every type of a 5,000-activity, 30-type plan (150,000 rows) measured **2.4–2.8 s**, and the
+row write alone was over 1 s whatever the keys and indexes, so the narrower shape shipped:
+
+| Frozen column                                                  | Copied from                                               | Meaning                                                                             |
+| -------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `baselines.swimlane_code_type_id`                              | `plans.swimlane_code_type_id`                             | the code type the swimlanes came from; set iff the frozen source is `ACTIVITY_CODE` |
+| `baselines.code_snapshot_level`                                | the capture path                                          | `NONE` \| `SWIMLANE_TYPE` — whether the three columns below were recorded           |
+| `baseline_activities.code_value_id`                            | the activity's assignment for that type                   | its value at capture; NULL is "no value of that type"                               |
+| `baseline_activities.code_lane_index`, `.code_lane_updated_at` | its `code_swimlane_lanes` row for (that type, that value) | its lane there; both NULL is "never placed there"                                   |
+
+- **`swimlane_code_type_id` is mandatory in this release whatever Q1 said**: the capture copies the
+  plan's source verbatim, so without it the first capture of a code-sourced plan would fail
+  `ck_baselines_swimlane_snapshot_shape` (whose inner `CASE` is the new plan CHECK verbatim).
+- **A level, as for every other snapshot**: `SWIMLANE_TYPE` is written unconditionally by the capture
+  once it is taught codes, and requires `swimlane_snapshot_level = 'FULL'`
+  (`ck_baselines_code_snapshot_shape`), because the frozen source is what names the type. Every
+  existing baseline reads `NONE` permanently.
+- **Columns, not a table**: one value per activity, so they ride the `baseline_activities` row the
+  capture already writes — no extra rows and no extra key checks. Correlation ids with no foreign key
+  (ADR-0025). `ck_baseline_activities_code_lane_pair` keeps the frozen lane whole and non-negative.
+- **What it cannot do**: a plan that switches its swimlanes to another code type after the capture
+  cannot place that baseline's **removed** work in the new type's swimlanes; it is counted instead. A
+  later "every type" level is a new enum label (two migrations) plus the copy tables
+  database-design §6.2 specified, and would need its own measurement.
+
 ### PlanLock: the edit-lock lease
 
 The `plan_locks` table (ADR-0028) is the **single-editor "pen"** — the human-facing
@@ -1657,8 +1687,11 @@ holds the reasoning; migration `20261023120000_swimlanes` holds the measurements
   (1–3 iff `WBS`) are pinned by the fail-closed `ck_plans_swimlane_source_level`. Neither is a
   scheduling input. The enum also has `ACTIVITY_CODE` (P6 activity codes, migration A,
   `20261027120000_swimlane_source_activity_code`), added alone because a CHECK cannot name a label in
-  the transaction that added it; until the codes migration gives both swimlane CHECKs a branch for it,
-  `ELSE false` keeps every `plans` and `baselines` row from holding it.
+  the transaction that added it; migration B (`20261027120100_p6_activity_codes`) gives both swimlane
+  CHECKs its branch, which requires `plans.swimlane_code_type_id` (see "P6 activity codes" below).
+- **`activities.swimlane` is written through `swimlane_id` only**, never a nested `connect` or
+  `disconnect`: its composite key has the shape the P6 codes probe found Prisma writes wrongly, and
+  `nested-relation-writes.structural.spec.ts` fails the build on a nested write to it.
 - **`activity_swimlane_lanes`** keeps an activity's in-swimlane lane **per basis**
   (`SwimlaneLaneBasis`: a swimlane, "No swimlane", a WBS summary, or "No WBS group" at a level),
   pinned by the fail-closed `ck_activity_swimlane_lanes_basis_shape`. "Never placed against this
@@ -1671,6 +1704,81 @@ holds the reasoning; migration `20261023120000_swimlanes` holds the measurements
   (measured in the migration header). The level branches of both CHECKs read
   `level IS NOT NULL AND level BETWEEN 1 AND 3`: `NULL BETWEEN 1 AND 3` is NULL, and a CHECK admits
   NULL, so the shorter form let a level-less `WBS` row through (probed).
+
+### P6 activity codes: code types, values, assignments and code lanes
+
+Designed in [`docs/specs/p6-activity-codes/database-design.md`](specs/p6-activity-codes/database-design.md),
+which holds the reasoning; migration `20261027120100_p6_activity_codes` holds the measurements
+(also [`m2-record.md`](specs/p6-activity-codes/m2-record.md)). The vocabulary is SchedulePoint's:
+P6's "activity codes" are **code types**, **code values** and **assignments**.
+
+- **Plan-scoped, one tier.** Every P6 code type, whatever its P6 scope (global, EPS, project), is copied
+  into the plan the import creates and is that plan's own (owner, Q2). The P6 scope is not stored.
+- **`code_types`** and **`code_values`** are plan content, like swimlanes: soft-deleted on their own
+  (own `delete_batch_id`), swept into the plan's batch by the plan cascade, never listed in Recently
+  deleted, hard-deleted only with the plan (expiry) or by import compensation. Both join the ADR-0172
+  soft-delete gate. Order is `position, id`, not unique. Names are unique per plan and short codes per
+  type, **ignoring case**, among live rows (`uq_code_types_plan_name`, `uq_code_values_type_short_code`).
+  CHECKs: `ck_code_types_name_shape` and `ck_code_values_short_code_shape` (1–80 characters, trimmed, no
+  control characters), `ck_code_values_description_shape` (NULL or 1–255, never `''`), and two
+  `position >= 0`. The two bounds and the absence of a parent value column are **provisional**
+  (owner, Q5): a real P6 export (M0-T2) may widen them or add `parent_id`, each an expand-only follow-up.
+  The limits of 100 types per plan and 1,000 values per type are service counts under the plan advisory
+  lock (a CHECK cannot count rows).
+- **`code_value_assignments`** is which value an activity carries for a type: at most one per (activity,
+  type), "no value" is the absence of a row. **`code_swimlane_lanes`** is an activity's lane inside a code
+  swimlane, kept per (type, value), with `code_value_id` NULL for the "no value" swimlane. Both are join
+  rows with no `version`, lifecycle or actor columns, written only under the activity's row lock in a
+  write that bumps `activities.version` (the `activity_swimlane_lanes` precedent). An assignment may
+  name a **soft-deleted** value: the activity then reads as having no value and comes back when the value
+  is restored (the ADR-0206 A8 rule); a new assignment to a deleted value is refused by the service.
+- **The database refuses a code of another plan or a value of another type.** Every key carries its scope
+  column: `(plan_id, activity_id) → activities (plan_id, id)`, `(plan_id, code_type_id) → code_types
+(plan_id, id)`, `(code_type_id, code_value_id) → code_values (code_type_id, id)`, all `ON UPDATE
+RESTRICT`. That is why `activities` has `uq_activities_plan_id_id`. Asserted in
+  `test/code-schema.e2e-spec.ts`.
+- **`plans.swimlane_code_type_id`** is the code type the swimlanes are made from, set iff
+  `swimlane_source = 'ACTIVITY_CODE'` (the replaced `ck_plans_swimlane_source_level`). Its key is
+  `(id, swimlane_code_type_id) → code_types (plan_id, id)`, so the type is of the same plan. With
+  `code_types.plan_id` it forms a **RESTRICT cycle**: every hard-delete path clears the pointer
+  (`swimlane_source = 'NONE', swimlane_code_type_id = NULL`) before deleting the plan's code types, and
+  the expiry census exempts `Plan→CodeType` for that reason, paid for by an assertion on the order.
+  Deleting the type the swimlanes come from is refused by the service (owner, Q3).
+- **Write every code relation through its scalar columns.** Prisma 6's nested writes on these composite
+  keys go wrong silently (database-design §16): `swimlaneCodeType: { connect }` rewrites `plans.id`,
+  `{ disconnect: true }` is dropped, and two `connect`s sharing `code_type_id` keep the last.
+  `nested-relation-writes.structural.spec.ts` fails the build on a nested write to any relation into or
+  out of the four code models, and to `Activity.swimlane`. The code-lane upsert is raw `INSERT … ON
+CONFLICT`, because a compound-unique `where` cannot name a NULL.
+- **Every key is `RESTRICT`**, so expiry and compensation delete code lanes and assignments before
+  activities, then values, then types. The expiry budget charges assignments at
+  `ASSIGNMENT_ROWS_PER_ACTIVITY` (measured: 4) and code lanes at `LANE_ROWS_PER_ACTIVITY`.
+- **Not scheduling inputs.** `plans.swimlane_code_type_id` is `NOT_INPUT`; nothing here is read by the
+  engine.
+
+**Indexes on the code tables** (rows for the register above, kept here beside their tables):
+
+| Index                                          | On                                                    | Kind                        | Serves                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------- | ----------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uq_activities_plan_id_id`                     | `activities (plan_id, id)`                            | full unique                 | the composite FK target for assignments and code lanes, and nothing else. Built at migration time: 35–37 ms at 50,000 activities, 276–359 ms at 500,000                                                                                                                         |
+| `uq_code_types_plan_id_id`                     | `(plan_id, id)`                                       | full unique                 | composite FK target (the plan pointer, assignments, lanes); the `plan_id` FK, a plan's type list (≤ 100 live, sorted in memory), the cascade sweep and the expiry delete                                                                                                        |
+| `code_types_organization_id_idx`               | `(organization_id)`                                   | full                        | `organization_id` FK + IDOR loads + the export `org` read                                                                                                                                                                                                                       |
+| `uq_code_types_plan_name`                      | `(plan_id, lower(name))`                              | partial unique              | live type name unique per plan ignoring case (`WHERE deleted_at IS NULL`). Raw SQL                                                                                                                                                                                              |
+| `idx_code_types_delete_batch_id`               | `(delete_batch_id)`                                   | partial                     | the batch restore lookup                                                                                                                                                                                                                                                        |
+| `uq_code_values_type_id_id`                    | `(code_type_id, id)`                                  | full unique                 | composite FK target (assignments, lanes); the `code_type_id` FK, a type's value list (≤ 1,000 live), the sweeps and the expiry delete                                                                                                                                           |
+| `code_values_organization_id_idx`              | `(organization_id)`                                   | full                        | `organization_id` FK + the export `org` read                                                                                                                                                                                                                                    |
+| `uq_code_values_type_short_code`               | `(code_type_id, lower(short_code))`                   | partial unique              | live short code unique per type ignoring case. Raw SQL                                                                                                                                                                                                                          |
+| `idx_code_values_delete_batch_id`              | `(delete_batch_id)`                                   | partial                     | the batch restore lookup                                                                                                                                                                                                                                                        |
+| `uq_code_value_assignments_plan_activity_type` | `(plan_id, activity_id, code_type_id)`                | full unique                 | one value per (activity, type); the upsert arbiter; the activity FK RESTRICT check; the plan load and page load; the expiry and compensation delete by plan. `plan_id` leads: with `activity_id` first the plan load was a sequential scan (372 ms against 65 ms at 1.5 M rows) |
+| `idx_code_value_assignments_type_value`        | `(code_type_id, code_value_id)`                       | full                        | "activities by value of type T", per-value counts, and the **type and value FK RESTRICT checks** at expiry. Without it deleting one large plan's 1,500 values took 177 s against 74–118 ms                                                                                      |
+| `code_value_assignments_organization_id_idx`   | `(organization_id)`                                   | full                        | `organization_id` FK + the export `org` read                                                                                                                                                                                                                                    |
+| `uq_code_swimlane_lanes_basis`                 | `(plan_id, activity_id, code_type_id, code_value_id)` | unique `NULLS NOT DISTINCT` | one row per (activity, type, value or "no value"); the `INSERT … ON CONFLICT` arbiter; the activity FK RESTRICT check; the lanes load. Declared as a plain `@@unique`                                                                                                           |
+| `idx_code_swimlane_lanes_type_value`           | `(code_type_id, code_value_id)`                       | full                        | the **type and value FK RESTRICT checks** at expiry. Without it the same values delete took 15.1–16.1 s                                                                                                                                                                         |
+| `code_swimlane_lanes_organization_id_idx`      | `(organization_id)`                                   | full                        | `organization_id` FK + the export `org` read                                                                                                                                                                                                                                    |
+
+Deliberately not indexed: `plans.swimlane_code_type_id` (read with its own row; the key's check uses the
+plans primary key), `position` on types and values (sorted in memory), and no recycle-bin index (types
+and values are not listed in Recently deleted).
 
 ### ActivityHistoryEntry: an activity's change history (ADR-0174)
 

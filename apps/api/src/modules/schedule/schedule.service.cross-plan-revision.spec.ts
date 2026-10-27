@@ -43,6 +43,7 @@ const planRow = (id: string, over: Partial<Plan> = {}): PlanWithProject =>
     id,
     swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
     organizationId: ORG_ID,
     projectId: 'project-1',
     name: id === FROM_PLAN ? 'Rev A' : 'Rev B',

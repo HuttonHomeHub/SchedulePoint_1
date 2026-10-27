@@ -812,12 +812,46 @@ deploy would repeat the whole re-derivation unasked. The #421 marker
 ### Rolling back past the P6 activity codes release
 
 The P6 activity codes schema (`docs/specs/p6-activity-codes/database-design.md` §13) lands in two
-migrations. So far only the first has shipped: `20261027120000_swimlane_source_activity_code` adds the
-value `ACTIVITY_CODE` to the `SwimlaneSource` enum and nothing else. **Redeploying the previous images
-needs no database step.** No plan or baseline can hold the value yet (both swimlane CHECKs refuse it, and
-the API does not accept it), so the previous image never reads it. Do not try to remove the value:
-PostgreSQL cannot drop an enum value, and an unused one costs nothing. When the second migration ships,
-this section gains the steps it needs.
+migrations: `20261027120000_swimlane_source_activity_code` adds the value `ACTIVITY_CODE` to the
+`SwimlaneSource` enum and nothing else, and `20261027120100_p6_activity_codes` adds the four code
+tables (`code_types`, `code_values`, `code_value_assignments`, `code_swimlane_lanes`), the plan's
+swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, three on
+`baseline_activities` and one index on `activities`. Both are forward-only (`docs/DATABASE.md`
+"Migrations"). What running the **previous** images after both have applied does:
+
+- **Before anybody uses a code as the swimlane source, it works with no database step.** The previous
+  image's Prisma client selects named columns and never sees the new tables or columns; the new
+  `activities` index costs it nothing; and its swimlane lane upsert is untouched, which is why code lanes
+  have a table of their own.
+- **Expiry and import rollback in the previous image fail on plans that hold codes.** Its expiry does not
+  know the new tables, so expiring such a plan fails with a foreign-key error (23503), which it logs and
+  retries every hour; nothing is lost, and the clear-out ships switched off. Its own imports never write
+  codes, so its import rollback is unaffected.
+- **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), the previous image
+  cannot read that plan's row**: its Prisma client refuses an enum value it does not know, which breaks
+  that plan and any list that loads it. Before starting the previous image, with the API stopped:
+
+  ```sql
+  UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL
+  WHERE swimlane_source = 'ACTIVITY_CODE';
+  ```
+
+  The planners' choice of code swimlanes is lost and is chosen again after rolling forward; their lanes
+  are kept in `code_swimlane_lanes` and come back.
+
+- **Once a baseline has been captured on such a plan, there is no clean rollback.** That baseline's frozen
+  `swimlane_source` is `ACTIVITY_CODE`, and rewriting it would falsify a snapshot (ADR-0025). Roll forward
+  instead, or, as a last resort, restore the pre-update copy the backup service made before migrating
+  (ADR-0192, `docs/guides/back-up-and-restore.md`), which loses everything written since.
+- **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
+  both migrations already recorded in `_prisma_migrations` and does not re-create anything, the trap the
+  milestone cross-calendar section above records for a marker row. PostgreSQL cannot drop an enum value
+  anyway, and an unused one costs nothing.
+
+Measured on a shared container (migration B's header): the second migration takes about 0.1 s at 50,000
+activities and 0.7–0.8 s at 500,000 activities with 2,000,000 baseline rows, almost all of it building
+the `activities` index and checking `baseline_activities`. The API migrates before it serves, so that
+is added to one boot.
 
 ### Which switches actually work on a running container, and which do not
 

@@ -35,6 +35,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     organizationId: ORG_ID,
     swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
     projectId: 'project-1',
     name: 'Baseline',
     description: null,

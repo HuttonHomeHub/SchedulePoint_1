@@ -66,9 +66,19 @@ describe('the scheduling-input classification', () => {
 
     // `version` is the optimistic lock and `editedField` the triad's control field: neither is
     // persisted scheduling state.
-    expect(Object.keys(PLAN_FIELD_CLASS).sort()).toEqual(
-      dtoKeys('plans/dto/update-plan.dto.ts', ['version']),
-    );
+    //
+    // Classified AHEAD of its DTO field, and only these: `plans.swimlane_code_type_id` landed with
+    // the P6 activity codes schema (migration 20261027120100_p6_activity_codes, plan M2-T3), and
+    // UpdatePlanDto admits it with the codes API (M2-T4), which deletes it from this list. A key
+    // here that the DTO has gained fails the check below, so the allowance cannot outlive its use.
+    const classifiedAheadOfDto = ['swimlaneCodeTypeId'];
+    const planDtoKeys = dtoKeys('plans/dto/update-plan.dto.ts', ['version']);
+    for (const key of classifiedAheadOfDto) expect(planDtoKeys).not.toContain(key);
+    expect(
+      Object.keys(PLAN_FIELD_CLASS)
+        .filter((key) => !classifiedAheadOfDto.includes(key))
+        .sort(),
+    ).toEqual(planDtoKeys);
     expect(Object.keys(ASSIGNMENT_FIELD_CLASS).sort()).toEqual(
       dtoKeys('resources/dto/update-assignment.dto.ts', ['version', 'editedField']),
     );
