@@ -811,7 +811,7 @@ describe('HierarchyLifecycleService', () => {
 
       expect(counts).toMatchObject({ codeTypes: 2, codeValues: 9 });
       const args = {
-        where: { deleteBatchId: 'batch-p' },
+        where: { deleteBatchId: 'batch-p', deletedAt: { not: null } },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       };
       expect(tx.codeType.updateMany).toHaveBeenCalledWith(args);

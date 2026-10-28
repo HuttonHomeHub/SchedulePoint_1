@@ -840,10 +840,16 @@ export class HierarchyLifecycleService {
           // it reads as "no value" until the value is restored (the ADR-0206 A8 rule, not ADR-0201's
           // calendar refusal). A name taken meanwhile raises P2002, which the catch below maps.
           counts.codeTypes = (
-            await tx.codeType.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+            await tx.codeType.updateMany({
+              where: { deleteBatchId: batchId, deletedAt: { not: null } },
+              data: restore,
+            })
           ).count;
           counts.codeValues = (
-            await tx.codeValue.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+            await tx.codeValue.updateMany({
+              where: { deleteBatchId: batchId, deletedAt: { not: null } },
+              data: restore,
+            })
           ).count;
         }
         // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A

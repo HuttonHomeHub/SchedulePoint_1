@@ -301,5 +301,26 @@ restore issues no code statement.
   `WHERE id = $plan AND swimlane_code_type_id = $type`, and `EXPLAIN` (with sequential scans disabled, on empty
   tables) shows `Index Scan using plans_pkey` with the pointer as a filter on at most one row. The sweep's
   statements use `uq_code_types_plan_id_id` and `uq_code_values_type_id_id`.
-- **Not measured:** the sweep at the 100 × 1,000 cap on a loaded database; the plan chosen on realistic
-  statistics may differ from the empty-table plans above.
+- **Restore statements state `deletedAt: { not: null }`** beside the batch id (security review), as
+  `code-value.repository.ts` does. The batch restore reaches them only inside `if (batchId)`, the guard every
+  sibling sweep sits under, so a missing batch id never reaches Prisma as a dropped `where`; nothing more was added.
+
+### Cost of the sweep at the caps (ADR-0142)
+
+`test/measure/codes-cascade.measure.ts`, local PostgreSQL 16 database, warm, 3 delete-then-restore cycles,
+one real HTTP `DELETE` and `POST …/restore` each, v4 ids, no activities or assignments (the codes sweep alone).
+
+| Case                                                       | delete p50 | restore p50 |
+| ---------------------------------------------------------- | ---------- | ----------- |
+| (a) one plan, 100 types × 1,000 values (100,000), plan     | 1,957 ms   | 1,978 ms    |
+| (a) the same plan, through its project's delete            | 1,729 ms   | 1,692 ms    |
+| (b) a project of 10 such plans (1,000,000 values), project | **fails**  | not run     |
+
+- **(b) does not fit.** The project delete was cancelled by Prisma at 17,330 ms against the **15,000 ms**
+  `TRANSACTION_TIMEOUT_MS` (`prisma.service.ts:25`), a 500 to the user. The plan, project and client delete and
+  restore call sites pass no `timeout`, so the 15 s default is what they run under; only the activity batch
+  writers use `BATCH_TRANSACTION_TIMEOUT_MS` (60 s, `prisma.service.ts:36`). The restore of (b) was not run
+  because there was nothing deleted to restore; by the symmetry of (a) it should cost about as much.
+- The cost is about 17 µs a value for the delete and the same for the restore. The caps (100 × 1,000 per plan)
+  allow 10 such plans in one project, and a client holds many projects, so the 15 s default is reachable by data
+  the product accepts. A plan alone is safe (2 s).
