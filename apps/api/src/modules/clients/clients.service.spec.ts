@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { BATCH_TRANSACTION_TIMEOUT_MS, type PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../audit/audit.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
@@ -147,6 +147,14 @@ describe('ClientsService', () => {
       );
     });
 
+    it('runs the cascade under the batch transaction timeout, not the 15 s default', async () => {
+      clients.findActiveByIdInOrg.mockResolvedValue(client());
+      await service.remove(principalWith(ALL), 'acme', 'c1');
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        timeout: BATCH_TRANSACTION_TIMEOUT_MS,
+      });
+    });
+
     it('404s (and does not delete) when the client is missing', async () => {
       clients.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(service.remove(principalWith(ALL), 'acme', 'c1')).rejects.toBeInstanceOf(
@@ -184,6 +192,15 @@ describe('ClientsService', () => {
         USER_ID,
       );
       expect(result.id).toBe('c1');
+    });
+
+    it('runs the restore under the batch transaction timeout, not the 15 s default', async () => {
+      clients.findByIdInOrg.mockResolvedValue(client({ deletedAt: new Date() }));
+      clients.findActiveByIdInOrg.mockResolvedValue(client());
+      await service.restore(principalWith(ALL), 'acme', 'c1');
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        timeout: BATCH_TRANSACTION_TIMEOUT_MS,
+      });
     });
 
     it('is a no-op when the client is already active', async () => {

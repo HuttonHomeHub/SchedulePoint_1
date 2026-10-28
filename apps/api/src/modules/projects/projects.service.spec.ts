@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
 import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-lifecycle.service';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { BATCH_TRANSACTION_TIMEOUT_MS, type PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../audit/audit.service';
 import type { ClientRepository } from '../clients/client.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -218,6 +218,14 @@ describe('ProjectsService', () => {
       );
     });
 
+    it('runs the cascade under the batch transaction timeout, not the 15 s default', async () => {
+      projects.findActiveByIdInOrg.mockResolvedValue(project());
+      await service.remove(principalWith(ALL), 'acme', 'p1');
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        timeout: BATCH_TRANSACTION_TIMEOUT_MS,
+      });
+    });
+
     it('404s (and does not delete) when the project is missing', async () => {
       projects.findActiveByIdInOrg.mockResolvedValue(null);
       await expect(service.remove(principalWith(ALL), 'acme', 'p1')).rejects.toBeInstanceOf(
@@ -255,6 +263,15 @@ describe('ProjectsService', () => {
         USER_ID,
       );
       expect(result.id).toBe('p1');
+    });
+
+    it('runs the restore under the batch transaction timeout, not the 15 s default', async () => {
+      projects.findByIdInOrg.mockResolvedValue(project({ deletedAt: new Date() }));
+      projects.findActiveByIdInOrg.mockResolvedValue(project());
+      await service.restore(principalWith(ALL), 'acme', 'p1');
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        timeout: BATCH_TRANSACTION_TIMEOUT_MS,
+      });
     });
 
     it('is a no-op when the project is already active', async () => {

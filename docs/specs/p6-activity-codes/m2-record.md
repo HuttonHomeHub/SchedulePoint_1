@@ -312,15 +312,22 @@ one real HTTP `DELETE` and `POST …/restore` each, v4 ids, no activities or ass
 
 | Case                                                       | delete p50 | restore p50 |
 | ---------------------------------------------------------- | ---------- | ----------- |
-| (a) one plan, 100 types × 1,000 values (100,000), plan     | 1,957 ms   | 1,978 ms    |
-| (a) the same plan, through its project's delete            | 1,729 ms   | 1,692 ms    |
-| (b) a project of 10 such plans (1,000,000 values), project | **fails**  | not run     |
+| (a) one plan, 100 types × 1,000 values (100,000), plan     | 2,147 ms   | 1,813 ms    |
+| (a) the same plan, through its project's delete            | 1,894 ms   | 1,843 ms    |
+| (b) a project of 10 such plans (1,000,000 values), project | 17,944 ms  | 26,208 ms   |
 
-- **(b) does not fit.** The project delete was cancelled by Prisma at 17,330 ms against the **15,000 ms**
-  `TRANSACTION_TIMEOUT_MS` (`prisma.service.ts:25`), a 500 to the user. The plan, project and client delete and
-  restore call sites pass no `timeout`, so the 15 s default is what they run under; only the activity batch
-  writers use `BATCH_TRANSACTION_TIMEOUT_MS` (60 s, `prisma.service.ts:36`). The restore of (b) was not run
-  because there was nothing deleted to restore; by the symmetry of (a) it should cost about as much.
-- The cost is about 17 µs a value for the delete and the same for the restore. The caps (100 × 1,000 per plan)
-  allow 10 such plans in one project, and a client holds many projects, so the 15 s default is reachable by data
-  the product accepts. A plan alone is safe (2 s).
+(The first run, before the fix below, gave (a) 1,957 / 1,978 ms and 1,729 / 1,692 ms, and (b) failed.)
+
+- **(b) did not fit the 15 s default.** The project delete was cancelled by Prisma at 17,330 ms against
+  `TRANSACTION_TIMEOUT_MS` = 15,000 ms (`prisma.service.ts:25`), a 500 to the user. The plan, project and client
+  delete and restore passed no `timeout`. **They now pass `BATCH_TRANSACTION_TIMEOUT_MS` (60 s,
+  `prisma.service.ts:36`)**, six call sites in the three services, each pinned by a unit test. With it (b)
+  completes: delete p50 17.9 s (max 26.2 s), **restore p50 26.2 s**. The restore is the slower direction, about 26 µs
+  a value against about 18 µs for the delete, so the restore sets the ceiling: about 2.3 million values in one
+  project or client restore (more than 20 plans at the 100 × 1,000 caps), beyond which it still answers 500.
+- **No e2e at that size.** The measure run, which seeds and cycles a million-value project, takes over a minute, which is not something
+  to add to a CI shard; the measure script is the evidence that a cascade over 15 s completes, and the unit tests
+  pin that the longer timeout is what each call passes.
+- **The plan advisory lock is now held for up to 60 s** in that worst case (the cascade and the restore take it
+  first and keep it to commit), so a plan write in a plan under it waits that long. Rare and deliberate: the
+  alternative was a 500 and a rolled-back delete. A plan alone is about 2 s.
