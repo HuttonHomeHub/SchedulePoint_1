@@ -3,56 +3,65 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-26. The owner asked for a hand-off check, a reconciliation pass, and then a
-shortlist built to completion. **All of it is merged and released:** the reconciliation pass (#1163),
-two fixes (#550 and #371), four approved specs (#539, #495, notes through XER/MSPDI, the import
-calendar tidy), and the release **`web` 0.200.0**, **`api` 0.102.0** and **`@repo/interchange` 0.16.0**
-(Version Packages #1166). The owner's **hard rule** still stands: nothing that needs them to test,
-measure or check anything on their server or devices (a decision question is fine; a test is not).
-**1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-28. The owner asked for a hand-off check, then to build the two plan-lock gaps
+(#553, #559), the `CheckboxField` touch-size change (#558) and the P6 activity-codes follow-on, driven to
+completion. **All of it is merged and released:** the three small fixes, the P6 spec and its database
+design (approved 2026-10-27), and **P6 milestones M0, M1 and M2 (T1 to T6)**: the import report line,
+the storage, the export, the clean-up, the codes API and the seeded sample plan. Released as **`api`
+0.102.2 and `web` 0.200.2** (Version Packages #1189), then **`api` 0.103.0** (#1197). **The codes
+have no screen yet: M3 (show and edit them) is next.** The owner's **hard rule** still stands: nothing
+that needs them to test, measure or check anything on their server or devices (a decision question is
+fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
 
-## The owner's answers this session (2026-10-26)
+## The owner's answers this session (2026-10-27)
 
-- **Shortlist:** build #539 and #550, and #495 and #371 too; **spec both** BACKLOG import items.
-- **The four specs** (`docs/specs/milestone-cross-calendar/`, `typed-field-commit/`,
-  `interchange-notes/`, `import-calendar-tidy/`): approved with every default.
-- **Dependabot PRs #1153 to #1162** (opened 2026-10-26): first "leave for later", then later the same
-  day **"merge the Dependabot PRs now"**. All ten are merged (as #1175 and #1177 to #1185) and released.
+- **What to build:** the plan-lock gaps (#553 and #559), the checkbox touch size (#558) and the P6
+  activity-codes follow-on; close the leftover Dependabot PR #1161; **one release at the end**.
+- **P6 design:** **keep the codes in the plan** (not "swimlanes once at import"); a swimlane is named by the
+  value's **description, else its short code**; no real P6 file exists yet, so build everything that needs
+  no unconfirmed P6 column and hold the P6 import and export steps (M5, M6).
+- **The spec (`docs/specs/p6-activity-codes/`) is approved with every recommended answer**, plus: **Q1**
+  baselines remember codes **only if one capture of the largest plan adds at most 1 second** (it measured
+  2.4 to 2.8 s, so the fallback shipped: baselines freeze only the swimlane source type); **Q2** codes belong
+  **to each plan**; Q3 refuse deleting the type the swimlanes are drawn from; Q4 limits 100 types per plan and
+  1,000 values per type; Q5 provisional lengths 80 and 255 and no parent value yet; Q6 guests see names only;
+  Q7 a drag never changes a code; Q8 "Swimlanes by code" in the import window, default none; Q9 call them
+  "Codes"; Q10 MS Project files say plainly they are not carried; Q11 nested values stored if the file has a
+  parent, shown flat.
 
 ## Where things stand
 
-- **Latest releases:** `web` 0.200.1 and `api` 0.102.1 (Version Packages #1176, the Dependabot
-  batch). Tags `api-v0.102.1` and `web-v0.200.1`. Before that `web` 0.200.0, `api` 0.102.0, `@repo/interchange` 0.16.0 (Version Packages
-  #1166). Tags `api-v0.102.0` and `web-v0.200.0`; both publish jobs passed. `@repo/interchange` is
-  versioned but never tagged (`release.yml` tags only the two apps; it ships inside the API image).
-  Before that, `web` 0.199.2 / `api` 0.101.1 (#1151).
+- **Latest releases:** `api` **0.103.0** (tag `api-v0.103.0`, Version Packages #1197) and `web` **0.200.2**
+  (tag `web-v0.200.2`). Before that `api` 0.102.2 (Version Packages #1189, which first published the
+  plan-lock fixes, the dependency re-read, the checkbox size, the P6 import-report line and migration A).
+  Both publish jobs passed for 0.102.2; the 0.103.0 publish run is `Release` run 40616405552.
+  `@repo/interchange` was not versioned this time.
 - **This session's PRs, in merge order:**
-  - **#1163** the reconciliation pass (last full pass now 2026-10-26; rows re-verified, #551 and #552
-    filed).
-  - **#1164** #550: a top-level activity create takes the plan lock (row #553 records the sibling
-    writers).
-  - **#1165** #371: `apps/web/scripts/bundle-probe.mjs`; 35 of 40 measurement scripts use it.
-  - **#1167** the four specs, approved.
-  - **#1168** calendar tidy M1: an import reuses an identical project calendar (ADR-0208; row #554).
-  - **#1169** #495: `useCommittedDraft`, `TextField commitOn="enter-or-blur"`, the critical float
-    threshold field adopts it.
-  - **#1170** the lazy-dialog warm-up for `plan-workspace-toolbar.test.tsx` (the flake seen on #1165).
-  - **#1171** #539: a milestone keeps the instant its logic gives it across calendars (ADR-0207; a
-    one-off boot recalculation of plans with a zero-span activity; rows #555 to #557).
-  - **#1172** calendar tidy M2: **Remove unused calendars…** on the project screen (row #558). Its
-    first CI run failed in all three browsers: the delete's refetch emptied the list while the modal
-    was still open, the page behind a modal is inert, and focus fell to `<body>`. Fixed by closing the
-    dialog before the hand-off, with a unit test that records whether a dialog was open at hand-off.
-  - **#1173** notes through XER and MSPDI, import and export (ADR-0209).
-  - **#1166** the Version Packages release.
-  - This hand-off (with row #559), merged as #1174.
-  - **The Dependabot batch**, one replacement PR per Dependabot PR (pushing to Dependabot's branches
-    was refused): #1175 NestJS 12.2 (PSF-2.0 allowed for `argparse`), #1177 typescript-eslint 8.72, #1178
-    the dev-tools group, #1179 better-auth 1.7.12, #1180 react-router 1.170.46, #1181 lucide 1.61,
-    #1182 nodemailer 10.2.1, #1183 express 5.3.0, #1184 react-virtual 3.14.22 (a test stub for
-    `clientHeight`), #1185 @hookform/resolvers 6. Dependabot closed its own ten.
-  - **#1186** put back the two package versions and 11 ranges the batch had lowered (see the
-    2026-10-26 lessons), then **#1176** released `api` 0.102.1 and `web` 0.200.1.
+  - **#1188** #559: plan create takes the calendar lock and binds only the ORG-scope Standard calendar
+    (an archived Standard binds nothing).
+  - **#1190** #553: dependency create re-reads the plan and both ends under the plan lock (the audit of the
+    other writers is in the closed ledger row; the accepted note-create race is row **#560**).
+  - **#1191** the P6 spec, plan and database design, approved.
+  - **#1192** #558: a labelled `CheckboxField` row is finger-sized (44 px) under a coarse pointer (the
+    toolbar's hand-rolled radio rows were measured to break the View panel's 420 px bar if grown: row **#561**).
+  - **#1193** P6 M0 + M1: an XER import now names the P6 activity codes it does not carry yet
+    (`docs/specs/p6-activity-codes/m0-record.md` records which P6 columns public sources confirm).
+  - **#1194** M2-T1/T2: migration A, the `ACTIVITY_CODE` label on its own; the Prisma probe results.
+  - **#1195** a fix to two changesets whose frontmatter lacked `: patch` (see the lessons).
+  - **#1189** Version Packages (release 1).
+  - **#1196** M2-T3: migration B, four tables (`code_types`, `code_values`, `code_value_assignments`,
+    `code_swimlane_lanes`), `plans.swimlane_code_type_id`, three nullable baseline columns, organisation
+    export **format 2.3**, expiry and import-compensation order, `clearPlanTree` test helper.
+  - **#1198** M2-T4: the codes API (`/plans/:planId/code-types`, `/code-values`, `PATCH …/activities/codes`),
+    the per-page `codes` field on the activity list, `code:*` permissions, audit and history.
+  - **#1199** M2-T5: plan, project and client delete and restore take their codes with them, under the
+    60 s batch transaction timeout (a project of ten plans at the code caps measured 17 s; ceiling in row **#562**).
+  - **#1200** M2-T6: the seeded plan `capability-codes` and its playbook rows (`pnpm check:playbook` says 51).
+  - **#1201** the swimlane name check also refuses U+2028, U+2029 and U+FFF9 to U+FFFB.
+  - **#1197** Version Packages (release 2). Dependabot #1161 was closed (its bump had merged as #1184).
+- **The P6 epic:** M0, M1 and M2 are shipped and **dark** (API only; nothing in the screens uses the codes).
+  `docs/specs/p6-activity-codes/` holds the spec, plan, `database-design.md` (§16 probe results, §17 what landed)
+  and `m2-record.md` (every measurement).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -115,6 +124,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-25 (evening): swimlanes M5 only; the three known gaps stay follow-ons ("None now").
 - 2026-10-26: the shortlist (#539, #550, #495, #371; spec both import items), the four specs with
   every default, and Dependabot #1153 to #1162 left for later; then "merge the Dependabot PRs now".
+- 2026-10-27: the P6 follow-on is built (keep the codes in the plan, per plan); the spec approved with every
+  default; Q1 baselines yes-if-under-1-second (the fallback shipped); close Dependabot #1161; one release at the end.
 
 ## Parked by the owner — keep, do not raise
 
@@ -168,20 +179,39 @@ owner returns to one, the steps are ready:
   section), **#557** (ADR-0196's exclusion may now be over-conservative),
   **#558** (a labelled `CheckboxField` row is 24 px under a coarse pointer), **#559** (a new plan takes
   the Standard calendar without the calendar lock). **#550** and **#371** are closed.
+- **New on 2026-10-27:** **#560** (a note create can land under an activity or plan a delete swept an instant
+  earlier; accepted, invisible through the API), **#561** (the toolbar's hand-rolled radio rows stay 24 px under
+  a coarse pointer; growing them breaks the View panel's 420 px bar), **#562** (the codes API's deferred items:
+  a values-on-demand read, `?include=deleted` unbounded, the write response returns every code, the redundant
+  lock re-take in `bumpVersions`, the unreproduced 2.6 s history flush, and the cascade's **60 s ceiling of about
+  2.3 million values in one project or client restore**). **#553**, **#558** and **#559** are closed.
+- **Also noted, no row:** the web form's client-side swimlane name regex (`features/swimlanes/model/swimlane-names.ts`)
+  still covers only C0/C1, so a name with a line separator is refused by the API with a 422, which is cosmetic.
 - **Untested, no row:** dragging a milestone onto a non-working day (ADR-0207 changed how a placed
   finish milestone reads back; only a journey can check the drag).
 
 ## Suggested next
 
-**The shortlist is finished.** Nothing on it is owed. Still open from the session:
+**The P6 epic is mid-build; the next step is M3, the first screen.** Switch the session to **Opus** for the
+UI design, then **Sonnet** for building (§19.14). Everything below is in `docs/specs/p6-activity-codes/plan.md`.
 
-- **#553 and #559** are the two lock gaps the session found; both are small API changes, and any fix
-  goes past the backend-performance reviewer first (the #520/#550 shape).
-- **#558** is a primitive change (`CheckboxField`), so it needs the ADR-0111 reviewers before release.
-- The P6 activity-codes follow-on (`docs/BACKLOG.md`) still needs a spec and a database-architect pass.
+- **M3: show and edit the codes** (the "Codes…" window, a column per code in the activity table and the
+  Gantt, a Codes section in the activity editor, set a value on many selected rows, undo and history). It adds
+  a user-facing entry point, so a **ui-architect pass comes first**, then the ux, accessibility and component
+  reviewers, and a Playwright journey (ADR-0081). **Before any screen binds to `GET code-types`, decide the
+  values-on-demand read** (at 100 types by 1,000 values it measured 2.3 s and 32 MB; row #562). The `@repo/types`
+  additions broke four web files that now say "Code changed" and carry five known-gap entries in
+  `scripts/surface-contract.json`; M3 closes them.
+- **M4: swimlanes by a code** (a "By code" source in Swimlanes… setup, the switch between codes keeping each
+  layout, `UpdatePlanDto` admitting `swimlaneCodeTypeId`, removing the `classifiedAheadOfDto` allowance in
+  `schedule-inputs.structural.spec.ts`, and making `swimlanesShown` in
+  `use-tsld-canvas-ui-state.ts` explicit about `MANUAL` and `WBS`). It needs the database-architect again.
+- **M5 and M6 (P6 import and export of codes) wait for a real P6 export** that uses activity codes (M0-T2,
+  `m0-record.md`); the owner has none yet. Do not build them on guessed column names (ADR-0071 §5).
+- **M7:** the ADR and the register and backlog updates.
+- Still open from the lock work: row **#560** and **#562** above.
 
-The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26). Switch the
-session to **Sonnet** for building.
+The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -670,3 +700,36 @@ origin/main <old base>` after the one below merges; union the ADR lines, take ou
     round-trip check went into the layout-restore test, whose last lines match the export-then-
     reimport test's, so it read an empty list on CI. Read a builder's journey diff hunk by hunk
     against the test it claims to extend, and run the suite locally before the PR.
+
+- **2026-10-27/28 lessons (the P6 build):**
+  - **A changeset whose frontmatter lacks `: patch` silently stops the release machine.** Two of mine named
+    the package without a bump type (`'@repo/api'` on its own line); the Release workflow's step "Create release
+    pull request" failed on every merge from #1190, so the Version Packages PR stopped updating and nothing
+    said so. Frontmatter must be exactly `---\n'@repo/api': patch\n---`. When the release PR looks stale, read that
+    step: `get_job_logs` with `return_content: true` and `tail_lines: 110` on the Release run's first job.
+  - **`actions_list list_workflow_runs` without `perPage: 1` floods the context** (it ignored `per_page`; the
+    parameter is `perPage`). Always pass `resource_id: release.yml`, `perPage: 1` and the branch and event filter.
+  - **A format version that shipped cannot be reused.** Organisation export 2.2 shipped in `api` 0.102.2 (it
+    carried migration A's enum label), so migration B's additions had to be **2.3**; the builder had checked the
+    tags before the release and was right at the time. Check `git ls-remote --tags` again at the point of
+    deciding.
+  - **After a squash-merge of a base PR, rebase the next one with `git rebase --onto origin/main <old base head>`**
+    in a scratch worktree, then force-push with the old head as the lease. It was clean every time.
+  - **Prisma's nested `connect`/`disconnect` misbehave on the composite relations** (`connect` rewrites the plan's
+    primary key; `disconnect` is silently dropped; two connects sharing a column: the last wins). Write them
+    through plain columns; `nested-relation-writes.structural.spec.ts` fails on any nested write.
+  - **Measure before keeping a design (ADR-0142).** The baseline code snapshot measured 2.4 to 2.8 s against the
+    owner's 1 s ceiling, so the approved fallback shipped; a project of ten maxed plans measured 17 s against the
+    15 s transaction default, so the delete and restore got the 60 s one. Both were found by a builder that
+    stopped and reported instead of deciding.
+  - **A container restart kills running builders and Postgres, but a builder's uncommitted edits survive in its
+    worktree under `.claude/worktrees/`.** Relaunch a builder into the same path (no new worktree), run
+    `scripts/e2e-local.sh --db-only` first, and have it commit and push before any long run.
+  - **`Monitor` with a timer loop emits an event per tick.** Do not use it to wait; use the wake-up and an
+    `until` loop on a log or `git ls-remote` in a background shell.
+  - **`cd` into a worktree moves the tool's working directory** (the environment notice says so). Use
+    `git -C <path>` and absolute paths, and `cd` back at once.
+  - **The GitHub MCP tools can disconnect mid-session.** Reload with `ToolSearch select:mcp__github__<name>`.
+  - **Reviewers found real things, each cheap before merge:** the org-export index shape `(organization_id, id)`
+    for a linear keyset scan; the line separators the database refuses but the DTO did not (the swimlane DTO had
+    the same gap); a missing `details.reason` on a 409.
