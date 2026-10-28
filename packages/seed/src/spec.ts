@@ -328,6 +328,13 @@ export const seedActivitySchema = z
      */
     swimlaneLane: z.number().int().min(0).max(10000).optional(),
     /**
+     * The activity's code values (p6-activity-codes), by {@link SeedCodes} type key to value key. A
+     * type left out is a type the activity carries no value for — which is a state in its own
+     * right, so absence is meaningful here and nothing is defaulted. Written through
+     * `PATCH …/activities/codes` once the activity exists.
+     */
+    codes: z.record(z.string().min(1), z.string().min(1)).optional(),
+    /**
      * The conformance `test_tags` this activity carries, so a coverage report can say which of the
      * fixture's 117 capability keys a seeded plan actually reaches. Empty for hand-authored plans
      * that claim nothing.
@@ -449,6 +456,34 @@ export const seedSwimlanesSchema = z
   );
 export type SeedSwimlanes = z.infer<typeof seedSwimlanesSchema>;
 
+/**
+ * A plan's activity-code types and their values (p6-activity-codes), created in order through the
+ * code-types routes. Keys are the spec's own handles, never sent to the API: an activity names a
+ * value by `(type key, value key)`, and the seeder resolves both to the ids the API issued.
+ */
+export const seedCodesSchema = z
+  .object({
+    types: z.array(
+      z
+        .object({
+          key: z.string().min(1),
+          name: z.string().min(1).max(80),
+          values: z.array(
+            z
+              .object({
+                key: z.string().min(1),
+                shortCode: z.string().min(1).max(80),
+                description: z.string().min(1).max(255).optional(),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type SeedCodes = z.infer<typeof seedCodesSchema>;
+
 export const seedSpecSchema = z
   .object({
     /** Stable identity for this seed, used to detect a re-run rather than duplicating. */
@@ -468,6 +503,34 @@ export const seedSpecSchema = z
     unplaceable: z.array(seedUnplaceableSchema),
     /** Absent means the plan keeps the default source, `NONE`. */
     swimlanes: seedSwimlanesSchema.optional(),
+    /** Absent means the plan has no code types, and its activities then carry no `codes`. */
+    codes: seedCodesSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((spec, ctx) => {
+    const types = spec.codes?.types ?? [];
+    const valuesByType = new Map<string, Set<string>>();
+    for (const type of types) {
+      if (valuesByType.has(type.key)) {
+        ctx.addIssue({ code: 'custom', message: `duplicate code type key "${type.key}"` });
+      }
+      const keys = new Set(type.values.map((value) => value.key));
+      if (keys.size !== type.values.length) {
+        ctx.addIssue({ code: 'custom', message: `duplicate value key in code type "${type.key}"` });
+      }
+      valuesByType.set(type.key, keys);
+    }
+    for (const activity of spec.activities) {
+      for (const [typeKey, valueKey] of Object.entries(activity.codes ?? {})) {
+        // A reference the seeder could not resolve would be dropped without a word, so the schema
+        // refuses it where the typo is made.
+        if (!valuesByType.get(typeKey)?.has(valueKey)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `activity "${activity.key}" names code ${typeKey}/${valueKey}, which the spec does not define`,
+          });
+        }
+      }
+    }
+  });
 export type SeedSpec = z.infer<typeof seedSpecSchema>;

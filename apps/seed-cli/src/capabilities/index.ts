@@ -1,6 +1,7 @@
 import type { SeedSpec } from '@repo/seed';
 
 import { calendarsPlan } from './calendars.js';
+import { codesPlan } from './codes.js';
 import { constraintsPlan, expectedFinishPlan, snetEffectsPlan } from './constraints.js';
 import { costPlan, externalIgnoredPlan, externalPlan } from './cost.js';
 import {
@@ -91,6 +92,7 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'placement', label: 'Placement left on an Early plan', build: placementOnEarlyPlan },
   { key: 'swimlanes', label: 'Swimlanes made by hand', build: swimlanesPlan },
   { key: 'swimlanes', label: 'Swimlanes from the WBS', build: swimlanesWbsPlan },
+  { key: 'codes', label: 'Activity codes', build: codesPlan },
 ];
 
 /** Every capability plan, or just one family's. An unknown family yields an empty list. */

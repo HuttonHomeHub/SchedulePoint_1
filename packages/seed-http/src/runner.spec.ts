@@ -456,6 +456,107 @@ describe('the payload contracts the real API enforces', () => {
     });
   });
 
+  describe('activity codes', () => {
+    const codes = {
+      types: [
+        {
+          key: 'area',
+          name: 'Area',
+          values: [
+            { key: 'gf', shortCode: 'GF', description: 'Ground floor' },
+            { key: 'l1', shortCode: 'L1' },
+          ],
+        },
+        { key: 'trade', name: 'Trade', values: [{ key: 'civ', shortCode: 'CIV' }] },
+      ],
+    };
+
+    it('creates types then their values in order, and sets each activity only the types it names', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      const inner = recordingFetch(calls);
+      // A type answers with an id built from its name, so a value's URL can be checked against it.
+      const typeId = (init: RequestInit): string =>
+        `T-${(JSON.parse(typeof init.body === 'string' ? init.body : '{}') as { name: string }).name}`;
+      globalThis.fetch = vi.fn((url: string, init?: RequestInit) =>
+        url.endsWith('/code-types') && init?.method === 'POST'
+          ? (inner(url, init), Promise.resolve(json(201, { data: { id: typeId(init) } })))
+          : inner(url, init),
+      ) as unknown as typeof fetch;
+      await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({
+          codes,
+          activities: [
+            { ...activity('A1'), codes: { area: 'l1', trade: 'civ' } },
+            { ...activity('A2'), codes: { area: 'gf' } },
+            activity('A3'),
+          ],
+        }),
+      );
+
+      const types = calls.filter((c) => c.url.endsWith('/code-types'));
+      expect(types.map((c) => c.body.name)).toEqual(['Area', 'Trade']);
+      const values = calls.filter((c) => /\/code-types\/[^/]+\/values$/.test(c.url));
+      expect(values.map((c) => c.body)).toEqual([
+        { shortCode: 'GF', description: 'Ground floor' },
+        { shortCode: 'L1' },
+        { shortCode: 'CIV' },
+      ]);
+      // Each value is posted under the id the API issued for ITS type.
+      expect(values.map((c) => c.url.split('/code-types/')[1])).toEqual([
+        'T-Area/values',
+        'T-Area/values',
+        'T-Trade/values',
+      ]);
+      // The types exist before the first activity is created.
+      const firstActivity = calls.findIndex((c) => c.url.endsWith('/activities'));
+      expect(calls.indexOf(values[2]!)).toBeLessThan(firstActivity);
+
+      const batch = calls.filter((c) => c.url.endsWith('/activities/codes'));
+      expect(batch).toHaveLength(1);
+      const rows = batch[0]?.body.activities as { codes: { codeTypeId: string }[] }[];
+      // A3 names nothing, so it is not in the batch; A2 states only the one type it carries.
+      expect(rows.map((row) => row.codes.length)).toEqual([2, 1]);
+      expect(rows[1]?.codes[0]?.codeTypeId).toBe('T-Area');
+    });
+
+    it('sends nothing about codes when the spec has none', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      globalThis.fetch = recordingFetch(calls);
+      await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({ activities: [activity('A1')] }),
+      );
+      expect(calls.some((c) => c.url.includes('/code-types'))).toBe(false);
+      expect(calls.some((c) => c.url.endsWith('/activities/codes'))).toBe(false);
+    });
+
+    it('reports a refused type as a finding and does not post its values or assign it', async () => {
+      const calls: { url: string; body: Record<string, unknown> }[] = [];
+      const inner = recordingFetch(calls);
+      globalThis.fetch = vi.fn((url: string, init?: RequestInit) =>
+        url.endsWith('/code-types') && init?.method === 'POST'
+          ? Promise.resolve(
+              json(409, { error: { code: 'CODE_TYPE_NAME_TAKEN', message: 'taken' } }),
+            )
+          : inner(url, init),
+      ) as unknown as typeof fetch;
+      const result = await seedPlan(
+        new SeedClient({ baseUrl: 'http://x' }),
+        target,
+        minimalSpec({
+          codes: { types: [codes.types[0]!] },
+          activities: [{ ...activity('A1'), codes: { area: 'gf' } }],
+        }),
+      );
+      expect(result.findings.map((f) => f.entity)).toContain('code-type');
+      expect(calls.some((c) => /\/code-types\/[^/]+\/values$/.test(c.url))).toBe(false);
+      expect(calls.some((c) => c.url.endsWith('/activities/codes'))).toBe(false);
+    });
+  });
+
   it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;

@@ -94,6 +94,28 @@ describe('the capability plans themselves', () => {
     }
   });
 
+  it('the codes plan exhibits each state of "no value" the playbook describes', () => {
+    const [plan] = capabilitySpecs('codes');
+    const types = plan?.codes?.types ?? [];
+    expect(types.map((t) => t.name)).toEqual(['Area', 'Trade', 'Phase']);
+    const carried = (typeKey: string) =>
+      new Set(
+        (plan?.activities ?? []).flatMap((a) => {
+          const value = a.codes?.[typeKey];
+          return value === undefined ? [] : [value];
+        }),
+      );
+    // Phase is used by nothing; Area and Trade each have one value no activity carries.
+    expect(carried('phase').size).toBe(0);
+    for (const type of types.filter((t) => t.key !== 'phase')) {
+      expect(type.values.length - carried(type.key).size, type.key).toBe(1);
+    }
+    const without = (typeKey: string) =>
+      (plan?.activities ?? []).filter((a) => a.codes?.[typeKey] === undefined).map((a) => a.key);
+    expect(without('area')).toEqual(['CD_7', 'CD_8']);
+    expect(without('trade')).toEqual(['CD_5', 'CD_8']);
+  });
+
   it('refuse a swimlane source the API would refuse', () => {
     const lane = { key: 'a', name: 'A' };
     expect(() => seedSwimlanesSchema.parse({ source: 'MANUAL', lanes: [lane, lane] })).toThrow();
