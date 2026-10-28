@@ -1,5 +1,23 @@
 # @repo/api
 
+## 0.103.0
+
+### Minor Changes
+
+- [#1198](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1198) [`9f3396a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9f3396acc39790f35b07fd8034fb8b0ea89d4ee7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Adds the API for a plan's P6 activity codes. A plan can now hold code types (Area, Trade) with their values, and a planner holding the pen can add, rename, reorder, delete and restore them under `/plans/:planId/code-types` and `/code-values`, up to 100 types per plan and 1,000 values per type. `PATCH /plans/:planId/activities/codes` sets or clears a value on many activities in one write, and the activity list gains a per-page `codes` field that is left out entirely when the plan has no code type, so plans that never use codes answer exactly as before. Deleting a code type or value, and restoring one, is recorded in the audit log, and setting a value is recorded in the activity's history. Nothing in the screens uses these yet.
+
+### Patch Changes
+
+- [#1199](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1199) [`f301584`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f30158422a80c70130c91412de54526b2c5382d2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Deleting a plan, project or client now takes its code types and values with it, and restoring brings back exactly those, leaving any type or value that was deleted on its own earlier still deleted.
+
+- [#1196](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1196) [`6d07a31`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6d07a31a787542d54cb9ec491b56e1fbdfbf4996) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Adds the database tables that will hold a plan's P6 activity codes, and lets a baseline remember each activity's code for the code its swimlanes are drawn from. Nothing uses them yet, and nothing changes for existing plans or baselines; the update adds well under a second to the first start after it. The organisation export (format 2.3) lists the new files, `code-types`, `code-values`, `code-value-assignments` and `code-swimlane-lanes`, which are empty until codes can be created, and a permanent delete of an expired plan now removes its codes with it.
+
+- [#1200](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1200) [`cba92dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cba92dc25d6c4f296a4073bd3f6c44de97861433) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a coded seeded plan to the test catalogue (`capability-codes`: three activity-code types, eight
+  activities, every state of "no value"), created through the public code routes, with a REST-level
+  end-to-end test that reads it back.
+
+- [#1201](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1201) [`93d703f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/93d703ff69e01edfe26247bf997bcda4b3cb4a8d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A swimlane name containing a line or paragraph separator or an interlinear annotation mark is now refused with a validation error instead of failing with a server error.
+
 ## 0.102.2
 
 ### Patch Changes
