@@ -270,6 +270,33 @@ export async function seedPlan(
         }
       }
 
+      // 3c. Code types and their values, in order, before any activity names one. Types are
+      //     appended after the previous, so the spec's order is the display order; a value is
+      //     appended to its type. The ids are kept by the spec's keys for the assignment below.
+      const codeTypeIdByKey = new Map<string, string>();
+      const codeValueIdByKeys = new Map<string, string>();
+      for (const type of spec.codes?.types ?? []) {
+        let typeId: string;
+        try {
+          typeId = (await client.post<Created>(`${planPath}/code-types`, { name: type.name })).id;
+          codeTypeIdByKey.set(type.key, typeId);
+        } catch (error) {
+          record('code-type', type.key, error);
+          continue;
+        }
+        for (const value of type.values) {
+          try {
+            const created = await client.post<Created>(`${planPath}/code-types/${typeId}/values`, {
+              shortCode: value.shortCode,
+              ...(value.description === undefined ? {} : { description: value.description }),
+            });
+            codeValueIdByKeys.set(`${type.key}\u0000${value.key}`, created.id);
+          } catch (error) {
+            record('code-value', `${type.key}/${value.key}`, error);
+          }
+        }
+      }
+
       // 4. Activities, parents last (a WBS parent is another activity, so all must exist first).
       const activityIdByKey = new Map<string, string>();
       const activityVersionById = new Map<string, number>();
@@ -551,11 +578,39 @@ export async function seedPlan(
           record('swimlane-lanes', spec.seedName, error);
         }
       }
+
+      // 9. Code values, in one batch. After every other activity write (each bumps the version),
+      //    on versions read now. The row states only the types the spec gives the activity: a type
+      //    it omits is left without a value, which is the state the plan exists to exhibit.
+      const coded = spec.activities.filter(
+        (a) => Object.keys(a.codes ?? {}).length > 0 && activityIdByKey.has(a.key),
+      );
+      if (coded.length > 0) {
+        try {
+          const rows = [];
+          for (const activity of coded) {
+            const id = activityIdByKey.get(activity.key)!;
+            const row = await client.get<{ version: number }>(`${org}/activities/${id}`);
+            const codes = Object.entries(activity.codes ?? {}).flatMap(([typeKey, valueKey]) => {
+              const codeTypeId = codeTypeIdByKey.get(typeKey);
+              const codeValueId = codeValueIdByKeys.get(`${typeKey}\u0000${valueKey}`);
+              return codeTypeId === undefined || codeValueId === undefined
+                ? []
+                : [{ codeTypeId, codeValueId }];
+            });
+            if (codes.length > 0) rows.push({ id, version: row.version, codes });
+          }
+          if (rows.length > 0)
+            await client.patch(`${planPath}/activities/codes`, { activities: rows });
+        } catch (error) {
+          record('activity-codes', spec.seedName, error);
+        }
+      }
     });
 
     const seedMs = Date.now() - started;
 
-    // 9. Recalculate — the plan is not a test bed until the engine has run over it.
+    // 10. Recalculate — the plan is not a test bed until the engine has run over it.
     let recalculateMs: number | null = null;
     try {
       const recalcStarted = Date.now();
