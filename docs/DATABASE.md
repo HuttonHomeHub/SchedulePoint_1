@@ -1724,7 +1724,12 @@ P6's "activity codes" are **code types**, **code values** and **assignments**.
   `position >= 0`. The two bounds and the absence of a parent value column are **provisional**
   (owner, Q5): a real P6 export (M0-T2) may widen them or add `parent_id`, each an expand-only follow-up.
   The limits of 100 types per plan and 1,000 values per type are service counts under the plan advisory
-  lock (a CHECK cannot count rows).
+  lock (a CHECK cannot count rows). A plan, project or client delete stamps a plan's live types, then
+  their live values, with the delete batch id beside its swimlanes (`CascadeCounts.codeTypes`,
+  `.codeValues`), and the batch restore brings back exactly those rows; it is skipped for activity and
+  dependency batches, which stamp none. A type or value deleted on its own keeps its own batch id and
+  stays deleted. Assignments are not rewritten. The reverse lookup for the pointer's key when a type is
+  hard-deleted is served by `plans_pkey` (`plans.id` is the key's first column), so it needs no index.
 - **`code_value_assignments`** is which value an activity carries for a type: at most one per (activity,
   type), "no value" is the absence of a row. **`code_swimlane_lanes`** is an activity's lane inside a code
   swimlane, kept per (type, value), with `code_value_id` NULL for the "no value" swimlane. Both are join

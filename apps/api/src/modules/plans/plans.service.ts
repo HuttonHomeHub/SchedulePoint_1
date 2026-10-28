@@ -19,7 +19,7 @@ import {
   changedInputs,
 } from '../../common/schedule-inputs/schedule-input-fields';
 import { parseCalendarDate } from '../../common/validation/calendar-date';
-import { PrismaService } from '../../prisma/prisma.service';
+import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -357,27 +357,30 @@ export class PlansService {
     const existing = await this.plans.findActiveByIdInOrg(planId, organization.id);
     if (!existing) throw new NotFoundError('Plan not found.');
 
-    await this.prisma.$transaction(async (tx) => {
-      const result = await this.lifecycle.cascadeSoftDelete(tx, 'plan', planId, principal.userId);
-      // Inside the cascade's own transaction, and carrying its batch id: a reader seeing forty
-      // rows vanish needs to know that was one action and not forty. A failed audit write rolls
-      // the whole cascade back, which is the trade ADR-0072 chose deliberately.
-      await this.audit.record(
-        hierarchyAuditEvent({
-          entity: 'plan',
-          kind: 'deleted',
-          organizationId: organization.id,
-          id: planId,
-          name: existing.name,
-          status: existing.status,
-          deleteBatchId: result.batchId,
-          counts: result.counts,
-          principal,
-          context,
-        }),
-        tx,
-      );
-    });
+    await this.prisma.$transaction(
+      async (tx) => {
+        const result = await this.lifecycle.cascadeSoftDelete(tx, 'plan', planId, principal.userId);
+        // Inside the cascade's own transaction, and carrying its batch id: a reader seeing forty
+        // rows vanish needs to know that was one action and not forty. A failed audit write rolls
+        // the whole cascade back, which is the trade ADR-0072 chose deliberately.
+        await this.audit.record(
+          hierarchyAuditEvent({
+            entity: 'plan',
+            kind: 'deleted',
+            organizationId: organization.id,
+            id: planId,
+            name: existing.name,
+            status: existing.status,
+            deleteBatchId: result.batchId,
+            counts: result.counts,
+            principal,
+            context,
+          }),
+          tx,
+        );
+      },
+      { timeout: BATCH_TRANSACTION_TIMEOUT_MS },
+    );
     this.logger.info(
       { organizationId: organization.id, planId, userId: principal.userId },
       'plan deleted',
@@ -399,28 +402,31 @@ export class PlansService {
 
     // The lifecycle enforces the top-down invariant: restoring a plan whose
     // parent project is still soft-deleted raises PARENT_DELETED (→ 409).
-    await this.prisma.$transaction(async (tx) => {
-      const counts = await this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId);
-      // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
-      // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
-      // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
-      // to be recorded — the audit row is never written for a restore that did not happen.
-      await this.audit.record(
-        hierarchyAuditEvent({
-          entity: 'plan',
-          kind: 'restored',
-          organizationId: organization.id,
-          id: planId,
-          name: existing.name,
-          status: existing.status,
-          deleteBatchId: existing.deleteBatchId,
-          counts,
-          principal,
-          context,
-        }),
-        tx,
-      );
-    });
+    await this.prisma.$transaction(
+      async (tx) => {
+        const counts = await this.lifecycle.restoreBatch(tx, 'plan', planId, principal.userId);
+        // `existing.deleteBatchId` is read before the transaction, and that is safe here in a way
+        // it is NOT in MembersService.changeRole: `restoreBatch` re-reads the root inside the
+        // transaction and throws unless it is still soft-deleted, so a stale read cannot survive
+        // to be recorded — the audit row is never written for a restore that did not happen.
+        await this.audit.record(
+          hierarchyAuditEvent({
+            entity: 'plan',
+            kind: 'restored',
+            organizationId: organization.id,
+            id: planId,
+            name: existing.name,
+            status: existing.status,
+            deleteBatchId: existing.deleteBatchId,
+            counts,
+            principal,
+            context,
+          }),
+          tx,
+        );
+      },
+      { timeout: BATCH_TRANSACTION_TIMEOUT_MS },
+    );
     this.logger.info(
       { organizationId: organization.id, planId, userId: principal.userId },
       'plan restored',

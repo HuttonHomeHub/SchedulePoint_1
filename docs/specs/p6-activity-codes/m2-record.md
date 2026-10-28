@@ -271,3 +271,63 @@ holding every type (150,000 assignments, the import cap); a second plan of 5,000
   which is additive; nothing is built for it now (ADR-0142: measured before it is built).
 - **Not measured here:** the membership read for a swimlane source (M4-T1's endpoint does not exist) and
   `loadActivityCodes` on the deployed host.
+
+## 10. What M2-T5 built (2026-10-27, the builder)
+
+**Cascade and restore** (`hierarchy-lifecycle.service.ts`, database-design §8.2). A plan, project or client
+delete stamps the plans' live code types and then their live values with the delete batch id, after the
+swimlane sweep and before the plan stamp (`CascadeCounts.codeTypes`, `.codeValues`). The batch restore
+reactivates them by batch id beside the swimlanes, and is skipped for activity and dependency batches. Assignments are
+join rows and are not rewritten: they read as "no value" while their value is deleted and come back with it.
+`activity-history-statements.e2e-spec.ts` is unchanged and green, and a unit test pins that an activity
+restore issues no code statement.
+
+- **Batch semantics hold.** A value or type deleted on its own keeps its own batch id, so the plan restore does not
+  revive it (`test/code-cascade.e2e-spec.ts`, for plan, project and client). The swimlane-source pointer survives
+  a delete and restore of its plan.
+- **No restore guard is added to the batch path.** A plan batch holds types and values swept together; a value
+  whose type was deleted earlier was itself deleted in that type's batch, so no value can be in this batch under
+  a type that is not. The `PARENT_DELETED` refusals of design §8.2 stay on the single type/value restore routes (M2-T4).
+- **Lock order.** The cascade takes the plan advisory lock and the plan's activity rows in id order
+  (`lockPlansForCascade`), then stamps types, then values, which is the order the codes writer takes its row locks in
+  (plan lock, activities, types `FOR SHARE`, values `FOR SHARE`, history last). Every creating or assigning codes route
+  (and every restore) takes the plan lock and re-reads the live plan under it; rename, reorder and update routes only touch live
+  rows by `deletedAt: null`, so none can add a live row under a deleted plan. The race is driven in
+  `code-cascade.e2e-spec.ts`: a test-owned transaction holds the plan lock and runs the real cascade, and a type
+  create, a value create and an assignment write started against the held lock are each held, then refused
+  `NotFoundError`, with no live code row left under the plan.
+- **No index is owed for the reverse lookup** (#562's last bullet). The pointer's key is
+  `plans (id, swimlane_code_type_id) → code_types (plan_id, id)`; deleting a type checks `plans` with
+  `WHERE id = $plan AND swimlane_code_type_id = $type`, and `EXPLAIN` (with sequential scans disabled, on empty
+  tables) shows `Index Scan using plans_pkey` with the pointer as a filter on at most one row. The sweep's
+  statements use `uq_code_types_plan_id_id` and `uq_code_values_type_id_id`.
+- **Restore statements state `deletedAt: { not: null }`** beside the batch id (security review), as
+  `code-value.repository.ts` does. The batch restore reaches them only inside `if (batchId)`, the guard every
+  sibling sweep sits under, so a missing batch id never reaches Prisma as a dropped `where`; nothing more was added.
+
+### Cost of the sweep at the caps (ADR-0142)
+
+`test/measure/codes-cascade.measure.ts`, local PostgreSQL 16 database, warm, 3 delete-then-restore cycles,
+one real HTTP `DELETE` and `POST …/restore` each, v4 ids, no activities or assignments (the codes sweep alone).
+
+| Case                                                       | delete p50 | restore p50 |
+| ---------------------------------------------------------- | ---------- | ----------- |
+| (a) one plan, 100 types × 1,000 values (100,000), plan     | 2,147 ms   | 1,813 ms    |
+| (a) the same plan, through its project's delete            | 1,894 ms   | 1,843 ms    |
+| (b) a project of 10 such plans (1,000,000 values), project | 17,944 ms  | 26,208 ms   |
+
+(The first run, before the fix below, gave (a) 1,957 / 1,978 ms and 1,729 / 1,692 ms, and (b) failed.)
+
+- **(b) did not fit the 15 s default.** The project delete was cancelled by Prisma at 17,330 ms against
+  `TRANSACTION_TIMEOUT_MS` = 15,000 ms (`prisma.service.ts:25`), a 500 to the user. The plan, project and client
+  delete and restore passed no `timeout`. **They now pass `BATCH_TRANSACTION_TIMEOUT_MS` (60 s,
+  `prisma.service.ts:36`)**, six call sites in the three services, each pinned by a unit test. With it (b)
+  completes: delete p50 17.9 s (max 26.2 s), **restore p50 26.2 s**. The restore is the slower direction, about 26 µs
+  a value against about 18 µs for the delete, so the restore sets the ceiling: about 2.3 million values in one
+  project or client restore (more than 20 plans at the 100 × 1,000 caps), beyond which it still answers 500.
+- **No e2e at that size.** The measure run, which seeds and cycles a million-value project, takes over a minute, which is not something
+  to add to a CI shard; the measure script is the evidence that a cascade over 15 s completes, and the unit tests
+  pin that the longer timeout is what each call passes.
+- **The plan advisory lock is now held for up to 60 s** in that worst case (the cascade and the restore take it
+  first and keep it to commit), so a plan write in a plan under it waits that long. Rare and deliberate: the
+  alternative was a 500 and a rolled-back delete. A plan alone is about 2 s.

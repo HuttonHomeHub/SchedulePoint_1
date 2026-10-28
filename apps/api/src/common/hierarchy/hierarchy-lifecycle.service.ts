@@ -56,6 +56,14 @@ export interface CascadeCounts {
    */
   swimlanes: number;
   /**
+   * Code types and code values swept under the deleted plans (p6-activity-codes database-design
+   * §8.2). Plan-scoped only, like a swimlane: a single-activity delete never touches them, and an
+   * assignment (a join row with no lifecycle columns) is neither stamped nor counted — it reads as
+   * "no value" while its value is deleted and comes back with it.
+   */
+  codeTypes: number;
+  codeValues: number;
+  /**
    * PROJECT-scoped calendars swept with their owning project (ADR-0053 §2). Counts the CALENDARS
    * only — their exceptions are stamped in the same batch but counted silently, the baselines /
    * baseline-activities precedent. ORG-scoped calendars are never swept: the predicate is
@@ -191,6 +199,8 @@ export class HierarchyLifecycleService {
       notes: 0,
       planShares: 0,
       swimlanes: 0,
+      codeTypes: 0,
+      codeValues: 0,
       calendars: 0,
     };
 
@@ -370,6 +380,28 @@ export class HierarchyLifecycleService {
       ).count;
     };
 
+    // Soft-delete the active code types under a set of plans, and their active values, in the same
+    // batch (p6-activity-codes database-design §8.2), so a plan restore brings exactly this batch's
+    // codes back. Types before values, the order every codes writer takes its row locks in
+    // (`activity-codes.service.ts`); the plan advisory lock `lockPlansForCascade` already holds is
+    // what serialises this sweep against a codes write, so none can land a live row under a plan
+    // being deleted. A value is reached through its type's plan (`code_values` carries no plan id).
+    const deleteCodesUnderPlans = async (planIds: string[]): Promise<void> => {
+      if (planIds.length === 0) return;
+      counts.codeTypes = (
+        await tx.codeType.updateMany({
+          where: { planId: { in: planIds }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+      counts.codeValues = (
+        await tx.codeValue.updateMany({
+          where: { codeType: { planId: { in: planIds } }, deletedAt: null },
+          data: stamp,
+        })
+      ).count;
+    };
+
     // Soft-delete the active PROJECT-scoped calendars of a set of projects — and their active
     // exceptions — in the same batch (ADR-0053 §2). Children (exceptions) before parents, like
     // every other sweep here; the two tables are the ONLY soft-deletable children of a calendar
@@ -459,6 +491,7 @@ export class HierarchyLifecycleService {
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.swimlanes = await deleteSwimlanesUnderPlans(planIds);
+      await deleteCodesUnderPlans(planIds);
       // A client delete removes its projects, so their project calendars go too — otherwise an
       // active calendar would sit under a soft-deleted ancestor, breaking the no-orphan invariant
       // this service exists to keep (ADR-0053 §2).
@@ -487,6 +520,7 @@ export class HierarchyLifecycleService {
       counts.planShares = await deletePlanSharesUnderPlans(planIds);
       counts.activities = await deleteActivitiesUnderPlans(planIds);
       counts.swimlanes = await deleteSwimlanesUnderPlans(planIds);
+      await deleteCodesUnderPlans(planIds);
       counts.calendars = await deleteCalendarsUnderProjects([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { projectId: id, deletedAt: null }, data: stamp })
@@ -503,6 +537,7 @@ export class HierarchyLifecycleService {
       counts.planShares = await deletePlanSharesUnderPlans([id]);
       counts.activities = await deleteActivitiesUnderPlans([id]);
       counts.swimlanes = await deleteSwimlanesUnderPlans([id]);
+      await deleteCodesUnderPlans([id]);
       counts.plans = (
         await tx.plan.updateMany({ where: { id, deletedAt: null }, data: stamp })
       ).count;
@@ -583,6 +618,8 @@ export class HierarchyLifecycleService {
       notes: 0,
       planShares: 0,
       swimlanes: 0,
+      codeTypes: 0,
+      codeValues: 0,
       calendars: 0,
     };
     if (ids.length === 0) return counts;
@@ -686,6 +723,8 @@ export class HierarchyLifecycleService {
       notes: 0,
       planShares: 0,
       swimlanes: 0,
+      codeTypes: 0,
+      codeValues: 0,
       calendars: 0,
     };
 
@@ -793,6 +832,24 @@ export class HierarchyLifecycleService {
         if (entity !== 'activity' && entity !== 'dependency') {
           counts.swimlanes = (
             await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+          ).count;
+          // …and the batch's code types, then their values (p6-activity-codes database-design §8.2),
+          // under the same skip and for the same reason. Both were swept in the SAME batch as their
+          // plan, so no parent guard is needed: a value or type deleted on its own carries its own
+          // batch id and never resurrects here, and an assignment to a deleted value is admitted —
+          // it reads as "no value" until the value is restored (the ADR-0206 A8 rule, not ADR-0201's
+          // calendar refusal). A name taken meanwhile raises P2002, which the catch below maps.
+          counts.codeTypes = (
+            await tx.codeType.updateMany({
+              where: { deleteBatchId: batchId, deletedAt: { not: null } },
+              data: restore,
+            })
+          ).count;
+          counts.codeValues = (
+            await tx.codeValue.updateMany({
+              where: { deleteBatchId: batchId, deletedAt: { not: null } },
+              data: restore,
+            })
           ).count;
         }
         // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
