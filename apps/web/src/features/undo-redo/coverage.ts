@@ -106,6 +106,19 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useRestoreSwimlane: recorded('swimlaneDeleteCommand'),
   useSetPlanSwimlaneSource: recorded('swimlaneSourceCommand'),
 
+  // Code types and values (P6 activity codes, M3-T1). A delete and its restore share one command, as the
+  // swimlanes' do: the restore is the delete's undo, and the delete is its redo.
+  useCreateCodeType: recorded('codeTypeAddCommand'),
+  useRenameCodeType: recorded('codeTypeRenameCommand'),
+  useReorderCodeTypes: recorded('codeTypeReorderCommand'),
+  useDeleteCodeType: recorded('codeTypeDeleteCommand'),
+  useRestoreCodeType: recorded('codeTypeDeleteCommand'),
+  useCreateCodeValue: recorded('codeValueAddCommand'),
+  useEditCodeValue: recorded('codeValueEditCommand'),
+  useReorderCodeValues: recorded('codeValueReorderCommand'),
+  useDeleteCodeValue: recorded('codeValueDeleteCommand'),
+  useRestoreCodeValue: recorded('codeValueDeleteCommand'),
+
   // Plan settings and the plan record
   useSetPlanCalendar: excluded(REASON.planSettings),
   useSetPlanExpectedFinish: excluded(REASON.planSettings),

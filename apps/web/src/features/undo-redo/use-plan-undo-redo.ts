@@ -1,6 +1,7 @@
 import type {
   ActivityStep,
   ActivitySummary,
+  CodeValueSummary,
   CrossPlanDependencySummary,
   DependencySummary,
   PlanSummary,
@@ -26,6 +27,8 @@ import type { HistoryEntries, PlanEditHistory, StepOutcome } from './use-plan-ed
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import { activityStepsQueryOptions } from '@/features/activities/api/use-activity-steps';
+import { codeTypesQueryOptions } from '@/features/codes/api/use-code-types';
+import { codeValuesQueryOptions } from '@/features/codes/api/use-code-values';
 import {
   planDependenciesQueryOptions,
   predecessorsQueryOptions,
@@ -310,6 +313,16 @@ export function usePlanUndoRedo(params: {
         ),
       readSwimlanes: () =>
         queryClient.fetchQuery({ ...swimlanesQueryOptions(orgSlug, planId), ...fresh }),
+      readCodeTypes: () =>
+        queryClient.fetchQuery({ ...codeTypesQueryOptions(orgSlug, planId), ...fresh }),
+      // A 404 here means the TYPE is gone (deleted, or not this plan's), which is what `undefined` says.
+      readCodeValues: (codeTypeId) =>
+        readList<CodeValueSummary>(() =>
+          queryClient.fetchQuery({
+            ...codeValuesQueryOptions(orgSlug, planId, codeTypeId),
+            ...fresh,
+          }),
+        ),
       readPlan: () =>
         readOne<PlanSummary>(
           planKeys.detail(orgSlug, planId),

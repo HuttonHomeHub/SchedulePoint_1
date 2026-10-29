@@ -82,6 +82,8 @@ export const activityKeys = {
     [...activityKeys.all(orgSlug), 'plan', planId] as const,
   detail: (orgSlug: string, activityId: string) =>
     [...activityKeys.all(orgSlug), 'detail', activityId] as const,
+  /** Every cached single-activity read of the organisation: a write that changes no activity row but changes what its `codes` read as. */
+  details: (orgSlug: string) => [...activityKeys.all(orgSlug), 'detail'] as const,
 };
 
 /**
@@ -370,6 +372,29 @@ export const swimlaneKeys = {
   all: (orgSlug: string) => ['swimlanes', orgSlug] as const,
   byPlan: (orgSlug: string, planId: string) =>
     [...swimlaneKeys.all(orgSlug), 'plan', planId] as const,
+};
+
+/**
+ * A plan's code types and the values behind them (P6 activity codes, M3). Plan content, so every key
+ * carries the plan. **Values are keyed by their type**, not held in the type list: a screen loads one
+ * type's values when it needs them (`GET …/code-types/:id/values`), never every type's at once.
+ * `names` holds the by-id resolution of a set of value ids (`GET …/code-values?id=`).
+ */
+export const codeKeys = {
+  all: (orgSlug: string) => ['codes', orgSlug] as const,
+  byPlan: (orgSlug: string, planId: string) => [...codeKeys.all(orgSlug), 'plan', planId] as const,
+  types: (orgSlug: string, planId: string) =>
+    [...codeKeys.byPlan(orgSlug, planId), 'types'] as const,
+  typesDeleted: (orgSlug: string, planId: string) =>
+    [...codeKeys.types(orgSlug, planId), 'deleted'] as const,
+  values: (orgSlug: string, planId: string, codeTypeId: string) =>
+    [...codeKeys.byPlan(orgSlug, planId), 'type', codeTypeId, 'values'] as const,
+  valuesDeleted: (orgSlug: string, planId: string, codeTypeId: string) =>
+    [...codeKeys.values(orgSlug, planId, codeTypeId), 'deleted'] as const,
+  namesAll: (orgSlug: string, planId: string) =>
+    [...codeKeys.byPlan(orgSlug, planId), 'names'] as const,
+  names: (orgSlug: string, planId: string, ids: readonly string[]) =>
+    [...codeKeys.namesAll(orgSlug, planId), ...[...ids].sort()] as const,
 };
 
 export const baselineKeys = {

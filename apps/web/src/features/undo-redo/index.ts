@@ -48,6 +48,24 @@ export {
   type RestoreDeleteBatchFn,
 } from './commands';
 export {
+  codeTypeAddCommand,
+  codeTypeDeleteCommand,
+  codeTypeRenameCommand,
+  codeTypeReorderCommand,
+  codeValueAddCommand,
+  codeValueDeleteCommand,
+  codeValueEditCommand,
+  codeValueReorderCommand,
+  type DeleteCodeTypeFn,
+  type DeleteCodeValueFn,
+  type EditCodeValueFn,
+  type RenameCodeTypeFn,
+  type ReorderCodeTypesFn,
+  type ReorderCodeValuesFn,
+  type RestoreCodeTypeFn,
+  type RestoreCodeValueFn,
+} from './code-commands';
+export {
   swimlaneAddCommand,
   swimlaneDeleteCommand,
   swimlaneRenameCommand,
