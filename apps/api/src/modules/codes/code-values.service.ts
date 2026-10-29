@@ -80,10 +80,10 @@ export class CodeValuesService {
       throw new NotFoundError('Code type not found.');
     }
 
-    // Prisma answers an absent cursor row with an empty page, which a client would read as the end.
+    // An absent or filtered-out cursor row would read as an empty page, i.e. as the end of the list.
     if (
       query.cursor &&
-      !(await this.values.existsInType(organization.id, codeTypeId, query.cursor))
+      !(await this.values.existsInType(organization.id, codeTypeId, query.cursor, includeDeleted))
     ) {
       throw new ValidationError('The cursor is not a value of this code type.', {
         reason: CODE_CONFLICT.CURSOR_UNKNOWN,

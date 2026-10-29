@@ -106,7 +106,7 @@ export class CodeTypesController {
   @ApiForbiddenResponse({ description: '`include=deleted` without `code:restore`.' })
   @ApiUnprocessableEntityResponse({
     description:
-      'A malformed `cursor`, one that is not a value of this type (CODE_CURSOR_UNKNOWN), or a `limit` outside 1–1,000.',
+      'A malformed `cursor`, one that is not a value this listing shows (CODE_CURSOR_UNKNOWN), or a `limit` outside 1–1,000.',
   })
   async listValues(
     @CurrentUser() principal: Principal,

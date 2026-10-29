@@ -147,18 +147,21 @@ export class CodeValueRepository {
   }
 
   /**
-   * Whether this id is a value of the type in either state, so a page cursor that was live when
-   * issued still resolves after the value is deleted. Scoped by organisation and type.
+   * Whether this id is a position the page can start after: a value of the type that the same page
+   * would list (live only, or either state with `includeDeleted`). Prisma answers a cursor row the
+   * page's own filter excludes with an empty page, which a client would read as the end.
    *
-   * soft-delete: any-state — a deleted value is a valid cursor position.
+   * soft-delete: any-state — when `includeDeleted` is set a deleted value is a valid cursor.
    */
   async existsInType(
     organizationId: string,
     codeTypeId: string,
     valueId: string,
+    includeDeleted: boolean,
   ): Promise<boolean> {
+    const scope = { id: valueId, organizationId, codeTypeId };
     const row = await this.prisma.codeValue.findFirst({
-      where: { id: valueId, organizationId, codeTypeId },
+      where: includeDeleted ? scope : this.active(scope),
       select: { id: true },
     });
     return row !== null;

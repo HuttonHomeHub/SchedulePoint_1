@@ -252,8 +252,10 @@ describe.skipIf(!hasDatabase)('Code reads API (e2e)', () => {
         const res = await actor.agent.get(`${url}?cursor=${cursor}`).expect(422);
         expect(res.body.error?.details?.reason).toBe('CODE_CURSOR_UNKNOWN');
       }
-      // A value deleted since the page was issued is still a position in the order.
-      const after = await actor.agent.get(`${url}?cursor=${l4.id}`).expect(200);
+      // A deleted value is a position only for the listing that shows deleted values.
+      const gone = await actor.agent.get(`${url}?cursor=${l4.id}`).expect(422);
+      expect(gone.body.error?.details?.reason).toBe('CODE_CURSOR_UNKNOWN');
+      const after = await actor.agent.get(`${url}?include=deleted&cursor=${l4.id}`).expect(200);
       expect((after.body.data as ValueBody[]).map((v) => v.shortCode)).toEqual(['L5']);
       await actor.agent.get(`${url}?cursor=${vs[0]?.id as string}`).expect(200);
     });
