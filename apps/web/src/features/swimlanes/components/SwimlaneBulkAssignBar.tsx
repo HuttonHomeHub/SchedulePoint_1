@@ -28,6 +28,7 @@ export function SwimlaneBulkAssignBar({
   onDone,
   onClear,
   companion = false,
+  children,
 }: {
   assignment: SwimlaneAssignment;
   /** The ticked activity ids; the bar renders nothing when empty. */
@@ -45,6 +46,11 @@ export function SwimlaneBulkAssignBar({
    * assign bar, when the plan has summaries), so this one leaves both out rather than say them twice.
    */
   companion?: boolean;
+  /**
+   * Further rows over the same selection, inside this bar's container (the table's Codes row), so the
+   * count and Clear selection are stated once for the whole bar. Ignored as a companion.
+   */
+  children?: React.ReactNode;
 }): React.ReactElement | null {
   const headingId = useId();
   if (ids.length === 0) return null;
@@ -75,6 +81,7 @@ export function SwimlaneBulkAssignBar({
         // One reason at a time: the pen's reason, when there is one, is the status line's.
         hint={assignment.shown || !gate.writable ? undefined : <p>{SWIMLANES_OFF_MOVE_REASON}</p>}
       />
+      {companion ? null : children}
       {companion ? null : (
         <div>
           <Button type="button" variant="ghost" size="sm" onClick={onClear}>

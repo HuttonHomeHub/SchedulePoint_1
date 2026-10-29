@@ -9,3 +9,12 @@ export type { CodesDialogProps } from './components/CodesDialog';
 export { CodeColumnsMenu, NO_CODE_TYPES_REASON } from './components/CodeColumnsMenu';
 export { useCodeColumns, type CodeColumnsHost } from './model/use-code-columns';
 export { useTableCodeColumns } from './model/use-table-code-columns';
+export { CodeAssignControl } from './components/CodeAssignControl';
+export { CodeBulkAssignBar } from './components/CodeBulkAssignBar';
+export { useSetActivityCodes } from './model/use-set-activity-codes';
+export { useWriteActivityCodes } from './api/use-write-activity-codes';
+export {
+  ActivityCodesSection,
+  type ActivityCodesSectionState,
+} from './components/ActivityCodesSection';
+export { useCodeValueNames, type ResolvedCodeValue } from './api/use-code-value-names';

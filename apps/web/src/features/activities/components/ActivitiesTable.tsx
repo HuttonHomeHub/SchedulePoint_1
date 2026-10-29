@@ -122,6 +122,34 @@ function scheduleColumn(
  */
 export type ActivitiesTableSwimlanes = SwimlaneColumnSource;
 
+/**
+ * The Codes row of the ticked-rows bar (P6 activity codes, M3-T3), supplied by the host so this feature
+ * learns nothing of how a code is stored or written (it must not import the codes feature). Called with
+ * the ticked activities as the live list holds them, the write's gate, and the table's own hand-offs.
+ * Present only when the plan has code types: with none there is nothing to set, and a row of
+ * checkboxes leading to a control that cannot change anything would be noise.
+ */
+export type ActivitiesTableCodeBulk = (input: {
+  activities: readonly ActivitySummary[];
+  gate: { writable: boolean; reason: string | null };
+  /** True when another bar already states the count and offers Clear selection. */
+  companion: boolean;
+  onDone: () => void;
+  onClear: () => void;
+}) => React.ReactNode;
+
+/**
+ * Calls the host's Codes renderer from inside a component, so the table's own hand-offs
+ * (`afterBulkWrite` reads the region's ref) are passed as props rather than into a function the
+ * render path calls.
+ */
+function CodeBulkRow({
+  render,
+  ...input
+}: { render: ActivitiesTableCodeBulk } & Parameters<ActivitiesTableCodeBulk>[0]): React.ReactNode {
+  return render(input);
+}
+
 /** The coarse sweep's hook, on the label (the hit target) rather than the 16 px input. */
 const ROW_SELECT_TARGET = { 'data-row-select': '' } as const;
 
@@ -300,6 +328,7 @@ export function ActivitiesTable({
   calendarsLoading = false,
   swimlanes,
   codeColumns = NO_CODE_COLUMNS,
+  codeBulk,
 }: {
   orgSlug: string;
   planId: string;
@@ -419,6 +448,8 @@ export function ActivitiesTable({
    * name or its values change, so with none shown the `columns` memo below keeps its identity.
    */
   codeColumns?: readonly CodeColumn[];
+  /** The Codes row of the ticked-rows bar; absent leaves the bar exactly as it was. */
+  codeBulk?: ActivitiesTableCodeBulk;
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -502,15 +533,16 @@ export function ActivitiesTable({
   const swimlaneAssignment = swimlanes?.source === 'MANUAL' ? swimlanes.assignment : null;
   const selectableIds = useMemo(
     () =>
-      WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null
+      WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null || codeBulk !== undefined
         ? new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id))
         : new Set<string>(),
-    [loadedActivities, swimlaneAssignment],
+    [loadedActivities, swimlaneAssignment, codeBulk],
   );
   const wbsBulkAssignActive =
     WBS_IMPROVEMENTS_ENABLED && loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
   // The selection column serves both bars: it appears when either has somewhere to file things.
-  const bulkAssignActive = wbsBulkAssignActive || swimlaneAssignment !== null;
+  const bulkAssignActive =
+    wbsBulkAssignActive || swimlaneAssignment !== null || codeBulk !== undefined;
   /**
    * The selection as it stands **against the current list**. Derived rather than pruned by an
    * effect, so a row deleted underneath the selection cannot leave the bar counting an activity
@@ -525,6 +557,9 @@ export function ActivitiesTable({
   // Moving to a swimlane is a layout write, not a members edit: it is gated on the schedule and the pen
   // (the editor's General gate, by identity), the right the selection bars and the editor's field use.
   const swimlaneGate = editorGating?.general ?? { writable: canEditSchedule, reason: null };
+  // Setting a code is an activity write under the same role and pen as the editor's Codes section,
+  // whose gate is the `definition` object by identity (`activity-editor-gating.ts`).
+  const codesGate = editorGating?.codes ?? { writable: canEditSchedule, reason: null };
   const selectedActivities = useMemo(
     () => loadedActivities.filter((a) => effectiveSelection.has(a.id)),
     [loadedActivities, effectiveSelection],
@@ -1096,7 +1131,10 @@ export function ActivitiesTable({
     regionRef.current?.focus();
   };
 
-  const swimlaneBar = (companion: boolean): React.ReactElement | null =>
+  const swimlaneBar = (
+    companion: boolean,
+    children?: React.ReactNode,
+  ): React.ReactElement | null =>
     swimlaneAssignment ? (
       <SwimlaneBulkAssignBar
         assignment={swimlaneAssignment}
@@ -1106,8 +1144,24 @@ export function ActivitiesTable({
         companion={companion}
         onClear={clearSelection}
         onDone={afterBulkWrite}
-      />
+      >
+        {children}
+      </SwimlaneBulkAssignBar>
     ) : null;
+
+  /** The Codes row, nothing when ticking is not leading to it or nothing is ticked. */
+  const codeBar = (companion: boolean): React.ReactNode =>
+    codeBulk === undefined || selectedActivities.length === 0 ? null : (
+      <CodeBulkRow
+        render={codeBulk}
+        activities={selectedActivities}
+        gate={codesGate}
+        companion={companion}
+        onDone={afterBulkWrite}
+        onClear={clearSelection}
+      />
+    );
+
 
   const confirmDelete = (): void => {
     if (!deleting) return;
@@ -1164,8 +1218,8 @@ export function ActivitiesTable({
       */}
       {wbsBulkAssignActive ? (
         <div className="shrink-0">
-          {/* One container when both apply: the WBS bar owns the count, the live region and Clear
-              selection, and the swimlane row sits inside it as a companion. */}
+          {/* One container when more than one applies: the WBS bar owns the count, the live region and
+              Clear selection, and the swimlane and Codes rows sit inside it as companions. */}
           <WbsBulkAssignBar
             orgSlug={orgSlug}
             planId={planId}
@@ -1177,10 +1231,14 @@ export function ActivitiesTable({
             onDone={afterBulkWrite}
           >
             {swimlaneBar(true)}
+            {codeBar(true)}
           </WbsBulkAssignBar>
         </div>
       ) : swimlaneAssignment ? (
-        <div className="shrink-0">{swimlaneBar(false)}</div>
+        // The swimlane bar owns the container (the count and Clear selection); Codes is its companion.
+        <div className="shrink-0">{swimlaneBar(false, codeBar(true))}</div>
+      ) : codeBulk !== undefined ? (
+        <div className="shrink-0">{codeBar(false)}</div>
       ) : null}
 
       {/* One sentence for the grid, not one per cell (`m3-ui-design.md` §10). Below `lg` the columns

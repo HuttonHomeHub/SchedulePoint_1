@@ -1,8 +1,10 @@
 import {
   activityHistoryItemKind,
   ACTIVITY_HISTORY_FIELDS,
+  ACTIVITY_HISTORY_KEY_PREFIXES,
   type ActivityHistoryAssignmentChange,
   type ActivityHistoryAssignmentState,
+  type ActivityHistoryCodeChange,
   type ActivityHistoryChange,
   type ActivityHistoryFieldChange,
   type ActivityHistoryFieldKey,
@@ -42,6 +44,24 @@ export interface HistoryFormatContext {
   hoursPerDay: number | undefined;
   /** The plan's currency, for the money items a cost reader sees. */
   currencyCode: string | null;
+  /**
+   * The names behind a code item's ids (P6 activity codes, M3-T3). An item stores a code **type** id in
+   * its key and **value** ids in `from`/`to`, never names: a name stored there would go stale the day it
+   * is renamed. Absent, every code is unknown and reads as such. A deleted type or value is still named
+   * — history records what happened, and the name was right at the time.
+   */
+  codes?: HistoryCodeNames;
+}
+
+/** Resolves a code item's ids to names. Pure, so the formatter stays a table test. */
+export interface HistoryCodeNames {
+  typeName: (codeTypeId: string) => string | undefined;
+  valueName: (codeValueId: string) => string | undefined;
+  /**
+   * The names are still on their way. A missing name then reads "Loading…" rather than "a value that no
+   * longer exists", which would be a claim about the data the formatter cannot yet make.
+   */
+  pending?: boolean;
 }
 
 export interface HistoryLine {
@@ -307,6 +327,34 @@ function assignmentLine(
     : `Resource changed: ${name} — ${parts.join('; ')}`;
 }
 
+const UNKNOWN_CODE_TYPE = 'A code';
+const UNKNOWN_CODE_VALUE = 'a value that no longer exists';
+const PENDING_NAME = 'Loading…';
+
+/**
+ * A code item (`code:<codeTypeId>`, `{ from, to }` as value ids, `null` for none), in the planner's words.
+ *
+ * **Never starts with "Code"**: an activity's `code` is its identifier, and "Code changed" told the reader
+ * the activity's ID had changed (`FIELD_LABELS.code` is 'Code'). The line names the type — "Area: Level 1
+ * → Level 2" — and a test pins that no code line begins with the word.
+ */
+function codeLine(
+  key: string,
+  change: ActivityHistoryCodeChange,
+  ctx: HistoryFormatContext,
+): string {
+  const names = ctx.codes;
+  const typeId = key.slice(ACTIVITY_HISTORY_KEY_PREFIXES.code.length);
+  const missing = names?.pending === true ? PENDING_NAME : undefined;
+  const type = names?.typeName(typeId) ?? missing ?? UNKNOWN_CODE_TYPE;
+  const value = (id: string): string => names?.valueName(id) ?? missing ?? UNKNOWN_CODE_VALUE;
+  const { from, to } = change;
+  if (from === null && to !== null) return `${type} set to ${value(to)}`;
+  if (from !== null && to !== null) return `${type}: ${value(from)} → ${value(to)}`;
+  if (from !== null) return `${type} cleared (was ${value(from)})`;
+  return `${type} changed`;
+}
+
 /**
  * The sentence for one stored item. `key` is the stored key (a field name, `link:<id>`, `xlink:<id>`
  * or `assignment:<id>`); a key this build does not know is shown by name rather than dropped, so a
@@ -333,11 +381,8 @@ function itemText(
       return linkLine(change as ActivityHistoryLinkChange, ctx, origin);
     case 'assignment':
       return assignmentLine(change as ActivityHistoryAssignmentChange, ctx);
-    // The item carries value ids, not names (ADR-0174 vocabulary, p6-activity-codes D7); the web names
-    // them once the plan's code types are loaded here (M3-T3), so until then the line says only that
-    // a code moved.
     case 'code':
-      return 'Code changed';
+      return codeLine(key, change as ActivityHistoryCodeChange, ctx);
     case 'field': {
       if (!(key in ACTIVITY_HISTORY_FIELDS)) return `${key} changed`;
       const field = key as ActivityHistoryFieldKey;

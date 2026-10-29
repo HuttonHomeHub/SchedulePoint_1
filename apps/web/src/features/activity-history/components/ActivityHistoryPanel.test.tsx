@@ -6,12 +6,12 @@ import { axe } from 'vitest-axe';
 
 import { ActivityHistoryPanel } from './ActivityHistoryPanel';
 
-import { apiFetchEnvelope } from '@/lib/api/client';
+import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import type * as ApiClient from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importActual) => {
   const actual = await importActual<typeof ApiClient>();
-  return { ...actual, apiFetchEnvelope: vi.fn() };
+  return { ...actual, apiFetchEnvelope: vi.fn(), apiFetch: vi.fn(), apiFetchAllPages: vi.fn() };
 });
 
 function entry(over: Partial<ActivityHistoryEntry> = {}): ActivityHistoryEntry {
@@ -37,6 +37,7 @@ function renderPanel() {
     <QueryClientProvider client={queryClient}>
       <ActivityHistoryPanel
         orgSlug="acme"
+        planId="p1"
         activityId="a1"
         activityCreatedAt="2026-09-01T00:00:00.000Z"
         context={{ hoursPerDay: 8, currencyCode: null }}
@@ -211,5 +212,81 @@ describe('ActivityHistoryPanel', () => {
     const { container } = renderPanel();
     await screen.findByText('Jane Smith');
     expect((await axe(container)).violations).toEqual([]);
+  });
+
+  describe('code values (P6 activity codes, M3-T3)', () => {
+    const resolved = (
+      id: string,
+      shortCode: string,
+      description: string | null,
+      typeName = 'Area',
+    ) => ({
+      id,
+      codeTypeId: 'area',
+      shortCode,
+      description,
+      position: 0,
+      version: 1,
+      createdAt: '',
+      updatedAt: '',
+      deletedAt: null,
+      codeTypeName: typeName,
+      codeTypeDeletedAt: null,
+    });
+
+    beforeEach(() => {
+      vi.mocked(apiFetch).mockReset();
+      vi.mocked(apiFetchAllPages).mockReset();
+    });
+
+    it('names the type and both values, from ONE resolve request for the ids on screen', async () => {
+      vi.mocked(apiFetchEnvelope).mockResolvedValue({
+        data: [
+          entry({ id: 'e1', changes: { 'code:area': { from: 'l1', to: 'l2' } } }),
+          entry({ id: 'e2', changes: { 'code:area': { from: null, to: 'l1' } } }),
+        ],
+        meta: META,
+      });
+      vi.mocked(apiFetchAllPages).mockResolvedValue([
+        { id: 'area', name: 'Area', planId: 'p1', position: 0, version: 1 },
+      ]);
+      vi.mocked(apiFetch).mockResolvedValue([
+        resolved('l1', 'L1', 'Level 1'),
+        resolved('l2', 'L2', 'Level 2'),
+      ]);
+      renderPanel();
+      expect(await screen.findByText('Area: Level 1 → Level 2')).toBeInTheDocument();
+      expect(screen.getByText('Area set to Level 1')).toBeInTheDocument();
+      expect(vi.mocked(apiFetch)).toHaveBeenCalledOnce();
+      const [path] = vi.mocked(apiFetch).mock.calls[0] ?? [];
+      expect(path).toBe('/organizations/acme/plans/p1/code-values?id=l1&id=l2');
+    });
+
+    it('names a value of a deleted type through the resolver, and says so for a purged one', async () => {
+      vi.mocked(apiFetchEnvelope).mockResolvedValue({
+        data: [entry({ changes: { 'code:old': { from: 'x', to: 'purged' } } })],
+        meta: META,
+      });
+      vi.mocked(apiFetchAllPages).mockResolvedValue([]);
+      vi.mocked(apiFetch).mockResolvedValue([
+        {
+          ...resolved('x', 'X', 'Basement', 'Zone'),
+          codeTypeId: 'old',
+          codeTypeDeletedAt: '2026-10-01T00:00:00Z',
+        },
+      ]);
+      renderPanel();
+      expect(
+        await screen.findByText('Zone: Basement → a value that no longer exists'),
+      ).toBeInTheDocument();
+    });
+
+    it('asks for no names when nothing in view is a code', async () => {
+      vi.mocked(apiFetchEnvelope).mockResolvedValue({ data: [entry()], meta: META });
+      renderPanel();
+      await screen.findByText(/Duration/);
+      expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
+      expect(vi.mocked(apiFetchAllPages)).not.toHaveBeenCalled();
+    });
   });
 });

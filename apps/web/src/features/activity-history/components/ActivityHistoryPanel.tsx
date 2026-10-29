@@ -1,3 +1,4 @@
+import { activityHistoryItemKind, type ActivityHistoryEntry } from '@repo/types';
 import { useEffect, useRef } from 'react';
 
 import { useActivityHistory } from '../api/use-activity-history';
@@ -10,10 +11,13 @@ import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape } from '@/components/ui/page';
 import { QueryErrorState } from '@/components/ui/query-error-state';
+import { useCodeTypes, useCodeValueNames, codeValueName } from '@/features/codes';
 import { formatCalendarDate } from '@/lib/format-date';
 
 export interface ActivityHistoryPanelProps {
   orgSlug: string;
+  /** The activity's plan, for naming the code types and values its history mentions. */
+  planId: string;
   activityId: string;
   /** When the activity was created, used when the server cannot name a later start. */
   activityCreatedAt: string;
@@ -32,12 +36,14 @@ export interface ActivityHistoryPanelProps {
  */
 export function ActivityHistoryPanel({
   orgSlug,
+  planId,
   activityId,
   activityCreatedAt,
-  context,
+  context: baseContext,
 }: ActivityHistoryPanelProps): React.ReactElement {
   const history = useActivityHistory(orgSlug, activityId);
   const entries = history.data?.pages.flatMap((page) => page.entries) ?? [];
+  const context = useCodeNames(orgSlug, planId, entries, baseContext);
   const since = history.data?.pages[0]?.recordingSince || activityCreatedAt;
   const sinceSentence = `History recorded since ${formatCalendarDate(since.slice(0, 10))}.`;
 
@@ -139,4 +145,53 @@ export function ActivityHistoryPanel({
       ) : null}
     </section>
   );
+}
+
+/**
+ * The format context with the names a code item needs (P6 activity codes, M3-T3): the plan's live code
+ * types, and one resolve request for the value ids on the pages loaded so far (deleted values and
+ * values of deleted types included — history records what happened, and the name was right then).
+ *
+ * A **deleted type** is named by its values, whose resolved rows carry the type's name; a type with no
+ * value on screen and no live row is unknown, and reads as such. Nothing here is requested when no
+ * loaded entry mentions a code, so a plan that never used codes costs one cached read of its types.
+ */
+function useCodeNames(
+  orgSlug: string,
+  planId: string,
+  entries: readonly ActivityHistoryEntry[],
+  base: HistoryFormatContext,
+): HistoryFormatContext {
+  const ids = new Set<string>();
+  let mentionsCodes = false;
+  for (const entry of entries) {
+    for (const [key, change] of Object.entries(entry.changes)) {
+      if (activityHistoryItemKind(key) !== 'code') continue;
+      mentionsCodes = true;
+      const { from, to } = change as { from: string | null; to: string | null };
+      if (from !== null) ids.add(from);
+      if (to !== null) ids.add(to);
+    }
+  }
+  const valueIds = [...ids];
+  const types = useCodeTypes(orgSlug, planId, mentionsCodes);
+  const names = useCodeValueNames(orgSlug, planId, valueIds);
+
+  const typeNames = new Map((types.data ?? []).map((t) => [t.id, t.name] as const));
+  for (const value of names.data?.values() ?? []) {
+    if (!typeNames.has(value.codeTypeId)) typeNames.set(value.codeTypeId, value.codeTypeName);
+  }
+  return {
+    ...base,
+    codes: {
+      typeName: (id) => typeNames.get(id),
+      valueName: (id) => {
+        const found = names.data?.get(id);
+        return found === undefined ? undefined : codeValueName(found);
+      },
+      pending:
+        mentionsCodes &&
+        (types.isPending || (valueIds.length > 0 && (names.isPending || names.isPlaceholderData))),
+    },
+  };
 }

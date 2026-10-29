@@ -31,7 +31,11 @@ export {
   activityStepsQueryOptions,
   stepKeys,
 } from './api/use-activity-steps';
-export { ActivitiesTable, type ActivitiesTableSwimlanes } from './components/ActivitiesTable';
+export {
+  ActivitiesTable,
+  type ActivitiesTableCodeBulk,
+  type ActivitiesTableSwimlanes,
+} from './components/ActivitiesTable';
 export { CreateActivityButton } from './components/CreateActivityButton';
 export { ActivityCreateDialog } from './components/ActivityCreateDialog';
 export { ActivityEditorDialog } from './components/ActivityEditorDialog';

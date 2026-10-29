@@ -36,6 +36,9 @@ export function codeErrorText(action: string, error: unknown, subject?: string):
     if (/CODE_TYPE_IS_SWIMLANE_SOURCE/.test(reason)) {
       return `Could not ${action}: the swimlanes are made from ${subject ?? 'this code type'}. Choose another swimlane source first.`;
     }
+    if (/CODE_VALUE_DELETED|CODE_VALUE_WRONG_TYPE/.test(reason)) {
+      return `Could not ${action}: that value was deleted. Choose another, or restore it in Codes…`;
+    }
     if (/PARENT_DELETED/.test(reason)) {
       return `Could not ${action}: restore ${subject ?? 'its code type'} first.`;
     }

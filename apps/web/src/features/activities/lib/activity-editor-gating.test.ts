@@ -45,7 +45,7 @@ describe('deriveActivityEditorGating — the converged collections', () => {
    * that must agree start disagreeing: someone tightens one and the other keeps yesterday's
    * answer, and nothing fails until a user is refused something they can do from the dialog.
    */
-  it.each(['logic', 'resources', 'members'] as const)(
+  it.each(['logic', 'resources', 'members', 'codes'] as const)(
     'reuses the definition gate object for %s',
     (path) => {
       for (const role of ['viewer', 'contributor', 'planner'] as const) {

@@ -66,13 +66,15 @@ import {
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
-import { type ActivitiesTableSwimlanes } from '@/features/activities';
+import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
+  CodeBulkAssignBar,
   deriveCodesGate,
   useCodeColumns,
+  useCodeTypes,
   useCodesDialog,
   useTableCodeColumns,
 } from '@/features/codes';
@@ -332,6 +334,28 @@ export function ToolbarPlanWorkspace({
       }),
     [codesWritable, codesReason, codesRoleDenied],
   );
+  // The Codes row of the table's ticked-rows bar (M3-T3). Offered only once the plan has a code type: with
+  // none there is nothing to set, and ticking would lead to a control that cannot change anything. The
+  // renderer closes over the workspace's one history seam, so the set is the same undo step wherever it
+  // is made.
+  const codeTypesForBulk = useCodeTypes(model.orgSlug, model.planId);
+  const recordCodeEdit = model.recordCodeEdit;
+  const renderCodeBulk = useCallback<ActivitiesTableCodeBulk>(
+    ({ activities, gate, companion, onDone, onClear }) => (
+      <CodeBulkAssignBar
+        orgSlug={model.orgSlug}
+        planId={model.planId}
+        activities={activities}
+        gate={gate}
+        record={recordCodeEdit}
+        companion={companion}
+        onDone={onDone}
+        onClear={onClear}
+      />
+    ),
+    [model.orgSlug, model.planId, recordCodeEdit],
+  );
+  const codeBulk = (codeTypesForBulk.data?.length ?? 0) > 0 ? renderCodeBulk : undefined;
   const swimlanesManage = useMemo(
     () => ({ label: swimlaneManagement.manageLabel, open: swimlaneManagement.openSwimlanes }),
     [swimlaneManagement.manageLabel, swimlaneManagement.openSwimlanes],
@@ -2898,6 +2922,7 @@ export function ToolbarPlanWorkspace({
                       onOpenCodes={codesDialog.request}
                       codeColumns={tableCodes.columns}
                       codeColumnsChoice={tableCodes.choice}
+                      {...(codeBulk ? { codeBulk } : {})}
                     />
                   </div>
                 </>

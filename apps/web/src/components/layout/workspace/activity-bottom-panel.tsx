@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import {
   ActivitiesTable,
+  type ActivitiesTableCodeBulk,
   type ActivitiesTableSwimlanes,
   CreateActivityButton,
   openActivityEditor,
@@ -233,6 +234,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   onOpenCodes,
   codeColumns = NO_CODE_COLUMNS,
   codeColumnsChoice,
+  codeBulk,
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
@@ -268,6 +270,8 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   codeColumns?: readonly CodeColumn[];
   /** The table's **Columns** chooser; absent when the host offers none. Stable, so the memo hits. */
   codeColumnsChoice?: CodeColumnsChoice;
+  /** The Codes row of the table's ticked-rows bar (M3-T3); absent while the plan has no code types. Stable, so the memo hits. */
+  codeBulk?: ActivitiesTableCodeBulk;
 }): React.ReactElement {
   const ownCollapseRef = useRef<HTMLButtonElement>(null);
   const collapseRef = collapseRefProp ?? ownCollapseRef;
@@ -404,6 +408,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
           calendarsLoading={model.calendarsLoading}
           {...(swimlanes ? { swimlanes } : {})}
           codeColumns={codeColumns}
+          {...(codeBulk ? { codeBulk } : {})}
           {...(model.planCalendarId === undefined ? {} : { planCalendarId: model.planCalendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }

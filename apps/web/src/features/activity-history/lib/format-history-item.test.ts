@@ -308,3 +308,82 @@ describe('formatHistoryItem — knock-on origins', () => {
     expect(lines.map((l) => l.text)).toEqual(['Swimlane none → unnamed']);
   });
 });
+
+describe('formatHistoryItem — code values (P6 activity codes, M3-T3)', () => {
+  const NAMES = {
+    area: 'Area',
+    trade: 'Trade',
+    l1: 'Level 1',
+    l2: 'Level 2',
+    mep: 'Mechanical, electrical and plumbing',
+  } as const;
+  const withCodes = (over: Partial<NonNullable<HistoryFormatContext['codes']>> = {}) => ({
+    ...CTX,
+    codes: {
+      typeName: (id: string) => (NAMES as Record<string, string>)[id],
+      valueName: (id: string) => (NAMES as Record<string, string>)[id],
+      ...over,
+    },
+  });
+  const line = (
+    change: { from: string | null; to: string | null },
+    ctx: HistoryFormatContext = withCodes(),
+  ) => text('code:area', change, ctx);
+
+  it('words a first value as set', () => {
+    expect(line({ from: null, to: 'l1' })).toBe('Area set to Level 1');
+  });
+
+  it('words a change as the type, then from → to', () => {
+    expect(line({ from: 'l1', to: 'l2' })).toBe('Area: Level 1 → Level 2');
+  });
+
+  it('words a clear with what it was', () => {
+    expect(line({ from: 'l1', to: null })).toBe('Area cleared (was Level 1)');
+  });
+
+  it('names a type that is not known as "A code", never by its id', () => {
+    expect(text('code:gone', { from: null, to: 'l1' }, withCodes())).toBe('A code set to Level 1');
+  });
+
+  it('says a value that no longer exists rather than printing its id', () => {
+    expect(line({ from: 'purged', to: 'l2' })).toBe(
+      'Area: a value that no longer exists → Level 2',
+    );
+    expect(line({ from: null, to: 'purged' })).toBe('Area set to a value that no longer exists');
+  });
+
+  it('reads every code as unknown when the host supplied no names', () => {
+    expect(line({ from: 'l1', to: 'l2' }, CTX)).toBe(
+      'A code: a value that no longer exists → a value that no longer exists',
+    );
+  });
+
+  it('says Loading… for a name still on its way, not that it no longer exists', () => {
+    const waiting = withCodes({
+      typeName: () => undefined,
+      valueName: () => undefined,
+      pending: true,
+    });
+    expect(line({ from: null, to: 'l1' }, waiting)).toBe('Loading… set to Loading…');
+  });
+
+  it('never starts with "Code": an activity’s code is its identifier', () => {
+    const lines = [
+      line({ from: null, to: 'l1' }),
+      line({ from: 'l1', to: 'l2' }),
+      line({ from: 'l1', to: null }),
+      text('code:gone', { from: null, to: 'l1' }, withCodes()),
+      line({ from: null, to: 'purged' }, CTX),
+    ];
+    for (const l of lines) expect(l).not.toMatch(/^Code\b/);
+  });
+
+  it('keeps code lines after the fields, in an entry', () => {
+    const lines = formatHistoryEntry(
+      { 'code:area': { from: null, to: 'l1' }, durationMinutes: { from: 2400, to: 4320 } },
+      withCodes(),
+    );
+    expect(lines.map((l) => l.text)).toEqual(['Duration 5d → 9d', 'Area set to Level 1']);
+  });
+});

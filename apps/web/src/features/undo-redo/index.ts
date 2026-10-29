@@ -48,6 +48,7 @@ export {
   type RestoreDeleteBatchFn,
 } from './commands';
 export {
+  activityCodesCommand,
   codeTypeAddCommand,
   codeTypeDeleteCommand,
   codeTypeRenameCommand,
@@ -56,6 +57,8 @@ export {
   codeValueDeleteCommand,
   codeValueEditCommand,
   codeValueReorderCommand,
+  type ActivityCodeChange,
+  type ActivityCodesStep,
   type DeleteCodeTypeFn,
   type DeleteCodeValueFn,
   type EditCodeValueFn,
@@ -64,6 +67,7 @@ export {
   type ReorderCodeValuesFn,
   type RestoreCodeTypeFn,
   type RestoreCodeValueFn,
+  type WriteActivityCodesFn,
 } from './code-commands';
 export {
   swimlaneAddCommand,
