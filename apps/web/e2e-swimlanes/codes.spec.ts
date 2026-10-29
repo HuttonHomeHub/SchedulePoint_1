@@ -765,8 +765,8 @@ test.describe('Setting codes from the diagram', () => {
       const trigger = bar.getByRole('button', { name: 'Set code…' });
       await trigger.click();
       const panel = page.getByRole('dialog', { name: 'Set code…' });
-      await expectFocused(page, panel.getByLabel('Code', { exact: true }));
-      await panel.getByLabel('Code', { exact: true }).selectOption({ label: 'Area' });
+      await expectFocused(page, panel.getByLabel('Code type', { exact: true }));
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
       const value = panel.getByRole('combobox', { name: 'Value' });
       await chooseOption(page, value, /Roof/);
       const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
@@ -791,7 +791,7 @@ test.describe('Setting codes from the diagram', () => {
       const bar = page.getByRole('toolbar', { name: 'Actions for Snagging, with no codes at all' });
       await bar.getByRole('button', { name: 'Set code…' }).click();
       const panel = page.getByRole('dialog', { name: 'Set code…' });
-      await panel.getByLabel('Code', { exact: true }).selectOption({ label: 'Area' });
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
       const value = panel.getByRole('combobox', { name: 'Value' });
       await value.focus();
       await page.keyboard.press('ArrowDown');
@@ -800,8 +800,10 @@ test.describe('Setting codes from the diagram', () => {
       await page.keyboard.press('Escape');
       await expect(values).toBeHidden();
       await expect(panel).toBeVisible();
+      await expectFocused(page, value);
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
+      await expectFocused(page, bar.getByRole('button', { name: 'Set code…' }));
     });
 
     await test.step('3. three selected: Set code… ▸ Trade ▸ ENV ▸ Set Trade is ONE request, one Undo', async () => {
@@ -814,7 +816,7 @@ test.describe('Setting codes from the diagram', () => {
       await expect(bar).toContainText(/3 activities selected/);
       await bar.getByRole('button', { name: 'Set code…' }).click();
       const panel = page.getByRole('dialog', { name: 'Set code…' });
-      await panel.getByLabel('Code', { exact: true }).selectOption({ label: 'Trade' });
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Trade' });
       await chooseOption(page, panel.getByRole('combobox', { name: 'Value' }), /Building envelope/);
       let writes = 0;
       page.on('request', (request) => {

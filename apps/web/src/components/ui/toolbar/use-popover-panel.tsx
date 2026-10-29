@@ -13,6 +13,11 @@ import { cn } from '@/lib/utils';
  * Whether Escape belongs to an expanded combobox inside the panel (ADR-0111: this changes which
  * Escape the panel claims). Checks the event target and the active element, because a key can be
  * dispatched at the document while focus sits on the input.
+ *
+ * It **assumes the matching widget closes itself on Escape** — true of `Combobox` today. A future
+ * `role="combobox"` that does not would trap Escape: the panel would yield and nothing would close.
+ * Nested `usePopoverPanel` panels are unchanged (the outer one registers its listener first and still
+ * closes everything at once); nothing nests them today.
  */
 function openInnerPopup(panel: HTMLElement | null, target: EventTarget | null): boolean {
   if (!panel) return false;

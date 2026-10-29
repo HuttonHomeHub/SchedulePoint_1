@@ -62,7 +62,7 @@ describe('CodeAssignButton', () => {
   it('opens a panel with focus on the code select', async () => {
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Set code…' }));
-    const select = await screen.findByLabelText('Code');
+    const select = await screen.findByLabelText('Code type');
     expect(select).toHaveFocus();
   });
 
@@ -71,7 +71,7 @@ describe('CodeAssignButton', () => {
     const trigger = screen.getByRole('button', { name: 'Set code…' });
     fireEvent.click(trigger);
     await screen.findByRole('option', { name: 'Area', hidden: true });
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'area' } });
+    fireEvent.change(screen.getByLabelText('Code type'), { target: { value: 'area' } });
     const picker = screen.getByRole('combobox', { name: 'Value' });
     await waitFor(() => expect(picker).not.toBeDisabled());
     fireEvent.keyDown(picker, { key: 'ArrowDown' });
@@ -83,7 +83,7 @@ describe('CodeAssignButton', () => {
     await screen.findByText(/^Sets Area to Roof on 3 activities/);
     fireEvent.click(screen.getByRole('button', { name: 'Set Area' }));
 
-    await waitFor(() => expect(screen.queryByLabelText('Code')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('Code type')).toBeNull());
     expect(server.writes).toHaveLength(1);
     expect(record).toHaveBeenCalledTimes(1);
     expect(trigger).toHaveFocus();
@@ -95,6 +95,6 @@ describe('CodeAssignButton', () => {
     expect(trigger).toHaveAttribute('aria-disabled', 'true');
     expect(trigger).toHaveAccessibleDescription('Start editing to change codes.');
     fireEvent.click(trigger);
-    expect(screen.queryByLabelText('Code')).toBeNull();
+    expect(screen.queryByLabelText('Code type')).toBeNull();
   });
 });
