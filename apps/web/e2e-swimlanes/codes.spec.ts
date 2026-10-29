@@ -1,10 +1,18 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
+import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
-import { planCommands } from '../e2e-support/toolbar';
+import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
 
-import { CODES_PLAN, ensurePen, expectFocused, openPlanId, openSeededPlan } from './support';
+import {
+  CODES_PLAN,
+  calculateSeededPlan,
+  ensurePen,
+  expectFocused,
+  openPlanId,
+  openSeededPlan,
+} from './support';
 
 /**
  * **Codes, in the Activities panel** (`docs/specs/p6-activity-codes/`, M3, ADR-0081): the milestone's
@@ -374,5 +382,174 @@ test.describe('Codes… at the 1024 × 600 floor', () => {
     ).toHaveCount(4);
     await dialog.getByRole('button', { name: /^Deleted values/ }).click();
     await expectReachable('with the Deleted lists open');
+  });
+});
+
+/** Show the Activities panel (folded by default). */
+async function showActivitiesPanel(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+}
+
+/** The Activities table's cell for a row (found by the activity's name) under a column heading. */
+async function tableCell(page: Page, rowName: string, heading: string): Promise<Locator> {
+  const table = page.getByRole('table', { name: 'Activities' });
+  const headings = await table.getByRole('columnheader').allTextContents();
+  const index = headings.indexOf(heading);
+  expect(index, `no "${heading}" column in ${headings.join(', ')}`).toBeGreaterThan(-1);
+  return table.getByRole('row').filter({ hasText: rowName }).first().getByRole('cell').nth(index);
+}
+
+const GANTT_GRID = { name: 'Schedule as a bar chart' } as const;
+
+/** Open View ▾ with every section unfolded, which opens the Codes list inside Columns. */
+async function openViewColumns(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'View', exact: true }).click();
+  await unfoldViewSections(page);
+  return page.getByRole('dialog', { name: /^View/ });
+}
+
+/**
+ * **Code columns, in the table and in the Gantt, and on paper** (M3-T2, ADR-0081). Off by default; the
+ * choice lives in the URL (`acodes` for the table, `gcodes` for the Gantt); a Gantt code cell is
+ * read-only; and the printed programme carries the Gantt's switched-on columns. What only a browser can
+ * say: that the pinned block does not paint over the chart, that the View panel stays inside a short
+ * window however many types the plan has, and what the print stylesheet receives.
+ */
+test.describe('Code columns', () => {
+  test('the table’s Columns menu, the Gantt’s View ▾ list, and the printed programme', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await openSeededPlan(page, Date.now() + 2, CODES_PLAN);
+
+    await test.step('1. nothing is shown by default; Columns ▸ Area shows it after WBS, and a reload keeps it', async () => {
+      await showActivitiesPanel(page);
+      const table = page.getByRole('table', { name: 'Activities' });
+      await expect(table.getByRole('columnheader', { name: 'Area' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Code columns' }).click();
+      const items = page.getByRole('menu', { name: 'Code columns' }).getByRole('menuitemcheckbox');
+      await expect(items).toHaveText(['Area', 'Trade', 'Phase']);
+      await page.getByRole('menuitemcheckbox', { name: 'Area' }).click();
+      await expect(table.getByRole('columnheader', { name: 'Area' })).toBeVisible();
+      await expect(await tableCell(page, 'Piling', 'Area')).toHaveText('Ground floor');
+      await expect(await tableCell(page, 'Cladding, in no area', 'Area')).toHaveText('—');
+      await expect(page).toHaveURL(/acodes=/);
+
+      await page.reload();
+      await showActivitiesPanel(page);
+      await expect(table.getByRole('columnheader', { name: 'Area' })).toBeVisible();
+      await expect(await tableCell(page, 'Piling', 'Area')).toHaveText('Ground floor');
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    });
+
+    await test.step('2. Gantt ▸ View ▾ ▸ Columns ▸ Codes ▸ Trade: a read-only column that stops short of the chart', async () => {
+      await page.goto(`${page.url().split('?')[0]}?view=gantt`);
+      const grid = page.getByRole('treegrid', GANTT_GRID);
+      await expect(grid.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+      await expect(grid.getByRole('columnheader', { name: 'Trade' })).toHaveCount(0);
+
+      const panel = await openViewColumns(page);
+      await panel.getByRole('checkbox', { name: 'Trade' }).click();
+      await page.keyboard.press('Escape');
+      await expect(grid.getByRole('columnheader', { name: 'Trade' })).toBeVisible();
+      await expect(page).toHaveURL(/gcodes=/);
+
+      const row = grid.getByRole('row').filter({ hasText: 'First-fix services' });
+      const headings = await grid.getByRole('columnheader').allTextContents();
+      const trade = headings.findIndex((h) => h === 'Trade');
+      await expect(row.getByRole('gridcell').nth(trade)).toHaveText(
+        'Mechanical, electrical and plumbing',
+      );
+      // Read-only: opening the cell offers no editor.
+      await row.getByRole('gridcell').nth(trade).dblclick();
+      await expect(row.getByRole('textbox')).toHaveCount(0);
+
+      // The pinned block ends where the chart begins: the last code cell's right edge is not past the
+      // Timeline header's left edge (the ADR-0095 Float incident, for a column that is not a GanttColumn).
+      const edges = await page.evaluate(() => {
+        const heads = [...document.querySelectorAll('[role="columnheader"]')];
+        const timeline = heads.find((h) => h.textContent?.includes('Timeline'));
+        const code = heads.find((h) => h.textContent === 'Trade');
+        return {
+          timelineLeft: timeline?.getBoundingClientRect().left ?? -1,
+          codeRight: code?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY,
+        };
+      });
+      expect(edges.codeRight).toBeLessThanOrEqual(edges.timelineLeft + 1);
+
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    });
+
+    await test.step('3. Export ▸ Print… carries Trade after the standard headings, and CD_4’s row reads its value', async () => {
+      // A plan seeded through the API has never been calculated, and Print… is shaded until it is.
+      await calculateSeededPlan(page);
+      await openPrintDocument(page);
+      const head = page.locator('.gantt-print-root thead');
+      const headings = (await head.locator('th').allTextContents()).slice(0, -1);
+      expect(headings).toEqual([
+        'Code',
+        'Activity',
+        'Duration',
+        'Start',
+        'Finish',
+        'Float left',
+        'Trade',
+      ]);
+      await expect(
+        page.locator('.gantt-print-root tbody tr').filter({ hasText: 'First-fix services' }),
+      ).toContainText('Mechanical, electrical and plumbing');
+      // Three fit with no baseline, so nothing is left off and no sentence is printed.
+      await expect(page.locator('.gantt-print-omitted')).toHaveCount(0);
+    });
+
+    await test.step('4. at 1024 × 600 the View panel does not grow with the number of types', async () => {
+      await ensurePen(page);
+      const planId = openPlanId(page);
+      const addTypes = async (from: number, to: number): Promise<void> => {
+        const failures = await page.evaluate(
+          async ({ org, id, a, b }: { org: string; id: string; a: number; b: number }) => {
+            const bad: string[] = [];
+            for (let i = a; i <= b; i += 1) {
+              const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/code-types`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ name: `Extra ${String(i).padStart(2, '0')}` }),
+              });
+              if (!response.ok) bad.push(`${String(response.status)} ${await response.text()}`);
+            }
+            return bad;
+          },
+          { org: orgSlug, id: planId, a: from, b: to },
+        );
+        expect(failures).toEqual([]);
+      };
+      const panelHeight = async (): Promise<number> => {
+        await page.reload();
+        const grid = page.getByRole('treegrid', GANTT_GRID);
+        await expect(grid.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+        const panel = await openViewColumns(page);
+        await expect(panel.getByRole('checkbox', { name: 'Extra 01' })).toBeVisible();
+        const box = await panel.boundingBox();
+        await page.keyboard.press('Escape');
+        return box?.height ?? -1;
+      };
+      await page.setViewportSize({ width: 1024, height: 600 });
+      await addTypes(1, 12);
+      const twelve = await panelHeight();
+      // The reload above released the pen; the second batch writes too.
+      await ensurePen(page);
+      await addTypes(13, 30);
+      const thirty = await panelHeight();
+      expect(twelve, 'the View panel has no height').toBeGreaterThan(0);
+      expect(thirty, 'the View panel grew with the type count').toBeLessThanOrEqual(twelve + 1);
+      expect(thirty).toBeLessThanOrEqual(600);
+    });
   });
 });

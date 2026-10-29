@@ -47,6 +47,8 @@ function bundle(withheld: number): GanttViewStateBundle {
     onSortChange: () => {},
     onHiddenColumnsChange: () => {},
     onCollapsedChange: () => {},
+    onCodeColumnsChange: () => {},
+    codeColumnIds: [],
     collapsedWithheld: withheld,
   };
 }

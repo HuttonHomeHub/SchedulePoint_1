@@ -56,6 +56,7 @@ const printed = (activities: ActivitySummary[]): HTMLElement =>
     <GanttPrintSurface
       columns={VISIBLE_COLUMNS}
       dependencies={[]}
+      codeColumns={[]}
       title="North Tower"
       subtitle="As of 2026-01-01"
       activities={activities}
@@ -95,5 +96,28 @@ describe('GanttPrintSurface — the Unassigned bucket (flag on)', () => {
       parentId: null,
     }));
     expect(printed(flat).textContent).not.toContain('Unassigned');
+  });
+});
+
+describe('GanttPrintSurface — the Unassigned bucket and code columns', () => {
+  /** The bucket row spans every printed column, code columns included, or its cell stops short. */
+  it('spans the code columns it sits beside', () => {
+    const { container } = render(
+      <GanttPrintSurface
+        columns={VISIBLE_COLUMNS}
+        dependencies={[]}
+        codeColumns={[
+          { key: 'area', label: 'Area', status: 'ready', text: () => 'Roof' },
+          { key: 'trade', label: 'Trade', status: 'ready', text: () => 'Finishes' },
+        ]}
+        title="North Tower"
+        subtitle="As of 2026-01-01"
+        activities={ACTIVITIES}
+      />,
+    );
+    const bucket = [...container.querySelectorAll('tbody td[colspan]')].find((td) =>
+      td.textContent?.includes('Unassigned'),
+    );
+    expect(bucket?.getAttribute('colspan')).toBe(String(VISIBLE_COLUMNS.length + 2));
   });
 });

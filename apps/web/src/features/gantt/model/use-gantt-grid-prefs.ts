@@ -36,14 +36,16 @@ export function useGanttGridPrefs(input: {
   columns: readonly GanttColumn[];
   widths: ColumnWidths;
   extraPinnedWidth: number;
+  /** The code columns drawn after `columns` (P6 activity codes, M3-T2); they are part of the floor. */
+  codeColumnCount: number;
 }): GanttGridPrefs {
-  const { columns, widths, extraPinnedWidth } = input;
+  const { columns, widths, extraPinnedWidth, codeColumnCount } = input;
   // The floor keeps the identity column readable; below it the pane stops being a grid and becomes a
   // margin. It is what the fixed columns need, not a round number: a pane narrower than that cannot
   // lay its columns out and they overflow onto the chart.
-  const min = ganttFixedWidth(columns, widths, extraPinnedWidth);
+  const min = ganttFixedWidth(columns, widths, extraPinnedWidth, codeColumnCount);
   const max = gridCeiling(min);
-  const seed = defaultGridWidth(columns, extraPinnedWidth);
+  const seed = defaultGridWidth(columns, extraPinnedWidth, codeColumnCount);
   const prefs = useResizablePanelPrefs({
     storageKey: 'schedulepoint:gantt-grid-width',
     min,

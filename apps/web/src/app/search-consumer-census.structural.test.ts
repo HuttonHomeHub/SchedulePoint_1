@@ -106,10 +106,16 @@ const CLASSIFIED: Record<string, string> = {
   'routes/audit-log.tsx': 'Hosts the audit filter; the parsing is `audit-filter.ts`’s.',
   'routes/my-activity.tsx': 'Hosts the same audit filter; the parsing is `audit-filter.ts`’s.',
   'features/gantt/model/gantt-view-state.ts':
-    'Parses the three UNDECLARED Gantt params (`gsort`/`ghide`/`gcollapsed`) through ' +
+    'Parses the four UNDECLARED Gantt params (`gsort`/`ghide`/`gcollapsed`/`gcodes`) through ' +
     '`searchString`; its own suite covers the shapes.',
   'features/gantt/model/use-gantt-view-state.ts':
     'Hosts the Gantt view state; the parsing is `gantt-view-state.ts`’s.',
+  'lib/code-columns.ts':
+    'Parses the `acodes`/`gcodes` values through `searchString`; `code-columns.test.ts` drives the ' +
+    'string, number and malformed shapes.',
+  'features/codes/model/use-table-code-columns.ts':
+    'Reads the UNDECLARED `acodes` through `useUrlFilterState`, and `parseCodeColumnIds` applies ' +
+    '`searchString`; `code-columns.test.ts` covers the shapes, including the numeric ones the codec coerces.',
   'features/gantt/use-plan-view-mode.ts':
     'Reads `view`, which IS declared — `/orgs/$orgSlug/plans/$planId`, covered by Gate A. Listed ' +
     'because it reads `useSearch` directly rather than through the route.',

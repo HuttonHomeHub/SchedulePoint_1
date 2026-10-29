@@ -7,6 +7,7 @@ import {
   DEFAULT_COLUMN_WIDTHS,
   chartGuard,
   clampColumnWidth,
+  codeColumnWidth,
   defaultGridWidth,
   ganttFixedWidth,
   gridCeiling,
@@ -70,8 +71,8 @@ describe('readStoredWidths is total', () => {
 
 describe('the shipped widths', () => {
   it('seed a default grid of 584 px, exactly what the grid was before widths were planner-set', () => {
-    expect(defaultGridWidth(DEFAULT_SET, 0)).toBe(584);
-    expect(defaultGridWidth(DEFAULT_SET, 72)).toBe(656);
+    expect(defaultGridWidth(DEFAULT_SET, 0, 0)).toBe(584);
+    expect(defaultGridWidth(DEFAULT_SET, 72, 0)).toBe(656);
   });
 
   it('write predecessors down rather than reaching it through a fallback', () => {
@@ -91,8 +92,27 @@ describe('the shipped widths', () => {
   });
 
   it('fix at 524 px for the default set, and 686 with everything and a baseline', () => {
-    expect(ganttFixedWidth(DEFAULT_SET, {}, 0)).toBe(524);
-    expect(ganttFixedWidth(STANDARD_COLUMNS, {}, 72)).toBe(686);
+    expect(ganttFixedWidth(DEFAULT_SET, {}, 0, 0)).toBe(524);
+    expect(ganttFixedWidth(STANDARD_COLUMNS, {}, 72, 0)).toBe(686);
+  });
+});
+
+describe('code columns in the pinned block (P6 activity codes, M3-T2)', () => {
+  it('add the one shared width once per column to the floor, so none paints over the chart', () => {
+    expect(ganttFixedWidth(DEFAULT_SET, {}, 0, 3)).toBe(524 + 3 * 96);
+    expect(ganttFixedWidth(DEFAULT_SET, { codes: 120 }, 72, 2)).toBe(524 + 72 + 2 * 120);
+  });
+
+  it('add to the seeded pane at the default width, ignoring a planner’s', () => {
+    expect(defaultGridWidth(DEFAULT_SET, 0, 2)).toBe(584 + 2 * 96);
+  });
+
+  it('are stored under the one key `codes`, and an unknown stored key is still dropped', () => {
+    expect(readStoredWidths({ v: 1, widths: { codes: 130, 'a-type-id': 200 } })).toEqual({
+      codes: 130,
+    });
+    expect(codeColumnWidth({})).toBe(96);
+    expect(codeColumnWidth({ codes: 9999 })).toBe(400);
   });
 });
 

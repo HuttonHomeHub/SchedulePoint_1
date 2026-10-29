@@ -231,8 +231,9 @@ pnpm --filter @repo/api exec vitest run --config vitest.measure.config.mts codes
   `features/tsld/toolbar/gantt-columns-group.tsx` (the folded Codes sub-section, bounded scroll),
   `features/tsld/toolbar/use-tsld-toolbar-context.tsx` (`:871-905`: await
   `ganttColumns.resolvePrintCodeColumns()`, pass `codeColumns`, alert on rejection); the
-  `GanttColumnsBundle` type; the plan route's search validation (`acodes`, `gcodes`, ADR-0123); host
-  wiring in `components/layout/workspace/`; `apps/web/e2e-support/print.ts` (**moved** from
+  `GanttColumnsBundle` type; `acodes`/`gcodes` are read through `searchString` and covered by the
+  search-consumer census, the undeclared-param precedent of ADR-0123 (as `gsort`/`ghide`/`gcollapsed`),
+  **not** declared in the plan route's `validateSearch`; host wiring in `components/layout/workspace/`; `apps/web/e2e-support/print.ts` (**moved** from
   `e2e-export/exported-diagram.spec.ts:92-168`, which then imports it).
 - **Risks:**
   - **A code column drawn but not counted paints over the chart** (the ADR-0095 Float incident,

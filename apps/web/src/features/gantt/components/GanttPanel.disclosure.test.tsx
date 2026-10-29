@@ -143,6 +143,8 @@ describe('the summary row arrow', () => {
           onSortChange: () => {},
           onHiddenColumnsChange: () => {},
           onCollapsedChange: () => {},
+          onCodeColumnsChange: () => {},
+          codeColumnIds: [],
           collapsedWithheld: 0,
         }}
       />,
@@ -228,6 +230,7 @@ describe('the printed programme', () => {
       <GanttPrintSurface
         columns={GANTT_COLUMNS.filter((c) => !DEFAULT_HIDDEN_COLUMNS.includes(c.key))}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="As of 2026-02-01"
         activities={NESTED}

@@ -21,8 +21,14 @@ import { GANTT_COLUMNS, type GanttColumn } from './grid-columns';
  * ```
  */
 
-/** A column whose width a planner may set. `name` is elastic and has no width of its own. */
-export type ResizableColumnKey = Exclude<GanttColumnKey, 'name' | 'wbs'>;
+/**
+ * A column whose width a planner may set. `name` is elastic and has no width of its own.
+ *
+ * `codes` is **not a column of the grid's vocabulary**: it is the one width every code column shares
+ * (P6 activity codes, M3-T2). Per-type keys would grow the device record without limit, each one an id
+ * from a plan this device may never open again; the trade is that widening Area widens Trade too.
+ */
+export type ResizableColumnKey = Exclude<GanttColumnKey, 'name' | 'wbs'> | 'codes';
 
 /** The planner's stored widths — only the columns they have set, already clamped. */
 export type ColumnWidths = Readonly<Partial<Record<ResizableColumnKey, number>>>;
@@ -44,6 +50,7 @@ export const DEFAULT_COLUMN_WIDTHS: Readonly<Record<ResizableColumnKey, number>>
   totalFloat: 60,
   predecessors: 90,
   swimlane: 110,
+  codes: 96,
 };
 
 /** The Activity column's width when the pane is first seeded; it is elastic afterwards. */
@@ -106,7 +113,7 @@ export function clampColumnWidth(width: number): number {
 }
 
 /** Whether a column key is one a planner can size — i.e. not `name` (elastic) and not the `wbs` sort. */
-export function isResizableKey(key: GanttColumnKey): key is ResizableColumnKey {
+export function isResizableKey(key: GanttColumnKey | 'codes'): key is ResizableColumnKey {
   return Object.hasOwn(DEFAULT_COLUMN_WIDTHS, key);
 }
 
@@ -118,6 +125,15 @@ export function isResizableKey(key: GanttColumnKey): key is ResizableColumnKey {
  */
 export function columnWidthOf(key: GanttColumnKey, widths: ColumnWidths): number {
   return isResizableKey(key) ? clampColumnWidth(widths[key] ?? DEFAULT_COLUMN_WIDTHS[key]) : 0;
+}
+
+/**
+ * The one width every code column shares: the planner's, else the default. Its own function rather than
+ * a `columnWidthOf('codes', …)` call because a code column is not laid out against the pane — each is
+ * exactly this wide, and Activity gives up the difference like any other fixed column.
+ */
+export function codeColumnWidth(widths: ColumnWidths): number {
+  return clampColumnWidth(widths.codes ?? DEFAULT_COLUMN_WIDTHS.codes);
 }
 
 /**
@@ -185,12 +201,20 @@ export function ganttFixedWidth(
    * `columns` alone and therefore agreed with the bug.
    */
   extraPinnedWidth: number,
+  /**
+   * How many code columns are drawn after {@link columns} (P6 activity codes, M3-T2) — **required, never
+   * defaulted**, for the same reason as `extraPinnedWidth`: they are not `GanttColumn`s, so a sum over
+   * `columns` alone agrees with the bug by construction and the code columns paint over the chart.
+   */
+  codeColumnCount: number,
 ): number {
   return (
     columns.reduce(
       (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidthOf(c.key, widths)),
       0,
-    ) + extraPinnedWidth
+    ) +
+    codeColumnCount * codeColumnWidth(widths) +
+    extraPinnedWidth
   );
 }
 
@@ -235,6 +259,7 @@ export function gridCeiling(fixedWidth: number): number {
 export function defaultGridWidth(
   columns: readonly GanttColumn[],
   extraPinnedWidth: number,
+  codeColumnCount: number,
 ): number {
   return (
     columns.reduce(
@@ -246,7 +271,9 @@ export function defaultGridWidth(
             ? DEFAULT_COLUMN_WIDTHS[c.key]
             : 0),
       0,
-    ) + extraPinnedWidth
+    ) +
+    codeColumnCount * DEFAULT_COLUMN_WIDTHS.codes +
+    extraPinnedWidth
   );
 }
 

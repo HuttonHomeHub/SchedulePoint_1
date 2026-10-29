@@ -58,6 +58,7 @@ import type { PenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
+import { CodeColumnsUnavailableError } from '@/lib/code-columns';
 import { downloadBlob } from '@/lib/download-blob';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -865,45 +866,68 @@ export function useTsldToolbarContext({
       printDiagram: () => {
         if (!EXPORT_PRINT_ENABLED || printing) return;
 
-        // The Gantt is DOM, so it prints as a document — no rasterisation, nothing async, and no
-        // `printing` flag to reset (ADR-0059 M4). Branching on `planView` is enough to keep the
-        // flag-off path byte-identical: with `VITE_GANTT_VIEW` off it is hard-wired to `tsld`.
+        // The Gantt is DOM, so it prints as a document — no rasterisation (ADR-0059 M4). Branching on
+        // `planView` is enough to keep the flag-off path byte-identical: with `VITE_GANTT_VIEW` off it
+        // is hard-wired to `tsld`.
+        //
+        // **Async only for the code columns' names** (P6 activity codes, M3-T2): the host resolves each
+        // shown type's values before anything mounts, so paper never carries "Loading…", "Unavailable"
+        // or an id. Normally every type is cached (30 s) and no request is made. When a type cannot be
+        // loaded NOTHING prints and the alert says which, because a printout missing a column it appears
+        // to have is worse than none. `printing` guards a second press while the names are awaited.
         if (planView === 'gantt') {
-          printGanttSchedule({
-            title: plan.name,
-            subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
-            activities,
-            ...(model.varianceByActivityId
-              ? { varianceByActivityId: model.varianceByActivityId }
-              : {}),
-            // Names which dates the ghost/column compare on paper (`placement-baseline-variance`,
-            // US-2) — the same read `varianceByActivityId` above is built from.
-            varianceBasis,
-            // The printed programme reads the SAME dates the screen does. Without these it drew
-            // every VISUAL-mode bar from the early columns while the chart beside it drew them
-            // from the effective-Visual ones — and paper is where that is hardest to notice and
-            // most expensive, because the reader has nothing to compare it against.
-            ...(barDateSource ? { barDateSource } : {}),
-            ...(hoursPerDayFor ? { hoursPerDayFor } : {}),
-            // **Paper follows the reader's column choice** (`docs/TECH_DEBT.md` #217) — ADR-0103
-            // /#167's "the export is MY picture" one artefact along.
-            //
-            // From the `ganttColumns` prop the workspace ALREADY threads for the columns chooser,
-            // not from `useGanttViewState`. The first version called that hook here and broke
-            // fifteen tests with `Cannot read properties of null (reading 'stores')`, because it
-            // needs the router and this one never has — which is the docblock two fields up
-            // ("passed IN rather than re-derived here", the rule `host-parity.structural.test.ts`
-            // exists to hold) being ignored. The failure was the design telling me so.
-            //
-            // The fallback is the screen's own default, so a host that wires no chooser prints the
-            // document its reader would see rather than every column there is.
-            hiddenColumns: ganttColumns?.hidden ?? new Set(DEFAULT_HIDDEN_COLUMNS),
-            // The edges the Predecessors column prints. Already in scope and memoised above; the
-            // surface derives the per-successor index from them with the SAME function the panel
-            // uses, so screen and paper cannot disagree about what an activity follows.
-            dependencies,
-          });
-          announce(`Printing ${plan.name}.`);
+          setPrinting(true);
+          setExportError(null);
+          setExportNotice(null);
+          void (ganttColumns?.resolvePrintCodeColumns() ?? Promise.resolve([]))
+            .then((codeColumns) => {
+              printGanttSchedule({
+                title: plan.name,
+                subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
+                activities,
+                ...(model.varianceByActivityId
+                  ? { varianceByActivityId: model.varianceByActivityId }
+                  : {}),
+                // Names which dates the ghost/column compare on paper (`placement-baseline-variance`,
+                // US-2) — the same read `varianceByActivityId` above is built from.
+                varianceBasis,
+                // The printed programme reads the SAME dates the screen does. Without these it drew
+                // every VISUAL-mode bar from the early columns while the chart beside it drew them
+                // from the effective-Visual ones — and paper is where that is hardest to notice and
+                // most expensive, because the reader has nothing to compare it against.
+                ...(barDateSource ? { barDateSource } : {}),
+                ...(hoursPerDayFor ? { hoursPerDayFor } : {}),
+                // **Paper follows the reader's column choice** (`docs/TECH_DEBT.md` #217) — ADR-0103
+                // /#167's "the export is MY picture" one artefact along.
+                //
+                // From the `ganttColumns` prop the workspace ALREADY threads for the columns chooser,
+                // not from `useGanttViewState`. The first version called that hook here and broke
+                // fifteen tests with `Cannot read properties of null (reading 'stores')`, because it
+                // needs the router and this one never has — which is the docblock two fields up
+                // ("passed IN rather than re-derived here", the rule `host-parity.structural.test.ts`
+                // exists to hold) being ignored. The failure was the design telling me so.
+                //
+                // The fallback is the screen's own default, so a host that wires no chooser prints the
+                // document its reader would see rather than every column there is.
+                hiddenColumns: ganttColumns?.hidden ?? new Set(DEFAULT_HIDDEN_COLUMNS),
+                // The edges the Predecessors column prints. Already in scope and memoised above; the
+                // surface derives the per-successor index from them with the SAME function the panel
+                // uses, so screen and paper cannot disagree about what an activity follows.
+                dependencies,
+                // The switched-on code columns, names resolved above, in on-screen order.
+                codeColumns,
+              });
+              announce(`Printing ${plan.name}.`);
+            })
+            .catch((error: unknown) => {
+              const message =
+                error instanceof CodeColumnsUnavailableError
+                  ? error.message
+                  : 'Couldn’t prepare the programme to print. Please try again.';
+              announce(message);
+              setExportError(message);
+            })
+            .finally(() => setPrinting(false));
           return;
         }
 

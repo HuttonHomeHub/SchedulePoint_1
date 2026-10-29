@@ -209,6 +209,13 @@
     color: var(--muted-foreground);
   }
 
+  /* The one line naming code columns that did not fit (`print-code-fit.ts`). */
+  .gantt-print-omitted {
+    margin: 4px 0 0;
+    font-size: 9px;
+    color: var(--muted-foreground);
+  }
+
   .gantt-print-swatch {
     position: relative;
     display: inline-block;

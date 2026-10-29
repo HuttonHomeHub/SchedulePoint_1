@@ -22,7 +22,7 @@ describe('useGanttGridPrefs — Reset widths restores the divider', () => {
   it('puts the pane back on its seed even though the floor it was clamped against was widened', () => {
     const { result, rerender } = renderHook(
       ({ widths }: { widths: ColumnWidths }) =>
-        useGanttGridPrefs({ columns: COLUMNS, widths, extraPinnedWidth: 0 }),
+        useGanttGridPrefs({ columns: COLUMNS, widths, extraPinnedWidth: 0, codeColumnCount: 0 }),
       { initialProps: { widths: WIDENED } },
     );
     expect(result.current.seed).toBe(584);
@@ -49,14 +49,24 @@ describe('useGanttGridPrefs: a pane stored before the row-menu column and the gu
     const extra = pinnedExtraWidth(false, true);
     localStorage.setItem('schedulepoint:gantt-grid-width', JSON.stringify({ size: 500 }));
     const low = renderHook(() =>
-      useGanttGridPrefs({ columns: COLUMNS, widths: {}, extraPinnedWidth: extra }),
+      useGanttGridPrefs({
+        columns: COLUMNS,
+        widths: {},
+        extraPinnedWidth: extra,
+        codeColumnCount: 0,
+      }),
     );
     expect(low.result.current.min).toBe(584 - 180 + 120 + extra);
     expect(low.result.current.size).toBe(low.result.current.min);
 
     localStorage.setItem('schedulepoint:gantt-grid-width', JSON.stringify({ size: 700 }));
     const old = renderHook(() =>
-      useGanttGridPrefs({ columns: COLUMNS, widths: {}, extraPinnedWidth: extra }),
+      useGanttGridPrefs({
+        columns: COLUMNS,
+        widths: {},
+        extraPinnedWidth: extra,
+        codeColumnCount: 0,
+      }),
     );
     expect(old.result.current.size).toBe(700);
   });

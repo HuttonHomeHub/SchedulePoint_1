@@ -70,7 +70,12 @@ import { type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
-import { deriveCodesGate, useCodesDialog } from '@/features/codes';
+import {
+  deriveCodesGate,
+  useCodeColumns,
+  useCodesDialog,
+  useTableCodeColumns,
+} from '@/features/codes';
 import {
   FloatPathsPanel,
   useFloatPathsPanelPrefs,
@@ -714,6 +719,17 @@ export function ToolbarPlanWorkspace({
   // `View ▾` Columns chooser — and a second copy is the drift `barDateSource` and the float-path
   // set were both lifted to this file to end.
   const ganttViewState = useGanttViewState();
+  // The code columns each grid shows (P6 activity codes, M3-T2): the table keeps `acodes` and the Gantt
+  // `gcodes`, because each has its own chooser and both can be on screen at once. Held HERE for the
+  // reason the view state is: the grid, the chooser and the print read one answer, and the columns array
+  // keeps its identity until a shown type, its name or its values change.
+  const tableCodes = useTableCodeColumns(model.orgSlug, model.planId);
+  const ganttCodes = useCodeColumns({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    requestedIds: ganttViewState.codeColumnIds,
+    write: ganttViewState.onCodeColumnsChange,
+  });
   // The planner's column widths and the grid pane's size (ADR-0173). Held here for the same reason as
   // the view state: the `View ▾` fields and the grid read ONE value, and two `useState`s over one
   // storage key do not sync. The pane's bounds derive from the same pure arithmetic the panel lays
@@ -730,6 +746,7 @@ export function ToolbarPlanWorkspace({
       model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
       GANTT_HAS_ROW_MENUS,
     ),
+    codeColumnCount: ganttCodes.columns.length,
   });
   const updateParents = useReparentActivities(model.orgSlug, model.planId);
 
@@ -998,6 +1015,8 @@ export function ToolbarPlanWorkspace({
             isDefault:
               isDefaultWidths(ganttColumnWidths.widths) &&
               ganttGridPrefs.size === ganttGridPrefs.seed,
+            codes: ganttCodes.choice,
+            resolvePrintCodeColumns: ganttCodes.resolvePrintColumns,
           }
         : undefined,
   });
@@ -1859,6 +1878,8 @@ export function ToolbarPlanWorkspace({
           // same numbers (ADR-0173).
           columnWidths={ganttColumnWidths}
           gridPrefs={ganttGridPrefs}
+          // Read-only code columns after the standard ones, sharing one width (M3-T2).
+          codeColumns={ganttCodes.columns}
           // Indent / Outdent (M5-T4). The panel resolves WHERE from its own row order; this is the
           // write.
           rowStructure={rowStructure}
@@ -2875,6 +2896,8 @@ export function ToolbarPlanWorkspace({
                       collapseRef={collapseButtonRef}
                       swimlanes={tableSwimlanes}
                       onOpenCodes={codesDialog.request}
+                      codeColumns={tableCodes.columns}
+                      codeColumnsChoice={tableCodes.choice}
                     />
                   </div>
                 </>

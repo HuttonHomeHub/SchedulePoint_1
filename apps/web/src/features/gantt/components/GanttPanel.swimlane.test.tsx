@@ -438,6 +438,8 @@ describe('how the closed cell looks', () => {
         onSortChange: vi.fn(),
         onHiddenColumnsChange: vi.fn(),
         onCollapsedChange: vi.fn(),
+        onCodeColumnsChange: vi.fn(),
+        codeColumnIds: [],
         collapsedWithheld: 0,
       },
     });
@@ -454,6 +456,8 @@ describe('how the closed cell looks', () => {
         onSortChange: vi.fn(),
         onHiddenColumnsChange: vi.fn(),
         onCollapsedChange: vi.fn(),
+        onCodeColumnsChange: vi.fn(),
+        codeColumnIds: [],
         collapsedWithheld: 0,
       },
     });

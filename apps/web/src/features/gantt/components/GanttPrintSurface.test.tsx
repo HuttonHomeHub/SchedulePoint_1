@@ -51,6 +51,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="As of 2026-02-01"
         activities={[anActivity()]}
@@ -73,6 +74,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="Big"
         subtitle="As of 2026-02-01"
         activities={activities}
@@ -91,6 +93,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="—"
         activities={[anActivity()]}
@@ -110,6 +113,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="Short"
         subtitle="—"
         activities={[anActivity({ earlyStart: '2026-02-02', earlyFinish: '2026-02-06' })]}
@@ -119,6 +123,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="Long"
         subtitle="—"
         activities={[anActivity({ earlyStart: '2026-02-02', earlyFinish: '2036-02-06' })]}
@@ -134,6 +139,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="—"
         activities={[anActivity({ earlyStart: null, earlyFinish: null })]}
@@ -148,6 +154,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="—"
         activities={[]}
@@ -161,6 +168,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity()]}
@@ -172,6 +180,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity({ id: 'a1' })]}
@@ -191,6 +200,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity()]}
@@ -210,6 +220,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity({ id: 'a1' })]}
@@ -225,6 +236,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity({ id: 'a1' })]}
@@ -241,6 +253,7 @@ describe('GanttPrintSurface', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="N"
         subtitle="—"
         activities={[anActivity()]}
@@ -275,6 +288,7 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
           activities: [anActivity()],
           hiddenColumns: new Set(DEFAULT_HIDDEN_COLUMNS),
           dependencies: [],
+          codeColumns: [],
         },
         { print },
       );
@@ -301,6 +315,7 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
           activities: [anActivity()],
           hiddenColumns: new Set(),
           dependencies: [],
+          codeColumns: [],
         },
         { print: vi.fn() },
       );
@@ -320,6 +335,7 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
           activities: [anActivity()],
           hiddenColumns: new Set(DEFAULT_HIDDEN_COLUMNS),
           dependencies: [],
+          codeColumns: [],
         },
         { print: vi.fn() },
       );
@@ -356,6 +372,7 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
             successor: { id: 'a2', code: 'A110', name: 'Pour slab' },
           } as never,
         ]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="As of 2026-02-01"
         activities={[excavate, pour]}
@@ -381,6 +398,7 @@ describe('printGanttSchedule (mount / teardown lifecycle)', () => {
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="As of 2026-02-01"
         activities={[anActivity()]}

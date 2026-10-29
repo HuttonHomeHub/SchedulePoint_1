@@ -65,6 +65,7 @@ function Host({ zoomLevel }: { zoomLevel?: ZoomLevel }): React.ReactElement {
     columns: IDENTITY,
     widths: columnWidths.widths,
     extraPinnedWidth: pinnedExtraWidth(false, false),
+    codeColumnCount: 0,
   });
   return (
     <GanttPanel
@@ -329,6 +330,8 @@ describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () 
           onSortChange: () => {},
           onHiddenColumnsChange: () => {},
           onCollapsedChange: () => {},
+          onCodeColumnsChange: () => {},
+          codeColumnIds: [],
           collapsedWithheld: 0,
         }}
       />,

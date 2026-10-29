@@ -53,6 +53,7 @@ describe('GanttPrintSurface — VITE_WBS_IMPROVEMENTS off (print parity)', () =>
       <GanttPrintSurface
         columns={VISIBLE_COLUMNS}
         dependencies={[]}
+        codeColumns={[]}
         title="North Tower"
         subtitle="As of 2026-01-01"
         activities={ACTIVITIES}

@@ -40,6 +40,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
       table: { size: 584, min: 524, max: 720, setSize: vi.fn((size: number) => size) },
       reset: vi.fn(),
       isDefault: true,
+      codes: { status: 'ready', types: [], shownIds: [], setShown: vi.fn() },
+      resolvePrintCodeColumns: vi.fn(() => Promise.resolve([])),
     },
     ...over,
   });
