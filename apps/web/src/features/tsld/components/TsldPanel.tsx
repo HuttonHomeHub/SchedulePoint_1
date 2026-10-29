@@ -599,6 +599,24 @@ export interface TsldPanelProps {
    * omits the control from both selection bars (the plan has no hand-made swimlanes).
    */
   swimlaneAssignment?: SwimlaneAssignment | null;
+  /**
+   * **Set code…** (P6 activity codes, M3-T4), supplied by the host as render functions because this
+   * feature must not import `features/codes` (`docs/TECH_DEBT.md` #548). `panel` fills the single
+   * bar's popover for one activity; `action` is the plural bar's whole button for the selection.
+   * Both memoised by the host: the single bar's context is rebuilt when `panel` changes. Absent
+   * omits Set code… from both bars (the plan has no code types).
+   */
+  setCode?: {
+    panel: (
+      activity: ActivitySummary,
+      gate: { writable: boolean; reason: string | null },
+      initialFocus: React.RefObject<HTMLSelectElement | null>,
+    ) => React.ReactNode;
+    action: (
+      activities: readonly ActivitySummary[],
+      gate: { writable: boolean; reason: string | null },
+    ) => React.ReactNode;
+  } | null;
   onGutterRoomChange?: (room: boolean) => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
@@ -731,6 +749,7 @@ export function TsldPanel({
   gutterWidthPx = 0,
   gutterActions = null,
   swimlaneAssignment = null,
+  setCode = null,
   onGutterRoomChange,
   overAllocationHighlight = false,
   floatPathIds,
@@ -1933,9 +1952,11 @@ export function TsldPanel({
         floatPathsOpen,
         onToggleFloatPaths,
         moveToSwimlane: swimlaneAssignment,
+        ...(setCode ? { setCodePanel: setCode.panel } : {}),
       }),
     [
       swimlaneAssignment,
+      setCode,
       selectionCanvas,
       selectedId,
       selection.ids.length,
@@ -3461,6 +3482,7 @@ export function TsldPanel({
                   }
                 : null
             }
+            codeAction={setCode ? setCode.action(selectedActivities, bulk.gate) : null}
           />
         ) : null}
 

@@ -9,6 +9,7 @@ export type { CodesDialogProps } from './components/CodesDialog';
 export { CodeColumnsMenu, NO_CODE_TYPES_REASON } from './components/CodeColumnsMenu';
 export { useCodeColumns, type CodeColumnsHost } from './model/use-code-columns';
 export { useTableCodeColumns } from './model/use-table-code-columns';
+export { CodeAssignButton } from './components/CodeAssignButton';
 export { CodeAssignControl } from './components/CodeAssignControl';
 export { CodeBulkAssignBar } from './components/CodeBulkAssignBar';
 export { useSetActivityCodes } from './model/use-set-activity-codes';
