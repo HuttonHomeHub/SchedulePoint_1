@@ -202,6 +202,7 @@ export function CodeTypePane({
         header: 'Activities',
         cell: (value) => String(usage.byValue.get(value.id) ?? 0),
         width: 'fit',
+        sample: '120',
       },
     ];
     if (!gate.roleDenied) {

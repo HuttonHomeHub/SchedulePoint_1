@@ -64,6 +64,12 @@ const DECLARED: Record<string, Declared> = {
     reason: 'no `fit` column (Name and Actions are undeclared), so there is nothing to sample',
   },
   // Tables outside the SC-3 set.
+  'features/codes/components/CodeTypePane.tsx': {
+    fit: 2,
+    sampled: 1,
+    reason:
+      'Activities is sampled; the other `fit` column is the row-action buttons, whose width a sample string cannot stand for',
+  },
   'features/members/components/InvitationsSection.tsx': { fit: 1, sampled: 0, reason: NOT_SC3 },
   'features/calendars/components/ProjectCalendarsSection.tsx': {
     fit: 1,

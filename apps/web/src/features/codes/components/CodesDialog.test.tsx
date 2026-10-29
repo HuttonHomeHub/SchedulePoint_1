@@ -258,7 +258,7 @@ describe('adding', () => {
       expect(screen.getByRole('tab', { name: 'System', selected: true })).toBeInTheDocument(),
     );
     expect(server.writes[0]).toMatchObject({ method: 'POST', body: { name: 'System' } });
-    expect(announced()).toBe('Code type System added.');
+    await waitFor(() => expect(announced()).toBe('Code type System added.'));
     await waitFor(() => expect(screen.getByLabelText('Short code')).toHaveFocus());
     expect(record).toHaveBeenCalledTimes(1);
     expect((record.mock.calls[0]?.[0] as { label: string }).label).toBe('Add code type “System”');
@@ -333,7 +333,7 @@ describe('renaming and editing', () => {
     fireEvent.change(field, { target: { value: 'Zone' } });
     fireEvent.click(within(rename).getByRole('button', { name: 'Rename' }));
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Zone' })).toBeInTheDocument());
-    expect(announced()).toBe('Code type renamed to Zone.');
+    await waitFor(() => expect(announced()).toBe('Code type renamed to Zone.'));
     expect(server.writes[0]).toMatchObject({ method: 'PATCH', body: { name: 'Zone', version: 1 } });
   });
 
@@ -412,7 +412,7 @@ describe('moving', () => {
         'Phase',
       ]),
     );
-    expect(announced()).toBe('Area moved to position 2 of 3.');
+    await waitFor(() => expect(announced()).toBe('Area moved to position 2 of 3.'));
     expect((record.mock.calls[0]?.[0] as { label: string }).label).toBe('Move code type “Area”');
   });
 

@@ -83,7 +83,7 @@ The list/manage dialogs additionally **put what exists above the form that adds 
 previously opened on a creation form above a table of the links already live, so the first thing a
 planner saw was a way to make another one.
 
-### 3. Direction B — a rail beside a pane — applies to the activity editor alone
+### 3. Direction B — a rail beside a pane — was the activity editor's alone; see 3a
 
 At a new `Dialog size="xl"` (`max-w-4xl`, 896 px) with `body="flush"`, the editor's sections move
 into a **vertical tablist** and the fields into a wide pane.
@@ -104,6 +104,23 @@ edit this" ended up rendering as the same dot.
 
 **Progress is never marked read-only**, because the pen deliberately does not gate it (ADR-0028
 Q-C). A padlock there would be a lie in exactly the situation the rail exists to clarify.
+
+### 3a. Amendment (2026-10-29) — a rail fits wherever the sections are a set the reader picks from
+
+§3 said the rail "applies to the activity editor alone". The **Codes…** dialog (P6 activity codes,
+M3-T1) is its second user, and the sentence was too narrow: the argument above is about permissions,
+and the rail is right for a second reason that has nothing to do with them. When a dialog's sections
+are **a set the reader picks from** (here, a plan's code types, up to a hundred of them), a rail gives
+one tab stop and Arrow/Home/End where a list of buttons gives a hundred tab stops, and it keeps the
+pick in view while the pane beside it scrolls. The editor was the first such set, not the only one.
+
+Nothing about the primitive changes. `Tabs` keeps its automatic activation, and the cost that carries
+here is named rather than waved away: arrowing through the rail selects a type, and the selected
+type's values are read, so a rail of a hundred types costs one request per type not read in the last
+30 seconds. That is bounded by the cache and by the 100-a-minute budget the dialog is built around
+(a unit test counts the requests). If it is ever shown to hurt, the remedy is manual activation on
+`Tabs`, which is a change to a shared primitive's keyboard contract and goes through ADR-0111 first.
+It is not built now.
 
 ### 4. The context strip withholds itself rather than showing em dashes
 
