@@ -3,7 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
-import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
+import { planCommands, recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
 import { CODES_PLAN, ensurePen, expectFocused, openPlanId, openSeededPlan } from './support';
 
@@ -480,6 +480,9 @@ test.describe('Code columns', () => {
     });
 
     await test.step('3. Export ▸ Print… carries Trade after the standard headings, and CD_4’s row reads its value', async () => {
+      // A plan seeded through the API has never been calculated, and Print… is shaded until it is.
+      await ensurePen(page);
+      await recalculate(page);
       await openPrintDocument(page);
       const head = page.locator('.gantt-print-root thead');
       const headings = (await head.locator('th').allTextContents()).slice(0, -1);
