@@ -63,7 +63,6 @@ import {
   type CloneRefusal,
 } from '@/features/activity-copy';
 import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
-import { useWriteActivityCodes } from '@/features/codes';
 import {
   useCloneCarriage,
   type SkippedAssignment,
@@ -72,6 +71,7 @@ import { useSession } from '@/features/auth';
 import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
+import { useWriteActivityCodes } from '@/features/codes';
 import {
   useCreateCrossPlanLink,
   useDeleteCrossPlanLink,
@@ -2792,7 +2792,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
                 version: clone.version,
                 codes: codes.map((c) => ({
                   codeTypeId: c.codeTypeId,
-                  codeValueId: c.codeValueId as string | null,
+                  codeValueId: c.codeValueId,
                 })),
               },
             ];
