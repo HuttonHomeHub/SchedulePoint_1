@@ -1390,7 +1390,7 @@ function GanttPanelBody({
                   className="relative shrink-0 px-2 pb-1"
                   style={{ width: codeWidth }}
                 >
-                  <span className="text-muted-foreground block w-full truncate text-left text-xs font-medium">
+                  <span className="text-muted-foreground block w-full truncate text-left text-xs">
                     {column.label}
                   </span>
                   {columnWidths === undefined ? null : (
