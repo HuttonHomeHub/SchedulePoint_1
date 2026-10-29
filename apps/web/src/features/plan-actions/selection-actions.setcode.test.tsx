@@ -79,7 +79,7 @@ describe('the selection bar — Set code…', () => {
     expect(item?.order).toBeGreaterThan(5.7);
     // `GanttRowMenu` keeps only items with `onActivate`, so a popover item stays off the row menu.
     expect(item?.onActivate).toBeUndefined();
-    expect(item?.lostReason).toBe('Not available here: the plan has no codes.');
+    expect(item?.lostReason).toBe('Not available here: the plan has no code types yet.');
   });
 
   it('opens the host’s panel with focus on its first field', () => {
@@ -97,6 +97,26 @@ describe('the selection bar — Set code…', () => {
     fireEvent.keyDown(screen.getByLabelText('Code'), { key: 'Escape' });
     expect(screen.queryByLabelText('Code')).toBeNull();
     expect(trigger()).toHaveFocus();
+  });
+
+  it('derives the panel gate from the definition gate, so writable and reason agree', () => {
+    render(
+      <SelectionActionsBar
+        context={ctx({
+          canEditSchedule: true,
+          definitionGate: {
+            writable: false,
+            reason: 'Your role cannot change this.',
+            readable: true,
+          },
+        })}
+      />,
+    );
+    fireEvent.click(trigger());
+    expect(panel).toHaveBeenLastCalledWith(
+      { writable: false, reason: 'Your role cannot change this.' },
+      expect.anything(),
+    );
   });
 
   it('is shaded with the pen’s sentence for a reader who cannot write', () => {

@@ -373,6 +373,9 @@ pnpm --filter @repo/api exec vitest run --config vitest.measure.config.mts codes
   `:3412-3460`); `features/tsld/toolbar/command-manifest.json` (`selectionBar` + `set-code`) and
   `promotion-manifest.test.tsx`; `features/codes/components/CodeAssignButton.tsx`; host wiring in
   `components/layout/workspace/`.
+- **As built:** the host's render function is `panel(gate, initialFocus)` (the registry item needs a
+  ref to hand the popover its first field), not the `panel(gate)` first sketched. The single bar's
+  `gate.writable` is derived from `penRefusal(ctx) == null`, so it and the reason cannot disagree.
 - **Risks:**
   - **`features/tsld` or `features/plan-actions` importing `features/codes`** (#548, ADR-0026 §8) → slot
     and render-function only; a structural test asserts neither imports `@/features/codes`.

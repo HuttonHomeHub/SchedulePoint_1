@@ -1924,6 +1924,8 @@ export function TsldPanel({
   // bar over the same objects, and two hosts assembling it independently is the defect this epic
   // already found twice one layer up (`barDateSource`, `lateOverlayActive`). The canvas half is the
   // whole of the difference and is passed as one prop.
+  // The memo depends on the render function, not the host object that carries `action` as well.
+  const setCodePanel = setCode?.panel;
   const selectionCtx = useMemo<SelectionBarContext | null>(
     () =>
       buildSelectionBarContext({
@@ -1952,11 +1954,11 @@ export function TsldPanel({
         floatPathsOpen,
         onToggleFloatPaths,
         moveToSwimlane: swimlaneAssignment,
-        ...(setCode ? { setCodePanel: setCode.panel } : {}),
+        ...(setCodePanel ? { setCodePanel } : {}),
       }),
     [
       swimlaneAssignment,
-      setCode,
+      setCodePanel,
       selectionCanvas,
       selectedId,
       selection.ids.length,

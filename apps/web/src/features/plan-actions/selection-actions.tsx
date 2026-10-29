@@ -297,7 +297,7 @@ const PEN_ACTION = 'change this activity';
 function penRefusal(ctx: SelectionActionContext): string | undefined {
   return ctx.definitionGate?.reason ?? ctx.scheduleRefusal(PEN_ACTION) ?? undefined;
 }
-const SET_CODE_LABEL = 'Set code…';
+export const SET_CODE_LABEL = 'Set code…';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 // The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt
 // the refusal there meets the identical wording here (`docs/specs/object-bar-defects/` M2).
@@ -600,6 +600,15 @@ function MoveToSwimlaneItem({
  * the panel takes focus on its first field, which needs a ref, and it is portalled out of the toolbar
  * but not out of its React tree, so the arrows must be kept from the toolbar's roving handler.
  */
+/** `writable` is derived from the reason so the two cannot disagree: writable ⇔ nothing refuses. */
+function setCodeGate(ctx: SelectionActionContext): {
+  writable: boolean;
+  reason: string | null;
+} {
+  const reason = penRefusal(ctx) ?? null;
+  return { writable: reason == null, reason };
+}
+
 function SetCodeItem({
   ctx,
   api,
@@ -619,12 +628,7 @@ function SetCodeItem({
       {...(api.disabled ? { disabled: true } : {})}
       {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
     >
-      <ArrowKeysStayInPanel>
-        {ctx.setCode.panel(
-          { writable: ctx.canEditSchedule, reason: penRefusal(ctx) ?? null },
-          selectRef,
-        )}
-      </ArrowKeysStayInPanel>
+      <ArrowKeysStayInPanel>{ctx.setCode.panel(setCodeGate(ctx), selectRef)}</ArrowKeysStayInPanel>
     </ToolbarPopover>
   );
 }
@@ -1054,7 +1058,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       penGated: true,
       disabledReason: (ctx) => penRefusal(ctx),
       isVisible: (ctx: SelectionActionContext) => ctx.setCode != null,
-      lostReason: 'Not available here: the plan has no codes.',
+      lostReason: 'Not available here: the plan has no code types yet.',
       render: (ctx, api) => <SetCodeItem ctx={ctx} api={api} />,
     },
     {

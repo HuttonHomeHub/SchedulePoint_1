@@ -795,9 +795,10 @@ test.describe('Setting codes from the diagram', () => {
       const value = panel.getByRole('combobox', { name: 'Value' });
       await value.focus();
       await page.keyboard.press('ArrowDown');
-      await expect(page.getByRole('option', { name: /Roof/ })).toBeVisible();
+      const values = page.getByRole('listbox', { name: /values$/ });
+      await expect(values.getByRole('option', { name: /Roof/ })).toBeVisible();
       await page.keyboard.press('Escape');
-      await expect(page.getByRole('option', { name: /Roof/ })).toBeHidden();
+      await expect(values).toBeHidden();
       await expect(panel).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
