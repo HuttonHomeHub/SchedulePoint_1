@@ -125,13 +125,46 @@ export function gutterLabels(page: Page): Locator {
   return page.getByRole('toolbar', { name: 'Swimlanes' });
 }
 
+/** Which catalogue family, plan and picture {@link openSeededPlan} opens. */
+export interface SeededPlan {
+  /** The `--family` value: `swimlanes` seeds both swimlane plans, `codes` the activity-codes plan. */
+  family: string;
+  /** The plan's link on the project page, found by the words in its name. */
+  planLink: RegExp;
+  /** How many activities the diagram draws once the plan has loaded. */
+  activityCount: number;
+  /** Wait for the swimlane gutter: only a plan whose source is hand-made or WBS draws one. */
+  gutter: boolean;
+}
+
+/** The swimlane suite's own plan, the default: `plan:capability-swimlanes`, made by hand. */
+export const SWIMLANES_PLAN: SeededPlan = {
+  family: 'swimlanes',
+  planLink: /three long-named bands made by hand/,
+  activityCount: ACTIVITIES.length,
+  gutter: true,
+};
+
+/** `plan:capability-codes` (p6-activity-codes M3): three code types and eight activities, no swimlanes. */
+export const CODES_PLAN: SeededPlan = {
+  family: 'codes',
+  planLink: /three types, eight activities/,
+  activityCount: 8,
+  gutter: false,
+};
+
 /**
- * Sign up, seed `plan:capability-swimlanes` into a fresh project through the public API, open it and
- * wait for the diagram. The pen is NOT taken: a case that writes calls {@link ensurePen}.
+ * Sign up, seed a catalogue plan into a fresh project through the public API, open it and wait for
+ * the diagram. Defaults to `plan:capability-swimlanes`. The pen is NOT taken: a case that writes calls
+ * {@link ensurePen}.
  *
  * Returns the organisation slug, which the API probes below need.
  */
-export async function openSeededPlan(page: Page, stamp: number): Promise<string> {
+export async function openSeededPlan(
+  page: Page,
+  stamp: number,
+  plan: SeededPlan = SWIMLANES_PLAN,
+): Promise<string> {
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   const projectId = /projects\/([0-9a-f-]{36})/.exec(page.url())?.[1];
@@ -157,19 +190,21 @@ export async function openSeededPlan(page: Page, stamp: number): Promise<string>
       '--tier',
       'capability',
       '--family',
-      'swimlanes',
+      plan.family,
     ],
     { stdio: 'inherit', cwd: '../..' },
   );
   await page.reload();
-  await page.getByRole('link', { name: /three long-named bands made by hand/ }).click();
+  await page.getByRole('link', { name: plan.planLink }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
-  await expect(diagramList(page).getByRole('option')).toHaveCount(ACTIVITIES.length, {
+  await expect(diagramList(page).getByRole('option')).toHaveCount(plan.activityCount, {
     timeout: 30_000,
   });
   // The gutter is drawn once the swimlane list has arrived; the plan's source is MANUAL, so the lens
   // is on by default.
-  await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 15_000 });
+  if (plan.gutter) {
+    await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 15_000 });
+  }
   return orgSlug;
 }
 

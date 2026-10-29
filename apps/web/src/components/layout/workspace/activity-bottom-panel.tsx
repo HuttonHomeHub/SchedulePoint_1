@@ -228,6 +228,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   toolDisarmed = false,
   collapseRef: collapseRefProp,
   swimlanes = null,
+  onOpenCodes,
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
@@ -254,6 +255,11 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   collapseRef?: RefObject<HTMLButtonElement | null>;
   /** The plan's swimlanes for the table's column and bulk bar (swimlanes M4-T1); stable, so the memo hits. */
   swimlanes?: ActivitiesTableSwimlanes | null;
+  /**
+   * Open the Codes… dialog (P6 activity codes, M3-T1). Shown to every reader: a Viewer opens it to
+   * read, and its write controls say why they are shut. Stable, so the memo above holds.
+   */
+  onOpenCodes?: () => void;
 }): React.ReactElement {
   const ownCollapseRef = useRef<HTMLButtonElement>(null);
   const collapseRef = collapseRefProp ?? ownCollapseRef;
@@ -308,6 +314,11 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
             What stays here is what belongs to the PANEL rather than to the plan: its heading, its
             baseline variance, its create button and its collapse control. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {onOpenCodes ? (
+            <Button variant="outline" onClick={onOpenCodes}>
+              Codes…
+            </Button>
+          ) : null}
           {model.canEditSchedule ? (
             <CreateActivityButton
               orgSlug={model.orgSlug}

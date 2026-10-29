@@ -1606,3 +1606,36 @@ describe('the Set up / Manage swimlanes command in View ▾ (swimlanes M2-T9)', 
     expect(screen.queryByRole('heading', { name: 'Set up swimlanes' })).not.toBeInTheDocument();
   });
 });
+
+/** Codes… in the Activities panel header (P6 activity codes, M3-T1): the host's wiring. */
+describe('Codes… in the host (codes M3-T1)', () => {
+  it('opens the Codes dialog from the Activities panel header', async () => {
+    renderScreen();
+    // The panel is collapsed by default (canvas-maximal), and Codes… lives in its header.
+    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Codes…' }));
+    expect(await screen.findByRole('dialog', { name: 'Codes' })).toBeInTheDocument();
+  });
+
+  it('is offered to a Viewer too, who opens it to read, and says why its writes are shut', async () => {
+    h.role = 'VIEWER';
+    renderScreen();
+    // The panel is collapsed by default (canvas-maximal), and Codes… lives in its header.
+    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Codes…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Codes' });
+    expect(await within(dialog).findByText('Your role cannot change codes.')).toBeInTheDocument();
+  });
+
+  it('puts focus back on the button that opened it when it closes', async () => {
+    renderScreen();
+    // The panel is collapsed by default (canvas-maximal), and Codes… lives in its header.
+    fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
+    const opener = screen.getByRole('button', { name: 'Codes…' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog', { name: 'Codes' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+});

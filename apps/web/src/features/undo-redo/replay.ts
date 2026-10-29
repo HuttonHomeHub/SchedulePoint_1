@@ -1,6 +1,8 @@
 import type {
   ActivityStep,
   ActivitySummary,
+  CodeTypeSummary,
+  CodeValueSummary,
   CrossPlanDependencySummary,
   DependencySummary,
   PlanSummary,
@@ -85,6 +87,10 @@ export interface ReplayContext {
   readCrossPlanLink: (linkId: string) => Promise<CrossPlanDependencySummary | undefined>;
   /** The plan's active swimlanes in display order, read fresh. A deleted swimlane is simply absent. */
   readSwimlanes: () => Promise<readonly SwimlaneSummary[]>;
+  /** The plan's live code types in display order, read fresh, **without their values**. A deleted type is absent. */
+  readCodeTypes: () => Promise<readonly CodeTypeSummary[]>;
+  /** One code type's live values in display order, read fresh; `undefined` when the type itself is gone. */
+  readCodeValues: (codeTypeId: string) => Promise<readonly CodeValueSummary[] | undefined>;
   /** The plan record, read fresh; `undefined` when the plan itself is gone. */
   readPlan: () => Promise<PlanSummary | undefined>;
 }

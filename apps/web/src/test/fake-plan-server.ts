@@ -1,6 +1,8 @@
 import type {
   ActivityStep,
   ActivitySummary,
+  CodeTypeSummary,
+  CodeValueSummary,
   CrossPlanDependencySummary,
   DependencySummary,
   EditedField,
@@ -115,6 +117,10 @@ export function fakePlanServer(
     /** Steps by the activity they hang off. */
     steps?: Record<string, ActivityStep[]>;
     crossPlanLinks?: CrossPlanDependencySummary[];
+    /** The plan's code types, live or deleted (`deletedAt`), without their values. */
+    codeTypes?: CodeTypeSummary[];
+    /** The plan's code values, live or deleted, of any seeded type. */
+    codeValues?: CodeValueSummary[];
   } = {},
   options: { normalise?: (row: ActivitySummary) => void } = {},
 ) {
@@ -125,6 +131,12 @@ export function fakePlanServer(
     Object.entries(seed.steps ?? {}).map(([id, list]) => [id, list.map((step) => ({ ...step }))]),
   );
   const crossPlanLinks = new Map((seed.crossPlanLinks ?? []).map((l) => [l.id, { ...l }]));
+  // Types and values live in one map each, deleted rows included: a read filters them, a restore
+  // clears the flag, which is what makes a restore id-stable here as on the server.
+  const codeTypes = new Map((seed.codeTypes ?? []).map((t) => [t.id, { ...t }]));
+  const codeValues = new Map((seed.codeValues ?? []).map((v) => [v.id, { ...v }]));
+  // The values a type's delete took, so its restore brings back exactly those.
+  const takenWithType = new Map<string, string[]>();
   let nextAssignment = 100;
   let nextStep = 100;
   let nextCrossLink = 100;
@@ -184,6 +196,49 @@ export function fakePlanServer(
     return deleteBatchId;
   };
 
+  const byPosition = <T extends { position: number; id: string }>(rows: Iterable<T>): T[] =>
+    [...rows].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+  const liveTypes = (): CodeTypeSummary[] =>
+    byPosition([...codeTypes.values()].filter((t) => t.deletedAt === null));
+  const liveValues = (codeTypeId: string): CodeValueSummary[] =>
+    byPosition(
+      [...codeValues.values()].filter((v) => v.codeTypeId === codeTypeId && v.deletedAt === null),
+    );
+  const typeOf = (id: string): CodeTypeSummary => {
+    const row = codeTypes.get(id);
+    if (row === undefined || row.deletedAt !== null) {
+      throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+    }
+    return row;
+  };
+  const valueOf = (id: string): CodeValueSummary => {
+    const row = codeValues.get(id);
+    if (row === undefined || row.deletedAt !== null) {
+      throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+    }
+    return row;
+  };
+  /** Both reorders: every live row exactly once, each at its CURRENT version, else the whole write is refused. */
+  const reorder = <T extends { id: string; position: number; version: number }>(
+    live: T[],
+    order: { id: string; version: number }[],
+  ): T[] => {
+    if (order.length !== live.length || order.some((o) => !live.some((row) => row.id === o.id))) {
+      throw conflict('STALE_VERSION');
+    }
+    for (const o of order)
+      lock(
+        live.find((row) => row.id === o.id)!,
+        o.version,
+      );
+    return order.map((o, position) => {
+      const row = live.find((r) => r.id === o.id)!;
+      row.position = position;
+      row.version += 1;
+      return { ...row };
+    });
+  };
+
   const ctx: ReplayContext = {
     readLinksOf: (ids) => {
       const wanted = new Set(ids);
@@ -225,6 +280,15 @@ export function fakePlanServer(
       ),
     // This fake holds no swimlanes: the swimlane commands are tested against their own small store.
     readSwimlanes: () => Promise.resolve([]),
+    readCodeTypes: () => Promise.resolve(liveTypes().map((type) => ({ ...type }))),
+    readCodeValues: (codeTypeId) => {
+      const type = codeTypes.get(codeTypeId);
+      return Promise.resolve(
+        type === undefined || type.deletedAt !== null
+          ? undefined
+          : liveValues(codeTypeId).map((value) => ({ ...value })),
+      );
+    },
     readPlan: () => Promise.resolve(undefined),
     readCrossPlanLink: (id) => {
       const link = crossPlanLinks.get(id);
@@ -257,6 +321,83 @@ export function fakePlanServer(
   };
 
   const mutations = {
+    renameCodeType: vi.fn((input: { codeTypeId: string; name: string; version: number }) => {
+      const row = typeOf(input.codeTypeId);
+      lock(row, input.version);
+      row.name = input.name;
+      row.version += 1;
+      return Promise.resolve({ ...row });
+    }),
+    reorderCodeTypes: vi.fn((input: { order: { id: string; version: number }[] }) =>
+      Promise.resolve(reorder(liveTypes(), input.order)),
+    ),
+    deleteCodeType: vi.fn((input: { codeTypeId: string; version?: number }) => {
+      const row = typeOf(input.codeTypeId);
+      staleGuard(row, input.version);
+      const taken = liveValues(row.id);
+      const at = new Date().toISOString();
+      for (const value of taken) value.deletedAt = at;
+      takenWithType.set(
+        row.id,
+        taken.map((value) => value.id),
+      );
+      row.deletedAt = at;
+      row.version += 1;
+      return Promise.resolve();
+    }),
+    restoreCodeType: vi.fn((input: { codeTypeId: string }) => {
+      const row = codeTypes.get(input.codeTypeId);
+      if (row?.deletedAt == null) {
+        throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+      }
+      row.deletedAt = null;
+      row.version += 1;
+      for (const id of takenWithType.get(row.id) ?? []) {
+        const value = codeValues.get(id);
+        if (value) value.deletedAt = null;
+      }
+      return Promise.resolve({ ...row });
+    }),
+    editCodeValue: vi.fn(
+      (input: {
+        codeValueId: string;
+        codeTypeId: string;
+        shortCode?: string;
+        description?: string | null;
+        version: number;
+      }) => {
+        const row = valueOf(input.codeValueId);
+        lock(row, input.version);
+        if (input.shortCode !== undefined) row.shortCode = input.shortCode;
+        if (input.description !== undefined) row.description = input.description;
+        row.version += 1;
+        return Promise.resolve({ ...row });
+      },
+    ),
+    reorderCodeValues: vi.fn(
+      (input: { codeTypeId: string; order: { id: string; version: number }[] }) =>
+        Promise.resolve(reorder(liveValues(input.codeTypeId), input.order)),
+    ),
+    deleteCodeValue: vi.fn(
+      (input: { codeValueId: string; codeTypeId: string; version?: number }) => {
+        const row = valueOf(input.codeValueId);
+        staleGuard(row, input.version);
+        row.deletedAt = new Date().toISOString();
+        row.version += 1;
+        return Promise.resolve();
+      },
+    ),
+    restoreCodeValue: vi.fn((input: { codeValueId: string; codeTypeId: string }) => {
+      const row = codeValues.get(input.codeValueId);
+      if (row?.deletedAt == null) {
+        throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+      }
+      // The server refuses to restore a value onto a deleted type, and says which parent it is.
+      if (codeTypes.get(row.codeTypeId)?.deletedAt != null) throw conflict('PARENT_DELETED');
+      row.deletedAt = null;
+      row.version += 1;
+      return Promise.resolve({ ...row });
+    }),
     updateParents: vi.fn(
       (input: { parents: { id: string; parentId: string | null; version: number }[] }) => {
         // All-or-nothing, like the endpoint: one stale row refuses the lot and writes none.
@@ -581,6 +722,24 @@ export function fakePlanServer(
     assignments,
     steps,
     crossPlanLinks,
+    codeTypes,
+    codeValues,
+    /** Somebody else's write to a code type: changes it and bumps its version. */
+    editCodeType: (id: string, fields: Partial<CodeTypeSummary>): void => {
+      const row = typeOf(id);
+      Object.assign(row, fields);
+      row.version += 1;
+    },
+    /** Somebody else's write to a code value. */
+    editCodeValueRow: (id: string, fields: Partial<CodeValueSummary>): void => {
+      const row = valueOf(id);
+      Object.assign(row, fields);
+      row.version += 1;
+    },
+    /** The plan's live code types and a type's live values, as a read would answer: copies, so a captured "before" cannot move under a test. */
+    liveCodeTypes: (): CodeTypeSummary[] => liveTypes().map((type) => ({ ...type })),
+    liveCodeValues: (codeTypeId: string): CodeValueSummary[] =>
+      liveValues(codeTypeId).map((value) => ({ ...value })),
     /** Somebody else's write to an assignment: changes it and bumps its version. */
     editAssignment: (id: string, fields: Partial<ResourceAssignmentSummary>): void => {
       const row = assignmentOf(id);

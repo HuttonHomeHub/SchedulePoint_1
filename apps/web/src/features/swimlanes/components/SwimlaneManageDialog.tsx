@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/form';
 import { FormSection } from '@/components/ui/form-layout';
+import { RowActionButton } from '@/components/ui/row-action-button';
 import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/features/wbs';
 
 export interface SwimlaneManageDialogProps {
@@ -241,7 +242,7 @@ function ManageBody({
                 <span className="text-muted-foreground text-sm whitespace-nowrap">
                   {count === 1 ? '1 activity' : `${String(count)} activities`}
                 </span>
-                <RowButton
+                <RowActionButton
                   label={`Rename ${s.name}`}
                   action={`${s.id}:rename`}
                   icon={<Pencil aria-hidden="true" className="size-4" />}
@@ -251,7 +252,7 @@ function ManageBody({
                     if (!guard()) onRename(s.id);
                   }}
                 />
-                <RowButton
+                <RowActionButton
                   label={`Move ${s.name} up`}
                   action={`${s.id}:up`}
                   icon={<ArrowUp aria-hidden="true" className="size-4" />}
@@ -262,7 +263,7 @@ function ManageBody({
                     if (!guard() && index > 0) void move(s, -1);
                   }}
                 />
-                <RowButton
+                <RowActionButton
                   label={`Move ${s.name} down`}
                   action={`${s.id}:down`}
                   icon={<ArrowDown aria-hidden="true" className="size-4" />}
@@ -275,7 +276,7 @@ function ManageBody({
                     if (!guard() && index < swimlanes.length - 1) void move(s, 1);
                   }}
                 />
-                <RowButton
+                <RowActionButton
                   label={`Delete ${s.name}`}
                   action={`${s.id}:delete`}
                   icon={<Trash2 aria-hidden="true" className="size-4" />}
@@ -335,53 +336,5 @@ function ManageBody({
         </Button>
       </div>
     </div>
-  );
-}
-
-/** One row action: an icon button named for its row, shaded rather than disabled (ADR-0204). */
-function RowButton({
-  label,
-  action,
-  icon,
-  shut,
-  describedBy,
-  endReason,
-  onPress,
-}: {
-  label: string;
-  action: string;
-  icon: React.ReactNode;
-  shut: boolean;
-  /** The id of the dialog's one pen sentence, when the pen is why every action is shut. */
-  describedBy: string | undefined;
-  /** Why a move has nowhere to go; this action's own sentence, read as a description. */
-  endReason?: string | undefined;
-  onPress: () => void;
-}): React.ReactElement {
-  const endId = useId();
-  return (
-    <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-row"
-        aria-label={label}
-        aria-disabled={shut || undefined}
-        aria-describedby={
-          [describedBy, endReason ? endId : undefined].filter(Boolean).join(' ') || undefined
-        }
-        data-row-action={action}
-        onClick={() => {
-          if (!shut) onPress();
-        }}
-      >
-        {icon}
-      </Button>
-      {endReason ? (
-        <span id={endId} className="sr-only">
-          {endReason}
-        </span>
-      ) : null}
-    </>
   );
 }
