@@ -1176,7 +1176,6 @@ export function ActivitiesTable({
       />
     );
 
-
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
