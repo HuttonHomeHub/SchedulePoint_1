@@ -76,6 +76,8 @@ export function ActivityCodesSection({
   const announce = useAnnounce();
   const queryClient = useQueryClient();
   const baseId = useId();
+  const titleId = `${baseId}-title`;
+  const errorId = `${baseId}-error`;
   const types = useCodeTypes(orgSlug, planId);
   const savedIds = (state.activity.codes ?? []).map((c) => c.codeValueId);
   const names = useCodeValueNames(orgSlug, planId, savedIds);
@@ -193,7 +195,7 @@ export function ActivityCodesSection({
                     : names.isPending
                       ? 'Loading…'
                       : found === undefined
-                        ? 'Unavailable'
+                        ? 'Deleted value'
                         : codeValueName(found)}
                 </dd>
               </div>
@@ -205,16 +207,19 @@ export function ActivityCodesSection({
     return (
       <form
         noValidate
-        aria-label="Codes"
+        aria-labelledby={titleId}
         onSubmit={(event) => {
           event.preventDefault();
+          // Enter in a picker with its list open and nothing highlighted falls through to implicit
+          // submission (the `Combobox` leaves the key alone then). Only the Save button saves.
+          if (!event.nativeEvent.submitter) return;
           if (!gate.writable || !state.dirty || state.saving || state.otherSaveInFlight) return;
           save();
         }}
         className="flex flex-col gap-4"
       >
         {state.error ? (
-          <p role="alert" className="text-destructive-text text-sm">
+          <p id={errorId} role="alert" className="text-destructive-text text-sm">
             {state.error}
           </p>
         ) : null}
@@ -240,6 +245,7 @@ export function ActivityCodesSection({
             pending={state.saving || state.otherSaveInFlight}
             saved={state.saved}
             label="Save codes"
+            {...(state.error ? { alsoDescribedBy: errorId } : {})}
             {...(state.otherSaveInFlight && !state.saving
               ? { dirtyMessage: 'Another save is finishing.' }
               : {})}
@@ -249,5 +255,9 @@ export function ActivityCodesSection({
     );
   })();
 
-  return <FormSection title="Codes">{body}</FormSection>;
+  return (
+    <FormSection title="Codes" titleId={titleId}>
+      {body}
+    </FormSection>
+  );
 }

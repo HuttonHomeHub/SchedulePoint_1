@@ -112,17 +112,22 @@ export function codeAssignmentStatus(input: {
   const { typeName, valueName, selected, plan } = input;
   if (plan.willChange === 0) {
     return valueName === null
-      ? `${selected === 1 ? 'It has' : 'They all have'} no ${typeName} already.`
-      : `${selected === 1 ? 'It already has' : 'They all already have'} that ${typeName}.`;
+      ? selected === 1
+        ? `It has no ${typeName} set.`
+        : `None of them has ${/^[aeiou]/i.test(typeName) ? 'an' : 'a'} ${typeName} set.`
+      : `${selected === 1 ? 'It’s' : 'They’re'} already set to that ${typeName}.`;
   }
   const verb =
     valueName === null
       ? `Clears ${typeName} on ${activitiesText(plan.willChange)}.`
       : `Sets ${typeName} to ${valueName} on ${activitiesText(plan.willChange)}.`;
   if (plan.alreadyHave === 0) return verb;
-  return `${verb} ${String(plan.alreadyHave)} already ${plan.alreadyHave === 1 ? 'has' : 'have'} ${
-    valueName === null ? 'none' : 'it'
-  }.`;
+  const n = String(plan.alreadyHave);
+  const rest =
+    valueName === null
+      ? `${n} already ${plan.alreadyHave === 1 ? 'has' : 'have'} no value.`
+      : `${n} ${plan.alreadyHave === 1 ? 'is' : 'are'} already set to it.`;
+  return `${verb} ${rest}`;
 }
 
 /** What is announced once a set lands. */

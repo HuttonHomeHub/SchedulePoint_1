@@ -151,4 +151,25 @@ describe('SwimlaneBulkAssignBar', () => {
     const { container } = renderBar();
     expect((await axe(container)).violations).toEqual([]);
   });
+
+  it('renders further rows inside its own container, and refuses them as a companion', () => {
+    renderBar({ children: <p>Codes row</p> });
+    expect(screen.getByText('Codes row')).toBeInTheDocument();
+    // A companion has no rows of its own, so passing some is a compile error, not a silent drop.
+    const bad = (
+      // @ts-expect-error `children` is not accepted with `companion`
+      <SwimlaneBulkAssignBar
+        assignment={assignment()}
+        ids={['a']}
+        names={['Pour']}
+        gate={WRITABLE}
+        onDone={vi.fn()}
+        onClear={vi.fn()}
+        companion
+      >
+        <p>dropped</p>
+      </SwimlaneBulkAssignBar>
+    );
+    expect(bad).toBeTruthy();
+  });
 });

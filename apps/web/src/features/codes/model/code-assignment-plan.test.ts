@@ -110,21 +110,21 @@ describe('the words', () => {
       new Map([['area', 'roof']]),
     );
     expect(codeAssignmentStatus({ typeName: 'Area', valueName: 'Roof', selected: 3, plan })).toBe(
-      'Sets Area to Roof on 2 activities. 1 already has it.',
+      'Sets Area to Roof on 2 activities. 1 is already set to it.',
     );
   });
 
   it('says so when nothing would change', () => {
     const plan = planCodeAssignment([act('a', area('roof'))], new Map([['area', 'roof']]));
     expect(codeAssignmentStatus({ typeName: 'Area', valueName: 'Roof', selected: 1, plan })).toBe(
-      'It already has that Area.',
+      'It’s already set to that Area.',
     );
   });
 
   it('words a clear as a clear', () => {
     const plan = planCodeAssignment([act('a', area('roof')), act('b')], new Map([['area', null]]));
     expect(codeAssignmentStatus({ typeName: 'Area', valueName: null, selected: 2, plan })).toBe(
-      'Clears Area on 1 activity. 1 already has none.',
+      'Clears Area on 1 activity. 1 already has no value.',
     );
     expect(codeAssignedAnnouncement({ typeName: 'Area', valueName: null, changed: 1 })).toBe(
       'Cleared Area on 1 activity.',

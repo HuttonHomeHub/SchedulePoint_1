@@ -443,7 +443,10 @@ export function activityCodesCommand(params: {
       steps.flatMap((step) => step.changes.flatMap((c) => (c[target] === null ? [] : [c[target]]))),
     );
     const only = targets.size === 1 ? [...targets][0] : undefined;
-    const valueName = (only === undefined ? undefined : valueNames.get(only)) ?? 'That value';
+    // One named value is quoted like the sibling clauses' subjects; several (or an unnamed one) are
+    // "A value", because naming one of them would be a guess.
+    const known = only === undefined ? undefined : valueNames.get(only);
+    const valueName = known === undefined ? 'A value' : `“${known}”`;
     try {
       return await writeOrSetAside(subject, () => write({ activities }));
     } catch (err) {

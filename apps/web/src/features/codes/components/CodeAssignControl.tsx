@@ -25,7 +25,7 @@ import type { Command } from '@/features/undo-redo';
 const UNCHOSEN = '';
 
 export const NO_CODES_FOR_ASSIGN = 'This plan has no codes yet. Add them with Codes…';
-export const TOO_MANY_TO_SET = `Set a code on up to ${CODE_ASSIGNMENT_LIMIT.toLocaleString('en')} activities at a time.`;
+export const TOO_MANY_TO_SET = `You can set a code on up to ${CODE_ASSIGNMENT_LIMIT.toLocaleString(undefined)} activities at a time. Untick some and try again.`;
 
 /**
  * **Set <type>…**: one value (or none) for many activities, as one write and one undo step. A code
@@ -138,7 +138,7 @@ export function CodeAssignControl({
       : types.isError
         ? 'Codes could not be loaded.'
         : type === undefined
-          ? `Choose a code to set on ${activities.length === 1 ? 'this activity' : 'these activities'}.`
+          ? `Choose a code type to set on ${activities.length === 1 ? 'this activity' : 'these activities'}.`
           : choice === undefined
             ? `Choose a value for ${type.name}.`
             : plan?.tooMany
@@ -156,7 +156,7 @@ export function CodeAssignControl({
     <div className="flex flex-col gap-3">
       <SelectField
         ref={selectRef}
-        label="Code"
+        label="Code type"
         id={selectId}
         value={typeId}
         onChange={(event) => {
@@ -169,7 +169,7 @@ export function CodeAssignControl({
         gate={{ writable: gate.writable && hasTypes, reason: null }}
         aria-describedby={statusId}
       >
-        <option value={UNCHOSEN}>Choose a code</option>
+        <option value={UNCHOSEN}>Choose a code type</option>
         {(types.data ?? []).map((t) => (
           <option key={t.id} value={t.id}>
             {t.name}
@@ -190,7 +190,7 @@ export function CodeAssignControl({
         eager
         gate={{ writable: gate.writable, reason: null }}
         describedBy={statusId}
-        placeholder={type === undefined ? 'Choose a code first' : 'Choose a value'}
+        placeholder={type === undefined ? 'Choose a code type first' : 'Choose a value'}
       />
       <Button
         type="button"

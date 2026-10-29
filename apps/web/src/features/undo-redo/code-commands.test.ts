@@ -538,17 +538,63 @@ describe('activityCodesCommand', () => {
       expect(result).toEqual({
         kind: 'not-applicable',
         reason: 'value-deleted',
-        subjectName: 'Level 1',
+        subjectName: '“Level 1”',
       });
       expect(
         historyResultMessage({
           direction: 'undo',
           outcome: 'set-aside',
           label: command.label,
-          setAside: { reason: 'value-deleted', subjectName: 'Level 1', nextLabel: null },
+          setAside: { reason: 'value-deleted', subjectName: '“Level 1”', nextLabel: null },
         }),
       ).toBe(
-        'Couldn’t undo set Area on 2 activities — Level 1 was deleted. Restore it in Codes… to set it again. That step was skipped.',
+        'Couldn’t undo set Area on 2 activities — “Level 1” was deleted. Restore it in Codes… to set it again. That step was skipped.',
+      );
+    });
+
+    it('says "A value" when the undo would have set several different values', async () => {
+      const write = vi.fn(() =>
+        Promise.reject(
+          new ApiFetchError(422, {
+            code: 'VALIDATION_ERROR',
+            message: 'That value was deleted.',
+            details: { reason: 'CODE_VALUE_DELETED' },
+          }),
+        ),
+      );
+      const server = fakePlanServer({
+        activities: [
+          anActivity({ id: 'a1', name: 'Piling', codes: held(['area', 'l2']) }),
+          anActivity({ id: 'a2', name: 'Slab', codes: held(['area', 'l2']) }),
+        ],
+      });
+      const command = activityCodesCommand({
+        steps: [
+          {
+            id: 'a1',
+            name: 'Piling',
+            changes: [{ codeTypeId: 'area', before: 'l1', after: 'l2' }],
+          },
+          { id: 'a2', name: 'Slab', changes: [{ codeTypeId: 'area', before: 'l3', after: 'l2' }] },
+        ],
+        label: 'Set Area on 2 activities',
+        valueNames: new Map([
+          ['l1', 'Level 1'],
+          ['l3', 'Level 3'],
+        ]),
+        write,
+      });
+      const result = await command.undo(server.ctx);
+      expect(result).toMatchObject({ reason: 'value-deleted', subjectName: 'A value' });
+      expect(
+        historyResultMessage({
+          direction: 'undo',
+          outcome: 'set-aside',
+          label: command.label,
+          setAside: { reason: 'value-deleted', subjectName: 'A value', nextLabel: null },
+        }),
+      ).toBe(
+        'Couldn’t undo set Area on 2 activities — A value was deleted. Restore it in Codes… to set it again. That step was skipped.',
       );
     });
 

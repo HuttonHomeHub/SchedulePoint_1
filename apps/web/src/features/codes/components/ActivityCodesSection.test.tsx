@@ -189,6 +189,20 @@ describe('the Codes section in the editor', () => {
     expect(record.mock.calls[0]?.[0].label).toBe('Set Trade on “Pour slab”');
   });
 
+  it('names the form by the section heading, and does not save on an implicit submit', async () => {
+    render(<Host row={baseActivity()} gating={gatingFor('planner')} />);
+    await waitFor(() => expect(picker('Area')).toHaveValue('GF — Ground floor'), { timeout: 5000 });
+    await pick('Trade', 'Mechanical');
+    const form = screen.getByRole('form', { name: 'Codes' });
+    expect(form).toHaveAttribute('aria-labelledby');
+    // Enter in a picker with its list open and nothing highlighted submits with no submitter.
+    fireEvent.submit(form);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.writes).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Save codes' }));
+    await waitFor(() => expect(server.writes).toHaveLength(1));
+  });
+
   it('says Saved. and is clean again once the save lands', async () => {
     render(<Host row={baseActivity()} gating={gatingFor('planner')} />);
     await waitFor(() => expect(picker('Area')).toHaveValue('GF — Ground floor'), { timeout: 5000 });

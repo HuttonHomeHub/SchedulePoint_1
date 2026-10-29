@@ -49,9 +49,12 @@ describe('codeErrorText', () => {
     expect(codeErrorText('move Area', refusal(404))).toContain('changed by someone else');
   });
 
-  it('keeps the server’s own sentence for anything it does not recognise', () => {
+  it('never forwards a server sentence it does not recognise', () => {
     expect(codeErrorText('add L1', refusal(422, undefined, 'Short code is too long.'))).toBe(
-      'Could not add L1: Short code is too long.',
+      'Could not add L1: something went wrong. Try again.',
+    );
+    expect(codeErrorText('save codes', refusal(422, 'DUPLICATE_CODES_TYPE_ID'))).toContain(
+      'named twice',
     );
   });
 

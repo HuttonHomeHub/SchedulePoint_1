@@ -81,7 +81,7 @@ function mount(
 /** Choose a type, then a value by its option text, the way a keyboard user does. */
 async function choose(typeName: string, optionName: string): Promise<void> {
   await screen.findByRole('option', { name: typeName, hidden: true });
-  fireEvent.change(screen.getByLabelText('Code'), {
+  fireEvent.change(screen.getByLabelText('Code type'), {
     target: { value: typeName === 'Area' ? 'area' : 'trade' },
   });
   const picker = screen.getByRole('combobox', { name: 'Value' });
@@ -116,7 +116,7 @@ describe('CodeBulkAssignBar', () => {
     mount();
     await choose('Area', 'Roof');
     expect(
-      await screen.findByText('Sets Area to Roof on 3 activities. 1 already has it.'),
+      await screen.findByText('Sets Area to Roof on 3 activities. 1 is already set to it.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set Area' })).toHaveAttribute(
       'aria-disabled',
@@ -171,7 +171,7 @@ describe('CodeBulkAssignBar', () => {
     mount();
     await choose('Area', 'None');
     expect(
-      await screen.findByText('Clears Area on 3 activities. 1 already has none.'),
+      await screen.findByText('Clears Area on 3 activities. 1 already has no value.'),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Set Area' }));
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
@@ -183,7 +183,7 @@ describe('CodeBulkAssignBar', () => {
   it('is shaded, not sending, when every ticked row already has the value', async () => {
     mount({ activities: [SELECTED[2]!] });
     await choose('Area', 'Roof');
-    expect(await screen.findByText('It already has that Area.')).toBeInTheDocument();
+    expect(await screen.findByText('It’s already set to that Area.')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: 'Set Area' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(button);
@@ -208,7 +208,9 @@ describe('CodeBulkAssignBar', () => {
     mount({ activities: many });
     await choose('Area', 'Roof');
     expect(
-      await screen.findByText('Set a code on up to 2,000 activities at a time.'),
+      await screen.findByText(
+        'You can set a code on up to 2,000 activities at a time. Untick some and try again.',
+      ),
     ).toBeInTheDocument();
     const button = screen.getByRole('button', { name: 'Set Area' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
@@ -282,7 +284,7 @@ describe('CodeBulkAssignBar', () => {
     mount();
     await screen.findByRole('option', { name: 'Area', hidden: true });
     expect(server.readCount(/\/values\?/)).toBe(0);
-    fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'area' } });
+    fireEvent.change(screen.getByLabelText('Code type'), { target: { value: 'area' } });
     await waitFor(() => expect(server.readCount(/code-types\/area\/values/)).toBe(1));
     expect(server.readCount(/code-types\/trade\/values/)).toBe(0);
   });

@@ -680,7 +680,7 @@ test.describe('Setting codes', () => {
     await test.step('3. tick CD_7 and CD_8, Set Area to Roof: ONE request, both read Roof, one Undo returns both', async () => {
       await page.getByRole('checkbox', { name: 'Select Cladding, in no area' }).check();
       await page.getByRole('checkbox', { name: 'Select Snagging, with no codes at all' }).check();
-      await page.getByLabel('Code', { exact: true }).selectOption({ label: 'Area' });
+      await page.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
       await chooseOption(page, page.getByRole('combobox', { name: 'Value' }), /Roof/);
       await expect(page.getByText('Sets Area to Roof on 2 activities.')).toBeVisible();
       const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();

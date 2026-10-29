@@ -343,7 +343,9 @@ describe('formatHistoryItem — code values (P6 activity codes, M3-T3)', () => {
   });
 
   it('names a type that is not known as "A code", never by its id', () => {
-    expect(text('code:gone', { from: null, to: 'l1' }, withCodes())).toBe('A code set to Level 1');
+    expect(text('code:gone', { from: null, to: 'l1' }, withCodes())).toBe(
+      'A deleted code type set to Level 1',
+    );
   });
 
   it('says a value that no longer exists rather than printing its id', () => {
@@ -355,7 +357,7 @@ describe('formatHistoryItem — code values (P6 activity codes, M3-T3)', () => {
 
   it('reads every code as unknown when the host supplied no names', () => {
     expect(line({ from: 'l1', to: 'l2' }, CTX)).toBe(
-      'A code: a value that no longer exists → a value that no longer exists',
+      'A deleted code type: a value that no longer exists → a value that no longer exists',
     );
   });
 

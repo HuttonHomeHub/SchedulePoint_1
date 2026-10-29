@@ -35,7 +35,7 @@ describe('calendarDeletedDetail (ADR-0201 D4)', () => {
 describe('a code step whose value was deleted since', () => {
   const setAside = {
     reason: 'value-deleted',
-    subjectName: 'Level 1',
+    subjectName: '“Level 1”',
     nextLabel: 'Set Trade on “Pour”',
   } as const;
 
@@ -48,7 +48,7 @@ describe('a code step whose value was deleted since', () => {
         setAside,
       }),
     ).toBe(
-      'Couldn’t undo set Area on “Piling” — Level 1 was deleted. Restore it in Codes… to set it again. That step was skipped. Undo again to continue with set Trade on “Pour”.',
+      'Couldn’t undo set Area on “Piling” — “Level 1” was deleted. Restore it in Codes… to set it again. That step was skipped. Undo again to continue with set Trade on “Pour”.',
     );
   });
 
@@ -62,7 +62,7 @@ describe('a code step whose value was deleted since', () => {
         steps: { done: 1, total: 3 },
       }),
     ).toBe(
-      'Undid 1 of 3 — stopped at set Area on “Piling”: Level 1 was deleted. Restore it in Codes… to set it again.',
+      'Undid 1 of 3 — stopped at set Area on “Piling”: “Level 1” was deleted. Restore it in Codes… to set it again.',
     );
   });
 });

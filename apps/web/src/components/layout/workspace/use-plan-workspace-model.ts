@@ -2779,6 +2779,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       // resource rate and roll the whole paste back. The clone set is at most 50, so this is one
       // request. A cross-plan paste is refused before any write (`clipboard.ts`), so there is nothing
       // to drop and count here.
+      // A source value deleted since reads as absent: the list the clones are copied from omits an
+      // assignment whose value or type is deleted, so it is dropped here, never sent and never an error.
       const liveById = new Map(rows.map((a) => [a.id, a] as const));
       const withCodes = plan_.creates.flatMap((step) => {
         const codes = liveById.get(step.sourceId)?.codes ?? [];

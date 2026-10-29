@@ -327,7 +327,7 @@ function assignmentLine(
     : `Resource changed: ${name} — ${parts.join('; ')}`;
 }
 
-const UNKNOWN_CODE_TYPE = 'A code';
+const UNKNOWN_CODE_TYPE = 'A deleted code type';
 const UNKNOWN_CODE_VALUE = 'a value that no longer exists';
 const PENDING_NAME = 'Loading…';
 

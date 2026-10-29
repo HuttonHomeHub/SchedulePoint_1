@@ -1134,20 +1134,34 @@ export function ActivitiesTable({
   const swimlaneBar = (
     companion: boolean,
     children?: React.ReactNode,
-  ): React.ReactElement | null =>
-    swimlaneAssignment ? (
+  ): React.ReactElement | null => {
+    if (!swimlaneAssignment) return null;
+    const ids = selectedActivities.map((a) => a.id);
+    const names = selectedActivities.map((a) => a.name);
+    // Two literal branches rather than `companion={companion}`: a companion takes no `children`.
+    return companion ? (
       <SwimlaneBulkAssignBar
         assignment={swimlaneAssignment}
-        ids={selectedActivities.map((a) => a.id)}
-        names={selectedActivities.map((a) => a.name)}
+        ids={ids}
+        names={names}
         gate={swimlaneGate}
-        companion={companion}
+        companion
+        onClear={clearSelection}
+        onDone={afterBulkWrite}
+      />
+    ) : (
+      <SwimlaneBulkAssignBar
+        assignment={swimlaneAssignment}
+        ids={ids}
+        names={names}
+        gate={swimlaneGate}
         onClear={clearSelection}
         onDone={afterBulkWrite}
       >
         {children}
       </SwimlaneBulkAssignBar>
-    ) : null;
+    );
+  };
 
   /** The Codes row, nothing when ticking is not leading to it or nothing is ticked. */
   const codeBar = (companion: boolean): React.ReactNode =>
