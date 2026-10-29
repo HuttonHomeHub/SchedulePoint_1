@@ -244,6 +244,20 @@ describe.skipIf(!hasDatabase)('Code reads API (e2e)', () => {
       expect(own.body.data).toEqual(nested[0]?.values);
     });
 
+    it('refuses a cursor that is not a value of the type with 422, never an empty page', async () => {
+      const { actor, planId, area, trade, vs, l4 } = await seed();
+      const other = await createValue(actor, planId, trade.id, 'T1');
+      const url = `${typesUrl(planId)}/${area.id}/values`;
+      for (const cursor of [other.id, '00000000-0000-4000-8000-000000000000']) {
+        const res = await actor.agent.get(`${url}?cursor=${cursor}`).expect(422);
+        expect(res.body.error?.details?.reason).toBe('CODE_CURSOR_UNKNOWN');
+      }
+      // A value deleted since the page was issued is still a position in the order.
+      const after = await actor.agent.get(`${url}?cursor=${l4.id}`).expect(200);
+      expect((after.body.data as ValueBody[]).map((v) => v.shortCode)).toEqual(['L5']);
+      await actor.agent.get(`${url}?cursor=${vs[0]?.id as string}`).expect(200);
+    });
+
     it('refuses a limit of 0 or 1,001 and a non-UUID cursor with 422', async () => {
       const { actor, planId, area } = await seed();
       const url = `${typesUrl(planId)}/${area.id}/values`;

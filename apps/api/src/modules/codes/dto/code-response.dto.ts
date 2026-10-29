@@ -119,6 +119,8 @@ export class CodeTypeResponseDto {
   values?: CodeValueResponseDto[];
 
   @ApiPropertyOptional({
+    type: 'integer',
+    minimum: 0,
     description:
       'The number of live values. Sent by the list with or without `values`; absent on a single-row write.',
   })

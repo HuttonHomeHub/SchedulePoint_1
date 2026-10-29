@@ -88,6 +88,7 @@ describe('CodeValuesService', () => {
     | 'findInPlan'
     | 'findManyActiveInTx'
     | 'findPageByType'
+    | 'existsInType'
     | 'findManyResolvedInPlan'
     | 'countActive'
     | 'maxActivePosition'
@@ -123,6 +124,7 @@ describe('CodeValuesService', () => {
       findInPlan: vi.fn().mockResolvedValue(value()),
       findManyActiveInTx: vi.fn().mockResolvedValue([]),
       findPageByType: vi.fn().mockResolvedValue([]),
+      existsInType: vi.fn().mockResolvedValue(true),
       findManyResolvedInPlan: vi.fn().mockResolvedValue([]),
       countActive: vi.fn().mockResolvedValue(0),
       maxActivePosition: vi.fn().mockResolvedValue(-1),
@@ -170,6 +172,16 @@ describe('CodeValuesService', () => {
     it('passes the cursor through', async () => {
       await service.list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, { limit: 5, cursor: 'c' });
       expect(values.findPageByType.mock.calls[0]?.[0]).toMatchObject({ cursor: 'c', take: 6 });
+    });
+
+    it('refuses a cursor that is not a value of the type, before reading a page', async () => {
+      values.existsInType.mockResolvedValue(false);
+      const error = await service
+        .list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, { limit: 5, cursor: 'c' })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).details).toMatchObject({ reason: 'CODE_CURSOR_UNKNOWN' });
+      expect(values.findPageByType).not.toHaveBeenCalled();
     });
 
     it('refuses include=deleted without code:restore, before reading anything', async () => {

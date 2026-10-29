@@ -89,18 +89,21 @@ export class CodeTypesService {
 
     const typeIds = pageRows.map((row) => row.id);
     const meta = { nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null, hasMore };
-    const counts = await this.values.countActiveByTypes(organization.id, typeIds);
     if (query.values === 'none') {
+      const counts = await this.values.countActiveByTypes(organization.id, typeIds);
       return {
         items: pageRows.map((type) => ({ type, valueCount: counts.get(type.id) ?? 0 })),
         meta,
       };
     }
 
-    // One query for the whole page's values, never one per type.
-    const valueRows = includeDeleted
-      ? await this.values.findManyAllByTypes(organization.id, typeIds)
-      : await this.values.findManyActiveByTypes(organization.id, typeIds);
+    // One query for the whole page's values, never one per type; the count runs beside it.
+    const [counts, valueRows] = await Promise.all([
+      this.values.countActiveByTypes(organization.id, typeIds),
+      includeDeleted
+        ? this.values.findManyAllByTypes(organization.id, typeIds)
+        : this.values.findManyActiveByTypes(organization.id, typeIds),
+    ]);
     const byType = new Map<string, ListedCodeValue[]>();
     for (const value of valueRows) {
       const list = byType.get(value.codeTypeId);

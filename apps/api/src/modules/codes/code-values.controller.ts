@@ -39,9 +39,9 @@ const PEN = 'You do not hold the plan edit-lock (when enforcement is on).';
 
 /**
  * Code value routes nested under a parent plan (p6-activity-codes spec §4.7): edit, delete and
- * restore a value by its own id, and name a set of them by id. A value has no plan of its own, so it is found through a type of the
- * plan in the path; another plan's or tenant's value id is a 404. Creating and ordering values is on
- * `code-types/:codeTypeId/values`.
+ * restore a value by its own id, and name a set of them by id. A value has no plan of its own, so
+ * it is found through a type of the plan in the path; another plan's or tenant's value id is a
+ * 404. Creating, ordering and listing values is on `code-types/:codeTypeId/values`.
  */
 @ApiTags('codes')
 @ApiCookieAuth('schedulepoint.session_token')

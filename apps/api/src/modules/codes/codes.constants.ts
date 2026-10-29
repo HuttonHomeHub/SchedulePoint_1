@@ -22,6 +22,8 @@ export const CODE_CONFLICT = {
   STALE_VERSION: 'STALE_VERSION',
   /** The type is the plan's swimlane source; deleting it would leave the diagram without lanes. */
   TYPE_IS_SWIMLANE_SOURCE: 'CODE_TYPE_IS_SWIMLANE_SOURCE',
+  /** A values-list `cursor` that is not a value of that type (unknown, purged, or another type's). */
+  CURSOR_UNKNOWN: 'CODE_CURSOR_UNKNOWN',
   /** A new assignment names a value that has been deleted. */
   VALUE_DELETED: 'CODE_VALUE_DELETED',
   /** An assignment names a value that belongs to another code type of the plan. */

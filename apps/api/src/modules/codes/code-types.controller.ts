@@ -93,7 +93,6 @@ export class CodeTypesController {
     );
   }
 
-  // Declared before the `:codeTypeId` writes only for reading order; `GET` has no literal sibling.
   @Get(':codeTypeId/values')
   @ApiOperation({
     summary: 'List one code type’s values, cursor-paged in display order. code:read.',
@@ -106,7 +105,8 @@ export class CodeTypesController {
   @ApiOkResponse({ type: CodeValueResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: '`include=deleted` without `code:restore`.' })
   @ApiUnprocessableEntityResponse({
-    description: 'A malformed `cursor`, or a `limit` outside 1–1,000.',
+    description:
+      'A malformed `cursor`, one that is not a value of this type (CODE_CURSOR_UNKNOWN), or a `limit` outside 1–1,000.',
   })
   async listValues(
     @CurrentUser() principal: Principal,

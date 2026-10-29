@@ -5,8 +5,11 @@
 
 ## 1. T0: the on-demand reads (2026-10-29, the builder)
 
-**Status: built and tested; two of the plan's ceilings are missed on this machine, so T1 must not bind
-until the owner and backend-performance-reviewer decide.** See "The miss" below.
+**Status: built and tested; the owner ACCEPTED the measured miss of the `values=none` list on 2026-10-29**
+(about 70 ms against its 60 ms slice, all of it the `valueCount` `groupBy` sequential scan) because the
+Codes... first paint passes (121 to 136 ms against 200 ms). No index and no contract change (ADR-0142,
+ADR-0076). The figures are under "The miss" below; T1 may bind. The machine ran about 1.4 times slower
+than the M2 set, so on the M2 machine both parts would sit inside their slices.
 
 ### What was built
 
@@ -62,7 +65,7 @@ It reads the whole value table (a sequential scan on the table, 1,679 buffers) b
 plan is not affected (1,500 rows). The combined first paint (121 to 136 ms) is inside its 200 ms ceiling;
 the individual 60 ms slice is what is missed.
 
-**Remedies, none taken** (the plan: "a miss blocks T1 from binding and goes to backend-performance-reviewer
+**Remedies considered, none taken; remedy 2 was chosen by the owner on 2026-10-29** (the plan: "a miss blocks T1 from binding and goes to backend-performance-reviewer
 and the owner with the figure"; any index is a schema change and goes to the database-architect, CLAUDE.md
 section 19.3):
 

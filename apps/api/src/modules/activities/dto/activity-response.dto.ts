@@ -309,8 +309,8 @@ export class ActivityResponseDto implements ActivitySummary {
     description:
       'The code value the activity carries for each code type, ordered by type id; a type with no ' +
       'value has no entry, and a deleted value or type reads as no value. **Absent, not empty, ' +
-      'when the plan has no live code type.** Sent by the activity list and by `PATCH ' +
-      '…/activities/codes` only; any other activity response omits it, so a client must not replace a ' +
+      'when the plan has no live code type.** Sent by the activity list, the single-activity ' +
+      '`GET …/activities/:activityId` and `PATCH …/activities/codes`; any other activity response omits it, so a client must not replace a ' +
       'cached activity’s `codes` with one that has none.',
   })
   codes?: ActivityCodeResponseDto[];

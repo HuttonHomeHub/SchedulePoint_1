@@ -146,6 +146,24 @@ export class CodeValueRepository {
     });
   }
 
+  /**
+   * Whether this id is a value of the type in either state, so a page cursor that was live when
+   * issued still resolves after the value is deleted. Scoped by organisation and type.
+   *
+   * soft-delete: any-state — a deleted value is a valid cursor position.
+   */
+  async existsInType(
+    organizationId: string,
+    codeTypeId: string,
+    valueId: string,
+  ): Promise<boolean> {
+    const row = await this.prisma.codeValue.findFirst({
+      where: { id: valueId, organizationId, codeTypeId },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   /** The number of live values of each of these types, in one grouped query. Absent = none. */
   async countActiveByTypes(
     organizationId: string,
