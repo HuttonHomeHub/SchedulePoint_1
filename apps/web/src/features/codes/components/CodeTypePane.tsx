@@ -285,7 +285,7 @@ export function CodeTypePane({
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={headingId} className="text-base font-semibold break-words">
+        <h3 id={headingId} className="text-base break-words">
           {countText === null ? type.name : `${type.name} · ${countText}`}
         </h3>
         {gate.roleDenied ? null : (
