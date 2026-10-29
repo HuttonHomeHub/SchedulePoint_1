@@ -9,6 +9,7 @@ import { deriveCodesGate, type CodesGate } from '../model/codes-gating';
 import { CodesDialog } from './CodesDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import type * as RowActionModule from '@/components/ui/row-action-button';
 import { ApiFetchError, apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 import { aType, aValue, codesServer, type CodesServer } from '@/test/codes-server';
@@ -19,6 +20,19 @@ vi.mock('@/lib/api/client', async (importOriginal) => ({
   apiFetchAllPages: vi.fn(),
   apiFetchEnvelope: vi.fn(),
 }));
+
+/** Counts every render of a row's action button, so a test can tell whether the rows re-rendered. */
+const rowButtonRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/components/ui/row-action-button', async (importOriginal) => {
+  const real = await importOriginal<typeof RowActionModule>();
+  return {
+    ...real,
+    RowActionButton: (props: React.ComponentProps<typeof real.RowActionButton>) => {
+      rowButtonRenders.count += 1;
+      return real.RowActionButton(props);
+    },
+  };
+});
 
 const OPEN: CodesGate = deriveCodesGate({ writable: true, reason: null, roleDenied: false });
 const PEN: CodesGate = deriveCodesGate({
@@ -42,6 +56,8 @@ const ACTIVITIES: ActivitySummary[] = [
 ];
 
 let server: CodesServer;
+/** What the host passes as the plan's activities; `undefined` is "still loading". */
+let activitiesNow: ActivitySummary[] | undefined = ACTIVITIES;
 
 /** Point the mocked client at the current server. */
 function wire(): void {
@@ -62,7 +78,7 @@ function tree(gate: CodesGate = OPEN, open = true): React.ReactElement {
           onClose={onClose}
           orgSlug="acme"
           planId="p1"
-          activities={ACTIVITIES}
+          activities={activitiesNow}
           gate={gate}
           record={record}
         />
@@ -106,6 +122,7 @@ beforeEach(() => {
   wire();
   record.mockReset();
   onClose.mockReset();
+  activitiesNow = ACTIVITIES;
   // The app's own staleness (`lib/query/query-client.ts`): without it every remount refetches.
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, retryDelay: 0, staleTime: 30_000 } },
@@ -142,9 +159,10 @@ describe('opening the dialog', () => {
     mount();
     await settled();
     expect(dialog()).toHaveAccessibleDescription(
-      'P6 activity codes. Changes apply at once. Each is one step you can undo.',
+      'Labels such as Area or Trade that you give to activities (P6 activity codes). Changes apply at once, and each one can be undone.',
     );
-    expect(dialog().textContent).not.toMatch(/activity code(?!s\.)/i);
+    // "P6 activity codes" is allowed once, as the hint that names the thing in the planner's other tool.
+    expect(dialog().textContent?.replace('(P6 activity codes)', '')).not.toMatch(/activity code/i);
   });
 
   it('fetches nothing while it is shut', () => {
@@ -436,7 +454,7 @@ describe('deleting', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete L1' }));
     const confirm = await screen.findByRole('alertdialog', { name: 'Delete L1?' });
     expect(confirm).toHaveAccessibleDescription(
-      '3 activities carry it. They will read as having no Area until you restore it.',
+      '3 activities use it. They will show no Area until you restore it.',
     );
     fireEvent.click(within(confirm).getByRole('button', { name: 'Delete value' }));
     await waitFor(() => expect(announced()).toBe('Value L1 deleted. Undo brings it back.'));
@@ -463,8 +481,17 @@ describe('deleting', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete L2' }));
     expect(
       await screen.findByRole('alertdialog', { name: 'Delete L2?' }),
-    ).toHaveAccessibleDescription(
-      'No activity carries it. You can restore it from Deleted values.',
+    ).toHaveAccessibleDescription('No activities use it. You can restore it from Deleted values.');
+  });
+
+  it('claims no count while the plan’s activities are still loading', async () => {
+    activitiesNow = undefined;
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete L1' }));
+    const confirm = await screen.findByRole('alertdialog', { name: 'Delete L1?' });
+    expect(confirm).toHaveAccessibleDescription(
+      'Activities that use it will show no Area until you restore it.',
     );
   });
 
@@ -488,7 +515,7 @@ describe('deleting', () => {
       name: 'Delete Area and its 4 values?',
     });
     expect(confirm).toHaveAccessibleDescription(
-      '4 activities carry a value of Area. They will read as having no Area until you restore it.',
+      'Activities that use Area will show no Area until you restore it. You can do that from Deleted code types.',
     );
     fireEvent.click(within(confirm).getByRole('button', { name: 'Delete code type' }));
     await waitFor(() =>
@@ -694,5 +721,167 @@ describe('closing', () => {
     rerender(tree(OPEN, false));
     rerender(tree(OPEN, true));
     await settled('Area');
+  });
+});
+
+describe('focus after a restore', () => {
+  const deletedTypes = (): void => {
+    server.types.push(
+      aType('old1', 'Old one', 3, { deletedAt: '2026-09-01T00:00:00Z' }),
+      aType('old2', 'Old two', 4, { deletedAt: '2026-09-01T00:00:00Z' }),
+    );
+  };
+
+  it('moves to the next Restore button, then the previous, then the toggle', async () => {
+    deletedTypes();
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Deleted code types' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore Old one' }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Old one' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Restore Old two' })).toHaveFocus(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Restore Old two' }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Old two' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Deleted code types/ })).toHaveFocus(),
+    );
+  });
+
+  it('falls back to the previous Restore button when the last row was restored', async () => {
+    deletedTypes();
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Deleted code types' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore Old two' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Restore Old one' })).toHaveFocus(),
+    );
+  });
+
+  it('does the same for a type’s deleted values', async () => {
+    server.values
+      .get('area')
+      ?.push(aValue('old', 'area', 'B1', 4, 'Basement', { deletedAt: '2026-09-01T00:00:00Z' }));
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Deleted values' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore B1 — Basement' }));
+    await waitFor(() => expect(announced()).toBe('Value B1 restored.'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Deleted values/ })).toHaveFocus(),
+    );
+  });
+
+  it('drops the “· Deleted” suffix and names the count once the list is known', async () => {
+    deletedTypes();
+    mount();
+    await settled();
+    expect(screen.getByRole('button', { name: 'Deleted code types' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Deleted code types' }));
+    await screen.findByRole('button', { name: 'Restore Old one' });
+    expect(screen.getByRole('button', { name: 'Deleted code types (2)' })).toBeInTheDocument();
+    expect(screen.queryByText(/· Deleted/)).not.toBeInTheDocument();
+  });
+});
+
+describe('a type delete hands focus on at once', () => {
+  it('focuses the neighbouring tab before the refetch has finished', async () => {
+    mount();
+    await settled();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let holding = false;
+    vi.mocked(apiFetchAllPages).mockImplementation(async (path: string) => {
+      if (holding && /code-types\?values=none$/.test(path)) await held;
+      return server.api.apiFetchAllPages(path);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete…' }));
+    const confirm = await screen.findByRole('alertdialog');
+    holding = true;
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete code type' }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Trade' })).toHaveFocus());
+    // The deleted type is still listed: this focus did not wait for the refetch.
+    expect(screen.getByRole('tab', { name: 'Area' })).toBeInTheDocument();
+    release();
+    await waitFor(() =>
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Trade', 'Phase']),
+    );
+  });
+});
+
+describe('a stacked editor whose subject a colleague deletes', () => {
+  it('keeps Edit value open, says so, shades Save and keeps focus inside', async () => {
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit L1' }));
+    const edit = await screen.findByRole('dialog', { name: 'Edit value' });
+    const field = within(edit).getByLabelText('Short code');
+    await waitFor(() => expect(field).toHaveFocus());
+    server.removeValueBehindMyBack('area', 'l1');
+    await act(() => queryClient.invalidateQueries());
+    expect(await within(edit).findByRole('alert')).toHaveTextContent('This value was deleted.');
+    expect(screen.getByRole('dialog', { name: 'Edit value' })).toBeInTheDocument();
+    const save = within(edit).getByRole('button', { name: 'Save' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(save).toHaveAccessibleDescription('This value was deleted.');
+    expect(edit.contains(document.activeElement)).toBe(true);
+    fireEvent.click(save);
+    expect(server.writes).toEqual([]);
+  });
+
+  it('keeps Rename code type open and says so', async () => {
+    mount();
+    await settled();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename…' }));
+    const rename = await screen.findByRole('dialog', { name: 'Rename code type' });
+    server.removeTypeBehindMyBack('area');
+    await act(() => queryClient.invalidateQueries());
+    expect(await within(rename).findByRole('alert')).toHaveTextContent(
+      'This code type was deleted.',
+    );
+    const save = within(rename).getByRole('button', { name: 'Rename' });
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(rename.contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe('the rail’s foot', () => {
+  it('puts Add code type before the deleted list, in a cell as wide as the rail', async () => {
+    server.types.push(aType('old', 'Old area', 3, { deletedAt: '2026-09-01T00:00:00Z' }));
+    mount();
+    await settled();
+    const foot = dialog().querySelector<HTMLElement>('[data-codes-rail-foot]');
+    expect(foot).not.toBeNull();
+    const add = within(foot!).getByRole('button', { name: 'Add code type' });
+    const toggle = within(foot!).getByRole('button', { name: 'Deleted code types' });
+    expect(add.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // One number in two files: the foot sits under the `Tabs` vertical rail and must match its width.
+    expect(foot).toHaveClass('w-52');
+    expect(screen.getByRole('tablist', { name: 'Code types' })).toHaveClass('w-52');
+  });
+});
+
+describe('typing in the Add value form', () => {
+  it('does not re-render the rows', async () => {
+    mount();
+    await settled();
+    const before = rowButtonRenders.count;
+    expect(before).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText('Short code'), { target: { value: 'ABC' } });
+    fireEvent.change(screen.getByLabelText('Description (optional)'), { target: { value: 'x' } });
+    expect(screen.getByLabelText('Short code')).toHaveValue('ABC');
+    expect(rowButtonRenders.count).toBe(before);
+  });
+
+  it('does not re-render the rows when a type name is typed either', async () => {
+    mount();
+    await settled();
+    const before = rowButtonRenders.count;
+    fireEvent.change(screen.getByLabelText('New code type'), { target: { value: 'Zone' } });
+    expect(rowButtonRenders.count).toBe(before);
   });
 });

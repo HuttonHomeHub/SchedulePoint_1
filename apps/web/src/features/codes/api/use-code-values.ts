@@ -67,11 +67,13 @@ export function useDeletedCodeValues(
   planId: string,
   codeTypeId: string,
   enabled: boolean,
+  staleTime?: number,
 ): UseQueryResult<CodeValueSummary[]> {
   return useQuery({
     queryKey: codeKeys.valuesDeleted(orgSlug, planId, codeTypeId),
     retry: 1,
     enabled,
+    ...(staleTime === undefined ? {} : { staleTime }),
     queryFn: async () =>
       (await fetchAllValues(`${valuesPath(orgSlug, planId, codeTypeId)}?include=deleted`)).filter(
         (value) => value.deletedAt !== null,

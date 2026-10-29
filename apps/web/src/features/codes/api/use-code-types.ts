@@ -44,11 +44,13 @@ export function useDeletedCodeTypes(
   orgSlug: string,
   planId: string,
   enabled: boolean,
+  staleTime?: number,
 ): UseQueryResult<CodeTypeSummary[]> {
   return useQuery({
     queryKey: codeKeys.typesDeleted(orgSlug, planId),
     retry: 1,
     enabled,
+    ...(staleTime === undefined ? {} : { staleTime }),
     queryFn: async () =>
       (
         await apiFetchAllPages<CodeTypeSummary>(

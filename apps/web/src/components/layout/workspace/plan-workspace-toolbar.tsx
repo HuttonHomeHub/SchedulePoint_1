@@ -167,7 +167,11 @@ import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
-/** The Codes… dialog, fetched the first time it is asked for (see `useCodesDialog`). */
+/**
+ * The Codes… dialog, fetched the first time it is asked for (see `useCodesDialog`). Imported by its
+ * deep path on purpose: the `@/features/codes` barrel is statically imported by the workspace, so
+ * exporting the component from it would pull the whole dialog into the plan's entry chunk.
+ */
 const CodesDialog = lazy(() =>
   import('@/features/codes/components/CodesDialog').then((m) => ({ default: m.CodesDialog })),
 );
@@ -305,11 +309,13 @@ export function ToolbarPlanWorkspace({
   ) {
     setSwimlaneDialogsWanted(true);
   }
-  // Codes… (P6 activity codes, M3-T1). Its writes are pen-gated like every other structural plan write;
-  // `roleDenied` is read off the editor's own gate (the same role rule), because no pen hand-off will
-  // ever open the controls for a role that cannot write.
+  // Codes… (P6 activity codes, M3-T1). Its writes are pen-gated like every other structural plan write.
+  // `roleDenied` is the hierarchy-writer role rule (Planner, Org Admin: the roles holding `code:create`,
+  // `code:update`, `code:delete` and `code:restore`, `org-permissions.ts`), read off `model.canWrite`,
+  // which is false while the role is still unknown: an unresolved session is denied, never allowed.
+  // No pen hand-off will ever open the controls for a role that cannot write.
   const codesDialog = useCodesDialog();
-  const codesRoleDenied = model.activityEditorGating.general.roleDenied === true;
+  const codesRoleDenied = !model.canWrite;
   const codesWritable = model.canEditSchedule;
   const codesReason = model.scheduleRefusal('change codes');
   const codesGate = useMemo(

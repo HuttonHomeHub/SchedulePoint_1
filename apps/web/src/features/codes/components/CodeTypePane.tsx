@@ -82,13 +82,9 @@ export function CodeTypePane({
   const reasonId = useFieldGate()?.reasonId;
   const values = useCodeValues(orgSlug, planId, type.id);
   const rows = useMemo(() => values.data ?? [], [values.data]);
-  const [shortCode, setShortCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [problems, setProblems] = useState<ValueProblems>(NO_PROBLEMS);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const shortCodeRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLInputElement>(null);
   const paneRef = useRef<HTMLElement>(null);
   // A move re-orders the rows and React may move the focused button to do it; the control that asked
   // takes focus back once the order has changed.
@@ -101,14 +97,22 @@ export function CodeTypePane({
   }, [rows]);
   // After a delete, once the row has left the list (and one frame later, so the dialog's own focus
   // restore has run first and cannot overwrite this).
+  const fetching = values.isFetching;
   useLayoutEffect(() => {
     const removed = removedRowRef.current;
-    if (removed === null || rows.some((row) => row.id === removed.id)) return;
+    if (removed === null) return;
+    if (rows.some((row) => row.id === removed.id)) {
+      // Still listed once the refetch has finished: the delete did not take this row out (it was
+      // restored, or the write was refused after arming), so nothing is owed and nothing stays armed
+      // to steal focus on some later, unrelated change of the list.
+      if (!fetching) removedRowRef.current = null;
+      return;
+    }
     removedRowRef.current = null;
     requestAnimationFrame(() => {
       focusAfterRemoval(removed, paneRef.current ?? document);
     });
-  }, [rows, removedRowRef]);
+  }, [rows, fetching, removedRowRef]);
 
   // A type just added: the next thing to type is a value (focus rule 2). The Add form exists once the
   // values have loaded, so this waits for them.
@@ -156,25 +160,6 @@ export function CodeTypePane({
     } finally {
       setBusy(false);
     }
-  };
-
-  const add = (): Promise<void> => {
-    // Shut first: a field problem is not worth reporting to a reader who cannot add anyway.
-    if (guard()) return Promise.resolve();
-    const found = valueProblems({ shortCode, description }, shortCodes, type.name);
-    if (hasValueProblem(found)) {
-      setProblems(found);
-      (found.shortCode !== null ? shortCodeRef : descriptionRef).current?.focus();
-      return Promise.resolve();
-    }
-    return run(`add ${shortCode.trim()}`, async () => {
-      const created = await actions.addValue(type, { shortCode, description });
-      setShortCode('');
-      setDescription('');
-      setProblems(NO_PROBLEMS);
-      announce(`Value ${created.shortCode} added to ${type.name}.`);
-      shortCodeRef.current?.focus();
-    });
   };
 
   const move = (value: CodeValueSummary, delta: -1 | 1): Promise<void> =>
@@ -329,64 +314,29 @@ export function CodeTypePane({
           </div>
         )}
       </div>
-      {table ? (
-        // A windowed table needs a bounded scroller to window against (ADR-0165), so it gets a fixed
-        // band; a short list sits in the pane's own flow and the pane scrolls.
-        <div className="flex h-80 flex-col">
+      {/* One parent whichever way the table goes, so adding the 101st value does not remount it and
+          drop the focus on the row the reader was using. A windowed table needs a bounded scroller to
+          window against (ADR-0165), so it gets a fixed band; a short list sits in the pane's own flow
+          and the pane scrolls. */}
+      <div className={table ? 'flex h-80 flex-col' : undefined}>
+        {table ? (
           <DataTable {...tableProps} windowed scroll="contained" />
-        </div>
-      ) : (
-        <DataTable {...tableProps} />
-      )}
+        ) : (
+          <DataTable {...tableProps} />
+        )}
+      </div>
       {values.isSuccess && !gate.roleDenied ? (
-        <form
-          noValidate
-          className="flex flex-wrap items-start gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void add();
-          }}
-        >
-          <div className="min-w-32 flex-1">
-            <TextField
-              ref={shortCodeRef}
-              label="Short code"
-              data-new-code-value
-              value={shortCode}
-              onChange={(event) => {
-                setProblems(NO_PROBLEMS);
-                setShortCode(event.target.value);
-              }}
-              error={problems.shortCode ?? undefined}
-              gate={{ writable: gate.writable, reason: null }}
-              aria-describedby={reasonId}
-            />
-          </div>
-          <div className="min-w-40 flex-[2]">
-            <TextField
-              ref={descriptionRef}
-              label="Description (optional)"
-              value={description}
-              onChange={(event) => {
-                setProblems(NO_PROBLEMS);
-                setDescription(event.target.value);
-              }}
-              error={problems.description ?? undefined}
-              gate={{ writable: gate.writable, reason: null }}
-              aria-describedby={reasonId}
-            />
-          </div>
-          <Button
-            type="submit"
-            // Aligned to the fields, not their labels: the labels sit above the controls.
-            className="self-end"
-            aria-disabled={busy || shut}
-            aria-busy={busy}
-            aria-describedby={reasonId}
-          >
-            Add value
-          </Button>
-        </form>
+        <AddValueForm
+          type={type}
+          shortCodes={shortCodes}
+          gate={gate}
+          reasonId={reasonId}
+          inputRef={shortCodeRef}
+          guard={guard}
+          busy={busy}
+          run={run}
+          actions={actions}
+        />
       ) : null}
       {failure !== null ? (
         <p role="alert" className="text-destructive-text text-sm">
@@ -443,5 +393,110 @@ function PaneButton({
         </span>
       ) : null}
     </>
+  );
+}
+
+interface AddValueFormProps {
+  type: CodeTypeSummary;
+  shortCodes: readonly string[];
+  gate: CodesGate;
+  reasonId: string | undefined;
+  inputRef: RefObject<HTMLInputElement | null>;
+  guard: () => boolean;
+  busy: boolean;
+  run: (action: string, work: () => Promise<void>) => Promise<void>;
+  actions: CodeActions;
+}
+
+/**
+ * The Add value form. Its draft lives here and not in the pane, so a keystroke re-renders this form
+ * alone: the table above it, up to 1,000 rows of buttons, is not touched by typing.
+ */
+function AddValueForm({
+  type,
+  shortCodes,
+  gate,
+  reasonId,
+  inputRef,
+  guard,
+  busy,
+  run,
+  actions,
+}: AddValueFormProps): React.ReactElement {
+  const announce = useAnnounce();
+  const [shortCode, setShortCode] = useState('');
+  const [description, setDescription] = useState('');
+  const [problems, setProblems] = useState<ValueProblems>(NO_PROBLEMS);
+  const descriptionRef = useRef<HTMLInputElement>(null);
+  const shut = !gate.writable;
+
+  const add = (): Promise<void> => {
+    // Shut first: a field problem is not worth reporting to a reader who cannot add anyway.
+    if (guard()) return Promise.resolve();
+    const found = valueProblems({ shortCode, description }, shortCodes, type.name);
+    if (hasValueProblem(found)) {
+      setProblems(found);
+      (found.shortCode !== null ? inputRef : descriptionRef).current?.focus();
+      return Promise.resolve();
+    }
+    return run(`add ${shortCode.trim()}`, async () => {
+      const created = await actions.addValue(type, { shortCode, description });
+      setShortCode('');
+      setDescription('');
+      setProblems(NO_PROBLEMS);
+      announce(`Value ${created.shortCode} added to ${type.name}.`);
+      inputRef.current?.focus();
+    });
+  };
+
+  return (
+    <form
+      noValidate
+      className="flex flex-wrap items-start gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+    >
+      <div className="min-w-32 flex-1">
+        <TextField
+          ref={inputRef}
+          label="Short code"
+          data-new-code-value
+          value={shortCode}
+          onChange={(event) => {
+            setProblems(NO_PROBLEMS);
+            setShortCode(event.target.value);
+          }}
+          error={problems.shortCode ?? undefined}
+          gate={{ writable: gate.writable, reason: null }}
+          aria-describedby={reasonId}
+        />
+      </div>
+      <div className="min-w-40 flex-[2]">
+        <TextField
+          ref={descriptionRef}
+          label="Description (optional)"
+          value={description}
+          onChange={(event) => {
+            setProblems(NO_PROBLEMS);
+            setDescription(event.target.value);
+          }}
+          error={problems.description ?? undefined}
+          gate={{ writable: gate.writable, reason: null }}
+          aria-describedby={reasonId}
+        />
+      </div>
+      <Button
+        type="submit"
+        // Aligned to the fields, not their labels: the labels sit above the controls.
+        className="self-end"
+        aria-disabled={busy || shut}
+        aria-busy={busy}
+        aria-describedby={reasonId}
+      >
+        Add value
+      </Button>
+    </form>
   );
 }

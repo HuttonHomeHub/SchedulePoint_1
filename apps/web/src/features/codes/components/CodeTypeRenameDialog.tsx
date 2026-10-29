@@ -1,5 +1,5 @@
 import type { CodeTypeSummary } from '@repo/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { codeErrorText } from '../model/code-errors';
 import { typeNameProblem } from '../model/code-text';
@@ -16,6 +16,11 @@ export interface CodeTypeRenameDialogProps {
   onClose: () => void;
   /** The type being renamed, or null while the dialog is closed. */
   type: CodeTypeSummary | null;
+  /**
+   * True once the type is known to be gone (a colleague deleted it while this was open). The dialog
+   * stays open, says so, and shades Rename; it does not close under the reader.
+   */
+  gone: boolean;
   /** The plan's other live type names, for the duplicate check. */
   otherNames: readonly string[];
   actions: CodeActions;
@@ -24,13 +29,14 @@ export interface CodeTypeRenameDialogProps {
 
 /** Rename one code type. One undo step; the change applies at once. */
 export function CodeTypeRenameDialog(props: CodeTypeRenameDialogProps): React.ReactElement {
+  // Kept for one opening so a colleague's deletion leaves the form on screen (see `CodeValueEditDialog`).
+  const [held, setHeld] = useState<CodeTypeSummary | null>(null);
+  if (props.open && props.type !== null && props.type !== held) setHeld(props.type);
+  if (!props.open && held !== null) setHeld(null);
+  const shown = props.type ?? held;
   return (
-    <Dialog
-      open={props.open && props.type !== null}
-      onClose={props.onClose}
-      title="Rename code type"
-    >
-      {props.type ? <RenameForm {...props} type={props.type} /> : null}
+    <Dialog open={props.open && shown !== null} onClose={props.onClose} title="Rename code type">
+      {shown ? <RenameForm {...props} type={shown} /> : null}
     </Dialog>
   );
 }
@@ -39,10 +45,12 @@ function RenameForm({
   onClose,
   type,
   otherNames,
+  gone,
   actions,
   gate,
 }: CodeTypeRenameDialogProps & { type: CodeTypeSummary }): React.ReactElement {
   const announce = useAnnounce();
+  const goneId = useId();
   const [name, setName] = useState(type.name);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -58,7 +66,7 @@ function RenameForm({
   }, []);
 
   const submit = async (): Promise<void> => {
-    if (pending || !gate.writable) return;
+    if (pending || gone || !gate.writable) return;
     const problem = typeNameProblem(name, otherNames);
     if (problem !== null) {
       setError(problem);
@@ -103,13 +111,19 @@ function RenameForm({
         error={error ?? undefined}
         gate={{ writable: gate.writable, reason: gate.reason }}
       />
+      {gone ? (
+        <p id={goneId} role="alert" className="text-destructive-text text-sm">
+          This code type was deleted.
+        </p>
+      ) : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
         <Button
           type="submit"
-          aria-disabled={pending || !gate.writable}
+          aria-disabled={pending || gone || !gate.writable}
+          aria-describedby={gone ? goneId : undefined}
           aria-busy={pending}
           className="aria-busy:pointer-events-none"
         >

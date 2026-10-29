@@ -53,7 +53,13 @@ describe('codeErrorText', () => {
     expect(codeErrorText('add L1', refusal(422, undefined, 'Short code is too long.'))).toBe(
       'Could not add L1: Short code is too long.',
     );
-    expect(codeErrorText('add L1', new Error('offline'))).toBe('Could not add L1: offline');
-    expect(codeErrorText('add L1', 'nope')).toBe('Could not add L1: something went wrong.');
+  });
+
+  it('says something plain for a refusal or a failure with no sentence of its own', () => {
+    const plain = 'Could not add Area: something went wrong. Try again.';
+    expect(codeErrorText('add Area', refusal(500, undefined, 'Internal error.'))).toBe(plain);
+    expect(codeErrorText('add Area', refusal(403))).toBe(plain);
+    expect(codeErrorText('add Area', new TypeError('Failed to fetch'))).toBe(plain);
+    expect(codeErrorText('add Area', 'nope')).toBe(plain);
   });
 });

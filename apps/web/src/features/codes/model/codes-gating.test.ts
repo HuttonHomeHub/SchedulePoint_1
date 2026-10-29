@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { deriveCodesGate } from './codes-gating';
 
+import { canManageHierarchy } from '@/lib/rbac';
+
 describe('deriveCodesGate', () => {
   it('passes the workspace’s gate through and lets a Planner restore', () => {
     expect(deriveCodesGate({ writable: true, reason: null, roleDenied: false })).toEqual({
@@ -30,5 +32,14 @@ describe('deriveCodesGate', () => {
     });
     expect(gate.roleDenied).toBe(true);
     expect(gate.canRestore).toBe(false);
+  });
+
+  it('is fed by the hierarchy-writer rule, which denies a role that has not resolved yet', () => {
+    // The workspace passes `roleDenied: !canManageHierarchy(role)`; an unknown role must read as denied.
+    expect(canManageHierarchy(undefined)).toBe(false);
+    expect(canManageHierarchy('VIEWER')).toBe(false);
+    expect(canManageHierarchy('CONTRIBUTOR')).toBe(false);
+    expect(canManageHierarchy('PLANNER')).toBe(true);
+    expect(canManageHierarchy('ORG_ADMIN')).toBe(true);
   });
 });

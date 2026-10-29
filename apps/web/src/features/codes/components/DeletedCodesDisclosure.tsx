@@ -1,5 +1,5 @@
 import type { CodeTypeSummary, CodeValueSummary } from '@repo/types';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { useDeletedCodeTypes } from '../api/use-code-types';
 import { useDeletedCodeValues } from '../api/use-code-values';
@@ -22,6 +22,15 @@ interface Common {
   gate: CodesGate;
 }
 
+function withCount(
+  label: string,
+  query: { data: readonly unknown[] | undefined; isStale: boolean },
+): string {
+  return query.data !== undefined && !query.isStale
+    ? `${label} (${String(query.data.length)})`
+    : label;
+}
+
 /**
  * **Deleted code types**, a restore list in the rail. Read only while it is open, and only offered to
  * a reader who can restore (`code:restore`; the server answers 403 otherwise). The content is
@@ -29,8 +38,13 @@ interface Common {
  * nobody can see (`Disclosure`'s own rule).
  */
 export function DeletedCodeTypes(props: Common): React.ReactElement {
+  // The toggle names how many are deleted once that is known. It reads the list's own cache without
+  // fetching (`enabled: false`), so a closed disclosure still costs no request; an infinite
+  // `staleTime` makes `isStale` mean "invalidated", so a count a later write has made wrong is dropped
+  // rather than shown.
+  const known = useDeletedCodeTypes(props.orgSlug, props.planId, false, Infinity);
   return (
-    <Disclosure label="Deleted code types" collapsed="hidden">
+    <Disclosure label={withCount('Deleted code types', known)} collapsed="hidden">
       <DeletedTypesList {...props} />
     </Disclosure>
   );
@@ -38,8 +52,9 @@ export function DeletedCodeTypes(props: Common): React.ReactElement {
 
 /** **Deleted values** of the open type, the same list in the pane. */
 export function DeletedCodeValues(props: Common & { type: CodeTypeSummary }): React.ReactElement {
+  const known = useDeletedCodeValues(props.orgSlug, props.planId, props.type.id, false, Infinity);
   return (
-    <Disclosure label="Deleted values" collapsed="hidden">
+    <Disclosure label={withCount('Deleted values', known)} collapsed="hidden">
       <DeletedValuesList {...props} />
     </Disclosure>
   );
@@ -114,30 +129,63 @@ function DeletedList({
   const reasonId = useFieldGate()?.reasonId;
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The row a restore is taking out of this list and the order it had, so that when the row has gone
+  // focus can follow it rather than fall to `<body>` (ADR-0135).
+  const leaving = useRef<{ id: string; order: readonly string[] } | null>(null);
+  useLayoutEffect(() => {
+    const gone = leaving.current;
+    if (gone === null || rows.some((row) => row.id === gone.id)) return;
+    leaving.current = null;
+    // One frame later, so the button that was pressed has finished leaving the DOM first.
+    requestAnimationFrame(() => {
+      const at = gone.order.indexOf(gone.id);
+      const root = rootRef.current;
+      if (root === null) return;
+      const candidates = [gone.order[at + 1], gone.order[at - 1]].filter(
+        (id): id is string => id !== undefined,
+      );
+      for (const id of candidates) {
+        const button = root.querySelector<HTMLElement>(`[data-restore-row="${id}"]`);
+        if (button !== null) {
+          button.focus();
+          return;
+        }
+      }
+      // Nothing left to restore: the toggle that opened this list, which stays on screen.
+      const content = root.closest('[id]');
+      if (content !== null) {
+        document.querySelector<HTMLElement>(`[aria-controls="${content.id}"]`)?.focus();
+      }
+    });
+  }, [rows]);
 
   const restore = async (row: DeletedRow): Promise<void> => {
     if (busy !== null || !gate.writable) return;
     setFailure(null);
     setBusy(row.id);
+    // Armed before the write: the list can refetch before this function resumes.
+    leaving.current = { id: row.id, order: rows.map((other) => other.id) };
     try {
       await row.restore();
       announce(row.restoredSentence);
     } catch (cause) {
+      leaving.current = null;
       setFailure(codeErrorText(row.failureAction, cause, row.subject));
     } finally {
       setBusy(null);
     }
   };
 
+  let content: React.ReactNode;
   if (query.isPending) {
-    return (
+    content = (
       <LoadingShape label={`Loading deleted ${noun}…`}>
         <Skeleton className="h-8 w-full" />
       </LoadingShape>
     );
-  }
-  if (query.isError) {
-    return (
+  } else if (query.isError) {
+    content = (
       <div className="flex flex-col items-start gap-2">
         <p role="alert" className="text-destructive-text text-sm">
           {`Deleted ${noun} could not be loaded.`}
@@ -147,38 +195,39 @@ function DeletedList({
         </Button>
       </div>
     );
+  } else if (rows.length === 0) {
+    content = <p className="text-muted-foreground text-sm">Nothing deleted.</p>;
+  } else {
+    content = (
+      <div className="flex flex-col gap-2">
+        {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- Preflight strips the list marker and VoiceOver then drops the role; the explicit one keeps the count it announces. */}
+        <ul role="list" aria-label={`Deleted ${noun}`} className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 text-sm break-words">{row.label}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-restore-row={row.id}
+                aria-disabled={busy !== null || !gate.writable || undefined}
+                aria-label={`Restore ${row.label}`}
+                aria-busy={busy === row.id}
+                aria-describedby={!gate.writable ? reasonId : undefined}
+                onClick={() => void restore(row)}
+              >
+                Restore
+              </Button>
+            </li>
+          ))}
+        </ul>
+        {failure !== null ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {failure}
+          </p>
+        ) : null}
+      </div>
+    );
   }
-  if (rows.length === 0) return <p className="text-muted-foreground text-sm">Nothing deleted.</p>;
-  return (
-    <div className="flex flex-col gap-2">
-      {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- Preflight strips the list marker and VoiceOver then drops the role; the explicit one keeps the count it announces. */}
-      <ul role="list" aria-label={`Deleted ${noun}`} className="flex flex-col gap-1">
-        {rows.map((row) => (
-          <li key={row.id} className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 text-sm break-words">
-              {row.label}
-              <span className="text-muted-foreground"> · Deleted</span>
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-disabled={busy !== null || !gate.writable || undefined}
-              aria-label={`Restore ${row.label}`}
-              aria-busy={busy === row.id}
-              aria-describedby={!gate.writable ? reasonId : undefined}
-              onClick={() => void restore(row)}
-            >
-              Restore
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {failure !== null ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {failure}
-        </p>
-      ) : null}
-    </div>
-  );
+  return <div ref={rootRef}>{content}</div>;
 }

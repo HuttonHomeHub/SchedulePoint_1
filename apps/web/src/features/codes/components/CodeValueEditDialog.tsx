@@ -1,5 +1,5 @@
 import type { CodeValueSummary } from '@repo/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { codeErrorText } from '../model/code-errors';
 import { hasValueProblem, valueProblems, type ValueProblems } from '../model/code-text';
@@ -16,6 +16,11 @@ export interface CodeValueEditDialogProps {
   onClose: () => void;
   /** The value being edited, or null while the dialog is closed. */
   value: CodeValueSummary | null;
+  /**
+   * True once the value is known to be gone (a colleague deleted it, or its type, while this was
+   * open). The dialog stays open, says so, and shades Save; it does not close under the reader.
+   */
+  gone: boolean;
   /** The type's name, for the duplicate sentence. */
   typeName: string;
   /** The type's other live short codes, for the duplicate check. */
@@ -26,9 +31,16 @@ export interface CodeValueEditDialogProps {
 
 /** Edit one value's short code and description. One undo step; the change applies at once. */
 export function CodeValueEditDialog(props: CodeValueEditDialogProps): React.ReactElement {
+  // The last value seen is kept for as long as this opening lasts, so a deletion by a colleague leaves
+  // the form on screen (with what the reader was editing) instead of unmounting it (ADR-0169: cleared
+  // when it closes). Adjusted while rendering, not in an effect.
+  const [held, setHeld] = useState<CodeValueSummary | null>(null);
+  if (props.open && props.value !== null && props.value !== held) setHeld(props.value);
+  if (!props.open && held !== null) setHeld(null);
+  const shown = props.value ?? held;
   return (
-    <Dialog open={props.open && props.value !== null} onClose={props.onClose} title="Edit value">
-      {props.value ? <EditForm {...props} value={props.value} /> : null}
+    <Dialog open={props.open && shown !== null} onClose={props.onClose} title="Edit value">
+      {shown ? <EditForm {...props} value={shown} /> : null}
     </Dialog>
   );
 }
@@ -40,10 +52,12 @@ function EditForm({
   value,
   typeName,
   otherShortCodes,
+  gone,
   actions,
   gate,
 }: CodeValueEditDialogProps & { value: CodeValueSummary }): React.ReactElement {
   const announce = useAnnounce();
+  const goneId = useId();
   const [shortCode, setShortCode] = useState(value.shortCode);
   const [description, setDescription] = useState(value.description ?? '');
   const [problems, setProblems] = useState<ValueProblems>(NO_PROBLEMS);
@@ -60,7 +74,7 @@ function EditForm({
   }, []);
 
   const submit = async (): Promise<void> => {
-    if (pending || !gate.writable) return;
+    if (pending || gone || !gate.writable) return;
     const found = valueProblems({ shortCode, description }, otherShortCodes, typeName);
     if (hasValueProblem(found)) {
       setProblems(found);
@@ -120,6 +134,11 @@ function EditForm({
         error={problems.description ?? undefined}
         gate={{ writable: gate.writable, reason: gate.reason }}
       />
+      {gone ? (
+        <p id={goneId} role="alert" className="text-destructive-text text-sm">
+          This value was deleted.
+        </p>
+      ) : null}
       {failure !== null ? (
         <p role="alert" className="text-destructive-text text-sm">
           {failure}
@@ -131,7 +150,8 @@ function EditForm({
         </Button>
         <Button
           type="submit"
-          aria-disabled={pending || !gate.writable}
+          aria-disabled={pending || gone || !gate.writable}
+          aria-describedby={gone ? goneId : undefined}
           aria-busy={pending}
           className="aria-busy:pointer-events-none"
         >

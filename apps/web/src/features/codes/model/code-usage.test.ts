@@ -28,29 +28,31 @@ describe('codeUsage', () => {
 });
 
 describe('the delete sentences', () => {
-  it('say how many carry a value and what they read as, in the singular and the plural', () => {
+  it('say how many use a value and what they show, in the singular and the plural', () => {
     expect(valueDeleteTitle('L1')).toBe('Delete L1?');
     expect(valueDeleteSentence(3, 'Area')).toBe(
-      '3 activities carry it. They will read as having no Area until you restore it.',
+      '3 activities use it. They will show no Area until you restore it.',
     );
     expect(valueDeleteSentence(1, 'Area')).toBe(
-      '1 activity carries it. It will read as having no Area until you restore it.',
+      '1 activity uses it. It will show no Area until you restore it.',
     );
     expect(valueDeleteSentence(0, 'Area')).toBe(
-      'No activity carries it. You can restore it from Deleted values.',
+      'No activities use it. You can restore it from Deleted values.',
     );
   });
 
-  it('count a type’s values in the title and its carriers in the sentence', () => {
+  it('claim no count while the activities are still loading', () => {
+    const sentence = valueDeleteSentence(undefined, 'Area');
+    expect(sentence).toBe('Activities that use it will show no Area until you restore it.');
+    expect(sentence).not.toMatch(/\bNo activities\b/);
+  });
+
+  it('count a type’s values in the title and say what its removal shows', () => {
     expect(typeDeleteTitle('Area', 4)).toBe('Delete Area and its 4 values?');
     expect(typeDeleteTitle('Area', 1)).toBe('Delete Area and its 1 value?');
     expect(typeDeleteTitle('Area', 0)).toBe('Delete Area?');
-    expect(typeDeleteSentence(6, 'Area')).toBe(
-      '6 activities carry a value of Area. They will read as having no Area until you restore it.',
-    );
-    expect(typeDeleteSentence(1, 'Area')).toContain('1 activity carries a value of Area.');
-    expect(typeDeleteSentence(0, 'Area')).toBe(
-      'No activity carries a value of Area. You can restore it from Deleted code types.',
+    expect(typeDeleteSentence('Area')).toBe(
+      'Activities that use Area will show no Area until you restore it. You can do that from Deleted code types.',
     );
   });
 });

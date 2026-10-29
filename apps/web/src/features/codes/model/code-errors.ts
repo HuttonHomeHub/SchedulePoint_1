@@ -44,6 +44,6 @@ export function codeErrorText(action: string, error: unknown, subject?: string):
     }
     if (error.status === 422) return `Could not ${action}: ${error.message}`;
   }
-  const message = error instanceof Error ? error.message : 'something went wrong.';
-  return `Could not ${action}: ${message}`;
+  // Anything else (a 500, a 403, a dropped connection) has no sentence meant for a planner.
+  return `Could not ${action}: something went wrong. Try again.`;
 }

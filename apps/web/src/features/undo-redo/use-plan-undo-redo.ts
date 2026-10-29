@@ -27,6 +27,10 @@ import type { HistoryEntries, PlanEditHistory, StepOutcome } from './use-plan-ed
 
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import { activityStepsQueryOptions } from '@/features/activities/api/use-activity-steps';
+// The codes and swimlanes features import this one for their commands and this one imports their
+// query options to replay them: the same two-way edge `swimlanesQueryOptions` already has, so it is
+// matched here rather than threaded through `ReplayContext`. It carries query options only, no
+// components.
 import { codeTypesQueryOptions } from '@/features/codes/api/use-code-types';
 import { codeValuesQueryOptions } from '@/features/codes/api/use-code-values';
 import {

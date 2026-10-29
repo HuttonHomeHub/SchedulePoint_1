@@ -23,31 +23,28 @@ export function codeUsage(activities: readonly { codes?: ActivityCodeAssignment[
   return { byValue, byType };
 }
 
-const activitiesCount = (count: number): string =>
-  count === 1 ? '1 activity' : `${String(count)} activities`;
-
 /**
- * What deleting a value does, for the confirmation: who carries it and what they read as. True of the
- * server: a deleted value is absent from `codes`, and a restore brings every carrier back.
+ * What deleting a value does, for the confirmation: who uses it and what they show. True of the
+ * server: a deleted value is absent from `codes`, and a restore brings every carrier back. `count` is
+ * `undefined` while the plan's activities are still loading, and then the sentence says nothing about
+ * how many rather than claiming none.
  */
-export function valueDeleteSentence(count: number, typeName: string): string {
-  if (count === 0) return 'No activity carries it. You can restore it from Deleted values.';
+export function valueDeleteSentence(count: number | undefined, typeName: string): string {
+  if (count === undefined) {
+    return `Activities that use it will show no ${typeName} until you restore it.`;
+  }
+  if (count === 0) return 'No activities use it. You can restore it from Deleted values.';
   return count === 1
-    ? `1 activity carries it. It will read as having no ${typeName} until you restore it.`
-    : `${activitiesCount(count)} carry it. They will read as having no ${typeName} until you restore it.`;
+    ? `1 activity uses it. It will show no ${typeName} until you restore it.`
+    : `${String(count)} activities use it. They will show no ${typeName} until you restore it.`;
 }
 
 /** The title for the same confirmation: "Delete L1?". */
 export const valueDeleteTitle = (shortCode: string): string => `Delete ${shortCode}?`;
 
-/** What deleting a type does: its values go with it, and so does every carrier's value of it. */
-export function typeDeleteSentence(count: number, typeName: string): string {
-  if (count === 0) {
-    return `No activity carries a value of ${typeName}. You can restore it from Deleted code types.`;
-  }
-  return count === 1
-    ? `1 activity carries a value of ${typeName}. It will read as having no ${typeName} until you restore it.`
-    : `${activitiesCount(count)} carry a value of ${typeName}. They will read as having no ${typeName} until you restore it.`;
+/** What deleting a type does: its values go with it, and so does every activity's value of it. */
+export function typeDeleteSentence(typeName: string): string {
+  return `Activities that use ${typeName} will show no ${typeName} until you restore it. You can do that from Deleted code types.`;
 }
 
 /** "Delete Area and its 4 values?", or "Delete Area?" when it has none. */

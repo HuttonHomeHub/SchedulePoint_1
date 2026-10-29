@@ -35,6 +35,7 @@ import { QueryErrorState } from '@/components/ui/query-error-state';
 import { Tabs, type TabDescriptor } from '@/components/ui/tabs';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 import type { Command } from '@/features/undo-redo';
+import { ApiFetchError } from '@/lib/api/client';
 
 export interface CodesDialogProps {
   open: boolean;
@@ -82,6 +83,8 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
   const removedRowRef = useRef<RemovedRow | null>(null);
   const removedTypeRef = useRef<string | null>(null);
   const addValueOnRef = useRef<string | null>(null);
+  // The body publishes "focus the selected tab" here, for a type delete to call as soon as it lands.
+  const focusTabRef = useRef<(() => void) | null>(null);
 
   const usage = useMemo(() => (open ? codeUsage(activities ?? []) : NO_USAGE), [open, activities]);
 
@@ -104,6 +107,12 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
       ? (stackedValues.data.find((value) => value.id === stacked.valueId) ?? null)
       : null;
   const shutStacked = (): void => setStacked(null);
+  // A colleague can delete the very thing a stacked editor is open on. The editor stays open and says
+  // so, rather than closing under the reader; "gone" is only claimed once the list has been read.
+  const typeGone = types.isSuccess && stackedType === null;
+  const valueGone =
+    stacked?.kind === 'edit-value' &&
+    (typeGone || (stackedValues.isSuccess && stackedValue === null));
 
   return (
     <>
@@ -111,7 +120,7 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
         open={open}
         onClose={close}
         title="Codes"
-        description="P6 activity codes. Changes apply at once. Each is one step you can undo."
+        description="Labels such as Area or Trade that you give to activities (P6 activity codes). Changes apply at once, and each one can be undone."
         size="xl"
         body="flush"
       >
@@ -131,6 +140,7 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
             removedRowRef={removedRowRef}
             removedTypeRef={removedTypeRef}
             addValueOnRef={addValueOnRef}
+            focusTabRef={focusTabRef}
           />
         </FieldGateProvider>
       </Dialog>
@@ -138,6 +148,7 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
         open={stacked?.kind === 'rename-type'}
         onClose={shutStacked}
         type={stacked?.kind === 'rename-type' ? stackedType : null}
+        gone={stacked?.kind === 'rename-type' && typeGone}
         otherNames={list.filter((type) => type.id !== stackedType?.id).map((type) => type.name)}
         actions={actions}
         gate={gate}
@@ -146,6 +157,7 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
         open={stacked?.kind === 'edit-value'}
         onClose={shutStacked}
         value={stacked?.kind === 'edit-value' ? stackedValue : null}
+        gone={valueGone}
         typeName={stackedType?.name ?? ''}
         otherShortCodes={stacked?.kind === 'edit-value' ? stacked.others : []}
         actions={actions}
@@ -155,7 +167,12 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
         open={stacked?.kind === 'delete-type' || stacked?.kind === 'delete-value'}
         onClose={shutStacked}
         title={deleteTitle(stacked, stackedType, stackedValue)}
-        description={deleteDescription(stacked, stackedType, stackedValue, usage)}
+        description={deleteDescription(
+          stacked,
+          stackedType,
+          stackedValue,
+          activities ? usage : null,
+        )}
         confirmLabel={stacked?.kind === 'delete-value' ? 'Delete value' : 'Delete code type'}
         failureAction={deleteAction(stacked, stackedType, stackedValue)}
         describeFailure={(action, cause) => codeErrorText(action, cause, stackedType?.name)}
@@ -168,13 +185,21 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
             await actions.removeValue(stackedValue);
             return `Value ${stackedValue.shortCode} deleted. Undo brings it back.`;
           }
-          throw new Error('That row is no longer there.');
+          // Deleted by a colleague between opening this and pressing Delete: reads as any other stale write.
+          throw new ApiFetchError(404, {
+            code: 'NOT_FOUND',
+            message: 'That row is no longer there.',
+          });
         }}
         onDeleted={() => {
           if (stacked?.kind === 'delete-type') {
             // Selects the neighbouring tab, and has focus follow once the removed one has left.
             removedTypeRef.current = stacked.typeId;
             setPicked(neighbourOf(stacked.order, stacked.typeId) ?? null);
+            // At once, not after the refetch: the pane that held the Delete button this dialog
+            // returns to is keyed by the type, so it is already gone, and focus would sit on `<body>`
+            // for as long as the refetch takes. One frame later, so the dialog's own restore has run.
+            requestAnimationFrame(() => focusTabRef.current?.());
           } else if (stacked?.kind === 'delete-value') {
             removedRowRef.current = { id: stacked.valueId, order: stacked.order, verb: 'delete' };
           }
@@ -199,13 +224,12 @@ function deleteDescription(
   stacked: Stacked | null,
   type: CodeTypeSummary | null,
   value: CodeValueSummary | null,
-  usage: CodeUsage,
+  usage: CodeUsage | null,
 ): string {
-  if (stacked?.kind === 'delete-type' && type) {
-    return typeDeleteSentence(usage.byType.get(type.id) ?? 0, type.name);
-  }
+  if (stacked?.kind === 'delete-type' && type) return typeDeleteSentence(type.name);
   if (stacked?.kind === 'delete-value' && value && type) {
-    return valueDeleteSentence(usage.byValue.get(value.id) ?? 0, type.name);
+    // No counts yet is not "no carriers": the sentence must not claim what it has not read.
+    return valueDeleteSentence(usage ? (usage.byValue.get(value.id) ?? 0) : undefined, type.name);
   }
   return '';
 }
@@ -234,6 +258,7 @@ interface BodyProps {
   removedRowRef: React.RefObject<RemovedRow | null>;
   removedTypeRef: React.RefObject<string | null>;
   addValueOnRef: React.RefObject<string | null>;
+  focusTabRef: React.RefObject<(() => void) | null>;
 }
 
 function CodesBody({
@@ -251,11 +276,10 @@ function CodesBody({
   removedRowRef,
   removedTypeRef,
   addValueOnRef,
+  focusTabRef,
 }: BodyProps): React.ReactElement {
   const announce = useAnnounce();
   const reasonId = useFieldGate()?.reasonId;
-  const [name, setName] = useState('');
-  const [problem, setProblem] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -281,6 +305,12 @@ function CodesBody({
 
   const selectedTab = (): HTMLElement | null =>
     railRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? null;
+  useLayoutEffect(() => {
+    focusTabRef.current = () => selectedTab()?.focus();
+    return () => {
+      focusTabRef.current = null;
+    };
+  });
 
   // Opening focuses the selected tab, or the Add form when there are no types (focus rule 1). Once the
   // types have arrived, and one frame later so `Dialog`'s own `showModal()` focusing has run first.
@@ -334,31 +364,6 @@ function CodesBody({
     }
   };
 
-  const add = (): Promise<void> => {
-    // Shut first: a name problem is not worth reporting to a reader who cannot add anyway.
-    if (busy || shut) return Promise.resolve();
-    const trouble = typeNameProblem(
-      name,
-      list.map((type) => type.name),
-    );
-    if (trouble !== null) {
-      setProblem(trouble);
-      // The first invalid field takes focus, so the problem is where the caret is.
-      nameRef.current?.focus();
-      return Promise.resolve();
-    }
-    return run(`add ${name.trim()}`, async () => {
-      const created = await actions.addType(name.trim());
-      setName('');
-      setProblem(null);
-      // Selects the new tab, and arms the pane's Add value field: the next thing to type is a value
-      // (focus rule 2). The list has refetched by now, so the type exists to be selected.
-      addValueOnRef.current = created.id;
-      onPick(created.id);
-      announce(`Code type ${created.name} added.`);
-    });
-  };
-
   const moveType = (type: CodeTypeSummary, delta: -1 | 1): void => {
     void run(`move ${type.name}`, async () => {
       const moved = await actions.moveType(list, type.id, delta);
@@ -369,39 +374,14 @@ function CodesBody({
   };
 
   const tabs: TabDescriptor<string>[] = list.map((type) => ({ id: type.id, label: type.name }));
-  const addForm = gate.roleDenied ? null : (
-    <form
-      noValidate
-      className="flex flex-col gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void add();
-      }}
-    >
-      <TextField
-        ref={nameRef}
-        label="New code type"
-        data-new-code-type
-        value={name}
-        onChange={(event) => {
-          setProblem(null);
-          setName(event.target.value);
-        }}
-        error={problem ?? undefined}
-        gate={{ writable: gate.writable, reason: null }}
-        aria-describedby={reasonId}
-      />
-      <Button
-        type="submit"
-        aria-disabled={busy || shut}
-        aria-busy={busy}
-        aria-describedby={reasonId}
-      >
-        Add code type
-      </Button>
-    </form>
-  );
-
+  const names = list.map((type) => type.name);
+  const onTypeAdded = (created: CodeTypeSummary): void => {
+    // Selects the new tab, and arms the pane's Add value field: the next thing to type is a value
+    // (focus rule 2). The list has refetched by now, so the type exists to be selected.
+    addValueOnRef.current = created.id;
+    onPick(created.id);
+    announce(`Code type ${created.name} added.`);
+  };
   let main: React.ReactNode;
   if (types.isPending) {
     // The settled shape (ADR-0202): a three-tab rail beside an empty pane, and one sentence.
@@ -471,14 +451,31 @@ function CodesBody({
     <div className="flex min-h-0 flex-1 flex-col" {...wrapperProps}>
       {main}
       <div className="border-border flex min-h-0 border-t">
-        {/* The rail's foot: the restore list and the Add form sit under the tabs in the rail's own
-            column, and scroll by themselves so a long list of deleted types cannot push the form
-            out of a 600 px window. */}
-        <div className="bg-muted border-border flex max-h-64 w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r p-2">
+        {/* The rail's foot sits under the tabs in the rail's own column, so it is exactly as wide as
+            the rail: `w-52` here and in `Tabs`' vertical rail are one number, pinned together by a
+            test, and moving one without the other leaves a step in the dialog's left edge. It scrolls
+            by itself, so a long list of deleted types cannot push the form out of a 600 px window.
+            The Add form leads because it is the common act, and the height is reserved from the first
+            frame so the cell does not grow under the pointer when the types arrive. */}
+        <div
+          data-codes-rail-foot
+          className={`bg-muted border-border flex max-h-64 w-52 shrink-0 flex-col gap-3 overflow-y-auto border-r p-2 ${gate.roleDenied ? '' : 'min-h-44'}`}
+        >
+          {types.isSuccess && !gate.roleDenied ? (
+            <AddTypeForm
+              names={names}
+              gate={gate}
+              reasonId={reasonId}
+              inputRef={nameRef}
+              busy={busy}
+              run={run}
+              actions={actions}
+              onAdded={onTypeAdded}
+            />
+          ) : null}
           {types.isSuccess && gate.canRestore ? (
             <DeletedCodeTypes orgSlug={orgSlug} planId={planId} actions={actions} gate={gate} />
           ) : null}
-          {types.isSuccess ? addForm : null}
         </div>
         <div className="flex flex-1 flex-col items-end justify-end gap-2 p-2">
           {failure !== null ? (
@@ -492,5 +489,86 @@ function CodesBody({
         </div>
       </div>
     </div>
+  );
+}
+
+interface AddTypeFormProps {
+  names: readonly string[];
+  gate: CodesGate;
+  reasonId: string | undefined;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  busy: boolean;
+  run: (action: string, work: () => Promise<void>) => Promise<void>;
+  actions: CodeActions;
+  onAdded: (created: CodeTypeSummary) => void;
+}
+
+/**
+ * The Add code type form. Its draft lives here and not in the body, so typing re-renders this form
+ * and nothing else: the pane and its (up to 1,000) value rows are not touched by a keystroke.
+ */
+function AddTypeForm({
+  names,
+  gate,
+  reasonId,
+  inputRef,
+  busy,
+  run,
+  actions,
+  onAdded,
+}: AddTypeFormProps): React.ReactElement {
+  const [name, setName] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const shut = !gate.writable;
+
+  const add = (): Promise<void> => {
+    // Shut first: a name problem is not worth reporting to a reader who cannot add anyway.
+    if (busy || shut) return Promise.resolve();
+    const trouble = typeNameProblem(name, names);
+    if (trouble !== null) {
+      setProblem(trouble);
+      // The first invalid field takes focus, so the problem is where the caret is.
+      inputRef.current?.focus();
+      return Promise.resolve();
+    }
+    return run(`add ${name.trim()}`, async () => {
+      const created = await actions.addType(name.trim());
+      setName('');
+      setProblem(null);
+      onAdded(created);
+    });
+  };
+
+  return (
+    <form
+      noValidate
+      className="flex flex-col gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+    >
+      <TextField
+        ref={inputRef}
+        label="New code type"
+        data-new-code-type
+        value={name}
+        onChange={(event) => {
+          setProblem(null);
+          setName(event.target.value);
+        }}
+        error={problem ?? undefined}
+        gate={{ writable: gate.writable, reason: null }}
+        aria-describedby={reasonId}
+      />
+      <Button
+        type="submit"
+        aria-disabled={busy || shut}
+        aria-busy={busy}
+        aria-describedby={reasonId}
+      >
+        Add code type
+      </Button>
+    </form>
   );
 }

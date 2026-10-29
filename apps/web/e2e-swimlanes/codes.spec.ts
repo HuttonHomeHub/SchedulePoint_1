@@ -155,7 +155,7 @@ test.describe('Codes…', () => {
       await dialog.getByRole('button', { name: 'Delete L1' }).click();
       const confirm = page.getByRole('alertdialog', { name: 'Delete L1?' });
       await expect(confirm).toContainText(
-        '3 activities carry it. They will read as having no Area until you restore it.',
+        '3 activities use it. They will show no Area until you restore it.',
       );
       await confirm.getByRole('button', { name: 'Delete value' }).click();
       await expect(confirm).toBeHidden();
@@ -185,6 +185,67 @@ test.describe('Codes…', () => {
       const reopened = await openCodes(page);
       await reopened.getByRole('tab', { name: 'Area' }).click();
       await expect.poll(() => paneRows(reopened, 'Area')).toContain('L1');
+    });
+
+    await test.step('6. deleting values hands focus to the next row’s Delete, and the last one to Add value', async () => {
+      const dialog = page.getByRole('dialog', DIALOG);
+      await dialog.getByRole('tab', { name: 'Phase' }).click();
+      expect(await paneRows(dialog, 'Phase')).toEqual(['PH1', 'PH2', 'PH3']);
+      for (const [gone, next] of [
+        ['PH1', 'Delete PH2'],
+        ['PH2', 'Delete PH3'],
+      ] as const) {
+        await dialog.getByRole('button', { name: `Delete ${gone}` }).click();
+        await page
+          .getByRole('alertdialog', { name: `Delete ${gone}?` })
+          .getByRole('button', { name: 'Delete value' })
+          .click();
+        await expect(dialog.getByRole('button', { name: `Delete ${gone}` })).toHaveCount(0);
+        await expectFocused(page, dialog.getByRole('button', { name: next }));
+      }
+      await dialog.getByRole('button', { name: 'Delete PH3' }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Delete PH3?' })
+        .getByRole('button', { name: 'Delete value' })
+        .click();
+      await expect(dialog.getByRole('button', { name: 'Delete PH3' })).toHaveCount(0);
+      // Nothing left to delete: the next thing to do in this pane is add one.
+      await expectFocused(page, dialog.getByLabel('Short code'));
+    });
+
+    await test.step('7. deleting a type focuses the neighbouring tab at once', async () => {
+      const dialog = page.getByRole('dialog', DIALOG);
+      await dialog.getByRole('button', { name: 'Delete…' }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Delete Phase?' })
+        .getByRole('button', { name: 'Delete code type' })
+        .click();
+      await expect(dialog.getByRole('tab', { name: 'Phase' })).toHaveCount(0);
+      // Phase was followed by System, which takes the selection and the focus.
+      await expectFocused(page, dialog.getByRole('tab', { name: 'System', selected: true }));
+      await dialog.getByRole('button', { name: 'Delete…' }).click();
+      await page
+        .getByRole('alertdialog', { name: /^Delete System/ })
+        .getByRole('button', { name: 'Delete code type' })
+        .click();
+      await expect(dialog.getByRole('tab', { name: 'System' })).toHaveCount(0);
+      // System was last, so the previous tab takes it.
+      await expectFocused(page, dialog.getByRole('tab', { name: 'Trade', selected: true }));
+    });
+
+    await test.step('8. restoring hands focus to the next Restore, and the last one to the list’s toggle', async () => {
+      const dialog = page.getByRole('dialog', DIALOG);
+      const toggle = dialog.getByRole('button', { name: /^Deleted code types/ });
+      await toggle.click();
+      const restores = dialog.getByRole('list', { name: 'Deleted code types' }).getByRole('button');
+      await expect(restores).toHaveCount(2);
+      await restores.first().click();
+      await expect(restores).toHaveCount(1);
+      await expectFocused(page, restores.first());
+      await restores.first().click();
+      await expect(dialog.getByText('Nothing deleted.')).toBeVisible();
+      await expectFocused(page, dialog.getByRole('button', { name: /^Deleted code types/ }));
+      await expect(dialog.getByRole('tab')).toHaveCount(4);
     });
   });
 });
@@ -223,6 +284,34 @@ test.describe('Codes… at the 1024 × 600 floor', () => {
       { org: orgSlug, id: planId, area: types['Area']! },
     );
     expect(failures).toEqual([]);
+    // Four deleted types, so the Deleted code types list has rows to push the Add form with.
+    const leftovers = await page.evaluate(
+      async ({ org, id }: { org: string; id: string }) => {
+        const bad: string[] = [];
+        const base = `/api/v1/organizations/${org}/plans/${id}/code-types`;
+        for (let i = 1; i <= 4; i += 1) {
+          const made = await fetch(base, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: `Gone ${String(i)}` }),
+          });
+          if (!made.ok) {
+            bad.push(`create ${String(made.status)}`);
+            continue;
+          }
+          const created = (await made.json()) as { data: { id: string; version: number } };
+          const removed = await fetch(
+            `${base}/${created.data.id}?version=${String(created.data.version)}`,
+            { method: 'DELETE', credentials: 'include' },
+          );
+          if (!removed.ok) bad.push(`delete ${String(removed.status)}`);
+        }
+        return bad;
+      },
+      { org: orgSlug, id: planId },
+    );
+    expect(leftovers).toEqual([]);
     await page.setViewportSize({ width: 1024, height: 600 });
     await page.waitForTimeout(500);
 
@@ -249,24 +338,37 @@ test.describe('Codes… at the 1024 × 600 floor', () => {
 
     // The rail's Add form is under the tabs, in view with no scrolling; the pane's is reached by
     // scrolling the pane, and is then a pointer hit and not covered by anything.
-    for (const name of ['Add code type', 'Add value']) {
-      const control = dialog.getByRole('button', { name });
-      await control.scrollIntoViewIfNeeded();
-      const hit = await control.evaluate((el) => {
-        const box = el.getBoundingClientRect();
-        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-        return {
-          ok: top !== null && (top === el || el.contains(top)),
-          found:
-            top === null
-              ? 'nothing'
-              : `${top.tagName.toLowerCase()} ${top.textContent ?? ''}`.slice(0, 60),
-          box: `${String(Math.round(box.top))}-${String(Math.round(box.bottom))} of ${String(window.innerHeight)}`,
-        };
-      });
-      expect(hit.ok, `${name} cannot be reached by a pointer: ${hit.found} at ${hit.box}`).toBe(
-        true,
-      );
-    }
+    const expectReachable = async (when: string): Promise<void> => {
+      for (const name of ['Add code type', 'Add value']) {
+        const control = dialog.getByRole('button', { name });
+        await control.scrollIntoViewIfNeeded();
+        const hit = await control.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          return {
+            ok: top !== null && (top === el || el.contains(top)),
+            found:
+              top === null
+                ? 'nothing'
+                : `${top.tagName.toLowerCase()} ${top.textContent ?? ''}`.slice(0, 60),
+            box: `${String(Math.round(box.top))}-${String(Math.round(box.bottom))} of ${String(window.innerHeight)}`,
+          };
+        });
+        expect(
+          hit.ok,
+          `${name} cannot be reached by a pointer ${when}: ${hit.found} at ${hit.box}`,
+        ).toBe(true);
+      }
+    };
+    await expectReachable('with the lists folded');
+
+    // Both Deleted lists open: the rail's foot scrolls by itself and the Add form leads it, so the
+    // longer list cannot push the form out of the window.
+    await dialog.getByRole('button', { name: /^Deleted code types/ }).click();
+    await expect(
+      dialog.getByRole('list', { name: 'Deleted code types' }).getByRole('button'),
+    ).toHaveCount(4);
+    await dialog.getByRole('button', { name: /^Deleted values/ }).click();
+    await expectReachable('with the Deleted lists open');
   });
 });
