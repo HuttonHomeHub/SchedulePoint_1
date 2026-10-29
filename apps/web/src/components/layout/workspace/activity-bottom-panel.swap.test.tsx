@@ -1,4 +1,4 @@
-import { render, renderHook, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -108,5 +108,22 @@ describe('ActivityBottomPanel while the diagram is hidden', () => {
     expect(screen.getByRole('button', { name: 'Collapse activities panel' })).not.toHaveAttribute(
       'aria-describedby',
     );
+  });
+});
+
+describe('ActivityBottomPanel Codes…', () => {
+  it('opens the Codes dialog from the header, for a reader who cannot edit', () => {
+    const onOpenCodes = vi.fn();
+    render(
+      <ActivityBottomPanel model={panelModel()} onCollapse={NOOP} onOpenCodes={onOpenCodes} />,
+    );
+    // The model above has `canEditSchedule: false`: Codes… is for every reader, who opens it to look.
+    fireEvent.click(screen.getByRole('button', { name: 'Codes…' }));
+    expect(onOpenCodes).toHaveBeenCalledTimes(1);
+  });
+
+  it('is absent when the host offers no way to open it', () => {
+    render(<ActivityBottomPanel model={panelModel()} onCollapse={NOOP} />);
+    expect(screen.queryByRole('button', { name: 'Codes…' })).not.toBeInTheDocument();
   });
 });

@@ -70,6 +70,7 @@ import { type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
+import { deriveCodesGate, useCodesDialog } from '@/features/codes';
 import {
   FloatPathsPanel,
   useFloatPathsPanelPrefs,
@@ -165,6 +166,11 @@ import { useReparentActivities } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
+
+/** The Codes… dialog, fetched the first time it is asked for (see `useCodesDialog`). */
+const CodesDialog = lazy(() =>
+  import('@/features/codes/components/CodesDialog').then((m) => ({ default: m.CodesDialog })),
+);
 
 /** The swimlane dialogs, fetched the first time one is asked for (see `swimlaneDialogsWanted`). */
 const SwimlaneDialogs = lazy(() =>
@@ -299,6 +305,22 @@ export function ToolbarPlanWorkspace({
   ) {
     setSwimlaneDialogsWanted(true);
   }
+  // Codes… (P6 activity codes, M3-T1). Its writes are pen-gated like every other structural plan write;
+  // `roleDenied` is read off the editor's own gate (the same role rule), because no pen hand-off will
+  // ever open the controls for a role that cannot write.
+  const codesDialog = useCodesDialog();
+  const codesRoleDenied = model.activityEditorGating.general.roleDenied === true;
+  const codesWritable = model.canEditSchedule;
+  const codesReason = model.scheduleRefusal('change codes');
+  const codesGate = useMemo(
+    () =>
+      deriveCodesGate({
+        writable: codesWritable,
+        reason: codesReason,
+        roleDenied: codesRoleDenied,
+      }),
+    [codesWritable, codesReason, codesRoleDenied],
+  );
   const swimlanesManage = useMemo(
     () => ({ label: swimlaneManagement.manageLabel, open: swimlaneManagement.openSwimlanes }),
     [swimlaneManagement.manageLabel, swimlaneManagement.openSwimlanes],
@@ -2846,6 +2868,7 @@ export function ToolbarPlanWorkspace({
                       toolDisarmed={toolPutAway}
                       collapseRef={collapseButtonRef}
                       swimlanes={tableSwimlanes}
+                      onOpenCodes={codesDialog.request}
                     />
                   </div>
                 </>
@@ -2882,6 +2905,19 @@ export function ToolbarPlanWorkspace({
 
         {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
         <ActivityCrudDialogs model={model} swimlaneAssignment={swimlaneAssignment} />
+        {codesDialog.wanted ? (
+          <Suspense fallback={null}>
+            <CodesDialog
+              open={codesDialog.open}
+              onClose={codesDialog.close}
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              activities={model.activities.data}
+              gate={codesGate}
+              record={model.recordCodeEdit}
+            />
+          </Suspense>
+        ) : null}
         {swimlaneDialogsWanted ? (
           <Suspense fallback={null}>
             <SwimlaneDialogs {...swimlaneManagement.dialogs} />
