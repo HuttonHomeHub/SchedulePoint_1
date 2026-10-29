@@ -24,6 +24,10 @@ import { clearDomainData } from '../audit-reset';
  *   DATABASE_URL=postgresql://… MEASURE_OUT=/path/run.txt pnpm --filter @repo/api exec vitest run \
  *     --config vitest.measure.config.mts codes-reads
  *
+ * M3-T0 adds the on-demand reads (p6-activity-codes m3-plan T0, ADR-0142): the 100 x 1,000 plan also
+ * holds 1,000 deleted values on its first type and 100 deleted types, and the cases are the plan's
+ * ceilings (`m3-record.md` §1).
+ *
  * Each figure is a wall-clock HTTP round trip through the real application (guards, validation, the
  * service, Prisma), warm, `ITER` repetitions, reported as p50 and p95 in milliseconds. The ids are v4
  * (`gen_random_uuid()`), so the index locality is the worst case, not the v7 an import writes.
@@ -131,6 +135,17 @@ describe('codes — request-path cost', () => {
       SELECT gen_random_uuid(), ${orgId}::uuid, ct.id, 'V' || v, 'Value number ' || v, v, 1, now(), now()
       FROM code_types ct, generate_series(0, 999) AS v
       WHERE ct.plan_id = ${worst}::uuid`;
+    // The include=deleted cases (m3-plan T0): the first type also holds 1,000 deleted values, and the
+    // plan 100 deleted types, so a page that must show deleted rows has the most to read.
+    await prisma.$executeRaw`
+      INSERT INTO code_values (id, organization_id, code_type_id, short_code, position, version, created_at, updated_at, deleted_at, delete_batch_id)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ct.id, 'D' || v, 1000 + v, 1, now(), now(), now(), gen_random_uuid()
+      FROM (SELECT id FROM code_types WHERE plan_id = ${worst}::uuid ORDER BY position, id LIMIT 1) ct,
+           generate_series(0, 999) AS v`;
+    await prisma.$executeRaw`
+      INSERT INTO code_types (id, organization_id, plan_id, name, position, version, created_at, updated_at, deleted_at, delete_batch_id)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ${worst}::uuid, 'Deleted ' || t, 100 + t, 1, now(), now(), now(), gen_random_uuid()
+      FROM generate_series(0, 99) AS t`;
     await prisma.$executeRawUnsafe('ANALYZE');
 
     const out: string[] = [];
@@ -240,6 +255,43 @@ describe('codes — request-path cost', () => {
       'GET code-types: 100 types x 1,000 values (100,000 values)',
       () => typeList(worst),
       5,
+    );
+
+    // M3-T0: the on-demand reads, against the ceilings in m3-plan.md.
+    const typesNone = (planId: string, extra = '') =>
+      agent.get(`${API}/plans/${planId}/code-types?values=none${extra}`).expect(200);
+    const firstType = (await typesNone(worst)).body.data[0].id as string;
+    const typeValues = (planId: string, typeId: string, query = '') =>
+      agent.get(`${API}/plans/${planId}/code-types/${typeId}/values${query}`).expect(200);
+    await time('GET code-types?values=none: 100 types', () => typesNone(worst));
+    await time('GET code-types/:first/values: 1,000 values', () => typeValues(worst, firstType));
+    await time('Codes… first paint: values=none + first type values (together)', async () => {
+      await typesNone(worst);
+      await typeValues(worst, firstType);
+    });
+    await time('GET code-types/:id/values?include=deleted: 1,000 live + 1,000 deleted', () =>
+      typeValues(worst, firstType, '?include=deleted'),
+    );
+    await time('GET code-types?values=none&include=deleted: 100 live + 100 deleted types', () =>
+      typesNone(worst, '&include=deleted'),
+    );
+    const oneEach = (await prisma.$queryRaw`
+      SELECT DISTINCT ON (ct.id) cv.id FROM code_values cv JOIN code_types ct ON ct.id = cv.code_type_id
+      WHERE ct.plan_id = ${worst}::uuid AND ct.deleted_at IS NULL AND cv.deleted_at IS NULL
+      ORDER BY ct.id, cv.position`) as { id: string }[];
+    const ids = oneEach.map((r) => `id=${r.id}`).join('&');
+    await time(`GET code-values?id= x ${oneEach.length} ids across ${oneEach.length} types`, () =>
+      agent.get(`${API}/plans/${worst}/code-values?${ids}`).expect(200),
+    );
+    const detailOf = async (planId: string): Promise<string> =>
+      (await prisma.activity.findFirstOrThrow({ where: { planId }, select: { id: true } })).id;
+    const codedDetail = await detailOf(coded);
+    const plainDetail = await detailOf(plain);
+    await time('GET activities/:id, plan with no code type', () =>
+      agent.get(`${API}/activities/${plainDetail}`).expect(200),
+    );
+    await time('GET activities/:id, 30-type coded plan, every type set', () =>
+      agent.get(`${API}/activities/${codedDetail}`).expect(200),
     );
 
     process.stdout.write(`\n${out.join('\n')}\n`);
