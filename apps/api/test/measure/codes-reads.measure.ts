@@ -275,10 +275,10 @@ describe('codes — request-path cost', () => {
     await time('GET code-types?values=none&include=deleted: 100 live + 100 deleted types', () =>
       typesNone(worst, '&include=deleted'),
     );
-    const oneEach = (await prisma.$queryRaw`
+    const oneEach = await prisma.$queryRaw<{ id: string }[]>`
       SELECT DISTINCT ON (ct.id) cv.id FROM code_values cv JOIN code_types ct ON ct.id = cv.code_type_id
       WHERE ct.plan_id = ${worst}::uuid AND ct.deleted_at IS NULL AND cv.deleted_at IS NULL
-      ORDER BY ct.id, cv.position`) as { id: string }[];
+      ORDER BY ct.id, cv.position`;
     const ids = oneEach.map((r) => `id=${r.id}`).join('&');
     await time(`GET code-values?id= x ${oneEach.length} ids across ${oneEach.length} types`, () =>
       agent.get(`${API}/plans/${worst}/code-values?${ids}`).expect(200),
