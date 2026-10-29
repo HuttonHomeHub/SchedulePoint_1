@@ -63,6 +63,7 @@ import {
   type CloneRefusal,
 } from '@/features/activity-copy';
 import { useCreateClonedActivity } from '@/features/activity-copy/api/use-clone-activities';
+import { useWriteActivityCodes } from '@/features/codes';
 import {
   useCloneCarriage,
   type SkippedAssignment,
@@ -853,6 +854,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // the inverse is now the id-stable batch restore, so there is nothing left here to re-create.
   const createClone = useCreateClonedActivity(orgSlug, planId);
   const cloneCarriage = useCloneCarriage(orgSlug);
+  const writeClonedCodes = useWriteActivityCodes(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
   // The writes the undo history replays for the records beside the bar (undo-redo M3). Each is a
   // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
@@ -2767,16 +2769,56 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         idMap.set(step.sourceId, row.id);
         created.push(row);
         if (step.parentSourceId === null) roots.push({ id: row.id, version: row.version });
+      }
 
-        // Carry the crew and the step breakdown onto this clone before moving to the next (M4).
-        // Inside the same try, so a failure here rolls the whole copy back like any other write —
-        // a clone that exists without the resources it was supposed to carry is a half-copy the
-        // planner has no way to spot, and the confirmation has already promised them otherwise.
+      // **The copies' codes, between the creates and the carriage** (P6 activity codes, M3-T3). A
+      // clone is made by the create DTO, which takes no codes; a copy within the plan keeps its
+      // source's by one write of its own, for every clone whose source carries any. The order is the
+      // one `use-clone-carriage.ts` records: a units-driven assignment create bumps the clone's
+      // version, so a codes write sent AFTER the carriage would 409 on exactly the clones that have a
+      // resource rate and roll the whole paste back. The clone set is at most 50, so this is one
+      // request. A cross-plan paste is refused before any write (`clipboard.ts`), so there is nothing
+      // to drop and count here.
+      const liveById = new Map(rows.map((a) => [a.id, a] as const));
+      const withCodes = plan_.creates.flatMap((step) => {
+        const codes = liveById.get(step.sourceId)?.codes ?? [];
+        const cloneId = idMap.get(step.sourceId);
+        const clone = created.find((c) => c.id === cloneId);
+        return codes.length === 0 || clone === undefined
+          ? []
+          : [
+              {
+                id: clone.id,
+                version: clone.version,
+                codes: codes.map((c) => ({
+                  codeTypeId: c.codeTypeId,
+                  codeValueId: c.codeValueId as string | null,
+                })),
+              },
+            ];
+      });
+      if (withCodes.length > 0) {
+        const written = await writeClonedCodes.mutateAsync({ activities: withCodes });
+        // The carriage and a rollback both address a clone at the version it has NOW.
+        for (const row of written) {
+          const at = created.findIndex((c) => c.id === row.id);
+          if (at !== -1) created[at] = row;
+          const root = roots.find((r) => r.id === row.id);
+          if (root) root.version = row.version;
+        }
+      }
+
+      for (const step of plan_.creates) {
+        // Carry the crew and the step breakdown onto this clone (M4). Inside the same try, so a
+        // failure here rolls the whole copy back like any other write — a clone that exists without
+        // the resources it was supposed to carry is a half-copy the planner has no way to spot, and
+        // the confirmation has already promised them otherwise.
         const source = sources.get(step.sourceId);
-        if (source === undefined) continue;
+        const clone = created.find((c) => c.id === idMap.get(step.sourceId));
+        if (source === undefined || clone === undefined) continue;
         const carried = await cloneCarriage.carry({
-          cloneId: row.id,
-          cloneVersion: row.version,
+          cloneId: clone.id,
+          cloneVersion: clone.version,
           sourceName: step.sourceName,
           assignments: source.assignments,
           steps: source.steps,

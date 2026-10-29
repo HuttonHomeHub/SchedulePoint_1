@@ -122,8 +122,8 @@ describe('the clone field census', () => {
     // the lane rows are server-kept against the source activity. Both classified `withheld`.
     //
     // 67 -> 68 on 2026-10-27: `codes` (P6 activity codes, M2-T4). Sent by the list and the codes write
-    // only, and set by a write of its own, never by the create DTO; carrying it within a plan is
-    // M3-T3's. Classified `withheld`.
+    // only, and set by a write of its own, never by the create DTO. Classified `withheld` from the
+    // create body; a paste within a plan carries it afterwards by one codes write (M3-T3).
     expect(entries.length).toBe(68);
   });
 

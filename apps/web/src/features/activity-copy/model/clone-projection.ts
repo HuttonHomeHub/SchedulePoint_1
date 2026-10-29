@@ -145,10 +145,11 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
   codes: {
     disposition: 'withheld',
     reason:
-      'Code values are set by a write of their own (`PATCH …/activities/codes`), not by the create ' +
-      'DTO, and are sent only by the list. Within one plan a copy will carry them, and across plans ' +
-      'drop and count them (p6-activity-codes design §15 D9); that is the codes milestone M3-T3, so ' +
-      'until then a clone has none.',
+      'Code values are set by a write of their own (`PATCH …/activities/codes`), never by the create ' +
+      'DTO, so the create body carries none. A paste within the plan sends them afterwards: one codes ' +
+      'write for every clone whose source has any, between the creates and the carriage ' +
+      '(`duplicateActivities`). A cross-plan paste is refused before any write, so there is nothing ' +
+      'to drop and count (p6-activity-codes m3-ui-design F5).',
   },
   parentId: {
     disposition: 'transformed',

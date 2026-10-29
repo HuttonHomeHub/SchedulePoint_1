@@ -167,3 +167,40 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
     expect(server.mutations.deleteActivity).not.toHaveBeenCalled();
   });
 });
+
+describe('pasteActivitiesCommand — codes (P6 activity codes, M3-T3)', () => {
+  const coded = [
+    anActivity({ id: 'c1', name: 'Excavate', codes: [{ codeTypeId: 'area', codeValueId: 'gf' }] }),
+    anActivity({ id: 'c2', name: 'Pour', codes: [] }),
+  ];
+
+  it('undoes while the clones still hold the codes the paste left them with', async () => {
+    const { server, command } = harness(coded);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+  });
+
+  it('is set aside when a colleague changed a clone’s codes since, and deletes nothing', async () => {
+    const { server, command } = harness(coded);
+    server.edit('c1', { codes: [{ codeTypeId: 'area', codeValueId: 'rf' }] });
+    expect(await command.undo(server.ctx)).toEqual(notApplicable('changed', 'Excavate'));
+    expect(server.mutations.bulkDelete).not.toHaveBeenCalled();
+  });
+
+  it('is set aside when a colleague coded a clone the paste left uncoded', async () => {
+    const { server, command } = harness(coded);
+    server.edit('c2', { codes: [{ codeTypeId: 'trade', codeValueId: 'civ' }] });
+    expect(await command.undo(server.ctx)).toMatchObject({ reason: 'changed' });
+  });
+
+  it('still undoes after a redo, though the restore’s answer carries no codes', async () => {
+    const { server, command } = harness(coded);
+    await command.undo(server.ctx);
+    await command.redo(server.ctx);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+  });
+
+  it('reads an absent codes key as no codes, so a plan with none is unchanged', async () => {
+    const { server, command } = harness();
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+  });
+});
