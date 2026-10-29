@@ -104,7 +104,11 @@ test.describe('Codes…', () => {
       for (const name of ['Add code type', 'Add value', 'Rename…', 'Delete…', 'Delete L1']) {
         const control = dialog.getByRole('button', { name });
         await expect(control).toHaveAttribute('aria-disabled', 'true');
-        await expect(control).not.toBeDisabled();
+        // Shaded, not disabled: the control stays in the tab order (ADR-0082). `toBeDisabled`
+        // counts `aria-disabled`, so the native attribute is asserted directly.
+        await expect(control).not.toHaveAttribute('disabled');
+        await control.focus();
+        await expect(control).toBeFocused();
       }
       await expect(dialog.getByLabel('New code type')).toHaveAttribute('readonly', '');
       const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();

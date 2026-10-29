@@ -269,7 +269,10 @@ export function CodeTypePane({
     <section
       ref={paneRef}
       aria-labelledby={headingId}
-      className="flex flex-col gap-4 p-4"
+      // `relative`: the rows carry `sr-only` spans, which are `position: absolute`. With no positioned
+      // ancestor below the dialog they escape the tab panel's scroller and stretch the dialog's own
+      // scroll height, so the dialog scrolls under its panes (measured: 1,497 px against 536).
+      className="relative flex flex-col gap-4 p-4"
       onFocusCapture={(event) => {
         const marker = event.target.getAttribute('data-row-action');
         const [id, verb] = marker?.split(':') ?? [];

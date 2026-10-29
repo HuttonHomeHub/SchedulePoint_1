@@ -450,7 +450,7 @@ function CodesBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col" {...wrapperProps}>
       {main}
-      <div className="border-border flex min-h-0 border-t">
+      <div className="border-border flex shrink-0 border-t">
         {/* The rail's foot sits under the tabs in the rail's own column, so it is exactly as wide as
             the rail: `w-52` here and in `Tabs`' vertical rail are one number, pinned together by a
             test, and moving one without the other leaves a step in the dialog's left edge. It scrolls
