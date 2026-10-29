@@ -30,10 +30,14 @@ import type { CreateCodeTypeDto } from './dto/create-code-type.dto';
 import type { ReorderCodeTypesDto } from './dto/reorder-codes.dto';
 import type { UpdateCodeTypeDto } from './dto/update-code-type.dto';
 
-/** A code type with the values it carries in a response. */
+/**
+ * A code type as the list returns it: its live value count always, its values unless `values=none`
+ * left them out.
+ */
 export interface CodeTypeWithValues {
   type: CodeType;
-  values: ListedCodeValue[];
+  values?: ListedCodeValue[];
+  valueCount?: number;
 }
 
 /**
@@ -83,11 +87,23 @@ export class CodeTypesService {
     const hasMore = rows.length > query.limit;
     const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
 
-    // One query for the whole page's values, never one per type.
     const typeIds = pageRows.map((row) => row.id);
-    const valueRows = includeDeleted
-      ? await this.values.findManyAllByTypes(organization.id, typeIds)
-      : await this.values.findManyActiveByTypes(organization.id, typeIds);
+    const meta = { nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null, hasMore };
+    if (query.values === 'none') {
+      const counts = await this.values.countActiveByTypes(organization.id, typeIds);
+      return {
+        items: pageRows.map((type) => ({ type, valueCount: counts.get(type.id) ?? 0 })),
+        meta,
+      };
+    }
+
+    // One query for the whole page's values, never one per type; the count runs beside it.
+    const [counts, valueRows] = await Promise.all([
+      this.values.countActiveByTypes(organization.id, typeIds),
+      includeDeleted
+        ? this.values.findManyAllByTypes(organization.id, typeIds)
+        : this.values.findManyActiveByTypes(organization.id, typeIds),
+    ]);
     const byType = new Map<string, ListedCodeValue[]>();
     for (const value of valueRows) {
       const list = byType.get(value.codeTypeId);
@@ -95,8 +111,12 @@ export class CodeTypesService {
       else byType.set(value.codeTypeId, [value]);
     }
     return {
-      items: pageRows.map((type) => ({ type, values: byType.get(type.id) ?? [] })),
-      meta: { nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null, hasMore },
+      items: pageRows.map((type) => ({
+        type,
+        values: byType.get(type.id) ?? [],
+        valueCount: counts.get(type.id) ?? 0,
+      })),
+      meta,
     };
   }
 

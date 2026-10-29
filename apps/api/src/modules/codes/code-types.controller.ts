@@ -36,6 +36,7 @@ import { CodeTypesService } from './code-types.service';
 import { CodeValuesService } from './code-values.service';
 import { CodeTypeResponseDto, CodeValueResponseDto } from './dto/code-response.dto';
 import { CodeTypeListQueryDto } from './dto/code-type-list-query.dto';
+import { CodeValueListQueryDto } from './dto/code-value-list-query.dto';
 import { CreateCodeTypeDto } from './dto/create-code-type.dto';
 import { CreateCodeValueDto } from './dto/create-code-value.dto';
 import { ReorderCodeTypesDto, ReorderCodeValuesDto } from './dto/reorder-codes.dto';
@@ -67,12 +68,16 @@ export class CodeTypesController {
   @ApiOperation({
     summary: "List a plan's code types, each with its values, in display order. code:read.",
     description:
-      'Cursor-paginated over the types (at most 100 per plan, so one page by default); each page ' +
-      'carries its types’ values in one query. `?include=deleted` adds deleted types and values for ' +
-      'a restore and needs `code:restore`.',
+      'Cursor-paginated over the types (at most 100 per plan, so one page by default); each type ' +
+      'carries `valueCount` (live values). Without `?values=none` each page also carries its types’ ' +
+      'values in one query: that nesting is kept for compatibility and is not what a screen should ' +
+      'use, because at 100 types of 1,000 values it is 100,000 rows. A screen sends `values=none` ' +
+      'and reads a type’s values from `{codeTypeId}/values`. `?include=deleted` adds deleted types ' +
+      '(and, without `values=none`, deleted values) for a restore and needs `code:restore`.',
   })
   @ApiOkResponse({ type: CodeTypeResponseDto, isArray: true })
   @ApiForbiddenResponse({ description: '`include=deleted` without `code:restore`.' })
+  @ApiUnprocessableEntityResponse({ description: 'A malformed `cursor`, `limit` or `values`.' })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -81,7 +86,38 @@ export class CodeTypesController {
   ): Promise<Paginated<CodeTypeResponseDto>> {
     const { items, meta } = await this.types.list(principal, orgSlug, planId, query);
     return new Paginated(
-      items.map(({ type, values }) => CodeTypeResponseDto.from(type, values)),
+      items.map(({ type, values, valueCount }) =>
+        CodeTypeResponseDto.from(type, values, valueCount),
+      ),
+      meta,
+    );
+  }
+
+  @Get(':codeTypeId/values')
+  @ApiOperation({
+    summary: 'List one code type’s values, cursor-paged in display order. code:read.',
+    description:
+      'The default page is the type’s whole cap of 1,000 values, so a live list is one page; a ' +
+      'reorder must name every live value, so a screen needs them all. `?include=deleted` adds the ' +
+      'type’s deleted values (each with `deletedAt`, same order, still paged) and needs ' +
+      '`code:restore`. A deleted, foreign or unknown type is 404.',
+  })
+  @ApiOkResponse({ type: CodeValueResponseDto, isArray: true })
+  @ApiForbiddenResponse({ description: '`include=deleted` without `code:restore`.' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A malformed `cursor`, one that is not a value this listing shows (CODE_CURSOR_UNKNOWN), or a `limit` outside 1–1,000.',
+  })
+  async listValues(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+    @Param('codeTypeId', ParseUUIDPipe) codeTypeId: string,
+    @Query() query: CodeValueListQueryDto,
+  ): Promise<Paginated<CodeValueResponseDto>> {
+    const { items, meta } = await this.values.list(principal, orgSlug, planId, codeTypeId, query);
+    return new Paginated(
+      items.map((value) => CodeValueResponseDto.from(value)),
       meta,
     );
   }

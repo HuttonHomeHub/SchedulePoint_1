@@ -56,7 +56,11 @@ export class ActivitiesController {
   constructor(private readonly service: ActivitiesService) {}
 
   @Get(':activityId')
-  @ApiOperation({ summary: 'Get an activity by id.' })
+  @ApiOperation({
+    summary: 'Get an activity by id.',
+    description:
+      'Carries `codes` (the activity’s code value per type) on a plan that has a live code type.',
+  })
   @ApiOkResponse({ type: ActivityResponseDto })
   async get(
     @CurrentUser() principal: Principal,

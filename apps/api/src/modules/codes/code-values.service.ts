@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type CodeValue } from '@prisma/client';
+import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -22,8 +23,13 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { CodeTypeRepository } from './code-type.repository';
-import { CodeValueRepository } from './code-value.repository';
+import {
+  CodeValueRepository,
+  type ListedCodeValue,
+  type ResolvedCodeValue,
+} from './code-value.repository';
 import { CODE_CONFLICT, CODE_VALUE_LIMIT } from './codes.constants';
+import type { CodeValueListQueryDto } from './dto/code-value-list-query.dto';
 import type { CreateCodeValueDto } from './dto/create-code-value.dto';
 import type { ReorderCodeValuesDto } from './dto/reorder-codes.dto';
 import type { UpdateCodeValueDto } from './dto/update-code-value.dto';
@@ -51,6 +57,71 @@ export class CodeValuesService {
     private readonly audit: AuditService,
     @InjectPinoLogger(CodeValuesService.name) private readonly logger: PinoLogger,
   ) {}
+
+  /**
+   * One live type's values, a page at a time in the order a reorder writes. A foreign, deleted or
+   * unknown type is the same 404; a deleted type's values come back through its restore, so there
+   * is no read of them here.
+   */
+  async list(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    codeTypeId: string,
+    query: CodeValueListQueryDto,
+  ): Promise<{ items: ListedCodeValue[]; meta: PageMeta }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'code:read', organization.id);
+    const includeDeleted = query.include === 'deleted';
+    // Deleted rows are the restore picker's: reading them needs the restore permission.
+    if (includeDeleted) this.assertCan(principal, 'code:restore', organization.id);
+    await this.loadActivePlan(planId, organization.id);
+    if (!(await this.types.findActiveInPlan(codeTypeId, planId, organization.id))) {
+      throw new NotFoundError('Code type not found.');
+    }
+
+    // An absent or filtered-out cursor row would read as an empty page, i.e. as the end of the list.
+    if (
+      query.cursor &&
+      !(await this.values.existsInType(organization.id, codeTypeId, query.cursor, includeDeleted))
+    ) {
+      throw new ValidationError('The cursor is not a value of this code type.', {
+        reason: CODE_CONFLICT.CURSOR_UNKNOWN,
+      });
+    }
+
+    const rows = await this.values.findPageByType({
+      organizationId: organization.id,
+      codeTypeId,
+      includeDeleted,
+      take: query.limit + 1,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+    });
+    const hasMore = rows.length > query.limit;
+    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    return {
+      items,
+      meta: { nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null, hasMore },
+    };
+  }
+
+  /**
+   * Name the values a caller holds ids for. Deleted values and values of deleted types are named,
+   * under `code:read`: the caller already has the id, and the value was readable while live. It is
+   * not a way to list what is deleted. An id of another plan or organisation, or an unknown one, is
+   * absent from the answer, never an error.
+   */
+  async resolve(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    ids: readonly string[],
+  ): Promise<ResolvedCodeValue[]> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'code:read', organization.id);
+    await this.loadActivePlan(planId, organization.id);
+    return this.values.findManyResolvedInPlan(organization.id, planId, [...new Set(ids)]);
+  }
 
   async create(
     principal: Principal,
