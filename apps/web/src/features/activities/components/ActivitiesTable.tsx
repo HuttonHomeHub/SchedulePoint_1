@@ -54,6 +54,12 @@ import {
   type SwimlaneColumnSource,
 } from '@/features/tsld';
 import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
+import {
+  codeCellText,
+  codeColumnsUnavailableSentence,
+  NO_CODE_COLUMNS,
+  type CodeColumn,
+} from '@/lib/code-columns';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -297,6 +303,7 @@ export function ActivitiesTable({
   planCalendarId,
   calendarsLoading = false,
   swimlanes,
+  codeColumns = NO_CODE_COLUMNS,
 }: {
   orgSlug: string;
   planId: string;
@@ -410,6 +417,12 @@ export function ActivitiesTable({
   planCalendarId?: string;
   /** The plan's swimlanes, for the Swimlane column and the bulk-assign bar (swimlanes M4-T1). */
   swimlanes?: ActivitiesTableSwimlanes | null;
+  /**
+   * The code columns the host shows (P6 activity codes, M3-T2), already in type order and already
+   * resolved to names. Drawn after the WBS column. The host holds the array stable until a shown type, its
+   * name or its values change, so with none shown the `columns` memo below keeps its identity.
+   */
+  codeColumns?: readonly CodeColumn[];
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -949,6 +962,24 @@ export function ActivitiesTable({
             } satisfies Column<ActivitySummary>,
           ]
         : []),
+      // Code columns (P6 activity codes, M3-T2): one per shown type, after the WBS column, read-only here
+      // (the table's Set <type> and the editor are the writes). Hidden below `lg` like the other
+      // definition-detail columns. A column still loading reads "Loading…" in the Calendar column's
+      // muted italic, and a failed one "Unavailable" with one sentence above the table — never an id.
+      ...codeColumns.map((column): Column<ActivitySummary> => ({
+        header: column.label,
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+        cell: (activity) => (
+          <span
+            className={
+              column.status === 'ready' ? 'text-muted-foreground' : 'text-muted-foreground italic'
+            }
+          >
+            {codeCellText(column, activity)}
+          </span>
+        ),
+      })),
       // Engine-owned computed columns (M6, read-only). Null renders as an em dash
       // until the plan is recalculated. Late dates hide first on narrow screens.
       scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
@@ -1054,6 +1085,7 @@ export function ActivitiesTable({
     planCalendarId,
     wbsParentLabelById,
     swimlanes,
+    codeColumns,
     noteCountByActivityId,
     varianceByActivityId,
     canEditSchedule,
@@ -1080,6 +1112,8 @@ export function ActivitiesTable({
         onDone={afterBulkWrite}
       />
     ) : null;
+
+  const unavailableSentence = codeColumnsUnavailableSentence(codeColumns);
 
   const confirmDelete = (): void => {
     if (!deleting) return;
@@ -1154,6 +1188,14 @@ export function ActivitiesTable({
       ) : swimlaneAssignment ? (
         <div className="shrink-0">{swimlaneBar(false)}</div>
       ) : null}
+
+      {unavailableSentence === null ? null : (
+        // One sentence for the grid, not one per cell (`m3-ui-design.md` §10). Below `lg` the columns
+        // are not drawn, so neither is the sentence.
+        <p role="status" className="text-muted-foreground hidden shrink-0 text-sm lg:block">
+          {unavailableSentence}
+        </p>
+      )}
 
       {swimlanes?.source === 'WBS' ? (
         // The note explains the Swimlane column, so it goes where the column goes (below `lg`).

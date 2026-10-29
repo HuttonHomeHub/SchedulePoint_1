@@ -15,6 +15,7 @@ import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
 import type { HistoryEntries } from '@/features/undo-redo';
+import type { CodeColumn, CodeColumnsChoice } from '@/lib/code-columns';
 
 /**
  * The context the TSLD toolbar registry ({@link tsldToolbarItems}) reads and commands (ADR-0031).
@@ -102,6 +103,18 @@ export interface TsldToolbarContext {
         reset: () => void;
         /** Nothing differs from standard — `Reset widths` is then shaded with its reason. */
         isDefault: boolean;
+        /**
+         * The code columns on offer and shown (P6 activity codes, M3-T2): plain data, so this feature
+         * learns nothing of how a code is stored. The host writes the choice to the URL (`gcodes`).
+         */
+        codes: CodeColumnsChoice;
+        /**
+         * The shown code columns with their values loaded, for the printed programme: it rejects with a
+         * `CodeColumnsUnavailableError` when a type's values cannot be read, and the toolbar then prints
+         * nothing and says so. **Required**, like the print input it feeds (#135, #217): an optional
+         * resolver is how a threaded-but-dead input ships.
+         */
+        resolvePrintCodeColumns: () => Promise<readonly CodeColumn[]>;
       }
     | undefined;
 

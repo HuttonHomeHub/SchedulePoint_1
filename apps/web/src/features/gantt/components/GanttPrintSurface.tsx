@@ -13,6 +13,11 @@ import { shownColumns } from '../layout/column-widths';
 import { varianceText, type GanttColumn } from '../layout/grid-columns';
 import { predecessorNamesBySuccessor } from '../layout/link-paths';
 import {
+  fitPrintCodeColumns,
+  omittedCodesSentence,
+  PRINT_CODE_COLUMN_WIDTH,
+} from '../layout/print-code-fit';
+import {
   buildRows,
   rowId,
   rowsDateSpan,
@@ -25,6 +30,7 @@ import type { GanttColumnKey } from '../model/gantt-view-state';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BarDateSource } from '@/lib/bar-dates';
+import { type CodeColumn } from '@/lib/code-columns';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -136,6 +142,16 @@ export interface GanttPrintSurfaceProps {
    * `link-paths.ts` and `bar-dates.ts` were both created to settle.
    */
   dependencies: readonly DependencySummary[];
+  /**
+   * The code columns the reader has switched on, **resolved to names** and in on-screen order —
+   * **required, with no default**, for the reason `columns` and `dependencies` are (#135, #217): an
+   * optional input is how a threaded-but-dead column ships. The surface prints as many as leave the
+   * chart {@link PRINT_CHART_MIN} px and names the rest on one line under it (`print-code-fit.ts`).
+   *
+   * Every column here is `ready`: paper never carries "Loading…", "Unavailable" or an id, and the
+   * toolbar refuses to print rather than pass a column whose values it could not load.
+   */
+  codeColumns: readonly CodeColumn[];
 }
 
 export function GanttPrintSurface({
@@ -148,6 +164,7 @@ export function GanttPrintSurface({
   varianceBasis,
   columns,
   dependencies,
+  codeColumns,
 }: GanttPrintSurfaceProps): React.ReactElement {
   // Printing is a snapshot, so the document takes the default order rather than whatever the
   // on-screen grid happened to be sorted by: a WBS-ordered programme is what a progress meeting
@@ -177,9 +194,16 @@ export function GanttPrintSurface({
       : showVariance && varianceBasis === 'NETWORK'
         ? ' (earliest dates)'
         : '';
-  const gridWidth =
-    columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0) +
-    (showVariance ? PRINT_VARIANCE_WIDTH : 0);
+  const standardWidth = columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0);
+  const varianceWidth = showVariance ? PRINT_VARIANCE_WIDTH : 0;
+  const { printed: printedCodes, omitted: omittedCodes } = fitPrintCodeColumns(
+    PRINT_DOCUMENT_WIDTH,
+    standardWidth,
+    varianceWidth,
+    codeColumns,
+  );
+  const omittedSentence = omittedCodesSentence(omittedCodes.map((c) => c.label));
+  const gridWidth = standardWidth + printedCodes.length * PRINT_CODE_COLUMN_WIDTH + varianceWidth;
   const chartPx = PRINT_DOCUMENT_WIDTH - gridWidth;
 
   const anchor = span === null ? null : chartAnchor(span);
@@ -212,6 +236,15 @@ export function GanttPrintSurface({
                     scope="col"
                     className={column.align === 'right' ? 'gantt-print-right' : undefined}
                     style={{ width: printColumnWidth(column.key) }}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+                {printedCodes.map((column) => (
+                  <th
+                    key={`code:${column.key}`}
+                    scope="col"
+                    style={{ width: PRINT_CODE_COLUMN_WIDTH }}
                   >
                     {column.label}
                   </th>
@@ -250,7 +283,7 @@ export function GanttPrintSurface({
                     row={row}
                     chartPx={chartPx}
                     showVariance={showVariance}
-                    columnCount={columns.length}
+                    columnCount={columns.length + printedCodes.length}
                   />
                 ) : (
                   <PrintRow
@@ -264,6 +297,7 @@ export function GanttPrintSurface({
                     variance={varianceByActivityId?.get(rowId(row))}
                     showVariance={showVariance}
                     columns={columns}
+                    codeColumns={printedCodes}
                     predecessorNames={predecessorNames}
                   />
                 ),
@@ -280,6 +314,9 @@ export function GanttPrintSurface({
             <span className="gantt-print-swatch gantt-print-ghost" /> Baseline{basisSuffix}
             <span className="gantt-print-swatch gantt-print-diamond" /> Milestone
           </p>
+          {omittedSentence === null ? null : (
+            <p className="gantt-print-omitted">{omittedSentence}</p>
+          )}
         </>
       )}
     </div>
@@ -296,6 +333,7 @@ interface PrintRowProps {
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
   columns: readonly GanttColumn[];
+  codeColumns: readonly CodeColumn[];
   predecessorNames: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -309,6 +347,7 @@ function PrintRow({
   variance,
   showVariance,
   columns,
+  codeColumns,
   predecessorNames,
 }: PrintRowProps): React.ReactElement {
   const { activity, depth } = row;
@@ -346,6 +385,13 @@ function PrintRow({
               hoursPerDayFor?.(activity),
               predecessorNames.get(activity.id),
             )}
+          </span>
+        </td>
+      ))}
+      {codeColumns.map((column) => (
+        <td key={`code:${column.key}`}>
+          <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
+            {column.text(activity)}
           </span>
         </td>
       ))}
@@ -444,12 +490,19 @@ export interface PrintGanttInput {
   hiddenColumns: ReadonlySet<GanttColumnKey>;
   /** The plan's dependency edges, so the Predecessors column has something to print (#217). */
   dependencies: readonly DependencySummary[];
+  /**
+   * The switched-on code columns with their values already resolved — **required**, the third field
+   * on this type that is, for the reason above. Resolving them is the caller's (it awaits the values
+   * and refuses to print when a type cannot be loaded); this entry point only prints what it is given.
+   */
+  codeColumns: readonly CodeColumn[];
 }
 
 /**
  * Mount the printed programme, open the print dialog, and tear it down again — the shared
  * {@link mountPrintDocument} lifecycle. Synchronous: unlike the diagram path there is no image to
- * rasterise first, because a DOM Gantt is already printable.
+ * rasterise first, because a DOM Gantt is already printable. (The code columns' names are awaited
+ * before this is called, never inside it.)
  */
 export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDeps = {}): void {
   mountPrintDocument(
@@ -459,6 +512,7 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       activities={input.activities}
       columns={shownColumns(input.hiddenColumns)}
       dependencies={input.dependencies}
+      codeColumns={input.codeColumns}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
       {...(input.varianceBasis !== undefined ? { varianceBasis: input.varianceBasis } : {})}
       {...(input.barDateSource ? { barDateSource: input.barDateSource } : {})}

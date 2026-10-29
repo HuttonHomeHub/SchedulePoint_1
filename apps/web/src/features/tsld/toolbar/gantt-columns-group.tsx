@@ -3,6 +3,7 @@ import { useId } from 'react';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 import { Button } from '@/components/ui/button';
+import { Disclosure } from '@/components/ui/disclosure';
 import { CheckboxField } from '@/components/ui/form';
 import { KEY_STEP } from '@/components/ui/panel-resizer';
 import { SizeField, useSizeNotice } from '@/components/ui/size-field';
@@ -14,6 +15,11 @@ import {
 } from '@/features/gantt/layout/column-widths';
 import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import {
+  CODE_COLUMN_CAP_REASON,
+  MAX_CODE_COLUMNS,
+  type CodeColumnsChoice,
+} from '@/lib/code-columns';
 
 type GanttColumnsBundle = NonNullable<TsldToolbarContext['ganttColumns']>;
 
@@ -82,6 +88,13 @@ export function GanttColumnsGroup({
           </div>
         );
       })}
+      <CodeColumnsList
+        choice={columns.codes}
+        width={columns.widths.codes}
+        setWidth={(width) => columns.setWidth('codes', width)}
+        hintId={columnHintId}
+        onNotice={setNotice}
+      />
       <p id={columnHintId} className="text-muted-foreground text-xs">
         Widths are {COLUMN_MIN} to {COLUMN_MAX} pixels. Activity takes the room that is left, and
         the chart always keeps at least {CHART_MIN_WIDTH} pixels.
@@ -129,5 +142,108 @@ export function GanttColumnsGroup({
       {/* Always mounted (`useSizeNotice`): a live region has to exist before its content changes. */}
       {status}
     </div>
+  );
+}
+
+/** What the Codes list says when there is nothing to tick, so the sub-section never opens onto a blank. */
+const NO_CODES_SENTENCE =
+  'This plan has no codes yet. Add them with Codes… in the Activities panel.';
+
+/**
+ * **Codes**, a folded sub-section of the Columns group (P6 activity codes, M3-T2): one checkbox per live
+ * type in type order, its list scrolling inside a bounded height so the `View ▾` panel does not grow with
+ * the number of types (its floor budget, `tsld-toolbar-items.tsx`). Off by default; read-only columns.
+ *
+ * At the cap the unticked boxes are shaded with their reason and stay focusable (ADR-0083 and ADR-0204);
+ * a ticked box is never shaded, so a column can always be switched off. The one shared width appears
+ * only while a code column is shown, as every other column's does.
+ */
+function CodeColumnsList({
+  choice,
+  width,
+  setWidth,
+  hintId,
+  onNotice,
+}: {
+  choice: CodeColumnsChoice;
+  width: number;
+  setWidth: (width: number) => number;
+  hintId: string;
+  onNotice: (notice: string | null) => void;
+}): React.ReactElement {
+  const atCap = choice.shownIds.length >= MAX_CODE_COLUMNS;
+  const capId = useId();
+  return (
+    <Disclosure
+      label="Codes"
+      collapsed="hidden"
+      className="border-border border-t pt-1"
+      defaultOpen={choice.shownIds.length > 0}
+    >
+      {choice.status === 'ready' && choice.types.length > 0 ? (
+        <div className="flex flex-col">
+          <div className="flex max-h-40 flex-col overflow-y-auto" data-testid="code-columns-list">
+            {choice.types.map((type) => {
+              const shown = choice.shownIds.includes(type.id);
+              return (
+                <CheckboxField
+                  key={type.id}
+                  label={type.name}
+                  density="compact"
+                  checked={shown}
+                  // The reason is printed ONCE below the list and pointed at by every shaded box, not
+                  // repeated under each of up to a hundred (ADR-0083 D4). The click is cancelled, so
+                  // the box stays focusable and states why.
+                  {...(shown || !atCap
+                    ? {}
+                    : {
+                        'aria-disabled': true,
+                        'aria-describedby': capId,
+                        onClick: (event: React.MouseEvent) => event.preventDefault(),
+                      })}
+                  onChange={() => {
+                    // The cancelled click above is not enough on its own: the framework still reports a
+                    // change on some browsers, and a shaded box must write nothing.
+                    if (!shown && atCap) return;
+                    choice.setShown(
+                      shown
+                        ? choice.shownIds.filter((id) => id !== type.id)
+                        : [...choice.shownIds, type.id],
+                    );
+                  }}
+                />
+              );
+            })}
+          </div>
+          {atCap ? (
+            <p id={capId} className="text-muted-foreground px-2 pt-1 text-xs">
+              {CODE_COLUMN_CAP_REASON}
+            </p>
+          ) : null}
+          {choice.shownIds.length > 0 ? (
+            <SizeField
+              subject="Code columns width"
+              value={width}
+              min={COLUMN_MIN}
+              max={COLUMN_MAX}
+              step={KEY_STEP}
+              hintId={hintId}
+              apply={setWidth}
+              onNotice={onNotice}
+              limitReason={CHART_GUARD}
+              className={FIELD_INDENT}
+            />
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-muted-foreground px-2 text-xs">
+          {choice.status === 'loading'
+            ? 'Codes are loading.'
+            : choice.status === 'error'
+              ? 'Codes could not be loaded.'
+              : NO_CODES_SENTENCE}
+        </p>
+      )}
+    </Disclosure>
   );
 }

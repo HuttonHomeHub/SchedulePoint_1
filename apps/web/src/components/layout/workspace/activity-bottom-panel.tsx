@@ -25,6 +25,8 @@ import {
   type ActivityEditorPurpose,
 } from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
+import { CodeColumnsMenu } from '@/features/codes';
+import { NO_CODE_COLUMNS, type CodeColumn, type CodeColumnsChoice } from '@/lib/code-columns';
 
 /**
  * What {@link ActivityBottomPanel} reads from the workspace — narrowed, and stable.
@@ -229,6 +231,8 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
   collapseRef: collapseRefProp,
   swimlanes = null,
   onOpenCodes,
+  codeColumns = NO_CODE_COLUMNS,
+  codeColumnsChoice,
 }: {
   /** Built by {@link useActivityPanelModel}; a stable object, which is what lets the memo hit. */
   model: ActivityPanelModel;
@@ -260,6 +264,10 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
    * read, and its write controls say why they are shut. Stable, so the memo above holds.
    */
   onOpenCodes?: () => void;
+  /** The code columns the table draws (P6 activity codes, M3-T2); stable until a shown type changes. */
+  codeColumns?: readonly CodeColumn[];
+  /** The table's **Columns** chooser; absent when the host offers none. Stable, so the memo hits. */
+  codeColumnsChoice?: CodeColumnsChoice;
 }): React.ReactElement {
   const ownCollapseRef = useRef<HTMLButtonElement>(null);
   const collapseRef = collapseRefProp ?? ownCollapseRef;
@@ -314,6 +322,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
             What stays here is what belongs to the PANEL rather than to the plan: its heading, its
             baseline variance, its create button and its collapse control. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {codeColumnsChoice ? <CodeColumnsMenu choice={codeColumnsChoice} /> : null}
           {onOpenCodes ? (
             <Button variant="outline" onClick={onOpenCodes}>
               Codes…
@@ -389,6 +398,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
           calendars={model.calendars}
           calendarsLoading={model.calendarsLoading}
           {...(swimlanes ? { swimlanes } : {})}
+          codeColumns={codeColumns}
           {...(model.planCalendarId === undefined ? {} : { planCalendarId: model.planCalendarId })}
           {...(model.varianceByActivityId
             ? { varianceByActivityId: model.varianceByActivityId }

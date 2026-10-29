@@ -124,6 +124,23 @@ describe('the hidden-columns param', () => {
   });
 });
 
+describe('the gcodes param (P6 activity codes, M3-T2)', () => {
+  it('shows no code column by default — a type added later must not appear for an old URL', () => {
+    expect(parseGanttViewState({}).codeColumnIds).toEqual([]);
+    expect(GANTT_VIEW_DEFAULTS[GANTT_VIEW_PARAMS.codes]).toBe('');
+  });
+
+  it('reads the ids it names, as the string they were written as (ADR-0123)', () => {
+    expect(parseGanttViewState({ gcodes: 'area,trade' }).codeColumnIds).toEqual(['area', 'trade']);
+    expect(parseGanttViewState({ gcodes: 4242 }).codeColumnIds).toEqual(['4242']);
+  });
+
+  it('lands a hand-edited URL on a working grid', () => {
+    expect(parseGanttViewState({ gcodes: ['%%', '<x>'] }).codeColumnIds).toEqual([]);
+    expect(parseGanttViewState({ gcodes: { a: 1 } }).codeColumnIds).toEqual([]);
+  });
+});
+
 describe('the collapsed param', () => {
   it('is empty when the URL says nothing', () => {
     expect(parseCollapsed(undefined).size).toBe(0);

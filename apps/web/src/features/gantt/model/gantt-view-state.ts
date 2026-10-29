@@ -6,6 +6,7 @@ import {
   type GanttSortKey,
 } from '../layout/row-model';
 
+import { parseCodeColumnIds } from '@/lib/code-columns';
 import { searchString } from '@/lib/router/search-string';
 
 /**
@@ -96,6 +97,13 @@ export interface GanttViewState {
   sort: GanttSort;
   hiddenColumns: ReadonlySet<GanttColumnKey>;
   collapsed: ReadonlySet<string>;
+  /**
+   * The code types the planner asked to see as columns (P6 activity codes, M3-T2), **unresolved**: the
+   * host drops the ones that are no longer live types and caps the rest, because only it knows the
+   * plan's types. A shown-list where `hiddenColumns` is a hidden-list, deliberately — "off by default"
+   * means a type added later must not appear for a planner holding an old URL.
+   */
+  codeColumnIds: readonly string[];
 }
 
 /** The search-param names, in one place so the hook and the tests cannot disagree. */
@@ -103,6 +111,7 @@ export const GANTT_VIEW_PARAMS = {
   sort: 'gsort',
   hidden: 'ghide',
   collapsed: 'gcollapsed',
+  codes: 'gcodes',
 } as const;
 
 /**
@@ -210,6 +219,7 @@ export function parseGanttViewState(raw: Record<string, unknown>): GanttViewStat
     sort: parseSort(raw[GANTT_VIEW_PARAMS.sort]),
     hiddenColumns: parseHiddenColumns(raw[GANTT_VIEW_PARAMS.hidden]),
     collapsed: parseCollapsed(raw[GANTT_VIEW_PARAMS.collapsed]),
+    codeColumnIds: parseCodeColumnIds(raw[GANTT_VIEW_PARAMS.codes]),
   };
 }
 
@@ -222,4 +232,5 @@ export const GANTT_VIEW_DEFAULTS: Record<string, string> = {
   [GANTT_VIEW_PARAMS.sort]: serialiseSort(DEFAULT_GANTT_SORT),
   [GANTT_VIEW_PARAMS.hidden]: serialiseHiddenColumns(new Set(DEFAULT_HIDDEN_COLUMNS)),
   [GANTT_VIEW_PARAMS.collapsed]: '',
+  [GANTT_VIEW_PARAMS.codes]: '',
 };

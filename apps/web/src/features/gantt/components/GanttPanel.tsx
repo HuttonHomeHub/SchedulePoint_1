@@ -16,6 +16,7 @@ import {
   ACTIONS_COLUMN_WIDTH,
   VARIANCE_COLUMN_WIDTH,
   chartGuard,
+  codeColumnWidth,
   ganttColumnWidth,
   ganttFixedWidth,
   isResizableKey,
@@ -109,6 +110,7 @@ import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 import { wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { codeCellText, NO_CODE_COLUMNS, type CodeColumn } from '@/lib/code-columns';
 import { formatCalendarDate } from '@/lib/format-date';
 import { finishMilestoneDayShift } from '@/lib/milestone-day';
 import { cn } from '@/lib/utils';
@@ -334,6 +336,14 @@ export interface GanttPanelProps {
    * instance, which is what the print surface and every suite mounting this component bare rely on.
    */
   gridPrefs?: GanttGridPrefs | undefined;
+  /**
+   * The code columns drawn after the standard ones (P6 activity codes, M3-T2), in type order, already
+   * resolved to names by the host. **Read-only here**: a code is written from the editor, the table or
+   * the diagram, never in a cell. They share one remembered width (`codes`). The host holds the array
+   * stable until a shown type, its name or its values change; absent ⇒ none, which is the grid that
+   * shipped.
+   */
+  codeColumns?: readonly CodeColumn[] | undefined;
   /** True while the first page is loading. */
   loading?: boolean;
   /** Set when the activities query failed; renders the error state with a retry. */
@@ -408,7 +418,7 @@ export function GanttPanel(props: GanttPanelProps): React.ReactElement {
 const NO_WIDTHS: ColumnWidths = {};
 
 function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
-  const { viewState, columnWidths, varianceByActivityId } = props;
+  const { viewState, columnWidths, varianceByActivityId, codeColumns = NO_CODE_COLUMNS } = props;
   const hiddenColumns = viewState?.hiddenColumns ?? DEFAULT_HIDDEN_SET;
   const columns = useMemo(
     () => shownColumns(hiddenColumns, props.swimlanes != null),
@@ -421,6 +431,7 @@ function BareGanttPanel(props: GanttPanelProps): React.ReactElement {
       varianceByActivityId !== undefined && varianceByActivityId.size > 0,
       props.rowMenuContextFor !== undefined,
     ),
+    codeColumnCount: codeColumns.length,
   });
   return <GanttPanelBody {...props} gridPrefs={gridPrefs} />;
 }
@@ -448,6 +459,7 @@ function GanttPanelBody({
   rowStructure,
   columnWidths,
   gridPrefs,
+  codeColumns = NO_CODE_COLUMNS,
 }: GanttPanelProps & { gridPrefs: GanttGridPrefs }): React.ReactElement {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -539,8 +551,9 @@ function GanttPanelBody({
         COLUMNS,
         widths,
         pinnedExtraWidth(showVariance, rowMenuContextFor !== undefined),
+        codeColumns.length,
       ),
-    [COLUMNS, widths, showVariance, rowMenuContextFor],
+    [COLUMNS, widths, showVariance, rowMenuContextFor, codeColumns.length],
   );
   /**
    * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8) — an instance the HOST owns
@@ -595,6 +608,7 @@ function GanttPanelBody({
    * Three call sites read it and none computes its own, which is the property ADR-0095's `Float`
    * incident argues for: that defect was a width literal disagreeing with its own columns.
    */
+  const codeWidth = codeColumnWidth(widths);
   const resolveColumnWidth = useCallback(
     (column: GanttColumn): number => ganttColumnWidth(column, widths, gridWidth, FIXED_WIDTH),
     [widths, gridWidth, FIXED_WIDTH],
@@ -607,10 +621,11 @@ function GanttPanelBody({
   // Read through a ref so the guard registers once, not on every drag frame (each frame changes
   // `widths` or `gridWidth`); the effect below keeps the ref current after every commit.
   const hasRowMenus = rowMenuContextFor !== undefined;
-  const guardInputs = useRef({ COLUMNS, widths, showVariance, hasRowMenus, gridWidth });
+  const codeCount = codeColumns.length;
+  const guardInputs = useRef({ COLUMNS, widths, showVariance, hasRowMenus, gridWidth, codeCount });
   useEffect(() => {
-    guardInputs.current = { COLUMNS, widths, showVariance, hasRowMenus, gridWidth };
-  }, [COLUMNS, widths, showVariance, hasRowMenus, gridWidth]);
+    guardInputs.current = { COLUMNS, widths, showVariance, hasRowMenus, gridWidth, codeCount };
+  }, [COLUMNS, widths, showVariance, hasRowMenus, gridWidth, codeCount]);
   useEffect(() => {
     if (registerGuard === undefined) return undefined;
     return registerGuard((key: ResizableColumnKey, candidate: number): number => {
@@ -621,6 +636,9 @@ function GanttPanelBody({
           others,
           current.widths,
           pinnedExtraWidth(current.showVariance, current.hasRowMenus),
+          // The shared code width is one key: resizing it leaves the code columns out of "the rest", the
+          // way resizing any other column leaves that column out.
+          key === 'codes' ? 0 : current.codeCount,
         ),
         pane: current.gridWidth,
         scrollerWidth: scrollRef.current?.clientWidth ?? Number.POSITIVE_INFINITY,
@@ -632,11 +650,11 @@ function GanttPanelBody({
   // Activity gives up the difference; **Activity's own edge is the table width** — the value the
   // `Grid width` separator sets — because Activity has no width of its own. Only the pointer's
   // frames pass through `setTransient`, so a drag stores once, on release.
-  const dragColumnEdge = (key: GanttColumn['key'], width: number): void => {
+  const dragColumnEdge = (key: GanttColumn['key'] | 'codes', width: number): void => {
     if (isResizableKey(key)) columnWidths?.setTransient(key, width);
     else if (key === 'name') gridPrefs.setSize(width);
   };
-  const resetColumnEdge = (key: GanttColumn['key']): void => {
+  const resetColumnEdge = (key: GanttColumn['key'] | 'codes'): void => {
     if (isResizableKey(key)) columnWidths?.setWidth(key, DEFAULT_COLUMN_WIDTHS[key]);
     else if (key === 'name') gridPrefs.resetSize();
   };
@@ -1255,7 +1273,7 @@ function GanttPanelBody({
           role="treegrid"
           aria-label="Schedule as a bar chart"
           aria-rowcount={rows.length + 1}
-          aria-colcount={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+          aria-colcount={COLUMNS.length + codeCount + actionColumns + (showVariance ? 2 : 1)}
           // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
           // interactive role must still be focusable, so it stays a programmatic focus target.
           tabIndex={-1}
@@ -1354,12 +1372,35 @@ function GanttPanelBody({
                   </div>
                 );
               })}
+              {codeColumns.map((column, j) => (
+                // Plain text, never a sort: code columns are `sortable: false` in v1 (`m3-ui-design.md`
+                // §5.2), the Predecessors column's treatment. They share one width, so one edge on each.
+                <div
+                  key={`code:${column.key}`}
+                  role="columnheader"
+                  aria-colindex={COLUMNS.length + j + 1}
+                  className="relative shrink-0 px-2 pb-1"
+                  style={{ width: codeWidth }}
+                >
+                  <span className="text-muted-foreground block w-full truncate text-left text-xs font-medium">
+                    {column.label}
+                  </span>
+                  {columnWidths === undefined ? null : (
+                    <GanttColumnEdge
+                      startWidth={() => codeWidth}
+                      onDrag={(width) => dragColumnEdge('codes', width)}
+                      onCommit={columnWidths.commit}
+                      onReset={() => resetColumnEdge('codes')}
+                    />
+                  )}
+                </div>
+              ))}
               {actionColumns === 0 ? null : (
                 // The column has a width (`ACTIONS_COLUMN_WIDTH`) and no visible heading: the name is
                 // `sr-only`, so it reaches assistive technology without a label above a lone `⋯`.
                 <div
                   role="columnheader"
-                  aria-colindex={COLUMNS.length + 1}
+                  aria-colindex={COLUMNS.length + codeCount + 1}
                   className="shrink-0"
                   style={{ width: ACTIONS_COLUMN_WIDTH }}
                 >
@@ -1369,7 +1410,7 @@ function GanttPanelBody({
               {showVariance ? (
                 <div
                   role="columnheader"
-                  aria-colindex={COLUMNS.length + actionColumns + 1}
+                  aria-colindex={COLUMNS.length + codeCount + actionColumns + 1}
                   aria-sort="none"
                   className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
                   style={{ width: VARIANCE_COLUMN_WIDTH }}
@@ -1380,7 +1421,7 @@ function GanttPanelBody({
             </div>
             <div
               role="columnheader"
-              aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+              aria-colindex={COLUMNS.length + codeCount + actionColumns + (showVariance ? 2 : 1)}
               aria-sort="none"
               className="border-border shrink-0 border-b"
               style={{ width: chartPx }}
@@ -1433,6 +1474,8 @@ function GanttPanelBody({
                 rowStructureFor,
                 actionColumns,
                 columns: COLUMNS,
+                codeColumns,
+                codeWidth,
                 gridWidth,
                 resolveColumnWidth,
                 showVariance,
@@ -1539,6 +1582,7 @@ function GanttPanelBody({
 function GanttBucketRowView({
   actionColumns,
   columns: COLUMNS,
+  codeColumns,
   row,
   rowIndex,
   top,
@@ -1567,6 +1611,8 @@ function GanttBucketRowView({
   actionColumns: number;
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
   columns: readonly GanttColumn[];
+  /** The code columns after them: a bucket has no codes, but the Timeline cell's index counts them. */
+  codeColumns: readonly CodeColumn[];
   /** Shared with the activity rows; a bucket has no activity, so it never renders a menu. */
   rowStructureFor?: unknown;
   isTabStop: boolean;
@@ -1663,7 +1709,7 @@ function GanttBucketRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + codeColumns.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >
@@ -1719,6 +1765,9 @@ interface GanttRowViewProps {
   actionColumns: number;
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
   columns: readonly GanttColumn[];
+  /** The code columns drawn after them, read-only, sharing {@link GanttRowViewProps.codeWidth}. */
+  codeColumns: readonly CodeColumn[];
+  codeWidth: number;
   gridWidth: number;
   /** One width per column, resolved against the pane — see the panel's own docblock. */
   resolveColumnWidth: (column: GanttColumn) => number;
@@ -1772,6 +1821,8 @@ function rowOwnsKey(event: React.KeyboardEvent<HTMLElement>): boolean {
 function GanttRowView({
   actionColumns,
   columns: COLUMNS,
+  codeColumns,
+  codeWidth,
   rowStructureFor,
   row,
   rowIndex,
@@ -2284,6 +2335,20 @@ function GanttRowView({
             </div>
           );
         })}
+        {codeColumns.map((column, j) => (
+          <div
+            key={`code:${column.key}`}
+            role="gridcell"
+            aria-colindex={COLUMNS.length + j + 1}
+            className={cn(
+              'shrink-0 truncate px-2 text-left text-xs',
+              column.status !== 'ready' && 'text-muted-foreground italic',
+            )}
+            style={{ width: codeWidth }}
+          >
+            {codeCellText(column, activity)}
+          </div>
+        ))}
         {/* The arrows' textual equivalent (spec GV-3), rendered ONCE PER ROW rather than inside a
             cell. It went into the editable-cell branch first and the test caught it: with no
             editing bundle the row takes the PLAIN branch, so the sentence existed for some readers
@@ -2306,7 +2371,7 @@ function GanttRowView({
           // untouched: it carries no role, so it is text content rather than an unallowed child.
           <div
             role="gridcell"
-            aria-colindex={COLUMNS.length + 1}
+            aria-colindex={COLUMNS.length + codeColumns.length + 1}
             className="flex shrink-0"
             style={{ width: ACTIONS_COLUMN_WIDTH }}
           >
@@ -2324,7 +2389,7 @@ function GanttRowView({
         {showVariance ? (
           <div
             role="gridcell"
-            aria-colindex={COLUMNS.length + actionColumns + 1}
+            aria-colindex={COLUMNS.length + codeColumns.length + actionColumns + 1}
             className={cn(
               'shrink-0 truncate px-2 text-right text-xs',
               // Direction is carried by the WORD, not the colour — "late"/"early" reads the same
@@ -2340,7 +2405,7 @@ function GanttRowView({
 
       <div
         role="gridcell"
-        aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+        aria-colindex={COLUMNS.length + codeColumns.length + actionColumns + (showVariance ? 2 : 1)}
         className="relative h-full shrink-0"
         style={{ width: chartPx }}
       >

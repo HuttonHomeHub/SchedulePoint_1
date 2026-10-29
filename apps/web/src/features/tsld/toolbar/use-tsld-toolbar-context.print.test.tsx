@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as diagramImageModule from './commands/use-diagram-image';
 import { NO_SWIMLANE_SCENE } from './test-helpers';
+import type { TsldToolbarContext } from './tsld-toolbar-context';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 import { useTsldToolbarContext } from './use-tsld-toolbar-context';
 
@@ -13,7 +14,10 @@ import type {
   LoadedPlan,
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
+import { resolveColumnWidths } from '@/features/gantt/layout/column-widths';
+import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
+import { CodeColumnsUnavailableError, type CodeColumn } from '@/lib/code-columns';
 
 /**
  * The `useTsldToolbarContext` Browser-Print wiring (spec `docs/specs/export-print/` §Milestone 4,
@@ -189,7 +193,13 @@ const PLAN = {
   version: 1,
 } as unknown as LoadedPlan;
 
-function build(planView: 'tsld' | 'gantt' = 'tsld', { canvas = true } = {}) {
+function build(
+  planView: 'tsld' | 'gantt' = 'tsld',
+  {
+    canvas = true,
+    ganttColumns,
+  }: { canvas?: boolean; ganttColumns?: TsldToolbarContext['ganttColumns'] } = {},
+) {
   const canvasUi = makeCanvasUi();
   if (!canvas) {
     (canvasUi.canvasControlRef as { current: unknown }).current = null;
@@ -206,6 +216,7 @@ function build(planView: 'tsld' | 'gantt' = 'tsld', { canvas = true } = {}) {
       minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
       planView,
+      ...(ganttColumns ? { ganttColumns } : {}),
     }),
   );
 }
@@ -298,10 +309,11 @@ describe('useTsldToolbarContext — Print follows the active view', () => {
     printDiagramImage.mockImplementation(() => undefined);
   });
 
-  it('prints the programme document, not a canvas raster, when the Gantt is showing', () => {
+  it('prints the programme document, not a canvas raster, when the Gantt is showing', async () => {
     const { result } = build('gantt');
-    act(() => {
+    await act(async () => {
       result.current.printDiagram();
+      await Promise.resolve();
     });
 
     expect(printGanttSchedule).toHaveBeenCalledTimes(1);
@@ -316,13 +328,17 @@ describe('useTsldToolbarContext — Print follows the active view', () => {
     expect(announce).toHaveBeenCalledWith('Printing North Tower.');
   });
 
-  // Synchronous: there is no image to build, so it must not announce a preparation step that never
-  // happens, and it must not leave the re-entry guard latched.
-  it('does not announce an image-build step, and stays repeatable', () => {
+  // There is no image to build, so it must not announce a preparation step that never happens, and
+  // it must not leave the re-entry guard latched once the code columns' names are in.
+  it('does not announce an image-build step, and stays repeatable', async () => {
     const { result } = build('gantt');
-    act(() => {
+    await act(async () => {
       result.current.printDiagram();
+      await Promise.resolve();
+    });
+    await act(async () => {
       result.current.printDiagram();
+      await Promise.resolve();
     });
     expect(announce).not.toHaveBeenCalledWith('Preparing the diagram to print…');
     expect(printGanttSchedule).toHaveBeenCalledTimes(2);
@@ -336,6 +352,114 @@ describe('useTsldToolbarContext — Print follows the active view', () => {
     });
     expect(printDiagramImage).toHaveBeenCalledTimes(1);
     expect(printGanttSchedule).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * **Print carries the code columns, and refuses when their names are not here** (P6 activity codes,
+ * M3-T2; `m3-spec.md` §4.6): the Gantt branch awaits the host's resolver before it mounts anything, and
+ * a type that cannot be loaded prints nothing and says which, because paper never carries "Loading…",
+ * "Unavailable" or an id.
+ */
+describe('useTsldToolbarContext — the printed Gantt carries its code columns', () => {
+  const READY: CodeColumn = { key: 'trade', label: 'Trade', status: 'ready', text: () => 'MEP' };
+
+  function codeBundle(
+    resolvePrintCodeColumns: () => Promise<readonly CodeColumn[]>,
+  ): NonNullable<TsldToolbarContext['ganttColumns']> {
+    return {
+      hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      setHidden: vi.fn(),
+      widths: resolveColumnWidths({}),
+      setWidth: vi.fn((_key: string, width: number) => width),
+      table: { size: 584, min: 524, max: 720, setSize: vi.fn((size: number) => size) },
+      reset: vi.fn(),
+      isDefault: true,
+      codes: { status: 'ready', types: [], shownIds: [], setShown: vi.fn() },
+      resolvePrintCodeColumns,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prints the resolved columns, in the order the host gave them', async () => {
+    const resolve = vi.fn(() => Promise.resolve([READY]));
+    const { result } = build('gantt', { ganttColumns: codeBundle(resolve) });
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    expect(resolve).toHaveBeenCalledTimes(1);
+    const [arg] = printGanttSchedule.mock.calls[0] as unknown as [{ codeColumns: CodeColumn[] }];
+    expect(arg.codeColumns).toEqual([READY]);
+  });
+
+  it('prints with no code columns when the host wires no chooser', async () => {
+    const { result } = build('gantt');
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    const [arg] = printGanttSchedule.mock.calls[0] as unknown as [{ codeColumns: CodeColumn[] }];
+    expect(arg.codeColumns).toEqual([]);
+  });
+
+  it('mounts nothing and alerts with the type’s name when its values could not be loaded', async () => {
+    const resolve = vi.fn(() => Promise.reject(new CodeColumnsUnavailableError(['Area'])));
+    const { result } = build('gantt', { ganttColumns: codeBundle(resolve) });
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    expect(printGanttSchedule).not.toHaveBeenCalled();
+    const sentence = 'The printout was not made: Area’s values could not be loaded. Try again.';
+    expect(announce).toHaveBeenCalledWith(sentence);
+    expect(result.current.exportError).toBe(sentence);
+    // And the guard is released, so Try again works.
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    expect(resolve).toHaveBeenCalledTimes(2);
+  });
+
+  it('says a generic sentence for any other failure, rather than leaking its message', async () => {
+    const resolve = vi.fn(() => Promise.reject(new Error('socket hang up')));
+    const { result } = build('gantt', { ganttColumns: codeBundle(resolve) });
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    expect(printGanttSchedule).not.toHaveBeenCalled();
+    expect(result.current.exportError).toBe(
+      'Couldn’t prepare the programme to print. Please try again.',
+    );
+  });
+
+  it('ignores a second press while the names are being awaited', async () => {
+    let release: ((columns: readonly CodeColumn[]) => void) | undefined;
+    const resolve = vi.fn(
+      () =>
+        new Promise<readonly CodeColumn[]>((done) => {
+          release = done;
+        }),
+    );
+    const { result } = build('gantt', { ganttColumns: codeBundle(resolve) });
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    act(() => {
+      result.current.printDiagram();
+    });
+    expect(resolve).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release?.([READY]);
+      await Promise.resolve();
+    });
+    expect(printGanttSchedule).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -361,7 +485,7 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
     vi.clearAllMocks();
   });
 
-  it('prints a link added since the last render, with the activities array unchanged', () => {
+  it('prints a link added since the last render, with the activities array unchanged', async () => {
     vi.spyOn(diagramImageModule, 'useDiagramImage').mockReturnValue(vi.fn(() => null));
 
     const canvasUi = makeCanvasUi();
@@ -418,8 +542,9 @@ describe('useTsldToolbarContext — the printed Gantt reads the CURRENT links (R
     dependencies.data = [addedLink];
     rerender();
 
-    act(() => {
+    await act(async () => {
       result.current.printDiagram();
+      await Promise.resolve();
     });
 
     const [arg] = printGanttSchedule.mock.calls.at(-1) as unknown as [

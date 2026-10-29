@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   COLUMN_MAX,
   COLUMN_MIN,
+  codeColumnWidth,
   DEFAULT_COLUMN_WIDTHS,
   ganttColumnWidth,
   ganttFixedWidth,
@@ -108,34 +109,45 @@ describe('the Gantt grid width', () => {
     ['one column at the maximum', { predecessors: COLUMN_MAX }],
   ];
 
+  /**
+   * How many code columns are drawn after the standard ones (P6 activity codes, M3-T2). They are not
+   * `GanttColumn`s either, so this is the second quantity a sum over `columns` cannot see — the same
+   * trap `VARIANCE` records, and the reason `ganttFixedWidth` takes the count as a required argument.
+   */
+  const CODE_COUNTS: readonly number[] = [0, 3, 10];
+
   const CASES = SETS.flatMap((hidden) =>
     EXTRAS.flatMap(([state, extra]) =>
-      WIDTHS.map(
-        ([widthsLabel, widths]) =>
-          [
-            `${hidden.join(',') || '(nothing hidden)'}, ${state}, ${widthsLabel}`,
-            hidden,
-            extra,
-            widths,
-          ] as const,
+      CODE_COUNTS.flatMap((codeCount) =>
+        WIDTHS.map(
+          ([widthsLabel, widths]) =>
+            [
+              `${hidden.join(',') || '(nothing hidden)'}, ${state}, ${String(codeCount)} code columns, ${widthsLabel}`,
+              hidden,
+              extra,
+              codeCount,
+              widths,
+            ] as const,
+        ),
       ),
     ),
   );
 
   it.each(CASES)(
     'fills the pane exactly at every width from the floor up — %s',
-    (_label, hidden, extra, widths) => {
+    (_label, hidden, extra, codeCount, widths) => {
       const columns = visible(hidden);
-      const fixed = ganttFixedWidth(columns, widths, extra);
+      const fixed = ganttFixedWidth(columns, widths, extra, codeCount);
 
       // The ceiling is `gridCeiling(fixed)`, the floor-wins rule: against the constant 720 the
       // all-max case puts the pane BELOW its own floor and the columns over the chart.
       for (const pane of [fixed, fixed + 1, fixed + 96, gridCeiling(fixed)]) {
         // `extra` is pinned content the column loop cannot see, so it is added here exactly as the
-        // component renders it — beside the columns, inside the same block.
+        // component renders it — beside the columns, inside the same block. The code columns are the
+        // same: `codeCount` cells of the one shared width.
         const total = columns.reduce(
           (sum, c) => sum + ganttColumnWidth(c, widths, pane, fixed),
-          extra,
+          extra + codeCount * codeColumnWidth(widths),
         );
         expect(
           total,
@@ -148,16 +160,16 @@ describe('the Gantt grid width', () => {
 
   it.each(CASES)(
     'never lets the columns overflow below the floor either — %s',
-    (_label, hidden, extra, widths) => {
+    (_label, hidden, extra, codeCount, widths) => {
       const columns = visible(hidden);
-      const fixed = ganttFixedWidth(columns, widths, extra);
+      const fixed = ganttFixedWidth(columns, widths, extra, codeCount);
 
       // The floor is enforced by `useResizablePanelPrefs`' `min`, so a pane narrower than it should
       // be unreachable. Asserted anyway: if the floor is ever bypassed the columns must CLIP, which
       // is recoverable, rather than paint over the chart, which is the defect.
       const total = columns.reduce(
         (sum, c) => sum + ganttColumnWidth(c, widths, fixed - 200, fixed),
-        extra,
+        extra + codeCount * codeColumnWidth(widths),
       );
       expect(total).toBe(fixed);
     },
@@ -181,7 +193,7 @@ describe('the Gantt grid width', () => {
   it('gives every extra pixel to the name column and none to the fixed ones', () => {
     const columns = visible(['predecessors']);
     const widths: ColumnWidths = { code: 160 };
-    const fixed = ganttFixedWidth(columns, widths, 0);
+    const fixed = ganttFixedWidth(columns, widths, 0, 0);
     const name = columns.find((c) => c.key === 'name')!;
 
     expect(

@@ -20,6 +20,8 @@ export interface GanttViewStateBundle extends GanttViewState {
   onSortChange: (sort: GanttSort) => void;
   onHiddenColumnsChange: (hidden: ReadonlySet<GanttColumnKey>) => void;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
+  /** Write the shown code columns' ids (already resolved, in type order), as `gcodes`. */
+  onCodeColumnsChange: (serialised: string) => void;
   /** Collapsed summaries the URL could not carry — see `serialiseCollapsed`. Usually 0. */
   collapsedWithheld: number;
 }
@@ -60,8 +62,14 @@ export function useGanttViewState(): GanttViewStateBundle {
     [setParams],
   );
 
+  const onCodeColumnsChange = useCallback(
+    (serialised: string) => setParams({ [GANTT_VIEW_PARAMS.codes]: serialised }),
+    [setParams],
+  );
+
   return {
     ...state,
+    onCodeColumnsChange,
     onSortChange,
     onHiddenColumnsChange,
     onCollapsedChange,

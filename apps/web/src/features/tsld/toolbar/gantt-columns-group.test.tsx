@@ -29,6 +29,8 @@ function bundle(over: Partial<Bundle> = {}): Bundle {
     table: { size: 584, min: 524, max: 720, setSize: vi.fn((size: number) => size) },
     reset: vi.fn(),
     isDefault: false,
+    codes: { status: 'ready', types: [], shownIds: [], setShown: vi.fn() },
+    resolvePrintCodeColumns: vi.fn(() => Promise.resolve([])),
     ...over,
   };
 }
@@ -307,5 +309,124 @@ describe('the Swimlane column in the chooser (swimlanes M4-T2)', () => {
     render(<GanttColumnsGroup columns={bundle({ swimlanesOffered: true })} />);
     expect(screen.getByRole('checkbox', { name: 'Swimlane' })).toBeChecked();
     expect(field('Swimlane width')).toHaveValue(110);
+  });
+});
+
+describe('the Codes sub-section of the chooser (P6 activity codes, M3-T2)', () => {
+  const types = [
+    { id: 'area', name: 'Area' },
+    { id: 'trade', name: 'Trade' },
+    { id: 'phase', name: 'Phase' },
+  ];
+  const codes = (over: Partial<Bundle['codes']> = {}): Bundle['codes'] => ({
+    status: 'ready',
+    types,
+    shownIds: [],
+    setShown: vi.fn(),
+    ...over,
+  });
+  const openCodes = (): void => {
+    fireEvent.click(screen.getByRole('button', { name: 'Codes', expanded: false }));
+  };
+
+  it('is folded, and lists each type in type order once opened', () => {
+    render(<GanttColumnsGroup columns={bundle({ codes: codes() })} />);
+    expect(screen.queryByRole('checkbox', { name: 'Area' })).toBeNull();
+    openCodes();
+    const names = screen
+      .getAllByRole('checkbox')
+      .map((box) => box.closest('label')?.textContent)
+      .filter((name) => ['Area', 'Trade', 'Phase'].includes(name ?? ''));
+    expect(names).toEqual(['Area', 'Trade', 'Phase']);
+    expect(screen.getByRole('checkbox', { name: 'Trade' })).not.toBeChecked();
+  });
+
+  it('opens on the choices already made, so a link that shows a column shows where to turn it off', () => {
+    render(<GanttColumnsGroup columns={bundle({ codes: codes({ shownIds: ['trade'] }) })} />);
+    expect(screen.getByRole('checkbox', { name: 'Trade' })).toBeChecked();
+  });
+
+  it('asks the host to show a ticked type, and to hide an unticked one, in one call each', () => {
+    const setShown = vi.fn();
+    const { rerender } = render(
+      <GanttColumnsGroup columns={bundle({ codes: codes({ setShown }) })} />,
+    );
+    openCodes();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Trade' }));
+    expect(setShown).toHaveBeenLastCalledWith(['trade']);
+    rerender(
+      <GanttColumnsGroup
+        columns={bundle({ codes: codes({ setShown, shownIds: ['area', 'trade'] }) })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Area' }));
+    expect(setShown).toHaveBeenLastCalledWith(['trade']);
+  });
+
+  it('keeps the list inside a bounded, scrolling region so View ▾ does not grow with the types', () => {
+    render(<GanttColumnsGroup columns={bundle({ codes: codes() })} />);
+    openCodes();
+    expect(screen.getByTestId('code-columns-list')).toHaveClass('max-h-40', 'overflow-y-auto');
+  });
+
+  it('shades the eleventh with one printed reason, keeps it focusable, and never shades a ticked one', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      id: `t${String(i)}`,
+      name: `Type ${String(i)}`,
+    }));
+    const setShown = vi.fn();
+    render(
+      <GanttColumnsGroup
+        columns={bundle({
+          codes: codes({ types: many, shownIds: many.slice(0, 10).map((t) => t.id), setShown }),
+        })}
+      />,
+    );
+    const eleventh = screen.getByRole('checkbox', { name: 'Type 10' });
+    expect(eleventh).toHaveAttribute('aria-disabled', 'true');
+    expect(eleventh).not.toBeDisabled();
+    fireEvent.click(eleventh);
+    expect(setShown).not.toHaveBeenCalled();
+    expect(screen.getAllByText('Up to 10 code columns at a time.')).toHaveLength(1);
+    expect(eleventh.getAttribute('aria-describedby')).toBe(
+      screen.getByText('Up to 10 code columns at a time.').id,
+    );
+    const ticked = screen.getByRole('checkbox', { name: 'Type 0' });
+    expect(ticked).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(ticked);
+    expect(setShown).toHaveBeenCalledOnce();
+  });
+
+  it('sizes every code column with one field, only while one is shown', () => {
+    const { rerender } = render(<GanttColumnsGroup columns={bundle({ codes: codes() })} />);
+    openCodes();
+    expect(screen.queryByRole('spinbutton', { name: 'Code columns width' })).toBeNull();
+    const setWidth = vi.fn((_key: string, width: number) => width);
+    rerender(
+      <GanttColumnsGroup columns={bundle({ setWidth, codes: codes({ shownIds: ['area'] }) })} />,
+    );
+    const width = field('Code columns width');
+    expect(width).toHaveValue(96);
+    fireEvent.change(width, { target: { value: '140' } });
+    fireEvent.keyDown(width, { key: 'Enter' });
+    expect(setWidth).toHaveBeenCalledExactlyOnceWith('codes', 140);
+  });
+
+  it.each([
+    ['loading', 'Codes are loading.'],
+    ['error', 'Codes could not be loaded.'],
+  ] as const)(
+    'says so when the types are %s, rather than showing an empty list',
+    (status, sentence) => {
+      render(<GanttColumnsGroup columns={bundle({ codes: codes({ status, types: [] }) })} />);
+      openCodes();
+      expect(screen.getByText(sentence)).toBeInTheDocument();
+    },
+  );
+
+  it('says how to add codes when the plan has none', () => {
+    render(<GanttColumnsGroup columns={bundle({ codes: codes({ types: [] }) })} />);
+    openCodes();
+    expect(screen.getByText(/This plan has no codes yet/)).toBeInTheDocument();
   });
 });
