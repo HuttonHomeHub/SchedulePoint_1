@@ -423,7 +423,7 @@ test.describe('Code columns', () => {
       await showActivitiesPanel(page);
       const table = page.getByRole('table', { name: 'Activities' });
       await expect(table.getByRole('columnheader', { name: 'Area' })).toHaveCount(0);
-      await page.getByRole('button', { name: 'Columns' }).click();
+      await page.getByRole('button', { name: 'Code columns' }).click();
       const items = page.getByRole('menu', { name: 'Code columns' }).getByRole('menuitemcheckbox');
       await expect(items).toHaveText(['Area', 'Trade', 'Phase']);
       await page.getByRole('menuitemcheckbox', { name: 'Area' }).click();

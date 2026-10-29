@@ -6,19 +6,20 @@ import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { useTooltip } from '@/components/ui/tooltip';
 import {
   CODE_COLUMN_CAP_REASON,
+  CODE_COLUMNS_FAILED_SENTENCE,
+  CODE_COLUMNS_LOADING_SENTENCE,
   MAX_CODE_COLUMNS,
+  NO_CODES_REASON,
   type CodeColumnsChoice,
 } from '@/lib/code-columns';
 import { cn } from '@/lib/utils';
 
 /** Why the button is shaded when the plan has no types to show. */
-export const NO_CODE_TYPES_REASON = 'This plan has no codes yet. Add them with Codes…';
-const LOADING_REASON = 'Codes are loading.';
-const FAILED_REASON = 'Codes could not be loaded.';
+export const NO_CODE_TYPES_REASON = NO_CODES_REASON;
 
 function shutReason(choice: CodeColumnsChoice): string | null {
-  if (choice.status === 'loading') return LOADING_REASON;
-  if (choice.status === 'error') return FAILED_REASON;
+  if (choice.status === 'loading') return CODE_COLUMNS_LOADING_SENTENCE;
+  if (choice.status === 'error') return CODE_COLUMNS_FAILED_SENTENCE;
   return choice.types.length === 0 ? NO_CODE_TYPES_REASON : null;
 }
 
@@ -58,7 +59,7 @@ export function CodeColumnsMenu({ choice }: { choice: CodeColumnsChoice }): Reac
           if (!shut) toggle();
         }}
       >
-        Columns
+        Code columns
         <ChevronDown aria-hidden="true" className="size-4" />
       </Button>
       {tip.tooltip}

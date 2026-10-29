@@ -387,9 +387,11 @@ describe('the Codes sub-section of the chooser (P6 activity codes, M3-T2)', () =
     expect(eleventh).not.toBeDisabled();
     fireEvent.click(eleventh);
     expect(setShown).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Up to 10 code columns at a time.')).toHaveLength(1);
+    expect(
+      screen.getAllByText('Up to 10 code columns at a time. Turn one off to show another.'),
+    ).toHaveLength(1);
     expect(eleventh.getAttribute('aria-describedby')).toBe(
-      screen.getByText('Up to 10 code columns at a time.').id,
+      screen.getByText('Up to 10 code columns at a time. Turn one off to show another.').id,
     );
     const ticked = screen.getByRole('checkbox', { name: 'Type 0' });
     expect(ticked).not.toHaveAttribute('aria-disabled');
@@ -400,12 +402,12 @@ describe('the Codes sub-section of the chooser (P6 activity codes, M3-T2)', () =
   it('sizes every code column with one field, only while one is shown', () => {
     const { rerender } = render(<GanttColumnsGroup columns={bundle({ codes: codes() })} />);
     openCodes();
-    expect(screen.queryByRole('spinbutton', { name: 'Code columns width' })).toBeNull();
+    expect(screen.queryByRole('spinbutton', { name: 'Width of all code columns' })).toBeNull();
     const setWidth = vi.fn((_key: string, width: number) => width);
     rerender(
       <GanttColumnsGroup columns={bundle({ setWidth, codes: codes({ shownIds: ['area'] }) })} />,
     );
-    const width = field('Code columns width');
+    const width = field('Width of all code columns');
     expect(width).toHaveValue(96);
     fireEvent.change(width, { target: { value: '140' } });
     fireEvent.keyDown(width, { key: 'Enter' });

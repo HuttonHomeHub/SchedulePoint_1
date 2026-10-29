@@ -23,6 +23,7 @@ import {
   isMilestoneType,
 } from '../schemas/activity-schemas';
 
+import { CodeColumnsNotice } from '@/components/layout/code-columns-notice';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,12 +55,7 @@ import {
   type SwimlaneColumnSource,
 } from '@/features/tsld';
 import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
-import {
-  codeCellText,
-  codeColumnsUnavailableSentence,
-  NO_CODE_COLUMNS,
-  type CodeColumn,
-} from '@/lib/code-columns';
+import { codeCellText, NO_CODE_COLUMNS, type CodeColumn } from '@/lib/code-columns';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -1113,8 +1109,6 @@ export function ActivitiesTable({
       />
     ) : null;
 
-  const unavailableSentence = codeColumnsUnavailableSentence(codeColumns);
-
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
@@ -1189,13 +1183,14 @@ export function ActivitiesTable({
         <div className="shrink-0">{swimlaneBar(false)}</div>
       ) : null}
 
-      {unavailableSentence === null ? null : (
-        // One sentence for the grid, not one per cell (`m3-ui-design.md` §10). Below `lg` the columns
-        // are not drawn, so neither is the sentence.
-        <p role="status" className="text-muted-foreground hidden shrink-0 text-sm lg:block">
-          {unavailableSentence}
-        </p>
-      )}
+      {/* One sentence for the grid, not one per cell (`m3-ui-design.md` §10). Below `lg` the columns
+          are not drawn, so neither is the strip; the region stays mounted (`CodeColumnsNotice`). */}
+      <CodeColumnsNotice
+        columns={codeColumns}
+        restoreFocus={() => regionRef.current?.focus()}
+        className="shrink-0 empty:-mb-3"
+        stripClassName="hidden lg:flex"
+      />
 
       {swimlanes?.source === 'WBS' ? (
         // The note explains the Swimlane column, so it goes where the column goes (below `lg`).

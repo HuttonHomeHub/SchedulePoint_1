@@ -322,7 +322,12 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
             What stays here is what belongs to the PANEL rather than to the plan: its heading, its
             baseline variance, its create button and its collapse control. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {codeColumnsChoice ? <CodeColumnsMenu choice={codeColumnsChoice} /> : null}
+          {/* Below `lg` the table draws no code column, so the chooser would change nothing. */}
+          {codeColumnsChoice ? (
+            <span className="hidden lg:contents">
+              <CodeColumnsMenu choice={codeColumnsChoice} />
+            </span>
+          ) : null}
           {onOpenCodes ? (
             <Button variant="outline" onClick={onOpenCodes}>
               Codes…

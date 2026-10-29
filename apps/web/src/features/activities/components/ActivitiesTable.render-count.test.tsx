@@ -8,6 +8,7 @@ import { activityKeys } from '../api/use-activities';
 import { ActivitiesTable } from './ActivitiesTable';
 
 import { setWindowedRowBudgetForTests } from '@/components/ui/data-table-windowed-body';
+import type { CodeColumn } from '@/lib/code-columns';
 
 /**
  * **Row-level isolation — one checkbox tick must not re-render the other rows**
@@ -156,6 +157,45 @@ describe('ActivitiesTable — row isolation (M2)', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Actions for Activity 7' })).toBe(trigger);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  // The host (`useCodeColumns`) owns the identity of `codeColumns`: it hands back the same array until a
+  // shown type, its name or its values change. The table does not compare contents, so these two pin
+  // both halves of that contract at the row level.
+  describe('code columns (M3-T2)', () => {
+    const area = (): CodeColumn => ({
+      key: 'area',
+      label: 'Area',
+      status: 'ready',
+      text: () => 'Ground floor',
+    });
+
+    // `tableElement` builds a fresh `calendars={[]}` and `onOpenEditor` per call, either of which would
+    // rebuild the columns on its own; stable ones isolate `codeColumns` as the only input that differs.
+    const calendars: React.ComponentProps<typeof ActivitiesTable>['calendars'] = [];
+    const onOpenEditor = (): void => {};
+    const stable = { calendars, onOpenEditor };
+
+    it('runs no row cell renderer when the host hands back the same codeColumns array', () => {
+      const columns = [area()];
+      const { rerenderWith } = renderTable();
+      rerenderWith({ codeColumns: columns, ...stable });
+      badgeRenders.count = 0;
+
+      rerenderWith({ codeColumns: columns, ...stable });
+
+      expect(badgeRenders.count).toBe(0);
+    });
+
+    it('re-renders the rows when codeColumns is a new array, which is why the host must not make one', () => {
+      const { rerenderWith } = renderTable();
+      rerenderWith({ codeColumns: [area()], ...stable });
+      badgeRenders.count = 0;
+
+      rerenderWith({ codeColumns: [area()], ...stable });
+
+      expect(badgeRenders.count).toBeGreaterThanOrEqual(ROW_COUNT + 1);
+    });
   });
 
   // Positive controls: the isolation above is only worth something if a genuine change still gets

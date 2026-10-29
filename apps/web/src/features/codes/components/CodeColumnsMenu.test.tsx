@@ -21,7 +21,7 @@ const choice = (over: Partial<CodeColumnsChoice> = {}): CodeColumnsChoice => ({
 });
 
 const open = (): void => {
-  fireEvent.click(screen.getByRole('button', { name: 'Columns' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Code columns' }));
 };
 
 describe('CodeColumnsMenu — the table’s chooser', () => {
@@ -58,7 +58,7 @@ describe('CodeColumnsMenu — the table’s chooser', () => {
 
   it('is shaded, not hidden, when the plan has no codes, and says how to add them', () => {
     render(<CodeColumnsMenu choice={choice({ types: [] })} />);
-    const button = screen.getByRole('button', { name: 'Columns' });
+    const button = screen.getByRole('button', { name: 'Code columns' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toBeDisabled();
     expect(button).toHaveAccessibleDescription(NO_CODE_TYPES_REASON);
@@ -71,7 +71,7 @@ describe('CodeColumnsMenu — the table’s chooser', () => {
     ['error', 'Codes could not be loaded.'],
   ] as const)('is shaded with its reason while the types are %s', (status, reason) => {
     render(<CodeColumnsMenu choice={choice({ status, types: [] })} />);
-    const button = screen.getByRole('button', { name: 'Columns' });
+    const button = screen.getByRole('button', { name: 'Code columns' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAccessibleDescription(reason);
   });
@@ -90,7 +90,9 @@ describe('CodeColumnsMenu — the table’s chooser', () => {
     open();
     const eleventh = screen.getByRole('menuitemcheckbox', { name: /Type 10/ });
     expect(eleventh).toHaveAttribute('aria-disabled', 'true');
-    expect(eleventh).toHaveAccessibleDescription('Up to 10 code columns at a time.');
+    expect(eleventh).toHaveAccessibleDescription(
+      'Up to 10 code columns at a time. Turn one off to show another.',
+    );
     eleventh.focus();
     expect(eleventh).toHaveFocus();
     fireEvent.click(eleventh);

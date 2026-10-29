@@ -19,7 +19,12 @@ import { searchString } from '@/lib/router/search-string';
 export const MAX_CODE_COLUMNS = 10;
 
 /** Why the eleventh item is shaded. Stated once so the table's menu and the Gantt's list say it alike. */
-export const CODE_COLUMN_CAP_REASON = `Up to ${String(MAX_CODE_COLUMNS)} code columns at a time.`;
+export const CODE_COLUMN_CAP_REASON = `Up to ${String(MAX_CODE_COLUMNS)} code columns at a time. Turn one off to show another.`;
+
+/** What the chooser says, in the menu's reason and the Gantt list's text, while it has nothing to offer. */
+export const CODE_COLUMNS_LOADING_SENTENCE = 'Codes are loading.';
+export const CODE_COLUMNS_FAILED_SENTENCE = 'Codes could not be loaded.';
+export const NO_CODES_REASON = 'This plan has no codes yet. Add them with Codes…';
 
 /** What a column reads while its type's values load, and when they could not be loaded. */
 export const CODE_CELL_LOADING = 'Loading…';
@@ -35,6 +40,8 @@ export interface CodeColumn {
   readonly status: 'loading' | 'ready' | 'error';
   /** The value's name for an activity, or an em dash for none. Meaningful only when `ready`. */
   readonly text: (activity: ActivitySummary) => string;
+  /** Read this column's values again. Present on every column the host builds; used when `error`. */
+  readonly retry?: () => void;
 }
 
 export const NO_CODE_COLUMNS: readonly CodeColumn[] = [];
@@ -55,7 +62,26 @@ export function codeColumnsUnavailableSentence(columns: readonly CodeColumn[]): 
   if (failed.length === 0) return null;
   return failed.length === 1
     ? `${failed[0] ?? ''}’s values could not be loaded.`
-    : `The values of ${failed.join(', ')} could not be loaded.`;
+    : `Values for ${joinNames(failed)} could not be loaded.`;
+}
+
+/** "Area and Trade", "Area, Trade and Zone". */
+function joinNames(names: readonly string[]): string {
+  return names.length < 2
+    ? names.join('')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
+}
+
+/** Read again every column that failed; the notice's Retry. `false` when nothing offers a retry. */
+export function retryFailedCodeColumns(columns: readonly CodeColumn[]): boolean {
+  const retries = columns.flatMap((c) => (c.status === 'error' && c.retry ? [c.retry] : []));
+  retries.forEach((retry) => retry());
+  return retries.length > 0;
+}
+
+/** Whether a failed column can be read again, so the notice offers Retry rather than a reload. */
+export function canRetryCodeColumns(columns: readonly CodeColumn[]): boolean {
+  return columns.some((c) => c.status === 'error' && c.retry !== undefined);
 }
 
 /** What the Columns menu and the `View ▾` list need to offer the choice. Plain data, no feature types. */

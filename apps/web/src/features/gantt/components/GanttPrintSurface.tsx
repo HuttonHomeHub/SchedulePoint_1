@@ -30,7 +30,7 @@ import type { GanttColumnKey } from '../model/gantt-view-state';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BarDateSource } from '@/lib/bar-dates';
-import { type CodeColumn } from '@/lib/code-columns';
+import { codeCellText, type CodeColumn } from '@/lib/code-columns';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -244,6 +244,8 @@ export function GanttPrintSurface({
                   <th
                     key={`code:${column.key}`}
                     scope="col"
+                    // Inline like the standard columns' widths: `fitPrintCodeColumns` counted exactly this
+                    // many pixels per code column when it decided how many fit.
                     style={{ width: PRINT_CODE_COLUMN_WIDTH }}
                   >
                     {column.label}
@@ -391,7 +393,7 @@ function PrintRow({
       {codeColumns.map((column) => (
         <td key={`code:${column.key}`}>
           <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
-            {column.text(activity)}
+            {codeCellText(column, activity)}
           </span>
         </td>
       ))}

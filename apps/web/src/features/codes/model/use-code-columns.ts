@@ -45,12 +45,14 @@ function buildColumn(
   type: Pick<CodeTypeSummary, 'id' | 'name'>,
   values: CodeValueSummary[] | undefined,
   status: CodeColumn['status'],
+  retry?: () => void,
 ): CodeColumn {
   const names = new Map((values ?? []).map((value) => [value.id, codeValueName(value)]));
   return {
     key: type.id,
     label: type.name,
     status,
+    ...(retry === undefined ? {} : { retry }),
     text: (activity) => {
       const assigned = activity.codes?.find((c) => c.codeTypeId === type.id);
       return (assigned && names.get(assigned.codeValueId)) ?? '—';
@@ -127,10 +129,16 @@ export function useCodeColumns(input: {
           type,
           values.data,
           values.status === 'success' ? 'ready' : values.status === 'error' ? 'error' : 'loading',
+          // Stable for a given type, so it does not change what the column memo depends on.
+          () => {
+            void queryClient.refetchQueries({
+              queryKey: codeValuesQueryOptions(orgSlug, planId, id).queryKey,
+            });
+          },
         ),
       ];
     });
-  }, [typeList, shownIds, shown]);
+  }, [typeList, shownIds, shown, queryClient, orgSlug, planId]);
 
   const choiceTypes = useMemo(
     () => typeList?.map((t) => ({ id: t.id, name: t.name })) ?? [],

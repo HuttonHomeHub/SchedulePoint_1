@@ -88,6 +88,7 @@ import { GanttRowMenu, type GanttRowMenuHandle } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 import { GanttSwimlaneCell } from './GanttSwimlaneCell';
 
+import { CodeColumnsNotice } from '@/components/layout/code-columns-notice';
 import {
   FORCED_ARMED_OUTLINE,
   FORCED_BAND_IN_OUTLINED_BAR,
@@ -1259,6 +1260,13 @@ function GanttPanelBody({
             this link — the address can only carry {MAX_COLLAPSED_IN_URL}.
           </div>
         ) : null}
+        {/* One sentence for the grid, with Retry (`CodeColumnsNotice`); mounted empty so a failure is announced. */}
+        <CodeColumnsNotice
+          columns={codeColumns}
+          restoreFocus={() =>
+            scrollRef.current?.querySelector<HTMLElement>('[role="treegrid"]')?.focus()
+          }
+        />
         {notCalculated ? (
           <div role="status" className="border-border bg-muted border-b px-3 py-2">
             <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>

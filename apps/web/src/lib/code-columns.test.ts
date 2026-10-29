@@ -87,7 +87,7 @@ describe('what a code cell says', () => {
         column({ key: 'trade', label: 'Trade', status: 'error' }),
         column({ key: 'phase', label: 'Phase' }),
       ]),
-    ).toBe('The values of Area, Trade could not be loaded.');
+    ).toBe('Values for Area and Trade could not be loaded.');
   });
 
   it('refuses a printout in one sentence naming the types', () => {

@@ -17,7 +17,10 @@ import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
   CODE_COLUMN_CAP_REASON,
+  CODE_COLUMNS_FAILED_SENTENCE,
+  CODE_COLUMNS_LOADING_SENTENCE,
   MAX_CODE_COLUMNS,
+  NO_CODES_REASON,
   type CodeColumnsChoice,
 } from '@/lib/code-columns';
 
@@ -145,10 +148,6 @@ export function GanttColumnsGroup({
   );
 }
 
-/** What the Codes list says when there is nothing to tick, so the sub-section never opens onto a blank. */
-const NO_CODES_SENTENCE =
-  'This plan has no codes yet. Add them with Codes… in the Activities panel.';
-
 /**
  * **Codes**, a folded sub-section of the Columns group (P6 activity codes, M3-T2): one checkbox per live
  * type in type order, its list scrolling inside a bounded height so the `View ▾` panel does not grow with
@@ -222,7 +221,7 @@ function CodeColumnsList({
           ) : null}
           {choice.shownIds.length > 0 ? (
             <SizeField
-              subject="Code columns width"
+              subject="Width of all code columns"
               value={width}
               min={COLUMN_MIN}
               max={COLUMN_MAX}
@@ -238,10 +237,10 @@ function CodeColumnsList({
       ) : (
         <p className="text-muted-foreground px-2 text-xs">
           {choice.status === 'loading'
-            ? 'Codes are loading.'
+            ? CODE_COLUMNS_LOADING_SENTENCE
             : choice.status === 'error'
-              ? 'Codes could not be loaded.'
-              : NO_CODES_SENTENCE}
+              ? CODE_COLUMNS_FAILED_SENTENCE
+              : NO_CODES_REASON}
         </p>
       )}
     </Disclosure>
