@@ -251,6 +251,19 @@ export interface SwimlaneSummary {
 }
 
 /**
+ * The caps and text bounds of P6 activity codes, shared so the web's forms and the API's DTOs read one
+ * number (p6-activity-codes Q4, Q5). A CHECK cannot count rows, so the API takes each count under the
+ * plan advisory lock. The short-code and description maxima are placeholders until a real P6 export is
+ * read (spec Q5): a change here is a change to `ck_code_values_short_code_shape` and
+ * `ck_code_values_description_shape` first.
+ */
+export const CODE_TYPE_LIMIT = 100;
+export const CODE_VALUE_LIMIT = 1000;
+export const CODE_NAME_MAX = 80;
+export const CODE_SHORT_CODE_MAX = 80;
+export const CODE_DESCRIPTION_MAX = 255;
+
+/**
  * One value of a code type (P6 activity codes, p6-activity-codes spec §4.7). `description` is `null`
  * when the planner gave none. `deletedAt` is `null` on every live value and set only on the rows
  * `?include=deleted` returns for a restore.
@@ -269,8 +282,8 @@ export interface CodeValueSummary {
 }
 
 /**
- * One code type of a plan ("Area", "Trade"). `values` is present on the list and on a restore, which
- * return a type with its values, and absent on the single-row writes (create, rename).
+ * One code type of a plan ("Area", "Trade"). `values` is present on the list (unless `values=none`) and on
+ * a restore, which return a type with its values, and absent on the single-row writes (create, rename).
  */
 export interface CodeTypeSummary {
   id: string;
@@ -282,7 +295,10 @@ export interface CodeTypeSummary {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  /** The type's values in order. Absent with `values=none`, on a create and on a rename. */
   values?: CodeValueSummary[];
+  /** The number of **live** values. Sent by the list (with or without `values`), absent on a single-row write. */
+  valueCount?: number;
 }
 
 /**

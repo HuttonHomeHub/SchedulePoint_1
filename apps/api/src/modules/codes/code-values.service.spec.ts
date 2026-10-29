@@ -87,6 +87,8 @@ describe('CodeValuesService', () => {
     | 'findActiveInPlan'
     | 'findInPlan'
     | 'findManyActiveInTx'
+    | 'findPageByType'
+    | 'findManyResolvedInPlan'
     | 'countActive'
     | 'maxActivePosition'
     | 'updateIfVersionMatches'
@@ -120,6 +122,8 @@ describe('CodeValuesService', () => {
       findActiveInPlan: vi.fn().mockResolvedValue(value()),
       findInPlan: vi.fn().mockResolvedValue(value()),
       findManyActiveInTx: vi.fn().mockResolvedValue([]),
+      findPageByType: vi.fn().mockResolvedValue([]),
+      findManyResolvedInPlan: vi.fn().mockResolvedValue([]),
       countActive: vi.fn().mockResolvedValue(0),
       maxActivePosition: vi.fn().mockResolvedValue(-1),
       updateIfVersionMatches: vi.fn().mockResolvedValue(1),
@@ -145,6 +149,78 @@ describe('CodeValuesService', () => {
       audit as unknown as AuditService,
       { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger,
     );
+  });
+
+  describe('list', () => {
+    it('reads a page of the type, asking for one more row than it returns', async () => {
+      values.findPageByType.mockResolvedValue([value({ id: 'a' }), value({ id: 'b' })]);
+      const { items, meta } = await service.list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, {
+        limit: 1,
+      });
+      expect(values.findPageByType).toHaveBeenCalledWith({
+        organizationId: ORG_ID,
+        codeTypeId: TYPE_ID,
+        includeDeleted: false,
+        take: 2,
+      });
+      expect(items.map((i) => i.id)).toEqual(['a']);
+      expect(meta).toEqual({ nextCursor: 'a', hasMore: true });
+    });
+
+    it('passes the cursor through', async () => {
+      await service.list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, { limit: 5, cursor: 'c' });
+      expect(values.findPageByType.mock.calls[0]?.[0]).toMatchObject({ cursor: 'c', take: 6 });
+    });
+
+    it('refuses include=deleted without code:restore, before reading anything', async () => {
+      const error = await service
+        .list(principalWith(['code:read']), 'acme', PLAN_ID, TYPE_ID, {
+          limit: 5,
+          include: 'deleted',
+        })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ForbiddenError);
+      expect(values.findPageByType).not.toHaveBeenCalled();
+    });
+
+    it('reads deleted rows with code:restore', async () => {
+      await service.list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, {
+        limit: 5,
+        include: 'deleted',
+      });
+      expect(values.findPageByType.mock.calls[0]?.[0]).toMatchObject({ includeDeleted: true });
+    });
+
+    it('is a 404 for a type that is not a live type of the plan', async () => {
+      types.findActiveInPlan.mockResolvedValue(null);
+      await expect(
+        service.list(principalWith(ALL), 'acme', PLAN_ID, TYPE_ID, { limit: 5 }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(values.findPageByType).not.toHaveBeenCalled();
+    });
+
+    it('needs code:read', async () => {
+      await expect(
+        service.list(principalWith([]), 'acme', PLAN_ID, TYPE_ID, { limit: 5 }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('resolve', () => {
+    it('reads the ids once, scoped by organisation and plan, without duplicates', async () => {
+      await service.resolve(principalWith(['code:read']), 'acme', PLAN_ID, ['a', 'b', 'a']);
+      expect(values.findManyResolvedInPlan).toHaveBeenCalledWith(ORG_ID, PLAN_ID, ['a', 'b']);
+    });
+
+    it('needs code:read and an active plan', async () => {
+      await expect(
+        service.resolve(principalWith([]), 'acme', PLAN_ID, ['a']),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      plans.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.resolve(principalWith(['code:read']), 'acme', PLAN_ID, ['a']),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
   });
 
   describe('create', () => {

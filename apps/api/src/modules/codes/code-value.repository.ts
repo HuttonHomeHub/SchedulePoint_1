@@ -24,6 +24,11 @@ const LISTED_VALUE = {
 /** A value as the list reads it: the columns of {@link LISTED_VALUE}. */
 export type ListedCodeValue = Prisma.CodeValueGetPayload<{ select: typeof LISTED_VALUE }>;
 
+/** A value with the name and state of its type, as the resolve read returns it. */
+export type ResolvedCodeValue = Prisma.CodeValueGetPayload<{
+  select: typeof LISTED_VALUE & { codeType: { select: { name: true; deletedAt: true } } };
+}>;
+
 /** A locked code value row's identity, order key and version (the reorder's read). */
 export interface LockedCodeValue {
   id: string;
@@ -112,6 +117,64 @@ export class CodeValueRepository {
     return this.prisma.codeValue.findMany({
       where: { organizationId, codeTypeId: { in: [...typeIds] } },
       select: LISTED_VALUE,
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * One page of a type's values in display order, live only or live and deleted. `take` includes the
+   * caller's look-ahead row. Scoped by organisation and type; the caller has already proven the type
+   * is a live one of the plan in the path.
+   *
+   * The deleted branch is the restore picker's read of ONE type, bounded by `take` (#562 bullet 2).
+   * soft-delete: any-state — when `includeDeleted` is set the picker lists deleted rows on purpose.
+   */
+  findPageByType(params: {
+    organizationId: string;
+    codeTypeId: string;
+    includeDeleted: boolean;
+    take: number;
+    cursor?: string;
+  }): Promise<ListedCodeValue[]> {
+    const scope = { organizationId: params.organizationId, codeTypeId: params.codeTypeId };
+    return this.prisma.codeValue.findMany({
+      where: params.includeDeleted ? scope : this.active(scope),
+      select: LISTED_VALUE,
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      take: params.take,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+    });
+  }
+
+  /** The number of live values of each of these types, in one grouped query. Absent = none. */
+  async countActiveByTypes(
+    organizationId: string,
+    typeIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    if (typeIds.length === 0) return new Map();
+    const groups = await this.prisma.codeValue.groupBy({
+      by: ['codeTypeId'],
+      where: this.active({ organizationId, codeTypeId: { in: [...typeIds] } }),
+      _count: { _all: true },
+    });
+    return new Map(groups.map((g) => [g.codeTypeId, g._count._all]));
+  }
+
+  /**
+   * The named values of this plan and organisation, live or deleted, under live or deleted types.
+   * Unknown, foreign and purged ids are simply not in the answer. One statement, not paged: the
+   * caller bounds the ids.
+   *
+   * soft-delete: any-state — the resolve read names values the caller already holds, deleted or not.
+   */
+  findManyResolvedInPlan(
+    organizationId: string,
+    planId: string,
+    ids: readonly string[],
+  ): Promise<ResolvedCodeValue[]> {
+    return this.prisma.codeValue.findMany({
+      where: { id: { in: [...ids] }, organizationId, codeType: { planId } },
+      select: { ...LISTED_VALUE, codeType: { select: { name: true, deletedAt: true } } },
       orderBy: [{ position: 'asc' }, { id: 'asc' }],
     });
   }

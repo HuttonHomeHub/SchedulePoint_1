@@ -7,9 +7,12 @@ import {
   UpdateActivityCodesDto,
 } from '../../activities/dto/update-activity-codes.dto';
 
+import { CodeTypeListQueryDto } from './code-type-list-query.dto';
+import { CodeValueListQueryDto } from './code-value-list-query.dto';
 import { CreateCodeTypeDto } from './create-code-type.dto';
 import { CreateCodeValueDto } from './create-code-value.dto';
 import { ReorderCodeTypesDto, ReorderCodeValuesDto } from './reorder-codes.dto';
+import { ResolveCodeValuesQueryDto } from './resolve-code-values-query.dto';
 import { UpdateCodeTypeDto } from './update-code-type.dto';
 import { UpdateCodeValueDto } from './update-code-value.dto';
 
@@ -144,5 +147,37 @@ describe('UpdateActivityCodesDto', () => {
   it('fits the activity version in the INT column', () => {
     expect(ok(ActivityCodesRowDto, { ...row, version: MAX_INT })).toBe(true);
     expect(ok(ActivityCodesRowDto, { ...row, version: MAX_INT + 1 })).toBe(false);
+  });
+});
+
+describe('code read query DTOs', () => {
+  it('bound the type list: a UUID cursor, the values option, a page of at most 100', () => {
+    expect(ok(CodeTypeListQueryDto, { cursor: ID, values: 'none', limit: '100' })).toBe(true);
+    expect(ok(CodeTypeListQueryDto, { cursor: 'nope' })).toBe(false);
+    expect(ok(CodeTypeListQueryDto, { values: 'all' })).toBe(false);
+    expect(ok(CodeTypeListQueryDto, { limit: '101' })).toBe(false);
+    expect(as(CodeTypeListQueryDto, {}).limit).toBe(100);
+  });
+
+  it('bound the values list: 1 to 1,000 per page, a UUID cursor, deleted as the only include', () => {
+    expect(as(CodeValueListQueryDto, {}).limit).toBe(1000);
+    expect(ok(CodeValueListQueryDto, { limit: '1000', cursor: ID, include: 'deleted' })).toBe(true);
+    expect(ok(CodeValueListQueryDto, { limit: '1' })).toBe(true);
+    expect(ok(CodeValueListQueryDto, { limit: '0' })).toBe(false);
+    expect(ok(CodeValueListQueryDto, { limit: '1001' })).toBe(false);
+    expect(ok(CodeValueListQueryDto, { cursor: 'nope' })).toBe(false);
+    expect(ok(CodeValueListQueryDto, { include: 'live' })).toBe(false);
+  });
+
+  it('take 1 to 100 repeated UUIDs to resolve, and read one id as a list of one', () => {
+    expect(as(ResolveCodeValuesQueryDto, { id: ID }).id).toEqual([ID]);
+    expect(ok(ResolveCodeValuesQueryDto, { id: ID })).toBe(true);
+    expect(ok(ResolveCodeValuesQueryDto, {})).toBe(false);
+    expect(ok(ResolveCodeValuesQueryDto, { id: [] })).toBe(false);
+    expect(ok(ResolveCodeValuesQueryDto, { id: `${ID},${ID}` })).toBe(false);
+    expect(ok(ResolveCodeValuesQueryDto, { id: Array.from({ length: 100 }, () => ID) })).toBe(true);
+    expect(ok(ResolveCodeValuesQueryDto, { id: Array.from({ length: 101 }, () => ID) })).toBe(
+      false,
+    );
   });
 });

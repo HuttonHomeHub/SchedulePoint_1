@@ -102,7 +102,11 @@ describe('CodeTypesService', () => {
     | 'rewritePositions'
   >;
   let values: Mocks<
-    'findManyActiveByTypes' | 'findManyAllByTypes' | 'softDeleteByType' | 'restoreByBatch'
+    | 'findManyActiveByTypes'
+    | 'findManyAllByTypes'
+    | 'countActiveByTypes'
+    | 'softDeleteByType'
+    | 'restoreByBatch'
   >;
   let editLock: { assertHoldsPen: ReturnType<typeof vi.fn> };
   let audit: { record: ReturnType<typeof vi.fn> };
@@ -137,6 +141,7 @@ describe('CodeTypesService', () => {
     values = {
       findManyActiveByTypes: vi.fn().mockResolvedValue([]),
       findManyAllByTypes: vi.fn().mockResolvedValue([]),
+      countActiveByTypes: vi.fn().mockResolvedValue(new Map()),
       softDeleteByType: vi.fn().mockResolvedValue(3),
       restoreByBatch: vi.fn().mockResolvedValue(3),
     };
@@ -207,7 +212,38 @@ describe('CodeTypesService', () => {
       const { items } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 100 });
       expect(values.findManyActiveByTypes).toHaveBeenCalledOnce();
       expect(values.findManyActiveByTypes).toHaveBeenCalledWith(ORG_ID, ['t1', 't2']);
-      expect(items.map((i) => i.values.map((v) => v.id))).toEqual([['v2'], ['v1', 'v3']]);
+      expect(items.map((i) => i.values?.map((v) => v.id))).toEqual([['v2'], ['v1', 'v3']]);
+    });
+
+    it('sends the live value count of every type, from one grouped query', async () => {
+      types.findManyActiveByPlan.mockResolvedValue([type({ id: 't1' }), type({ id: 't2' })]);
+      values.countActiveByTypes.mockResolvedValue(new Map([['t2', 4]]));
+      const { items } = await service.list(principalWith(ALL), 'acme', PLAN_ID, { limit: 100 });
+      expect(values.countActiveByTypes).toHaveBeenCalledOnce();
+      expect(values.countActiveByTypes).toHaveBeenCalledWith(ORG_ID, ['t1', 't2']);
+      expect(items.map((i) => i.valueCount)).toEqual([0, 4]);
+    });
+
+    it('with values=none returns the types alone and never reads a value', async () => {
+      types.findManyActiveByPlan.mockResolvedValue([type({ id: 't1' })]);
+      values.countActiveByTypes.mockResolvedValue(new Map([['t1', 2]]));
+      const { items } = await service.list(principalWith(ALL), 'acme', PLAN_ID, {
+        limit: 100,
+        values: 'none',
+      });
+      expect(items).toEqual([{ type: type({ id: 't1' }), valueCount: 2 }]);
+      expect(values.findManyActiveByTypes).not.toHaveBeenCalled();
+      expect(values.findManyAllByTypes).not.toHaveBeenCalled();
+    });
+
+    it('with values=none and include=deleted bounds the read by the types', async () => {
+      types.findManyAllByPlan.mockResolvedValue([type({ id: 't1', deletedAt: new Date() })]);
+      await service.list(principalWith(ALL), 'acme', PLAN_ID, {
+        limit: 100,
+        values: 'none',
+        include: 'deleted',
+      });
+      expect(values.findManyAllByTypes).not.toHaveBeenCalled();
     });
 
     it('reports the next cursor when a full page + 1 comes back', async () => {

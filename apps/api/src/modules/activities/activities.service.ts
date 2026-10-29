@@ -434,7 +434,10 @@ export class ActivitiesService {
 
     const activity = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!activity) throw new NotFoundError('Activity not found.');
-    return { activity: await this.withDayFactor(activity), canReadCost };
+    // `codes` rides the single read too, so an undo replay's row check sees what the list shows.
+    const [decorated] = await this.decorateWithCodes([activity]);
+    if (decorated === undefined) throw new NotFoundError('Activity not found.');
+    return { activity: decorated, canReadCost };
   }
 
   async create(

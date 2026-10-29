@@ -1,19 +1,12 @@
-/**
- * The caps on a plan's code types and a type's values (p6-activity-codes Q4, database-design DB-4).
- * A CHECK cannot count rows, so each is a service count taken under the plan advisory lock; the
- * create and restore paths refuse more, which is also what bounds the lists and the reorder bodies.
- */
-export const CODE_TYPE_LIMIT = 100;
-export const CODE_VALUE_LIMIT = 1000;
-
-/**
- * The text bounds, the same predicates as `ck_code_types_name_shape`, `ck_code_values_short_code_shape`
- * and `ck_code_values_description_shape`. The short-code and description maxima are placeholders until
- * a real P6 export is read (spec Q5), so a change here is a change to those CHECKs first.
- */
-export const CODE_NAME_MAX = 80;
-export const CODE_SHORT_CODE_MAX = 80;
-export const CODE_DESCRIPTION_MAX = 255;
+// The caps and text bounds live in `@repo/types`, so the web reads the same numbers; re-exported here
+// so the module's imports stay local.
+export {
+  CODE_DESCRIPTION_MAX,
+  CODE_NAME_MAX,
+  CODE_SHORT_CODE_MAX,
+  CODE_TYPE_LIMIT,
+  CODE_VALUE_LIMIT,
+} from '@repo/types';
 
 /** Machine-readable reasons carried in a code {@link ConflictError}/{@link ValidationError}. */
 export const CODE_CONFLICT = {
