@@ -605,6 +605,9 @@ test.describe('The exported diagram', () => {
     // ── Open: the strip is in the picture.
     const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
     await toolbar.getByRole('button', { name: 'Resource view' }).click();
+    // The button's tooltip stays up while the pointer rests on it (WCAG 1.4.13 persistent) and sits over
+    // the Export button beside it, which then never receives the click. Escape dismisses it, focus unmoved.
+    await page.keyboard.press('Escape');
     const panel = page.getByRole('region', { name: 'Resource loading' });
     // **Wait for the legend, not the panel.** The panel mounts before its histogram arrives; an
     // export taken then would (correctly) carry the "still loading" caption and no bars.
