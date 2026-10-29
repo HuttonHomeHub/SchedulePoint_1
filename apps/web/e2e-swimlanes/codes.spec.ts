@@ -605,11 +605,20 @@ async function openEditorFor(page: Page, name: string): Promise<Locator> {
   return editor;
 }
 
-/** Open a Combobox with the keyboard and commit the option whose text matches. */
+/**
+ * Open a Combobox with the keyboard and commit the option whose text matches. The option is looked
+ * up inside the listbox the picker controls, because the page holds other options (the diagram's
+ * search list names "Roof deck" too).
+ */
 async function chooseOption(page: Page, picker: Locator, text: RegExp): Promise<void> {
   await picker.focus();
   await page.keyboard.press('ArrowDown');
-  await page.getByRole('option', { name: text }).click();
+  const listboxId = await picker.getAttribute('aria-controls');
+  expect(listboxId, 'the picker names its listbox').toBeTruthy();
+  await page
+    .locator(`[id="${listboxId as string}"]`)
+    .getByRole('option', { name: text })
+    .click();
 }
 
 /**
