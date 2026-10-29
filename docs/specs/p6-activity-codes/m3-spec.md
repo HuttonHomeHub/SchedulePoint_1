@@ -1,6 +1,6 @@
 # Feature Spec: P6 activity codes, M3 — show and edit codes
 
-- **Status:** Draft — awaiting the product owner's approval before implementation. (The
+- **Status:** Approved — by the product owner on 2026-10-29, with every answer below. (The
   `check:spec-status` gate reads only `spec.md` in this directory; this file is M3's own spec, under
   the approved epic spec.)
 - **Author(s):** Feature Analyst (Claude Code), for James Ewbank (product owner)
@@ -36,12 +36,11 @@ written to them):
    **Yes, both, in M3.** "Set code…" appears on the diagram's selection bar (for one activity, and for
    several selected together) as well as on the Activities table's ticked-rows bar. (§4.8 says how.)
 
-**Still to answer** (one question; work is not blocked, the recommendation is built unless you say
-otherwise):
+**Decided by the owner, 2026-10-29, as recommended:**
 
 3. **A printed page only has room for a few code columns. What should happen when you have switched on
    more than fit?**
-   _Recommended: print as many as fit, in the order you see them, and print one line under the chart
+   _Decided: print as many as fit, in the order you see them, and print one line under the chart
    naming the ones left off_ — for example "Not printed, to leave room for the chart: System, Phase."
    The page is a fixed width (landscape A4 or Letter). Beside the usual columns there is room for about
    **three** code columns, **two** when a baseline is showing, and **none** if you have also switched on

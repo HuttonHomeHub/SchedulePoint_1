@@ -3,7 +3,7 @@
 - **Feature spec:** [`./m3-spec.md`](./m3-spec.md) (Draft) — under the approved epic
   [`./spec.md`](./spec.md) and [`./plan.md`](./plan.md) M3. Design authority:
   [`./m3-ui-design.md`](./m3-ui-design.md).
-- **Status:** Draft — awaiting the product owner's approval before implementation.
+- **Status:** Approved — by the product owner on 2026-10-29 (see the spec header).
 - **Owner:** James Ewbank (product owner); built by the **builder** agent once approved (CLAUDE.md §19.14).
 - **Owner decisions (fixed):** `spec.md` Q1–Q11; values load on demand (the T0 contract); no feature
   flag; **Gantt print carries the code columns switched on** and **Set code… is on the Activities table

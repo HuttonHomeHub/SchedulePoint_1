@@ -3,7 +3,7 @@
 - **Spec:** [`./spec.md`](./spec.md) §0, §2, §4.8 · **Plan:** [`./plan.md`](./plan.md) M3 (M3-T1..T3) ·
   **Built so far:** [`./m2-record.md`](./m2-record.md) §9 · **Schema:** [`./database-design.md`](./database-design.md) §15 D7, D9 ·
   **Debt:** `docs/TECH_DEBT.md` #562
-- **Status:** Draft. This is a design for M3, waiting for approval. It is not a spec header (the
+- **Status:** Approved with the M3 spec on 2026-10-29; where the owner's answers differ, `m3-spec.md` wins. It is not a spec header (the
   `check:spec-status` gate reads only `spec.md`).
 - **Author:** ui-architect (Claude Code), 2026-10-29, for James Ewbank (product owner)
 - **Owner decisions taken as given (not reopened):** spec Q1–Q11; the product word is **Codes**; code
