@@ -30,3 +30,10 @@ export {
   type WbsBasis,
   type WbsNode,
 } from './swimlanes.js';
+export {
+  codeBasisOf,
+  codeSwimlaneName,
+  codeSwimlaneValues,
+  type CodeAssignmentRef,
+  type CodeSwimlaneMember,
+} from './code-swimlanes.js';
