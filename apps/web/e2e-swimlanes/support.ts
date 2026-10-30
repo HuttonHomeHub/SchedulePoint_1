@@ -631,3 +631,36 @@ export async function groupPlaces(
     return { text, swimlane: swimlane!, lane: Number(lane) };
   });
 }
+
+/**
+ * The page point of a bar, found by clicking down the swimlane band it should be in and reading which
+ * option the click made active. A click on empty ground leaves the previous option active, so a hit
+ * counts only when the active option CHANGED to the one asked for.
+ */
+export async function findBar(page: Page, name: string): Promise<{ x: number; y: number }> {
+  const list = diagramList(page);
+  const gutter = (await page.getByTestId('tsld-swimlane-gutter').boundingBox())!;
+  const region = (await page
+    .locator('section[aria-label="Time-scaled logic diagram"]')
+    .boundingBox())!;
+  const left = gutter.x + gutter.width;
+  const activeText = async (): Promise<string> => {
+    const id = await list.getAttribute('aria-activedescendant');
+    return id === null ? '' : ((await page.locator(`[id="${id}"]`).textContent()) ?? '');
+  };
+  let last = await activeText();
+  for (let y = region.y + 12; y < region.y + region.height - 4; y += 9) {
+    // Well inside a bar: its end zones (8 px, `EDGE_HANDLE_PX`) start a resize, not a move. The bars
+    // here start at the data date, about 60 px in from the gutter, and run for days, so 200 px and
+    // more lands on the body of a bar and never on its start edge.
+    for (const dx of [200, 260, 320, 380, 440]) {
+      await page.mouse.click(left + dx, y);
+      const now = await activeText();
+      if (now !== last && now.startsWith(name)) return { x: left + dx, y };
+      last = now;
+    }
+  }
+  throw new Error(
+    `no bar for "${name}" was found by clicking down the scene from x=${String(left)}: the plan did not draw it, or the gutter moved`,
+  );
+}
