@@ -128,6 +128,14 @@ interface Member {
 }
 
 const label = (extent: SwimlaneExtent): string => extent.name ?? NO_SWIMLANE_LABEL;
+
+/**
+ * Whether a bar may be filed in another swimlane by dragging it: **only hand-made swimlanes**. A WBS
+ * swimlane is a parent, and a code swimlane is a code value, so filing either is a write to something
+ * else (the parent, the code) that the planner makes by name — never as a side effect of a vertical
+ * drag. An input with no source is the hand-made one (`SwimlaneInput.source`).
+ */
+const isManualSource = (input: SwimlaneInput): boolean => (input.source ?? 'MANUAL') === 'MANUAL';
 const overlaps = (a: DaySpan, b: DaySpan): boolean =>
   !(a.endDay < b.startDay || b.endDay < a.startDay);
 
@@ -234,10 +242,11 @@ function landedOf(
  * ghost stops at an edge instead of crossing it and being refused after (C6).
  *
  * Hand-made swimlanes put no edge in the way: a bar may cross into any swimlane, "No swimlane"
- * included, and the bottom is open because the last swimlane can take another lane. **A WBS source
- * narrows it to the bar's own swimlane** (SQ-5): filing is the WBS's, changed through Breakdown, and a
- * vertical drag that re-filed would write a parent — and move summary dates — as a side effect. The
- * bottom edge is the swimlane's last lane; growing it is the keyboard's (`Alt+↓`). `null` for a bar
+ * included, and the bottom is open because the last swimlane can take another lane. **A WBS or a code
+ * source narrows it to the bar's own swimlane** (SQ-5; m4-spec Q7): filing is the WBS's, changed
+ * through Breakdown, or the code's, changed by writing the code, and a vertical drag that re-filed
+ * would write a parent — and move summary dates — or a code as a side effect. The bottom edge is the
+ * swimlane's last lane; growing it is the keyboard's (`Alt+↓`). `null` for a bar
  * that is not drawn.
  */
 export function laneRangeOf(
@@ -246,7 +255,7 @@ export function laneRangeOf(
 ): { min: number; max: number } | null {
   const display = ctx.scene.displayLanes.get(activityId);
   if (display === undefined) return null;
-  if (ctx.input.source !== 'WBS') return { min: 0, max: Number.POSITIVE_INFINITY };
+  if (isManualSource(ctx.input)) return { min: 0, max: Number.POSITIVE_INFINITY };
   const home = ctx.scene.extents[extentIndexAt(ctx.scene, display)];
   if (home === undefined) return null;
   return { min: home.firstLane, max: home.firstLane + home.laneCount - 1 };
@@ -260,9 +269,25 @@ export function laneRangeOf(
 export const WBS_EDGE_NOTE =
   'This swimlane follows the WBS, so the bar stays in it. Change its Breakdown to move it to another swimlane. Press Alt+Down to add a lane in the swimlane.';
 
+/**
+ * Said, once, when a drag in a code swimlane is held at the swimlane's edge. Names the type, because
+ * "its code" would not tell a planner with six code types which one the swimlanes follow.
+ */
+export const codeEdgeNote = (typeName?: string): string =>
+  `This swimlane is made from ${typeName ?? 'a code'}, so the bar stays in it. Use Move to swimlane… or Set code… to change its ${typeName ?? 'code'}. Press Alt+Down to add a lane in the swimlane.`;
+
+/** The note for a drag held at the swimlane's edge, by what the swimlanes are made of. */
+export function edgeNoteFor(input: SwimlaneInput | null | undefined): string {
+  return input?.source === 'ACTIVITY_CODE' ? codeEdgeNote(input.codeTypeName) : WBS_EDGE_NOTE;
+}
+
 /** What a drop that would carry a bar into another WBS swimlane says: the WBS owns filing. */
 export const WBS_FILING_REASON =
   'Swimlanes follow the WBS in this plan. Change the activity’s Breakdown to move it to another swimlane.';
+
+/** The same refusal for a code: the planner changes the code, and the bar follows. */
+export const codeFilingReason = (typeName?: string): string =>
+  `Swimlanes are made from ${typeName ?? 'a code'} in this plan. Use Move to swimlane… or Set code… to change the activity’s ${typeName ?? 'code'}.`;
 
 /**
  * The top of the swimlane a bar is in, as a display lane, and the name to say it by — what the
@@ -302,9 +327,15 @@ export function dropInSwimlane(
   const dropped = Math.min(Math.max(0, displayLane) - to.firstLane, to.laneCount);
   const changedSwimlane = target !== subject.extent;
   // The gesture is clamped by `laneRange`, so this is the backstop for a caller that is not: the
-  // server refuses a swimlane on a WBS plan, and the bar must not be shown crossing first.
-  if (changedSwimlane && ctx.input.source === 'WBS') {
-    return { kind: 'refuse', reason: WBS_FILING_REASON };
+  // server refuses a swimlane on a WBS or a code plan, and the bar must not be shown crossing first.
+  if (changedSwimlane && !isManualSource(ctx.input)) {
+    return {
+      kind: 'refuse',
+      reason:
+        ctx.input.source === 'ACTIVITY_CODE'
+          ? codeFilingReason(ctx.input.codeTypeName)
+          : WBS_FILING_REASON,
+    };
   }
   let lane: number;
   let how: SwimlaneLaneFacts['how'];
@@ -657,7 +688,7 @@ export function assignToSwimlane(
       landed: first
         ? landedOf(ctx, extent, first.lane, false, 'stays')
         : {
-            swimlane: NO_SWIMLANE_LABEL,
+            swimlane: ctx.input.noneName ?? NO_SWIMLANE_LABEL,
             lane: 0,
             count: 1,
             changedSwimlane: false,
@@ -692,7 +723,7 @@ export function assignToSwimlane(
     to !== undefined
       ? landedOf(ctx, extent, firstLane, true, firstHow)
       : {
-          swimlane: NO_SWIMLANE_LABEL,
+          swimlane: ctx.input.noneName ?? NO_SWIMLANE_LABEL,
           lane: firstLane,
           count: landedLane,
           changedSwimlane: true,

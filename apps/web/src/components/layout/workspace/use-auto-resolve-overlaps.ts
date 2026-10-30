@@ -268,15 +268,14 @@ export function useAutoResolveOverlaps(params: {
       announce('An overlap could not be cleared automatically. Arrange can clear it.');
       return;
     }
-    const swimlaneNames = new Map(
-      (paramsRef.current.readSwimlaneInput()?.swimlanes ?? []).map((s) => [s.id, s.name]),
-    );
+    const swimlaneInput = paramsRef.current.readSwimlaneInput();
+    const swimlaneNames = new Map((swimlaneInput?.swimlanes ?? []).map((s) => [s.id, s.name]));
+    const noneName = swimlaneInput?.noneName ?? NO_SWIMLANE_LABEL;
     const message = sentenceFor(
       moves,
       {
         activity: (id) => byId.get(id)?.name ?? 'Activity',
-        swimlane: (id) =>
-          id === null ? NO_SWIMLANE_LABEL : (swimlaneNames.get(id) ?? NO_SWIMLANE_LABEL),
+        swimlane: (id) => (id === null ? noneName : (swimlaneNames.get(id) ?? noneName)),
       },
       pending.s0.swimlane !== null && after.swimlane !== null,
     );

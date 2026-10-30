@@ -18,6 +18,10 @@ import {
   SWIMLANE_GONE_REASON,
   settleInSwimlanes,
   WBS_FILING_REASON,
+  WBS_EDGE_NOTE,
+  codeEdgeNote,
+  codeFilingReason,
+  edgeNoteFor,
   nudgeInSwimlane,
   type DaySpan,
   type SwimlaneEditContext,
@@ -117,6 +121,79 @@ describe('laneRangeOf', () => {
     it('still moves a bar inside its own swimlane', () => {
       expect(dropInSwimlane(wbs, 'a1', 1).kind).toBe('write');
     });
+  });
+});
+
+describe('a code source (m4-spec Q7)', () => {
+  const base = context(BASE);
+  const code: SwimlaneEditContext = {
+    ...base,
+    input: {
+      ...base.input,
+      source: 'ACTIVITY_CODE',
+      codeTypeId: 'area',
+      codeTypeName: 'Area',
+      noneName: 'No Area',
+    },
+  };
+
+  it('stops a bar at its own swimlane, as a WBS source does', () => {
+    expect(laneRangeOf(code, 'a1')).toEqual({ min: 0, max: 1 });
+    expect(laneRangeOf(code, 'b1')).toEqual({ min: 2, max: 2 });
+    expect(laneRangeOf(code, 'n1')).toEqual({ min: 3, max: 3 });
+  });
+
+  it('refuses a drop into another swimlane with the code’s own sentence', () => {
+    expect(dropInSwimlane(code, 'a1', 2)).toEqual({
+      kind: 'refuse',
+      reason: codeFilingReason('Area'),
+    });
+    expect(codeFilingReason('Area')).toContain('Area');
+  });
+
+  it('still moves a bar inside its own swimlane', () => {
+    expect(dropInSwimlane(code, 'a1', 1).kind).toBe('write');
+  });
+
+  it('says "No Area" for the none swimlane in a landed fact, not "No swimlane"', () => {
+    const named: SwimlaneEditContext = {
+      ...code,
+      scene: {
+        ...code.scene,
+        extents: code.scene.extents.map((e) => (e.id === null ? { ...e, name: 'No Area' } : e)),
+      },
+    };
+    const move = dropInSwimlane(named, 'n1', 3);
+    const landed = move.kind === 'stay' || move.kind === 'write' ? move.landed.swimlane : '';
+    expect(landed).toBe('No Area');
+  });
+
+  it('opens the range only for hand-made swimlanes: MANUAL, and an input with no source', () => {
+    const manual: SwimlaneEditContext = { ...base, input: { ...base.input, source: 'MANUAL' } };
+    expect(laneRangeOf(manual, 'a1')).toEqual({ min: 0, max: Number.POSITIVE_INFINITY });
+    expect(laneRangeOf(base, 'a1')).toEqual({ min: 0, max: Number.POSITIVE_INFINITY });
+  });
+});
+
+describe('edgeNoteFor', () => {
+  const swimlanes = { swimlanes: [], membership: new Map(), storedLanes: new Map() };
+
+  it('names the type for a code, and keeps the WBS sentence for everything else', () => {
+    expect(edgeNoteFor({ ...swimlanes, source: 'ACTIVITY_CODE', codeTypeName: 'Area' })).toBe(
+      codeEdgeNote('Area'),
+    );
+    expect(codeEdgeNote('Area')).toBe(
+      'This swimlane is made from Area, so the bar stays in it. Use Move to swimlane… or Set code… to change its Area. Press Alt+Down to add a lane in the swimlane.',
+    );
+    expect(edgeNoteFor({ ...swimlanes, source: 'WBS' })).toBe(WBS_EDGE_NOTE);
+    expect(edgeNoteFor(null)).toBe(WBS_EDGE_NOTE);
+  });
+
+  it('reads grammatically when the type is not named', () => {
+    expect(edgeNoteFor({ ...swimlanes, source: 'ACTIVITY_CODE' })).toContain(
+      'made from a code, so the bar stays in it. Use Move to swimlane… or Set code… to change its code.',
+    );
+    expect(codeFilingReason()).not.toMatch(/its its/);
   });
 });
 

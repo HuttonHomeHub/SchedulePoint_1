@@ -448,6 +448,16 @@ export interface TsldToolbarContext {
   swimlanesManage: { label: string; open: () => void };
   /** The list failed to load; the lens says so and offers a retry through the sentence. Absent = fine. */
   swimlanesFailed?: boolean;
+  /**
+   * A code-sourced plan drawing more bands than `SWIMLANE_LIMIT`: the type's name and the count of
+   * values in use. A standing condition, stated on the lens row (ADR-0132); absent otherwise.
+   */
+  /**
+   * A code-sourced plan drawn with derived lanes because the saved lanes could not be read; a standing
+   * condition on the lens row (ADR-0132). Absent otherwise.
+   */
+  swimlanesLanesFailed?: boolean;
+  swimlanesOverLimit?: { typeName: string; count: number };
 
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and

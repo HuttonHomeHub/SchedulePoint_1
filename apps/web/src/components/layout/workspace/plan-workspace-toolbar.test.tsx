@@ -1614,7 +1614,10 @@ describe('Codes… in the host (codes M3-T1)', () => {
     // The panel is collapsed by default (canvas-maximal), and Codes… lives in its header.
     fireEvent.click(screen.getByRole('button', { name: 'Expand activities panel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Codes…' }));
-    expect(await screen.findByRole('dialog', { name: 'Codes' })).toBeInTheDocument();
+    // Past the default 1 s: the lazy dialog chunk loads here and timed out once on a CI runner under load.
+    expect(
+      await screen.findByRole('dialog', { name: 'Codes' }, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it('is offered to a Viewer too, who opens it to read, and says why its writes are shut', async () => {

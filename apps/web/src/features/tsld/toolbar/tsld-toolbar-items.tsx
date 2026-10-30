@@ -1,7 +1,7 @@
 // `DEPENDENCY_TYPES` is the canonical set the Prisma enum mirrors; `DEPENDENCY_TYPE_LABELS` is the
 // wording the Logic panel already uses. Taking the set from the domain and the words from the shared
 // labels is what stops this surface and that one describing the product differently.
-import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
+import { DEPENDENCY_TYPES, SWIMLANE_LIMIT, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BookOpen,
@@ -348,6 +348,18 @@ function minimapShutReason(ctx: TsldToolbarContext): string | undefined {
 /** What a checked Swimlanes lens says once its list failed: the lens row and the canvas notice agree. */
 export const SWIMLANES_FAILED_NOTE = "Couldn't load swimlanes. The diagram is shown without them.";
 
+/** What a checked lens says when a code's saved lanes could not be read: bars are placed afresh, not as left. */
+export const SWIMLANES_LANES_FAILED_NOTE =
+  "Couldn't read where bars were placed. They are placed afresh and may sit differently than you left them.";
+
+/**
+ * What a checked Swimlanes lens says while a code draws more bands than swimlanes are made for: a
+ * standing condition, not an event, so a note on the row and not an announcement (ADR-0132). The
+ * diagram still draws every band; the sentence says why a switch back to this code would be refused.
+ */
+export const swimlanesOverLimitNote = (typeName: string, count: number, limit: number): string =>
+  `${typeName} has ${String(count)} values in use. Swimlanes are made for up to ${String(limit)}.`;
+
 /**
  * Exported for the compare-overlay refusal gate, which asserts that a cross-plan pair triggers NO
  * refusal and that there are exactly two refusal states. The registry builder filters these by
@@ -580,7 +592,19 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     // the lens off), so the failure is stated here as a standing note on the row, `aria-describedby`-
     // linked and not live. The canvas says it too, with a retry (`SwimlanesFailedNotice`).
     note: (ctx) =>
-      ctx.swimlanesShown && ctx.swimlanesFailed === true ? SWIMLANES_FAILED_NOTE : undefined,
+      !ctx.swimlanesShown
+        ? undefined
+        : ctx.swimlanesFailed === true
+          ? SWIMLANES_FAILED_NOTE
+          : ctx.swimlanesLanesFailed === true
+            ? SWIMLANES_LANES_FAILED_NOTE
+            : ctx.swimlanesOverLimit
+              ? swimlanesOverLimitNote(
+                  ctx.swimlanesOverLimit.typeName,
+                  ctx.swimlanesOverLimit.count,
+                  SWIMLANE_LIMIT,
+                )
+              : undefined,
     // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,
     // then nothing is set up (the plan's own source, so a plan with none never hears about a load),
     // then the list is on its way, then it failed. All are `aria-describedby` text on the row

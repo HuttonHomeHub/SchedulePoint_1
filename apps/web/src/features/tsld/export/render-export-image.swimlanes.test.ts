@@ -153,8 +153,8 @@ describe('renderExportImage, the swimlane gutter mirror', () => {
       ...withMarks.scene,
       swimlaneMarks: {
         extents: [
-          { name: 'Mechanical', firstLane: 0, laneCount: 1 },
-          { name: 'Electrical', firstLane: 1, laneCount: 1 },
+          { id: 'm', name: 'Mechanical', firstLane: 0, laneCount: 1 },
+          { id: 'e', name: 'Electrical', firstLane: 1, laneCount: 1 },
         ],
         ground: true,
       },

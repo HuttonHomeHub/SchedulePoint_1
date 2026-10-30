@@ -121,3 +121,42 @@ parameter (the code columns are left out of the bulk insert when no activity has
 
 The pair spread (about ±500 ms) exceeds the original target, so 50 ms could not have been demonstrated on this
 machine either way (ADR-0076: the miss is recorded, not re-measured away).
+
+## 4. T3: the projection with many bands (2026-10-30, the builder)
+
+**What was measured, and what it does not claim.** `projectSwimlanes` alone (the pure function that
+gives every drawn bar its display lane), at 5,000 activities, with the same activities spread over 100
+bands and over 1,000 bands (owner question 1's recommended answer draws every value in use, so a plan can
+be past 100). It runs once per data change and not per frame, so this is **not** a canvas frame-rate
+claim; the canvas cost of 1,000 band rules is not measured here.
+
+**Method.** `apps/web/src/features/tsld/render/project-swimlanes.scale.test.ts` (Vitest, jsdom, the
+build machine, no other load of this builder's own). One warm-up call, then the median of nine timed
+calls per size; the test prints both medians and asserts only that 1,000 bands cost less than ten times
+100 (or 50 ms), because an absolute figure belongs to the machine that took it (ADR-0128). Three runs.
+
+| Run | 100 bands | 1,000 bands |
+| --- | --------- | ----------- |
+| 1   | 17.97 ms  | 14.67 ms    |
+| 2   | 17.70 ms  | 12.79 ms    |
+| 3   | 13.20 ms  | 11.48 ms    |
+
+Each activity was a one-lane band member (a band is one lane, so 100 and 1,000 lanes). A first scene
+that put five activities with one start in each of 1,000 bands (every activity its own lane, 5,000 lanes
+at both sizes) measured 19.07 / 19.55 ms, 13.31 / 14.50 ms and 13.89 / 13.28 ms for 100 / 1,000 bands.
+
+**Reading.** Ten times the bands costs nothing measurable: the work is per activity, and a band with no
+members only adds one extent. The 1,000-band stack is 1,000 lanes tall, which is the diagram's vertical
+extent and not a projection cost. **For the performance-reviewer:** no figure here bears on painting,
+the gutter's 1,000 labels, or the listbox's 1,000 groups; those are the reviewer's to ask about.
+
+**Carried forward from the T3 reviews (2026-10-30).**
+
+- **T4/T5 must verify before T5 opens the entry point:** the code swimlane edge note and the filing
+  refusal both tell the planner to use **Move to swimlane…** or **Set code…**. Neither exists for a code
+  plan until T4/T5, which is fine while the feature is dark and is not fine the day T5 lights it.
+- **Untested at size:** with 1,000 values in use the gutter has 1,000 buttons and the listbox 1,000
+  groups. Screen-reader group navigation at that size has not been tried.
+- **The plan-wide lane read waits for the activity list** (it is enabled only once the list is known to
+  carry no lane for the type), so a code plan with no saved lanes pays a second round trip on first
+  load. Defensible as built; recorded so it is not rediscovered.

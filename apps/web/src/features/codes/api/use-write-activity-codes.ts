@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
 import { activityHistoryKeys, activityKeys } from '@/lib/query/hierarchy-keys';
+import { invalidateCodeSwimlaneLanes } from '@/lib/query/invalidate-code-lanes';
 
 /** One activity's part of a codes write: the types it means to touch (`null` clears one). */
 export interface ActivityCodesWriteRow {
@@ -48,6 +49,8 @@ export function useWriteActivityCodes(orgSlug: string, planId: string) {
           queryKey: activityKeys.details(orgSlug),
           predicate: isTouched,
         }),
+        // A code write moves membership and can move lanes, so a plan-wide code lane read is stale.
+        invalidateCodeSwimlaneLanes(queryClient, orgSlug, planId),
         // The write recorded a history entry per activity (ADR-0174).
         queryClient.invalidateQueries({
           queryKey: activityHistoryKeys.all(orgSlug),

@@ -15,10 +15,11 @@ export interface GhostLaneScene {
   displayLanes: ReadonlyMap<string, number>;
   /**
    * What the swimlanes are made of. Only `MANUAL` can place removed work today: a WBS-grouped scene
-   * keys its rows by summary activity and needs the frozen ancestors, which arrives with M3. Until
-   * then removed work on `WBS` is counted, so it never lands in "No swimlane" by default.
+   * keys its rows by summary activity and needs the frozen ancestors, which arrives with M3, and a
+   * code scene needs the baseline's frozen code (M4-T6). Until then removed work on either is
+   * counted, so it never lands in "No swimlane" by default.
    */
-  source: 'MANUAL' | 'WBS';
+  source: 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
   /** `id: null` is "No swimlane". */
   extents: readonly { id: string | null; firstLane: number; laneCount: number }[];
 }

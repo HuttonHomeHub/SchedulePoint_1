@@ -169,6 +169,30 @@ describe('projectSwimlanes', () => {
   });
 });
 
+describe('noneName', () => {
+  const acts = [bar('a1', 0, 3), bar('n1', 0, 3)];
+  const membership = new Map([['a1', 'A']]);
+
+  it('names the none extent, which is still told apart by its id', () => {
+    const out = projectSwimlanes(acts, input({ membership, noneName: 'No Area' }), OPTIONS);
+    expect(out.extents.at(-1)).toEqual({ id: null, name: 'No Area', firstLane: 2, laneCount: 1 });
+  });
+
+  it('leaves the none extent unnamed when the input names none, so a hand-made picture is unchanged', () => {
+    const out = projectSwimlanes(acts, input({ membership }), OPTIONS);
+    expect(out.extents.at(-1)).toEqual({ id: null, name: null, firstLane: 2, laneCount: 1 });
+  });
+
+  it('still hides the none extent when nothing is in it', () => {
+    const out = projectSwimlanes(
+      [bar('a1', 0, 3)],
+      input({ membership, noneName: 'No Area' }),
+      OPTIONS,
+    );
+    expect(out.extents.map((e) => e.id)).toEqual(['A', 'B']);
+  });
+});
+
 describe('swimlaneMarksOf', () => {
   it('is the projection’s extents with the ground choice, and absent without a projection', () => {
     const out = projectSwimlanes([bar('a1', 0, 3)], input(), OPTIONS);

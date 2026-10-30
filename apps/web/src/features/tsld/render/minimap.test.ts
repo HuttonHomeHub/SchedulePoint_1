@@ -485,11 +485,11 @@ function countingStyleCtx(): { calls: { styles: string[] }; ctx: Ctx2D } {
 
 describe('swimlanesInView (swimlanes C13)', () => {
   const EXTENTS = [
-    { name: 'Mechanical', firstLane: 0, laneCount: 3 },
-    { name: 'Electrical', firstLane: 3, laneCount: 2 },
-    { name: 'Civil', firstLane: 5, laneCount: 1 },
-    { name: 'Fit-out', firstLane: 6, laneCount: 1 },
-    { name: null, firstLane: 7, laneCount: 1 },
+    { id: 'm', name: 'Mechanical', firstLane: 0, laneCount: 3 },
+    { id: 'e', name: 'Electrical', firstLane: 3, laneCount: 2 },
+    { id: 'c', name: 'Civil', firstLane: 5, laneCount: 1 },
+    { id: 'f', name: 'Fit-out', firstLane: 6, laneCount: 1 },
+    { id: null, name: null, firstLane: 7, laneCount: 1 },
   ];
   it('names the one swimlane a window sits inside', () => {
     expect(swimlanesInView(EXTENTS, 1, 2)).toBe('swimlane Mechanical');
@@ -511,15 +511,23 @@ describe('swimlanesInView (swimlanes C13)', () => {
   it('words "no swimlane" in lower case inside a list', () => {
     expect(swimlanesInView(EXTENTS, 6, 7)).toBe('swimlanes Fit-out and no swimlane');
   });
+  it('reads the none swimlane by its id, so a source that names it is read as named', () => {
+    const named = [
+      { id: 'g', name: 'Ground floor', firstLane: 0, laneCount: 1 },
+      { id: null, name: 'No Area', firstLane: 1, laneCount: 1 },
+    ];
+    expect(swimlanesInView(named, 1, 1)).toBe('swimlane No Area');
+    expect(swimlanesInView(named, 0, 1)).toBe('swimlanes Ground floor and No Area');
+  });
   it('words a blank name rather than printing nothing', () => {
-    expect(swimlanesInView([{ name: '  ', firstLane: 0, laneCount: 1 }], 0, 0)).toBe(
+    expect(swimlanesInView([{ id: 'x', name: '  ', firstLane: 0, laneCount: 1 }], 0, 0)).toBe(
       'an unnamed swimlane',
     );
     expect(
       swimlanesInView(
         [
-          { name: ' ', firstLane: 0, laneCount: 1 },
-          { name: 'Civil', firstLane: 1, laneCount: 1 },
+          { id: 'x', name: ' ', firstLane: 0, laneCount: 1 },
+          { id: 'c', name: 'Civil', firstLane: 1, laneCount: 1 },
         ],
         0,
         1,

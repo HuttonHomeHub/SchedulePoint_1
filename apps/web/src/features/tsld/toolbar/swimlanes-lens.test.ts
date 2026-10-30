@@ -111,4 +111,31 @@ describe('the Swimlanes lens note', () => {
     expect(note({ swimlanesShown: false, swimlanesFailed: true })).toBeUndefined();
     expect(note({ swimlanesShown: true })).toBeUndefined();
   });
+
+  it('states a standing line, not an event, when a code draws more bands than swimlanes are made for', () => {
+    const over = { swimlanesShown: true, swimlanesOverLimit: { typeName: 'Area', count: 140 } };
+    expect(note(over)).toBe('Area has 140 values in use. Swimlanes are made for up to 100.');
+    expect(note({ ...over, swimlanesShown: false })).toBeUndefined();
+  });
+
+  it('puts the failure first when both are true: nothing is drawn, so the count is moot', () => {
+    expect(
+      note({
+        swimlanesShown: true,
+        swimlanesFailed: true,
+        swimlanesOverLimit: { typeName: 'Area', count: 140 },
+      }),
+    ).toBe("Couldn't load swimlanes. The diagram is shown without them.");
+  });
+
+  it('says the placements were not read when only the saved lanes failed, after the failure note', () => {
+    const note1 = note({ swimlanesShown: true, swimlanesLanesFailed: true });
+    expect(note1).toBe(
+      "Couldn't read where bars were placed. They are placed afresh and may sit differently than you left them.",
+    );
+    expect(note({ swimlanesShown: false, swimlanesLanesFailed: true })).toBeUndefined();
+    expect(note({ swimlanesShown: true, swimlanesFailed: true, swimlanesLanesFailed: true })).toBe(
+      "Couldn't load swimlanes. The diagram is shown without them.",
+    );
+  });
 });

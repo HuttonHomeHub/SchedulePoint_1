@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
 import { activityKeys, swimlaneKeys } from '@/lib/query/hierarchy-keys';
+import { invalidateCodeSwimlaneLanes } from '@/lib/query/invalidate-code-lanes';
 
 /**
  * One activity's lane **inside its swimlane**, with the version it was read at (optimistic lock).
@@ -62,6 +63,8 @@ export function useWriteSwimlaneLanes(orgSlug: string, planId: string) {
     onSettled: (_data, _error, input) =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: activityKeys.listByPlan(orgSlug, planId) }),
+        // Under a code source these in-swimlane lanes are stored as code lanes.
+        invalidateCodeSwimlaneLanes(queryClient, orgSlug, planId),
         ...(changesMembership(input.positions)
           ? [queryClient.invalidateQueries({ queryKey: swimlaneKeys.byPlan(orgSlug, planId) })]
           : []),

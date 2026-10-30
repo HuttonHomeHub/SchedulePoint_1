@@ -41,7 +41,7 @@ export function swimlaneScene(): {
   let next = 0;
   for (const k of c.order) {
     const laneCount = rowsOf.get(k)!;
-    extents.push({ name: String(k), firstLane: next, laneCount });
+    extents.push({ id: String(k), name: String(k), firstLane: next, laneCount });
     next += laneCount;
   }
 

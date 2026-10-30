@@ -110,3 +110,17 @@ describe('a WBS source is spoken like a hand-made one (M3)', () => {
     expect(swimlaneLaneClauses(scene).get('slab')).toMatch(/^in Structure, lane \d of \d$/);
   });
 });
+
+describe('a code source names the none swimlane (M4)', () => {
+  const code = { ...input({ a: 'S2', b: null, c: 'S1', d: 'S2' }), noneName: 'No Area' };
+
+  it('groups the listbox under "No Area", last', () => {
+    const groups = groupListboxRows(ACTIVITIES, code);
+    expect(groups.map((g) => g.label)).toEqual(['Civil', 'Mechanical', 'No Area']);
+  });
+
+  it('says "in No Area" in a bar’s sentence', () => {
+    const scene = projectSwimlanes(ACTIVITIES, code, { source: 'visual', dataDate: '2026-01-01' });
+    expect(swimlaneLaneClauses(scene).get('b')).toBe('in No Area, lane 1 of 1');
+  });
+});

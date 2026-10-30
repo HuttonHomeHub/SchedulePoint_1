@@ -49,7 +49,7 @@ export function groupListboxRows(
     rows: byGroup.get(s.id) ?? [],
   }));
   const none = byGroup.get(null);
-  if (none) groups.push({ key: 'none', label: NO_SWIMLANE_LABEL, rows: none });
+  if (none) groups.push({ key: 'none', label: input.noneName ?? NO_SWIMLANE_LABEL, rows: none });
   return groups;
 }
 

@@ -145,6 +145,8 @@ export function useTsldToolbarContext({
     pending: boolean;
     failed?: boolean;
     count?: number | undefined;
+    overLimit?: { typeName: string; count: number } | undefined;
+    lanesFailed?: boolean;
   };
   /** The Set up / Manage swimlanes command (M2-T9): its label and what it opens. Both stable. */
   swimlanesManage?: { label: string; open: () => void };
@@ -728,14 +730,18 @@ export function useTsldToolbarContext({
       levelResources: plan.levelResources,
       swimlanesShown: swimlaneLensShown,
       toggleSwimlanes: () => setSwimlanesOverride(!swimlaneLensShown),
-      // A hand-made plan with no swimlanes (a setup undone) is not set up; a WBS plan is, whatever its
-      // summaries, because its swimlanes are not a list that can be empty of its own accord.
+      // A hand-made plan with no swimlanes (a setup undone) is not set up; a WBS or a code plan is,
+      // whatever its summaries or values, because its swimlanes are not a list that can be empty of
+      // its own accord (a code source is only ever stored with at least one value in use).
       swimlanesSetUp:
         plan.swimlaneSource === 'WBS' ||
+        plan.swimlaneSource === 'ACTIVITY_CODE' ||
         (plan.swimlaneSource === 'MANUAL' && swimlaneScene.count !== 0),
       swimlanesLoading: swimlaneScene.pending,
       swimlanesManage,
       ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
+      ...(swimlaneScene.lanesFailed ? { swimlanesLanesFailed: true } : {}),
+      ...(swimlaneScene.overLimit ? { swimlanesOverLimit: swimlaneScene.overLimit } : {}),
       hasActiveBaseline,
       varianceLoading,
       varianceError,
@@ -1119,6 +1125,8 @@ export function useTsldToolbarContext({
     swimlaneScene.pending,
     swimlaneScene.failed,
     swimlaneScene.count,
+    swimlaneScene.overLimit,
+    swimlaneScene.lanesFailed,
     swimlanesManage,
     hasActiveBaseline,
     varianceLoading,

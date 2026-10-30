@@ -234,8 +234,12 @@ export interface MinimapWindow {
   laneTo: number;
 }
 
-/** One swimlane's place in the stack, as the readout needs it. `name: null` is "No swimlane". */
+/**
+ * One swimlane's place in the stack, as the readout needs it. `id: null` is "No swimlane" — told apart
+ * by the id because a code source gives that extent a name of its own ("No Area").
+ */
 export interface MinimapSwimlaneExtent {
+  id: string | null;
   name: string | null;
   firstLane: number;
   laneCount: number;
@@ -258,12 +262,16 @@ export function swimlanesInView(
   );
   if (inView.length === 0) return 'past the last swimlane';
   // A blank name is a name somebody typed, not "No swimlane", so it is worded rather than hidden.
+  // The none extent keeps the constant's lower case mid-sentence; a name the source gave it ("No
+  // Area") is a proper noun and is read as it is.
   const nameOf = (e: MinimapSwimlaneExtent): string =>
-    e.name === null ? NO_SWIMLANE_LABEL.toLowerCase() : e.name.trim() || 'an unnamed swimlane';
+    e.id === null && e.name === null
+      ? NO_SWIMLANE_LABEL.toLowerCase()
+      : (e.name?.trim() ?? '') || 'an unnamed swimlane';
   if (inView.length === 1) {
     const only = inView[0]!;
-    if (only.name === null) return 'outside any swimlane';
-    return only.name.trim() ? `swimlane ${only.name.trim()}` : 'an unnamed swimlane';
+    if (only.id === null && only.name === null) return 'outside any swimlane';
+    return only.name?.trim() ? `swimlane ${only.name.trim()}` : 'an unnamed swimlane';
   }
   const SHOWN = 3;
   const names = inView.map(nameOf);

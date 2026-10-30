@@ -111,6 +111,7 @@ import {
   swimlanePictureInput,
   swimlanePictureOn,
   swimlaneKeys,
+  useCodeSwimlaneSource,
   useSwimlanes,
   useWriteSwimlaneLanes,
   type SwimlaneLaneRow,
@@ -706,9 +707,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // can overlap bars in the other; it is the scene's own query, so one fetch.
   const swimlaneSource = plan.data?.swimlaneSource ?? 'NONE';
   const swimlaneLevel = plan.data?.swimlaneWbsLevel ?? null;
+  const swimlaneCodeTypeId = plan.data?.swimlaneCodeTypeId ?? null;
   const swimlanePicture = swimlanePictureOn({
     source: swimlaneSource,
     level: swimlaneLevel,
+    codeTypeId: swimlaneCodeTypeId,
     canEdit: canEditSchedule,
   });
   // The list is only a hand-made plan's; a WBS plan's swimlanes are read from the activities.
@@ -717,11 +720,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     planId,
     swimlanePicture && swimlaneSource === 'MANUAL',
   );
+  // A code source's type, values and lanes: the scene's own queries (one fetch each), enabled here too
+  // because auto-resolve reads them from the cache at settle time.
+  const codeSource = useCodeSwimlaneSource({
+    orgSlug,
+    planId,
+    codeTypeId: swimlanePicture && swimlaneSource === 'ACTIVITY_CODE' ? swimlaneCodeTypeId : null,
+    activities: activities.data,
+  });
   const readSwimlaneInput = (): SwimlaneInput | null =>
     swimlanePictureInput({
       on: swimlanePicture,
       source: swimlaneSource,
       level: swimlaneLevel,
+      code: codeSource,
       list:
         queryClient.getQueryData<SwimlaneSummary[]>(swimlaneKeys.byPlan(orgSlug, planId)) ??
         swimlaneList.data,
