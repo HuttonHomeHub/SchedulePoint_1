@@ -59,10 +59,14 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
   let app: INestApplication;
   let prisma: PrismaService;
   let priorEnforced: string | undefined;
+  let priorRateLimit: string | undefined;
 
   beforeAll(async () => {
     priorEnforced = process.env.PLAN_EDIT_LOCK_ENFORCED;
     process.env.PLAN_EDIT_LOCK_ENFORCED = 'true';
+    // The 101-activity cases make more requests in a minute than the default per-IP bound allows.
+    priorRateLimit = process.env.RATE_LIMIT_LIMIT;
+    process.env.RATE_LIMIT_LIMIT = '100000';
     process.env.LOG_LEVEL ??= 'silent';
     const { AppModule } = await import('../src/app.module');
     const { PrismaService: Token } = await import('../src/prisma/prisma.service');
@@ -81,6 +85,8 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
     await app?.close();
     if (priorEnforced === undefined) delete process.env.PLAN_EDIT_LOCK_ENFORCED;
     else process.env.PLAN_EDIT_LOCK_ENFORCED = priorEnforced;
+    if (priorRateLimit === undefined) delete process.env.RATE_LIMIT_LIMIT;
+    else process.env.RATE_LIMIT_LIMIT = priorRateLimit;
   });
 
   beforeEach(async () => {
@@ -218,6 +224,14 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
     const [aAfter] = await liveActivities(actor, planId, [a.id]);
     await assign(actor, planId, trade.id, [{ activity: aAfter!, valueId: mech.id }]);
     return { ...ctx, area, trade, l1, l2, mech, a, b };
+  }
+
+  /** One activity's current id and version, read directly: the list is paged and the 101st is on page two. */
+  async function currentActivity(id: string): Promise<ActivityBody> {
+    return prisma.activity.findUniqueOrThrow({
+      where: { id },
+      select: { id: true, version: true },
+    });
   }
 
   async function liveActivities(actor: Actor, planId: string, ids: string[]) {
@@ -517,7 +531,7 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
       expect((await switchTo(actor, planId, toCode(type.id))).status).toBe(200);
       await switchTo(actor, planId, { swimlaneSource: 'NONE' });
 
-      const fresh = await liveActivities(actor, planId, [activities[100]!.id]);
+      const fresh = [await currentActivity(activities[100]!.id)];
       await assign(actor, planId, type.id, [{ activity: fresh[0]!, valueId: values[100]!.id }]);
       const over = await switchTo(actor, planId, toCode(type.id));
       expect(over.status).toBe(422);
@@ -561,7 +575,7 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
       expect((await switchTo(actor, planId, toCode(type.id))).status).toBe(200);
 
       // The codes write is not stopped by the source (owner answer 1: keep drawing), so the count drifts.
-      const last = await liveActivities(actor, planId, [activities[100]!.id]);
+      const last = [await currentActivity(activities[100]!.id)];
       await assign(actor, planId, type.id, [{ activity: last[0]!, valueId: values[100]!.id }]);
 
       const restated = await switchTo(actor, planId, { swimlaneSource: 'ACTIVITY_CODE' });

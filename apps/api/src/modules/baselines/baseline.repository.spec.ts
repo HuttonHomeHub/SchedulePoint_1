@@ -254,15 +254,14 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
         swimlaneCodeTypeId: null,
       }),
     });
-    expect(db.baselineActivity.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          codeValueId: null,
-          codeLaneIndex: null,
-          codeLaneUpdatedAt: null,
-        }),
-      ],
-    });
+    // The columns are left out (they default to NULL), so a plan with no code source binds nothing
+    // extra in its bulk insert.
+    const [row] = (
+      db.baselineActivity.createMany.mock.calls[0] as [{ data: Record<string, unknown>[] }]
+    )[0].data;
+    expect(row).not.toHaveProperty('codeValueId');
+    expect(row).not.toHaveProperty('codeLaneIndex');
+    expect(row).not.toHaveProperty('codeLaneUpdatedAt');
   });
 
   it('freezes the pointer and each activity’s code placement under a code source', async () => {
@@ -305,35 +304,23 @@ describe('BaselineRepository.loadCodePlacementsForCapture', () => {
     assignments: { activityId: string; codeValueId: string }[],
     lanes: { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[],
   ) {
-    const assignmentFind = vi.fn().mockResolvedValue(assignments);
-    const laneFind = vi.fn().mockResolvedValue(lanes);
-    return {
-      assignmentFind,
-      laneFind,
-      db: {
-        codeValueAssignment: { findMany: assignmentFind },
-        codeSwimlaneLane: { findMany: laneFind },
-      } as never,
-    };
+    // The two reads in the order the repository issues them: the type's assignments, then its lanes.
+    const queryRaw = vi.fn().mockResolvedValueOnce(assignments).mockResolvedValueOnce(lanes);
+    return { queryRaw, db: { $queryRaw: queryRaw } as never };
   }
 
   it('reads the type’s assignments and the plan’s lanes for it, org-scoped, in two statements', async () => {
-    const { db, assignmentFind, laneFind } = reads([], []);
+    const { db, queryRaw } = reads([], []);
     await new BaselineRepository({} as PrismaService).loadCodePlacementsForCapture(
       'org',
       'plan',
       'ct1',
       db,
     );
-    expect(assignmentFind.mock.calls[0]![0].where).toEqual({
-      organizationId: 'org',
-      codeTypeId: 'ct1',
-    });
-    expect(laneFind.mock.calls[0]![0].where).toEqual({
-      organizationId: 'org',
-      planId: 'plan',
-      codeTypeId: 'ct1',
-    });
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    // Tagged-template calls: [strings, ...values].
+    expect(queryRaw.mock.calls[0]!.slice(1)).toEqual(['org', 'ct1']);
+    expect(queryRaw.mock.calls[1]!.slice(1)).toEqual(['org', 'plan', 'ct1']);
   });
 
   it('pairs the stored value verbatim with the lane kept for that value, and no other', async () => {

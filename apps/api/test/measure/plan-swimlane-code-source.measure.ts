@@ -10,6 +10,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
 import { configureHttpApp } from '../../src/app-setup';
+import { BaselineRepository } from '../../src/modules/baselines/baseline.repository';
 import { CodeTypeRepository } from '../../src/modules/codes/code-type.repository';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { clearDomainData } from '../audit-reset';
@@ -172,6 +173,13 @@ describe('plan swimlane code source — switch and capture cost', () => {
       ITER,
     );
 
+    const baselines = app.get(BaselineRepository);
+    await time(
+      'loadCodePlacementsForCapture alone: 5,000 assignments + 5,000 code lanes',
+      () => baselines.loadCodePlacementsForCapture(orgId, planId, first.id, prisma),
+      ITER,
+    );
+
     const plan = `${API}/plans/${planId}`;
     const patch = async (body: Record<string, unknown>): Promise<void> => {
       const current = await agent.get(plan).expect(200);
@@ -198,19 +206,41 @@ describe('plan swimlane code source — switch and capture cost', () => {
         .send({ name: `Baseline ${n}` })
         .expect(201);
     };
-    await patch({ swimlaneSource: 'MANUAL' });
-    const byHand = await time(
-      'capture, MANUAL source (by hand): 5,000 activities',
-      capture,
-      CAPTURE_ITER,
+    // Paired: each iteration captures once by hand and once from the code, alternating which goes
+    // first, so drift in the machine's state between sittings cancels in the difference.
+    const sources = {
+      hand: () => patch({ swimlaneSource: 'MANUAL' }),
+      code: () => patch({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: first.id }),
+    };
+    const timed = async (kind: 'hand' | 'code'): Promise<number> => {
+      await sources[kind]();
+      const started = performance.now();
+      await capture();
+      return performance.now() - started;
+    };
+    await timed('hand'); // warm both paths
+    await timed('code');
+    const hand: number[] = [];
+    const code: number[] = [];
+    const diffs: number[] = [];
+    for (let i = 0; i < CAPTURE_ITER; i += 1) {
+      const order = i % 2 === 0 ? (['hand', 'code'] as const) : (['code', 'hand'] as const);
+      const got: Record<string, number> = {};
+      for (const kind of order) got[kind] = await timed(kind);
+      hand.push(got.hand as number);
+      code.push(got.code as number);
+      diffs.push((got.code as number) - (got.hand as number));
+    }
+    const median = (xs: number[]): number =>
+      quantile(
+        [...xs].sort((a, b) => a - b),
+        0.5,
+      );
+    out.push(
+      `capture, MANUAL source (by hand), paired: median ${median(hand).toFixed(1)} ms   (n=${CAPTURE_ITER})`,
+      `capture, ACTIVITY_CODE source, paired: median ${median(code).toFixed(1)} ms   (n=${CAPTURE_ITER})`,
+      `added by the code half of the capture, median paired difference: ${median(diffs).toFixed(1)} ms (min ${Math.min(...diffs).toFixed(1)}, max ${Math.max(...diffs).toFixed(1)})`,
     );
-    await patch({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: first.id });
-    const byCode = await time(
-      'capture, ACTIVITY_CODE source: 5,000 activities, 15,000 code lanes',
-      capture,
-      CAPTURE_ITER,
-    );
-    out.push(`added by the code half of the capture (p50): ${(byCode - byHand).toFixed(1)} ms`);
 
     process.stdout.write(`\n${out.join('\n')}\n`);
     if (process.env.MEASURE_OUT) writeFileSync(process.env.MEASURE_OUT, `${out.join('\n')}\n`);

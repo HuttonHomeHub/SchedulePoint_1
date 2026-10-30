@@ -338,9 +338,16 @@ export class BaselineRepository {
             // The frozen swimlane membership (§13.3), copied whatever the plan's source was.
             swimlaneId: a.swimlaneId,
             // The frozen code placement for the source type, verbatim (see CaptureCodePlacement).
-            codeValueId: placed?.codeValueId ?? null,
-            codeLaneIndex: placed?.codeLaneIndex ?? null,
-            codeLaneUpdatedAt: placed?.codeLaneUpdatedAt ?? null,
+            // Left out entirely when no activity has one (every plan not sourced from a code): the
+            // columns default to NULL, and a bulk insert pays for every bound parameter, so that
+            // plan pays nothing. All rows of one insert share one column set, so it is all or none.
+            ...(input.codePlacements.size > 0
+              ? {
+                  codeValueId: placed?.codeValueId ?? null,
+                  codeLaneIndex: placed?.codeLaneIndex ?? null,
+                  codeLaneUpdatedAt: placed?.codeLaneUpdatedAt ?? null,
+                }
+              : {}),
             createdBy: input.actorId,
             updatedBy: input.actorId,
           };
@@ -532,7 +539,8 @@ export class BaselineRepository {
    * (that type, that value or "no value"). Two reads joined in memory, the cheapest shape measured
    * (m4-database-review §2.10): the type's assignments by the type filter alone and the type's lanes
    * for the plan, both served by an index, against a single three-way `IS NOT DISTINCT FROM` join at
-   * 19-22 ms. Neither table carries `deleted_at`, so there is no filter to forget, and a soft-deleted
+   * 19-22 ms. Raw SQL, because Prisma's row hydration of 10,000 rows cost about 60 ms against a few ms in the
+   * database. Neither table carries `deleted_at`, so there is no filter to forget, and a soft-deleted
    * value is returned as stored on purpose: the capture freezes facts and runs no rule.
    *
    * Org-scoped (anti-IDOR). Read inside the capture tx, after the activity rows are locked and under
@@ -545,14 +553,18 @@ export class BaselineRepository {
     typeId: string,
     db: Prisma.TransactionClient,
   ): Promise<Map<string, CaptureCodePlacement>> {
-    const assignments = await db.codeValueAssignment.findMany({
-      where: { organizationId, codeTypeId: typeId },
-      select: { activityId: true, codeValueId: true },
-    });
-    const lanes = await db.codeSwimlaneLane.findMany({
-      where: { organizationId, planId, codeTypeId: typeId },
-      select: { activityId: true, codeValueId: true, laneIndex: true, updatedAt: true },
-    });
+    const assignments = await db.$queryRaw<{ activityId: string; codeValueId: string }[]>`
+      SELECT activity_id AS "activityId", code_value_id AS "codeValueId"
+      FROM code_value_assignments
+      WHERE organization_id = ${organizationId}::uuid AND code_type_id = ${typeId}::uuid`;
+    const lanes = await db.$queryRaw<
+      { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
+    >`
+      SELECT activity_id AS "activityId", code_value_id AS "codeValueId",
+             lane_index AS "laneIndex", updated_at AS "updatedAt"
+      FROM code_swimlane_lanes
+      WHERE organization_id = ${organizationId}::uuid AND plan_id = ${planId}::uuid
+        AND code_type_id = ${typeId}::uuid`;
     const valueOf = new Map(assignments.map((a) => [a.activityId, a.codeValueId]));
     const placements = new Map<string, CaptureCodePlacement>();
     for (const [activityId, codeValueId] of valueOf) {
