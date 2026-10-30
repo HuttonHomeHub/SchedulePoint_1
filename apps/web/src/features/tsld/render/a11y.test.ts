@@ -913,6 +913,21 @@ describe('the comparison overlay’s spoken summary', () => {
     );
   });
 
+  it('still speaks when everything changed was withheld by the swimlanes', () => {
+    const summary = compareOverlaySummary(
+      [],
+      0,
+      { drawn: 0, undrawable: 0 },
+      'NOT_RECORDED',
+      1,
+      'CODE',
+    );
+    expect(summary?.heading).toContain(
+      '1 not shown because the earlier revision was grouped differently',
+    );
+    expect(summary?.removed).toEqual([]);
+  });
+
   it('lists the REMOVED activities and only those', () => {
     // An activity that merely moved already has a listbox row; a removed one has none, which is
     // the whole reason this list exists (ADR-0122).

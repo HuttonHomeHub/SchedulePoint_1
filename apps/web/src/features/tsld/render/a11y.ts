@@ -426,7 +426,15 @@ export function compareOverlaySummary(
   /** The VISIBLE sentence for that count. Empty when there is nothing withheld. */
   readonly undrawnLabel: string;
 } | null {
-  if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
+  // `unplaced` counts too: an overlay that withheld every changed bar must still say so, or the
+  // reader is told nothing in exactly the case where the picture is empty for a reason.
+  if (
+    ghosts.length === 0 &&
+    undrawable === 0 &&
+    unplaced === 0 &&
+    links.drawn === 0 &&
+    links.undrawable === 0
+  ) {
     return null;
   }
   const removed = ghosts

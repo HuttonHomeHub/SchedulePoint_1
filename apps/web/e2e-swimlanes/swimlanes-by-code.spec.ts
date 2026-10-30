@@ -717,11 +717,10 @@ test.describe('choosing a code in Swimlanes…', () => {
           /not shown because the earlier revision was grouped differently, or its value is no longer in use/,
         ),
       ).toBeVisible();
-      await expect(
-        page
-          .getByRole('list', { name: 'Removed in this revision' })
-          .getByText('First-fix services'),
-      ).toBeVisible();
+      // Counted is not drawn, so it is not in the diagram's removed list either; the comparison panel
+      // still reports the removal in its own words.
+      await expect(page.getByRole('list', { name: 'Removed in this revision' })).toHaveCount(0);
+      await expect(compare.getByText(/1 removed/)).toBeVisible();
 
       await page.getByRole('button', { name: 'View', exact: true }).click();
       await page.getByRole('checkbox', { name: 'Compare on diagram' }).uncheck();
@@ -731,6 +730,9 @@ test.describe('choosing a code in Swimlanes…', () => {
       await back.getByRole('button', { name: 'Use Area' }).click();
       await back.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(back).toBeHidden();
+      // The comparison dock shares the panel column with Codes…, which a later step opens.
+      await compare.getByRole('button', { name: 'Close revision comparison' }).click();
+      await expect(compare).toBeHidden();
     });
 
     await test.step('6c. a guest sees the bands by name, "No Area" last, and no code', async () => {
@@ -823,6 +825,9 @@ test.describe('choosing a code in Swimlanes…', () => {
     });
 
     await test.step('8. at 1024 × 600 the printed Delete… reason leaves the Area values table in view', async () => {
+      // Opening the comparison dock in 6b folded the activities panel; Codes… lives in it.
+      const expand = page.getByRole('button', { name: 'Expand activities panel' });
+      if (await expand.isVisible()) await expand.click();
       await page.getByRole('button', { name: 'Codes…' }).click();
       const codes = page.getByRole('dialog', { name: 'Codes', exact: true });
       await expect(codes).toBeVisible();
