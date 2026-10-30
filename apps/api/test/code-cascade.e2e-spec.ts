@@ -228,10 +228,16 @@ describe.skipIf(!hasDatabase)('Code types and values in the delete cascade (e2e)
 
   it('keeps a plan’s swimlane source type pointing at the type through delete and restore', async () => {
     const c = await codedPlan('Plan A');
-    await prisma.plan.update({
-      where: { id: c.planId },
-      data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: c.live.typeId },
-    });
+    // Through the real switch (M4-T2): the one activity carries a live value of the type, so 1 value is in use.
+    const held = await agent.get(`${base}/plans/${c.planId}`).expect(200);
+    await agent
+      .patch(`${base}/plans/${c.planId}`)
+      .send({
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneCodeTypeId: c.live.typeId,
+        version: held.body.data.version,
+      })
+      .expect(200);
     await agent.delete(`${base}/plans/${c.planId}`).expect(204);
     expect((await typeRow(c.live.typeId)).deletedAt).not.toBeNull();
     await agent.post(`${base}/plans/${c.planId}/restore`).expect(200);

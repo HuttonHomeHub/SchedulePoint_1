@@ -336,7 +336,8 @@ structural writes under the pen. Showing and hiding swimlanes is view state.
 | Scenario                                      | Detection                     | User-facing result                                                                       | Status           |
 | --------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
 | Ineligible code (0 or > 100 in use)           | service count under plan lock | shaded with reason; if sent: "Area has 140 values in use. Swimlanes can show up to 100." | 422              |
-| Foreign / deleted / unknown code type         | service, org + plan scope     | "That code no longer exists. Choose another."                                            | 404              |
+| Foreign / unknown code type                   | service, org + plan scope     | "That code no longer exists. Choose another."                                            | 404              |
+| Deleted code type of this plan                | service, under the type lock  | "That code has been deleted. Choose another."                                            | 422              |
 | Stale plan version on the switch              | optimistic lock               | "Someone changed this plan. Reload to see it."                                           | 409              |
 | No pen                                        | write gate                    | the pen sentence                                                                         | 423/409 as today |
 | Hand-made `swimlaneId` under a code           | `assertSwimlaneIdWritable`    | (never sent by the web)                                                                  | 422              |

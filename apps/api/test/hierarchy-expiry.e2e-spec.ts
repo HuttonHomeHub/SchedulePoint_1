@@ -314,10 +314,18 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
         { activityId: summaryId, codeValueId: removed.id, laneIndex: 2 },
       ].map((row) => ({ organizationId: orgId, planId, codeTypeId: codeType.id, ...row })),
     });
-    await prisma.plan.update({
-      where: { id: planId },
-      data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: codeType.id },
-    });
+    // Through the real switch (M4-T2), so the expiry meets a pointer set by the product's own write:
+    // `activityId` carries the live value and the summary's value does not count, so 1 is in use.
+    const switchPlan = `/api/v1/organizations/acme/plans/${planId}`;
+    const planNow = await actor.agent.get(switchPlan).expect(200);
+    await actor.agent
+      .patch(switchPlan)
+      .send({
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneCodeTypeId: codeType.id,
+        version: planNow.body.data.version,
+      })
+      .expect(200);
     const liveType = await prisma.codeType.create({
       data: { organizationId: orgId, planId: otherPlanId, name: 'Live area', position: 0 },
       select: { id: true },

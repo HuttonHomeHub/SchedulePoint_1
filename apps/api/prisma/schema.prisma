@@ -729,9 +729,10 @@ enum SwimlaneSource {
   MANUAL
   WBS
   /// swimlanes are the live values of a code type (P6 activity codes, database-design.md §5.1).
-  /// Added alone by 20261027120000_swimlane_source_activity_code; NO row can hold it until the
-  /// next migration gives ck_plans_swimlane_source_level an ACTIVITY_CODE branch, and the API's
-  /// UpdatePlanDto does not admit it.
+  /// Added alone by 20261027120000_swimlane_source_activity_code; a baseline holds it as a frozen copy
+  /// of the plan's source; held by a plan with its
+  /// `swimlane_code_type_id` under ck_plans_swimlane_source_level (20261027120100_p6_activity_codes),
+  /// and written by the API's UpdatePlanDto together with that type (M4).
   ACTIVITY_CODE
 }
 
@@ -2383,7 +2384,7 @@ model Baseline {
   swimlaneCodeTypeId    String?               @map("swimlane_code_type_id") @db.Uuid
   /// WHAT this baseline froze of the P6 activity codes (the CodeSnapshotLevel docblock). Constant
   /// DEFAULT 'NONE' ⇒ metadata-only ADD COLUMN; written SWIMLANE_TYPE unconditionally by every capture
-  /// once the capture path is taught the codes, and then immutable. SWIMLANE_TYPE requires
+  /// (since M4), and then immutable. SWIMLANE_TYPE requires
   /// `swimlaneSnapshotLevel` FULL (ck_baselines_code_snapshot_shape), because the frozen swimlane
   /// source is what says which type baseline_activities.code_value_id belongs to.
   codeSnapshotLevel     CodeSnapshotLevel     @default(NONE) @map("code_snapshot_level")

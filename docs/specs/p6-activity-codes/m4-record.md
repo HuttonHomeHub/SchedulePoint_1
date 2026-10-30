@@ -94,3 +94,30 @@ read's median above 10 ms at 5,000 activities.
 **Implemented:** `ActivityCodesService.assignOnCreate` is called from `ActivitiesService.create` after the
 insert and before `markScheduleInputsChanged`; no history entry and no lane row on create; the
 `swimlaneId` refusal is re-checked against the re-read inside the transaction.
+
+## 3. T2: the source switch, baseline capture, the rollback runbook (2026-10-30)
+
+**Status: built and tested; the owner ACCEPTED the capture-cost miss on 2026-10-30** ("Accept": keep freezing each
+activity's source-type value and lane in the baseline, about 0.1–0.15 s slower on a code-sourced plan; the other
+option offered was to stop freezing them, so removed work under a code grouping would only be counted).
+
+Method: `apps/api/test/measure/plan-swimlane-code-source.measure.ts`, local PostgreSQL 16.15 in the shared container
+(not the deployed host); 5,000 activities, 30 types × 50 values, 5 % deleted activities, 5 % WBS summaries, one
+deleted value per type; the source type has 5,000 code lanes. Paired cases alternate per iteration; the figure is the
+median paired difference. Run with `MEASURE_CAPTURE_ITER=30` for the capture.
+
+| What                                                    | Target        | Measured                                                                                                                                   | Result                                                                                |
+| ------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `countValuesInUse`, summaries excluded                  | ≤ 10 ms       | p50 7.9, 8.8, 10.4 and 11.5 ms over four runs (p95 9.1–20.3)                                                                               | at the ceiling; recorded as about 8–11 ms (runs once per switch, under the plan lock) |
+| Code-sourced capture vs MANUAL capture of the same plan | ≤ 50 ms added | median paired 85 (n=10), 123 (n=30); after optimising 120, 199, 148 (n=30); pair spread about −460 to +1,060 ms; a capture is ~1.25–1.47 s | **missed; accepted by the owner** — honest figure about +100 to +150 ms (~8–10 %)     |
+| PATCH switch to the code and back, over HTTP            | —             | p50 about 67–86 ms                                                                                                                         | recorded                                                                              |
+
+Why the capture target was out of reach (backend-performance-reviewer, reasoned from the figures, not measured): the
+placement read is about 33 ms alone (two raw statements, down from 62 ms with Prisma `findMany`); the three
+`baseline_activities` code columns add about 10 % bound parameters to the insert that dominates the capture, plausibly
+60–80 ms. Folding the two reads into one `FULL OUTER JOIN` would save perhaps 10–15 ms; an `UPDATE … FROM` after the
+insert is roughly a wash. Neither was done. MANUAL, WBS and NONE captures issue no new statement and bind no new
+parameter (the code columns are left out of the bulk insert when no activity has a placement).
+
+The pair spread (about ±500 ms) exceeds the original target, so 50 ms could not have been demonstrated on this
+machine either way (ADR-0076: the miss is recorded, not re-measured away).

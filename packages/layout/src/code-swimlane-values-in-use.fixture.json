@@ -1,0 +1,199 @@
+{
+  "_comment": "The 'values in use' rule for a code swimlane source (M4): the number of distinct LIVE values of the code carried by LIVE activities other than WBS summaries. One fixture, two readers: the API's SQL count (apps/api/test/plan-swimlane-code-source.e2e-spec.ts builds each case through the public routes and compares CodeTypeRepository.countValuesInUse) and, from M4-T3, the web's codeSwimlaneValues (packages/layout). An activity's valueId is the id (within this case) of the value it carries, null for none; 'deleted' is a soft delete of the activity or value. A switch is admitted when 1 <= expectedInUse <= 100.",
+  "cases": [
+    {
+      "name": "an empty plan has no values in use",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        }
+      ],
+      "activities": [],
+      "expectedInUse": 0
+    },
+    {
+      "name": "one value on one activity",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "a"
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "two activities sharing a value count it once",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        },
+        {
+          "id": "b",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": null
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "a value only a WBS summary carries is not in use",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        },
+        {
+          "id": "b",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "WBS_SUMMARY",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "b"
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "a summary and a task sharing a value count it once",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "WBS_SUMMARY",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "a"
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "a deleted activity does not carry its value",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        },
+        {
+          "id": "b",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "TASK",
+          "deleted": true,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "b"
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "a deleted value is not in use",
+      "values": [
+        {
+          "id": "a",
+          "deleted": true
+        },
+        {
+          "id": "b",
+          "deleted": false
+        }
+      ],
+      "activities": [
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "b"
+        }
+      ],
+      "expectedInUse": 1
+    },
+    {
+      "name": "only summaries, deleted work and deleted values leaves nothing in use",
+      "values": [
+        {
+          "id": "a",
+          "deleted": false
+        },
+        {
+          "id": "b",
+          "deleted": false
+        },
+        {
+          "id": "c",
+          "deleted": true
+        }
+      ],
+      "activities": [
+        {
+          "type": "WBS_SUMMARY",
+          "deleted": false,
+          "valueId": "a"
+        },
+        {
+          "type": "TASK",
+          "deleted": true,
+          "valueId": "b"
+        },
+        {
+          "type": "TASK",
+          "deleted": false,
+          "valueId": "c"
+        }
+      ],
+      "expectedInUse": 0
+    }
+  ]
+}

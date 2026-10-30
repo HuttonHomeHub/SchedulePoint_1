@@ -26,13 +26,11 @@ import { IsCalendarDate } from '../../../common/validation/calendar-date';
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 /**
- * The swimlane sources a client may write. `ACTIVITY_CODE` is in the database enum
- * (20261027120000_swimlane_source_activity_code) before any plan can hold it:
- * ck_plans_swimlane_source_level has no branch for it yet, so admitting it here would turn a 422
- * into the CHECK's 500. The P6 activity codes milestones widen this list with the column that
- * names the code type.
+ * The swimlane sources a client may write. `ACTIVITY_CODE` is written with `swimlaneCodeTypeId`, the
+ * code the swimlanes are made from: `ck_plans_swimlane_source_level` ties the two together, so the
+ * service resolves them as one fact and refuses a mismatch as a 422 before the CHECK could (M4).
  */
-const WRITABLE_SWIMLANE_SOURCES = ['NONE', 'MANUAL', 'WBS'] as const;
+const WRITABLE_SWIMLANE_SOURCES = ['NONE', 'MANUAL', 'WBS', 'ACTIVITY_CODE'] as const;
 type WritableSwimlaneSource = (typeof WRITABLE_SWIMLANE_SOURCES)[number];
 
 const trim = ({ value }: { value: unknown }): unknown =>
@@ -200,9 +198,11 @@ export class UpdatePlanDto {
   @ApiPropertyOptional({
     enum: WRITABLE_SWIMLANE_SOURCES,
     description:
-      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL (hand-made) or WBS ' +
-      '(the summaries at `swimlaneWbsLevel`). A presentation field: changing it never marks the plan ' +
-      'as edited since calculated. WBS needs a level (422 otherwise).',
+      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL (hand-made), WBS ' +
+      '(the summaries at `swimlaneWbsLevel`) or ACTIVITY_CODE (one swimlane per value of the code ' +
+      '`swimlaneCodeTypeId` that some activity carries). A presentation field: changing it never ' +
+      'marks the plan as edited since calculated. WBS needs a level and ACTIVITY_CODE a code (422 ' +
+      'otherwise).',
   })
   @IsOptional()
   @IsIn(WRITABLE_SWIMLANE_SOURCES)
@@ -224,6 +224,23 @@ export class UpdatePlanDto {
   @Min(1)
   @Max(3)
   swimlaneWbsLevel?: number | null;
+
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'The code type the swimlanes are made from: required when the source is ACTIVITY_CODE, and ' +
+      'null otherwise (`ck_plans_swimlane_source_level`). Moving the source off ACTIVITY_CODE clears ' +
+      'it. The type must be a live code of this plan (404 when it is another plan’s or unknown, 422 ' +
+      'SWIMLANE_CODE_TYPE_MISMATCH when deleted) with 1 to 100 values in use by live activities ' +
+      'other than WBS summaries (422 SWIMLANE_CODE_TYPE_INELIGIBLE, with the count).',
+  })
+  @IsOptional()
+  // Allow an explicit null (clear the type); validate the shape only for a value. @Matches, not
+  // @IsUUID: our ids are UUID v7 (see common/validation/uuid.ts).
+  @ValidateIf((_, value) => value !== null)
+  @Matches(UUID_REGEX, { message: 'swimlaneCodeTypeId must be a valid UUID.' })
+  swimlaneCodeTypeId?: string | null;
 
   @ApiProperty({ description: 'Optimistic-locking version from the last read.' })
   @Type(() => Number)

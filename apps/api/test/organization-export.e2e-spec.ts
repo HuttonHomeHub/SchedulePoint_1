@@ -778,7 +778,8 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     ]);
     expect(
       jsonRows(files, 'json/baselines.json')
-        .filter((b) => b.codeSnapshotLevel === 'SWIMLANE_TYPE')
+        // Every capture now says SWIMLANE_TYPE (M4); only the code-sourced one names a type.
+        .filter((b) => b.codeSnapshotLevel === 'SWIMLANE_TYPE' && b.swimlaneCodeTypeId !== null)
         .map((b) => b.swimlaneCodeTypeId),
     ).toEqual([type!.id]);
     expect(

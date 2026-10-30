@@ -161,8 +161,9 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
     actorId: 'user',
     activities: [activity],
     dependencies: [],
-    swimlane: { source: 'WBS' as const, wbsLevel: 2 },
+    swimlane: { source: 'WBS' as const, wbsLevel: 2, codeTypeId: null },
     lanes: [lane],
+    codePlacements: new Map(),
     ...over,
   });
 
@@ -204,7 +205,7 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
     const db = tx();
     const repository = new BaselineRepository({} as PrismaService);
     await repository.createWithSnapshot(
-      input({ swimlane: { source: 'NONE', wbsLevel: null }, lanes: [] }),
+      input({ swimlane: { source: 'NONE', wbsLevel: null, codeTypeId: null }, lanes: [] }),
       db as never,
     );
     expect(db.baseline.create).toHaveBeenCalledWith({
@@ -241,5 +242,133 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
       activityId: { in: ids.slice(0, 8_000) },
     });
     expect(rows[0]).toEqual(lane);
+  });
+
+  it('writes SWIMLANE_TYPE on every capture, with no type and NULL activity columns off a code source', async () => {
+    const db = tx();
+    const repository = new BaselineRepository({} as PrismaService);
+    await repository.createWithSnapshot(input(), db as never);
+    expect(db.baseline.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        codeSnapshotLevel: 'SWIMLANE_TYPE',
+        swimlaneCodeTypeId: null,
+      }),
+    });
+    // The columns are left out (they default to NULL), so a plan with no code source binds nothing
+    // extra in its bulk insert.
+    const [row] = (
+      db.baselineActivity.createMany.mock.calls[0] as [{ data: Record<string, unknown>[] }]
+    )[0].data;
+    expect(row).not.toHaveProperty('codeValueId');
+    expect(row).not.toHaveProperty('codeLaneIndex');
+    expect(row).not.toHaveProperty('codeLaneUpdatedAt');
+  });
+
+  it('freezes the pointer and each activity’s code placement under a code source', async () => {
+    const db = tx();
+    const repository = new BaselineRepository({} as PrismaService);
+    const at = new Date('2026-02-01T09:00:00Z');
+    await repository.createWithSnapshot(
+      input({
+        swimlane: { source: 'ACTIVITY_CODE', wbsLevel: null, codeTypeId: 'ct1' },
+        codePlacements: new Map([
+          ['act-1', { codeValueId: 'v-gone', codeLaneIndex: 4, codeLaneUpdatedAt: at }],
+        ]),
+      }),
+      db as never,
+    );
+    expect(db.baseline.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneCodeTypeId: 'ct1',
+        codeSnapshotLevel: 'SWIMLANE_TYPE',
+      }),
+    });
+    expect(db.baselineActivity.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          sourceActivityId: 'act-1',
+          codeValueId: 'v-gone',
+          codeLaneIndex: 4,
+          codeLaneUpdatedAt: at,
+        }),
+      ],
+    });
+  });
+});
+
+describe('BaselineRepository.loadCodePlacementsForCapture', () => {
+  const at = new Date('2026-02-01T09:00:00Z');
+
+  function reads(
+    assignments: { activityId: string; codeValueId: string }[],
+    lanes: { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[],
+  ) {
+    // The two reads in the order the repository issues them: the type's assignments, then its lanes.
+    const queryRaw = vi.fn().mockResolvedValueOnce(assignments).mockResolvedValueOnce(lanes);
+    return { queryRaw, db: { $queryRaw: queryRaw } as never };
+  }
+
+  it('reads the type’s assignments and the plan’s lanes for it, org-scoped, in two statements', async () => {
+    const { db, queryRaw } = reads([], []);
+    await new BaselineRepository({} as PrismaService).loadCodePlacementsForCapture(
+      'org',
+      'plan',
+      'ct1',
+      db,
+    );
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    // Tagged-template calls: [strings, ...values].
+    expect(queryRaw.mock.calls[0]!.slice(1)).toEqual(['org', 'ct1']);
+    expect(queryRaw.mock.calls[1]!.slice(1)).toEqual(['org', 'plan', 'ct1']);
+  });
+
+  it('pairs the stored value verbatim with the lane kept for that value, and no other', async () => {
+    const { db } = reads(
+      [
+        { activityId: 'a1', codeValueId: 'v1' },
+        { activityId: 'a2', codeValueId: 'v-deleted' },
+      ],
+      [
+        { activityId: 'a1', codeValueId: 'v1', laneIndex: 2, updatedAt: at },
+        // A layout kept for a value a1 no longer holds is not a1's placement.
+        { activityId: 'a1', codeValueId: 'v0', laneIndex: 9, updatedAt: at },
+        { activityId: 'a2', codeValueId: 'v-deleted', laneIndex: 1, updatedAt: at },
+      ],
+    );
+    const placements = await new BaselineRepository(
+      {} as PrismaService,
+    ).loadCodePlacementsForCapture('org', 'plan', 'ct1', db);
+    expect(placements.get('a1')).toEqual({
+      codeValueId: 'v1',
+      codeLaneIndex: 2,
+      codeLaneUpdatedAt: at,
+    });
+    expect(placements.get('a2')).toEqual({
+      codeValueId: 'v-deleted',
+      codeLaneIndex: 1,
+      codeLaneUpdatedAt: at,
+    });
+  });
+
+  it('freezes the "no value" lane of an activity with no assignment, and a value with no lane', async () => {
+    const { db } = reads(
+      [{ activityId: 'a1', codeValueId: 'v1' }],
+      [{ activityId: 'a3', codeValueId: null, laneIndex: 5, updatedAt: at }],
+    );
+    const placements = await new BaselineRepository(
+      {} as PrismaService,
+    ).loadCodePlacementsForCapture('org', 'plan', 'ct1', db);
+    expect(placements.get('a1')).toEqual({
+      codeValueId: 'v1',
+      codeLaneIndex: null,
+      codeLaneUpdatedAt: null,
+    });
+    expect(placements.get('a3')).toEqual({
+      codeValueId: null,
+      codeLaneIndex: 5,
+      codeLaneUpdatedAt: at,
+    });
+    expect(placements.has('a2')).toBe(false);
   });
 });

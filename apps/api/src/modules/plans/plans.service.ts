@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { Plan } from '@prisma/client';
-import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
+import type { Plan, Prisma } from '@prisma/client';
+import { STANDARD_CALENDAR_NAME, SWIMLANE_LIMIT, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
 import { lockActiveProjectChainForShare } from '../../common/db/hierarchy-row-lock';
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
   ConflictError,
@@ -25,6 +26,7 @@ import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
+import { CodeTypeRepository } from '../codes/code-type.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { ProjectRepository } from '../projects/project.repository';
@@ -55,6 +57,7 @@ export class PlansService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly editLock: PlanEditLockService,
+    private readonly codeTypes: CodeTypeRepository,
     @InjectPinoLogger(PlansService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -231,33 +234,23 @@ export class PlansService {
     // to inherit the org default. Dark until the EV read (EV2b); nothing computes EV yet.
     if (dto.eacMethod !== undefined) patch.eacMethod = dto.eacMethod;
     if (dto.currencyCode !== undefined) patch.currencyCode = dto.currencyCode;
-    // Swimlane source and level (swimlanes spec §4.6): presentation, so neither is a governance field
-    // nor a scheduling input. The pair is resolved against the stored row because the database's
-    // `ck_plans_swimlane_source_level` ties them together (WBS needs a level of 1 to 3, anything else
-    // none) and a refusal here is a 422 where the CHECK would be a 500.
-    if (dto.swimlaneSource !== undefined || dto.swimlaneWbsLevel !== undefined) {
+    // Swimlane source, level and code type (swimlanes spec §4.6; m4-spec §4.5). Presentation, so
+    // none of them is a governance field or a scheduling input. They are one fact, tied together by
+    // the database's `ck_plans_swimlane_source_level` (WBS needs a level of 1 to 3, a code source
+    // needs a type, anything else neither), so they are resolved as a triple and written together;
+    // a refusal here is a 422 where the CHECK would be a 500. The resolution happens inside the
+    // transaction, against the row re-read under the plan lock.
+    const carriesSwimlane =
+      dto.swimlaneSource !== undefined ||
+      dto.swimlaneWbsLevel !== undefined ||
+      dto.swimlaneCodeTypeId !== undefined;
+    if (carriesSwimlane) {
+      // Before the transaction and its plan lock on purpose (ADR-0028): the pen is a plain read, and a
+      // writer without it must be refused without queueing behind the lock.
       // Choosing where the swimlanes come from re-draws the diagram for everyone looking at it, so it
       // is a structural write like the swimlane routes themselves (spec §2, Permissions): the pen. A
       // rename or a scheduling option on the same route is not, and stays ungated.
       await this.editLock.assertHoldsPen(principal, planId, organization.id);
-      const source = dto.swimlaneSource ?? existing.swimlaneSource;
-      // A level the request did not name is kept only while the source stays WBS; leaving WBS clears it.
-      const level =
-        dto.swimlaneWbsLevel !== undefined
-          ? dto.swimlaneWbsLevel
-          : source === 'WBS'
-            ? existing.swimlaneWbsLevel
-            : null;
-      if (source === 'WBS' ? level === null : level !== null) {
-        throw new ValidationError(
-          source === 'WBS'
-            ? 'A WBS swimlane source needs a level of 1 to 3.'
-            : 'A swimlane level applies only to a WBS swimlane source.',
-          { reason: 'SWIMLANE_LEVEL_MISMATCH' },
-        );
-      }
-      patch.swimlaneSource = source;
-      patch.swimlaneWbsLevel = level;
     }
     // May be moved, never cleared (ADR-0033 M1): the DTO rejects an explicit null, so a
     // defined value is always a valid calendar date.
@@ -271,6 +264,18 @@ export class PlansService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        if (carriesSwimlane) {
+          // First statement, so the switch is serialised with a code type's delete (which takes the
+          // same lock and refuses to delete the source type) and with a recalculation or a codes
+          // write. The foreign key alone does not: a soft delete changes no key column, so it holds
+          // `FOR NO KEY UPDATE` on the type, which the key check's `FOR KEY SHARE` does not conflict
+          // with (m4-database-review §2.9, measured). The calendar guard follows, keeping plan →
+          // calendar. A switch that carries no swimlane field takes no lock.
+          await acquirePlanWriteLock(tx, planId);
+          const current = await this.plans.findActiveByIdInOrg(planId, organization.id, tx);
+          if (!current) throw new NotFoundError('Plan not found.');
+          await this.resolveSwimlaneTriple(tx, organization.id, current, dto, patch);
+        }
         if (calendarId !== undefined && calendarId !== null) {
           // Assigning a specific calendar goes through THE shared scope guard (ADR-0053 §2):
           // it takes the same advisory lock the delete-in-use guard uses (so a plan can never
@@ -343,6 +348,98 @@ export class PlansService {
     const updated = await this.plans.findActiveByIdInOrg(planId, organization.id);
     if (!updated) throw new NotFoundError('Plan not found.');
     return updated;
+  }
+
+  /**
+   * Resolve the swimlane source, WBS level and code type of an update into one consistent triple on
+   * `patch`, refusing in domain terms what the database's CHECK would refuse as a 500. Runs under the
+   * plan lock, against the row re-read there.
+   *
+   * A level or type the request did not name is kept only while the source stays WBS or ACTIVITY_CODE
+   * respectively; leaving either clears it, in the same write (database probe P4: clearing the source
+   * without the type is refused 23514). A code source is then checked as a choice the planner can
+   * live with: the type is live, of this plan and organisation, and 1 to 100 of its values are in use
+   * on live, non-summary activities. Only a request that changes the type or the source is checked —
+   * one that restates the stored pair (a planner re-saving, a level cleared that was already null)
+   * must not be refused because the count has since drifted over 100, which the diagram absorbs.
+   */
+  private async resolveSwimlaneTriple(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    current: Plan,
+    dto: UpdatePlanDto,
+    patch: PlanPatch,
+  ): Promise<void> {
+    const source = dto.swimlaneSource ?? current.swimlaneSource;
+    const level =
+      dto.swimlaneWbsLevel !== undefined
+        ? dto.swimlaneWbsLevel
+        : source === 'WBS'
+          ? current.swimlaneWbsLevel
+          : null;
+    const typeId =
+      dto.swimlaneCodeTypeId !== undefined
+        ? dto.swimlaneCodeTypeId
+        : source === 'ACTIVITY_CODE'
+          ? current.swimlaneCodeTypeId
+          : null;
+    if (source === 'WBS' ? level === null : level !== null) {
+      throw new ValidationError(
+        source === 'WBS'
+          ? 'A WBS swimlane source needs a level of 1 to 3.'
+          : 'A swimlane level applies only to a WBS swimlane source.',
+        { reason: 'SWIMLANE_LEVEL_MISMATCH' },
+      );
+    }
+    if (source === 'ACTIVITY_CODE' ? typeId === null : typeId !== null) {
+      throw new ValidationError(
+        source === 'ACTIVITY_CODE'
+          ? 'A code swimlane source needs the code to make the swimlanes from.'
+          : 'A swimlane code applies only to a code swimlane source.',
+        { reason: 'SWIMLANE_CODE_TYPE_MISMATCH' },
+      );
+    }
+    if (
+      source === 'ACTIVITY_CODE' &&
+      typeId !== null &&
+      (current.swimlaneSource !== 'ACTIVITY_CODE' || current.swimlaneCodeTypeId !== typeId)
+    ) {
+      await this.assertCodeTypeEligible(tx, organizationId, current.id, typeId);
+    }
+    patch.swimlaneSource = source;
+    patch.swimlaneWbsLevel = level;
+    patch.swimlaneCodeTypeId = typeId;
+  }
+
+  /**
+   * The code type must be live and of this plan and organisation (locked `FOR SHARE`, so its liveness
+   * and the write see the same row), and 1 to {@link SWIMLANE_LIMIT} of its values must be in use.
+   * Never the foreign key's 23503: another plan's or organisation's type reads as missing (404), and a
+   * type of this plan that has been deleted is a 422 the planner can act on.
+   */
+  private async assertCodeTypeEligible(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    planId: string,
+    typeId: string,
+  ): Promise<void> {
+    const [type] = await this.codeTypes.lockActiveForShare(organizationId, planId, [typeId], tx);
+    if (!type) {
+      const known = await this.codeTypes.findInPlan(typeId, planId, organizationId, tx);
+      if (!known) throw new NotFoundError('That code no longer exists. Choose another.');
+      throw new ValidationError('That code has been deleted. Choose another.', {
+        reason: 'SWIMLANE_CODE_TYPE_MISMATCH',
+      });
+    }
+    const valuesInUse = await this.codeTypes.countValuesInUse(organizationId, planId, typeId, tx);
+    if (valuesInUse < 1 || valuesInUse > SWIMLANE_LIMIT) {
+      throw new ValidationError(
+        valuesInUse < 1
+          ? `${type.name} has no values in use. Give some activities a value of ${type.name} first.`
+          : `${type.name} has ${valuesInUse} values in use. Swimlanes can show up to ${SWIMLANE_LIMIT}.`,
+        { reason: 'SWIMLANE_CODE_TYPE_INELIGIBLE', valuesInUse, limit: SWIMLANE_LIMIT },
+      );
+    }
   }
 
   async remove(

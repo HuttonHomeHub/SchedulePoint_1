@@ -178,6 +178,7 @@ describe('BaselinesService', () => {
     loadActiveActivitiesForCapture: ReturnType<typeof vi.fn>;
     loadActiveDependenciesForCapture: ReturnType<typeof vi.fn>;
     loadLanesForCapture: ReturnType<typeof vi.fn>;
+    loadCodePlacementsForCapture: ReturnType<typeof vi.fn>;
     countActiveByPlan: ReturnType<typeof vi.fn>;
     findActiveByIdInPlan: ReturnType<typeof vi.fn>;
     findActiveDetailByIdInPlan: ReturnType<typeof vi.fn>;
@@ -204,6 +205,7 @@ describe('BaselinesService', () => {
       loadActiveActivitiesForCapture: vi.fn().mockResolvedValue([activityRow()]),
       loadActiveDependenciesForCapture: vi.fn().mockResolvedValue([]),
       loadLanesForCapture: vi.fn().mockResolvedValue([]),
+      loadCodePlacementsForCapture: vi.fn().mockResolvedValue(new Map()),
       countActiveByPlan: vi.fn().mockResolvedValue(0),
       findActiveByIdInPlan: vi.fn().mockResolvedValue(baseline()),
       findActiveDetailByIdInPlan: vi.fn(),
@@ -358,7 +360,7 @@ describe('BaselinesService', () => {
         expect.objectContaining({
           // The frozen source and level are the plan's, read under the lock — and a pair, because
           // the baselines CHECK refuses a WBS source with no level.
-          swimlane: { source: 'WBS', wbsLevel: 2 },
+          swimlane: { source: 'WBS', wbsLevel: 2, codeTypeId: null },
           lanes,
           activities: [
             expect.objectContaining({ id: 'act-1', swimlaneId: 'lane-a' }),
@@ -368,6 +370,59 @@ describe('BaselinesService', () => {
         expect.anything(),
       );
     });
+
+    it('reads the code placements only under a code source, and freezes the pointer with them', async () => {
+      const placements = new Map([
+        ['act-1', { codeValueId: 'v1', codeLaneIndex: 2, codeLaneUpdatedAt: new Date() }],
+      ]);
+      baselines.loadCodePlacementsForCapture.mockResolvedValue(placements);
+      txPlanFindFirst.mockResolvedValue({
+        name: 'Baseline plan',
+        scheduleCriticalPathDefinition: null,
+        scheduleCriticalFloatThresholdMinutes: null,
+        scheduleTotalFloatMode: null,
+        scheduleMakeOpenEndsCritical: null,
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneWbsLevel: null,
+        swimlaneCodeTypeId: 'ct1',
+      });
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      expect(baselines.loadCodePlacementsForCapture).toHaveBeenCalledWith(
+        ORG_ID,
+        PLAN_ID,
+        'ct1',
+        expect.anything(),
+      );
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          swimlane: { source: 'ACTIVITY_CODE', wbsLevel: null, codeTypeId: 'ct1' },
+          codePlacements: placements,
+        }),
+        expect.anything(),
+      );
+    });
+
+    it.each(['NONE', 'MANUAL', 'WBS'] as const)(
+      'issues no code read for a %s plan, so its statement count does not move',
+      async (source) => {
+        txPlanFindFirst.mockResolvedValue({
+          name: 'Baseline plan',
+          scheduleCriticalPathDefinition: null,
+          scheduleCriticalFloatThresholdMinutes: null,
+          scheduleTotalFloatMode: null,
+          scheduleMakeOpenEndsCritical: null,
+          swimlaneSource: source,
+          swimlaneWbsLevel: source === 'WBS' ? 1 : null,
+          swimlaneCodeTypeId: null,
+        });
+        await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+        expect(baselines.loadCodePlacementsForCapture).not.toHaveBeenCalled();
+        expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+          expect.objectContaining({ codePlacements: new Map() }),
+          expect.anything(),
+        );
+      },
+    );
 
     it('locks the activity rows after the plan lock and before it reads activities or lanes (M1-T1b)', async () => {
       // A positions batch takes no plan lock, so without the row lock it could commit between the

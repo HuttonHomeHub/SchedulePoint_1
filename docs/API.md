@@ -382,6 +382,14 @@ own swimlane, and a verbatim copy of its lane rows for every basis (the organisa
 of it: `baselines`, `baseline-activities` and `baseline-activity-swimlane-lanes`). Read the level, never
 the absence of lane copies: a plan nobody laid out freezes none and is still `FULL`.
 
+`BaselineSummary` does not carry the code half, but every capture records it (P6 activity codes M4):
+`code_snapshot_level` is `SWIMLANE_TYPE` on **every** capture, and a plan whose source is
+`ACTIVITY_CODE` also freezes `swimlane_code_type_id` and, per activity, `code_value_id` (the stored
+assignment of that code **verbatim**, a soft-deleted value too), `code_lane_index` and
+`code_lane_updated_at` (the activity's code lane for that code and value, both `NULL` when it was never
+placed there). Under any other source the three activity columns are `NULL` and that is complete. The
+organisation export already lists all of them (format 2.3).
+
 ### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
 
 `GET …/plans/:planId/schedule/earned-value` phases Planned Value on **one basis per read**, chosen
@@ -713,13 +721,32 @@ message is fixed text and never echoes a stored name. Create, rename and reorder
 
 #### Swimlane placement
 
-**The plan.** `PATCH …/plans/:planId` gains **`swimlaneSource`** (`NONE`, the default · `MANUAL` · `WBS`)
-and **`swimlaneWbsLevel`** (1 to 3). WBS needs a level; any other source has none, and the pair is
-resolved against the stored row — leaving WBS clears the level, a lone level on a WBS plan moves it,
-and a level beside a source that is not WBS, WBS without a level, or a level outside 1–3 is
-**422** (`SWIMLANE_LEVEL_MISMATCH` for the pairing). Both fields are on the plan response. They are
-presentation: changing them never makes the plan read as edited since calculated. **Structural**: a
-write that carries either field needs the pen (**423**); a rename on the same route does not.
+**The plan.** `PATCH …/plans/:planId` gains **`swimlaneSource`** (`NONE`, the default · `MANUAL` ·
+`WBS` · `ACTIVITY_CODE`), **`swimlaneWbsLevel`** (1 to 3) and **`swimlaneCodeTypeId`** (a code type
+id). The three are one fact, resolved against the stored row and written together: WBS needs a level,
+`ACTIVITY_CODE` needs a code type, and any other source has neither. Leaving WBS clears the level,
+leaving `ACTIVITY_CODE` clears the type, a lone level on a WBS plan (or a lone type on a code plan)
+moves it, and a level or type beside a source it does not belong to, a source without the one it needs
+or a level outside 1–3 is **422** (`SWIMLANE_LEVEL_MISMATCH` for the level's pairing,
+`SWIMLANE_CODE_TYPE_MISMATCH` for the type's). All three are on the plan response (`swimlaneCodeTypeId`
+is `null` unless the source is `ACTIVITY_CODE`). They are presentation: changing them never makes the
+plan read as edited since calculated and writes no `plan.settings_changed` row. **Structural**: a
+write that carries any of them needs the pen (**423**); a rename on the same route does not.
+
+**Choosing a code.** The code type must be a live code of this plan. Another plan's or organisation's
+type, or an unknown id, is **404**, never told apart; a type of this plan that has been deleted is
+**422 `SWIMLANE_CODE_TYPE_MISMATCH`**. The code must also have **1 to 100 values in use**: distinct
+live values carried by live activities, WBS summaries not counted (a summary is never a member of a
+swimlane, so a value only a summary carries would offer an empty band). Otherwise **422
+`SWIMLANE_CODE_TYPE_INELIGIBLE`**, with `details: { reason, valuesInUse, limit }` so a client can say
+how far over or under it is. The rule is checked when the source or the type **changes**; a request
+that restates the stored pair is not refused because the count has since drifted past 100 (assigning a
+value is never refused by the source, and the diagram draws what is in use). **Lock order:** a PATCH
+carrying any of these fields takes the plan advisory lock first — it waits behind a recalculation, a
+codes write or a code type's delete on the same plan, and the type's delete refuses to delete the
+source type (**409 `CODE_TYPE_IS_SWIMLANE_SOURCE`**) — then the calendar guard when a calendar is
+assigned in the same request, then re-reads the plan and locks the type. A PATCH with none of them
+takes no lock.
 
 **The activity.** `POST …/plans/:planId/activities` and `PATCH …/activities/:id` accept
 **`swimlaneId`** (a swimlane id, or `null` for "No swimlane"). A swimlane that is unknown, deleted, of
