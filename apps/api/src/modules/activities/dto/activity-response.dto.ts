@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import type {
   ActivityCodeAssignment,
+  ActivityCodeLaneSummary,
   ActivitySummary,
   ActivitySwimlaneLaneSummary,
   SwimlaneLaneBasis as SwimlaneLaneBasisUnion,
@@ -77,6 +78,24 @@ export class ActivityCodeResponseDto implements ActivityCodeAssignment {
 
   @ApiProperty({ format: 'uuid' })
   codeValueId!: string;
+}
+
+/** The lane an activity holds under one code type and value (p6-activity-codes M4). */
+export class ActivityCodeLaneResponseDto implements ActivityCodeLaneSummary {
+  @ApiProperty({ format: 'uuid' })
+  codeTypeId!: string;
+
+  @ApiProperty({ format: 'uuid', nullable: true, type: String })
+  codeValueId!: string | null;
+
+  @ApiProperty({ minimum: 0 })
+  laneIndex!: number;
+
+  @ApiProperty({
+    format: 'date-time',
+    description: 'When the lane was last written; the tie-break when two placed members collide.',
+  })
+  updatedAt!: string;
 }
 
 /**
@@ -310,10 +329,21 @@ export class ActivityResponseDto implements ActivitySummary {
       'The code value the activity carries for each code type, ordered by type id; a type with no ' +
       'value has no entry, and a deleted value or type reads as no value. **Absent, not empty, ' +
       'when the plan has no live code type.** Sent by the activity list, the single-activity ' +
-      '`GET …/activities/:activityId` and `PATCH …/activities/codes`; any other activity response omits it, so a client must not replace a ' +
+      '`GET …/activities/:activityId`, `PATCH …/activities/codes` and `POST …/activities` (when it sent `codes`); any other activity response omits it, so a client must not replace a ' +
       'cached activity’s `codes` with one that has none.',
   })
   codes?: ActivityCodeResponseDto[];
+
+  @ApiPropertyOptional({
+    type: ActivityCodeLaneResponseDto,
+    isArray: true,
+    description:
+      'The lane the activity holds under each live code type it has been placed under, for a value ' +
+      'of that type (`codeValueId`) or for "no value" (`null`), so switching the swimlanes from one ' +
+      'code to another and back finds each layout. A deleted type’s rows are not sent. **Absent, ' +
+      'not empty, when the plan has no live code type**, and sent wherever `codes` is.',
+  })
+  codeSwimlaneLanes?: ActivityCodeLaneResponseDto[];
 
   @ApiProperty({ enum: ActivityStatus })
   status!: ActivityStatus;
@@ -566,6 +596,7 @@ export class ActivityResponseDto implements ActivitySummary {
   static from(
     entity: WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>> & {
       codes?: ActivityCodeAssignment[];
+      codeSwimlaneLanes?: ActivityCodeLaneSummary[];
     },
     canReadCost: boolean,
   ): ActivityResponseDto {
@@ -599,6 +630,9 @@ export class ActivityResponseDto implements ActivitySummary {
       swimlaneId: entity.swimlaneId,
       swimlaneLanes: entity.swimlaneLanes,
       ...(entity.codes === undefined ? {} : { codes: entity.codes }),
+      ...(entity.codeSwimlaneLanes === undefined
+        ? {}
+        : { codeSwimlaneLanes: entity.codeSwimlaneLanes }),
       scheduleAsLateAsPossible: entity.scheduleAsLateAsPossible,
       status: entity.status,
       percentComplete: entity.percentComplete,
