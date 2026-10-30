@@ -5,9 +5,11 @@ import { ValidationError } from '../../common/errors/domain-errors';
 
 import {
   attachSwimlaneLanes,
+  codeLaneTypeOf,
   deriveCodeLaneBasis,
   deriveLaneBasis,
-  loadCodeSwimlaneLanes,
+  loadCurrentCodeLanes,
+  loadPlanCodeLanes,
   loadSwimlaneLanes,
 } from './swimlane-lanes';
 
@@ -136,26 +138,60 @@ describe('deriveCodeLaneBasis', () => {
   });
 });
 
-describe('loadCodeSwimlaneLanes', () => {
-  it('issues one statement for the page and orders each activity by type then value', async () => {
-    const at = new Date('2026-10-30T10:00:00.000Z');
-    const queryRaw = vi.fn().mockResolvedValue([
-      { activityId: 'a', codeTypeId: 'b-type', codeValueId: 'v', laneIndex: 2, updatedAt: at },
-      { activityId: 'a', codeTypeId: 'a-type', codeValueId: null, laneIndex: 1, updatedAt: at },
-    ]);
-    const lanes = await loadCodeSwimlaneLanes(
-      { $queryRaw: queryRaw },
-      { organizationId: 'o', planId: 'p' },
-      ['a', 'c'],
-    );
+describe('loadCurrentCodeLanes', () => {
+  const at = new Date('2026-10-30T10:00:00.000Z');
+  const scope = { organizationId: 'o', planId: 'p' };
+
+  it('issues one statement for the page and gives each activity at most its one current lane', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValue([{ activityId: 'a', codeValueId: 'v', laneIndex: 2, updatedAt: at }]);
+    const lanes = await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', ['a', 'c']);
     expect(queryRaw).toHaveBeenCalledTimes(1);
-    expect(lanes.get('a')?.map((l) => l.codeTypeId)).toEqual(['a-type', 'b-type']);
+    expect(lanes.get('a')).toEqual([
+      { codeTypeId: 'area', codeValueId: 'v', laneIndex: 2, updatedAt: at.toISOString() },
+    ]);
     expect(lanes.get('c')).toEqual([]);
+  });
+
+  it('keeps the no-value row as a null codeValueId', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValue([{ activityId: 'a', codeValueId: null, laneIndex: 0, updatedAt: at }]);
+    const lanes = await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', ['a']);
+    expect(lanes.get('a')?.[0]?.codeValueId).toBeNull();
   });
 
   it('issues none for an empty page', async () => {
     const queryRaw = vi.fn();
-    await loadCodeSwimlaneLanes({ $queryRaw: queryRaw }, { organizationId: 'o', planId: 'p' }, []);
+    expect((await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', [])).size).toBe(0);
     expect(queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadPlanCodeLanes', () => {
+  it('orders by activity id and serialises the timestamp', async () => {
+    const at = new Date('2026-10-30T10:00:00.000Z');
+    const queryRaw = vi.fn().mockResolvedValue([
+      { activityId: 'b', codeValueId: null, laneIndex: 1, updatedAt: at },
+      { activityId: 'a', codeValueId: 'v', laneIndex: 3, updatedAt: at },
+    ]);
+    const lanes = await loadPlanCodeLanes(
+      { $queryRaw: queryRaw },
+      { organizationId: 'o', planId: 'p' },
+      't',
+    );
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(lanes.map((l) => l.activityId)).toEqual(['a', 'b']);
+    expect(lanes[0]?.updatedAt).toBe(at.toISOString());
+  });
+});
+
+describe('codeLaneTypeOf', () => {
+  it('names the type only under a code source', () => {
+    expect(codeLaneTypeOf({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 't' })).toBe('t');
+    for (const swimlaneSource of ['NONE', 'MANUAL', 'WBS'] as const) {
+      expect(codeLaneTypeOf({ swimlaneSource, swimlaneCodeTypeId: null })).toBeNull();
+    }
   });
 });

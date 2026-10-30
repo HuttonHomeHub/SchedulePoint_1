@@ -87,11 +87,13 @@ import {
 } from './resource-assignment-counts';
 import {
   attachSwimlaneLanes,
+  codeLaneTypeOf,
   deriveCodeLaneBasis,
   deriveLaneBasis,
-  loadCodeSwimlaneLanes,
+  loadCurrentCodeLanes,
   loadSwimlaneLanes,
   SWIMLANE_SOURCE_REASON,
+  type CodeLaneSource,
   type LaneBasisKey,
   type WithSwimlaneLanes,
 } from './swimlane-lanes';
@@ -415,7 +417,7 @@ export class ActivitiesService {
     // Org-scoped cost:read (EV4a, ADR-0042) on the SAME resolved org — never `canAnywhere` (cross-tenant
     // IDOR). Threaded to the response DTO so the money expense amounts are gated per role (fail-closed).
     const canReadCost = principal.can('cost:read', organization.id);
-    await this.loadActivePlan(planId, organization.id);
+    const plan = await this.loadActivePlan(planId, organization.id);
 
     const rows = await this.activities.findManyActiveByPlan({
       organizationId: organization.id,
@@ -428,7 +430,7 @@ export class ActivitiesService {
     const items = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
     return {
-      items: await this.decorateWithCodes(items),
+      items: await this.decorateWithCodes(items, { plan }),
       meta: { nextCursor, hasMore },
       canReadCost,
     };
@@ -437,31 +439,36 @@ export class ActivitiesService {
   /**
    * {@link withDayFactors} plus the rows' code values, for the responses that carry them (the list and
    * the codes write). **One plan's rows**: the assignments are read per plan, in one statement for the
-   * whole page, and `codes` and `codeSwimlaneLanes` are left off every row when the plan has no live
-   * code type, so such a plan answers byte for byte as before (p6-activity-codes SC-2).
+   * whole page, and `codes` is left off every row when the plan has no live code type, so such a plan
+   * answers byte for byte as before (p6-activity-codes SC-2). `codeSwimlaneLanes` is present only
+   * under a code swimlane source (owner decision 2026-10-30, "current code only"): the plan's source
+   * is passed in, or the lanes already read in the caller's own transaction.
    */
-  async decorateWithCodes(rows: readonly Activity[]): Promise<DecoratedActivity[]> {
+  async decorateWithCodes(
+    rows: readonly Activity[],
+    lanes: { plan: CodeLaneSource } | { codeLanes: Map<string, ActivityCodeLaneSummary[]> | null },
+  ): Promise<DecoratedActivity[]> {
     const first = rows[0];
     if (first === undefined) return [];
-    const [decorated, codes] = await Promise.all([
+    const scope = { organizationId: first.organizationId, planId: first.planId };
+    const ids = rows.map((r) => r.id);
+    // The lane read needs only the plan's source, which the caller has (the list loaded the plan) or
+    // read in its own transaction (the codes write), so it runs beside the other reads.
+    const typeId = 'plan' in lanes ? codeLaneTypeOf(lanes.plan) : null;
+    const [decorated, codes, laneMap] = await Promise.all([
       this.withDayFactors(rows),
-      loadActivityCodes(
-        this.prisma,
-        { organizationId: first.organizationId, planId: first.planId },
-        rows.map((r) => r.id),
-      ),
+      loadActivityCodes(this.prisma, scope, ids),
+      'codeLanes' in lanes
+        ? Promise.resolve(lanes.codeLanes)
+        : typeId === null
+          ? Promise.resolve(null)
+          : loadCurrentCodeLanes(this.prisma, scope, typeId, ids),
     ]);
-    if (codes === null) return decorated;
-    // Read only now that a live type exists, so a plan that never used codes issues no lane statement.
-    const codeLanes = await loadCodeSwimlaneLanes(
-      this.prisma,
-      { organizationId: first.organizationId, planId: first.planId },
-      rows.map((r) => r.id),
-    );
+    if (codes === null && laneMap === null) return decorated;
     return decorated.map((row) => ({
       ...row,
-      codes: codes.get(row.id) ?? [],
-      codeSwimlaneLanes: codeLanes.get(row.id) ?? [],
+      ...(codes === null ? {} : { codes: codes.get(row.id) ?? [] }),
+      ...(laneMap === null ? {} : { codeSwimlaneLanes: laneMap.get(row.id) ?? [] }),
     }));
   }
 
@@ -477,7 +484,8 @@ export class ActivitiesService {
     const activity = await this.activities.findActiveByIdInOrg(activityId, organization.id);
     if (!activity) throw new NotFoundError('Activity not found.');
     // `codes` rides the single read too, so an undo replay's row check sees what the list shows.
-    const [decorated] = await this.decorateWithCodes([activity]);
+    const plan = await this.loadActivePlan(activity.planId, organization.id);
+    const [decorated] = await this.decorateWithCodes([activity], { plan });
     if (decorated === undefined) throw new NotFoundError('Activity not found.');
     return { activity: decorated, canReadCost };
   }
@@ -667,7 +675,7 @@ export class ActivitiesService {
       // that sent none answers as before.
       const [decorated] =
         codes.length > 0
-          ? await this.decorateWithCodes([activity])
+          ? await this.decorateWithCodes([activity], { plan })
           : [await this.withDayFactor(activity)];
       return { activity: decorated, canReadCost };
     } catch (error) {

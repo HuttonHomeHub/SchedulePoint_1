@@ -338,12 +338,13 @@ export class ActivityResponseDto implements ActivitySummary {
     type: ActivityCodeLaneResponseDto,
     isArray: true,
     description:
-      'The lane the activity holds under each live code type it has been placed under, for a value ' +
-      'of that type (`codeValueId`) or for "no value" (`null`), so switching the swimlanes from one ' +
-      'code to another and back finds each layout. A deleted type’s rows are not sent. **Absent, ' +
-      'not empty, when the plan has no live code type**, and sent wherever `codes` is. A read ' +
-      'projection: never sent on a write (lanes are written through `PATCH …/activities/positions` ' +
-      'and the `lanes` of `PATCH …/activities/codes`).',
+      'The activity’s stored lane at its **current** basis under the plan’s swimlane code type: its ' +
+      'live value of it (`codeValueId`), or `null` for none or a deleted value. At most one entry; ' +
+      'a basis the activity no longer has, and every other type, is stored but not sent. **Absent, ' +
+      'not empty, unless the plan’s swimlane source is `ACTIVITY_CODE`**, when `[]` means never ' +
+      'placed at this basis. Another code’s lanes come from `GET …/plans/:planId/code-swimlane-lanes`. ' +
+      'A read projection: never sent on a write (lanes are written through `PATCH ' +
+      '…/activities/positions` and the `lanes` of `PATCH …/activities/codes`).',
   })
   codeSwimlaneLanes?: ActivityCodeLaneResponseDto[];
 

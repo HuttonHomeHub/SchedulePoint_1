@@ -40,8 +40,8 @@ vi.mock('../../src/modules/activities/swimlane-lanes', async (importOriginal) =>
     await importOriginal<typeof import('../../src/modules/activities/swimlane-lanes')>();
   return {
     ...original,
-    loadCodeSwimlaneLanes: (...args: Parameters<typeof original.loadCodeSwimlaneLanes>) =>
-      skipLanes.on ? Promise.resolve(new Map()) : original.loadCodeSwimlaneLanes(...args),
+    loadCurrentCodeLanes: (...args: Parameters<typeof original.loadCurrentCodeLanes>) =>
+      skipLanes.on ? Promise.resolve(new Map()) : original.loadCurrentCodeLanes(...args),
   };
 });
 

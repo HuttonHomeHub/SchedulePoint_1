@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Activity, Prisma } from '@prisma/client';
+import type { ActivityCodeLaneSummary } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Principal } from '../../common/auth/principal';
@@ -24,7 +25,13 @@ import { PlanRepository } from '../plans/plan.repository';
 
 import { ActivityRepository } from './activity.repository';
 import type { ActivityCodeValueDto, UpdateActivityCodesDto } from './dto/update-activity-codes.dto';
-import { deriveCodeLaneBasis } from './swimlane-lanes';
+import {
+  codeLaneTypeOf,
+  deriveCodeLaneBasis,
+  loadCurrentCodeLanes,
+  loadPlanCodeLanes,
+  type PlanCodeLaneRow,
+} from './swimlane-lanes';
 
 /**
  * The batch write of an activity's code values (p6-activity-codes spec §4.7, database-design §5.4).
@@ -76,7 +83,11 @@ export class ActivityCodesService {
     orgSlug: string,
     planId: string,
     dto: UpdateActivityCodesDto,
-  ): Promise<{ items: Activity[]; canReadCost: boolean }> {
+  ): Promise<{
+    items: Activity[];
+    canReadCost: boolean;
+    codeLanes: Map<string, ActivityCodeLaneSummary[]> | null;
+  }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     if (!principal.can('activity:update', organization.id)) {
       this.logger.warn(
@@ -162,7 +173,7 @@ export class ActivityCodesService {
       ),
     ];
 
-    await this.prisma.$transaction(async (tx) => {
+    const codeLanes = await this.prisma.$transaction(async (tx) => {
       await acquirePlanWriteLock(tx, planId);
       // Re-read under the lock: a plan deleted a moment ago must not take an assignment. The same read
       // supplies the swimlane source, which stays put while we hold the lock (a switch takes it too).
@@ -293,6 +304,18 @@ export class ActivityCodesService {
           { reason: CODE_CONFLICT.STALE_VERSION },
         );
       }
+      // The written rows' lanes at their current basis, read after the upsert so the answer shows what
+      // this write left. Only under a code source (absent otherwise); a plain read, no lock.
+      const laneTypeId = codeLaneTypeOf(lockedPlan);
+      const writtenLanes =
+        laneTypeId === null
+          ? null
+          : await loadCurrentCodeLanes(
+              tx,
+              { organizationId: organization.id, planId },
+              laneTypeId,
+              writeIds,
+            );
       // Recorded last, in this transaction: the recorder takes the history lock, which must be the
       // last lock a write takes (activity-history-lock.ts). A lane-only row has no code change to
       // record, so it is left out rather than offered to the recorder as an empty write.
@@ -302,6 +325,7 @@ export class ActivityCodesService {
         batch: {},
         writes: this.history.codeWrites(planId, changes),
       });
+      return writtenLanes;
     });
 
     this.logger.info(
@@ -313,7 +337,40 @@ export class ActivityCodesService {
     const items = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, id: { in: writeIds }, deletedAt: null },
     });
-    return { items, canReadCost };
+    return { items, canReadCost, codeLanes };
+  }
+
+  /**
+   * Every live activity's current-basis lane under one type of the plan (the plan-wide read). Scoped by
+   * the caller's own membership, the plan loaded active and in-org, and the type loaded as live in that
+   * plan and organisation: a foreign, deleted or unknown id is one 404. Plain reads, no lock.
+   */
+  async readPlanLanes(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    codeTypeId: string,
+  ): Promise<{ codeTypeId: string; lanes: PlanCodeLaneRow[] }> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    if (!principal.can('activity:read', organization.id)) {
+      this.logger.warn(
+        { userId: principal.userId, permission: 'activity:read', organizationId: organization.id },
+        'authorisation denied',
+      );
+      throw new ForbiddenError('You do not have permission to perform this action.');
+    }
+    if (!(await this.plans.findActiveByIdInOrg(planId, organization.id))) {
+      throw new NotFoundError('Plan not found.');
+    }
+    if (!(await this.types.findActiveInPlan(codeTypeId, planId, organization.id))) {
+      throw new NotFoundError('Code type not found in this plan.');
+    }
+    const lanes = await loadPlanCodeLanes(
+      this.prisma,
+      { organizationId: organization.id, planId },
+      codeTypeId,
+    );
+    return { codeTypeId, lanes };
   }
 
   /** Refuse a value that is another type's or deleted, naming the way forward in the message. */

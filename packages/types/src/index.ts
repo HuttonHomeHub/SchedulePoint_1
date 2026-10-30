@@ -318,17 +318,36 @@ export interface ActivityCodeAssignment {
 }
 
 /**
- * One stored in-swimlane lane for a plan whose swimlanes come from a code (p6-activity-codes M4,
- * database-design §5.5): the lane an activity holds under one code type, for one value of it
- * (`codeValueId`) or for "no value" (`null`). Kept per type, so switching the source from one code to
- * another and back finds each layout as it was. `updatedAt` is the tie-break when two placed members
- * of one basis collide.
+ * An activity's stored lane at its **current** basis under the plan's swimlane code type (p6-activity-codes
+ * M4, owner decision 2026-10-30, "current code only"): `(codeTypeId, the activity's live value of it)`, or
+ * `(codeTypeId, null)` for none or a deleted value. At most one entry an activity; a basis the activity
+ * no longer has, and every other type, is stored but not sent. A client applies a lane only when its
+ * `codeValueId` equals the activity's current value of the type (or both are null). `updatedAt` is the
+ * tie-break when two placed members of one basis collide.
  */
 export interface ActivityCodeLaneSummary {
   codeTypeId: string;
   codeValueId: string | null;
   laneIndex: number;
   updatedAt: string;
+}
+
+/** One activity's current-basis lane in the plan-wide read (`GET …/plans/:planId/code-swimlane-lanes`). */
+export interface PlanCodeLane {
+  activityId: string;
+  codeValueId: string | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/**
+ * What `GET …/plans/:planId/code-swimlane-lanes?codeTypeId=` returns: every live activity's lane at its
+ * current basis under that type, ordered by activity id. Read when the planner switches the swimlanes to
+ * a code, since a list only carries the lanes of the code the plan already uses.
+ */
+export interface PlanCodeSwimlaneLanes {
+  codeTypeId: string;
+  lanes: PlanCodeLane[];
 }
 
 /** One value to set on a new activity, or on an activity in a codes write (`null` clears the type). */
@@ -756,9 +775,11 @@ export interface ActivitySummary {
    */
   codes?: ActivityCodeAssignment[];
   /**
-   * The activity's lane for each live code type it has been placed under (p6-activity-codes M4).
-   * **Absent, not empty, when the plan has no live code type**, exactly as `codes`; sent wherever
-   * `codes` is (the list, the single read, the codes write and create).
+   * The activity's lane at its current basis under the plan's swimlane code type, at most one entry
+   * (p6-activity-codes M4, owner decision 2026-10-30). **Absent, not empty, unless the plan's swimlane
+   * source is `ACTIVITY_CODE`**; then `[]` means "never placed at this basis". Sent by the list, the
+   * single read, the codes write and create (when it sent `codes`). Another code's lanes come from
+   * `GET …/plans/:planId/code-swimlane-lanes`.
    */
   codeSwimlaneLanes?: ActivityCodeLaneSummary[];
   /**

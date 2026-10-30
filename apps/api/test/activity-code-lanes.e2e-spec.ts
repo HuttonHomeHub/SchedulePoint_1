@@ -544,9 +544,50 @@ describe.skipIf(!hasDatabase)('Code swimlane lanes API (e2e, pen enforced)', () 
     });
   });
 
-  describe('the activity list', () => {
-    it('carries codeSwimlaneLanes for each live type, and omits a deleted type’s rows', async () => {
-      const { actor, planId, area, trade, l1, mech, a } = await seed();
+  const lanesOf = async (actor: Actor, planId: string, id: string) =>
+    (await listActivities(actor, planId)).find((r) => r.id === id)!.codeSwimlaneLanes;
+
+  const orgIdOf = async (planId: string) =>
+    (await prisma.plan.findUniqueOrThrow({ where: { id: planId } })).organizationId;
+
+  describe('the activity list (current code only)', () => {
+    it('carries only the source type’s lane at the current basis, one entry at most', async () => {
+      const { actor, planId, area, trade, l1, l2, mech, a } = await seed();
+      const placed = await setCode(actor, planId, a, area.id, l1.id);
+      const orgId = await orgIdOf(planId);
+      await actor.agent
+        .patch(`${activitiesUrl(planId)}/positions`)
+        .send({ positions: [{ id: a.id, version: placed.version, swimlane: { laneIndex: 6 } }] })
+        .expect(200);
+      // Another type's row, and a stale value's row: stored, never sent.
+      await prisma.codeSwimlaneLane.createMany({
+        data: [
+          {
+            organizationId: orgId,
+            planId,
+            activityId: a.id,
+            codeTypeId: trade.id,
+            codeValueId: mech.id,
+            laneIndex: 9,
+          },
+          {
+            organizationId: orgId,
+            planId,
+            activityId: a.id,
+            codeTypeId: area.id,
+            codeValueId: l2.id,
+            laneIndex: 4,
+          },
+        ],
+      });
+      expect(await lanesOf(actor, planId, a.id)).toEqual([
+        expect.objectContaining({ codeTypeId: area.id, codeValueId: l1.id, laneIndex: 6 }),
+      ]);
+      expect(await prisma.codeSwimlaneLane.count({ where: { planId } })).toBe(3);
+    });
+
+    it('reads a deleted value as the (type, null) lane, and an unplaced activity as []', async () => {
+      const { actor, planId, area, l1, a, b } = await seed();
       const placed = await setCode(actor, planId, a, area.id, l1.id);
       await actor.agent
         .patch(`${activitiesUrl(planId)}/positions`)
@@ -554,35 +595,176 @@ describe.skipIf(!hasDatabase)('Code swimlane lanes API (e2e, pen enforced)', () 
         .expect(200);
       await prisma.codeSwimlaneLane.create({
         data: {
-          organizationId: (await prisma.plan.findUniqueOrThrow({ where: { id: planId } }))
-            .organizationId,
+          organizationId: await orgIdOf(planId),
           planId,
           activityId: a.id,
-          codeTypeId: trade.id,
-          codeValueId: mech.id,
-          laneIndex: 9,
+          codeTypeId: area.id,
+          codeValueId: null,
+          laneIndex: 11,
         },
       });
-      const listed = (await listActivities(actor, planId)).find((r) => r.id === a.id)!;
-      expect(listed.codeSwimlaneLanes?.map((l) => [l.codeTypeId, l.laneIndex]).sort()).toEqual(
-        [
-          [area.id, 6],
-          [trade.id, 9],
-        ].sort(),
-      );
-      await prisma.codeType.update({ where: { id: trade.id }, data: { deletedAt: new Date() } });
-      const again = (await listActivities(actor, planId)).find((r) => r.id === a.id)!;
-      expect(again.codeSwimlaneLanes?.map((l) => l.codeTypeId)).toEqual([area.id]);
+      await prisma.codeValue.update({ where: { id: l1.id }, data: { deletedAt: new Date() } });
+      expect(await lanesOf(actor, planId, a.id)).toEqual([
+        expect.objectContaining({ codeValueId: null, laneIndex: 11 }),
+      ]);
+      expect(await lanesOf(actor, planId, b.id)).toEqual([]);
     });
 
-    it('carries no codeSwimlaneLanes key at all on a plan with no live code type (SC-2)', async () => {
+    it('is absent under MANUAL, WBS and NONE even when the plan holds code lanes', async () => {
+      const { actor, planId, area, l1, a } = await seed();
+      await setCode(actor, planId, a, area.id, l1.id);
+      for (const source of ['MANUAL', 'WBS', 'NONE'] as const) {
+        await prisma.plan.update({
+          where: { id: planId },
+          data: {
+            swimlaneSource: source,
+            swimlaneCodeTypeId: null,
+            swimlaneWbsLevel: source === 'WBS' ? 1 : null,
+          },
+        });
+        const res = await actor.agent.get(activitiesUrl(planId)).expect(200);
+        expect(JSON.stringify(res.body.data)).not.toContain('codeSwimlane');
+        // `codes` still rides, because the plan has a live code type.
+        expect((res.body.data as ActivityBody[])[0]!.codes).toBeDefined();
+        const single = await actor.agent.get(`${base()}/activities/${a.id}`).expect(200);
+        expect('codeSwimlaneLanes' in single.body.data).toBe(false);
+      }
+    });
+
+    it('carries no code key at all on a plan with no live code type (SC-2)', async () => {
       const { actor, planId } = await setup();
       await createActivity(actor, planId, 'Only');
       const res = await actor.agent.get(activitiesUrl(planId)).expect(200);
       const first = (res.body.data as Record<string, unknown>[])[0]!;
       expect('codeSwimlaneLanes' in first).toBe(false);
       expect('codes' in first).toBe(false);
-      expect(JSON.stringify(res.body.data)).not.toContain('codeSwimlane');
+    });
+
+    it('answers the single read and the codes write with the current lane too', async () => {
+      const { actor, planId, area, l1, a } = await seed();
+      const moved = await setCode(actor, planId, a, area.id, l1.id);
+      expect(moved.codeSwimlaneLanes).toEqual([]);
+      const single = await actor.agent.get(`${base()}/activities/${a.id}`).expect(200);
+      expect(single.body.data.codeSwimlaneLanes).toEqual([]);
+    });
+  });
+
+  describe('the plan-wide code lane read', () => {
+    const lanesUrl = (planId: string, typeId: string, org = 'acme') =>
+      `${planUrl(planId, org)}/code-swimlane-lanes?codeTypeId=${typeId}`;
+
+    it('returns every activity’s current-basis lane for any type of the plan, and only that', async () => {
+      const { actor, planId, area, trade, l1, l2, mech, a, b } = await seed();
+      const orgId = await orgIdOf(planId);
+      const placedA = await setCode(actor, planId, a, area.id, l1.id);
+      await setCode(actor, planId, b, area.id, l2.id);
+      await prisma.codeSwimlaneLane.createMany({
+        data: [
+          {
+            organizationId: orgId,
+            planId,
+            activityId: a.id,
+            codeTypeId: area.id,
+            codeValueId: l1.id,
+            laneIndex: 3,
+          },
+          // Stale: b now holds l2, so its l1 row is not its current basis.
+          {
+            organizationId: orgId,
+            planId,
+            activityId: b.id,
+            codeTypeId: area.id,
+            codeValueId: l1.id,
+            laneIndex: 8,
+          },
+          {
+            organizationId: orgId,
+            planId,
+            activityId: b.id,
+            codeTypeId: area.id,
+            codeValueId: l2.id,
+            laneIndex: 5,
+          },
+          {
+            organizationId: orgId,
+            planId,
+            activityId: a.id,
+            codeTypeId: trade.id,
+            codeValueId: mech.id,
+            laneIndex: 9,
+          },
+        ],
+      });
+      expect(placedA.id).toBe(a.id);
+      const res = await actor.agent.get(lanesUrl(planId, area.id)).expect(200);
+      expect(res.body.data.codeTypeId).toBe(area.id);
+      const lanes = res.body.data.lanes as {
+        activityId: string;
+        codeValueId: string;
+        laneIndex: number;
+      }[];
+      expect(lanes.map((l) => l.activityId)).toEqual([a.id, b.id].sort());
+      const byId = new Map(lanes.map((l) => [l.activityId, [l.codeValueId, l.laneIndex]]));
+      expect(byId.get(a.id)).toEqual([l1.id, 3]);
+      expect(byId.get(b.id)).toEqual([l2.id, 5]);
+      // Works under any source: trade is not the plan's source type, and the plan stays on Area.
+      const other = await actor.agent.get(lanesUrl(planId, trade.id)).expect(200);
+      expect(other.body.data.lanes).toEqual([]);
+    });
+
+    it('reads a deleted value as the (type, null) row and leaves out a deleted activity', async () => {
+      const { actor, planId, area, l1, a, b } = await seed();
+      const orgId = await orgIdOf(planId);
+      await setCode(actor, planId, a, area.id, l1.id);
+      await setCode(actor, planId, b, area.id, l1.id);
+      await prisma.codeSwimlaneLane.createMany({
+        data: [
+          {
+            organizationId: orgId,
+            planId,
+            activityId: a.id,
+            codeTypeId: area.id,
+            codeValueId: null,
+            laneIndex: 2,
+          },
+          {
+            organizationId: orgId,
+            planId,
+            activityId: b.id,
+            codeTypeId: area.id,
+            codeValueId: null,
+            laneIndex: 7,
+          },
+        ],
+      });
+      await prisma.codeValue.update({ where: { id: l1.id }, data: { deletedAt: new Date() } });
+      await prisma.activity.update({ where: { id: b.id }, data: { deletedAt: new Date() } });
+      const res = await actor.agent.get(lanesUrl(planId, area.id)).expect(200);
+      expect(res.body.data.lanes).toEqual([
+        expect.objectContaining({ activityId: a.id, codeValueId: null, laneIndex: 2 }),
+      ]);
+    });
+
+    it('answers 404 for a deleted, foreign or unknown type, another plan, and another organisation', async () => {
+      const { actor, planId, area, trade } = await seed();
+      await prisma.codeType.update({ where: { id: trade.id }, data: { deletedAt: new Date() } });
+      await actor.agent.get(lanesUrl(planId, trade.id)).expect(404);
+      await actor.agent.get(lanesUrl(planId, '00000000-0000-4000-8000-000000000001')).expect(404);
+      const otherPlan = await makePlan(actor, 'acme', 'Second');
+      await actor.agent.get(lanesUrl(otherPlan, area.id)).expect(404);
+      const outsider = await signUp('outsider@example.com');
+      await outsider.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+      await outsider.agent.get(lanesUrl(planId, area.id, 'other-co')).expect(404);
+      await outsider.agent.get(lanesUrl(planId, area.id)).expect(404);
+      await request(server()).get(lanesUrl(planId, area.id)).expect(401);
+    });
+
+    it('needs a type id, lets a Viewer read it, and is not on the guest surface', async () => {
+      const { actor, orgId, planId, area } = await seed();
+      await actor.agent.get(`${planUrl(planId)}/code-swimlane-lanes`).expect(422);
+      await actor.agent.get(`${planUrl(planId)}/code-swimlane-lanes?codeTypeId=nope`).expect(422);
+      const viewer = await addMember(orgId, 'VIEWER', 'viewer@example.com');
+      await viewer.agent.get(lanesUrl(planId, area.id)).expect(200);
     });
   });
 });

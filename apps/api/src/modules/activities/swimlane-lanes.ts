@@ -149,57 +149,106 @@ export function deriveCodeLaneBasis(
   };
 }
 
-/** An activity response decorated with its code lanes, absent when the plan has no live code type. */
+/** An activity response decorated with its code lane, present only under a code swimlane source. */
 export type WithCodeSwimlaneLanes<T> = T & { codeSwimlaneLanes?: ActivityCodeLaneSummary[] };
 
+/** What decides whether a response carries `codeSwimlaneLanes`, and for which type. */
+export interface CodeLaneSource {
+  swimlaneSource: SwimlaneSource;
+  swimlaneCodeTypeId: string | null;
+}
+
+/** The type to read lanes for, or `null` when the plan's swimlanes do not come from a code. */
+export function codeLaneTypeOf(plan: CodeLaneSource): string | null {
+  return plan.swimlaneSource === 'ACTIVITY_CODE' ? plan.swimlaneCodeTypeId : null;
+}
+
 /**
- * **The code lanes of a page's activities, in one statement** (m4-database-review §2.3: 0.6 ms per
- * 200 rows), for every **live** type — a deleted type's rows stay stored, for its restore, and are not
- * sent. The caller runs it only once `loadActivityCodes` has found a live code type, so a plan that
- * never used codes issues no statement and answers byte for byte as before (SC-2). One plan's rows.
- * The statement joins `code_types`, so it states that table's `deleted_at`.
+ * **The current-basis code lane of a page's activities, in one statement** (owner decision 2026-10-30,
+ * "current code only"; m4-database-review and the database-architect's Statement A). Only the plan's
+ * source type `typeId`, and only the row at each activity's **current** basis: `(T, the activity's
+ * live value of T)`, or `(T, NULL)` when it has none or the value is soft-deleted. At most one entry
+ * an activity, so nothing stale is sent. Rows for other bases and other types stay stored untouched
+ * (ADR-0206), they are simply not read. An activity with no stored row for its basis gets `[]`.
+ *
+ * Nested loop over the ids, probing `uq_code_value_assignments_plan_activity_type`,
+ * `uq_code_values_type_id_id` and `uq_code_swimlane_lanes_basis`. Fail-closed: the type must be a live
+ * type of this plan, else nothing is read. States `deleted_at` of `code_types` and `code_values`.
  */
-export async function loadCodeSwimlaneLanes(
+export async function loadCurrentCodeLanes(
   db: Pick<PrismaClient, '$queryRaw'>,
   scope: { organizationId: string; planId: string },
+  typeId: string,
   activityIds: readonly string[],
 ): Promise<Map<string, ActivityCodeLaneSummary[]>> {
-  if (activityIds.length === 0) return new Map();
-  const rows = await db.$queryRaw<
-    {
-      activityId: string;
-      codeTypeId: string;
-      codeValueId: string | null;
-      laneIndex: number;
-      updatedAt: Date;
-    }[]
-  >`
-    SELECT l.activity_id AS "activityId", l.code_type_id AS "codeTypeId",
-           l.code_value_id AS "codeValueId", l.lane_index AS "laneIndex",
-           l.updated_at AS "updatedAt"
-    FROM code_swimlane_lanes l
-    JOIN code_types t ON t.id = l.code_type_id AND t.deleted_at IS NULL
-    WHERE l.plan_id = ${scope.planId}::uuid
-      AND l.organization_id = ${scope.organizationId}::uuid
-      AND l.activity_id IN (SELECT u FROM unnest(${[...activityIds]}::uuid[]) AS u)
-  `;
   const byActivity = new Map<string, ActivityCodeLaneSummary[]>(activityIds.map((id) => [id, []]));
+  if (activityIds.length === 0) return byActivity;
+  const rows = await db.$queryRaw<
+    { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
+  >`
+    SELECT p.activity_id AS "activityId", l.code_value_id AS "codeValueId",
+           l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
+    FROM unnest(${[...activityIds]}::uuid[]) AS p(activity_id)
+    JOIN code_types t ON t.id = ${typeId}::uuid AND t.plan_id = ${scope.planId}::uuid
+      AND t.deleted_at IS NULL
+    LEFT JOIN code_value_assignments cva
+      ON cva.plan_id = ${scope.planId}::uuid AND cva.activity_id = p.activity_id
+      AND cva.code_type_id = ${typeId}::uuid
+    LEFT JOIN code_values v
+      ON v.code_type_id = ${typeId}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+    JOIN code_swimlane_lanes l
+      ON l.plan_id = ${scope.planId}::uuid AND l.activity_id = p.activity_id
+      AND l.code_type_id = ${typeId}::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id
+    WHERE l.organization_id = ${scope.organizationId}::uuid
+  `;
   for (const row of rows) {
     byActivity.get(row.activityId)?.push({
-      codeTypeId: row.codeTypeId,
+      codeTypeId: typeId,
       codeValueId: row.codeValueId,
       laneIndex: row.laneIndex,
       updatedAt: row.updatedAt.toISOString(),
     });
   }
-  // Ordered here rather than by the statement, as `codes` is: at most 100 types an activity, and the
-  // database need not sort 200 activities' rows to give a stable payload. "No value" sorts first.
-  for (const list of byActivity.values()) {
-    list.sort(
-      (a, b) =>
-        (a.codeTypeId < b.codeTypeId ? -1 : a.codeTypeId > b.codeTypeId ? 1 : 0) ||
-        (a.codeValueId ?? '').localeCompare(b.codeValueId ?? ''),
-    );
-  }
   return byActivity;
+}
+
+/** One activity's stored lane at its current basis under a type, for the plan-wide read. */
+export interface PlanCodeLaneRow {
+  activityId: string;
+  codeValueId: string | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/**
+ * **Every activity's current-basis lane under one type of the plan, in one statement** (the
+ * database-architect's Statement B), for the moment a planner switches the swimlanes to that code.
+ * The caller has loaded `typeId` as a live type of this plan and organisation (404 otherwise): that
+ * check is what makes leaving `plan_id` off the child tables safe, and naming it there makes the
+ * planner walk the plan-leading unique index instead (13 to 15 ms against 7 to 8). States
+ * `deleted_at` of `activities` and `code_values`. Ordered in memory by activity id for a stable body.
+ */
+export async function loadPlanCodeLanes(
+  db: Pick<PrismaClient, '$queryRaw'>,
+  scope: { organizationId: string; planId: string },
+  typeId: string,
+): Promise<PlanCodeLaneRow[]> {
+  const rows = await db.$queryRaw<
+    { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
+  >`
+    SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
+           l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
+    FROM code_swimlane_lanes l
+    JOIN activities a
+      ON a.id = l.activity_id AND a.organization_id = ${scope.organizationId}::uuid
+      AND a.plan_id = ${scope.planId}::uuid AND a.deleted_at IS NULL
+    LEFT JOIN code_value_assignments cva
+      ON cva.activity_id = l.activity_id AND cva.code_type_id = ${typeId}::uuid
+    LEFT JOIN code_values v
+      ON v.code_type_id = ${typeId}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+    WHERE l.code_type_id = ${typeId}::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id
+  `;
+  return rows
+    .map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }))
+    .sort((a, b) => (a.activityId < b.activityId ? -1 : a.activityId > b.activityId ? 1 : 0));
 }

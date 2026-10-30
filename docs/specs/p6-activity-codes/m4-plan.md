@@ -82,8 +82,12 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   - Codes write: `lanes` + `lanesCodeTypeId`; union lock in id order; 409 `SWIMLANE_SOURCE_CHANGED`;
     lane-only rows bumped, no history item; order DB §3.2.
   - Create: `codes` (0–100); types/values `FOR SHARE` after the plan lock and the insert.
-  - List (and the codes write and create responses): `codeSwimlaneLanes` for every live type, absent with
-    no live type.
+  - List (and the single read, the codes write and create responses): `codeSwimlaneLanes`. **Amended 2026-10-30 by the owner's decision (current code only).** Only under an
+    `ACTIVITY_CODE` source, only the source type, only the current basis (at most one entry, absent
+    otherwise), run in the list's `Promise.all`; the codes write reads it inside its transaction after the
+    upsert. Plus a plan-wide read `GET …/plans/:planId/code-swimlane-lanes?codeTypeId=` for any live type
+    (member read, not a guest route). Success criteria: the list ≤ 6 ms per 200 rows added; that read
+    ≤ 10 ms DB time at 5,000 activities (median paired difference).
   - `@repo/types`: `ActivitySummary.codeSwimlaneLanes?`, `CreateActivityInput.codes?`, the codes-write
     body, `SWIMLANE_LIMIT` (moved from `swimlanes/dto/reorder-swimlanes.dto.ts:15`, API re-exports).
 - **Schema:** **none** (DB §1 item 1). If a measurement below calls for an index, **stop**: that is the
@@ -229,6 +233,11 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   whenever the source is a code); `laneRangeOf` and `dropInSwimlane` cross only under `MANUAL`;
   `edgeNoteFor(input)`; `swimlanesShown` and the lens's "set up" test name `ACTIVITY_CODE`; the over-100
   standing line in the lens (owner answer 1 recommended).
+  - **Amended 2026-10-30 by the owner's decision (current code only):** switching the source to another code
+    fetches that code's lanes with `GET …/code-swimlane-lanes?codeTypeId=` (T1) and shows the settled shape
+    while it loads (ADR-0202); the list only carries the lanes of the code the plan already uses. Consistency
+    rule: a lane is applied only when its `codeValueId` equals the activity's current `codes` value of the
+    type (or both are null), else it counts as unplaced and is derived on the client.
 - **Complexity:** M.
 - **Dependencies:** T2 (the plan's `swimlaneCodeTypeId`; the journey sets the source through the API).
 - **Files (expected):** `packages/layout/src/code-swimlanes.ts` (+ spec, `index.ts`);
@@ -351,6 +360,11 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   list and the gutter shades rename/move/delete with `CODE_GUTTER_REASON` (`notHandMade`); `CodeTypePane`'s
   Delete… shaded for the source type with spec Q3's sentence; `ChosenSource` no longer excludes
   `ACTIVITY_CODE` and its comment is corrected.
+  - **Amended 2026-10-30 by the owner's decision (current code only):** switching the source to another code
+    fetches that code's lanes with `GET …/code-swimlane-lanes?codeTypeId=` (T1) and shows the settled shape
+    while it loads (ADR-0202); the list only carries the lanes of the code the plan already uses. Consistency
+    rule: a lane is applied only when its `codeValueId` equals the activity's current `codes` value of the
+    type (or both are null), else it counts as unplaced and is derived on the client.
 - **Complexity:** M.
 - **Dependencies:** T3, T4.
 - **Files (expected):** `features/swimlanes/components/SwimlaneSourceFields.tsx`,

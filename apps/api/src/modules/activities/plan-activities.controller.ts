@@ -88,7 +88,7 @@ export class PlanActivitiesController {
     description:
       'Optional `codes` (0–100) are written in the create transaction, so a bar drawn in a code ' +
       'swimlane is created in it; creating with codes needs `activity:update` as well. A create ' +
-      'that sent `codes` answers with `codes` and `codeSwimlaneLanes`. No lane is written.',
+      'that sent `codes` answers with `codes`, and with `codeSwimlaneLanes` under a code source. No lane is written.',
   })
   @ApiCreatedResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
@@ -246,8 +246,13 @@ export class PlanActivitiesController {
     @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdateActivityCodesDto,
   ): Promise<ActivityResponseDto[]> {
-    const { items, canReadCost } = await this.codes.write(principal, orgSlug, planId, dto);
-    const decorated = await this.service.decorateWithCodes(items);
+    const { items, canReadCost, codeLanes } = await this.codes.write(
+      principal,
+      orgSlug,
+      planId,
+      dto,
+    );
+    const decorated = await this.service.decorateWithCodes(items, { codeLanes });
     return decorated.map((activity) => ActivityResponseDto.from(activity, canReadCost));
   }
 

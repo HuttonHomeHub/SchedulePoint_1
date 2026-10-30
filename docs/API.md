@@ -834,7 +834,7 @@ as well as `activity:create`, since a code is an activity write): `[{ codeTypeId
 schedule-input stamp (types `FOR SHARE`, then values in id order), so a bar drawn in a code swimlane is
 created in it; a create without `codes` issues no extra statement. No lane is written: an unplaced
 activity has none, and the next positions batch or codes write stores it. A create that sent `codes`
-answers with `codes` and `codeSwimlaneLanes`.
+answers with `codes`, and with `codeSwimlaneLanes` under a code source.
 
 **The batch bound.** `maxItems: 2000` is not the real limit of `PATCH …/activities/codes`: the 512 KB
 organisation body limit is, and a body with many types per activity reaches it first (about 4,000
@@ -861,13 +861,27 @@ exactly as before; once it has one, an activity with no value carries `[]`. **Ev
 response omits `codes`**, so a client must not replace a cached activity's codes with a response that
 has none. An External Guest never receives a code field.
 
-**`codeSwimlaneLanes` (M4-T1)** rides wherever `codes` does: `[{ codeTypeId, codeValueId | null,
-laneIndex, updatedAt }]`, one entry per live type and value the activity has been placed against,
-read in one statement per page after the assignments. **Absent, not empty, with `codes`** (a plan with
-no live code type), and a deleted type's rows are not sent: they stay stored, so a restore brings the
-layout back. Switching the source from one code to another and back finds each layout as it was. It is a **read
-projection, never a request field**: lanes are written through the positions batch and the codes
-write's `lanes`.
+**`codeSwimlaneLanes` (M4-T1)** is sent by the list, the single read, the codes write and a create
+that sent `codes`, **only while the plan's swimlane source is `ACTIVITY_CODE`**, only for that source
+type, and only the row at the activity's **current** basis: `[{ codeTypeId, codeValueId | null,
+laneIndex, updatedAt }]`, at most one entry, `codeValueId: null` for no value or a deleted value, `[]`
+for an activity never placed at its basis. **Absent, not empty, under any other source**, whatever
+lanes the plan has stored. Rows for a basis an activity no longer has, and for every other type, stay
+stored untouched (switching a source, or an activity's value, back finds its layout) but are not sent.
+A client applies a lane only when its `codeValueId` equals the activity's current `codes` value of the
+type (or both are null); a mismatch counts as unplaced. It is a **read projection, never a request
+field**: lanes are written through the positions batch and the codes write's `lanes`. The codes
+write reads it after its own upsert, in its transaction. Owner decision 2026-10-30, "current code
+only" (`m4-record.md` §1).
+
+**`GET …/plans/:planId/code-swimlane-lanes?codeTypeId=<uuid>` (M4-T1)** returns the same thing for **any
+live type of the plan**, for every live activity in one request: `{ data: { codeTypeId, lanes: [{
+activityId, codeValueId | null, laneIndex, updatedAt }] } }`, ordered by activity id, at most one lane
+an activity. It is what a client reads when the planner switches the swimlanes to another code, because
+the activity list only carries the lanes of the code the plan already uses. A member read
+(**`activity:read`**, a Viewer included), never an External Guest route. A type that is deleted,
+unknown, another plan's or another organisation's is one **404**; a missing or malformed `codeTypeId`
+is **422**. Not a write and not a schedule input.
 
 ### Activity change history (ADR-0174)
 
