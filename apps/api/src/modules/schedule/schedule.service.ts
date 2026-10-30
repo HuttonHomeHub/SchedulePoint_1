@@ -2341,10 +2341,30 @@ export class ScheduleService {
     if (wantsGeometry && fromBaseline.swimlaneSnapshotLevel === 'FULL') {
       const toIds = new Set(toSide.map((r) => r.activityId));
       const removedIds = fromSide.map((r) => r.activityId).filter((id) => !toIds.has(id));
+      // The code half (P6 M4-T6): only when the baseline froze its swimlanes from a code. Every
+      // other baseline attaches no code fact, which the client reads as "count, do not draw".
+      const frozenCodeTypeId =
+        fromBaseline.swimlaneSource === 'ACTIVITY_CODE' &&
+        fromBaseline.codeSnapshotLevel === 'SWIMLANE_TYPE'
+          ? fromBaseline.swimlaneCodeTypeId
+          : null;
+      const [frozenLaneRows, frozenCodeRows] = await Promise.all([
+        this.baselines.loadFrozenLanesForGhosts(fromBaseline.id, organization.id, removedIds),
+        frozenCodeTypeId === null
+          ? Promise.resolve(null)
+          : this.baselines.loadFrozenCodePlacementsForGhosts(
+              fromBaseline.id,
+              organization.id,
+              removedIds,
+            ),
+      ]);
       frozenSwimlanes = frozenGhostSwimlanes(
         fromBaseline.swimlaneSnapshotLevel,
         fromRows,
-        await this.baselines.loadFrozenLanesForGhosts(fromBaseline.id, organization.id, removedIds),
+        frozenLaneRows,
+        frozenCodeTypeId === null || frozenCodeRows === null
+          ? undefined
+          : { typeId: frozenCodeTypeId, placements: frozenCodeRows },
       );
     }
     const ghostResult = wantsGeometry

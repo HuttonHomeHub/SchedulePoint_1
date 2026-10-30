@@ -138,3 +138,72 @@ describe('placeCompareGhosts on a WBS-grouped scene (M3 guard)', () => {
     expect(out).toEqual({ ghosts: [], counted: 1 });
   });
 });
+
+describe('placeCompareGhosts on a code-grouped scene (P6 M4-T6)', () => {
+  // Level 1 is a band of two lanes at 0-1, Roof one lane at 2, and "No Area" (id null) lane 3.
+  const CODE_SCENE: GhostLaneScene = {
+    source: 'ACTIVITY_CODE',
+    codeTypeId: 'area',
+    displayLanes: new Map(),
+    extents: [
+      { id: 'l1', firstLane: 0, laneCount: 2 },
+      { id: 'roof', firstLane: 2, laneCount: 1 },
+      { id: null, firstLane: 3, laneCount: 1 },
+    ],
+  };
+  const gone = (over: Partial<CompareGhost> = {}): CompareGhost =>
+    ghost({
+      activityId: 'gone',
+      removed: true,
+      frozenCodeTypeId: 'area',
+      frozenCodeValueId: 'l1',
+      frozenCodeLane: { laneIndex: 1 },
+      ...over,
+    });
+
+  it('draws removed work in its frozen band at its frozen lane', () => {
+    const out = placeCompareGhosts(
+      [gone(), gone({ frozenCodeValueId: 'roof', frozenCodeLane: { laneIndex: 0 } })],
+      CODE_SCENE,
+    );
+    expect(out.ghosts.map((g) => g.laneIndex)).toEqual([1, 2]);
+    expect(out.counted).toBe(0);
+  });
+
+  it('draws removed work that held no value in the No <type> band', () => {
+    const out = placeCompareGhosts(
+      [gone({ frozenCodeValueId: null, frozenCodeLane: { laneIndex: 0 } })],
+      CODE_SCENE,
+    );
+    expect(out.ghosts.map((g) => g.laneIndex)).toEqual([3]);
+  });
+
+  it.each([
+    ['a baseline from before codes (no frozen type)', { frozenCodeTypeId: undefined }],
+    ['a baseline frozen under another type', { frozenCodeTypeId: 'trade' }],
+    ['a frozen value that is no longer a drawn band', { frozenCodeValueId: 'deleted' }],
+    ['no frozen lane (never placed)', { frozenCodeLane: null }],
+    ['a frozen lane past the band’s rows', { frozenCodeLane: { laneIndex: 2 } }],
+    [
+      'a baseline frozen by hand, which has swimlane facts and no code',
+      {
+        frozenCodeTypeId: undefined,
+        frozenSwimlaneId: 'l1',
+        frozenLanes: [frozen('SWIMLANE', 'l1', 0)],
+      },
+    ],
+  ])('counts removed work and never derives a lane when %s', (_why, over) => {
+    const out = placeCompareGhosts([gone(over as Partial<CompareGhost>)], CODE_SCENE);
+    expect(out).toEqual({ ghosts: [], counted: 1 });
+  });
+
+  it('counts when today’s scene carries no type id', () => {
+    const { codeTypeId: _drop, ...noType } = CODE_SCENE;
+    expect(placeCompareGhosts([gone()], noType)).toEqual({ ghosts: [], counted: 1 });
+  });
+
+  it('still draws a live activity’s ghost on its display lane', () => {
+    const scene = { ...CODE_SCENE, displayLanes: new Map([['live', 2]]) };
+    expect(placeCompareGhosts([ghost()], scene).ghosts.map((g) => g.laneIndex)).toEqual([2]);
+  });
+});

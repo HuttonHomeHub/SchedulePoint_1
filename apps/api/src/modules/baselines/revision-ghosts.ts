@@ -99,8 +99,22 @@ export type FrozenGhostSwimlanes = ReadonlyMap<
   {
     readonly swimlaneId: string | null;
     readonly lanes: readonly RevisionGhostFrozenLane[];
+    /**
+     * The code placement a baseline froze under a code source (P6 M4-T6); absent when the baseline's
+     * frozen source was not `ACTIVITY_CODE`, which is what makes the ghost counted under a code.
+     */
+    readonly code?: FrozenGhostCode;
   }
 >;
+
+/** One removed activity's frozen value of the baseline's code type, and its frozen code lane. */
+export interface FrozenGhostCode {
+  readonly typeId: string;
+  /** Null: the activity held no value of the type (the No <type> band). */
+  readonly valueId: string | null;
+  /** Null: never placed in that band. */
+  readonly laneIndex: number | null;
+}
 
 /**
  * The activity's frozen ancestors, root first, from the FROZEN parent links alone. A cycle or a
@@ -120,6 +134,18 @@ function frozenAncestors(
     parentId = byId.get(parentId)?.parentId ?? null;
   }
   return chain.reverse();
+}
+
+/** The wire form of {@link FrozenGhostCode}: nothing at all when the baseline froze no code. */
+function frozenCodeFields(
+  code: FrozenGhostCode | undefined,
+): Pick<RevisionGhostBar, 'frozenCodeTypeId' | 'frozenCodeValueId' | 'frozenCodeLane'> {
+  if (code === undefined) return {};
+  return {
+    frozenCodeTypeId: code.typeId,
+    frozenCodeValueId: code.valueId,
+    frozenCodeLane: code.laneIndex === null ? null : { laneIndex: code.laneIndex },
+  };
 }
 
 export function buildRevisionGhosts(
@@ -196,6 +222,7 @@ export function buildRevisionGhosts(
             frozenSwimlaneId: frozenSwimlanes.get(from.activityId)?.swimlaneId ?? null,
             frozenLanes: frozenSwimlanes.get(from.activityId)?.lanes ?? [],
             frozenAncestorIds: frozenAncestors(from, fromById),
+            ...frozenCodeFields(frozenSwimlanes.get(from.activityId)?.code),
           }
         : {}),
     });

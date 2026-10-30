@@ -12,7 +12,7 @@ import type { RevisionGhostFrozenLane, VarianceBasis } from '@repo/types';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 
 import type { RevisionEdge, RevisionRow } from './revision-delta';
-import type { FrozenGhostSwimlanes } from './revision-ghosts';
+import type { FrozenGhostCode, FrozenGhostSwimlanes } from './revision-ghosts';
 
 /**
  * **The four projections that put a frozen side and a live side into ONE shape**, extracted so that
@@ -158,6 +158,21 @@ export const frozenRevisionSide = (
   }));
 
 /**
+ * The code half of a ghost's frozen facts. Passed ONLY for a baseline whose frozen source was
+ * `ACTIVITY_CODE` and whose `code_snapshot_level` is `SWIMLANE_TYPE`; its absence is the "count, do
+ * not draw" case for every other baseline. An activity with no placement row froze no value and no
+ * lane, which the entry says as nulls rather than leaving the code absent.
+ */
+export interface FrozenCodeInput {
+  readonly typeId: string;
+  readonly placements: readonly {
+    readonly sourceActivityId: string;
+    readonly codeValueId: string | null;
+    readonly codeLaneIndex: number | null;
+  }[];
+}
+
+/**
  * **A baseline's frozen swimlane facts, for the ghosts of removed work** (schema-design §13.6).
  *
  * `null` unless the baseline's level is `FULL`. That is the whole interpretation this function does,
@@ -172,6 +187,7 @@ export const frozenGhostSwimlanes = (
   level: SwimlaneSnapshotLevel,
   rows: readonly FrozenRevisionRowInput[],
   lanes: readonly FrozenLaneInput[],
+  codes?: FrozenCodeInput,
 ): FrozenGhostSwimlanes | null => {
   if (level !== 'FULL') return null;
   const lanesByActivity = new Map<string, RevisionGhostFrozenLane[]>();
@@ -187,10 +203,30 @@ export const frozenGhostSwimlanes = (
     });
     lanesByActivity.set(l.sourceActivityId, list);
   }
+  const codesByActivity = new Map<string, FrozenGhostCode>(
+    codes === undefined
+      ? []
+      : codes.placements.map((p) => [
+          p.sourceActivityId,
+          { typeId: codes.typeId, valueId: p.codeValueId, laneIndex: p.codeLaneIndex },
+        ]),
+  );
   return new Map(
     rows.map((r) => [
       r.sourceActivityId,
-      { swimlaneId: r.swimlaneId, lanes: lanesByActivity.get(r.sourceActivityId) ?? [] },
+      {
+        swimlaneId: r.swimlaneId,
+        lanes: lanesByActivity.get(r.sourceActivityId) ?? [],
+        ...(codes === undefined
+          ? {}
+          : {
+              code: codesByActivity.get(r.sourceActivityId) ?? {
+                typeId: codes.typeId,
+                valueId: null,
+                laneIndex: null,
+              },
+            }),
+      },
     ]),
   );
 };

@@ -335,6 +335,49 @@ describe('the frozen swimlane facts on a ghost of removed work (M1-T1b)', () => 
     expect(ghosts[0]).not.toHaveProperty('frozenLanes');
   });
 
+  it('a code baseline: carries the frozen type, value and code lane; a null lane stays null', () => {
+    const codeFacts: FrozenGhostSwimlanes = new Map([
+      [
+        'placed',
+        { swimlaneId: null, lanes: [], code: { typeId: 'area', valueId: 'roof', laneIndex: 3 } },
+      ],
+      [
+        'unplaced',
+        { swimlaneId: null, lanes: [], code: { typeId: 'area', valueId: null, laneIndex: null } },
+      ],
+    ]);
+    const { ghosts } = buildRevisionGhosts(
+      [row({ activityId: 'placed' }), row({ activityId: 'unplaced' })],
+      [],
+      CAP,
+      'SAME_PLAN',
+      codeFacts,
+    );
+    expect(ghosts[0]).toMatchObject({
+      frozenCodeTypeId: 'area',
+      frozenCodeValueId: 'roof',
+      frozenCodeLane: { laneIndex: 3 },
+    });
+    expect(ghosts[1]).toMatchObject({
+      frozenCodeTypeId: 'area',
+      frozenCodeValueId: null,
+      frozenCodeLane: null,
+    });
+  });
+
+  it('a baseline that froze no code attaches no code fact, even with swimlane facts', () => {
+    const { ghosts } = buildRevisionGhosts(
+      [row({ activityId: 'gone' })],
+      [],
+      CAP,
+      'SAME_PLAN',
+      facts,
+    );
+    expect(ghosts[0]).not.toHaveProperty('frozenCodeTypeId');
+    expect(ghosts[0]).not.toHaveProperty('frozenCodeValueId');
+    expect(ghosts[0]).not.toHaveProperty('frozenCodeLane');
+  });
+
   it('survives a cyclic or dangling frozen parent chain by truncating it', () => {
     const from = [
       row({ activityId: 'a', parentId: 'b' }),

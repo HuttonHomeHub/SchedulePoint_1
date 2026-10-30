@@ -123,6 +123,21 @@ describe('frozenGhostSwimlanes', () => {
     expect(facts?.get('a')?.lanes[0]?.laneUpdatedAt).toBe('2026-01-05T10:00:00.000Z');
   });
 
+  it('carries the code placements only when the caller passes them, and nulls for a row with none', () => {
+    const withCodes = frozenGhostSwimlanes(
+      'FULL',
+      [frozen, { ...frozen, sourceActivityId: 'b' }],
+      [],
+      {
+        typeId: 'area',
+        placements: [{ sourceActivityId: 'a', codeValueId: 'roof', codeLaneIndex: 2 }],
+      },
+    );
+    expect(withCodes?.get('a')?.code).toEqual({ typeId: 'area', valueId: 'roof', laneIndex: 2 });
+    expect(withCodes?.get('b')?.code).toEqual({ typeId: 'area', valueId: null, laneIndex: null });
+    expect(frozenGhostSwimlanes('FULL', [frozen], [])?.get('a')).not.toHaveProperty('code');
+  });
+
   it('gives an activity that froze no lane row an empty list, not an absent entry', () => {
     // "Recorded nothing for this activity" must stay distinct from "the baseline recorded none".
     const facts = frozenGhostSwimlanes('FULL', [frozen], []);

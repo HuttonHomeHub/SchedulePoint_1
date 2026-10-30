@@ -420,6 +420,10 @@ export class RevisionGhostFrozenLaneDto implements RevisionGhostFrozenLane {
   @ApiProperty({ format: 'date-time' }) laneUpdatedAt!: string;
 }
 
+export class RevisionGhostFrozenCodeLaneDto {
+  @ApiProperty() laneIndex!: number;
+}
+
 export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() activityId!: string;
   @ApiProperty() name!: string;
@@ -466,6 +470,34 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
       'basis, verbatim. The client picks the one for the basis today’s source resolves to.',
   })
   frozenLanes?: readonly RevisionGhostFrozenLaneDto[];
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    description:
+      'Removed work from a baseline whose frozen swimlane source was `ACTIVITY_CODE`: the code ' +
+      'type the swimlanes were then made from. Absent otherwise, and the client counts the ghost ' +
+      'rather than drawing it.',
+  })
+  frozenCodeTypeId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'With `frozenCodeTypeId`: the activity’s value of that type at capture; null means no value.',
+  })
+  frozenCodeValueId?: string | null;
+
+  @ApiPropertyOptional({
+    type: () => RevisionGhostFrozenCodeLaneDto,
+    nullable: true,
+    description:
+      'With `frozenCodeTypeId`: the activity’s code lane at capture; null means it was never ' +
+      'placed there, and the client counts the ghost.',
+  })
+  frozenCodeLane?: RevisionGhostFrozenCodeLaneDto | null;
 
   @ApiPropertyOptional({
     type: [String],

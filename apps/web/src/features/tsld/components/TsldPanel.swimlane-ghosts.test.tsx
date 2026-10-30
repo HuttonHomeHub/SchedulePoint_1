@@ -183,6 +183,27 @@ describe('TsldPanel — removed work is placed by the input’s own source', () 
   it('counts it instead on a WBS input, which must not borrow the hand-made basis', () => {
     expect(ghostsFor({ ...INPUT, source: 'WBS' })).toEqual([]);
   });
+
+  it('draws it on a code input only when the type the input carries is the type the baseline froze', () => {
+    const frozenByCode = {
+      ...REMOVED,
+      frozenCodeTypeId: 'area',
+      frozenCodeValueId: 's2',
+      frozenCodeLane: { laneIndex: 0 },
+    };
+    const run = (codeTypeId: string): string[] => {
+      render(
+        <HarnessWith
+          swimlanes={{ ...INPUT, source: 'ACTIVITY_CODE', codeTypeId }}
+          ghosts={[frozenByCode]}
+        />,
+      );
+      const last = seen.props[seen.props.length - 1]!;
+      return (last['compareGhosts'] as { activityId: string }[]).map((g) => g.activityId);
+    };
+    expect(run('area')).toEqual(['gone']);
+    expect(run('trade')).toEqual([]);
+  });
 });
 
 function HarnessWith({

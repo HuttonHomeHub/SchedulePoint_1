@@ -1268,7 +1268,11 @@ export function TsldPanel({
   const ghostLaneScene = useMemo<GhostLaneScene | null>(
     () =>
       diagramSource.swimlaneScene
-        ? { ...diagramSource.swimlaneScene, source: swimlanes?.source ?? 'MANUAL' }
+        ? {
+            ...diagramSource.swimlaneScene,
+            source: swimlanes?.source ?? 'MANUAL',
+            ...(swimlanes?.codeTypeId !== undefined ? { codeTypeId: swimlanes.codeTypeId } : {}),
+          }
         : null,
     [diagramSource.swimlaneScene, swimlanes],
   );
