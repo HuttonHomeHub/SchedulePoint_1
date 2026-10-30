@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
 import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
 import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
@@ -550,6 +551,187 @@ test.describe('Code columns', () => {
       expect(twelve, 'the View panel has no height').toBeGreaterThan(0);
       expect(thirty, 'the View panel grew with the type count').toBeLessThanOrEqual(twelve + 1);
       expect(thirty).toBeLessThanOrEqual(600);
+    });
+  });
+});
+
+/** A type's live values (id by short code), from the API. */
+async function storedValues(
+  page: Page,
+  orgSlug: string,
+  typeId: string,
+): Promise<Record<string, string>> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id, type }: { org: string; id: string; type: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/code-types/${type}/values`,
+        { credentials: 'include' },
+      );
+      const body = (await response.json()) as { data: { id: string; shortCode: string }[] };
+      return Object.fromEntries(body.data.map((v) => [v.shortCode, v.id]));
+    },
+    { org: orgSlug, id: planId, type: typeId },
+  );
+}
+
+/** Each activity's code values by the activity's NAME, for a clone that has no code of its own. */
+async function storedCodesByName(
+  page: Page,
+  orgSlug: string,
+): Promise<Record<string, { codeTypeId: string; codeValueId: string }[]>> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      const body = (await response.json()) as {
+        data: { name: string; codes?: { codeTypeId: string; codeValueId: string }[] }[];
+      };
+      return Object.fromEntries(body.data.map((a) => [a.name, a.codes ?? []]));
+    },
+    { org: orgSlug, id: planId },
+  );
+}
+
+/** Open one activity's editor from its row's Actions menu in the Activities table. */
+async function openEditorFor(page: Page, name: string): Promise<Locator> {
+  await page.getByRole('button', { name: `Actions for ${name}` }).click();
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  const editor = activityEditor(page);
+  await expect(editor).toBeVisible();
+  return editor;
+}
+
+/**
+ * Open a Combobox with the keyboard and commit the option whose text matches. The option is looked
+ * up inside the listbox the picker controls, because the page holds other options (the diagram's
+ * search list names "Roof deck" too).
+ */
+async function chooseOption(page: Page, picker: Locator, text: RegExp): Promise<void> {
+  await picker.focus();
+  await page.keyboard.press('ArrowDown');
+  const listboxId = await picker.getAttribute('aria-controls');
+  expect(listboxId, 'the picker names its listbox').toBeTruthy();
+  await page
+    .locator(`[id="${listboxId as string}"]`)
+    .getByRole('option', { name: text })
+    .click();
+}
+
+/**
+ * **Setting codes: the editor, the table's ticked rows, undo, history and copy** (M3-T3, ADR-0081). What
+ * only a browser can say: that the two Saves on General are separate requests with separate bodies, that
+ * ticking two rows and pressing Set sends exactly ONE request (counted on the wire), that one Undo takes
+ * both rows back, that History names the type and the value, and that a copy within the plan carries the
+ * source's codes.
+ */
+test.describe('Setting codes', () => {
+  test('the editor’s Codes section, the table’s Set Area, undo, history and a copy', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await openSeededPlan(page, Date.now() + 3, CODES_PLAN);
+    const types = await storedTypes(page, orgSlug);
+    const trade = types['Trade']!;
+    const area = types['Area']!;
+    const tradeValues = await storedValues(page, orgSlug, trade);
+    const areaValues = await storedValues(page, orgSlug, area);
+    await ensurePen(page);
+    await showActivitiesPanel(page);
+
+    await test.step('1. the editor: Trade = MEP on CD_5, saved by Save codes alone, then read in History', async () => {
+      const editor = await openEditorFor(page, 'Fit-out, in no trade');
+      const trades = editor.getByRole('combobox', { name: 'Trade' });
+      await expect(trades).toHaveValue('None');
+      await chooseOption(page, trades, /MEP/);
+      // Two Saves on General: only the codes one is pending.
+      await expect(editor.getByRole('button', { name: 'Save general' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      const requests: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() === 'PATCH') requests.push(request.url());
+      });
+      await editor.getByRole('button', { name: 'Save codes' }).click();
+      await expect(editor.getByText('Saved.')).toBeVisible();
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatch(/\/plans\/[0-9a-f-]{36}\/activities\/codes$/);
+      expect((await storedCodes(page, orgSlug))['CD_5']).toContainEqual({
+        codeTypeId: trade,
+        codeValueId: tradeValues['MEP'],
+      });
+
+      await editor.getByRole('tab', { name: 'History' }).click();
+      await expect(
+        editor.getByText('Trade set to Mechanical, electrical and plumbing'),
+      ).toBeVisible();
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      await editor.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(editor).toBeHidden();
+    });
+
+    await test.step('2. Undo takes the editor’s save back in one step', async () => {
+      await planCommands(page)
+        .getByRole('button', { name: /^Undo\b/ })
+        .click();
+      await expect
+        .poll(async () =>
+          (await storedCodes(page, orgSlug))['CD_5']?.some((c) => c.codeTypeId === trade),
+        )
+        .toBe(false);
+    });
+
+    await test.step('3. tick CD_7 and CD_8, Set Area to Roof: ONE request, both read Roof, one Undo returns both', async () => {
+      await page.getByRole('checkbox', { name: 'Select Cladding, in no area' }).check();
+      await page.getByRole('checkbox', { name: 'Select Snagging, with no codes at all' }).check();
+      await page.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
+      await chooseOption(page, page.getByRole('combobox', { name: 'Value' }), /Roof/);
+      await expect(page.getByText('Sets Area to Roof on 2 activities.')).toBeVisible();
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+
+      let writes = 0;
+      page.on('request', (request) => {
+        if (request.method() === 'PATCH' && /\/activities\/codes$/.test(request.url())) writes += 1;
+      });
+      await page.getByRole('button', { name: 'Set Area' }).click();
+      await expect
+        .poll(async () => (await storedCodes(page, orgSlug))['CD_8']?.map((c) => c.codeValueId))
+        .toContain(areaValues['RF']);
+      const stored = await storedCodes(page, orgSlug);
+      expect(stored['CD_7']).toContainEqual({ codeTypeId: area, codeValueId: areaValues['RF'] });
+      expect(writes).toBe(1);
+
+      await planCommands(page)
+        .getByRole('button', { name: /^Undo\b/ })
+        .click();
+      await expect
+        .poll(async () => {
+          const after = await storedCodes(page, orgSlug);
+          return ['CD_7', 'CD_8'].map((k) => after[k]?.some((c) => c.codeTypeId === area));
+        })
+        .toEqual([false, false]);
+    });
+
+    await test.step('4. duplicating CD_1 within the plan: the copy carries Ground floor and Civil', async () => {
+      await page.getByRole('button', { name: 'Actions for Piling' }).click();
+      await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
+      await expect(page.getByTestId('announcer')).toContainText('1 activity duplicated.');
+      const copies = Object.entries(await storedCodesByName(page, orgSlug)).filter(
+        ([name]) => name !== 'Piling' && name.startsWith('Piling'),
+      );
+      expect(copies).toHaveLength(1);
+      expect(copies[0]?.[1]).toEqual(
+        expect.arrayContaining([
+          { codeTypeId: area, codeValueId: areaValues['GF'] },
+          { codeTypeId: trade, codeValueId: tradeValues['CIV'] },
+        ]),
+      );
     });
   });
 });

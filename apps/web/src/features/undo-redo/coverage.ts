@@ -118,6 +118,9 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
   useReorderCodeValues: recorded('codeValueReorderCommand'),
   useDeleteCodeValue: recorded('codeValueDeleteCommand'),
   useRestoreCodeValue: recorded('codeValueDeleteCommand'),
+  // Setting values on activities: the editor's Save codes, the bulk Set, and the codes write a paste
+  // makes after it creates its clones (that one rides inside `pasteActivitiesCommand`'s step).
+  useWriteActivityCodes: recorded('activityCodesCommand'),
 
   // Plan settings and the plan record
   useSetPlanCalendar: excluded(REASON.planSettings),

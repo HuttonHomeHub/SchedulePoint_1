@@ -398,6 +398,55 @@ export function fakePlanServer(
       row.version += 1;
       return Promise.resolve({ ...row });
     }),
+    writeActivityCodes: vi.fn(
+      (input: {
+        activities: {
+          id: string;
+          version: number;
+          codes: { codeTypeId: string; codeValueId: string | null }[];
+        }[];
+      }) => {
+        // All-or-nothing, like the endpoint: stale versions first, then each value must be a live
+        // value of its own type (422 otherwise), and a missing activity is a 404.
+        for (const row of input.activities) lock(rowOf(row.id), row.version);
+        for (const row of input.activities) {
+          for (const c of row.codes) {
+            if (c.codeValueId === null) continue;
+            const value = codeValues.get(c.codeValueId);
+            if (value === undefined) {
+              throw new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Gone.' });
+            }
+            if (value.codeTypeId !== c.codeTypeId) {
+              throw new ApiFetchError(422, {
+                code: 'VALIDATION_ERROR',
+                message: 'That value does not belong to this code type.',
+                details: { reason: 'CODE_VALUE_WRONG_TYPE' },
+              });
+            }
+            if (value.deletedAt !== null) {
+              throw new ApiFetchError(422, {
+                code: 'VALIDATION_ERROR',
+                message: 'That value was deleted.',
+                details: { reason: 'CODE_VALUE_DELETED' },
+              });
+            }
+          }
+        }
+        return Promise.resolve(
+          input.activities.map((row) => {
+            const held = rowOf(row.id);
+            const next = new Map((held.codes ?? []).map((c) => [c.codeTypeId, c.codeValueId]));
+            for (const c of row.codes) {
+              if (c.codeValueId === null) next.delete(c.codeTypeId);
+              else next.set(c.codeTypeId, c.codeValueId);
+            }
+            return write(row.id, row.version, {
+              codes: [...next].map(([codeTypeId, codeValueId]) => ({ codeTypeId, codeValueId })),
+            });
+          }),
+        );
+      },
+    ),
     updateParents: vi.fn(
       (input: { parents: { id: string; parentId: string | null; version: number }[] }) => {
         // All-or-nothing, like the endpoint: one stale row refuses the lot and writes none.

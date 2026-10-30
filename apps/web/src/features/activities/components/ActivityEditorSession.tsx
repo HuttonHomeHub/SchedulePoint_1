@@ -101,7 +101,7 @@ const ANOTHER_SAVE_FINISHING = 'Another save is finishing.';
 type PanelSlot = 'progress' | 'measure' | 'steps';
 
 /** Every scope that can say "Saved.": the tabs' definition scopes and the Progress tab's panels. */
-type SaveSlot = TabKey | PanelSlot;
+type SaveSlot = TabKey | PanelSlot | 'codes';
 
 /**
  * One opening of the editor (ADR-0169 D3): every form and every other piece of working state, mounted
@@ -129,6 +129,7 @@ export function ActivityEditorSession({
   notesSlot,
   historySlot,
   swimlaneSlot,
+  codesSlot,
   onAssignmentEdited,
   onReparented,
 }: ActivityEditorSessionProps): React.ReactElement {
@@ -161,9 +162,15 @@ export function ActivityEditorSession({
       const { [slot]: _cleared, ...rest } = held;
       return rest;
     });
+  /**
+   * Codes save through their own endpoint but bump the same row `version` the definition scopes send, so
+   * each waits for the other: a codes Save pressed while "Save general" is in flight would 409 against
+   * the version that save is about to produce, and the other way about.
+   */
+  const codesSaving = savingSlots.codes === true;
   /** The sentence for a dirty bar blocked only by somebody else's save, or `undefined` to say nothing new. */
   const othersSaving = (slot: SaveSlot): { dirtyMessage: string } | Record<string, never> =>
-    saves.fieldsPending && savingSlots[slot] !== true
+    (saves.fieldsPending || codesSaving) && savingSlots[slot] !== true
       ? { dirtyMessage: ANOTHER_SAVE_FINISHING }
       : {};
   const markSaved = (slot: SaveSlot, saved: boolean): void =>
@@ -187,6 +194,20 @@ export function ActivityEditorSession({
     });
   /** Whether the discard confirmation (spec US-5) is showing. */
   const [confirmingClose, setConfirmingClose] = useState(false);
+  /**
+   * The Codes section's working state (P6 activity codes, M3-T3): the planner's unsaved choices by code
+   * type, and the last save's failure. **Held here, not in the section**, because the section is
+   * mounted only while General shows, and the tab's dot, the close confirmation and the navigation
+   * guard have to count a choice made before the planner clicked away (the Progress forms' lesson,
+   * ADR-0169 §4.6). An entry equal to what is saved is not a change.
+   */
+  const [codesDraft, setCodesDraft] = useState<Readonly<Record<string, string | null>>>({});
+  const [codesError, setCodesError] = useState<string | null>(null);
+  const savedCodeValue = (codeTypeId: string): string | null =>
+    activity.codes?.find((c) => c.codeTypeId === codeTypeId)?.codeValueId ?? null;
+  const codesDirty = Object.entries(codesDraft).some(
+    ([codeTypeId, value]) => savedCodeValue(codeTypeId) !== value,
+  );
 
   // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
   // the same editor as **Edit**, on the tab that answers the action. A session is born per opening,
@@ -424,6 +445,8 @@ export function ActivityEditorSession({
           label: 'Scheduling',
           savable: gating.general.writable,
         },
+        // The section heading, as the other labels are (the Progress panels' lesson above).
+        { when: codesDirty, key: 'codes', label: 'Codes', savable: gating.codes.writable },
         {
           when: cost.isDirty && gating.cost.readable,
           key: 'cost',
@@ -457,11 +480,13 @@ export function ActivityEditorSession({
     [
       general.isDirty,
       scheduling.isDirty,
+      codesDirty,
       cost.isDirty,
       progress.isDirty,
       measure.isDirty,
       stepsDirty,
       gating.general.writable,
+      gating.codes.writable,
       gating.cost.readable,
       gating.cost.writable,
       gating.progress.writable,
@@ -633,7 +658,7 @@ export function ActivityEditorSession({
     {
       id: 'general',
       label: 'General',
-      ...marker(general.errorCount, general.isDirty, gating.general.writable),
+      ...marker(general.errorCount, general.isDirty || codesDirty, gating.general.writable),
     },
     {
       id: 'scheduling',
@@ -817,7 +842,7 @@ export function ActivityEditorSession({
                       <ScopeSaveBar
                         gate={gating.general}
                         dirty={general.isDirty}
-                        pending={saves.fieldsPending}
+                        pending={saves.fieldsPending || codesSaving}
                         saved={savedSlots.general === true}
                         label="Save general"
                         {...othersSaving('general')}
@@ -825,6 +850,42 @@ export function ActivityEditorSession({
                     </FieldGateProvider>
                   </form>
                   {swimlaneSlot?.({ generalDirty: general.isDirty })}
+                  {codesSlot?.({
+                    activity,
+                    gate: gating.codes,
+                    draft: codesDraft,
+                    choose: (codeTypeId, value) => {
+                      setCodesError(null);
+                      markSaved('codes', false);
+                      setCodesDraft((held) => ({ ...held, [codeTypeId]: value }));
+                    },
+                    dirty: codesDirty,
+                    saving: codesSaving,
+                    otherSaveInFlight: saves.fieldsPending,
+                    saved: savedSlots.codes === true,
+                    error: codesError,
+                    begin: () => {
+                      setCodesError(null);
+                      markSaved('codes', false);
+                      markSaving('codes', true);
+                    },
+                    succeeded: (sent) => {
+                      markSaving('codes', false);
+                      // Choices made while the save ran stay as drafts: only what was sent is settled.
+                      setCodesDraft((held) => {
+                        const next = { ...held };
+                        for (const [codeTypeId, value] of sent) {
+                          if (next[codeTypeId] === value) delete next[codeTypeId];
+                        }
+                        return next;
+                      });
+                      markSaved('codes', true);
+                    },
+                    failed: (message) => {
+                      markSaving('codes', false);
+                      setCodesError(message);
+                    },
+                  })}
                 </>
               ) : null}
 
@@ -883,7 +944,7 @@ export function ActivityEditorSession({
                     <ScopeSaveBar
                       gate={gating.scheduling}
                       dirty={scheduling.isDirty}
-                      pending={saves.fieldsPending}
+                      pending={saves.fieldsPending || codesSaving}
                       saved={savedSlots.scheduling === true}
                       label="Save scheduling"
                       {...othersSaving('scheduling')}
@@ -1001,7 +1062,7 @@ export function ActivityEditorSession({
                     steps={stepsQuery.data ?? []}
                     gate={gating.measure}
                     onSave={saveMeasure}
-                    pending={saves.fieldsPending}
+                    pending={saves.fieldsPending || codesSaving}
                     saved={savedSlots.measure === true}
                     error={panelErrors.measure ?? null}
                     {...othersSaving('measure')}
@@ -1058,7 +1119,7 @@ export function ActivityEditorSession({
                     <ScopeSaveBar
                       gate={gating.cost}
                       dirty={cost.isDirty}
-                      pending={saves.fieldsPending}
+                      pending={saves.fieldsPending || codesSaving}
                       saved={savedSlots.cost === true}
                       label="Save cost"
                       {...othersSaving('cost')}

@@ -37,6 +37,9 @@ const h = vi.hoisted(() => ({
   release: vi.fn(),
   notify: vi.fn(),
   refetch: vi.fn(),
+  writeCodes: vi.fn(),
+  /** Extra rows in the plan's list, for a test that needs a source carrying codes. */
+  extra: [] as unknown[],
   writeRejected: { kind: 'none' },
 }));
 
@@ -107,6 +110,10 @@ vi.mock('@/features/schedule', () => ({
   // the session, with no error and no surface.
   usePlanAutoRecalc: () => ({ notify: h.notify, hold: h.hold, release: h.release }),
 }));
+vi.mock('@/features/codes', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useWriteActivityCodes: () => ({ mutateAsync: h.writeCodes }),
+}));
 vi.mock('@/features/activity-copy/api/use-clone-activities', () => ({
   useCreateClonedActivity: () => ({ mutateAsync: h.createClone }),
 }));
@@ -146,7 +153,7 @@ const DEPENDENCY = {
 // `ActivityCreateDialog`).
 vi.mock('@/features/activities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useActivities: () => query([ACTIVITY, FINISH]),
+  useActivities: () => query([ACTIVITY, FINISH, ...(h.extra as ActivitySummary[])]),
   useCreateActivity: () => ({ mutateAsync: vi.fn() }),
   useCreatePlacedActivity: () => ({ mutateAsync: h.createPlaced }),
   useUpdateActivity: () => ({ mutateAsync: vi.fn() }),
@@ -180,6 +187,8 @@ const clone = (id: string): ActivitySummary => ({
 beforeEach(() => {
   vi.clearAllMocks();
   h.writeRejected = { kind: 'none' };
+  h.extra = [];
+  h.writeCodes.mockResolvedValue([]);
   h.createClone.mockImplementation(() => Promise.resolve(clone('clone-1')));
   h.readSource.mockResolvedValue({ assignments: [], steps: [] });
   h.carry.mockResolvedValue({ skipped: [] });
@@ -387,5 +396,116 @@ describe('copySelection and pasteClipboard', () => {
     });
     const said = h.announce.mock.calls.map((c) => String(c[0]));
     expect(said.some((s) => /no longer exist/.test(s))).toBe(true);
+  });
+});
+
+describe('duplicateActivities — the codes (P6 activity codes, M3-T3)', () => {
+  const CODED: ActivitySummary = anActivity({
+    ...ACTIVITY,
+    id: 'coded',
+    name: 'Coded',
+    laneIndex: 5,
+    codes: [
+      { codeTypeId: 'area', codeValueId: 'gf' },
+      { codeTypeId: 'trade', codeValueId: 'civ' },
+    ],
+  });
+
+  beforeEach(() => {
+    h.extra = [CODED];
+    h.createClone.mockImplementation(() => Promise.resolve(clone('clone-1')));
+    // The codes write answers the clone at its NEXT version, with the codes it was given.
+    h.writeCodes.mockImplementation((input: { activities: { id: string }[] }) =>
+      Promise.resolve(input.activities.map((a) => ({ ...clone(a.id), version: 7 }))),
+    );
+  });
+
+  it('writes the source’s codes once, between the creates and the carriage', async () => {
+    const order: string[] = [];
+    h.createClone.mockImplementation(() => {
+      order.push('create');
+      return Promise.resolve(clone('clone-1'));
+    });
+    h.writeCodes.mockImplementation((input: { activities: { id: string }[] }) => {
+      order.push('codes');
+      return Promise.resolve(input.activities.map((a) => ({ ...clone(a.id), version: 7 })));
+    });
+    h.carry.mockImplementation(() => {
+      order.push('carry');
+      return Promise.resolve({ skipped: [] });
+    });
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.duplicateActivities([ACTIVITY, CODED]);
+    });
+    expect(order).toEqual(['create', 'create', 'codes', 'carry', 'carry']);
+    expect(h.writeCodes).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends only the clones whose source has codes, at the clone’s version and with the source’s codes', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.duplicateActivities([ACTIVITY, CODED]);
+    });
+    expect(h.writeCodes).toHaveBeenCalledExactlyOnceWith({
+      activities: [
+        {
+          id: 'clone-1',
+          version: 1,
+          codes: [
+            { codeTypeId: 'area', codeValueId: 'gf' },
+            { codeTypeId: 'trade', codeValueId: 'civ' },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('carries steps and resources at the version the codes write returned', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.duplicateActivities([CODED]);
+    });
+    expect(h.carry).toHaveBeenCalledWith(expect.objectContaining({ cloneVersion: 7 }));
+  });
+
+  it('writes nothing when no source carries codes', async () => {
+    h.extra = [];
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.duplicateActivities([ACTIVITY]);
+    });
+    expect(h.writeCodes).not.toHaveBeenCalled();
+    expect(h.carry).toHaveBeenCalledWith(expect.objectContaining({ cloneVersion: 1 }));
+  });
+
+  it('rolls every clone back, at the returned versions, when the codes write fails — and carries nothing', async () => {
+    h.writeCodes.mockRejectedValue(
+      new ApiFetchError(422, { code: 'X', message: 'That value was deleted.' }),
+    );
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    let outcome: Awaited<ReturnType<typeof result.current.duplicateActivities>> | undefined;
+    await act(async () => {
+      outcome = await result.current.duplicateActivities([CODED]);
+    });
+    expect(outcome).toMatchObject({ applied: false, conflict: 'That value was deleted.' });
+    expect(h.carry).not.toHaveBeenCalled();
+    expect(h.bulkDelete).toHaveBeenCalledExactlyOnceWith({
+      activities: [{ id: 'clone-1', version: 1 }],
+    });
+    expect(h.release).toHaveBeenCalledTimes(1);
+    expect(h.record).not.toHaveBeenCalled();
+  });
+
+  it('rolls every clone back, at the versions the codes write returned, when the carriage fails', async () => {
+    h.carry.mockRejectedValue(new ApiFetchError(409, { code: 'CONFLICT', message: 'clash' }));
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.duplicateActivities([CODED]);
+    });
+    expect(h.bulkDelete).toHaveBeenCalledExactlyOnceWith({
+      activities: [{ id: 'clone-1', version: 7 }],
+    });
+    expect(h.record).not.toHaveBeenCalled();
   });
 });

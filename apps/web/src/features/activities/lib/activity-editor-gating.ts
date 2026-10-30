@@ -47,7 +47,7 @@ export interface ActivityEditorGatingInput {
 }
 
 export type ActivityWritePath =
-  ActivityScope | 'progress' | 'steps' | 'logic' | 'resources' | 'notes' | 'members';
+  ActivityScope | 'progress' | 'steps' | 'logic' | 'resources' | 'notes' | 'members' | 'codes';
 
 export interface ScopeGate {
   /** May the caller save this scope right now. */
@@ -132,6 +132,10 @@ export function deriveActivityEditorGating(input: ActivityEditorGatingInput): Ac
     // `parentId` edit already on the Scheduling tab), so this is **the same object**, and the
     // identity test says so rather than a comment claiming it.
     members: definition,
+    // Codes (P6 activity codes) are an activity write under the same role and pen as every definition
+    // scope: `PATCH …/activities/codes` needs `activity:update` and the pen. **The same object**, so
+    // "this epic changes no permission" is checked by the identity test rather than claimed.
+    codes: definition,
     // Notes are **not** pen-gated (ADR-0046) — annotating a plan is not editing its schedule, and a
     // Contributor may write one while a Planner holds the pen. Same role rule as progress, so it
     // reuses that gate object rather than restating it.

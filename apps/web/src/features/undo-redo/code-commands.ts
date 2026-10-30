@@ -1,7 +1,21 @@
-import type { CodeTypeSummary, CodeValueSummary } from '@repo/types';
+import type {
+  ActivityCodeAssignment,
+  ActivitySummary,
+  CodeTypeSummary,
+  CodeValueSummary,
+} from '@repo/types';
 
 import type { Command } from './commands';
-import { notApplicable, writeOrSetAside, type ReplayContext, type ReplayResult } from './replay';
+import {
+  checkActivities,
+  notApplicable,
+  UNNAMED_SUBJECT,
+  writeOrSetAside,
+  type ReplayContext,
+  type ReplayResult,
+} from './replay';
+
+import { ApiFetchError } from '@/lib/api/client';
 
 /**
  * The undo steps for a plan's **code types and values** (P6 activity codes, M3-T1; `m3-ui-design.md`
@@ -13,7 +27,7 @@ import { notApplicable, writeOrSetAside, type ReplayContext, type ReplayResult }
  * activity that carries the value — would be orphaned. A type's delete takes its values in one batch
  * and its restore brings back exactly those.
  *
- * What is NOT here: setting a value on activities (`activityCodesCommand`, M3-T3).
+ * Setting a value on activities is `activityCodesCommand`, at the end of this file.
  */
 
 export type RenameCodeTypeFn = (input: {
@@ -331,5 +345,121 @@ export function codeValueDeleteCommand(params: {
       if (row.shortCode !== deleted.shortCode) return notApplicable('changed', deleted.shortCode);
       return writeOrSetAside(deleted.shortCode, () => remove({ ...target, version: row.version }));
     },
+  };
+}
+
+export type WriteActivityCodesFn = (input: {
+  activities: {
+    id: string;
+    version: number;
+    codes: { codeTypeId: string; codeValueId: string | null }[];
+  }[];
+}) => Promise<ActivitySummary[]>;
+
+/** One type's change on one activity: the value ids on either side, `null` for "no value". */
+export interface ActivityCodeChange {
+  codeTypeId: string;
+  before: string | null;
+  after: string | null;
+}
+
+/** One activity a codes step touched, with the types it changed. */
+export interface ActivityCodesStep {
+  id: string;
+  /** For the strip's sentence when this is the only activity. */
+  name: string;
+  changes: readonly ActivityCodeChange[];
+}
+
+/** What a fresh row holds for a type: the value id, or `null` when it has none. */
+const heldValue = (row: ActivitySummary, codeTypeId: string): string | null =>
+  row.codes?.find((c: ActivityCodeAssignment) => c.codeTypeId === codeTypeId)?.codeValueId ?? null;
+
+/** The server refusing a value because it was deleted since, or is not of that type (422). */
+function isValueRefusal(err: unknown): boolean {
+  if (!(err instanceof ApiFetchError) || err.status !== 422) return false;
+  const reason = (err.error.details as { reason?: string } | undefined)?.reason ?? '';
+  return reason === 'CODE_VALUE_DELETED' || reason === 'CODE_VALUE_WRONG_TYPE';
+}
+
+/**
+ * Reverse **setting code values on activities** — the editor's Save codes and the bulk Set, one
+ * `PATCH …/activities/codes` and so one undo step (`m3-ui-design.md` §8.2).
+ *
+ * The check compares **only the types the step touched**, on every activity it named: a colleague who
+ * changed Trade after we set Area has not touched our step. A deleted value reads as absent in `codes`,
+ * so the usual way a deleted value shows up here is as `changed`. The 422 the server answers when a
+ * value is deleted between the check and the write is the race that remains; it is a set-aside, not
+ * the keep-the-stack throw ADR-0201 D4 gives a deleted calendar, because a deleted value **can** be
+ * brought back from Codes… and the planner can then set it again by hand.
+ *
+ * Both directions write the CURRENT version of each row. Codes are `NOT_INPUT` to the engine, so the
+ * step never asks for a recalculation (`affectsSchedule: false`).
+ */
+export function activityCodesCommand(params: {
+  steps: readonly ActivityCodesStep[];
+  label: string;
+  /** Names for the value ids the step mentions, for the set-aside sentence. */
+  valueNames: ReadonlyMap<string, string>;
+  write: WriteActivityCodesFn;
+}): Command {
+  const { steps, label, valueNames, write } = params;
+  const subject = steps.length === 1 && steps[0] !== undefined ? steps[0].name : UNNAMED_SUBJECT;
+  const replay = async (
+    ctx: ReplayContext,
+    expect: 'before' | 'after',
+    target: 'before' | 'after',
+  ): Promise<ReplayResult> => {
+    const checked = await checkActivities(
+      ctx,
+      steps.map((step) => ({ id: step.id, name: step.name, expect: {} })),
+    );
+    if (!checked.ok) return checked.result;
+    for (const step of steps) {
+      const row = checked.rows.get(step.id);
+      if (row === undefined) return notApplicable('gone', step.name);
+      for (const change of step.changes) {
+        if (heldValue(row, change.codeTypeId) !== change[expect]) {
+          return notApplicable('changed', step.name);
+        }
+      }
+    }
+    const activities = steps.flatMap((step) => {
+      const row = checked.rows.get(step.id);
+      return row === undefined
+        ? []
+        : [
+            {
+              id: step.id,
+              version: row.version,
+              codes: step.changes.map((c) => ({
+                codeTypeId: c.codeTypeId,
+                codeValueId: c[target],
+              })),
+            },
+          ];
+    });
+    const targets = new Set(
+      steps.flatMap((step) => step.changes.flatMap((c) => (c[target] === null ? [] : [c[target]]))),
+    );
+    const only = targets.size === 1 ? [...targets][0] : undefined;
+    // One named value is quoted like the sibling clauses' subjects; several (or an unnamed one) are
+    // "A value", because naming one of them would be a guess.
+    const known = only === undefined ? undefined : valueNames.get(only);
+    const valueName = known === undefined ? 'A value' : `“${known}”`;
+    try {
+      return await writeOrSetAside(subject, () => write({ activities }));
+    } catch (err) {
+      // `writeOrSetAside` set aside the 409 and 404 and rethrew everything else, so this sees the 422.
+      if (isValueRefusal(err)) return notApplicable('value-deleted', valueName);
+      throw err;
+    }
+  };
+  return {
+    label,
+    subjects: steps.map((step) => step.id),
+    affectsSchedule: false,
+    undo: (ctx) => replay(ctx, 'after', 'before'),
+    redo: (ctx) => replay(ctx, 'before', 'after'),
   };
 }

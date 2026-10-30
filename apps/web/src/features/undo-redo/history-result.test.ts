@@ -31,3 +31,38 @@ describe('calendarDeletedDetail (ADR-0201 D4)', () => {
     );
   });
 });
+
+describe('a code step whose value was deleted since', () => {
+  const setAside = {
+    reason: 'value-deleted',
+    subjectName: '“Level 1”',
+    nextLabel: 'Set Trade on “Pour”',
+  } as const;
+
+  it('names the value and the way back, then says the step was skipped', () => {
+    expect(
+      historyResultMessage({
+        direction: 'undo',
+        outcome: 'set-aside',
+        label: 'Set Area on “Piling”',
+        setAside,
+      }),
+    ).toBe(
+      'Couldn’t undo set Area on “Piling” — “Level 1” was deleted. Restore it in Codes… to set it again. That step was skipped. Undo again to continue with set Trade on “Pour”.',
+    );
+  });
+
+  it('reads as one sentence inside an undo-to-here run', () => {
+    expect(
+      historyResultMessage({
+        direction: 'undo',
+        outcome: 'set-aside',
+        label: 'Set Area on “Piling”',
+        setAside,
+        steps: { done: 1, total: 3 },
+      }),
+    ).toBe(
+      'Undid 1 of 3 — stopped at set Area on “Piling”: “Level 1” was deleted. Restore it in Codes… to set it again.',
+    );
+  });
+});

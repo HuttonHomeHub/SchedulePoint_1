@@ -28,6 +28,7 @@ export function SwimlaneBulkAssignBar({
   onDone,
   onClear,
   companion = false,
+  children,
 }: {
   assignment: SwimlaneAssignment;
   /** The ticked activity ids; the bar renders nothing when empty. */
@@ -40,12 +41,26 @@ export function SwimlaneBulkAssignBar({
   onDone: () => void;
   /** The user dismissed the selection without moving. */
   onClear: () => void;
-  /**
-   * Another bar over the same selection already states the count and offers Clear selection (the WBS
-   * assign bar, when the plan has summaries), so this one leaves both out rather than say them twice.
-   */
-  companion?: boolean;
-}): React.ReactElement | null {
+} & (
+  | {
+      companion?: false;
+      /**
+       * Further rows over the same selection, inside this bar's container (the table's Codes row), so
+       * the count and Clear selection are stated once for the whole bar.
+       */
+      children?: React.ReactNode;
+    }
+  | {
+      /**
+       * Another bar over the same selection already states the count and offers Clear selection (the
+       * WBS assign bar, when the plan has summaries), so this one leaves both out rather than say them
+       * twice. A companion is a row in that bar's container and has no rows of its own: `children` is
+       * not accepted, so none can be dropped silently.
+       */
+      companion: true;
+      children?: never;
+    }
+)): React.ReactElement | null {
   const headingId = useId();
   if (ids.length === 0) return null;
   return (
@@ -75,6 +90,7 @@ export function SwimlaneBulkAssignBar({
         // One reason at a time: the pen's reason, when there is one, is the status line's.
         hint={assignment.shown || !gate.writable ? undefined : <p>{SWIMLANES_OFF_MOVE_REASON}</p>}
       />
+      {children}
       {companion ? null : (
         <div>
           <Button type="button" variant="ghost" size="sm" onClick={onClear}>

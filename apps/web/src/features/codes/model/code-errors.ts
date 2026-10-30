@@ -9,8 +9,8 @@ function reasonOf(error: ApiFetchError): string {
 /**
  * A refused code write in plain words, **naming the action** ("Could not delete L1: …"), because a
  * bare server sentence ("Version conflict.") says neither what was attempted nor what to do. `action`
- * completes "Could not …". Anything unrecognised keeps the server's own sentence after the action, so
- * nothing is lost and nothing is invented.
+ * completes "Could not …". Anything unrecognised gets one plain sentence rather than the server's own, which is
+ * written for a developer.
  *
  * `subject` is the name of the thing the write was about — the type for a type write, and the type
  * the value belongs to for a value write — and is only used where a sentence has to name it.
@@ -36,13 +36,18 @@ export function codeErrorText(action: string, error: unknown, subject?: string):
     if (/CODE_TYPE_IS_SWIMLANE_SOURCE/.test(reason)) {
       return `Could not ${action}: the swimlanes are made from ${subject ?? 'this code type'}. Choose another swimlane source first.`;
     }
+    if (/CODE_VALUE_DELETED|CODE_VALUE_WRONG_TYPE/.test(reason)) {
+      return `Could not ${action}: that value was deleted. Choose another, or restore it in Codes…`;
+    }
     if (/PARENT_DELETED/.test(reason)) {
       return `Could not ${action}: restore ${subject ?? 'its code type'} first.`;
     }
     if (error.status === 409 || error.status === 404) {
       return `Could not ${action}: the codes were changed by someone else. The list has been refreshed, so check it and try again.`;
     }
-    if (error.status === 422) return `Could not ${action}: ${error.message}`;
+    if (/DUPLICATE_CODES_/.test(reason)) {
+      return `Could not ${action}: the same activity or code type was named twice. Reload the page and try again.`;
+    }
   }
   // Anything else (a 500, a 403, a dropped connection) has no sentence meant for a planner.
   return `Could not ${action}: something went wrong. Try again.`;

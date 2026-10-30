@@ -21,6 +21,7 @@ import {
   useDissolveSummary,
 } from '@/features/activities';
 import { ActivityHistoryPanel } from '@/features/activity-history';
+import { ActivityCodesSection } from '@/features/codes';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
 import { WbsSwimlaneField } from '@/features/swimlanes';
@@ -239,6 +240,21 @@ export function ActivityCrudDialogs({
         {...(model.editorIntent ? { intent: model.editorIntent } : {})}
         {...(intended
           ? {
+              // The Codes section of General (P6 activity codes, M3-T3): its own scope and its own
+              // Save, drawn here because the editor must not import the codes feature. The session
+              // owns the working state; the section does the write and records the one undo step.
+              codesSlot: (state: React.ComponentProps<typeof ActivityCodesSection>['state']) => (
+                <ActivityCodesSection
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  state={state}
+                  record={model.recordCodeEdit}
+                />
+              ),
+            }
+          : {})}
+        {...(intended
+          ? {
               // The History tab (ADR-0174). Unflagged (ADR-0088 D1), and composed here because the
               // panel reads the plan's calendars and currency and this root is where the editor's
               // other cross-feature panels are wired. The day factor is the one the Duration field
@@ -246,6 +262,7 @@ export function ActivityCrudDialogs({
               historySlot: (
                 <ActivityHistoryPanel
                   orgSlug={orgSlug}
+                  planId={planId}
                   activityId={intended.id}
                   activityCreatedAt={intended.createdAt}
                   context={{

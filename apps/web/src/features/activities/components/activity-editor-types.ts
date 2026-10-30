@@ -5,7 +5,7 @@ import type {
   DependencySummary,
 } from '@repo/types';
 
-import type { ActivityEditorGating } from '../lib/activity-editor-gating';
+import type { ActivityEditorGating, ScopeGate } from '../lib/activity-editor-gating';
 import type { ActivityEditorIntent } from '../lib/activity-editor-intent';
 import type { ProgressFormValues } from '../schemas/activity-schemas';
 import type { StepsFormValues } from '../schemas/step-schemas';
@@ -108,6 +108,51 @@ export interface ActivityEditorDialogProps {
    * hand-made swimlanes (source `NONE`) gets.
    */
   swimlaneSlot?: (state: { generalDirty: boolean }) => React.ReactNode;
+  /**
+   * The **Codes** section of the General tab (P6 activity codes, M3-T3): one picker per code type, with
+   * a Save of its own. A slot for the reason the History panel is one — it reads the plan's code types
+   * and values, and this feature must not import the codes feature sideways.
+   *
+   * **It is its own write scope** (ADR-0060 §3), not a field of "Save general": codes are written by
+   * `PATCH …/activities/codes`, a different endpoint that bumps the same `version`, and one button over
+   * two endpoints is the two-phase write that ADR refuses. So it is rendered after the General form,
+   * like {@link swimlaneSlot}, and the session — not the slot — owns its working state, so the tab's
+   * unsaved dot, the close confirmation and the navigation guard count it like any other scope.
+   * Absent ⇒ no section, which is what a host without the codes feature wants.
+   */
+  codesSlot?: (state: ActivityCodesSlotState) => React.ReactNode;
+}
+
+/**
+ * What the session hands the Codes section: the activity, the gate, the working state and the hooks
+ * that keep it honest. The slot does the write (it holds the codes feature) and reports back through
+ * `begin`, `succeeded` and `failed`, so a Save's busy, saved and failed states are the session's.
+ */
+export interface ActivityCodesSlotState {
+  /** The row as the editor holds it now. Its `version` is what a codes save sends: read at press time. */
+  activity: ActivitySummary;
+  /** `gating.codes`: by identity the `definition` gate. */
+  gate: ScopeGate;
+  /**
+   * The planner's unsaved choices, by code type id: a value id, or `null` for None. A type with no
+   * entry is untouched. An entry equal to what is saved is not a change.
+   */
+  draft: Readonly<Record<string, string | null>>;
+  choose: (codeTypeId: string, value: string | null) => void;
+  /** At least one choice differs from what is saved. */
+  dirty: boolean;
+  /** This Save is in flight. */
+  saving: boolean;
+  /** Another definition scope's save is in flight on the same row, so this Save waits for its version. */
+  otherSaveInFlight: boolean;
+  /** Saved and not edited since. */
+  saved: boolean;
+  /** The last save's failure, in words. */
+  error: string | null;
+  begin: () => void;
+  /** `sent` is what the save wrote; choices made while it ran are kept. */
+  succeeded: (sent: ReadonlyMap<string, string | null>) => void;
+  failed: (message: string) => void;
 }
 
 /** What the frame can ask of the session it hosts: close the way the footer Close does. */

@@ -89,6 +89,8 @@ function setAsideClause(setAside: SetAside): string {
       return `“${setAside.subjectName}” was already brought back`;
     case 'unfiled':
       return `“${setAside.subjectName}” is back, but its activities could not be moved back under it`;
+    case 'value-deleted':
+      return `${setAside.subjectName} was deleted. Restore it in Codes… to set it again`;
   }
 }
 
@@ -130,6 +132,11 @@ export function historyResultMessage(result: HistoryResult | PostedHistoryResult
         undo && setAside.nextLabel !== null
           ? ` ${historyPhrase('Undo again to continue with', setAside.nextLabel)}.`
           : '';
+      // This clause is two sentences (what happened, and the way back), so it cannot take the
+      // ", so that step was skipped" tail the one-clause reasons share.
+      if (setAside.reason === 'value-deleted') {
+        return `${head} — ${setAsideClause(setAside)}. That step was skipped.${next}`;
+      }
       return `${head} — ${setAsideClause(setAside)}, so that step was skipped.${next}`;
     }
     case 'failed':

@@ -180,14 +180,34 @@ export function codesServer(
         const method = init?.method ?? 'GET';
         const body: unknown = init?.body ? JSON.parse(init.body as string) : undefined;
         server.requests.push(`${method} ${path}`);
-        server.writes.push({ method, path, body });
-        if (server.failNext) {
+        if (method !== 'GET') server.writes.push({ method, path, body });
+        if (server.failNext && method !== 'GET') {
           const error = server.failNext;
           server.failNext = null;
           return Promise.reject(error);
         }
         const tail = path.replace(/^.*\/plans\/p1\//, '');
         let m: RegExpExecArray | null;
+        // Naming ids (`GET …/code-values?id=a&id=b`): deleted values and values of deleted types are
+        // named too, and an id nothing holds is simply absent, as on the server.
+        if (method === 'GET' && (m = /^code-values\?(.+)$/.exec(tail))) {
+          const ids = new URLSearchParams(m[1]).getAll('id');
+          const found = ids.flatMap((id) => {
+            for (const [typeId, list] of values) {
+              const row = list.find((v) => v.id === id);
+              if (row === undefined) continue;
+              const type = typeOf(typeId);
+              return [{ ...row, codeTypeName: type.name, codeTypeDeletedAt: type.deletedAt }];
+            }
+            return [];
+          });
+          return Promise.resolve(found);
+        }
+        // The codes write: records the request and answers each named row at its next version.
+        if (method === 'PATCH' && tail === 'activities/codes') {
+          const rows = (body as { activities: { id: string; version: number }[] }).activities;
+          return Promise.resolve(rows.map((row) => ({ id: row.id, version: row.version + 1 })));
+        }
         if (method === 'POST' && tail === 'code-types') {
           const t = aType(`new-${String(next++)}`, (body as { name: string }).name, types.length);
           types.push(t);

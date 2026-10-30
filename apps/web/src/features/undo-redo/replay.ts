@@ -1,4 +1,5 @@
 import type {
+  ActivityCodeAssignment,
   ActivityStep,
   ActivitySummary,
   CodeTypeSummary,
@@ -34,9 +35,19 @@ import { ApiFetchError } from '@/lib/api/client';
  * - `already-restored` — undoing a dissolve whose restore batch is already consumed (restored elsewhere).
  * - `unfiled` — undoing a dissolve: the summary was put back but its activities could not be moved back
  *   under it. The one reason that says something was written, so the planner is not told "nothing changed".
+ * - `value-deleted` — a code step whose target value has been deleted since (the server's 422
+ *   `CODE_VALUE_DELETED` / `CODE_VALUE_WRONG_TYPE`). Unlike a deleted activity it is restorable from
+ *   Codes…, so the strip says where the way back is (`m3-ui-design.md` §8.2).
  */
 export type NotApplicableReason =
-  'changed' | 'gone' | 'parent-deleted' | 'duplicate' | 'cycle' | 'unfiled' | 'already-restored';
+  | 'changed'
+  | 'gone'
+  | 'parent-deleted'
+  | 'duplicate'
+  | 'cycle'
+  | 'unfiled'
+  | 'already-restored'
+  | 'value-deleted';
 
 export type ReplayResult =
   | { readonly kind: 'applied' }
@@ -100,6 +111,21 @@ function comparable(value: unknown): unknown {
   return value === undefined ? null : value;
 }
 
+/**
+ * Whether two `codes` lists name the same value for every type. An absent list and an empty one are
+ * the same answer (the key is absent on a plan with no code type), and order is not part of it.
+ */
+export function sameCodes(
+  a: readonly ActivityCodeAssignment[] | undefined,
+  b: readonly ActivityCodeAssignment[] | undefined,
+): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) return false;
+  const held = new Map(left.map((c) => [c.codeTypeId, c.codeValueId] as const));
+  return right.every((c) => held.get(c.codeTypeId) === c.codeValueId);
+}
+
 /** The named fields of a row, as a plain object — what a step expects to find, or wrote. */
 export function pick<T extends object, K extends keyof T>(row: T, keys: readonly K[]): Pick<T, K> {
   const out = {} as Pick<T, K>;
@@ -109,8 +135,14 @@ export function pick<T extends object, K extends keyof T>(row: T, keys: readonly
 
 /** Whether every expected field holds its expected value in `row`. Only the named fields are read. */
 export function matches<T extends object>(row: T, expected: Partial<T>): boolean {
-  return (Object.keys(expected) as (keyof T)[]).every(
-    (key) => comparable(row[key]) === comparable(expected[key]),
+  return (Object.keys(expected) as (keyof T)[]).every((key) =>
+    // `codes` is a list, and `===` on two lists is identity: it would refuse every row.
+    key === 'codes'
+      ? sameCodes(
+          row[key] as readonly ActivityCodeAssignment[] | undefined,
+          expected[key] as readonly ActivityCodeAssignment[] | undefined,
+        )
+      : comparable(row[key]) === comparable(expected[key]),
   );
 }
 

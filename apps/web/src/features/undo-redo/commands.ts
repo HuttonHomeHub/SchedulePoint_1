@@ -2102,11 +2102,16 @@ export function pasteActivitiesCommand(params: {
   let batchId: string | null = null;
   // What the clones were left with. Duration is left out: carrying a clone's resources recomputes it
   // after the row is saved (ADR-0040), so the saved row is not the final word on it.
+  // Codes ride in the expectation too (P6 activity codes, M3-T3): a paste within a plan keeps them, so a
+  // colleague's later change to a clone's codes is an edit that sets the step aside, as any other is.
+  // Only the list and the codes write carry `codes`, so the restore's answer cannot say what the clones
+  // hold again; the codes they were left with are remembered instead (a delete never touches them).
+  const leftWith = new Map(params.created.map((row) => [row.id, row.codes ?? []] as const));
   const stateOf = (rows: readonly ActivitySummary[]) =>
     rows.map((row) => ({
       id: row.id,
       name: row.name,
-      expect: definitionState(row, ['durationMinutes']),
+      expect: { ...definitionState(row, ['durationMinutes']), codes: leftWith.get(row.id) ?? [] },
     }));
   let expected = stateOf(params.created);
   return {

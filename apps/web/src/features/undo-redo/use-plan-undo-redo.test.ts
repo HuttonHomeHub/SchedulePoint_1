@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { activityCodesCommand } from './code-commands';
 import { autoArrangeCommand, dependencyEditCommand, relaneCommand, type Command } from './commands';
 import {
   REDO_FAILED_MESSAGE,
@@ -17,6 +18,7 @@ import { usePlanUndoRedo } from './use-plan-undo-redo';
 import { activitiesQueryOptions } from '@/features/activities/api/use-activities';
 import { ApiFetchError } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
+import { aType, aValue } from '@/test/codes-server';
 import { aDependency, detailReader, fakePlanServer, pagedReader } from '@/test/fake-plan-server';
 
 // The replay reads the plan through `fetchQuery`; the one test that exercises it answers from a fake.
@@ -908,5 +910,63 @@ describe('usePlanUndoRedo — undo and redo to a chosen step (undo-redo M7)', ()
     const entries = vi.fn().mockReturnValue({ undo: ['A'], redo: [] });
     const { result } = setup(hist({ entries }));
     expect(result.current.entries()).toEqual({ undo: ['A'], redo: [] });
+  });
+});
+
+/**
+ * **The same check, whichever way it reads** (`m3-ui-design.md` F3). A replay reads up to five rows
+ * through the single-activity endpoint and more through the plan list; the codes check compares
+ * `codes`, so both reads must carry it or the answer would depend on how many rows a step touched.
+ */
+describe('usePlanUndoRedo — a codes step reads the same codes by detail and by list', () => {
+  const six = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'];
+
+  /** Undo a Set-Area step over `ids` against a plan whose six activities hold `held`. */
+  async function undoing(ids: string[], held: string | null) {
+    const server = fakePlanServer({
+      codeTypes: [aType('area', 'Area', 0)],
+      codeValues: [aValue('l1', 'area', 'L1', 0), aValue('l2', 'area', 'L2', 1)],
+      activities: six.map((id) =>
+        anActivity({
+          id,
+          name: id,
+          codes: held === null ? [] : [{ codeTypeId: 'area', codeValueId: held }],
+        }),
+      ),
+    });
+    reader.current = pagedReader(server);
+    reader.one = detailReader(server);
+    const command = activityCodesCommand({
+      steps: ids.map((id) => ({
+        id,
+        name: id,
+        changes: [{ codeTypeId: 'area', before: 'l1', after: 'l2' }],
+      })),
+      label: 'Set Area',
+      valueNames: new Map(),
+      write: server.mutations.writeActivityCodes,
+    });
+    let outcome: unknown;
+    const undo = vi.fn(async (ctx: Parameters<PlanEditHistory['undo']>[0]) => {
+      outcome = await command.undo(ctx);
+      return applied(command);
+    });
+    const { result, announce } = setup(fakeHistory({ undo }));
+    act(() => result.current.undo());
+    await waitFor(() => expect(announce).toHaveBeenCalled());
+    return outcome;
+  }
+
+  it('answers "applied" for one row (detail) and for six (list) when the codes are as the step left them', async () => {
+    expect(await undoing(['a1'], 'l2')).toEqual({ kind: 'applied' });
+    expect(await undoing(six, 'l2')).toEqual({ kind: 'applied' });
+  });
+
+  it('answers "changed" for both when the codes are not as the step left them', async () => {
+    expect(await undoing(['a1'], null)).toMatchObject({
+      kind: 'not-applicable',
+      reason: 'changed',
+    });
+    expect(await undoing(six, null)).toMatchObject({ kind: 'not-applicable', reason: 'changed' });
   });
 });
