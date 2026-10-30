@@ -269,6 +269,133 @@ describe.skipIf(!hasDatabase)('External-Guest swimlanes (e2e)', () => {
     },
   );
 
+  describe('swimlanes made from a code (p6-activity-codes M4-T6, owner answer 3)', () => {
+    /** Area with Ground floor, Level 1, Level 2 (nobody carries it) and Roof; five activities. */
+    async function codedPlan() {
+      const { actor, planId } = await setup();
+      const typeRes = await actor.agent
+        .post(`${planUrl(planId)}/code-types`)
+        .send({ name: 'Area' })
+        .expect(201);
+      const typeId = typeRes.body.data.id as string;
+      const value = async (shortCode: string, description?: string): Promise<string> =>
+        (
+          await actor.agent
+            .post(`${planUrl(planId)}/code-types/${typeId}/values`)
+            .send({ shortCode, ...(description === undefined ? {} : { description }) })
+            .expect(201)
+        ).body.data.id as string;
+      const gf = await value('GF', 'Ground floor');
+      const l1 = await value('L1');
+      const l2 = await value('L2', 'Level 2');
+      const rf = await value('RF', 'Roof');
+      const dig = await createActivity(actor, planId, 'Dig');
+      const pour = await createActivity(actor, planId, 'Pour');
+      const roof = await createActivity(actor, planId, 'Roof deck');
+      const snag = await createActivity(actor, planId, 'Snagging');
+      const stray = await createActivity(actor, planId, 'Stray');
+      const version = async (id: string): Promise<number> =>
+        (await prisma.activity.findUniqueOrThrow({ where: { id } })).version;
+      const set = async (id: string, codeValueId: string): Promise<void> => {
+        await actor.agent
+          .patch(`${planUrl(planId)}/activities/codes`)
+          .send({
+            activities: [
+              { id, version: await version(id), codes: [{ codeTypeId: typeId, codeValueId }] },
+            ],
+          })
+          .expect(200);
+      };
+      await set(dig.id, gf);
+      await set(pour.id, l1);
+      await set(roof.id, rf);
+      // A value only a WBS summary carries is not in use, so its band is not drawn.
+      const summary = await createActivity(actor, planId, 'Summary', { type: 'WBS_SUMMARY' });
+      await set(summary.id, l2);
+      await setSource(actor, planId, {
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneCodeTypeId: typeId,
+      });
+      const current = await version(pour.id);
+      await actor.agent
+        .patch(`${planUrl(planId)}/activities/codes`)
+        .send({
+          activities: [
+            { id: pour.id, version: current, codes: [{ codeTypeId: typeId, codeValueId: l1 }] },
+          ],
+          lanes: [{ id: pour.id, version: current, laneIndex: 3 }],
+          lanesCodeTypeId: typeId,
+        })
+        .expect(200);
+      return { actor, planId, typeId, gf, l1, l2, rf, dig, pour, roof, snag, stray, summary };
+    }
+
+    it('lists the values in use by name in value order, and names the last band "No <type>"', async () => {
+      const { actor, planId, gf, l1, rf } = await codedPlan();
+      const token = await mintToken(actor, planId);
+      const plan = await guestGet('/api/v1/share/plan', token).expect(200);
+      expect(plan.body.data.swimlanes).toEqual([
+        { id: gf, name: 'Ground floor' },
+        { id: l1, name: 'L1' },
+        { id: rf, name: 'Roof' },
+      ]);
+      expect(plan.body.data.noSwimlaneName).toBe('No Area');
+    });
+
+    it('places each activity by derived membership and lane, null for No <type>', async () => {
+      const { actor, planId, gf, l1, rf, dig, pour, roof, snag, summary } = await codedPlan();
+      const token = await mintToken(actor, planId);
+      const activities = await guestGet('/api/v1/share/activities', token).expect(200);
+      const byId = new Map(
+        (activities.body.data as GuestActivity[]).map((row): [string, GuestActivity] => [
+          row.id,
+          row,
+        ]),
+      );
+      expect(byId.get(dig.id)?.memberOfSwimlaneId).toBe(gf);
+      expect(byId.get(pour.id)).toMatchObject({ memberOfSwimlaneId: l1, swimlaneLaneIndex: 3 });
+      expect(byId.get(roof.id)?.memberOfSwimlaneId).toBe(rf);
+      // No value, and a summary: both in No Area.
+      expect(byId.get(snag.id)).toMatchObject({ memberOfSwimlaneId: null });
+      expect(byId.get(summary.id)).toMatchObject({ memberOfSwimlaneId: null });
+    });
+
+    it('never discloses a code: no type, value id of an undrawn band, short code, lane row or source', async () => {
+      const { actor, planId, typeId, l2 } = await codedPlan();
+      const token = await mintToken(actor, planId);
+      const plan = await guestGet('/api/v1/share/plan', token).expect(200);
+      const activities = await guestGet('/api/v1/share/activities', token).expect(200);
+      const wire = JSON.stringify([plan.body, activities.body]);
+      expect(wire).not.toContain(typeId);
+      // Level 2 is carried only by a summary, so it is not a band and its id never travels.
+      expect(wire).not.toContain(l2);
+      expect(wire).not.toContain('shortCode');
+      expect(
+        containsKey(
+          [plan.body, activities.body],
+          [
+            'codes',
+            'codeSwimlaneLanes',
+            'codeTypeId',
+            'codeValueId',
+            'swimlaneCodeTypeId',
+            ...FORBIDDEN_SWIMLANE_KEYS,
+          ],
+        ),
+      ).toBe(false);
+      expect(Object.keys(plan.body.data.swimlanes[0]).sort()).toEqual(['id', 'name']);
+    });
+
+    it('does not send noSwimlaneName for a hand-made plan', async () => {
+      const { actor, planId } = await setup();
+      await setSource(actor, planId, { swimlaneSource: 'MANUAL' });
+      await createSwimlane(actor, planId, 'Civil');
+      const token = await mintToken(actor, planId);
+      const plan = await guestGet('/api/v1/share/plan', token).expect(200);
+      expect(plan.body.data).not.toHaveProperty('noSwimlaneName');
+    });
+  });
+
   it('keeps the uniform 404 for a dead token on the plan view that now carries swimlanes', async () => {
     await guestGet('/api/v1/share/plan', 'not-a-real-token').expect(404);
   });

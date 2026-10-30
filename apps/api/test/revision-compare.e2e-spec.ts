@@ -636,6 +636,130 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       expect(data.linksUndrawable).toBe(1);
     });
 
+    describe('the frozen code of removed work (p6-activity-codes M4-T6)', () => {
+      /** A plan with Area (L1, L2), `doomed` in L1 at code lane 2, `kept` in L2; the source is as given. */
+      async function codedPlan(admin: Actor, bySource: 'ACTIVITY_CODE' | 'NONE') {
+        const planId = await makePlan(admin);
+        const base = `/api/v1/organizations/acme/plans/${planId}`;
+        const kept = await makeActivity(admin, planId, 'Frame', 5);
+        const doomed = await makeActivity(admin, planId, 'Site hoarding', 5);
+        const type = await admin.agent
+          .post(`${base}/code-types`)
+          .send({ name: 'Area' })
+          .expect(201);
+        const typeId = type.body.data.id as string;
+        const value = async (shortCode: string): Promise<string> =>
+          (
+            await admin.agent
+              .post(`${base}/code-types/${typeId}/values`)
+              .send({ shortCode })
+              .expect(201)
+          ).body.data.id as string;
+        const l1 = await value('L1');
+        const l2 = await value('L2');
+        const version = async (id: string): Promise<number> =>
+          (await prisma.activity.findUniqueOrThrow({ where: { id } })).version;
+        await admin.agent
+          .patch(`${base}/activities/codes`)
+          .send({
+            activities: [
+              {
+                id: kept,
+                version: await version(kept),
+                codes: [{ codeTypeId: typeId, codeValueId: l2 }],
+              },
+              {
+                id: doomed,
+                version: await version(doomed),
+                codes: [{ codeTypeId: typeId, codeValueId: l1 }],
+              },
+            ],
+          })
+          .expect(200);
+        const plan = await admin.agent.get(base).expect(200);
+        if (bySource === 'ACTIVITY_CODE') {
+          await admin.agent
+            .patch(base)
+            .send({
+              swimlaneSource: 'ACTIVITY_CODE',
+              swimlaneCodeTypeId: typeId,
+              version: plan.body.data.version,
+            })
+            .expect(200);
+          // The lane is stored against the basis the activity holds after the write, so the row
+          // restates its value; the same version in both lists is what the route requires.
+          const current = await version(doomed);
+          await admin.agent
+            .patch(`${base}/activities/codes`)
+            .send({
+              activities: [
+                { id: doomed, version: current, codes: [{ codeTypeId: typeId, codeValueId: l1 }] },
+              ],
+              lanes: [{ id: doomed, version: current, laneIndex: 2 }],
+              lanesCodeTypeId: typeId,
+            })
+            .expect(200);
+        }
+        await recalculate(admin, planId);
+        return { planId, typeId, l1, doomed, kept };
+      }
+
+      async function removedGhost(admin: Actor, planId: string, from: string, doomed: string) {
+        await admin.agent
+          .delete(`/api/v1/organizations/acme/activities/${doomed}`)
+          .expect((res) => {
+            if (res.status !== 200 && res.status !== 204) throw new Error(String(res.status));
+          });
+        await recalculate(admin, planId);
+        const res = await admin.agent.get(`${compareUrl(planId, from)}&include=ghosts`).expect(200);
+        return (res.body.data.ghosts as Record<string, unknown>[]).find(
+          (g) => g['activityId'] === doomed,
+        );
+      }
+
+      it('carries the frozen type, value and code lane of removed work from a code-sourced baseline', async () => {
+        const admin = await adminWithOrg();
+        const { planId, typeId, l1, doomed } = await codedPlan(admin, 'ACTIVITY_CODE');
+        const from = await capture(admin, planId, 'Rev A');
+        const ghost = await removedGhost(admin, planId, from, doomed);
+        expect(ghost).toMatchObject({
+          removed: true,
+          frozenCodeTypeId: typeId,
+          frozenCodeValueId: l1,
+          frozenCodeLane: { laneIndex: 2 },
+        });
+      });
+
+      it('says nothing about a code on a baseline frozen under another source, so the client counts it', async () => {
+        const admin = await adminWithOrg();
+        const { planId, doomed } = await codedPlan(admin, 'NONE');
+        const from = await capture(admin, planId, 'Rev A');
+        const ghost = await removedGhost(admin, planId, from, doomed);
+        expect(ghost).toMatchObject({ removed: true });
+        for (const key of ['frozenCodeTypeId', 'frozenCodeValueId', 'frozenCodeLane']) {
+          expect(ghost, key).not.toHaveProperty(key);
+        }
+      });
+
+      it('carries the frozen code only on removed work, and only when ghosts are asked for', async () => {
+        const admin = await adminWithOrg();
+        const { planId, kept, doomed } = await codedPlan(admin, 'ACTIVITY_CODE');
+        const from = await capture(admin, planId, 'Rev A');
+        await removedGhost(admin, planId, from, doomed);
+        const bare = await admin.agent.get(compareUrl(planId, from)).expect(200);
+        expect(JSON.stringify(bare.body)).not.toContain('frozenCode');
+        const live = await prisma.activity.findUniqueOrThrow({ where: { id: kept } });
+        await admin.agent
+          .patch(`/api/v1/organizations/acme/activities/${kept}`)
+          .send({ name: 'Frame, renamed', version: live.version })
+          .expect(200);
+        const res = await admin.agent.get(`${compareUrl(planId, from)}&include=ghosts`).expect(200);
+        for (const ghost of res.body.data.ghosts as Record<string, unknown>[]) {
+          if (ghost['removed'] === false) expect(ghost).not.toHaveProperty('frozenCodeTypeId');
+        }
+      });
+    });
+
     it('answers `existsLive` per row, for an activity in no delta list at all', async () => {
       // The client cannot infer this. A re-laned activity enters and leaves nothing, so it appears
       // in none of the delta's four lists — and inferring "not in the live plan" from that puts a
