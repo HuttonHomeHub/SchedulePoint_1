@@ -3,7 +3,7 @@
 - **Feature spec:** [`./m4-spec.md`](./m4-spec.md) — under the approved epic [`./spec.md`](./spec.md) §4.5
   and [`./plan.md`](./plan.md) M4. Design authorities: [`./m4-database-review.md`](./m4-database-review.md)
   and [`./m4-ui-design.md`](./m4-ui-design.md).
-- **Status:** Draft — awaiting owner approval (see the spec header; `check:spec-status` reads only
+- **Status:** Approved — by the product owner on 2026-10-30, owner questions 1–3 as recommended (see the spec header; `check:spec-status` reads only
   `spec.md`).
 - **Owner:** James Ewbank (product owner); built by the **builder** agent once approved (CLAUDE.md §19.14).
 - **Owner decisions (fixed):** `spec.md` Q1–Q11 (Q1 as the shipped fallback, `m2-record.md:90-97`); M3's

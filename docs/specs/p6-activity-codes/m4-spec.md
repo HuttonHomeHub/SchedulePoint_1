@@ -1,6 +1,6 @@
 # Feature Spec: P6 activity codes, M4 — swimlanes by a code
 
-- **Status:** Draft — awaiting owner approval. (The `check:spec-status` gate reads only `spec.md` in this
+- **Status:** Approved — by the product owner on 2026-10-30, with every recommended answer below. (The `check:spec-status` gate reads only `spec.md` in this
   directory; this file is M4's own spec, under the approved epic spec.)
 - **Author(s):** Feature Analyst (Claude Code), for James Ewbank (product owner)
 - **Date:** 2026-10-30
@@ -27,6 +27,10 @@
 ---
 
 ## Owner questions
+
+**Decided by the owner, 2026-10-30, all as recommended:** (1) keep drawing every band past 100,
+with the standing line; (2) Move to swimlane… offers the bands on screen plus "No <type>"; (3) a guest
+sees "No <type>" as the last band's name. The spec and plan are approved.
 
 Three questions. Each has a recommended answer; the plan is built to the recommendation unless you say
 otherwise. A **swimlane** is one of the horizontal bands the diagram is divided into. A **code** is a label
