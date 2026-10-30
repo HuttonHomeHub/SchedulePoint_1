@@ -364,6 +364,14 @@ describe.skipIf(!hasDatabase)('Plan swimlane source from a code (e2e, pen enforc
       expect(await planBody(actor, planId)).toMatchObject({ swimlaneCodeTypeId: null });
     });
 
+    it('reads a deleted type of ANOTHER plan as missing (404), not as the deleted-type 422', async () => {
+      const { actor, planId } = await seed();
+      const second = await makePlan(actor, 'acme', 'Second plan');
+      const foreign = await createType(actor, second, 'Other plan area');
+      await actor.agent.delete(`${typesUrl(second)}/${foreign.id}`).expect(204);
+      expect((await switchTo(actor, planId, toCode(foreign.id))).status).toBe(404);
+    });
+
     it('then refuses to delete the source type, with the sentence to act on', async () => {
       const { actor, planId, area } = await seed();
       await switchTo(actor, planId, toCode(area.id)).then((r) => expect(r.status).toBe(200));

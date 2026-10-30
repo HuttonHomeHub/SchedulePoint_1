@@ -194,9 +194,10 @@ export interface CaptureInput {
    */
   dependencies: CaptureDependencyRow[];
   /**
-   * The plan's swimlane source and WBS level at capture, read under the same lock as the rows
-   * (schema-design §13.4). Required: `ck_baselines_swimlane_snapshot_shape` refuses a `FULL`
-   * baseline without a source, and the pair is the live `ck_plans_swimlane_source_level` one.
+   * The plan's swimlane source, WBS level and code type at capture, read under the same lock as the
+   * rows (schema-design §13.4). Required: `ck_baselines_swimlane_snapshot_shape` refuses a `FULL`
+   * baseline without a source, and the triple is the live `ck_plans_swimlane_source_level` one
+   * (`codeTypeId` is set iff the source is `ACTIVITY_CODE`).
    */
   swimlane: { source: SwimlaneSource; wbsLevel: number | null; codeTypeId: string | null };
   /** Every lane row of every captured activity (see {@link CaptureLaneRow}). */

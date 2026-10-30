@@ -526,6 +526,7 @@ describe('GuestPlanViewDto', () => {
     'lockedBy',
     'swimlaneSource',
     'swimlaneWbsLevel',
+    'swimlaneCodeTypeId',
   ])('never exposes %s', (key) => {
     expect(dto).not.toHaveProperty(key);
   });

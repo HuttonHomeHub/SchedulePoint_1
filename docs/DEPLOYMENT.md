@@ -834,47 +834,91 @@ swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, thre
   retries every hour; nothing is lost, and the clear-out ships switched off. Its own imports never write
   codes, so its import rollback is unaffected.
 - **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), what breaks
-  depends on how far back you go.** Before rolling back, find out whether any plan holds one. If this
-  prints 0, nothing below applies:
+  depends on how far back you go.** Run every command from the stack folder (the one holding
+  `docker-compose.yml`, `/apps/schedulepoint` on the reference host). On the reference stack `<user>`
+  and `<db>` are both `app`. Work through these steps in order and stop at the first one that does not
+  say what it should.
 
-  ```sh
-  docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM plans WHERE swimlane_source = 'ACTIVITY_CODE';"
-  ```
+  1. **Back up and check the copy first** (ADR-0192). A restore never overwrites the live database;
+     if you ever need the copy, follow the steps in `docs/guides/back-up-and-restore.md` to switch to
+     the restored database.
 
-  - **Back to api 0.103.x or 0.102.2** (the images that already know the value): such a plan still
-    opens, but it draws no swimlanes. Choosing another swimlane source for it, and capturing a
-    baseline of it, both fail with a server error, because those images do not clear the plan's code.
-  - **Back to api 0.102.1 or earlier**: those images cannot read such a plan at all, which breaks it
-    and any list that loads it.
+     ```sh
+     docker compose run --rm backup now
+     docker compose run --rm backup check
+     ```
 
-  In both cases, with the API **and** web containers stopped (roll both images back together: a newer
-  web sends lane writes that an older API answers with a server error), save the list of plans and
-  their codes, then reset them:
+     The second command must end with `CHECK PASSED`. If it does not, stop here.
 
-  ```sh
-  docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 \
-    -c "COPY (SELECT id, swimlane_code_type_id FROM plans WHERE swimlane_source = 'ACTIVITY_CODE') TO STDOUT WITH CSV HEADER" \
-    > p6-code-swimlanes-$(date -u +%Y%m%dT%H%MZ).csv
-  docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL, version = version + 1, updated_at = now() WHERE swimlane_source = 'ACTIVITY_CODE';"
-  ```
+  2. **Find out whether anything is affected.** If this prints 0, nothing below applies and you can
+     roll back as usual:
 
-  The `UPDATE` reports how many plans it reset; that must equal the count above. `version` is raised so
-  an editor that still holds the old plan is told to refresh rather than overwriting it. Then pin the
-  previous `API_IMAGE_TAG` and `WEB_IMAGE_TAG` and run `docker compose up -d`. What is kept: every code,
-  every value and every assignment, and every code swimlane lane (`code_swimlane_lanes` is not touched),
-  so after rolling forward a planner chooses **Swimlanes… ▸ By code** again for each plan in the saved
-  file and the bars return to the lanes they had. What is lost: only the choice itself, until it is made
-  again. The reset writes no audit row (a swimlane source is not a governance setting), so note it where
-  the host's changes are recorded.
+     ```sh
+     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM plans WHERE swimlane_source = 'ACTIVITY_CODE';"
+     ```
 
-- **Baselines are never edited by this procedure.** A baseline captured on such a plan keeps
-  `swimlane_source = 'ACTIVITY_CODE'`, which api 0.102.2 and later read without trouble. **Going back to
-  api 0.102.1 or earlier once such a baseline exists has no clean route**: those images cannot read it,
-  and rewriting it would falsify a snapshot (ADR-0025). Check with
-  `SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';` (deleted baselines included,
-  because they come back on restore). If it is not 0, roll forward instead or, as a last resort, restore
-  the pre-update copy the backup service made before migrating (ADR-0192,
-  `docs/guides/back-up-and-restore.md`), which loses everything written since.
+     Deleted plans are counted on purpose: they come back if someone restores them, and they would
+     break in the same way. Write the number down; call it N.
+
+  3. **Check baselines, and decide how far back you can go.** Deleted baselines are counted on
+     purpose, because they come back on restore:
+
+     ```sh
+     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';"
+     ```
+
+     - **Going back to api 0.103.x or 0.102.2** (the images that already know the value): such a plan
+       still opens, but it draws no swimlanes. Those images fail with a server error when you change
+       that plan's swimlane source and when you capture a baseline of it. A baseline that froze the
+       code source is harmless to them, so a non-zero count here does not stop you.
+     - **Going back to api 0.102.1 or earlier** (inferred from the schema design, not run): those
+       images cannot read such a plan at all, which breaks it and any list that loads it, and they
+       cannot read such a baseline either. **If this count is not 0, stop.** Rewriting a baseline would
+       falsify a snapshot (ADR-0025), so there is no clean route back that far: roll forward instead
+       or, as a last resort, restore the pre-update copy the backup service made before migrating
+       (ADR-0192, the same guide), which loses everything written since.
+
+  4. **Stop the API and the web containers, and only those.** Never a bare `docker compose stop`: the
+     database must stay up. Roll both images back together, because a newer web sends lane writes that
+     an older API answers with a server error.
+
+     ```sh
+     docker compose stop api web
+     ```
+
+     Run the count from step 2 again. It must still be N.
+
+  5. **Save the list of affected plans, and check the file** before changing anything. The file lands
+     in the folder you are in:
+
+     ```sh
+     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 \
+       -c "COPY (SELECT id, swimlane_code_type_id FROM plans WHERE swimlane_source = 'ACTIVITY_CODE') TO STDOUT WITH CSV HEADER" \
+       > p6-code-swimlanes.csv && wc -l p6-code-swimlanes.csv
+     ```
+
+     The line count must be N plus 1 (the header). If it is not, or the command printed an error, stop:
+     nothing has been changed yet.
+
+  6. **Reset the plans.** This writes no audit row (a swimlane source is not a governance setting), so
+     note it where the host's changes are recorded:
+
+     ```sh
+     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL, version = version + 1, updated_at = now() WHERE swimlane_source = 'ACTIVITY_CODE';"
+     ```
+
+     It prints `UPDATE n`; n must equal N and the CSV's line count minus 1. The version goes up so
+     that anyone still holding the old plan in a browser is asked to reload before saving.
+
+  7. **Pin the previous images and start again.** Set the previous `API_IMAGE_TAG` and
+     `WEB_IMAGE_TAG` in the stack's `.env`, then `docker compose up -d`. With auto-update on, the pin
+     is what stops the newer image coming straight back.
+
+  What is kept: every code, value and assignment, and every code swimlane lane
+  (`code_swimlane_lanes` is not touched). After rolling forward, a planner chooses **Swimlanes… ▸ By
+  code** again for each plan in the saved file and the bars return to the lanes they had. What is
+  lost: only the choice itself, until it is made again.
+
 - **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
   both migrations already recorded in `_prisma_migrations` and does not re-create anything, the trap the
   milestone cross-calendar section above records for a marker row. PostgreSQL cannot drop an enum value

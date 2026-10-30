@@ -246,6 +246,8 @@ export class PlansService {
       dto.swimlaneWbsLevel !== undefined ||
       dto.swimlaneCodeTypeId !== undefined;
     if (carriesSwimlane) {
+      // Before the transaction and its plan lock on purpose (ADR-0028): the pen is a plain read, and a
+      // writer without it must be refused without queueing behind the lock.
       // Choosing where the swimlanes come from re-draws the diagram for everyone looking at it, so it
       // is a structural write like the swimlane routes themselves (spec §2, Permissions): the pen. A
       // rename or a scheduling option on the same route is not, and stays ungated.
