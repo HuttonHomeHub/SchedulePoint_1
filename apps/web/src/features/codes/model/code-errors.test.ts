@@ -33,6 +33,12 @@ describe('codeErrorText', () => {
     );
   });
 
+  it('says the plan’s swimlanes were changed, not that the codes were, when a lane write is refused', () => {
+    expect(codeErrorText('set Area', refusal(409, 'SWIMLANE_SOURCE_CHANGED'), 'Area')).toBe(
+      'Could not set Area: the plan’s swimlanes were changed by someone else. The plan has been refreshed, so check the diagram and try again.',
+    );
+  });
+
   it('says to restore the parent first when a restore is refused for a deleted parent', () => {
     expect(codeErrorText('restore L1', refusal(409, 'PARENT_DELETED'), 'Area')).toBe(
       'Could not restore L1: restore Area first.',

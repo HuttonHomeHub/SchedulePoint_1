@@ -15,7 +15,7 @@
     "surface": "components/ui/scope-save-bar.tsx"
   },
   "activities/create-activity.codes": {
-    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+    "surface": "components/layout/workspace/use-plan-workspace-model.ts — a bar drawn in a code swimlane is created carrying that band’s value (p6-activity-codes M4-T4)"
   },
   "activities/create-activity.constraintDate": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
@@ -108,13 +108,13 @@
     "surface": "features/codes/api/use-write-activity-codes.ts"
   },
   "activities/update-activity-codes.laneIndex": {
-    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+    "surface": "features/codes/model/use-set-activity-codes.ts — Move to swimlane…, Set code…, the table’s Set and the editor’s Save codes send the lanes a code swimlane needs (p6-activity-codes M4-T4)"
   },
   "activities/update-activity-codes.lanes": {
-    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+    "surface": "features/codes/model/use-set-activity-codes.ts — Move to swimlane…, Set code…, the table’s Set and the editor’s Save codes send the lanes a code swimlane needs (p6-activity-codes M4-T4)"
   },
   "activities/update-activity-codes.lanesCodeTypeId": {
-    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+    "surface": "features/codes/model/use-set-activity-codes.ts — Move to swimlane…, Set code…, the table’s Set and the editor’s Save codes send the lanes a code swimlane needs (p6-activity-codes M4-T4)"
   },
   "activities/update-activity-progress.actualFinish": {
     "surface": "features/share/guest-api.ts"

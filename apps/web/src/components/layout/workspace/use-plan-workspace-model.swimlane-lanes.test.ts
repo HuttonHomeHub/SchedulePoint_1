@@ -618,6 +618,38 @@ describe('onTsldCreate with swimlane (create on the swimlane layout)', () => {
     expect(sent).not.toHaveProperty('swimlaneId');
   });
 
+  it('from a code creates the bar carrying that swimlane’s value, in the one request (M4)', async () => {
+    h.plan = { ...h.plan, swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'area' };
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldCreate(draw('l1'));
+    });
+    const sent = h.createPlaced.mock.calls[0]![0];
+    expect(sent).toMatchObject({
+      name: 'Fix',
+      codes: [{ codeTypeId: 'area', codeValueId: 'l1' }],
+    });
+    expect(sent).not.toHaveProperty('swimlaneId');
+    expect(sent).not.toHaveProperty('parentId');
+    // Its lane inside the band is still written, naming no swimlane: the server derives the basis.
+    expect(h.writeLanes.mock.calls[0]![0].positions[0]).toEqual({
+      id: 'new',
+      version: 1,
+      swimlane: { laneIndex: 1 },
+    });
+  });
+
+  it('from a code, "No <type>" carries no value', async () => {
+    h.plan = { ...h.plan, swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'area' };
+    const { result } = setup();
+    await act(async () => {
+      await result.current.onTsldCreate(draw(null));
+    });
+    const sent = h.createPlaced.mock.calls[0]![0];
+    expect(sent).not.toHaveProperty('codes');
+    expect(sent).not.toHaveProperty('swimlaneId');
+  });
+
   it('sends no swimlane for "No swimlane"', async () => {
     const { result } = setup();
     await act(async () => {

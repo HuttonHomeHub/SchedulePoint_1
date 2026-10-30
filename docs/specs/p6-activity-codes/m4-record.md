@@ -160,3 +160,36 @@ the gutter's 1,000 labels, or the listbox's 1,000 groups; those are the reviewer
 - **The plan-wide lane read waits for the activity list** (it is enabled only once the list is known to
   carry no lane for the type), so a code plan with no saved lanes pays a second round trip on first
   load. Defensible as built; recorded so it is not rediscovered.
+
+## 5. T4: writes under a code source (2026-10-30, the builder)
+
+**What now works for a plan whose swimlanes come from a code** (reached today only by setting the source
+through the API; T5 opens the entry point):
+
+- **Move to swimlane…** (selection bars, the table's bulk bar): one `PATCH …/activities/codes` carrying
+  the movers' new value and the lane of every bar the move places, neighbours it pins included; one
+  undo step. Its choices are the bands on screen and "No <type>" (owner answer 2).
+- **Set code…** (both diagram bars and the Gantt dock), **the table's Set <type>** and **the editor's
+  Save codes** carry the lanes when the changed type is the plan's source: the lanes are planned through a
+  context `features/codes` declares and the workspace root provides, so `features/tsld` gains no import.
+  A value nobody uses yet is planned as an empty band, a WBS summary and a bar that is not drawn are left
+  out of the lanes, and none of that can refuse a codes write.
+- **Undo and redo** plan the lanes again at replay against the picture as it is then, and send codes alone
+  once the plan's swimlanes are no longer made from the type. A 409 `SWIMLANE_SOURCE_CHANGED` reads the
+  plan again and sets the step aside ("the plan's swimlanes were changed after your edit").
+- The editor's Swimlane line is read-only; the table's and the Gantt's Swimlane columns name the value
+  (the Gantt cell read-only with its reason); a bar drawn in a band is created carrying that band's value.
+
+**Confirmed for the accessibility reviewer's T3 carry-forward.** The code swimlane edge note and the
+filing refusal both tell the planner to use **Move to swimlane…** or **Set code…**. Both now write for a
+code plan, so neither sentence is a dead end before T5 opens the entry point. What was run to establish
+it: unit and component suites for each path (`use-code-swimlane-assignment.test.tsx`,
+`use-set-activity-codes.test.tsx`, `CodeBulkAssignBar.test.tsx`, `code-commands.test.ts`,
+`code-lane-planning.test.ts`); the browser journey in `swimlanes-by-code.spec.ts` was **written and not
+run** by this builder (no database), so the orchestrator's `web:swimlanes` run is the remaining half of
+the evidence.
+
+**Known limit.** If the workspace has not yet read the type's values (or the activity list) when a Set
+code… is pressed, the planner answers `null` and the write carries codes alone; the lane for the mover
+is then derived, as it is for any member with no stored row. Nothing is refused and the next write
+materialises it.

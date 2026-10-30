@@ -4,6 +4,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
+import {
+  CodeSwimlaneLanePlannerProvider,
+  type CodeSwimlaneLanePlanner,
+} from '../model/code-swimlane-lanes';
+
 import { CodeBulkAssignBar } from './CodeBulkAssignBar';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
@@ -59,20 +64,23 @@ function wire(): void {
 
 function mount(
   props: Partial<React.ComponentProps<typeof CodeBulkAssignBar>> = {},
+  planner: CodeSwimlaneLanePlanner | null = null,
 ): ReturnType<typeof render> {
   return render(
     <QueryClientProvider client={queryClient}>
       <AnnouncerProvider>
-        <CodeBulkAssignBar
-          orgSlug="acme"
-          planId="p1"
-          activities={SELECTED}
-          gate={OPEN}
-          record={record}
-          onDone={onDone}
-          onClear={onClear}
-          {...props}
-        />
+        <CodeSwimlaneLanePlannerProvider value={planner}>
+          <CodeBulkAssignBar
+            orgSlug="acme"
+            planId="p1"
+            activities={SELECTED}
+            gate={OPEN}
+            record={record}
+            onDone={onDone}
+            onClear={onClear}
+            {...props}
+          />
+        </CodeSwimlaneLanePlannerProvider>
       </AnnouncerProvider>
     </QueryClientProvider>,
   );
@@ -293,5 +301,57 @@ describe('CodeBulkAssignBar', () => {
     const view = mount();
     await screen.findByRole('option', { name: 'Area', hidden: true });
     expect((await axe(view.container)).violations).toEqual([]);
+  });
+});
+
+describe('CodeBulkAssignBar while the swimlanes are made from a code', () => {
+  it('sends the lanes its planner chose, in the same request as the codes', async () => {
+    const planner = vi.fn<CodeSwimlaneLanePlanner>(() => ({
+      lanesCodeTypeId: 'area',
+      lanes: [
+        { id: 'a1', version: 3, laneIndex: 1 },
+        { id: 'z9', version: 7, laneIndex: 0 },
+      ],
+    }));
+    mount({}, planner);
+    await choose('Area', 'Roof');
+    await screen.findByText(/^Sets Area to Roof/);
+    fireEvent.click(screen.getByRole('button', { name: 'Set Area' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+
+    expect(server.writes).toHaveLength(1);
+    expect(server.writes[0]?.body).toMatchObject({
+      lanesCodeTypeId: 'area',
+      lanes: [
+        { id: 'a1', version: 3, laneIndex: 1 },
+        { id: 'z9', version: 7, laneIndex: 0 },
+      ],
+    });
+    // Asked once for what it showed and not again at the press: the lanes counted are the lanes sent.
+    expect(planner.mock.calls.every(([plan]) => plan.rows.length === 3)).toBe(true);
+  });
+
+  it('counts the lane-only rows against the 2,000-activity cap and shades the button', async () => {
+    const lanes = Array.from({ length: 1999 }, (_, i) => ({
+      id: `n${String(i)}`,
+      version: 1,
+      laneIndex: 0,
+    }));
+    mount({}, () => ({ lanesCodeTypeId: 'area', lanes }));
+    await choose('Area', 'Roof');
+    expect(await screen.findByText(/at a time/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set Area' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('sends no lanes when the planner has none, exactly as before', async () => {
+    mount({}, () => null);
+    await choose('Area', 'Roof');
+    await screen.findByText(/^Sets Area to Roof/);
+    fireEvent.click(screen.getByRole('button', { name: 'Set Area' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(server.writes[0]?.body).not.toHaveProperty('lanes');
   });
 });
