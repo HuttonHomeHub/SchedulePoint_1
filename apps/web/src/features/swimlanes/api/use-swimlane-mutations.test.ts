@@ -160,4 +160,42 @@ describe('the swimlane writes', () => {
       body: JSON.stringify({ swimlaneSource: 'MANUAL', version: 9 }),
     });
   });
+
+  it('names the code type only with a code source, and sends no lane and no level with it', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ id: 'p1', version: 10 });
+    const { wrapper } = setup();
+    const { result } = renderHook(() => useSetPlanSwimlaneSource('acme'), { wrapper });
+    await act(() =>
+      result.current.mutateAsync({
+        planId: 'p1',
+        version: 9,
+        source: 'ACTIVITY_CODE',
+        level: 2,
+        codeTypeId: 'area',
+      }),
+    );
+    expect(apiFetch).toHaveBeenLastCalledWith('/organizations/acme/plans/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneCodeTypeId: 'area',
+        version: 9,
+      }),
+    });
+    // Leaving the code names none; the server clears the one it holds.
+    await act(() =>
+      result.current.mutateAsync({
+        planId: 'p1',
+        version: 10,
+        source: 'MANUAL',
+        codeTypeId: 'area',
+      }),
+    );
+    expect(apiFetch).toHaveBeenLastCalledWith('/organizations/acme/plans/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ swimlaneSource: 'MANUAL', version: 10 }),
+    });
+    // One request per switch: no activity list, lane or code is read or written by it.
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
 });

@@ -40,6 +40,8 @@ import { ApiFetchError } from '@/lib/api/client';
  *   Codes…, so the strip says where the way back is (`m3-ui-design.md` §8.2).
  * - `swimlanes-changed` — a code step whose lanes the server refused (409 `SWIMLANE_SOURCE_CHANGED`)
  *   because a colleague switched the plan's swimlane source since the lanes were planned.
+ * - `code-not-choosable` — a swimlane source step naming a code whose values in use have since left what
+ *   swimlanes can show (the server's 422 `SWIMLANE_CODE_TYPE_INELIGIBLE`).
  */
 export type NotApplicableReason =
   | 'changed'
@@ -50,7 +52,8 @@ export type NotApplicableReason =
   | 'unfiled'
   | 'already-restored'
   | 'value-deleted'
-  | 'swimlanes-changed';
+  | 'swimlanes-changed'
+  | 'code-not-choosable';
 
 export type ReplayResult =
   | { readonly kind: 'applied' }

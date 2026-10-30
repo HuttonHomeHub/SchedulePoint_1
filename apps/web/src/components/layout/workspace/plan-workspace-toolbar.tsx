@@ -3066,6 +3066,9 @@ export function ToolbarPlanWorkspace({
                 planId={model.planId}
                 activities={model.activities.data}
                 gate={codesGate}
+                swimlaneSourceTypeId={
+                  plan.swimlaneSource === 'ACTIVITY_CODE' ? plan.swimlaneCodeTypeId : null
+                }
                 record={model.recordCodeEdit}
               />
             </Suspense>

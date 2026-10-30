@@ -120,11 +120,16 @@ export interface SetPlanSwimlaneSourceInput {
    * `WBS`, so a switch back to hand-made names no level.
    */
   level?: number | null;
+  /**
+   * The code type, sent only with source `ACTIVITY_CODE`. The server clears it when the source leaves
+   * `ACTIVITY_CODE`, so a switch back names none.
+   */
+  codeTypeId?: string | null;
 }
 
 /**
  * Write the plan's swimlane source (the setup dialog's last step, and the manage dialog's switch). A
- * targeted PATCH of the source, its level and the version, like `useSetPlanCalendar`, so it needs no plan form. Presentation only: it never
+ * targeted PATCH of the source, its level or code type and the version, like `useSetPlanCalendar`, so it needs no plan form. Presentation only: it never
  * marks the schedule stale (API.md "Swimlane placement"), so the schedule keys are left alone. The
  * returned plan goes straight into the detail cache so the next write sees the fresh `version`.
  */
@@ -138,6 +143,9 @@ export function useSetPlanSwimlaneSource(orgSlug: string) {
           swimlaneSource: input.source,
           ...(input.source === 'WBS' && input.level != null
             ? { swimlaneWbsLevel: input.level }
+            : {}),
+          ...(input.source === 'ACTIVITY_CODE' && input.codeTypeId != null
+            ? { swimlaneCodeTypeId: input.codeTypeId }
             : {}),
           version: input.version,
         }),

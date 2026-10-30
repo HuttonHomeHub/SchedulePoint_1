@@ -3,6 +3,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 
 import { swimlaneErrorText } from '../model/swimlane-errors';
 import { parseSwimlaneNames } from '../model/swimlane-names';
+import { useCodeSourcePicker } from '../model/use-code-source-picker';
 import type { SwimlaneActions, SwimlanePlanFacts } from '../model/use-swimlane-actions';
 
 import { SwimlaneSourceFields, type ChosenSource } from './SwimlaneSourceFields';
@@ -16,6 +17,7 @@ import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/featu
 export interface SwimlaneSetupDialogProps {
   open: boolean;
   onClose: () => void;
+  orgSlug: string;
   /** The plan, at the version last read: the source write is locked on it. */
   plan: SwimlanePlanFacts;
   /** The plan's active swimlanes now, so a name that is taken is named before the server refuses it. */
@@ -28,15 +30,16 @@ export interface SwimlaneSetupDialogProps {
 }
 
 /**
- * **Set up swimlanes** (swimlanes M2-T9 and M3-T1, feature-spec US-2 and US-4): by hand — type the
- * names, one per line — or one per WBS group at a level. **By hand is the default source**; only the
- * WBS level is preselected, to the shallowest level that has two groups, for a planner who chooses it.
+ * **Set up swimlanes** (swimlanes M2-T9 and M3-T1, feature-spec US-2 and US-4; p6-activity-codes M4):
+ * by hand — type the names, one per line — one per WBS group at a level, or one per value of a code.
+ * **By hand is the default source**; only the WBS level and the code are preselected (the shallowest
+ * level that has two groups, the first code that can be chosen), for a planner who chooses them.
  *
  * Confirming by hand does two writes in order: the swimlanes (appended in the order typed, one undo
  * step), then the plan's source. If the second fails the first stays, and the dialog says so and
  * retries **only** the source — pressing Set up again must not meet the swimlanes it just made as
- * "already exists". Confirming from the WBS is one write, the source and level, and is one undo step:
- * there are no swimlanes to make, they are the summaries.
+ * "already exists". Confirming from the WBS, or from a code, is one write — the source with its level
+ * or code — and is one undo step: there are no swimlanes to make, they are the summaries or the values.
  *
  * Working state (the text, the error, how far a confirm got) lives for one opening (ADR-0169): the
  * form is the dialog's child, which `Dialog` mounts only while open.
@@ -56,6 +59,7 @@ export function SwimlaneSetupDialog(props: SwimlaneSetupDialogProps): React.Reac
 
 function SetupForm({
   onClose,
+  orgSlug,
   plan,
   swimlanes,
   activities,
@@ -65,10 +69,23 @@ function SetupForm({
   const announce = useAnnounce();
   const errorId = useId();
   const reasonId = useId();
-  const [source, setSource] = useState<ChosenSource>('MANUAL');
+  const [chosenSource, setSource] = useState<ChosenSource>('MANUAL');
   const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
   const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
   const level = clampWbsLevel(pickedLevel, levels);
+  // `current` is null: Set up is only offered while no source is in use, so there is no code of the
+  // plan's own to hold selected.
+  const code = useCodeSourcePicker({
+    orgSlug,
+    planId: plan.id,
+    activities,
+    current: null,
+    chosen: chosenSource === 'ACTIVITY_CODE',
+  });
+  // A card chosen while the codes loaded can become shaded when they arrive (none to choose): the dialog
+  // falls back to by hand rather than leave a selected card that cannot be used.
+  const source: ChosenSource =
+    chosenSource === 'ACTIVITY_CODE' && code.cardReason !== null ? 'MANUAL' : chosenSource;
   const [text, setText] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -93,8 +110,36 @@ function SetupForm({
       setProblems([]);
       setPending(true);
       try {
-        await actions.switchSource(plan, { source: 'WBS', level });
+        await actions.switchSource(plan, { source: 'WBS', level, codeTypeId: null });
         announce(`Swimlanes set up: one per WBS group at level ${String(level)}.`);
+        onClose();
+      } catch (error) {
+        setFailure(swimlaneErrorText('set up swimlanes', error));
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
+    if (source === 'ACTIVITY_CODE') {
+      const chosen = code.choices?.find((c) => c.id === code.typeId);
+      if (chosen === undefined) {
+        setFailure(code.cardReason ?? 'Choose a code to make swimlanes from.');
+        return;
+      }
+      if (chosen.reason !== null) {
+        setFailure(chosen.reason);
+        return;
+      }
+      setProblems([]);
+      setPending(true);
+      try {
+        await actions.switchSource(plan, {
+          source: 'ACTIVITY_CODE',
+          level: null,
+          codeTypeId: chosen.id,
+          codeTypeName: chosen.name,
+        });
+        announce(`Swimlanes set up: one per value of ${chosen.name}.`);
         onClose();
       } catch (error) {
         setFailure(swimlaneErrorText('set up swimlanes', error));
@@ -165,6 +210,7 @@ function SetupForm({
           onLevel={setPickedLevel}
           levels={levels}
           loaded={activities !== undefined}
+          code={code}
         />
       ) : null}
       {source === 'MANUAL' ? (
@@ -192,7 +238,7 @@ function SetupForm({
           />
         </>
       ) : (
-        // By hand, the pen's reason is on the names field; there is no field to carry it from the WBS.
+        // By hand, the pen's reason is on the names field; there is no field to carry it from the WBS or a code.
         !gate.writable &&
         gate.reason !== null && (
           <p id={reasonId} className="text-muted-foreground text-sm">
@@ -222,7 +268,7 @@ function SetupForm({
           type="submit"
           aria-disabled={pending || !gate.writable}
           aria-busy={pending}
-          aria-describedby={source === 'WBS' && !gate.writable ? reasonId : undefined}
+          aria-describedby={source !== 'MANUAL' && !gate.writable ? reasonId : undefined}
           className="aria-busy:pointer-events-none"
         >
           {pending

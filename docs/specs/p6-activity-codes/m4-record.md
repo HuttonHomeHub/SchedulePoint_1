@@ -210,3 +210,51 @@ one `isSwimlaneSourceChanged` serves the hook and the undo step. Recorded, no ch
 - **`plan-workspace-toolbar.tsx`'s diff is mostly re-indentation** under the provider
   (`git diff -w` is about 100 lines); say so in the PR body.
 - **K3 (a shared `ReadOnlySwimlaneField`) was not done**: two callers, optional.
+
+## 6. T5: the By code card, the entry point (2026-10-30, the builder)
+
+**What opened.** Set up swimlanes… and Swimlanes… now offer a third card, **One per value of Area**, with a
+`Combobox` of the plan's codes beside it. Each code carries "N values in use" (counted from the activity list
+the workspace holds through `codeSwimlaneValues`, the rule the server's 422 reads, so the two agree and no
+request is made) and is shaded with its reason when it has none in use or more than `SWIMLANE_LIMIT`. The
+card itself is shaded only once the answer is known (activities not loaded, no codes, none choosable, the
+types unreadable); while the types load it claims nothing. Choosing it preselects the first code that can be
+chosen and prefetches that code's values; the lanes of the code are the scene's own conditional read (T3).
+`SwimlanePlanFacts`, `SwimlaneBasisChoice` and the plan PATCH carry `swimlaneCodeTypeId`; the switch is one
+undo step whose label names the code as it was when recorded. Under a code the manage dialog hides the
+hand-made list and the gutter's rows are shaded with the code's own sentence. **Delete…** in Codes… is shaded
+for the source code, visibly and described, with the owner's sentence.
+
+**Confirmed for the accessibility reviewer's T3/T4 carry-forward.** Move to swimlane… and Set code… both
+write for a code plan (record §5); nothing T5 changed touches either, and their suites still pass with the
+card in place (`use-code-swimlane-assignment`, `use-set-activity-codes`, `CodeBulkAssignBar`,
+`code-commands`, `code-lane-planning`, all run in the targeted pass). The journey that drives them in a
+browser is still the orchestrator's `web:swimlanes` run.
+
+**Decisions worth a second look.**
+
+- **Undo of a switch to a deleted or no-longer-choosable code** is set aside, not failed: a pre-check reads the
+  plan's live types (`gone`, "Area was deleted after your edit"), and a 422 `SWIMLANE_CODE_TYPE_*` at replay is
+  `changed`. `writeOrSetAside` rethrows a 422, so the command catches it itself.
+- **A plan whose current code is shaded** (its values in use fell to none, or past 100 after it was chosen)
+  keeps that code selected in the manage dialog, so it reads "Swimlanes already come from this" and the diagram
+  keeps drawing (owner answer 1) instead of the picker jumping to another code.
+- **`swimlaneErrorText`** passes the server's sentence through when it begins "That code" (404 unknown, 422
+  deleted); a bare 404 elsewhere still reads as a colleague's change.
+- **Not done:** `plans/update-plan.swimlaneSource` and `.swimlaneWbsLevel` are still `gap` rows in
+  `scripts/surface-contract.json` and say "lands in M2-T9"; those dialogs shipped long ago, so the rows are
+  stale. T5 closed only `swimlaneCodeTypeId`.
+- **The 101-values shading** is pinned at the component tier (`swimlane-code-source.test.tsx`,
+  `code-source-choices.test.ts`); the browser case waits for T6's wide plan.
+
+**T5 review findings folded (2026-10-30).** When the card is shaded because no code can be chosen, the picker
+is rendered anyway so each code's reason is reachable, as its sentence says. A card chosen while the codes
+loaded falls back to by hand if it then becomes shaded; the manage dialog says "Loading…" and "Loading codes…"
+until the code's name is known and names the failure rather than doing nothing. An undo or redo of a switch to
+a code that is no longer choosable has its own reason (`code-not-choosable`), distinct from "changed". The Delete…
+sentence moved to the codes feature's own copy module. **Recorded, not changed:** `docs/TECH_DEBT.md` #564 — a
+shaded radio card's reason is dimmed to about 2.6:1 by the shared primitive, and the `Combobox` listbox shares its
+name with its toggle. Neither is T5's to change (ADR-0111). The "no code choosable" state is not reachable from the
+seeded plan (`plan:capability-codes` has Area in use), so it is pinned at the component tier only. Not yet checked in
+a browser: that CodeTypePane's printed Delete… reason leaves the values table above the fold at 1024 × 600 (U6);
+the journey's floor step does not open Codes….

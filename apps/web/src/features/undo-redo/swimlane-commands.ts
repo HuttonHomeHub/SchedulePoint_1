@@ -9,6 +9,8 @@ import {
   type ReplayResult,
 } from './replay';
 
+import { ApiFetchError } from '@/lib/api/client';
+
 /**
  * The undo steps for the **swimlane list** (swimlanes M2-T9; feature-spec US-2: "the change applies at
  * once, as one undo step"). Same contract as `commands.ts` (ADR-0176): read fresh, compare the fields
@@ -224,20 +226,27 @@ export interface SwimlaneBasisChoice {
   source: SwimlaneSource;
   /** 1 to 3 with source `WBS`, `null` otherwise (`ck_plans_swimlane_source_level`). */
   level: number | null;
+  /** The code type with source `ACTIVITY_CODE`, `null` otherwise. */
+  codeTypeId: string | null;
+  /** The type's name when the step was recorded, for its label: a rename since does not rewrite history. */
+  codeTypeName?: string | undefined;
 }
 export type SetSwimlaneSourceFn = (input: {
   planId: string;
   version: number;
   source: SwimlaneSource;
   level: number | null;
+  codeTypeId: string | null;
 }) => Promise<unknown>;
 
 const choiceWords = (to: SwimlaneBasisChoice): string =>
   to.source === 'WBS'
     ? `one per WBS group at level ${String(to.level ?? 1)}`
-    : to.source === 'MANUAL'
-      ? 'by hand'
-      : 'off';
+    : to.source === 'ACTIVITY_CODE'
+      ? `one per value of ${to.codeTypeName ?? 'a code'}`
+      : to.source === 'MANUAL'
+        ? 'by hand'
+        : 'off';
 
 /**
  * Reverse a **change of where swimlanes come from** (by hand, or one per WBS group at a level). The
@@ -245,9 +254,12 @@ const choiceWords = (to: SwimlaneBasisChoice): string =>
  * was written for (`schema-design.md` §2), so neither direction touches a lane, and switching back
  * brings the old picture back exactly.
  *
- * Undo and redo each check that the plan still holds the pair the step left, and write with the plan's
- * CURRENT version, so an unrelated plan edit in between is not a reason to refuse. A colleague who has
- * chosen another source has made it theirs: the step is set aside rather than overwriting them.
+ * Undo and redo each check that the plan still holds the choice the step left (source, level and code
+ * type), and write with the plan's CURRENT version, so an unrelated plan edit in between is not a
+ * reason to refuse. A colleague who has chosen another source has made it theirs: the step is set
+ * aside rather than overwriting them. So is a step whose target code has since been deleted, or whose
+ * values in use have fallen outside what swimlanes can show: the server would refuse it (422), and a
+ * planner who can do nothing about that is told it was set aside, not shown a failure.
  */
 export function swimlaneSourceCommand(params: {
   planId: string;
@@ -263,12 +275,43 @@ export function swimlaneSourceCommand(params: {
   ): Promise<ReplayResult> => {
     const plan = await ctx.readPlan();
     if (plan === undefined) return notApplicable('gone', 'The plan');
-    if (plan.swimlaneSource !== from.source || (plan.swimlaneWbsLevel ?? null) !== from.level) {
+    if (
+      plan.swimlaneSource !== from.source ||
+      (plan.swimlaneWbsLevel ?? null) !== from.level ||
+      (plan.swimlaneCodeTypeId ?? null) !== from.codeTypeId
+    ) {
       return notApplicable('changed', 'The swimlane source');
     }
-    return writeOrSetAside('The swimlane source', () =>
-      setSource({ planId, version: plan.version, source: to.source, level: to.level }),
-    );
+    if (to.codeTypeId !== null) {
+      const target = to.codeTypeId;
+      const types = await ctx.readCodeTypes();
+      if (!types.some((t) => t.id === target)) {
+        return notApplicable('gone', to.codeTypeName ?? 'The code');
+      }
+    }
+    try {
+      return await writeOrSetAside('The swimlane source', () =>
+        setSource({
+          planId,
+          version: plan.version,
+          source: to.source,
+          level: to.level,
+          codeTypeId: to.codeTypeId,
+        }),
+      );
+    } catch (error) {
+      // The pre-check above can lose a race, or the type's values in use can have left 1 to 100.
+      if (
+        error instanceof ApiFetchError &&
+        error.status === 422 &&
+        /SWIMLANE_CODE_TYPE_/.test(
+          (error.error.details as { reason?: string } | undefined)?.reason ?? '',
+        )
+      ) {
+        return notApplicable('code-not-choosable', to.codeTypeName ?? 'The code');
+      }
+      throw error;
+    }
   };
   return {
     label: `Make swimlanes ${choiceWords(after)}`,

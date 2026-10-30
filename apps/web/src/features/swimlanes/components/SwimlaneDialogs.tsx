@@ -23,6 +23,7 @@ export function SwimlaneDialogs({
   close,
   openRename,
   openDelete,
+  orgSlug,
   plan,
   afterDelete,
   swimlanes,
@@ -45,6 +46,7 @@ export function SwimlaneDialogs({
       <SwimlaneSetupDialog
         open={state.setup}
         onClose={() => close('setup')}
+        orgSlug={orgSlug}
         plan={plan}
         swimlanes={swimlanes}
         activities={activities}
@@ -54,6 +56,7 @@ export function SwimlaneDialogs({
       <SwimlaneManageDialog
         open={state.manage}
         onClose={() => close('manage')}
+        orgSlug={orgSlug}
         plan={plan}
         activities={activities}
         swimlanes={swimlanes}

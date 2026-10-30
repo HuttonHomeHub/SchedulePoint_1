@@ -13,9 +13,12 @@ import {
   ensurePen,
   findBar,
   gutterLabels,
+  manageButton,
   openActivityEditor,
+  openManageFromView,
   openPlanId,
   openSeededPlan,
+  openStructure,
   option,
 } from './support';
 
@@ -25,13 +28,18 @@ import {
  * through the public API and turns on no flags, so it needs no config of its own (`m4-ui-design.md`
  * §11.5).
  *
- * The plan is the catalogue's `plan:capability-codes`. Until M4-T5 lights the **By code** card there
- * is no way to choose a code in the dialog, so this journey sets the plan's source the way a client
- * does: through the API, with the pen held. T3 asks only what the diagram draws from it.
+ * The plan is the catalogue's `plan:capability-codes`. The first two tests set the plan's source the
+ * way a client does, through the API with the pen held (T3 asks only what the diagram draws from it).
  *
  * **M4-T4 adds the writes** (second test): Move to swimlane…, the editor's Save codes, Set code… and a bar
  * drawn in a band all write the code, each as one request carrying the lanes that keep the rest of the
  * diagram still, and Undo takes each back in one step.
+ *
+ * **M4-T5 lights the entry point** (third test): the third source card in Set up swimlanes… and
+ * Swimlanes…, its `Combobox` of codes with a shaded reason on a code that cannot be chosen, the switch
+ * between codes and back with no lane write (SC-M4-4), Delete… shaded for the source code, and 1024 × 600.
+ * The first two tests still set the source through the API: they ask what the diagram does with it, and
+ * the card is asked in the third.
  *
  * What only a browser can say is here: that a pointer drag across a code swimlane's edge is held while
  * it is in progress and nothing is refused by the server (m4-spec Q7), and that a keyboard nudge inside
@@ -56,7 +64,7 @@ function recordActivityWrites(page: Page): { writes: string[]; failed: string[] 
 }
 
 /**
- * Switch the open plan's swimlanes to one code type, as the Swimlanes… dialog will in M4-T5: a plain
+ * Switch the open plan's swimlanes to one code type, the way a client does without the dialog: a plain
  * PATCH of the source and the type, carrying the version last read. The pen must be held.
  */
 async function setSourceToCode(page: Page, orgSlug: string, typeName: string): Promise<void> {
@@ -434,6 +442,216 @@ test.describe('writes under a code source', () => {
         })
         .toContain(area.values['L1']);
       expect(wire.failed, 'the server accepted every write').toEqual([]);
+    });
+  });
+});
+
+test.describe('choosing a code in Swimlanes…', () => {
+  test('the third card sets the source, switches between codes without a lane write, and shades what it cannot offer', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    const orgSlug = await openSeededPlan(page, Date.now() + 2, CODES_PLAN);
+    await calculateSeededPlan(page);
+    const list = diagramList(page);
+    const wire = recordActivityWrites(page);
+    const gutter = gutterLabels(page).getByRole('button');
+
+    await test.step('1. Set up swimlanes… ▸ One per code value: Phase is shaded with its reason and still takes focus; Escape closes the list and not the dialog', async () => {
+      const panel = await openStructure(page);
+      await manageButton(panel).click();
+      const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+      await expect(dialog).toBeVisible();
+      // The existing cards keep their names, so the WBS and by-hand journeys still find them.
+      await expect(dialog.getByRole('radio', { name: 'By hand' })).toBeVisible();
+      await expect(dialog.getByRole('radio', { name: /One per WBS group/ })).toBeVisible();
+      await dialog.getByRole('radio', { name: /^One per (code value|value of)/ }).click();
+      const picker = dialog.getByRole('combobox', { name: 'Code' });
+      // The first code that can be chosen is preselected.
+      await expect(picker).toHaveValue('Area');
+      await picker.focus();
+      await page.keyboard.press('ArrowDown');
+      const phase = dialog.getByRole('option', { name: /^Phase/ });
+      await expect(phase).toHaveAttribute('aria-disabled', 'true');
+      await expect(phase).not.toHaveAttribute('disabled', /.*/);
+      await expect(phase).toContainText('No activity carries a value of Phase yet.');
+      // Reachable by the arrows (Area, Trade, Phase), not skipped.
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await expect(picker).toHaveAttribute(
+        'aria-activedescendant',
+        (await phase.getAttribute('id'))!,
+      );
+      await page.keyboard.press('Escape');
+      await expect(picker).toHaveAttribute('aria-expanded', 'false');
+      await expect(dialog).toBeVisible();
+      await expect(picker).toBeFocused();
+      await expect(picker).toHaveValue('Area');
+    });
+
+    await test.step('2. Set up swimlanes writes the plan record only; the gutter reads Ground floor, Level 1, Roof, No Area', async () => {
+      const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+      const writesBefore = wire.writes.length;
+      await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 30_000 });
+      await expect(gutter).toHaveCount(4);
+      for (const [index, name] of ['Ground floor', 'Level 1', 'Roof', 'No Area'].entries()) {
+        await expect(gutter.nth(index)).toContainText(name);
+      }
+      expect(wire.writes.slice(writesBefore), 'setting the source writes no activity').toEqual([]);
+    });
+
+    await test.step('3. a bar moved inside Level 1, then Trade and back: it is still where it was and no lane or code was written (SC-M4-4)', async () => {
+      await list.focus();
+      await list.press('Escape');
+      await cursorTo(page, 'Steel frame');
+      await list.press('Alt+ArrowDown');
+      await expect(option(page, 'Steel frame')).toContainText(/in Level 1, lane 2 of 2/);
+      await expect
+        .poll(() => wire.writes.filter((w) => /\/activities\/positions/.test(w)))
+        .toHaveLength(1);
+      const writesBefore = wire.writes.length;
+
+      let dialog = await openManageFromView(page);
+      let picker = dialog.getByRole('combobox', { name: 'Code' });
+      await expect(picker).toHaveValue('Area');
+      await expect(dialog.getByRole('button', { name: 'Use Area' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await chooseOption(page, picker, /^Trade/);
+      await dialog.getByRole('button', { name: 'Use Trade' }).click();
+      await expect(page.getByTestId('announcer')).toContainText('Swimlanes now follow Trade.');
+      await expect(gutterLabels(page)).not.toContainText('Level 1');
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(dialog).toBeHidden();
+
+      dialog = await openManageFromView(page);
+      picker = dialog.getByRole('combobox', { name: 'Code' });
+      await chooseOption(page, picker, /^Area/);
+      await dialog.getByRole('button', { name: 'Use Area' }).click();
+      await expect(page.getByTestId('announcer')).toContainText('Swimlanes now follow Area.');
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(dialog).toBeHidden();
+
+      await expect(gutterLabels(page)).toContainText('Level 1');
+      await expect(option(page, 'Steel frame')).toContainText(/in Level 1, lane 2 of 2/);
+      expect(
+        wire.writes.slice(writesBefore),
+        'no positions or codes request on either switch',
+      ).toEqual([]);
+      expect(wire.failed, 'the server accepted every write').toEqual([]);
+    });
+
+    await test.step('4. while Area leads, the gutter’s rows are shaded with their reason and the manage dialog hides the hand-made list', async () => {
+      // The label opens its menu: Rename… and Move up are shaded with the code's sentence, which is the
+      // item's description and its printed text, and the item keeps its name.
+      await gutter.filter({ hasText: 'Level 1' }).click();
+      const menu = page.getByRole('menu', { name: /^Actions for Level 1/ });
+      await expect(menu).toBeVisible();
+      for (const name of ['Rename…', 'Move up']) {
+        const item = menu.getByRole('menuitem', { name, exact: true });
+        await expect(item).toHaveAttribute('aria-disabled', 'true');
+        await expect(item).toHaveAccessibleDescription(
+          'Swimlanes follow Area in this plan. Rename or reorder its values in Codes…, or choose Swimlanes… to make them another way.',
+        );
+      }
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+      const dialog = await openManageFromView(page);
+      await expect(dialog.getByRole('list', { name: 'Swimlanes' })).toHaveCount(0);
+      await expect(
+        dialog.getByText(/^Swimlanes follow Area: one for each value in use/),
+      ).toBeVisible();
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(dialog).toBeHidden();
+    });
+
+    await test.step('5. Codes… ▸ Area: Delete… is shaded with the sentence, and still takes focus', async () => {
+      const expand = page.getByRole('button', { name: 'Expand activities panel' });
+      const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+      await expect(expand.or(collapse).first()).toBeVisible();
+      if (await expand.isVisible()) await expand.click();
+      await expect(collapse).toBeVisible();
+      await page.getByRole('button', { name: 'Codes…' }).click();
+      const codes = page.getByRole('dialog', { name: 'Codes', exact: true });
+      await expect(codes).toBeVisible();
+      await expect(codes.getByRole('heading', { name: /^Area · / })).toBeVisible();
+      const remove = codes.getByRole('button', { name: 'Delete…' });
+      await expect(remove).toHaveAttribute('aria-disabled', 'true');
+      await expect(remove).not.toHaveAttribute('disabled', /.*/);
+      await expect(remove).toHaveAccessibleDescription(
+        'The swimlanes are made from Area. Choose another swimlane source first.',
+      );
+      await expect(
+        codes.locator('p', {
+          hasText: 'The swimlanes are made from Area. Choose another swimlane source first.',
+        }),
+      ).toBeVisible();
+      await remove.focus();
+      await expect(remove).toBeFocused();
+      // Playwright waits for an aria-disabled control to become enabled; the press is the point here.
+      await remove.click({ force: true });
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(codes).toBeHidden();
+    });
+
+    await test.step('6. a baseline can be taken while swimlanes are made from a code', async () => {
+      const failure = await page.evaluate(
+        async ({ org, id }: { org: string; id: string }) => {
+          const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/baselines`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name: 'Under Area' }),
+          });
+          return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+        },
+        { org: orgSlug, id: openPlanId(page) },
+      );
+      expect(failure, 'taking a baseline').toBeNull();
+    });
+
+    await test.step('7. at 1024 × 600 every card, the picker, an open list’s last option and the submit are reachable, and axe is clean', async () => {
+      await page.setViewportSize({ width: 1024, height: 600 });
+      const dialog = await openManageFromView(page);
+      const box = await dialog.boundingBox();
+      expect(box!.height, 'the dialog does not grow past the viewport').toBeLessThanOrEqual(600);
+      for (const name of [/^By hand$/, /One per WBS group/, /^One per value of Area$/]) {
+        await dialog.getByRole('radio', { name }).scrollIntoViewIfNeeded();
+        await expect(dialog.getByRole('radio', { name })).toBeInViewport();
+      }
+      const picker = dialog.getByRole('combobox', { name: 'Code' });
+      await picker.scrollIntoViewIfNeeded();
+      await picker.focus();
+      await page.keyboard.press('ArrowDown');
+      const options = dialog.getByRole('option');
+      await options.last().scrollIntoViewIfNeeded();
+      await expect(options.last()).toBeInViewport();
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(picker).toBeFocused();
+      const close = dialog.getByRole('button', { name: 'Close', exact: true });
+      await close.scrollIntoViewIfNeeded();
+      await expect(close).toBeInViewport();
+      await close.click();
+    });
+
+    await test.step('8. at 1024 × 600 the printed Delete… reason leaves the Area values table in view', async () => {
+      await page.getByRole('button', { name: 'Codes…' }).click();
+      const codes = page.getByRole('dialog', { name: 'Codes', exact: true });
+      await expect(codes).toBeVisible();
+      await expect(codes.getByRole('table', { name: 'Area values' })).toBeInViewport();
+      await expect(
+        codes.locator('p', {
+          hasText: 'The swimlanes are made from Area. Choose another swimlane source first.',
+        }),
+      ).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(codes).toBeHidden();
     });
   });
 });

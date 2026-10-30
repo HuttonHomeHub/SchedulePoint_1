@@ -93,6 +93,8 @@ function setAsideClause(setAside: SetAside): string {
       return `${setAside.subjectName} was deleted. Restore it in Codes… to set it again`;
     case 'swimlanes-changed':
       return 'the plan’s swimlanes were changed after your edit';
+    case 'code-not-choosable':
+      return `${setAside.subjectName} no longer has between 1 and 100 values in use, so swimlanes cannot be made from it`;
   }
 }
 
