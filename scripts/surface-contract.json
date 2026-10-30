@@ -14,6 +14,9 @@
   "activities/create-activity.code": {
     "surface": "components/ui/scope-save-bar.tsx"
   },
+  "activities/create-activity.codes": {
+    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+  },
   "activities/create-activity.constraintDate": {
     "surface": "components/layout/workspace/use-plan-workspace-model.ts"
   },
@@ -103,6 +106,15 @@
   },
   "activities/update-activity-codes.id": {
     "surface": "features/codes/api/use-write-activity-codes.ts"
+  },
+  "activities/update-activity-codes.laneIndex": {
+    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+  },
+  "activities/update-activity-codes.lanes": {
+    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
+  },
+  "activities/update-activity-codes.lanesCodeTypeId": {
+    "gap": "docs/specs/p6-activity-codes/m4-plan.md T4. No client yet: the diagram's Move to swimlane…, Set code… and the draw-in-a-band create bind to this field in T4, behind a plan whose source only T2 can set; recorded as a gap so T4 has to close it."
   },
   "activities/update-activity-progress.actualFinish": {
     "surface": "features/share/guest-api.ts"
