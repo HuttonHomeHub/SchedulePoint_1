@@ -61,10 +61,14 @@ describe('the capability plans themselves', () => {
 
   it('stay small enough for a person to check by hand', () => {
     for (const spec of specs) {
+      expect(spec.activities.length, spec.seedName).toBeGreaterThanOrEqual(3);
+      // The one plan whose subject IS a count over 100, so it cannot be small: its 101 activities
+      // are generated from one rule and are read for their codes, not their dates, which is what
+      // the limit below protects. The exception is named so a second one has to be argued for.
+      if (spec.seedName === 'capability-codes-wide') continue;
       // The entire point of this tier beside the 129-activity fixture. A plan that outgrows this is
       // one nobody will read, and an unread plan proves nothing about a date being wrong.
       expect(spec.activities.length, spec.seedName).toBeLessThanOrEqual(15);
-      expect(spec.activities.length, spec.seedName).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -114,6 +118,27 @@ describe('the capability plans themselves', () => {
       (plan?.activities ?? []).filter((a) => a.codes?.[typeKey] === undefined).map((a) => a.key);
     expect(without('area')).toEqual(['CD_7', 'CD_8']);
     expect(without('trade')).toEqual(['CD_5', 'CD_8']);
+  });
+
+  it('the wide codes plan has Room one over the swimlane limit and Zone exactly at it', () => {
+    const [plan] = capabilitySpecs('codes-wide');
+    expect(plan?.activities).toHaveLength(101);
+    const inUse = (typeKey: string) =>
+      new Set((plan?.activities ?? []).map((a) => a.codes?.[typeKey]));
+    expect(inUse('room').size).toBe(101);
+    expect(inUse('zone').size).toBe(100);
+    // Every value of both types is carried, so the count in use is the count of values.
+    const types = plan?.codes?.types ?? [];
+    expect(types.map((t) => [t.name, t.values.length])).toEqual([
+      ['Room', 101],
+      ['Zone', 100],
+    ]);
+    // Zone's one shared value is carried by exactly two activities, the first and the last.
+    const sharers = (plan?.activities ?? []).filter((a) => a.codes?.['zone'] === 'z001');
+    expect(sharers.map((a) => a.key)).toEqual(['CW_001', 'CW_101']);
+    // Its own family: the eight-activity plan every earlier case reads is not widened.
+    expect(capabilitySpecs('codes')[0]?.activities).toHaveLength(8);
+    expect(capabilitySpecs('codes')).toHaveLength(1);
   });
 
   it('refuse a swimlane source the API would refuse', () => {
