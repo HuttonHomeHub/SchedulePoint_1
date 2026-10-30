@@ -384,6 +384,18 @@ describe.skipIf(!hasDatabase)('External-Guest swimlanes (e2e)', () => {
         ),
       ).toBe(false);
       expect(Object.keys(plan.body.data.swimlanes[0]).sort()).toEqual(['id', 'name']);
+      // A band's id is its value's opaque id, never the type's.
+      for (const band of plan.body.data.swimlanes as { id: string }[]) {
+        expect(band.id).not.toBe(typeId);
+      }
+    });
+
+    it('says null for the lane of an activity never placed in its band', async () => {
+      const { actor, planId, dig } = await codedPlan();
+      const token = await mintToken(actor, planId);
+      const activities = await guestGet('/api/v1/share/activities', token).expect(200);
+      const row = (activities.body.data as GuestActivity[]).find((r) => r.id === dig.id);
+      expect(row).toMatchObject({ swimlaneLaneIndex: null });
     });
 
     it('does not send noSwimlaneName for a hand-made plan', async () => {

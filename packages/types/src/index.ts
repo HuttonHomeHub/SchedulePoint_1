@@ -3848,6 +3848,11 @@ export interface RevisionChangeReport {
 export const REVISION_INCLUDES = ['changes', 'progress', 'ghosts'] as const;
 export type RevisionInclude = (typeof REVISION_INCLUDES)[number];
 
+/** A removed ghost's code lane as its baseline froze it (P6 M4-T6). */
+export interface RevisionGhostFrozenCodeLane {
+  readonly laneIndex: number;
+}
+
 /**
  * One activity's OLD geometry — where a bar was on the `from` side — for a canvas that draws the
  * difference behind the live scene.
@@ -3895,7 +3900,8 @@ export interface RevisionGhostBar {
   readonly frozenLanes?: readonly RevisionGhostFrozenLane[];
   /**
    * **The code the baseline froze its swimlanes from** (P6 M4-T6, `baselines.swimlane_code_type_id`),
-   * present on a removed ghost only when the baseline's frozen source was `ACTIVITY_CODE`. Absent on
+   * present on a removed ghost only when the baseline is `FULL` with `codeSnapshotLevel`
+   * `SWIMLANE_TYPE` and its frozen source was `ACTIVITY_CODE`. Absent on
    * every other baseline, which tells the client to count the ghost under a code source rather than
    * draw it: a baseline frozen by hand, by the WBS, or before codes existed holds no code fact, and
    * deriving one among today's members would put removed work somewhere plausible and false.
@@ -3904,7 +3910,7 @@ export interface RevisionGhostBar {
   /** The activity's value of that type at capture; null is "no value" (the No <type> band). */
   readonly frozenCodeValueId?: string | null;
   /** Its code lane at capture; null is "never placed there", which the client counts. */
-  readonly frozenCodeLane?: { readonly laneIndex: number } | null;
+  readonly frozenCodeLane?: RevisionGhostFrozenCodeLane | null;
   /**
    * The activity's FROZEN WBS ancestors, root first (so index `L - 1` is the level-`L` ancestor),
    * from the baseline's own parent links. Carried because a removed activity's live parent chain

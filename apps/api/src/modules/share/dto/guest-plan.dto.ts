@@ -15,7 +15,7 @@ import type { GuestSwimlaneEntry } from '../guest-swimlanes';
  * that copies it). In particular these carry NO cost / Earned-Value / money, NO
  * resources / assignments, NO baselines / variance, NO notes, NO audit columns
  * (createdBy/updatedBy/version/deletedAt/timestamps), NO user identity, NO plan-lock
- * holder, NO swimlane source/level (only the swimlanes' ids and names, and under a code the name of its last band), and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
+ * holder, NO swimlane source/level (only the swimlanes' ids and names, and under a code the name of its last band; a code value's id is its band's opaque identity, the type's id is never sent), and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
  */
 
 /** A single dated calendar exception, stripped to what the time axis needs. */
@@ -181,7 +181,10 @@ export class GuestPlanViewDto {
     isArray: true,
     description:
       'The plan’s swimlanes in display order (ADR-0051 §4 as amended for swimlanes): id and name ' +
-      'only. Empty when the plan has none, or its swimlanes follow its WBS, which no view draws yet.',
+      'only. Empty when the plan has none, or its swimlanes follow its WBS, which no view draws yet. ' +
+      'Under a code source these are the code’s values in use, in value order: each id is the ' +
+      'value’s own opaque identifier (never the code type’s), each name the value’s description, ' +
+      'else its short code; the last band is named by `noSwimlaneName`.',
   })
   swimlanes!: GuestSwimlaneDto[];
 
@@ -190,7 +193,8 @@ export class GuestPlanViewDto {
       'What the last band — the activities in no swimlane — is called when the swimlanes are made ' +
       'from a code: "No <type name>", exactly as a member’s picture reads it (ADR-0205, owner ' +
       'decision 2026-10-30). Absent under every other source, where the client words it itself. ' +
-      'A band name and nothing more: no code id, value or short code is ever sent.',
+      'A band label and nothing more: the code type’s id and the activities’ `codes` are never sent. ' +
+      'The band ids are the values’ opaque ids and the names the values’ description, else short code.',
   })
   noSwimlaneName?: string;
 

@@ -679,6 +679,9 @@ test.describe('choosing a code in Swimlanes…', () => {
       expect(frozen?.name).toBe('First-fix services');
       expect(frozen?.frozenCodeLane, 'a code lane was frozen').toBeTruthy();
       expect(doomed.name).toBe('First-fix services');
+      // Stated BEFORE the delete, so a missing lane fails here and not as a puzzling counted ghost.
+      expect(doomed.lanes.length, 'CD_4 holds a stored code lane').toBeGreaterThan(0);
+      // From here the case runs on the mutated plan (CD_4 is gone): steps 6c and 7 onwards read it so.
 
       await pressPromotable(page, {
         id: 'compare-revisions',
@@ -698,7 +701,9 @@ test.describe('choosing a code in Swimlanes…', () => {
       // Drawn in its frozen band (Level 1 still has members): nothing is said to be withheld.
       await expect(page.getByText(/Comparison overlay: .*removed/i)).toBeVisible();
       await expect(
-        page.getByText(/not shown because their swimlane or row can no longer be matched/),
+        page.getByText(
+          /not shown because the earlier revision was grouped differently, or its value is no longer in use/,
+        ),
       ).toHaveCount(0);
 
       // Frozen under Area, viewed under Trade: the cost ADR-0127 names, said in words, never derived.
@@ -708,7 +713,9 @@ test.describe('choosing a code in Swimlanes…', () => {
       await dialog.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(dialog).toBeHidden();
       await expect(
-        page.getByText(/not shown because their swimlane or row can no longer be matched/),
+        page.getByText(
+          /not shown because the earlier revision was grouped differently, or its value is no longer in use/,
+        ),
       ).toBeVisible();
       await expect(
         page
@@ -735,6 +742,8 @@ test.describe('choosing a code in Swimlanes…', () => {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({}),
           });
+          if (!response.ok)
+            throw new Error(`share link ${String(response.status)}: ${await response.text()}`);
           return ((await response.json()) as { data: { url: string } }).data.url;
         },
         { org: orgSlug, id: openPlanId(page) },
@@ -742,13 +751,17 @@ test.describe('choosing a code in Swimlanes…', () => {
       const guestContext = await page.context().browser()!.newContext();
       try {
         const guest = await guestContext.newPage();
-        const payloads: string[] = [];
-        guest.on('response', (response) => {
-          if (/\/share\/(plan|activities)/.test(response.url())) {
-            void response.text().then((text) => payloads.push(text));
-          }
-        });
+        // Both payloads are awaited before anything is asserted about them, so an absence is not a
+        // read taken before the response arrived.
+        const planResponse = guest.waitForResponse((r) => /\/share\/plan(\?|$)/.test(r.url()));
+        const activitiesResponse = guest.waitForResponse((r) =>
+          /\/share\/activities(\?|$)/.test(r.url()),
+        );
         await guest.goto(share);
+        const payloads = [
+          await (await planResponse).text(),
+          await (await activitiesResponse).text(),
+        ];
         const guestDiagram = guest.getByRole('region', { name: 'Time-scaled logic diagram' });
         await expect(guestDiagram).toBeVisible();
         // CD_4 was deleted above, so Level 1 keeps CD_3 and CD_5; Level 2 is carried by nobody.
@@ -847,6 +860,9 @@ test.describe('a code with more values in use than a swimlane can draw', () => {
       await expect(room).toHaveAttribute('aria-disabled', 'true');
       await expect(room).not.toHaveAttribute('disabled', /.*/);
       await expect(room).toContainText('Room has 101 values in use. Swimlanes can show up to 100.');
+      // Axe with the list open: the shaded Room option is on screen with its reason.
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       await page.keyboard.press('Escape');
       await expect(dialog).toBeVisible();
     });
@@ -855,17 +871,27 @@ test.describe('a code with more values in use than a swimlane can draw', () => {
       const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
       await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
       await expect(dialog).toBeHidden();
-      const source = await page.evaluate(
+      const written = await page.evaluate(
         async ({ org, id }: { org: string; id: string }) => {
-          const response = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
-            credentials: 'include',
-          });
-          return ((await response.json()) as { data: { swimlaneSource: string } }).data
-            .swimlaneSource;
+          const base = `/api/v1/organizations/${org}/plans/${id}`;
+          const plan = (await (await fetch(base, { credentials: 'include' })).json()) as {
+            data: { swimlaneSource: string; swimlaneCodeTypeId: string | null };
+          };
+          const types = (await (
+            await fetch(`${base}/code-types?values=none`, { credentials: 'include' })
+          ).json()) as { data: { id: string; name: string }[] };
+          return {
+            source: plan.data.swimlaneSource,
+            typeId: plan.data.swimlaneCodeTypeId,
+            zoneId: types.data.find((t) => t.name === 'Zone')?.id ?? null,
+          };
         },
         { org: orgSlug, id: openPlanId(page) },
       );
-      expect(source).toBe('ACTIVITY_CODE');
+      expect(written.source).toBe('ACTIVITY_CODE');
+      // The code chosen is Zone, the one that fits, and not the shaded Room.
+      expect(written.zoneId).not.toBeNull();
+      expect(written.typeId).toBe(written.zoneId);
     });
 
     await test.step('3. axe finds nothing', async () => {

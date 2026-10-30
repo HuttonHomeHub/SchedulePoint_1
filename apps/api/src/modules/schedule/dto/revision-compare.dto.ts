@@ -10,6 +10,7 @@ import type {
   RevisionCompletionReason,
   RevisionCriticalPathDelta,
   RevisionGhostBar,
+  RevisionGhostFrozenCodeLane,
   RevisionGhostFrozenLane,
   RevisionLinkChange,
   RevisionMovedActivity,
@@ -420,7 +421,7 @@ export class RevisionGhostFrozenLaneDto implements RevisionGhostFrozenLane {
   @ApiProperty({ format: 'date-time' }) laneUpdatedAt!: string;
 }
 
-export class RevisionGhostFrozenCodeLaneDto {
+export class RevisionGhostFrozenCodeLaneDto implements RevisionGhostFrozenCodeLane {
   @ApiProperty() laneIndex!: number;
 }
 
@@ -475,7 +476,8 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
     type: String,
     format: 'uuid',
     description:
-      'Removed work from a baseline whose frozen swimlane source was `ACTIVITY_CODE`: the code ' +
+      'Removed work from a `FULL` baseline with `codeSnapshotLevel` `SWIMLANE_TYPE` whose frozen source ' +
+      'was `ACTIVITY_CODE`: the code ' +
       'type the swimlanes were then made from. Absent otherwise, and the client counts the ghost ' +
       'rather than drawing it.',
   })

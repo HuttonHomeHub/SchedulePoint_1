@@ -241,9 +241,11 @@ export class ShareGuestService {
           type.id,
         ),
       ]);
+      const entries = guestCodeSwimlaneList(values, carriers);
       return {
-        entries: guestCodeSwimlaneList(values, carriers),
-        noneName: `No ${type.name}`,
+        entries,
+        // Named only when there are bands, so a plan that draws none sends nothing about its type.
+        noneName: entries.length > 0 ? `No ${type.name}` : null,
         codeTypeId: type.id,
       };
     }

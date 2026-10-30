@@ -432,6 +432,14 @@ describe('ShareGuestService', () => {
       expect(view).not.toHaveProperty('noSwimlaneName');
     });
 
+    it('names no last band when no band is drawn', async () => {
+      byCode();
+      guestCodes.findCarriers.mockResolvedValue([]);
+      const view = await service.getPlanView(guest);
+      expect(view.swimlanes).toEqual([]);
+      expect(view).not.toHaveProperty('noSwimlaneName');
+    });
+
     it('sends no noSwimlaneName for a hand-made plan, whose picture is unchanged', async () => {
       plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' } as never));
       const view = await service.getPlanView(guest);

@@ -1555,6 +1555,7 @@ export function TsldPanel({
         },
         compareUndrawableReason,
         compareGhostBars ? compareGhostsUnplaced : 0,
+        swimlanes?.source === 'ACTIVITY_CODE' ? 'CODE' : 'SWIMLANE',
       ),
     [
       compareGhostBars,
@@ -1563,6 +1564,7 @@ export function TsldPanel({
       compareLinkLines,
       compareLinksUndrawable,
       compareUndrawableReason,
+      swimlanes?.source,
     ],
   );
 

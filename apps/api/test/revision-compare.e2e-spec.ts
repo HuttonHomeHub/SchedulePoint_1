@@ -748,15 +748,39 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         await removedGhost(admin, planId, from, doomed);
         const bare = await admin.agent.get(compareUrl(planId, from)).expect(200);
         expect(JSON.stringify(bare.body)).not.toContain('frozenCode');
+        // A longer duration moves the live activity's finish, so it is a MOVED ghost beside its bar.
         const live = await prisma.activity.findUniqueOrThrow({ where: { id: kept } });
         await admin.agent
           .patch(`/api/v1/organizations/acme/activities/${kept}`)
-          .send({ name: 'Frame, renamed', version: live.version })
+          .send({ durationDays: 9, version: live.version })
           .expect(200);
+        await recalculate(admin, planId);
         const res = await admin.agent.get(`${compareUrl(planId, from)}&include=ghosts`).expect(200);
-        for (const ghost of res.body.data.ghosts as Record<string, unknown>[]) {
-          if (ghost['removed'] === false) expect(ghost).not.toHaveProperty('frozenCodeTypeId');
+        const ghosts = res.body.data.ghosts as Record<string, unknown>[];
+        // Non-vacuity: there is a moved ghost to check, beside the removed one.
+        expect(ghosts.some((g) => g['removed'] === false)).toBe(true);
+        expect(ghosts.some((g) => g['removed'] === true)).toBe(true);
+        for (const ghost of ghosts) {
+          if (ghost['removed'] === false) {
+            for (const key of ['frozenCodeTypeId', 'frozenCodeValueId', 'frozenCodeLane']) {
+              expect(ghost, key).not.toHaveProperty(key);
+            }
+          }
         }
+      });
+
+      it('carries the frozen value and a null lane for removed work that was never placed', async () => {
+        const admin = await adminWithOrg();
+        const { planId, typeId, l1, kept } = await codedPlan(admin, 'ACTIVITY_CODE');
+        // `kept` holds L2 and no code lane was ever written for it.
+        const from = await capture(admin, planId, 'Rev A');
+        const ghost = await removedGhost(admin, planId, from, kept);
+        expect(ghost).toMatchObject({
+          frozenCodeTypeId: typeId,
+          frozenCodeLane: null,
+        });
+        expect(ghost?.['frozenCodeValueId']).not.toBe(l1);
+        expect(typeof ghost?.['frozenCodeValueId']).toBe('string');
       });
     });
 

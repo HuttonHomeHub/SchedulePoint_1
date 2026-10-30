@@ -46,11 +46,12 @@ export function ghostLaneOf(
  *
  * - A ghost of a **live** activity draws on that activity's display lane.
  * - A ghost of **removed** work has no bar, so it is placed from the lane its baseline froze for the
- *   basis today's source resolves to (under a code, see {@link removedCodeLane}): its frozen swimlane if that swimlane still exists, else "No
- *   swimlane". It is **counted, not drawn** when the baseline froze nothing (a `NONE` capture), when
- *   no frozen row exists for that basis, or when the frozen lane lies outside the swimlane's rows
- *   today. A lane is never derived among today's members, because that would put removed work
- *   somewhere plausible, which is a false statement about where it was.
+ *   basis today's source resolves to (under a code, see {@link removedCodeLane}): its frozen swimlane
+ *   if that swimlane still exists, else "No swimlane". It is **counted, not drawn** when the baseline
+ *   froze nothing (a `NONE` capture), when no frozen row exists for that basis, or when the frozen
+ *   lane lies outside the swimlane's rows today. A lane is never derived among today's members,
+ *   because that would put removed work somewhere plausible, which is a false statement about where
+ *   it was.
  *
  * With no scene the ghosts come back as the same array.
  */

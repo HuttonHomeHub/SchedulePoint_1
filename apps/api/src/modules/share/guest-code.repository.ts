@@ -33,6 +33,7 @@ export class GuestCodeRepository {
       FROM code_value_assignments cva
       JOIN activities a ON a.id = cva.activity_id
       WHERE cva.code_type_id = ${typeId}::uuid
+        AND cva.organization_id = ${scope.organizationId}::uuid
         AND a.organization_id = ${scope.organizationId}::uuid AND a.plan_id = ${scope.planId}::uuid
         AND a.deleted_at IS NULL
     `;
