@@ -1,9 +1,16 @@
-import type { ActivitySummary, SwimlaneSource, SwimlaneSummary } from '@repo/types';
+import {
+  SWIMLANE_LIMIT,
+  type ActivitySummary,
+  type SwimlaneSource,
+  type SwimlaneSummary,
+} from '@repo/types';
 import { useMemo } from 'react';
 
 import { useSwimlanes } from '../api/use-swimlanes';
 
+import { codeSwimlaneInput } from './code-membership';
 import { manualSwimlaneInput } from './manual-membership';
+import { useCodeSwimlaneSource, type CodeSwimlaneSource } from './use-code-swimlane-source';
 
 import type { SwimlaneInput } from '@/features/tsld';
 import { isWbsSwimlaneLevel, wbsSwimlaneInput } from '@/features/wbs';
@@ -16,28 +23,35 @@ import { isWbsSwimlaneLevel, wbsSwimlaneInput } from '@/features/wbs';
 export const SWIMLANE_GROUND = true;
 
 /**
- * Whether the plan's swimlane picture exists for this session: its swimlanes are hand-made, or come
- * from the WBS at a valid level, and, where it matters, the planner can write. **The one gate** for
- * drawing it and auto-resolving in it; assigning is hand-made only and says so at its own call.
+ * Whether the plan's swimlane picture exists for this session: its swimlanes are hand-made, come
+ * from the WBS at a valid level, or come from a code type, and, where it matters, the planner can
+ * write. **The one gate** for drawing it and auto-resolving in it; assigning is hand-made only and says
+ * so at its own call.
  *
- * A `WBS` source without a level (which the server refuses to store) reads as no picture rather than
- * as level 1, so a half-written plan draws and resolves swimlane-free.
+ * A `WBS` source without a level, or a code source without a type (which the server refuses to
+ * store), reads as no picture rather than as level 1 or an empty one, so a half-written plan draws and
+ * resolves swimlane-free.
  */
 export function swimlanePictureOn(args: {
   source: SwimlaneSource;
   /** The plan's WBS level; only read for source `WBS`. */
   level?: number | null | undefined;
+  /** The plan's swimlane code type; only read for source `ACTIVITY_CODE`. */
+  codeTypeId?: string | null | undefined;
   /** Only the writers of auto-resolve pass this; the read-only scene has no use for it. */
   canEdit?: boolean;
 }): boolean {
   const fromSource =
-    args.source === 'MANUAL' || (args.source === 'WBS' && isWbsSwimlaneLevel(args.level));
+    args.source === 'MANUAL' ||
+    (args.source === 'WBS' && isWbsSwimlaneLevel(args.level)) ||
+    (args.source === 'ACTIVITY_CODE' && args.codeTypeId != null);
   return fromSource && (args.canEdit ?? true);
 }
 
 /**
  * The swimlane input auto-resolve reads from the caches: `null` unless the picture is on and what the
- * source needs has loaded — the list for hand-made swimlanes, only the activities for the WBS.
+ * source needs has loaded — the list for hand-made swimlanes, only the activities for the WBS, the
+ * type and its values for a code.
  */
 export function swimlanePictureInput(args: {
   on: boolean;
@@ -45,11 +59,18 @@ export function swimlanePictureInput(args: {
   level?: number | null | undefined;
   activities: readonly ActivitySummary[] | undefined;
   list: readonly SwimlaneSummary[] | undefined;
+  /** What a code source is built from; only read for source `ACTIVITY_CODE`. */
+  code?: Pick<CodeSwimlaneSource, 'type' | 'values' | 'planLanes'>;
 }): SwimlaneInput | null {
-  const { on, source, level, activities, list } = args;
+  const { on, source, level, activities, list, code } = args;
   if (!on || activities === undefined) return null;
   if (source === 'WBS') {
     return isWbsSwimlaneLevel(level) ? wbsSwimlaneInput(activities, level) : null;
+  }
+  if (source === 'ACTIVITY_CODE') {
+    return code?.type !== undefined && code.values !== undefined
+      ? codeSwimlaneInput(activities, code.type, code.values, code.planLanes)
+      : null;
   }
   return list !== undefined ? manualSwimlaneInput(activities, list) : null;
 }
@@ -73,6 +94,13 @@ export interface SwimlaneScene {
    * source), and the lens and its command must say "none set up" then as they do for `NONE`.
    */
   count?: number | undefined;
+  /**
+   * For a code source drawing more bands than a plan can be switched to (`SWIMLANE_LIMIT`): the type's
+   * name and how many values are in use. The lens states it as a standing line (ADR-0132); absent
+   * otherwise. A plan can get here after the switch (a value comes into use, a restore), and the
+   * diagram keeps drawing every band rather than refuse the planner's classification work.
+   */
+  overLimit?: { typeName: string; count: number } | undefined;
   /** Try the list again. */
   refetch: () => void;
 }
@@ -82,14 +110,17 @@ export interface SwimlaneScene {
  *
  * The list itself is fetched whenever the plan has hand-made swimlanes ({@link swimlanePictureOn}),
  * independent of `shown`: a toggle made later then finds it cached and cannot cause a load that
- * would hold the diagram.
+ * would hold the diagram. A code source's type, values and (when the list lacks them) lanes are
+ * fetched the same way, for the same reason.
  *
- * Memoised on the two things that can change the input — the activities and the list — so it is
- * rebuilt once per data change and never per frame or per render.
+ * Memoised on the things that can change the input — the activities and the list, or the code
+ * source's reads — so it is rebuilt once per data change and never per frame or per render.
  *
  * **Source `WBS` needs no list**: its swimlanes are the plan's summaries at the level, read from the
  * activities already loaded, so the input exists the moment the diagram can be drawn and `pending` is
- * never true. No frame paints the swimlane-free layout first (ui-architecture §6).
+ * never true. No frame paints the swimlane-free layout first (ui-architecture §6). **A code source
+ * does**: its bands are the type's values, so the first paint holds the settled shape until they
+ * arrive (ADR-0202); a failed read degrades to the swimlane-free diagram, as a failed list does.
  */
 export function useSwimlaneScene(args: {
   orgSlug: string;
@@ -97,28 +128,57 @@ export function useSwimlaneScene(args: {
   source: SwimlaneSource;
   /** The plan's WBS level; only read for source `WBS`. */
   level?: number | null | undefined;
+  /** The plan's swimlane code type; only read for source `ACTIVITY_CODE`. */
+  codeTypeId?: string | null | undefined;
   activities: readonly ActivitySummary[] | undefined;
   shown: boolean;
 }): SwimlaneScene {
-  const { orgSlug, planId, source, level, activities, shown } = args;
-  const picture = swimlanePictureOn({ source, level });
+  const { orgSlug, planId, source, level, codeTypeId, activities, shown } = args;
+  const picture = swimlanePictureOn({ source, level, codeTypeId });
   const manual = picture && source === 'MANUAL';
   const list = useSwimlanes(orgSlug, planId, manual);
   const swimlanes = list.data;
+  const byCode = picture && source === 'ACTIVITY_CODE';
+  const code = useCodeSwimlaneSource({
+    orgSlug,
+    planId,
+    codeTypeId: byCode ? (codeTypeId ?? null) : null,
+    activities,
+  });
   const drawn = picture && shown;
   const input = useMemo(
     () =>
-      drawn ? swimlanePictureInput({ on: true, source, level, activities, list: swimlanes }) : null,
-    [drawn, source, level, swimlanes, activities],
+      drawn
+        ? swimlanePictureInput({
+            on: true,
+            source,
+            level,
+            activities,
+            list: swimlanes,
+            code: { type: code.type, values: code.values, planLanes: code.planLanes },
+          })
+        : null,
+    [drawn, source, level, swimlanes, activities, code.type, code.values, code.planLanes],
+  );
+  const inUse = input?.source === 'ACTIVITY_CODE' ? input.swimlanes.length : 0;
+  const typeName = input?.codeTypeName;
+  const overLimit = useMemo(
+    () =>
+      inUse > SWIMLANE_LIMIT && typeName !== undefined ? { typeName, count: inUse } : undefined,
+    [inUse, typeName],
   );
   // `isPending` is true for a disabled query that has no data, so it is gated on `drawn`; an error
   // is not pending, so a failed list degrades to the swimlane-free diagram rather than a spinner
   // that never ends.
   return {
     input,
-    pending: drawn && manual && list.isPending,
-    failed: manual && list.isError,
+    pending: drawn && ((manual && list.isPending) || (byCode && code.pending)),
+    failed: (manual && list.isError) || (byCode && code.failed),
     count: manual ? swimlanes?.length : undefined,
-    refetch: () => void list.refetch(),
+    overLimit,
+    refetch: () => {
+      if (byCode) code.refetch();
+      else void list.refetch();
+    },
   };
 }

@@ -7,6 +7,8 @@ export {
 export { swimlanesQueryOptions, useSwimlanes } from './api/use-swimlanes';
 export { swimlaneKeys } from '@/lib/query/hierarchy-keys';
 export { manualSwimlaneInput } from './model/manual-membership';
+export { codeSwimlaneInput } from './model/code-membership';
+export { useCodeSwimlaneSource, type CodeSwimlaneSource } from './model/use-code-swimlane-source';
 export {
   SWIMLANE_GROUND,
   swimlanePictureInput,

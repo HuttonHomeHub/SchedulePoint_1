@@ -391,6 +391,9 @@ export const codeKeys = {
     [...codeKeys.byPlan(orgSlug, planId), 'type', codeTypeId, 'values'] as const,
   valuesDeleted: (orgSlug: string, planId: string, codeTypeId: string) =>
     [...codeKeys.values(orgSlug, planId, codeTypeId), 'deleted'] as const,
+  /** One type's plan-wide swimlane lanes (read when the swimlanes switch to a code, M4). */
+  swimlaneLanes: (orgSlug: string, planId: string, codeTypeId: string) =>
+    [...codeKeys.byPlan(orgSlug, planId), 'type', codeTypeId, 'swimlane-lanes'] as const,
   namesAll: (orgSlug: string, planId: string) =>
     [...codeKeys.byPlan(orgSlug, planId), 'names'] as const,
   names: (orgSlug: string, planId: string, ids: readonly string[]) =>
