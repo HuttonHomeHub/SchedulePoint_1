@@ -58,6 +58,7 @@ export {
   codeValueEditCommand,
   codeValueReorderCommand,
   type ActivityCodeChange,
+  isSwimlaneSourceChanged,
   type ActivityCodesLanesInput,
   type ActivityCodesRowInput,
   type ActivityCodesStep,

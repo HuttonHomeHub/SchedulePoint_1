@@ -193,3 +193,20 @@ the evidence.
 code… is pressed, the planner answers `null` and the write carries codes alone; the lane for the mover
 is then derived, as it is for any member with no stored row. Nothing is refused and the next write
 materialises it.
+
+**T4 review findings folded (2026-10-30).** The editor's reason now says "Change it under Codes on this tab"
+(the Swimlane section renders before Codes, so "above" was wrong); the field holds "Loading…" with no
+reason until the type's name arrives; Move to swimlane… carries one shared note, "Need a swimlane that
+isn’t listed? Use Set code…", from the assignment; a refused move names the move; the planner builder is
+`useBuildCodeSwimlaneLanePlanner` (the consumer in `features/codes` keeps `useCodeSwimlaneLanePlanner`);
+one `isSwimlaneSourceChanged` serves the hook and the undo step. Recorded, no change:
+
+- **Past 100 bands** the Move to swimlane… list is long; known and accepted (owner answer 1).
+- **The table's Swimlane column is null until the type's name arrives** (`plan-workspace-toolbar.tsx`);
+  the journey should confirm focus is not lost if a bar is open then. Not exercised.
+- **`CodeAssignControl` plans lanes in a `useMemo` during render** while a choice is pending, so each
+  activity refetch re-plans 2,000 to 5,000 rows. Unmeasured; `projectSwimlanes` at 5,000 is 14 ms
+  (§4). A test pins one projection per plan call.
+- **`plan-workspace-toolbar.tsx`'s diff is mostly re-indentation** under the provider
+  (`git diff -w` is about 100 lines); say so in the PR body.
+- **K3 (a shared `ReadOnlySwimlaneField`) was not done**: two callers, optional.

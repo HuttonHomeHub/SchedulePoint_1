@@ -1,9 +1,10 @@
 import type { ActivitySummary, CodeValueSummary } from '@repo/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { planCodeSwimlaneLanes, planCodeSwimlaneMove } from './code-lane-planning';
 import { codeSwimlaneInput } from './code-membership';
 
+import * as diagram from '@/features/tsld/model/derive-diagram-source';
 import { SWIMLANE_GONE_REASON } from '@/features/tsld/model/swimlane-lanes';
 import { anActivity } from '@/test/activity-fixture';
 
@@ -162,6 +163,15 @@ describe('planCodeSwimlaneLanes', () => {
     const plan = planCodeSwimlaneLanes(planning(), [row('a', 'l1', 9)]);
     expect(plan?.lanes.find((l) => l.id === 'a')?.version).toBe(9);
     expect(plan?.lanes.find((l) => l.id === 'b')?.version).toBe(3);
+  });
+});
+
+describe('the projection cost', () => {
+  it('derives the diagram once per plan, however many rows and destinations it names', () => {
+    const spy = vi.spyOn(diagram, 'deriveDiagramSource');
+    planCodeSwimlaneLanes(planning(), [row('a', 'rf'), row('e', 'l1'), row('b', 'gf')]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
 

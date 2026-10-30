@@ -132,7 +132,7 @@ import {
 import {
   SWIMLANE_GROUND,
   useCodeSwimlaneAssignment,
-  useCodeSwimlaneLanePlanner,
+  useBuildCodeSwimlaneLanePlanner,
   useCodeSwimlaneSource,
   useSwimlaneAssignment,
   useSwimlaneManagement,
@@ -770,7 +770,7 @@ export function ToolbarPlanWorkspace({
     record: model.recordCodeEdit,
   });
   const swimlaneAssignment = handMadeAssignment ?? (codeTypeId === null ? null : codeAssignment);
-  const codeLanePlanner = useCodeSwimlaneLanePlanner({
+  const codeLanePlanner = useBuildCodeSwimlaneLanePlanner({
     orgSlug: model.orgSlug,
     planId: model.planId,
     codeTypeId,

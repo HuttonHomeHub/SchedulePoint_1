@@ -67,4 +67,18 @@ describe('the codes writers and the lane planner', () => {
     expect(dialogs).toBeGreaterThan(open);
     expect(dialogs).toBeLessThan(close);
   });
+
+  it('renders the codes controls from the root alone, which is wrapped once', () => {
+    const source = read(ROOT);
+    const open = source.indexOf('<CodeSwimlaneLanePlannerProvider');
+    const close = source.indexOf('</CodeSwimlaneLanePlannerProvider>');
+    // The controls are built in render functions above the return and placed in the tree by
+    // reference, so what can be held is that every one is in this file and the return is wrapped.
+    expect(source.match(/<(CodeAssignControl|CodeAssignButton|CodeBulkAssignBar)\b/g)?.length).toBe(
+      3,
+    );
+    expect(source.lastIndexOf('<CodeSwimlaneLanePlannerProvider')).toBe(open);
+    expect(source.indexOf('return (')).toBeLessThan(open);
+    expect(close).toBeGreaterThan(open);
+  });
 });

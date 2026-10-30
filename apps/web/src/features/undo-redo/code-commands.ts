@@ -398,7 +398,7 @@ const heldValue = (row: ActivitySummary, codeTypeId: string): string | null =>
   row.codes?.find((c: ActivityCodeAssignment) => c.codeTypeId === codeTypeId)?.codeValueId ?? null;
 
 /** The server refusing lanes because the plan's swimlanes are not made from the code they were planned against. */
-function isSwimlaneSourceChanged(err: unknown): boolean {
+export function isSwimlaneSourceChanged(err: unknown): boolean {
   if (!(err instanceof ApiFetchError) || err.status !== 409) return false;
   const reason = (err.error.details as { reason?: string } | undefined)?.reason ?? '';
   return reason === 'SWIMLANE_SOURCE_CHANGED';

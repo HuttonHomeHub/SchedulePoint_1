@@ -110,6 +110,11 @@ describe('useCodeSwimlaneAssignment', () => {
     ]);
   });
 
+  it('says under the select that a value nobody uses yet is set with Set code…', () => {
+    const { result } = render();
+    expect(result.current?.note).toBe('Need a swimlane that isn’t listed? Use Set code…');
+  });
+
   it('knows where each activity is', () => {
     const { result } = render();
     expect(result.current?.currentOf('a')).toBe('gf');
@@ -191,7 +196,7 @@ describe('useCodeSwimlaneAssignment', () => {
     const outcome = await result.current!.assign(['a'], 'l1');
     expect(outcome.applied).toBe(false);
     expect(outcome.conflict).toMatch(
-      /^Could not move to Level 1: the plan’s swimlanes were changed/,
+      /^Could not move “Task a” to Level 1: the plan’s swimlanes were changed/,
     );
     expect(record).not.toHaveBeenCalled();
   });

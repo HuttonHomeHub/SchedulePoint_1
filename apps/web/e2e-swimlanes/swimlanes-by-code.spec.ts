@@ -336,8 +336,11 @@ test.describe('writes under a code source', () => {
       await expect(line).toHaveValue('Level 1');
       await expect(line).toHaveAttribute('readonly', '');
       await expect(line).toHaveAccessibleDescription(
-        'Swimlanes follow Area in this plan. Change it under Codes above.',
+        'Swimlanes follow Area in this plan. Change it under Codes on this tab.',
       );
+      // Once, with the editor open and its read-only line on screen.
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       const areas = editor.getByRole('combobox', { name: 'Area' });
       await chooseOption(page, areas, /Ground floor/);
       const before = codesWrites().length;
@@ -358,8 +361,6 @@ test.describe('writes under a code source', () => {
       for (const name of ['Piling', 'Ground-bearing slab', 'Steel frame', 'Roof deck']) {
         expect(after.get(name), name).toBe(sentences.get(name));
       }
-      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 
       await planCommands(page)
         .getByRole('button', { name: /^Undo\b/ })

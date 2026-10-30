@@ -4,10 +4,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
 
-import { codeSwimlaneEditorReason } from '../model/code-swimlane-copy';
-
 import { CodeSwimlaneField } from './CodeSwimlaneField';
 
+import { swimlanesFollowCodeEditorReason } from '@/features/tsld/model/swimlane-assignment';
 import { codeKeys } from '@/lib/query/hierarchy-keys';
 import { anActivity } from '@/test/activity-fixture';
 
@@ -67,10 +66,25 @@ describe('CodeSwimlaneField', () => {
     const field = screen.getByRole('textbox', { name: 'Current swimlane' });
     expect(field).toHaveAttribute('readonly');
     expect(field).not.toBeDisabled();
-    expect(field).toHaveAccessibleDescription(codeSwimlaneEditorReason('Area'));
+    expect(field).toHaveAccessibleDescription(swimlanesFollowCodeEditorReason('Area'));
     expect(
-      screen.getByText('Swimlanes follow Area in this plan. Change it under Codes above.'),
+      screen.getByText('Swimlanes follow Area in this plan. Change it under Codes on this tab.'),
     ).toBeVisible();
     expect((await axe(container)).violations).toEqual([]);
+  });
+
+  it('holds the settled shape and claims no reason until the type and its values arrive', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CodeSwimlaneField orgSlug="acme" planId="p1" codeTypeId="area" activity={anActivity()} />
+      </QueryClientProvider>,
+    );
+    const field = screen.getByRole('textbox', { name: 'Current swimlane' });
+    expect(field).toHaveValue('Loading…');
+    expect(field).toHaveAccessibleDescription('');
+    expect(screen.queryByText(/Swimlanes follow/)).not.toBeInTheDocument();
   });
 });

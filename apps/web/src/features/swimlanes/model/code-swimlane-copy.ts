@@ -1,14 +1,11 @@
 /**
- * The words for a plan whose swimlanes are made from a code (p6-activity-codes M4). Written once so the
- * editor's field, the Activities table and the Gantt's cell say the same thing about the same fact, and
- * each names the type, because "its code" would not tell a planner with six types which one it follows.
+ * The words for a plan whose swimlanes are made from a code (p6-activity-codes M4) that only the
+ * swimlanes feature speaks. The sentences the grids share with the editor live beside the grids'
+ * (`features/tsld/model/swimlane-assignment.ts`), which `features/tsld` owns and this feature imports.
  */
 
-/**
- * The activity editor's read-only Swimlane field (`m4-ui-design.md` §5.3, ADR-0083): why it cannot be
- * edited on this tab, and where the activity's value is. Two controls on one tab writing the same fact —
- * one saving at once, one holding unsaved working state — would leave the Codes section's version stale
- * and its Save refused, so the swimlane is changed there and shown here.
- */
-export const codeSwimlaneEditorReason = (typeName: string): string =>
-  `Swimlanes follow ${typeName} in this plan. Change it under Codes above.`;
+/** The editor's field while the type's name or values have not arrived: the settled shape, no reason claimed yet. */
+export const CODE_SWIMLANE_LOADING = 'Loading…';
+
+/** What the editor's field reads for an activity with no live value, named for the type. */
+export const noCodeValueName = (typeName: string): string => `No ${typeName}`;

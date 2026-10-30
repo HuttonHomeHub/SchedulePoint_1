@@ -12,6 +12,7 @@ import {
   useSetActivityCodes,
 } from '@/features/codes';
 import type { SwimlaneAssignment, SwimlaneAssignOutcome } from '@/features/tsld';
+import { CODE_MOVE_NOT_LISTED_NOTE } from '@/features/tsld/model/swimlane-assignment';
 import { ROWS_GONE_REASON } from '@/features/tsld/model/swimlane-lanes';
 import type { Command } from '@/features/undo-redo';
 import type { BarDateSource } from '@/lib/bar-dates';
@@ -129,7 +130,13 @@ export function useCodeSwimlaneAssignment(args: {
       } catch (error) {
         return {
           applied: false,
-          conflict: codeErrorText(`move to ${name}`, error, type.name),
+          conflict: codeErrorText(
+            only
+              ? `move “${only.name}” to ${name}`
+              : `move ${String(rows.length)} activities to ${name}`,
+            error,
+            type.name,
+          ),
           refreshable: false,
         };
       }
@@ -144,7 +151,10 @@ export function useCodeSwimlaneAssignment(args: {
   );
 
   return useMemo(
-    () => (input !== null && dataDate !== null ? { shown, choices, currentOf, assign } : null),
+    () =>
+      input !== null && dataDate !== null
+        ? { shown, choices, note: CODE_MOVE_NOT_LISTED_NOTE, currentOf, assign }
+        : null,
     [input, dataDate, shown, choices, currentOf, assign],
   );
 }

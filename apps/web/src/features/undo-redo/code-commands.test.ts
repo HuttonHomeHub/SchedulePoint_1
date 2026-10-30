@@ -767,4 +767,16 @@ describe('activityCodesCommand under a code swimlane source', () => {
     expect(await command.undo({ ...server.ctx, readPlan })).toMatchObject({ reason: 'changed' });
     expect(readPlan).not.toHaveBeenCalled();
   });
+
+  it('plans lanes at replay, not at record time: a step made off a code source writes codes alone, one replayed on a code source carries lanes', async () => {
+    const planLanes = vi.fn<PlanActivityCodeLanesFn>(() => null);
+    const { server, command } = moved(planLanes);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.writeActivityCodes.mock.calls[0]?.[0]).not.toHaveProperty('lanes');
+    // The plan has been switched to a code since: the same step now asks the planner again and sends lanes.
+    planLanes.mockReturnValueOnce({ lanesCodeTypeId: 'area', lanes: [] });
+    await command.redo(server.ctx);
+    expect(planLanes).toHaveBeenCalledTimes(2);
+    expect(server.mutations.writeActivityCodes.mock.calls[1]?.[0].lanesCodeTypeId).toBe('area');
+  });
 });

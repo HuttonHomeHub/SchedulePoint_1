@@ -22,9 +22,12 @@ import { activityKeys } from '@/lib/query/hierarchy-keys';
  * component keeps current, and the activities are read from the query cache, which is where a settled
  * recalculation lands first (the way auto-resolve reads them).
  *
+ * The ref is updated in an effect, so it lags one commit on purpose; do not put `args` in the
+ * `useCallback` dependencies, which would hand the provider a new planner on every render.
+ *
  * `null` while the plan's swimlanes do not come from a code: nothing is planned and no lane is sent.
  */
-export function useCodeSwimlaneLanePlanner(args: {
+export function useBuildCodeSwimlaneLanePlanner(args: {
   orgSlug: string;
   planId: string;
   /** The plan's swimlane code type, or `null` for any other source. */

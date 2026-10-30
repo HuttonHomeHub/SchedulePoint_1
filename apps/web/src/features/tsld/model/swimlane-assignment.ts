@@ -34,6 +34,8 @@ export interface SwimlaneAssignment {
   readonly shown: boolean;
   /** The plan's swimlanes in their order, then "No swimlane". */
   readonly choices: readonly SwimlaneChoice[];
+  /** A standing sentence under the choices, for a source whose list is not every place work could go. */
+  readonly note?: string;
   /** The swimlane an activity is drawn in now (`null`: none). */
   readonly currentOf: (activityId: string) => string | null;
   /**
@@ -56,6 +58,20 @@ export const SWIMLANES_OFF_MOVE_REASON =
  */
 export const SWIMLANES_FOLLOW_WBS_REASON =
   'Swimlanes follow the WBS in this plan. To move an activity, file it under another summary in Breakdown.';
+/**
+ * Why the activity editor's Swimlane field is read-only while the swimlanes are made from a code, and
+ * where the value is written: the Codes section of the same tab. Lives beside the grids' sentence so the
+ * two cannot drift; `features/tsld` imports no feature, so the swimlanes feature imports this.
+ */
+export const swimlanesFollowCodeEditorReason = (typeName: string): string =>
+  `Swimlanes follow ${typeName} in this plan. Change it under Codes on this tab.`;
+
+/**
+ * What the Move to swimlane… control says under a code source about a value that is not listed: its
+ * choices are the swimlanes drawn, so one nobody uses yet is set with Set code… (owner decision).
+ */
+export const CODE_MOVE_NOT_LISTED_NOTE = 'Need a swimlane that isn’t listed? Use Set code…';
+
 /**
  * Why a grid's Swimlane cell is read-only while the plan's swimlanes are made from a code, and where the
  * value is written instead (`m4-ui-design.md` §6.2, ADR-0204). Named for the type, because "its code"

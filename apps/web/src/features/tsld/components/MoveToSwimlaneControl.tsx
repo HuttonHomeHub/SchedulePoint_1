@@ -76,7 +76,11 @@ export function MoveToSwimlaneControl({
   const selectId = useId();
   const statusId = useId();
   const hintId = useId();
-  const described = hint ? `${statusId} ${hintId}` : statusId;
+  const noteId = useId();
+  const note = assignment.note;
+  const described = [statusId, note ? noteId : null, hint ? hintId : null]
+    .filter(Boolean)
+    .join(' ');
   const [value, setValue] = useState(UNCHOSEN);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,6 +173,11 @@ export function MoveToSwimlaneControl({
       >
         {busy ? 'Moving…' : MOVE_BUTTON_LABEL}
       </Button>
+      {note ? (
+        <p id={noteId} className="text-muted-foreground text-sm">
+          {note}
+        </p>
+      ) : null}
       {hint ? (
         <div id={hintId} className="text-muted-foreground text-sm">
           {hint}

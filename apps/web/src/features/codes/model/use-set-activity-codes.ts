@@ -7,8 +7,7 @@ import { useWriteActivityCodes } from '../api/use-write-activity-codes';
 import { codeAssignmentLabel, type CodeAssignmentPlan } from './code-assignment-plan';
 import { useCodeSwimlaneLanePlanner, type CodeLanePlan } from './code-swimlane-lanes';
 
-import { activityCodesCommand, type Command } from '@/features/undo-redo';
-import { ApiFetchError } from '@/lib/api/client';
+import { activityCodesCommand, isSwimlaneSourceChanged, type Command } from '@/features/undo-redo';
 import { planKeys } from '@/lib/query/hierarchy-keys';
 
 export interface SetActivityCodesRequest {
@@ -58,7 +57,7 @@ export function useSetActivityCodes(
       } catch (error) {
         // A colleague switched the swimlane source after the lanes were planned: the plan is read
         // again so the diagram follows, and the planner tries again against what it now shows.
-        if (error instanceof ApiFetchError && isSourceChanged(error)) {
+        if (isSwimlaneSourceChanged(error)) {
           void queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, planId) });
         }
         throw error;
@@ -86,6 +85,3 @@ export function useSetActivityCodes(
     [write, record, planner, queryClient, orgSlug, planId],
   );
 }
-
-const isSourceChanged = (error: ApiFetchError): boolean =>
-  (error.error.details as { reason?: string } | undefined)?.reason === 'SWIMLANE_SOURCE_CHANGED';
