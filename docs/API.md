@@ -1002,7 +1002,7 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
 
 | Method | Path                         | Notes                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts) + `swimlanes` (ADR-0205: the live swimlanes as `{ id, name }` in display order; empty unless hand-made).                                                                                         |
+| GET    | `/api/v1/share/plan`         | The plan header (`id`, `name`, `status`, `description`, `dataDate`) + its calendar (weekday mask + exceptions) + the schedule summary (`projectFinish`, activity/critical/near-critical counts) + `swimlanes` (ADR-0205: the live swimlanes as `{ id, name }` in display order; empty unless hand-made or made from a code) + `noSwimlaneName` (only under a code source: "No <type name>").     |
 | GET    | `/api/v1/share/activities`   | The plan's activities, **cursor-paginated** (`limit`/`cursor`) — id, code, name, type, duration, CPM early/late dates, the **placed start/finish** (where the bar is drawn — ADR-0163), actual dates, total float, `isCritical`, `isNearCritical` (ADR-0198), lane, the **derived swimlane** (`memberOfSwimlaneId`, `swimlaneLaneIndex` — ADR-0205), and progress (`status`, `percentComplete`). |
 | GET    | `/api/v1/share/dependencies` | The plan's logic ties, **cursor-paginated** — id, predecessorId, successorId, type, lag (days and exact minutes), and `isDriving` (ADR-0198: whether the link sets its successor's early start).                                                                                                                                                                                                 |
 
@@ -1033,6 +1033,16 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
   `null` for "No swimlane") and `swimlaneLaneIndex` (the stored lane for that membership, or `null`).
   Both are **derived** by the member diagram's own rule; the raw `swimlaneId`/`swimlaneLanes`, the plan's
   `swimlaneSource`/`swimlaneWbsLevel`, a swimlane's `position`/`version` and the WBS `parentId` are never sent.
+  **Under a code source** (p6-activity-codes M4, owner decision 2026-10-30) the same fields carry the
+  code-grouped picture: `swimlanes` lists the type's **values in use** by name (description, else short
+  code) in value order, each `{ id, name }` where the id is the band's identity and only that;
+  `noSwimlaneName` is `"No <type name>"` (e.g. "No Area"), exactly as a member's picture reads it; and an
+  activity's `memberOfSwimlaneId` is its value's id when that value is a drawn band, else `null`
+  (a WBS summary is always `null`), with `swimlaneLaneIndex` its code lane for that band. **Never sent:** the
+  type's id, a value's short code or description as fields, `codes`, `codeSwimlaneLanes` or
+  `swimlaneCodeTypeId`; a guest learns the band names and who is in each, which is ADR-0205's stated
+  residual. `noSwimlaneName` is absent under every other source, and an older client reads absence as
+  "No swimlane".
 - **Read-only** — the persisted CPM columns are read (no engine call); the only write is
   a best-effort, coalesced `last_accessed_at` telemetry touch (at most once / 5 min per
   link), fired-and-forgotten so it never blocks or fails a read.
@@ -2517,6 +2527,15 @@ controller's 30 / 60 s per handler.
     places nothing: which swimlane the ghost falls in depends on the plan's source today, which the
     client derives. A `NONE` baseline's removed ghosts carry none of the three, and the client counts
     them. Moved ghosts never carry them, and neither does the cross-plan comparison.
+
+    When that baseline's frozen swimlane source was a code (`swimlaneSource: ACTIVITY_CODE`,
+    `codeSnapshotLevel: SWIMLANE_TYPE`), a removed ghost also carries `frozenCodeTypeId` (the type the
+    swimlanes were then made from), `frozenCodeValueId` (its value of that type; `null` is "no value", the
+    No <type> band) and `frozenCodeLane` (`{ laneIndex }`; `null` is "never placed there"). Again the
+    server places nothing: the client draws the ghost in that band at that lane only when today's source is
+    **the same type**, the value is still a drawn band, a lane was frozen and it lies inside the band's
+    rows; every other case is counted, never derived (p6-activity-codes M4, ADR-0127). A baseline frozen
+    under another source carries none of the three, and neither do moved ghosts or the cross-plan comparison.
 
 ## Authentication
 
