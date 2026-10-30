@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.200.4
+
+### Patch Changes
+
+- [#1215](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1215) [`b70af2a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b70af2ac13609a644640c437d814f38fc059e541) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram can draw swimlanes from a code, chosen in Set up swimlanes… and Swimlanes…. A drag is held at a code
+  swimlane's edge and says which code the swimlanes are made from.
+
+- [#1216](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1216) [`e4d1442`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e4d14427f667e82e99eeff6ad01838a1f06ecab7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Under swimlanes drawn from a code, moving work between them sets its code.
+
+- [#1217](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1217) [`95a4129`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/95a412951efdb1949caa07e038980812a835acff) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Swimlanes can be made from a code: in Set up swimlanes… or Swimlanes…, choose "One per value of" a code and pick which one. Each value in use gets a swimlane, in the order set in Codes…, with "No" and the code's name below for work that has none. A code with no values in use, or more than 100, is shaded with its reason. Switching between codes, the WBS and by hand keeps every layout, and the switch is one step you can undo. Delete… in Codes… is shaded for the code the swimlanes are made from.
+
+- [#1218](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1218) [`afed942`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/afed94293ad2476ab717770a75d3dae94121eaa9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Comparisons draw removed work in its code swimlane, and guests see swimlanes drawn from a code by name. When swimlanes are made from a code, a comparison against a baseline taken under the same code draws removed work in the band and lane it held; against a baseline taken under another code, or before codes existed, it counts what it cannot place, as it always has. A share link to such a plan shows the bands by name, with "No" and the code's name last, and never the codes themselves. The test catalogue gains a plan with 101 values in use, to prove a code with more values than a swimlane can draw is refused.
+- Updated dependencies [[`b70af2a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b70af2ac13609a644640c437d814f38fc059e541)]:
+  - @repo/layout@0.2.1
+
 ## 0.200.3
 
 ### Patch Changes

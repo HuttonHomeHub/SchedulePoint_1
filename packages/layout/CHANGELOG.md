@@ -1,5 +1,12 @@
 # @repo/layout
 
+## 0.2.1
+
+### Patch Changes
+
+- [#1215](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1215) [`b70af2a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b70af2ac13609a644640c437d814f38fc059e541) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram can draw swimlanes from a code, chosen in Set up swimlanes… and Swimlanes…. A drag is held at a code
+  swimlane's edge and says which code the swimlanes are made from.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,18 @@
 # @repo/api
 
+## 0.103.2
+
+### Patch Changes
+
+- [#1212](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1212) [`bceae2e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/bceae2ebb0fdaa4b15f61f8bb7efa6ec909ece4a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Activities can be created with codes, and code writes and lane writes are ready for swimlanes drawn from a code.
+
+- [#1214](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1214) [`19fc706`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/19fc706f0cedad1264d9873014b30d9fdb492656) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan's swimlanes can come from a code, and such a plan can be baselined. Plan responses carry a new
+  `swimlaneCodeTypeId`.
+
+- [#1218](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1218) [`afed942`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/afed94293ad2476ab717770a75d3dae94121eaa9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Comparisons draw removed work in its code swimlane, and guests see swimlanes drawn from a code by name. When swimlanes are made from a code, a comparison against a baseline taken under the same code draws removed work in the band and lane it held; against a baseline taken under another code, or before codes existed, it counts what it cannot place, as it always has. A share link to such a plan shows the bands by name, with "No" and the code's name last, and never the codes themselves. The test catalogue gains a plan with 101 values in use, to prove a code with more values than a swimlane can draw is refused.
+- Updated dependencies [[`b70af2a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b70af2ac13609a644640c437d814f38fc059e541)]:
+  - @repo/layout@0.2.1
+
 ## 0.103.1
 
 ### Patch Changes
