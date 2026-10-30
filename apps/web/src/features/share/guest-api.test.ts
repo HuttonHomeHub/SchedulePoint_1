@@ -186,6 +186,12 @@ describe('toGuestSwimlaneInput (ADR-0205)', () => {
     });
   });
 
+  it('carries the server’s "No <type>" as the none band’s name, and nothing without it', () => {
+    const filed = baseActivity({ id: 'a', memberOfSwimlaneId: 'sl-1', swimlaneLaneIndex: 0 });
+    expect(toGuestSwimlaneInput(lanes, [filed], 'No Area')?.noneName).toBe('No Area');
+    expect(toGuestSwimlaneInput(lanes, [filed])).not.toHaveProperty('noneName');
+  });
+
   it('reads an older API’s missing keys as "No swimlane", not as a fault', () => {
     const input = toGuestSwimlaneInput(lanes, [baseActivity({ id: 'old' })]);
     expect(input?.membership.get('old')).toBeNull();

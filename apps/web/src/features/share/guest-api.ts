@@ -90,6 +90,12 @@ export interface GuestPlanView {
    * type** for version skew: an older API does not send it, and absent reads as "no swimlanes".
    */
   swimlanes?: GuestSwimlane[];
+  /**
+   * What the last band is called when the swimlanes are made from a code — "No Area", as a member's
+   * picture reads it (p6-activity-codes M4, owner answer 3). Absent under every other source, and from
+   * an older API: the band is then worded "No swimlane" as ever.
+   */
+  noSwimlaneName?: string;
 }
 
 /** A guest activity row (`GuestActivityDto`) — schedule + progress fields only. */
@@ -215,10 +221,12 @@ export function toWorkingDayCalendar(calendar: GuestCalendar | null): WorkingDay
  * member diagram's own rule, so this only reshapes them for `projectSwimlanes` — the one projection
  * both views draw by. A guest is never sent the lane rows' timestamps, so every stored lane carries
  * the same recency and the projection breaks a stale-row collision by the lower id (ADR-0205 D5).
+ * `noneName` is the server's "No <type>" for a code-grouped plan; it names a band and nothing else.
  */
 export function toGuestSwimlaneInput(
   swimlanes: readonly GuestSwimlane[] | undefined,
   activities: readonly GuestActivity[],
+  noneName?: string,
 ): SwimlaneInput | null {
   if (!swimlanes || swimlanes.length === 0) return null;
   const membership = new Map<string, string | null>();
@@ -233,6 +241,9 @@ export function toGuestSwimlaneInput(
     membership,
     storedLanes,
     source: 'MANUAL',
+    // The input's own naming seam: it rides in the none band's name, so the gutter and the listbox
+    // say "No Area" with no code of their own here.
+    ...(noneName === undefined ? {} : { noneName }),
   };
 }
 
