@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.200.3
+
+### Patch Changes
+
+- [#1206](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1206) [`e698d15`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e698d15fecd9f15447b981c30f45a08ee8fef56e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A Codes… dialog in the Activities panel manages a plan's P6 activity codes: add, rename, reorder, delete and restore code types and their values, each as one undo step.
+
+- [#1207](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1207) [`3f4524b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3f4524bfaa4793587c886c405808c3e9587d3d19) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Codes can be shown as columns in the Activities table and the Gantt, and the Gantt's code columns print.
+
+- [#1208](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1208) [`922c899`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/922c899427893b4293c90712061647d86a89926b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Set an activity's codes in its editor, or one code on many ticked rows; codes undo, show in history and survive copy and paste within a plan.
+
+- [#1209](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1209) [`c291e5f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c291e5f5d72763f6dcfff47fb8b192f34bb27a71) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Set a code on selected activities straight from the diagram.
+
 ## 0.200.2
 
 ### Patch Changes

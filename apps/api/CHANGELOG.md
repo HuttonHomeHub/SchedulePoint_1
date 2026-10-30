@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.103.1
+
+### Patch Changes
+
+- [#1204](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1204) [`5888d41`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5888d41b5da7101224b7cc44462c7f0582d7d3cd) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Codes load a code's values when they are needed, so the Codes window opens quickly even on a plan at the limits.
+
 ## 0.103.0
 
 ### Minor Changes
