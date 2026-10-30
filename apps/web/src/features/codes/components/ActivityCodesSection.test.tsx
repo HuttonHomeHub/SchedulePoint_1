@@ -213,7 +213,11 @@ describe('the Codes section in the editor', () => {
       timeout: 5000,
     });
     expect(screen.getByText('Saved.')).toBeInTheDocument();
-    expect(screen.getByTestId('announcer')).toHaveTextContent('Codes saved.');
+    // The announcer writes its text on its own beat, after the registry clears, so wait for it:
+    // it lands one animation frame later (announcer.tsx), so an immediate check races it.
+    await waitFor(() => expect(screen.getByTestId('announcer')).toHaveTextContent('Codes saved.'), {
+      timeout: 5000,
+    });
   });
 
   it('keeps the two Saves apart: Save general sends no codes', async () => {
