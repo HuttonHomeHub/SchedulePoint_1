@@ -833,22 +833,48 @@ swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, thre
   know the new tables, so expiring such a plan fails with a foreign-key error (23503), which it logs and
   retries every hour; nothing is lost, and the clear-out ships switched off. Its own imports never write
   codes, so its import rollback is unaffected.
-- **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), the previous image
-  cannot read that plan's row**: its Prisma client refuses an enum value it does not know, which breaks
-  that plan and any list that loads it. Before starting the previous image, with the API stopped:
+- **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), what breaks
+  depends on how far back you go.** Before rolling back, find out whether any plan holds one. If this
+  prints 0, nothing below applies:
 
-  ```sql
-  UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL
-  WHERE swimlane_source = 'ACTIVITY_CODE';
+  ```sh
+  docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM plans WHERE swimlane_source = 'ACTIVITY_CODE';"
   ```
 
-  The planners' choice of code swimlanes is lost and is chosen again after rolling forward; their lanes
-  are kept in `code_swimlane_lanes` and come back.
+  - **Back to api 0.103.x or 0.102.2** (the images that already know the value): such a plan still
+    opens, but it draws no swimlanes. Choosing another swimlane source for it, and capturing a
+    baseline of it, both fail with a server error, because those images do not clear the plan's code.
+  - **Back to api 0.102.1 or earlier**: those images cannot read such a plan at all, which breaks it
+    and any list that loads it.
 
-- **Once a baseline has been captured on such a plan, there is no clean rollback.** That baseline's frozen
-  `swimlane_source` is `ACTIVITY_CODE`, and rewriting it would falsify a snapshot (ADR-0025). Roll forward
-  instead, or, as a last resort, restore the pre-update copy the backup service made before migrating
-  (ADR-0192, `docs/guides/back-up-and-restore.md`), which loses everything written since.
+  In both cases, with the API **and** web containers stopped (roll both images back together: a newer
+  web sends lane writes that an older API answers with a server error), save the list of plans and
+  their codes, then reset them:
+
+  ```sh
+  docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 \
+    -c "COPY (SELECT id, swimlane_code_type_id FROM plans WHERE swimlane_source = 'ACTIVITY_CODE') TO STDOUT WITH CSV HEADER" \
+    > p6-code-swimlanes-$(date -u +%Y%m%dT%H%MZ).csv
+  docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL, version = version + 1, updated_at = now() WHERE swimlane_source = 'ACTIVITY_CODE';"
+  ```
+
+  The `UPDATE` reports how many plans it reset; that must equal the count above. `version` is raised so
+  an editor that still holds the old plan is told to refresh rather than overwriting it. Then pin the
+  previous `API_IMAGE_TAG` and `WEB_IMAGE_TAG` and run `docker compose up -d`. What is kept: every code,
+  every value and every assignment, and every code swimlane lane (`code_swimlane_lanes` is not touched),
+  so after rolling forward a planner chooses **Swimlanes… ▸ By code** again for each plan in the saved
+  file and the bars return to the lanes they had. What is lost: only the choice itself, until it is made
+  again. The reset writes no audit row (a swimlane source is not a governance setting), so note it where
+  the host's changes are recorded.
+
+- **Baselines are never edited by this procedure.** A baseline captured on such a plan keeps
+  `swimlane_source = 'ACTIVITY_CODE'`, which api 0.102.2 and later read without trouble. **Going back to
+  api 0.102.1 or earlier once such a baseline exists has no clean route**: those images cannot read it,
+  and rewriting it would falsify a snapshot (ADR-0025). Check with
+  `SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';` (deleted baselines included,
+  because they come back on restore). If it is not 0, roll forward instead or, as a last resort, restore
+  the pre-update copy the backup service made before migrating (ADR-0192,
+  `docs/guides/back-up-and-restore.md`), which loses everything written since.
 - **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
   both migrations already recorded in `_prisma_migrations` and does not re-create anything, the trap the
   milestone cross-calendar section above records for a marker row. PostgreSQL cannot drop an enum value
