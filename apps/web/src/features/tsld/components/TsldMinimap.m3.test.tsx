@@ -89,9 +89,9 @@ describe('TsldMinimap — navigation (M3)', () => {
     // WINDOW spans display lanes 4-23 (zero-based): Electrical ends at 5, Civil starts at 6.
     mount({
       swimlaneExtents: [
-        { name: 'Mechanical', firstLane: 0, laneCount: 4 },
-        { name: 'Electrical', firstLane: 4, laneCount: 2 },
-        { name: 'Civil', firstLane: 6, laneCount: 30 },
+        { id: 'm', name: 'Mechanical', firstLane: 0, laneCount: 4 },
+        { id: 'e', name: 'Electrical', firstLane: 4, laneCount: 2 },
+        { id: 'c', name: 'Civil', firstLane: 6, laneCount: 30 },
       ],
     });
     fireEvent.keyDown(screen.getByRole('group', { name: 'Diagram overview' }), { key: 'End' });
@@ -100,7 +100,7 @@ describe('TsldMinimap — navigation (M3)', () => {
   });
 
   it('says "past the last swimlane", not lane numbers, when the window is beyond the stack', () => {
-    mount({ swimlaneExtents: [{ name: 'Mechanical', firstLane: 0, laneCount: 2 }] });
+    mount({ swimlaneExtents: [{ id: 'm', name: 'Mechanical', firstLane: 0, laneCount: 2 }] });
     fireEvent.keyDown(screen.getByRole('group', { name: 'Diagram overview' }), { key: 'End' });
     expect(announce.mock.calls[0]![0]).toMatch(/, past the last swimlane\.$/);
     expect(announce.mock.calls[0]![0]).not.toMatch(/lanes \d/);

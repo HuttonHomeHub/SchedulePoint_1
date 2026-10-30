@@ -206,7 +206,9 @@ const DEFAULT_NAV_STATE: NavState = {
 /**
  * Whether swimlanes are shown: the planner's choice when they have made one, else whether the plan
  * has been set up for them (swimlanes ui-architecture C11). A `WBS` source counts as set up (M3): its
- * input is derived from the activities already loaded, so showing it never waits on anything.
+ * input is derived from the activities already loaded, so showing it never waits on anything. So does
+ * an `ACTIVITY_CODE` source (M4): the plan only ever holds it with a type, and its bands are read, not
+ * entered.
  */
 export function swimlanesShown(override: boolean | null, source: SwimlaneSource): boolean {
   return override ?? source !== 'NONE';

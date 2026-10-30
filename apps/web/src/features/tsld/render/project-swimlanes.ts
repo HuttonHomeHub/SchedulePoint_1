@@ -39,7 +39,17 @@ export interface SwimlaneInput {
    * ADR-0126). Absent reads as `MANUAL`, the only input the host builds until M3; M3's WBS input
    * must say `WBS`, or removed work would be placed by the wrong basis.
    */
-  source?: 'MANUAL' | 'WBS';
+  source?: 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
+  /** For source `ACTIVITY_CODE`: the code type the swimlanes are drawn from, so a sentence can name it. */
+  codeTypeId?: string;
+  codeTypeName?: string;
+  /**
+   * What "No swimlane" is called when the source names it better — "No Area" for a code. Absent for
+   * `MANUAL` and `WBS`, whose pictures are therefore unchanged. **It rides in the none extent's `name`**
+   * so every reader that falls back to {@link NO_SWIMLANE_LABEL} is already right; the none extent is
+   * told apart by `id === null`, never by a `null` name.
+   */
+  noneName?: string;
 }
 
 /**
@@ -51,7 +61,7 @@ export const NO_SWIMLANE_LABEL = 'No swimlane';
 
 /** One swimlane's place in the stack, for the gutter. */
 export interface SwimlaneExtent {
-  /** `null` for "No swimlane", whose label is the gutter's to word. */
+  /** `null` for "No swimlane", whose label is the gutter's to word unless the input named it. */
   id: string | null;
   name: string | null;
   /** The display lane of its first lane. */
@@ -119,7 +129,9 @@ export function projectSwimlanes(
   const stack: { id: string | null; name: string | null; key: string }[] = [
     ...input.swimlanes.map((s) => ({ id: s.id, name: s.name, key: s.id })),
   ];
-  if ((placed.get(NONE)?.laneCount ?? 0) > 0) stack.push({ id: null, name: null, key: NONE });
+  if ((placed.get(NONE)?.laneCount ?? 0) > 0) {
+    stack.push({ id: null, name: input.noneName ?? null, key: NONE });
+  }
 
   const displayLanes = new Map<string, number>();
   const derivedIds = new Set<string>();

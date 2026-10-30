@@ -289,3 +289,37 @@ describe('laneToReveal', () => {
     expect(lane).toBe(30 + 4 / 2 - 0.5);
   });
 });
+
+describe('a code source names the none swimlane (M4)', () => {
+  it('reads "No Area" in the gutter, told apart from a named swimlane by its id', () => {
+    const scene = projectSwimlanes(
+      [
+        anActivity({
+          id: 'n',
+          laneIndex: 0,
+          visualEffectiveStart: '2026-01-02',
+          visualEffectiveFinish: '2026-01-04',
+        }),
+      ],
+      {
+        swimlanes: [{ id: 'g', name: 'Ground floor' }],
+        membership: new Map(),
+        storedLanes: new Map(),
+        source: 'ACTIVITY_CODE',
+        noneName: 'No Area',
+      },
+      { source: 'visual', dataDate: '2026-01-01' },
+    );
+    const labels = swimlaneGutterModel(
+      {
+        widthPx: SWIMLANE_GUTTER_WIDTH_PX,
+        collapsed: false,
+        swimlanes: gutterSwimlanesFrom(scene),
+      },
+      VIEW,
+      SIZE,
+    );
+    expect(labels.map((l) => l.text)).toEqual(['Ground floor', 'No Area']);
+    expect(labels[1]?.accessibleName).toBe('No Area, 1 activity, 1 lane');
+  });
+});

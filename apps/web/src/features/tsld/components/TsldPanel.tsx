@@ -58,7 +58,7 @@ import {
   swimlanePluralAnnouncement,
 } from '../model/reposition-announcement';
 import { moveToSwimlaneGate, type SwimlaneAssignment } from '../model/swimlane-assignment';
-import { WBS_EDGE_NOTE, type SwimlaneLanePlacement } from '../model/swimlane-lanes';
+import { edgeNoteFor, type SwimlaneLanePlacement } from '../model/swimlane-lanes';
 import { useUnshownHistoryAnnouncement } from '../model/use-unshown-history-announcement';
 import {
   announceChainStep,
@@ -2824,7 +2824,7 @@ export function TsldPanel({
       // a sideways-only drop arrives as a refusal to speak. Not refreshable — a rule, not stale
       // data — and the banner's `role="alert"` says it, as the start-edge backstop does.
       if (intent.laneClamped && intent.startDay === undefined && intent.laneIndex === undefined) {
-        announce(WBS_EDGE_NOTE);
+        announce(edgeNoteFor(swimlanes));
         return;
       }
       if (intent.sidewaysRefused) {
@@ -3022,7 +3022,7 @@ export function TsldPanel({
             });
             const notes = [
               intent.sidewaysDiscarded ? START_NOT_CHANGED_NOTE : null,
-              intent.laneClamped ? WBS_EDGE_NOTE : null,
+              intent.laneClamped ? edgeNoteFor(swimlanes) : null,
             ].filter((note) => note !== null);
             announce([moved, ...notes].join(' '));
           }

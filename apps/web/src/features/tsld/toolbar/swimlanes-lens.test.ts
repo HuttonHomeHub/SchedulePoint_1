@@ -111,4 +111,20 @@ describe('the Swimlanes lens note', () => {
     expect(note({ swimlanesShown: false, swimlanesFailed: true })).toBeUndefined();
     expect(note({ swimlanesShown: true })).toBeUndefined();
   });
+
+  it('states a standing line, not an event, when a code draws more bands than swimlanes are made for', () => {
+    const over = { swimlanesShown: true, swimlanesOverLimit: { typeName: 'Area', count: 140 } };
+    expect(note(over)).toBe('Area has 140 values in use. Swimlanes are made for up to 100.');
+    expect(note({ ...over, swimlanesShown: false })).toBeUndefined();
+  });
+
+  it('puts the failure first when both are true: nothing is drawn, so the count is moot', () => {
+    expect(
+      note({
+        swimlanesShown: true,
+        swimlanesFailed: true,
+        swimlanesOverLimit: { typeName: 'Area', count: 140 },
+      }),
+    ).toBe("Couldn't load swimlanes. The diagram is shown without them.");
+  });
 });

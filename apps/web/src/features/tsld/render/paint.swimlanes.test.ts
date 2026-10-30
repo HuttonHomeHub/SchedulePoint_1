@@ -109,6 +109,7 @@ function recordingCtx() {
 
 function stack(count: number, lanesEach = 2): SwimlaneMarks['extents'] {
   return Array.from({ length: count }, (_, i) => ({
+    id: `s${String(i + 1)}`,
     name: `Swimlane ${String(i + 1)}`,
     firstLane: i * lanesEach,
     laneCount: lanesEach,

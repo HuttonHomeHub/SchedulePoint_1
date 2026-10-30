@@ -226,7 +226,12 @@ export interface TsldPalette {
 /** The swimlane stack as the painter needs it: where each swimlane starts and how tall it is. */
 export interface SwimlaneMarks {
   /** Top to bottom, contiguous, in display lanes. */
-  extents: readonly { name: string | null; firstLane: number; laneCount: number }[];
+  extents: readonly {
+    id: string | null;
+    name: string | null;
+    firstLane: number;
+    laneCount: number;
+  }[];
   /**
    * Tint every second swimlane with the band ground, and withhold the month bands while it shows
    * (they are the same ground, so both would read as one muddle). The rule is drawn either way.
