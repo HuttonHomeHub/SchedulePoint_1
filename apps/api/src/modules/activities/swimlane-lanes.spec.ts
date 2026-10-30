@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ValidationError } from '../../common/errors/domain-errors';
 
-import { attachSwimlaneLanes, deriveLaneBasis, loadSwimlaneLanes } from './swimlane-lanes';
+import {
+  attachSwimlaneLanes,
+  deriveCodeLaneBasis,
+  deriveLaneBasis,
+  loadCodeSwimlaneLanes,
+  loadSwimlaneLanes,
+} from './swimlane-lanes';
 
 const node = (id: string, parentId: string | null, type = 'TASK'): [string, WbsNode] => [
   id,
@@ -102,5 +108,54 @@ describe('loadSwimlaneLanes', () => {
   it('attaches [] to an activity that was never placed', () => {
     const attached = attachSwimlaneLanes([{ id: 'c' }], new Map());
     expect(attached).toEqual([{ id: 'c', swimlaneLanes: [] }]);
+  });
+});
+
+describe('deriveCodeLaneBasis', () => {
+  const live = new Set(['roof', 'l1']);
+
+  it('is (type, the live value) for a carrier of a live value', () => {
+    expect(deriveCodeLaneBasis('area', 'roof', live)).toEqual({
+      codeTypeId: 'area',
+      codeValueId: 'roof',
+    });
+  });
+
+  it('is (type, null) for no value, and for a value that has been deleted', () => {
+    expect(deriveCodeLaneBasis('area', null, live)).toEqual({
+      codeTypeId: 'area',
+      codeValueId: null,
+    });
+    expect(deriveCodeLaneBasis('area', 'gone', live).codeValueId).toBeNull();
+  });
+
+  it('is not reachable through the hand-made and WBS derivation', () => {
+    expect(() =>
+      deriveLaneBasis({ swimlaneSource: 'ACTIVITY_CODE', swimlaneWbsLevel: null }, 'a', null, TREE),
+    ).toThrow(/by code/);
+  });
+});
+
+describe('loadCodeSwimlaneLanes', () => {
+  it('issues one statement for the page and orders each activity by type then value', async () => {
+    const at = new Date('2026-10-30T10:00:00.000Z');
+    const queryRaw = vi.fn().mockResolvedValue([
+      { activityId: 'a', codeTypeId: 'b-type', codeValueId: 'v', laneIndex: 2, updatedAt: at },
+      { activityId: 'a', codeTypeId: 'a-type', codeValueId: null, laneIndex: 1, updatedAt: at },
+    ]);
+    const lanes = await loadCodeSwimlaneLanes(
+      { $queryRaw: queryRaw },
+      { organizationId: 'o', planId: 'p' },
+      ['a', 'c'],
+    );
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(lanes.get('a')?.map((l) => l.codeTypeId)).toEqual(['a-type', 'b-type']);
+    expect(lanes.get('c')).toEqual([]);
+  });
+
+  it('issues none for an empty page', async () => {
+    const queryRaw = vi.fn();
+    await loadCodeSwimlaneLanes({ $queryRaw: queryRaw }, { organizationId: 'o', planId: 'p' }, []);
+    expect(queryRaw).not.toHaveBeenCalled();
   });
 });

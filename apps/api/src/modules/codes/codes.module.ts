@@ -5,6 +5,7 @@ import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
 import { CodeAssignmentRepository } from './code-assignment.repository';
+import { CodeSwimlaneLaneRepository } from './code-swimlane-lane.repository';
 import { CodeTypeRepository } from './code-type.repository';
 import { CodeTypesController } from './code-types.controller';
 import { CodeTypesService } from './code-types.service';
@@ -31,7 +32,13 @@ import { CodeValuesService } from './code-values.service';
     CodeTypeRepository,
     CodeValueRepository,
     CodeAssignmentRepository,
+    CodeSwimlaneLaneRepository,
   ],
-  exports: [CodeTypeRepository, CodeValueRepository, CodeAssignmentRepository],
+  exports: [
+    CodeTypeRepository,
+    CodeValueRepository,
+    CodeAssignmentRepository,
+    CodeSwimlaneLaneRepository,
+  ],
 })
 export class CodesModule {}

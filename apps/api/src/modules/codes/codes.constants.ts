@@ -28,4 +28,14 @@ export const CODE_CONFLICT = {
   VALUE_DELETED: 'CODE_VALUE_DELETED',
   /** An assignment names a value that belongs to another code type of the plan. */
   VALUE_WRONG_TYPE: 'CODE_VALUE_WRONG_TYPE',
+  /** A codes write's `lanes` were planned against a swimlane source that is no longer the plan's. */
+  SWIMLANE_SOURCE_CHANGED: 'SWIMLANE_SOURCE_CHANGED',
+  /** A codes write names an activity twice in `lanes`. */
+  DUPLICATE_LANES_ACTIVITY_ID: 'DUPLICATE_LANES_ACTIVITY_ID',
+  /** A codes write sends `lanes` without the type they were planned against. */
+  LANES_CODE_TYPE_REQUIRED: 'LANES_CODE_TYPE_REQUIRED',
+  /** An activity is in both `activities` and `lanes` of a codes write, at two different versions. */
+  LANES_VERSION_DISAGREES: 'LANES_VERSION_DISAGREES',
+  /** The activities of a codes write and its lane-only neighbours together pass the batch ceiling. */
+  BATCH_TOO_LARGE: 'CODES_BATCH_TOO_LARGE',
 } as const;

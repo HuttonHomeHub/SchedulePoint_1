@@ -260,6 +260,13 @@ export interface SwimlaneSummary {
 export const CODE_TYPE_LIMIT = 100;
 export const CODE_VALUE_LIMIT = 1000;
 export const CODE_NAME_MAX = 80;
+
+/**
+ * The cap on a plan's hand-made swimlanes (swimlanes spec §2) and the longest swimlane order a body
+ * may name. Also what a code-sourced plan's "values in use" is judged against when the source is
+ * switched to a code (p6-activity-codes M4), so the web and the API read one number.
+ */
+export const SWIMLANE_LIMIT = 100;
 export const CODE_SHORT_CODE_MAX = 80;
 export const CODE_DESCRIPTION_MAX = 255;
 
@@ -308,6 +315,46 @@ export interface CodeTypeSummary {
 export interface ActivityCodeAssignment {
   codeTypeId: string;
   codeValueId: string;
+}
+
+/**
+ * One stored in-swimlane lane for a plan whose swimlanes come from a code (p6-activity-codes M4,
+ * database-design §5.5): the lane an activity holds under one code type, for one value of it
+ * (`codeValueId`) or for "no value" (`null`). Kept per type, so switching the source from one code to
+ * another and back finds each layout as it was. `updatedAt` is the tie-break when two placed members
+ * of one basis collide.
+ */
+export interface ActivityCodeLaneSummary {
+  codeTypeId: string;
+  codeValueId: string | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/** One value to set on a new activity, or on an activity in a codes write (`null` clears the type). */
+export interface ActivityCodeValueInput {
+  codeTypeId: string;
+  codeValueId: string | null;
+}
+
+/**
+ * One activity's place in a code swimlane, sent beside a codes write (`lanes`): the activity's lane
+ * inside the band it will be in once the write lands. Carries no basis: the server derives it from the
+ * activity's value of `lanesCodeTypeId` after the write (ADR-0206 A3).
+ */
+export interface ActivityCodeLaneInput {
+  id: string;
+  version: number;
+  laneIndex: number;
+}
+
+/** The body of `PATCH …/activities/codes` (`docs/API.md` "Codes"). */
+export interface UpdateActivityCodesInput {
+  activities: { id: string; version: number; codes: ActivityCodeValueInput[] }[];
+  /** Lanes to write at the basis the codes write leaves; needs `lanesCodeTypeId`. 0–2,000. */
+  lanes?: ActivityCodeLaneInput[];
+  /** The plan's current swimlane code type; the write is refused (409) if the source is not it. */
+  lanesCodeTypeId?: string;
 }
 
 /**
@@ -708,6 +755,12 @@ export interface ActivitySummary {
    * by the activity list and by the codes write only; any other activity response omits it.
    */
   codes?: ActivityCodeAssignment[];
+  /**
+   * The activity's lane for each live code type it has been placed under (p6-activity-codes M4).
+   * **Absent, not empty, when the plan has no live code type**, exactly as `codes`; sent wherever
+   * `codes` is (the list, the single read, the codes write and create).
+   */
+  codeSwimlaneLanes?: ActivityCodeLaneSummary[];
   /**
    * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
    * activity renders at its late-based position; it never changes early/late/float. False by default.

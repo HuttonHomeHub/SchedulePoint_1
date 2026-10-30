@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient, SwimlaneLaneBasis, SwimlaneSource } from '@prisma/client';
 import { wbsBasisOf, type WbsNode } from '@repo/layout';
-import type { ActivitySwimlaneLaneSummary } from '@repo/types';
+import type { ActivityCodeLaneSummary, ActivitySwimlaneLaneSummary } from '@repo/types';
 
 import { ValidationError } from '../../common/errors/domain-errors';
 
@@ -10,6 +10,8 @@ export const SWIMLANE_SOURCE_REASON = {
   IS_WBS: 'SWIMLANE_SOURCE_IS_WBS',
   /** An in-swimlane lane write while the plan has no swimlane source. */
   IS_NONE: 'SWIMLANE_SOURCE_NONE',
+  /** A direct `swimlaneId` write while the plan's swimlanes come from a code. */
+  IS_ACTIVITY_CODE: 'SWIMLANE_SOURCE_IS_ACTIVITY_CODE',
 } as const;
 
 /** An activity response decorated with the lanes stored against each basis it has been placed on. */
@@ -116,11 +118,88 @@ export function deriveLaneBasis(
         : { basis: 'NO_WBS_SUMMARY', swimlaneId: null, summaryActivityId: null, wbsLevel: level };
     }
     case 'ACTIVITY_CODE':
-      // Unreachable: the label exists in the database before anything can store it
-      // (20261027120000_swimlane_source_activity_code). ck_plans_swimlane_source_level has no
-      // ACTIVITY_CODE branch yet and ends ELSE false, and UpdatePlanDto does not admit it. Code lanes
-      // are designed to live in their own table rather than under a SwimlaneLaneBasis
-      // (p6-activity-codes database-design.md §5.5); the codes milestones decide how they are written.
-      throw new Error('A plan whose swimlanes come from an activity code has no lane basis here.');
+      // Code lanes live in their own table, keyed by (code type, value) rather than by a
+      // SwimlaneLaneBasis (p6-activity-codes database-design §5.5), so they derive through
+      // `deriveCodeLaneBasis` and a caller reaching this branch has taken the wrong road.
+      throw new Error('A plan whose swimlanes come from a code derives its lane basis by code.');
   }
+}
+
+/** What a code lane row is keyed by besides its activity: `codeValueId` is `null` for "No <type>". */
+export interface CodeLaneBasisKey {
+  codeTypeId: string;
+  codeValueId: string | null;
+}
+
+/**
+ * **The basis of an activity's lane under a code source, derived on the server** (ADR-0206 A3): the
+ * type the plan's swimlanes are made from and the activity's value of it once the write lands, or
+ * "no value" when it has none or the value is soft-deleted. A deleted value draws its carriers in
+ * "No <type>", so their lane belongs to that basis; the stored value is kept for a restore, exactly as
+ * a kept membership naming a deleted hand-made swimlane takes the "No swimlane" basis.
+ */
+export function deriveCodeLaneBasis(
+  codeTypeId: string,
+  valueId: string | null,
+  liveValueIds: ReadonlySet<string>,
+): CodeLaneBasisKey {
+  return {
+    codeTypeId,
+    codeValueId: valueId !== null && liveValueIds.has(valueId) ? valueId : null,
+  };
+}
+
+/** An activity response decorated with its code lanes, absent when the plan has no live code type. */
+export type WithCodeSwimlaneLanes<T> = T & { codeSwimlaneLanes?: ActivityCodeLaneSummary[] };
+
+/**
+ * **The code lanes of a page's activities, in one statement** (m4-database-review §2.3: 0.6 ms per
+ * 200 rows), for every **live** type — a deleted type's rows stay stored, for its restore, and are not
+ * sent. The caller runs it only once `loadActivityCodes` has found a live code type, so a plan that
+ * never used codes issues no statement and answers byte for byte as before (SC-2). One plan's rows.
+ * The statement joins `code_types`, so it states that table's `deleted_at`.
+ */
+export async function loadCodeSwimlaneLanes(
+  db: Pick<PrismaClient, '$queryRaw'>,
+  scope: { organizationId: string; planId: string },
+  activityIds: readonly string[],
+): Promise<Map<string, ActivityCodeLaneSummary[]>> {
+  if (activityIds.length === 0) return new Map();
+  const rows = await db.$queryRaw<
+    {
+      activityId: string;
+      codeTypeId: string;
+      codeValueId: string | null;
+      laneIndex: number;
+      updatedAt: Date;
+    }[]
+  >`
+    SELECT l.activity_id AS "activityId", l.code_type_id AS "codeTypeId",
+           l.code_value_id AS "codeValueId", l.lane_index AS "laneIndex",
+           l.updated_at AS "updatedAt"
+    FROM code_swimlane_lanes l
+    JOIN code_types t ON t.id = l.code_type_id AND t.deleted_at IS NULL
+    WHERE l.plan_id = ${scope.planId}::uuid
+      AND l.organization_id = ${scope.organizationId}::uuid
+      AND l.activity_id IN (SELECT u FROM unnest(${[...activityIds]}::uuid[]) AS u)
+  `;
+  const byActivity = new Map<string, ActivityCodeLaneSummary[]>(activityIds.map((id) => [id, []]));
+  for (const row of rows) {
+    byActivity.get(row.activityId)?.push({
+      codeTypeId: row.codeTypeId,
+      codeValueId: row.codeValueId,
+      laneIndex: row.laneIndex,
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  }
+  // Ordered here rather than by the statement, as `codes` is: at most 100 types an activity, and the
+  // database need not sort 200 activities' rows to give a stable payload. "No value" sorts first.
+  for (const list of byActivity.values()) {
+    list.sort(
+      (a, b) =>
+        (a.codeTypeId < b.codeTypeId ? -1 : a.codeTypeId > b.codeTypeId ? 1 : 0) ||
+        (a.codeValueId ?? '').localeCompare(b.codeValueId ?? ''),
+    );
+  }
+  return byActivity;
 }

@@ -11,7 +11,12 @@ import {
   type SwimlaneSource,
 } from '@prisma/client';
 import type { WbsNode } from '@repo/layout';
-import type { ActivityCodeAssignment, PageMeta, ProgressWarning } from '@repo/types';
+import type {
+  ActivityCodeAssignment,
+  ActivityCodeLaneSummary,
+  PageMeta,
+  ProgressWarning,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -47,12 +52,17 @@ import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
 import { assertCalendarUsableBy } from '../calendars/calendar-scope.guard';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { loadActivityCodes } from '../codes/code-assignment.repository';
+import {
+  CodeSwimlaneLaneRepository,
+  type CodeLaneWrite,
+} from '../codes/code-swimlane-lane.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
+import { ActivityCodesService } from './activity-codes.service';
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
 import { batchRestoreAnchor } from './batch-restore-anchor';
 import {
@@ -77,7 +87,9 @@ import {
 } from './resource-assignment-counts';
 import {
   attachSwimlaneLanes,
+  deriveCodeLaneBasis,
   deriveLaneBasis,
+  loadCodeSwimlaneLanes,
   loadSwimlaneLanes,
   SWIMLANE_SOURCE_REASON,
   type LaneBasisKey,
@@ -143,6 +155,8 @@ function deriveStatus(
 export type DecoratedActivity = WithSwimlaneLanes<WithAssignmentCount<WithDayFactor<Activity>>> & {
   /** The activity's code values; absent, not empty, when its plan has no live code type (SC-2). */
   codes?: ActivityCodeAssignment[];
+  /** The activity's lane per live code type; present exactly when `codes` is (SC-2). */
+  codeSwimlaneLanes?: ActivityCodeLaneSummary[];
 };
 
 @Injectable()
@@ -158,6 +172,8 @@ export class ActivitiesService {
     private readonly audit: AuditService,
     private readonly history: ActivityHistoryRecorder,
     private readonly swimlanes: SwimlaneRepository,
+    private readonly activityCodes: ActivityCodesService,
+    private readonly codeLaneRepo: CodeSwimlaneLaneRepository,
     @InjectPinoLogger(ActivitiesService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -313,9 +329,16 @@ export class ActivitiesService {
    * come from its WBS (422): membership is then the WBS tree's, and the stored `swimlane_id` is kept
    * and ignored so switching back restores it. `swimlaneId` may therefore only be a value the
    * request would change, never a refusal of a no-op — a form that resends the whole row in WBS mode
-   * must not be told it wrote a swimlane.
+   * must not be told it wrote a swimlane. The same refusal holds while the swimlanes come from a
+   * code (p6-activity-codes M4): membership is the code's, so set the code instead.
    */
   private assertSwimlaneIdWritable(plan: { swimlaneSource: string }): void {
+    if (plan.swimlaneSource === 'ACTIVITY_CODE') {
+      throw new ValidationError(
+        'This plan’s swimlanes come from a code; set the activity’s code to move it.',
+        { reason: SWIMLANE_SOURCE_REASON.IS_ACTIVITY_CODE },
+      );
+    }
     if (plan.swimlaneSource === 'WBS') {
       throw new ValidationError(
         'This plan’s swimlanes come from its WBS; move the activity there.',
@@ -339,11 +362,20 @@ export class ActivitiesService {
     tx: Prisma.TransactionClient,
     organizationId: string,
     planId: string,
-  ): Promise<{ swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }> {
+  ): Promise<{
+    swimlaneSource: SwimlaneSource;
+    swimlaneWbsLevel: number | null;
+    swimlaneCodeTypeId: string | null;
+  }> {
     const rows = await tx.$queryRaw<
-      { swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }[]
+      {
+        swimlaneSource: SwimlaneSource;
+        swimlaneWbsLevel: number | null;
+        swimlaneCodeTypeId: string | null;
+      }[]
     >`
-      SELECT swimlane_source::text AS "swimlaneSource", swimlane_wbs_level AS "swimlaneWbsLevel"
+      SELECT swimlane_source::text AS "swimlaneSource", swimlane_wbs_level AS "swimlaneWbsLevel",
+             swimlane_code_type_id AS "swimlaneCodeTypeId"
       FROM plans
       WHERE id = ${planId}::uuid AND organization_id = ${organizationId}::uuid
         AND deleted_at IS NULL
@@ -405,8 +437,8 @@ export class ActivitiesService {
   /**
    * {@link withDayFactors} plus the rows' code values, for the responses that carry them (the list and
    * the codes write). **One plan's rows**: the assignments are read per plan, in one statement for the
-   * whole page, and `codes` is left off every row when the plan has no live code type, so such a plan
-   * answers byte for byte as before (p6-activity-codes SC-2).
+   * whole page, and `codes` and `codeSwimlaneLanes` are left off every row when the plan has no live
+   * code type, so such a plan answers byte for byte as before (p6-activity-codes SC-2).
    */
   async decorateWithCodes(rows: readonly Activity[]): Promise<DecoratedActivity[]> {
     const first = rows[0];
@@ -420,7 +452,17 @@ export class ActivitiesService {
       ),
     ]);
     if (codes === null) return decorated;
-    return decorated.map((row) => ({ ...row, codes: codes.get(row.id) ?? [] }));
+    // Read only now that a live type exists, so a plan that never used codes issues no lane statement.
+    const codeLanes = await loadCodeSwimlaneLanes(
+      this.prisma,
+      { organizationId: first.organizationId, planId: first.planId },
+      rows.map((r) => r.id),
+    );
+    return decorated.map((row) => ({
+      ...row,
+      codes: codes.get(row.id) ?? [],
+      codeSwimlaneLanes: codeLanes.get(row.id) ?? [],
+    }));
   }
 
   async get(
@@ -469,6 +511,8 @@ export class ActivitiesService {
     // Hand-made swimlane (swimlanes spec §4.6); null/omitted is "No swimlane", which writes nothing.
     const swimlaneId = dto.swimlaneId ?? null;
     if (swimlaneId !== null) this.assertSwimlaneIdWritable(plan);
+    const codes = dto.codes ?? [];
+    this.activityCodes.assertDistinctTypes(codes);
 
     try {
       const activity = await this.prisma.$transaction(async (tx) => {
@@ -482,9 +526,13 @@ export class ActivitiesService {
         // The pre-transaction read may predate a delete that held the lock; re-read now that it is ours.
         // A plain read, not `FOR SHARE`, which would conflict with `markScheduleInputsChanged`'s later
         // `FOR NO KEY UPDATE` on the same row.
-        if (!(await this.plans.findActiveByIdInOrg(plan.id, organization.id, tx))) {
+        const lockedPlan = await this.plans.findActiveByIdInOrg(plan.id, organization.id, tx);
+        if (!lockedPlan) {
           throw new NotFoundError('Plan not found.');
         }
+        // The pre-transaction refusal ran on a read a source switch may have overtaken; the switch
+        // takes this lock too, so this one is final.
+        if (swimlaneId !== null) this.assertSwimlaneIdWritable(lockedPlan);
         // Validate a specific calendar through THE shared scope guard before the insert
         // (ADR-0037 + ADR-0053 §2): active + in-org (404 otherwise) AND usable by this
         // activity's PROJECT — an ORG calendar anywhere, a PROJECT calendar only inside its
@@ -595,6 +643,9 @@ export class ActivitiesService {
           },
           tx,
         );
+        // Codes after the insert and before the stamp, so the plan row's `FOR NO KEY UPDATE` stays as
+        // short as it was (m4-record §2). Nothing is issued for a create without codes.
+        await this.activityCodes.assignOnCreate(tx, organization.id, plan.id, created.id, codes);
         // A new activity is a new node in the network: always a scheduling-input change.
         await markScheduleInputsChanged(tx, organization.id, [plan.id]);
         return created;
@@ -608,7 +659,13 @@ export class ActivitiesService {
         },
         'activity created',
       );
-      return { activity: await this.withDayFactor(activity), canReadCost };
+      // With `codes`, so a client placing a bar in a code swimlane reads it back in its band; a create
+      // that sent none answers as before.
+      const [decorated] =
+        codes.length > 0
+          ? await this.decorateWithCodes([activity])
+          : [await this.withDayFactor(activity)];
+      return { activity: decorated, canReadCost };
     } catch (error) {
       throw this.mapWriteError(error);
     }
@@ -1086,6 +1143,7 @@ export class ActivitiesService {
 
     await this.prisma.$transaction(async (tx) => {
       let lanes: (LaneBasisKey & { activityId: string; laneIndex: number })[] = [];
+      let codeLanes: CodeLaneWrite[] = [];
       let membershipBefore = new Map<string, string | null>();
       if (swimlaneRows.length > 0) {
         // Activity rows first, then the swimlanes (schema-design §5). The repository's own lock below
@@ -1134,29 +1192,68 @@ export class ActivitiesService {
                 ]),
               )
             : new Map();
-        lanes = swimlaneRows.map((p) => {
-          const lane = p.swimlane!;
-          // The swimlane the activity is in once this write lands: the one named, `null` for none,
-          // else its own (which is none when that swimlane has been deleted).
-          const kept = membershipBefore.get(p.id) ?? null;
-          const effective =
-            lane.swimlaneId !== undefined
-              ? lane.swimlaneId
-              : kept !== null && activeKept.has(kept)
-                ? kept
-                : null;
-          return {
+        if (locked.swimlaneSource === 'ACTIVITY_CODE') {
+          // Under a code source the basis is (T, the activity's live value of T), stored in
+          // `code_swimlane_lanes` and nowhere else. Assignments are stable here: every assignment
+          // write holds the activity row locks taken above. The liveness read is advisory, like the
+          // kept-swimlane read below: a value deleted a moment later leaves a lane the diagram no
+          // longer draws, which the stale-row rule absorbs. T is a live type: the source type cannot
+          // be deleted (CODE_TYPE_IS_SWIMLANE_SOURCE).
+          const typeId = locked.swimlaneCodeTypeId;
+          if (typeId === null) {
+            throw new ValidationError('This plan has no code to place a lane against.', {
+              reason: SWIMLANE_SOURCE_REASON.IS_NONE,
+            });
+          }
+          const assigned = await tx.codeValueAssignment.findMany({
+            where: {
+              planId,
+              codeTypeId: typeId,
+              activityId: { in: swimlaneRows.map((p) => p.id) },
+            },
+            select: { activityId: true, codeValueId: true },
+          });
+          const valueOf = new Map(assigned.map((a) => [a.activityId, a.codeValueId]));
+          const live = await tx.codeValue.findMany({
+            where: {
+              organizationId: organization.id,
+              codeTypeId: typeId,
+              id: { in: [...new Set(valueOf.values())] },
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+          const liveIds = new Set(live.map((v) => v.id));
+          codeLanes = swimlaneRows.map((p) => ({
             activityId: p.id,
-            laneIndex: lane.laneIndex,
-            ...deriveLaneBasis(locked, p.id, effective, wbsNodes),
-          };
-        });
-        await this.lockSwimlanesForAssignment(
-          tx,
-          organization.id,
-          planId,
-          lanes.flatMap((l) => (l.swimlaneId === null ? [] : [l.swimlaneId])),
-        );
+            laneIndex: p.swimlane!.laneIndex,
+            ...deriveCodeLaneBasis(typeId, valueOf.get(p.id) ?? null, liveIds),
+          }));
+        } else {
+          lanes = swimlaneRows.map((p) => {
+            const lane = p.swimlane!;
+            // The swimlane the activity is in once this write lands: the one named, `null` for none,
+            // else its own (which is none when that swimlane has been deleted).
+            const kept = membershipBefore.get(p.id) ?? null;
+            const effective =
+              lane.swimlaneId !== undefined
+                ? lane.swimlaneId
+                : kept !== null && activeKept.has(kept)
+                  ? kept
+                  : null;
+            return {
+              activityId: p.id,
+              laneIndex: lane.laneIndex,
+              ...deriveLaneBasis(locked, p.id, effective, wbsNodes),
+            };
+          });
+          await this.lockSwimlanesForAssignment(
+            tx,
+            organization.id,
+            planId,
+            lanes.flatMap((l) => (l.swimlaneId === null ? [] : [l.swimlaneId])),
+          );
+        }
       }
 
       // One set-based UPDATE keyed by id+version and re-asserting plan/org/active scope: a stale
@@ -1196,6 +1293,7 @@ export class ActivitiesService {
       if (lanes.length > 0) {
         await this.activities.upsertSwimlaneLanes(organization.id, planId, lanes, tx);
       }
+      await this.codeLaneRepo.upsertMany(organization.id, planId, codeLanes, tx);
 
       // Only a move into another swimlane is a decision worth an entry; a lane written inside the
       // swimlane the activity is already in changes no recorded value, so it makes none, exactly as a

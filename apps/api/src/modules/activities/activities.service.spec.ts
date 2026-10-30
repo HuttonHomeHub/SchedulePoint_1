@@ -28,6 +28,7 @@ import type { PlanRepository } from '../plans/plan.repository';
 import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { ActivitiesService } from './activities.service';
+import type { ActivityCodesService } from './activity-codes.service';
 import type { ActivityRepository } from './activity.repository';
 import { ActivityResponseDto } from './dto/activity-response.dto';
 
@@ -386,6 +387,12 @@ describe('ActivitiesService', () => {
       audit as unknown as AuditService,
       history as unknown as ActivityHistoryRecorder,
       swimlanes as unknown as SwimlaneRepository,
+      // Codes on create and code lanes are proven against a real database by the codes e2e specs.
+      {
+        assertDistinctTypes: vi.fn(),
+        assignOnCreate: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ActivityCodesService,
+      { upsertMany: vi.fn().mockResolvedValue(undefined) },
       logger,
     );
   });
