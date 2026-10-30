@@ -13,7 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { CODE_TYPE_LIMIT } from '../../codes/codes.constants';
+import { ACTIVITY_BATCH_LIMIT, CODE_TYPE_LIMIT } from '../../codes/codes.constants';
 
 /** One code value to set on an activity, or `null` to clear that type. */
 export class ActivityCodeValueDto {
@@ -100,10 +100,15 @@ export class ActivityCodeLaneDto {
  * means to touch; any other type the activity carries is left alone.
  */
 export class UpdateActivityCodesDto {
-  @ApiProperty({ type: ActivityCodesRowDto, isArray: true, minItems: 1, maxItems: 2000 })
+  @ApiProperty({
+    type: ActivityCodesRowDto,
+    isArray: true,
+    minItems: 1,
+    maxItems: ACTIVITY_BATCH_LIMIT,
+  })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(2000)
+  @ArrayMaxSize(ACTIVITY_BATCH_LIMIT)
   @ValidateNested({ each: true })
   @Type(() => ActivityCodesRowDto)
   activities!: ActivityCodesRowDto[];
@@ -111,7 +116,7 @@ export class UpdateActivityCodesDto {
   @ApiPropertyOptional({
     type: ActivityCodeLaneDto,
     isArray: true,
-    maxItems: 2000,
+    maxItems: ACTIVITY_BATCH_LIMIT,
     description:
       'Lanes to store, at the basis each activity holds **after** this write, while the plan’s ' +
       'swimlanes come from the code `lanesCodeTypeId`. An activity at most once; one that is also in ' +
@@ -121,7 +126,7 @@ export class UpdateActivityCodesDto {
   })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(2000)
+  @ArrayMaxSize(ACTIVITY_BATCH_LIMIT)
   @ValidateNested({ each: true })
   @Type(() => ActivityCodeLaneDto)
   lanes?: ActivityCodeLaneDto[];

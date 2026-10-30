@@ -12,10 +12,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// The cap on active swimlanes per plan (swimlanes spec §2) now lives in @repo/types, where the web's
-// code-source picker reads it too; re-exported so the swimlane module's own imports are unchanged.
-export { SWIMLANE_LIMIT };
-
 /** One swimlane in the new order, with the version it was read at. */
 export class SwimlaneOrderItemDto {
   @ApiProperty({ format: 'uuid' })

@@ -351,7 +351,7 @@ export class CreateActivityDto {
     maxItems: CODE_TYPE_LIMIT,
     description:
       'Code values the new activity carries (p6-activity-codes M4): a live type of this plan at ' +
-      'most once each, each with a live value of that type (`codeValueId: null` writes nothing). ' +
+      'most once each (else 422 `DUPLICATE_CODES_TYPE_ID`), each with a live value of that type (`codeValueId: null` writes nothing). ' +
       'Written in the same transaction, so an activity drawn in a code swimlane is created in it.',
   })
   @IsOptional()

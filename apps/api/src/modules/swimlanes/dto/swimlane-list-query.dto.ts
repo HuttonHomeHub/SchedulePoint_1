@@ -1,8 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { SWIMLANE_LIMIT } from '@repo/types';
 
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
-
-import { SWIMLANE_LIMIT } from './reorder-swimlanes.dto';
 
 /**
  * The list query. The default page is the plan's whole cap, because the control that shows the

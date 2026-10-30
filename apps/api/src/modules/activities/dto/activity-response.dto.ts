@@ -88,7 +88,7 @@ export class ActivityCodeLaneResponseDto implements ActivityCodeLaneSummary {
   @ApiProperty({ format: 'uuid', nullable: true, type: String })
   codeValueId!: string | null;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ minimum: 0, maximum: 10000 })
   laneIndex!: number;
 
   @ApiProperty({
@@ -341,7 +341,9 @@ export class ActivityResponseDto implements ActivitySummary {
       'The lane the activity holds under each live code type it has been placed under, for a value ' +
       'of that type (`codeValueId`) or for "no value" (`null`), so switching the swimlanes from one ' +
       'code to another and back finds each layout. A deleted type’s rows are not sent. **Absent, ' +
-      'not empty, when the plan has no live code type**, and sent wherever `codes` is.',
+      'not empty, when the plan has no live code type**, and sent wherever `codes` is. A read ' +
+      'projection: never sent on a write (lanes are written through `PATCH …/activities/positions` ' +
+      'and the `lanes` of `PATCH …/activities/codes`).',
   })
   codeSwimlaneLanes?: ActivityCodeLaneResponseDto[];
 

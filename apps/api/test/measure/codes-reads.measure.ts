@@ -385,40 +385,33 @@ describe('codes — request-path cost', () => {
     await prisma.$executeRawUnsafe('ANALYZE');
 
     const out: string[] = [];
-    const time = async (label: string, fn: () => Promise<unknown>, reps = ITER): Promise<void> => {
-      await fn();
-      const samples: number[] = [];
-      for (let i = 0; i < reps; i += 1) {
-        const started = performance.now();
-        await fn();
-        samples.push(performance.now() - started);
-      }
-      samples.sort((a, b) => a - b);
-      out.push(
-        `${label.padEnd(66)} p50 ${quantile(samples, 0.5).toFixed(1).padStart(7)} ms   p95 ${quantile(samples, 0.95).toFixed(1).padStart(7)} ms   (n=${reps})`,
-      );
-    };
 
     const list = (query: string) =>
       agent.get(`${API}/plans/${planId}/activities?${query}`).expect(200);
-    skipLanes.on = true;
-    await time(
-      'list 100 activities (one page, the route cap) WITHOUT the code-lane statement',
-      () => list('limit=100'),
-    );
-    skipLanes.on = false;
-    await time(
-      'list 100 activities (one page, the route cap) WITH code lanes (3 types, every row placed)',
-      () => list('limit=100'),
-    );
-    skipLanes.on = true;
-    await time(
-      'list 100 activities (one page, the route cap) WITHOUT the code-lane statement (again)',
-      () => list('limit=100'),
-    );
-    skipLanes.on = false;
-    await time('list 100 activities (one page, the route cap) WITH code lanes (again)', () =>
-      list('limit=100'),
+    // Paired: each repetition times the page without the lane statement and then with it, back to back,
+    // so the machine's drift lands on both halves; the figure is the median of the paired differences.
+    const median = (xs: number[]): number =>
+      [...xs].sort((x, y) => x - y)[Math.floor(xs.length / 2)]!;
+    const timed = async (fn: () => Promise<unknown>): Promise<number> => {
+      const started = performance.now();
+      await fn();
+      return performance.now() - started;
+    };
+    const pairedList: number[] = [];
+    const listWithout: number[] = [];
+    const listWith: number[] = [];
+    await list('limit=100');
+    for (let i = 0; i < ITER; i += 1) {
+      skipLanes.on = true;
+      const without = await timed(() => list('limit=100'));
+      skipLanes.on = false;
+      const withLanes = await timed(() => list('limit=100'));
+      listWithout.push(without);
+      listWith.push(withLanes);
+      pairedList.push(withLanes - without);
+    }
+    out.push(
+      `list 100 activities, 3 placed types: median without ${median(listWithout).toFixed(1)} ms, with ${median(listWith).toFixed(1)} ms, median paired difference ${median(pairedList).toFixed(1)} ms (n=${ITER} pairs; two pages = 2x)`,
     );
 
     // The full list payload: every page, summed as bytes on the wire.
@@ -475,10 +468,35 @@ describe('codes — request-path cost', () => {
       }
       await agent.patch(`${API}/plans/${planId}/activities/codes`).send(body).expect(200);
     };
-    for (let round = 0; round < 2; round += 1) {
-      await time('PATCH codes: 2,000 activities, 1 type, WITHOUT lanes', () => write(false), 5);
-      await time('PATCH codes: 2,000 activities, 1 type, WITH 2,000 lanes', () => write(true), 5);
+    // The lane table grows with every write that changes a value (a new basis row each time), which
+    // is what made an unpaired run drift; it is rebuilt to the seeded 15,000 rows before every half.
+    const rebuildLanes = async (): Promise<void> => {
+      await prisma.$executeRaw`DELETE FROM code_swimlane_lanes WHERE plan_id = ${planId}::uuid`;
+      await prisma.$executeRaw`
+        INSERT INTO code_swimlane_lanes
+          (id, organization_id, plan_id, activity_id, code_type_id, code_value_id, lane_index, created_at, updated_at)
+        SELECT gen_random_uuid(), ${orgId}::uuid, ${planId}::uuid, cva.activity_id, cva.code_type_id,
+               cva.code_value_id, abs(hashtext(cva.activity_id::text)) % 40, now(), now()
+        FROM code_value_assignments cva WHERE cva.plan_id = ${planId}::uuid`;
+      await prisma.$executeRawUnsafe('ANALYZE code_swimlane_lanes');
+    };
+    const PAIRS = Number(process.env.MEASURE_PAIRS ?? 7);
+    const writeWithout: number[] = [];
+    const writeWith: number[] = [];
+    const pairedWrite: number[] = [];
+    await write(false);
+    for (let i = 0; i < PAIRS; i += 1) {
+      await rebuildLanes();
+      const without = await timed(() => write(false));
+      await rebuildLanes();
+      const withLanes = await timed(() => write(true));
+      writeWithout.push(without);
+      writeWith.push(withLanes);
+      pairedWrite.push(withLanes - without);
     }
+    out.push(
+      `PATCH codes, 2,000 activities, 1 type, a new value each time: median without ${median(writeWithout).toFixed(1)} ms, with 2,000 lanes ${median(writeWith).toFixed(1)} ms, median paired difference ${median(pairedWrite).toFixed(1)} ms (n=${PAIRS} pairs, lanes rebuilt before each half; pairs: ${pairedWrite.map((x) => x.toFixed(0)).join(', ')})`,
+    );
 
     process.stdout.write(`\n${out.join('\n')}\n`);
     if (process.env.MEASURE_OUT) writeFileSync(process.env.MEASURE_OUT, `${out.join('\n')}\n`);

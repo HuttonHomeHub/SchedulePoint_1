@@ -17,7 +17,7 @@ import { CodeAssignmentRepository } from '../codes/code-assignment.repository';
 import { CodeSwimlaneLaneRepository } from '../codes/code-swimlane-lane.repository';
 import { CodeTypeRepository } from '../codes/code-type.repository';
 import { CodeValueRepository } from '../codes/code-value.repository';
-import { CODE_CONFLICT } from '../codes/codes.constants';
+import { ACTIVITY_BATCH_LIMIT, CODE_CONFLICT } from '../codes/codes.constants';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -51,9 +51,6 @@ import { deriveCodeLaneBasis } from './swimlane-lanes';
  * own memberships, never from the body (security review S1): the DTO has no such field and the global
  * validation pipe refuses one that is sent.
  */
-/** The ceiling every activity batch body shares (`@ArrayMaxSize(2000)`), applied here to the union. */
-const ACTIVITY_BATCH_LIMIT = 2000;
-
 @Injectable()
 export class ActivityCodesService {
   constructor(
@@ -100,7 +97,7 @@ export class ActivityCodesService {
     const ids = dto.activities.map((row) => row.id);
     if (new Set(ids).size !== ids.length) {
       throw new ValidationError('Each activity may appear at most once in a codes batch.', {
-        reason: 'DUPLICATE_CODES_ACTIVITY_ID',
+        reason: CODE_CONFLICT.DUPLICATE_CODES_ACTIVITY_ID,
       });
     }
     for (const row of dto.activities) this.assertDistinctTypes(row.codes);
@@ -109,15 +106,21 @@ export class ActivityCodesService {
     const lanesTypeId = dto.lanesCodeTypeId;
     if (laneRows.length > 0) {
       if (lanesTypeId === undefined) {
-        throw new ValidationError('Lanes need the code type they were planned against.', {
-          reason: CODE_CONFLICT.LANES_CODE_TYPE_REQUIRED,
-        });
+        throw new ValidationError(
+          'Lanes need the code type they were planned against: send lanesCodeTypeId with lanes.',
+          {
+            reason: CODE_CONFLICT.LANES_CODE_TYPE_REQUIRED,
+          },
+        );
       }
       const laneIds = laneRows.map((row) => row.id);
       if (new Set(laneIds).size !== laneIds.length) {
-        throw new ValidationError('Each activity may appear at most once in the lanes.', {
-          reason: CODE_CONFLICT.DUPLICATE_LANES_ACTIVITY_ID,
-        });
+        throw new ValidationError(
+          'Each activity may appear at most once in the lanes: send each activity once.',
+          {
+            reason: CODE_CONFLICT.DUPLICATE_LANES_ACTIVITY_ID,
+          },
+        );
       }
       const rowVersion = new Map(dto.activities.map((row) => [row.id, row.version]));
       if (
@@ -139,7 +142,7 @@ export class ActivityCodesService {
     if (writeRows.length > ACTIVITY_BATCH_LIMIT) {
       throw new ValidationError(
         `A codes write may change at most ${ACTIVITY_BATCH_LIMIT} activities, lane-only rows included. Split it into smaller steps.`,
-        { reason: CODE_CONFLICT.BATCH_TOO_LARGE },
+        { reason: CODE_CONFLICT.CODES_BATCH_TOO_LARGE },
       );
     }
     const writeIds = writeRows.map((row) => row.id);
@@ -341,7 +344,7 @@ export class ActivityCodesService {
     const typeIds = codes.map((c) => c.codeTypeId);
     if (new Set(typeIds).size !== typeIds.length) {
       throw new ValidationError('Each code type may appear at most once for an activity.', {
-        reason: 'DUPLICATE_CODES_TYPE_ID',
+        reason: CODE_CONFLICT.DUPLICATE_CODES_TYPE_ID,
       });
     }
   }

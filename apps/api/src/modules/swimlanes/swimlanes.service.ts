@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Swimlane } from '@prisma/client';
-import type { PageMeta } from '@repo/types';
+import { SWIMLANE_LIMIT, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -23,7 +23,7 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import type { CreateSwimlaneDto } from './dto/create-swimlane.dto';
-import { SWIMLANE_LIMIT, type ReorderSwimlanesDto } from './dto/reorder-swimlanes.dto';
+import type { ReorderSwimlanesDto } from './dto/reorder-swimlanes.dto';
 import type { UpdateSwimlaneDto } from './dto/update-swimlane.dto';
 import { SwimlaneRepository } from './swimlane.repository';
 

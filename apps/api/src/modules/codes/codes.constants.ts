@@ -37,5 +37,16 @@ export const CODE_CONFLICT = {
   /** An activity is in both `activities` and `lanes` of a codes write, at two different versions. */
   LANES_VERSION_DISAGREES: 'LANES_VERSION_DISAGREES',
   /** The activities of a codes write and its lane-only neighbours together pass the batch ceiling. */
-  BATCH_TOO_LARGE: 'CODES_BATCH_TOO_LARGE',
+  CODES_BATCH_TOO_LARGE: 'CODES_BATCH_TOO_LARGE',
+  /** The same activity twice in one codes batch. */
+  DUPLICATE_CODES_ACTIVITY_ID: 'DUPLICATE_CODES_ACTIVITY_ID',
+  /** The same code type twice for one activity. */
+  DUPLICATE_CODES_TYPE_ID: 'DUPLICATE_CODES_TYPE_ID',
 } as const;
+
+/**
+ * The ceiling every activity batch body shares (`@ArrayMaxSize`), which a codes write also applies to
+ * the union of its movers and its lane-only rows. An over-long single array is a plain validation
+ * failure (422, no `reason`); only the union carries `CODES_BATCH_TOO_LARGE`.
+ */
+export const ACTIVITY_BATCH_LIMIT = 2000;

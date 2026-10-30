@@ -490,6 +490,10 @@ export class ActivitiesService {
   ): Promise<{ activity: DecoratedActivity; canReadCost: boolean }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'activity:create', organization.id);
+    // A code is an activity write (it takes `activity:update`), so creating with codes needs both.
+    if (dto.codes !== undefined && dto.codes.length > 0) {
+      this.assertCan(principal, 'activity:update', organization.id);
+    }
     const canReadCost = principal.can('cost:read', organization.id);
     // N26 (ADR-0043 / ADR-0035 §30): an external late finish may not precede an external early start
     // when BOTH are set. Boundary reject before the insert (mirrors the actual finish-before-start and

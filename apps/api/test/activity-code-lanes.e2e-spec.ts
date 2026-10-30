@@ -406,6 +406,27 @@ describe.skipIf(!hasDatabase)('Code swimlane lanes API (e2e, pen enforced)', () 
       expect(await prisma.codeValueAssignment.count()).toBe(0);
     });
 
+    it('reads another organisation’s activity in lanes as missing, and writes nothing', async () => {
+      const { actor, planId, area, l1, a } = await seed();
+      const outsider = await signUp('outsider@example.com');
+      await outsider.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+      const theirPlan = await makePlan(outsider, 'other-co', 'Theirs');
+      await outsider.agent.post(lockUrl(theirPlan, 'other-co')).send({}).expect(200);
+      const theirs = (
+        await outsider.agent
+          .post(`${planUrl(theirPlan, 'other-co')}/activities`)
+          .send({ name: 'Theirs' })
+          .expect(201)
+      ).body.data as ActivityBody;
+      const res = await write(actor, planId, {
+        activities: [row(a, [{ codeTypeId: area.id, codeValueId: l1.id }])],
+        lanes: [{ id: theirs.id, version: theirs.version, laneIndex: 1 }],
+        lanesCodeTypeId: area.id,
+      }).expect(404);
+      expect(res.body.error.message).toBe('Activity not found in this plan.');
+      expect(await prisma.codeSwimlaneLane.count()).toBe(0);
+    });
+
     it('refuses an id twice in lanes, lanes without a type, and an id with two versions', async () => {
       const { actor, planId, area, l1, a, b } = await seed();
       const mover = row(a, [{ codeTypeId: area.id, codeValueId: l1.id }]);

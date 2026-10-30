@@ -821,11 +821,13 @@ plan lock and must be `ACTIVITY_CODE` with that type, or the write is **409
 `SWIMLANE_SOURCE_CHANGED`** and nothing is written. Also **422**: an id twice in `lanes`
 (`DUPLICATE_LANES_ACTIVITY_ID`), `lanes` without `lanesCodeTypeId` (`LANES_CODE_TYPE_REQUIRED`), an
 id in both lists at two versions (`LANES_VERSION_DISAGREES`), and more than 2,000 activities in the
-union (`CODES_BATCH_TOO_LARGE`). A stale lane-only version is **409 `STALE_VERSION`** and a foreign or
+union (`CODES_BATCH_TOO_LARGE`); a single array over its own cap is a plain validation failure with no
+`reason`. A stale lane-only version is **409 `STALE_VERSION`** and a foreign or
 unknown id is **404**, never told apart. The answer carries the lane-only rows too. There is no
 membership route.
 
-**Create with codes (M4-T1).** `POST …/activities` takes **`codes`**: `[{ codeTypeId, codeValueId }]`,
+**Create with codes (M4-T1).** `POST …/activities` takes **`codes`** (it then needs **`activity:update`**
+as well as `activity:create`, since a code is an activity write): `[{ codeTypeId, codeValueId }]`,
 0 to 100, a type at most once (**422 `DUPLICATE_CODES_TYPE_ID`**), each value live and of its type
 (**422 `CODE_VALUE_WRONG_TYPE`** / **`CODE_VALUE_DELETED`**), an unknown or foreign type or value
 **404**. The assignments are written in the create transaction, after the insert and before the
@@ -863,7 +865,9 @@ has none. An External Guest never receives a code field.
 laneIndex, updatedAt }]`, one entry per live type and value the activity has been placed against,
 read in one statement per page after the assignments. **Absent, not empty, with `codes`** (a plan with
 no live code type), and a deleted type's rows are not sent: they stay stored, so a restore brings the
-layout back. Switching the source from one code to another and back finds each layout as it was.
+layout back. Switching the source from one code to another and back finds each layout as it was. It is a **read
+projection, never a request field**: lanes are written through the positions batch and the codes
+write's `lanes`.
 
 ### Activity change history (ADR-0174)
 

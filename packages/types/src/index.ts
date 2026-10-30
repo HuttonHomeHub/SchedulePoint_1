@@ -221,6 +221,13 @@ export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
 export type SwimlaneLaneBasis = 'SWIMLANE' | 'NO_SWIMLANE' | 'WBS_SUMMARY' | 'NO_WBS_SUMMARY';
 
 /**
+ * The cap on a plan's hand-made swimlanes (swimlanes spec §2) and the longest swimlane order a body
+ * may name. Also what a code-sourced plan's "values in use" is judged against when the source is
+ * switched to a code (p6-activity-codes M4), so the web and the API read one number.
+ */
+export const SWIMLANE_LIMIT = 100;
+
+/**
  * One stored in-swimlane lane (swimlanes schema-design §3.5): which basis it was written against —
  * exactly the columns that basis names are set, the rest `null` — and the lane. `updatedAt` is the
  * tie-break when two placed members of one basis collide.
@@ -260,13 +267,6 @@ export interface SwimlaneSummary {
 export const CODE_TYPE_LIMIT = 100;
 export const CODE_VALUE_LIMIT = 1000;
 export const CODE_NAME_MAX = 80;
-
-/**
- * The cap on a plan's hand-made swimlanes (swimlanes spec §2) and the longest swimlane order a body
- * may name. Also what a code-sourced plan's "values in use" is judged against when the source is
- * switched to a code (p6-activity-codes M4), so the web and the API read one number.
- */
-export const SWIMLANE_LIMIT = 100;
 export const CODE_SHORT_CODE_MAX = 80;
 export const CODE_DESCRIPTION_MAX = 255;
 

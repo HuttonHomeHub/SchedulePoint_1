@@ -96,7 +96,7 @@ export class ActivitiesController {
       'rejected against ADR-0038: away from WBS_SUMMARY while it still parents an active child ' +
       '(PARENT_NOT_SUMMARY), or into WBS_SUMMARY while it still names an active dependency ' +
       '(SUMMARY_HAS_NO_LOGIC). A changed `swimlaneId` is refused while the plan’s swimlanes come ' +
-      'from its WBS (SWIMLANE_SOURCE_IS_WBS).',
+      'from its WBS (SWIMLANE_SOURCE_IS_WBS) or a code (SWIMLANE_SOURCE_IS_ACTIVITY_CODE).',
   })
   @ApiNotFoundResponse({
     description:
