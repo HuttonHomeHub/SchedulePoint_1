@@ -455,8 +455,13 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
       swimlaneSnapshotLevel: 'FULL',
       swimlaneSource: 'WBS',
       swimlaneWbsLevel: 2,
+      // Every capture says it froze the codes, and a plan not sourced from one froze none: the three
+      // activity columns are NULL and that is complete (M4-T2).
+      codeSnapshotLevel: 'SWIMLANE_TYPE',
+      swimlaneCodeTypeId: null,
     });
     const snaps = await prisma.baselineActivity.findMany({ where: { baselineId } });
+    expect(snaps.every((r) => r.codeValueId === null && r.codeLaneIndex === null)).toBe(true);
     expect(snaps.find((r) => r.sourceActivityId === a)?.swimlaneId).toBe(swimlane.id);
     expect(snaps.find((r) => r.sourceActivityId === b)?.swimlaneId).toBeNull();
     const lanes = await prisma.baselineActivitySwimlaneLane.findMany({
@@ -494,6 +499,168 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
         where: { baselineId: created.body.data.id as string },
       }),
     ).toBe(0);
+  });
+
+  describe('a plan whose swimlanes come from a code (M4-T2)', () => {
+    /** A plan with Area (L1, L2, L3) and activities A, B, C carrying L1, L3 and nothing. */
+    async function codedPlan(actor: Actor, orgId: string) {
+      const planId = await makePlan(actor, 'Northgate');
+      const a = await makeActivity(actor, planId, 'A', 3);
+      const b = await makeActivity(actor, planId, 'B', 2);
+      const c = await makeActivity(actor, planId, 'C', 1);
+      await recalc(actor, planId);
+      const plan = `/api/v1/organizations/acme/plans/${planId}`;
+      const type = (await actor.agent.post(`${plan}/code-types`).send({ name: 'Area' }).expect(201))
+        .body.data as { id: string };
+      const value = async (shortCode: string) =>
+        (
+          await actor.agent
+            .post(`${plan}/code-types/${type.id}/values`)
+            .send({ shortCode })
+            .expect(201)
+        ).body.data as { id: string };
+      const [l1, l2, l3] = [await value('L1'), await value('L2'), await value('L3')] as [
+        { id: string },
+        { id: string },
+        { id: string },
+      ];
+      const listed = await actor.agent.get(`${plan}/activities`).expect(200);
+      const versionOf = (id: string) =>
+        (listed.body.data as { id: string; version: number }[]).find((x) => x.id === id)!.version;
+      await actor.agent
+        .patch(`${plan}/activities/codes`)
+        .send({
+          activities: [
+            { id: a, version: versionOf(a), codes: [{ codeTypeId: type.id, codeValueId: l1.id }] },
+            { id: b, version: versionOf(b), codes: [{ codeTypeId: type.id, codeValueId: l3.id }] },
+          ],
+        })
+        .expect(200);
+      // Through the real switch: before M4-T2 a capture of such a plan failed with the CHECK's 23514.
+      const held = await actor.agent.get(plan).expect(200);
+      await actor.agent
+        .patch(plan)
+        .send({
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: type.id,
+          version: held.body.data.version,
+        })
+        .expect(200);
+      const laneRow = (activityId: string, codeValueId: string | null, laneIndex: number) => ({
+        organizationId: orgId,
+        planId,
+        activityId,
+        codeTypeId: type.id,
+        codeValueId,
+        laneIndex,
+      });
+      await prisma.codeSwimlaneLane.createMany({
+        data: [
+          laneRow(a, l1.id, 3),
+          // A layout kept for a value A no longer holds: not A's placement, so it is not frozen.
+          laneRow(a, l2.id, 9),
+          laneRow(b, l3.id, 1),
+          laneRow(c, null, 7),
+        ],
+      });
+      return { planId, plan, type, a, b, c, l1, l2, l3 };
+    }
+
+    it('captures it (no 23514), freezing the pointer, each value verbatim and its code lane', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const w = await codedPlan(actor, orgId);
+      // A deleted value stays frozen as stored: the capture records facts and runs no rule.
+      await actor.agent.delete(`${w.plan}/code-values/${w.l3.id}`).expect(204);
+
+      const created = await actor.agent
+        .post(baselinesUrl(w.planId))
+        .send({ name: 'Contract Baseline' })
+        .expect(201);
+      const baselineId = created.body.data.id as string;
+      expect(await prisma.baseline.findUniqueOrThrow({ where: { id: baselineId } })).toMatchObject({
+        swimlaneSnapshotLevel: 'FULL',
+        swimlaneSource: 'ACTIVITY_CODE',
+        swimlaneWbsLevel: null,
+        swimlaneCodeTypeId: w.type.id,
+        codeSnapshotLevel: 'SWIMLANE_TYPE',
+      });
+
+      const snaps = await prisma.baselineActivity.findMany({ where: { baselineId } });
+      const frozen = (id: string) => {
+        const row = snaps.find((r) => r.sourceActivityId === id)!;
+        return [row.codeValueId, row.codeLaneIndex, row.codeLaneUpdatedAt === null];
+      };
+      expect(frozen(w.a)).toEqual([w.l1.id, 3, false]);
+      expect(frozen(w.b)).toEqual([w.l3.id, 1, false]);
+      // No assignment: the "no value" lane is frozen, with no value.
+      expect(frozen(w.c)).toEqual([null, 7, false]);
+
+      // A live edit afterwards does not reach the frozen copy.
+      await prisma.codeSwimlaneLane.updateMany({
+        where: { activityId: w.a },
+        data: { laneIndex: 0 },
+      });
+      const again = await prisma.baselineActivity.findMany({
+        where: { baselineId, sourceActivityId: w.a },
+      });
+      expect(again[0]?.codeLaneIndex).toBe(3);
+    });
+
+    it('freezes a value with no lane as a value with no lane (both lane columns NULL)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const w = await codedPlan(actor, orgId);
+      await prisma.codeSwimlaneLane.deleteMany({ where: { activityId: w.b } });
+      const created = await actor.agent
+        .post(baselinesUrl(w.planId))
+        .send({ name: 'Contract Baseline' })
+        .expect(201);
+      const row = await prisma.baselineActivity.findFirstOrThrow({
+        where: { baselineId: created.body.data.id as string, sourceActivityId: w.b },
+      });
+      expect([row.codeValueId, row.codeLaneIndex, row.codeLaneUpdatedAt]).toEqual([
+        w.l3.id,
+        null,
+        null,
+      ]);
+    });
+
+    it.each(['MANUAL', 'WBS'] as const)(
+      'captures a %s plan with SWIMLANE_TYPE and NULL code columns',
+      async (source) => {
+        const { actor } = await adminWithOrg();
+        const { planId } = await calculatedPlan(actor);
+        const plan = `/api/v1/organizations/acme/plans/${planId}`;
+        const held = await actor.agent.get(plan).expect(200);
+        await actor.agent
+          .patch(plan)
+          .send({
+            swimlaneSource: source,
+            ...(source === 'WBS' ? { swimlaneWbsLevel: 1 } : {}),
+            version: held.body.data.version,
+          })
+          .expect(200);
+        const created = await actor.agent
+          .post(baselinesUrl(planId))
+          .send({ name: 'Contract Baseline' })
+          .expect(201);
+        const baselineId = created.body.data.id as string;
+        expect(
+          await prisma.baseline.findUniqueOrThrow({ where: { id: baselineId } }),
+        ).toMatchObject({
+          swimlaneSource: source,
+          swimlaneCodeTypeId: null,
+          codeSnapshotLevel: 'SWIMLANE_TYPE',
+        });
+        const snaps = await prisma.baselineActivity.findMany({ where: { baselineId } });
+        expect(snaps).not.toHaveLength(0);
+        expect(
+          snaps.every(
+            (r) =>
+              r.codeValueId === null && r.codeLaneIndex === null && r.codeLaneUpdatedAt === null,
+          ),
+        ).toBe(true);
+      },
+    );
   });
 
   it('activates only the first baseline; later captures are inactive', async () => {

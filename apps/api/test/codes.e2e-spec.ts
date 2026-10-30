@@ -863,7 +863,8 @@ describe.skipIf(!hasDatabase)('Codes API (e2e, pen enforced)', () => {
       const area = await createType(actor, planId, 'Area');
       const trade = await createType(actor, planId, 'Trade');
       await createValue(actor, planId, area.id, 'L1');
-      // The source switch is M4; the pointer is written directly, as the migration's own probes do.
+      // Written directly so the case needs no activity carrying a value; the real switch, and this
+      // refusal after it, are plan-swimlane-code-source.e2e-spec.ts.
       await prisma.plan.update({
         where: { id: planId },
         data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: area.id },

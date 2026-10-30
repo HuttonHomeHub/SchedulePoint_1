@@ -731,10 +731,17 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
           laneIndex,
         })),
       });
-      await prisma.plan.update({
-        where: { id: planId },
-        data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: type.id },
-      });
+      // Through the real switch (M4-T2): the import itself cannot set the source until M5.
+      const planPath = `/api/v1/organizations/acme/plans/${planId}`;
+      const planNow = await actor.agent.get(planPath).expect(200);
+      await actor.agent
+        .patch(planPath)
+        .send({
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: type.id,
+          version: planNow.body.data.version,
+        })
+        .expect(200);
       throw new Error('recalculation failed');
     });
 
