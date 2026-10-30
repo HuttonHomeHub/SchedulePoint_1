@@ -4,6 +4,7 @@ import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { swimlaneErrorText } from '../model/swimlane-errors';
 import { swimlaneNameProblem } from '../model/swimlane-names';
+import { useCodeSourcePicker } from '../model/use-code-source-picker';
 import type { SwimlaneActions, SwimlanePlanFacts } from '../model/use-swimlane-actions';
 
 import { SwimlaneSourceFields, type ChosenSource } from './SwimlaneSourceFields';
@@ -19,6 +20,7 @@ import { clampWbsLevel, wbsSwimlaneLevels, type WbsSwimlaneLevel } from '@/featu
 export interface SwimlaneManageDialogProps {
   open: boolean;
   onClose: () => void;
+  orgSlug: string;
   /** The plan, at the version last read: a change of source is locked on it. */
   plan: SwimlanePlanFacts;
   /** The plan's activities, which the WBS option reads its levels from; `undefined` while they load. */
@@ -36,12 +38,14 @@ export interface SwimlaneManageDialogProps {
 
 /**
  * **Swimlanes** — add, rename, reorder and delete (swimlanes M2-T9, feature-spec US-2), and choose where
- * they come from (M3-T1). Every change applies at once and is one undo step; there is no Save.
+ * they come from (M3-T1; a code, p6-activity-codes M4). Every change applies at once and is one undo
+ * step; there is no Save.
  *
- * **Switching between by hand and the WBS writes the plan's source and nothing else.** Lanes are stored
- * per basis, so switching back returns the hand-made swimlanes, their members and their lanes as they
- * were. While the WBS leads, the hand-made list is kept but not shown or editable here: its swimlanes
- * are not drawn, and editing a list nobody can see would change a picture that returns later.
+ * **Switching between by hand, the WBS and a code writes the plan's source and nothing else.** Lanes are
+ * stored per basis, so switching back returns the hand-made swimlanes, their members and their lanes as
+ * they were. While the WBS or a code leads, the hand-made list is kept but not shown or editable here:
+ * its swimlanes are not drawn, and editing a list nobody can see would change a picture that returns
+ * later.
  *
  * The row actions are icon buttons named for their row ("Move Mechanical up") — ADR-0117 — and are
  * shaded with `aria-disabled` rather than hidden or natively disabled when the pen is not held or a
@@ -63,6 +67,7 @@ export function SwimlaneManageDialog(props: SwimlaneManageDialogProps): React.Re
 
 function ManageBody({
   onClose,
+  orgSlug,
   plan,
   activities,
   swimlanes,
@@ -108,12 +113,27 @@ function ManageBody({
   // Where the swimlanes come from. The picker starts on what the plan holds, so an untouched dialog
   // reads "unchanged" and the button has nothing to do.
   const followsWbs = plan.swimlaneSource === 'WBS';
-  const current: ChosenSource = followsWbs ? 'WBS' : 'MANUAL';
+  const followsCode = plan.swimlaneSource === 'ACTIVITY_CODE';
+  const current: ChosenSource = followsWbs ? 'WBS' : followsCode ? 'ACTIVITY_CODE' : 'MANUAL';
   const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
   const [source, setSource] = useState<ChosenSource>(current);
   const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
   const level = clampWbsLevel(pickedLevel ?? plan.swimlaneWbsLevel, levels);
-  const unchanged = source === current && (source === 'MANUAL' || level === plan.swimlaneWbsLevel);
+  const code = useCodeSourcePicker({
+    orgSlug,
+    planId: plan.id,
+    activities,
+    current: followsCode ? plan.swimlaneCodeTypeId : null,
+    chosen: source === 'ACTIVITY_CODE',
+  });
+  const codeChoice = code.choices?.find((c) => c.id === code.typeId);
+  const currentCodeName = code.choices?.find((c) => c.id === plan.swimlaneCodeTypeId)?.name;
+  const unchanged =
+    source === current &&
+    (source === 'MANUAL' ||
+      (source === 'WBS'
+        ? level === plan.swimlaneWbsLevel
+        : code.typeId === plan.swimlaneCodeTypeId));
   const unchangedId = useId();
 
   const switchSource = (): Promise<void> => {
@@ -121,12 +141,30 @@ function ManageBody({
     if (source === 'WBS') {
       if (level === null) return Promise.resolve();
       return run('change where swimlanes come from', async () => {
-        await actions.switchSource(plan, { source: 'WBS', level });
+        await actions.switchSource(plan, { source: 'WBS', level, codeTypeId: null });
         announce(`Swimlanes now follow the WBS at level ${String(level)}.`);
       });
     }
+    if (source === 'ACTIVITY_CODE') {
+      if (codeChoice === undefined) return Promise.resolve();
+      if (codeChoice.reason !== null) {
+        // A shaded type reaches the button when it is the one the plan already uses, or after a refetch
+        // shaded the choice: say why instead of writing what the server would refuse.
+        setFailure(codeChoice.reason);
+        return Promise.resolve();
+      }
+      return run('change where swimlanes come from', async () => {
+        await actions.switchSource(plan, {
+          source: 'ACTIVITY_CODE',
+          level: null,
+          codeTypeId: codeChoice.id,
+          codeTypeName: codeChoice.name,
+        });
+        announce(`Swimlanes now follow ${codeChoice.name}.`);
+      });
+    }
     return run('change where swimlanes come from', async () => {
-      await actions.switchSource(plan, { source: 'MANUAL', level: null });
+      await actions.switchSource(plan, { source: 'MANUAL', level: null, codeTypeId: null });
       announce('Swimlanes are now made by hand.');
     });
   };
@@ -181,9 +219,10 @@ function ManageBody({
           onLevel={setPickedLevel}
           levels={levels}
           loaded={activities !== undefined}
+          code={code}
         />
         <p className="text-muted-foreground text-sm">
-          {followsWbs
+          {followsWbs || followsCode
             ? 'Choosing here changes nothing until you press the button below.'
             : 'Choosing here changes nothing until you press the button below. Adding, renaming, moving and deleting swimlanes apply as soon as you do them.'}
         </p>
@@ -207,13 +246,21 @@ function ManageBody({
             }
             onClick={() => void switchSource()}
           >
-            {busy ? 'Switching…' : source === 'WBS' ? 'Use WBS groups' : 'Make by hand'}
+            {busy
+              ? 'Switching…'
+              : source === 'WBS'
+                ? 'Use WBS groups'
+                : source === 'ACTIVITY_CODE'
+                  ? `Use ${codeChoice?.name ?? 'the code'}`
+                  : 'Make by hand'}
           </Button>
         </div>
       </FormSection>
-      {followsWbs ? (
+      {followsWbs || followsCode ? (
         <p className="text-muted-foreground text-sm">
-          {`Swimlanes follow the WBS at level ${String(plan.swimlaneWbsLevel ?? level ?? 1)}: one for each summary, in WBS order. Rename or move a summary to change them.`}
+          {followsWbs
+            ? `Swimlanes follow the WBS at level ${String(plan.swimlaneWbsLevel ?? level ?? 1)}: one for each summary, in WBS order. Rename or move a summary to change them.`
+            : `Swimlanes follow ${currentCodeName ?? 'a code'}: one for each value in use, in the order set in Codes…. Set an activity’s ${currentCodeName ?? 'code'} to move it.`}
           {swimlanes.length > 0
             ? ` The swimlanes you made by hand (${String(swimlanes.length)}) are kept, and come back if you switch back.`
             : ''}
@@ -291,7 +338,7 @@ function ManageBody({
           })}
         </ul>
       )}
-      {followsWbs ? null : (
+      {followsWbs || followsCode ? null : (
         <form
           noValidate
           className="flex items-end gap-2"

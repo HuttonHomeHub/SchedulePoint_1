@@ -265,26 +265,40 @@ describe('every swimlane step', () => {
 
 describe('swimlaneSourceCommand', () => {
   /** A plan record in one object: the pair the step reads, and a version the write must use. */
-  function plan(initial: { swimlaneSource: SwimlaneSource; swimlaneWbsLevel: number | null }) {
-    const state = { ...initial, version: 4 };
+  function plan(
+    initial: {
+      swimlaneSource: SwimlaneSource;
+      swimlaneWbsLevel: number | null;
+      swimlaneCodeTypeId?: string | null;
+    },
+    liveTypes: readonly string[] = [],
+  ) {
+    const state = { swimlaneCodeTypeId: null, ...initial, version: 4 };
     const ctx = {
       readPlan: () => Promise.resolve({ id: 'p1', ...state } as unknown as PlanSummary),
+      readCodeTypes: () => Promise.resolve(liveTypes.map((id) => ({ id }))),
     } as unknown as ReplayContext;
     const setSource = vi.fn(
-      (input: { version: number; source: SwimlaneSource; level: number | null }) => {
+      (input: {
+        version: number;
+        source: SwimlaneSource;
+        level: number | null;
+        codeTypeId: string | null;
+      }) => {
         if (input.version !== state.version) {
           return Promise.reject(new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }));
         }
         state.swimlaneSource = input.source;
         state.swimlaneWbsLevel = input.level;
+        state.swimlaneCodeTypeId = input.codeTypeId;
         state.version += 1;
         return Promise.resolve({});
       },
     );
     return { state, ctx, setSource };
   }
-  const MANUAL = { source: 'MANUAL', level: null } as const;
-  const WBS2 = { source: 'WBS', level: 2 } as const;
+  const MANUAL = { source: 'MANUAL', level: null, codeTypeId: null } as const;
+  const WBS2 = { source: 'WBS', level: 2, codeTypeId: null } as const;
 
   it('undo puts the previous choice back, redo the new one, each at the plan’s current version', async () => {
     const p = plan({ swimlaneSource: 'WBS', swimlaneWbsLevel: 2 });
@@ -301,6 +315,7 @@ describe('swimlaneSourceCommand', () => {
       version: 4,
       source: 'MANUAL',
       level: null,
+      codeTypeId: null,
     });
     expect(await command.redo(p.ctx)).toEqual({ kind: 'applied' });
     expect(p.setSource).toHaveBeenLastCalledWith({
@@ -308,6 +323,7 @@ describe('swimlaneSourceCommand', () => {
       version: 5,
       source: 'WBS',
       level: 2,
+      codeTypeId: null,
     });
   });
 
@@ -348,5 +364,105 @@ describe('swimlaneSourceCommand', () => {
     });
     const ctx = { readPlan: () => Promise.resolve(undefined) } as unknown as ReplayContext;
     expect(await command.undo(ctx)).toMatchObject({ kind: 'not-applicable', reason: 'gone' });
+  });
+
+  describe('a switch to a code', () => {
+    const AREA = {
+      source: 'ACTIVITY_CODE',
+      level: null,
+      codeTypeId: 'area',
+      codeTypeName: 'Area',
+    } as const;
+    const TRADE = { source: 'ACTIVITY_CODE', level: null, codeTypeId: 'trade' } as const;
+
+    it('is worded for the code as it was named when recorded, and carries the type both ways', async () => {
+      const p = plan(
+        { swimlaneSource: 'ACTIVITY_CODE', swimlaneWbsLevel: null, swimlaneCodeTypeId: 'area' },
+        ['area', 'trade'],
+      );
+      const command = swimlaneSourceCommand({
+        planId: 'p1',
+        before: TRADE,
+        after: AREA,
+        setSource: p.setSource,
+      });
+      expect(command.label).toBe('Make swimlanes one per value of Area');
+      expect(await command.undo(p.ctx)).toEqual({ kind: 'applied' });
+      expect(p.setSource).toHaveBeenLastCalledWith({
+        planId: 'p1',
+        version: 4,
+        source: 'ACTIVITY_CODE',
+        level: null,
+        codeTypeId: 'trade',
+      });
+      expect(await command.redo(p.ctx)).toEqual({ kind: 'applied' });
+      expect(p.setSource).toHaveBeenLastCalledWith({
+        planId: 'p1',
+        version: 5,
+        source: 'ACTIVITY_CODE',
+        level: null,
+        codeTypeId: 'area',
+      });
+    });
+
+    it('sets the step aside when somebody chose another code since', async () => {
+      const p = plan(
+        { swimlaneSource: 'ACTIVITY_CODE', swimlaneWbsLevel: null, swimlaneCodeTypeId: 'phase' },
+        ['area', 'trade', 'phase'],
+      );
+      const command = swimlaneSourceCommand({
+        planId: 'p1',
+        before: TRADE,
+        after: AREA,
+        setSource: p.setSource,
+      });
+      expect(await command.undo(p.ctx)).toMatchObject({
+        kind: 'not-applicable',
+        reason: 'changed',
+      });
+      expect(p.setSource).not.toHaveBeenCalled();
+    });
+
+    it('sets undo aside, writing nothing, when the code it would return to has been deleted', async () => {
+      // Area → Trade, then Area is deleted from Codes…: undoing the switch would name a deleted type.
+      const p = plan(
+        { swimlaneSource: 'ACTIVITY_CODE', swimlaneWbsLevel: null, swimlaneCodeTypeId: 'trade' },
+        ['trade'],
+      );
+      const command = swimlaneSourceCommand({
+        planId: 'p1',
+        before: { ...AREA },
+        after: { ...TRADE, codeTypeName: 'Trade' },
+        setSource: p.setSource,
+      });
+      expect(await command.undo(p.ctx)).toEqual({
+        kind: 'not-applicable',
+        reason: 'gone',
+        subjectName: 'Area',
+      });
+      expect(p.setSource).not.toHaveBeenCalled();
+    });
+
+    it('sets the step aside when the server refuses the code at replay (no values in use now)', async () => {
+      const p = plan({ swimlaneSource: 'NONE', swimlaneWbsLevel: null }, ['area']);
+      p.setSource.mockRejectedValueOnce(
+        new ApiFetchError(422, {
+          code: 'VALIDATION_ERROR',
+          message: 'Area has no values in use.',
+          details: { reason: 'SWIMLANE_CODE_TYPE_INELIGIBLE' },
+        }),
+      );
+      const command = swimlaneSourceCommand({
+        planId: 'p1',
+        before: { source: 'NONE', level: null, codeTypeId: null },
+        after: AREA,
+        setSource: p.setSource,
+      });
+      expect(await command.redo(p.ctx)).toMatchObject({
+        kind: 'not-applicable',
+        reason: 'changed',
+        subjectName: 'Area',
+      });
+    });
   });
 });

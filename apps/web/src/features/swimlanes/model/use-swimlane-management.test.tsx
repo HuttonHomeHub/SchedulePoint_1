@@ -139,8 +139,14 @@ describe('useSwimlaneActions', () => {
     const { result } = renderHook(() => useSwimlaneActions('acme', 'p1', record), { wrapper });
     await act(async () => {
       await result.current.switchSource(
-        { id: 'p1', version: 4, swimlaneSource: 'MANUAL', swimlaneWbsLevel: null },
-        { source: 'WBS', level: 2 },
+        {
+          id: 'p1',
+          version: 4,
+          swimlaneSource: 'MANUAL',
+          swimlaneWbsLevel: null,
+          swimlaneCodeTypeId: null,
+        },
+        { source: 'WBS', level: 2, codeTypeId: null },
       );
     });
     // One request, to the plan: no lane row, no swimlane and no activity is written, which is what
@@ -166,8 +172,14 @@ describe('useSwimlaneActions', () => {
     await act(async () => {
       await expect(
         result.current.switchSource(
-          { id: 'p1', version: 4, swimlaneSource: 'WBS', swimlaneWbsLevel: 1 },
-          { source: 'MANUAL', level: null },
+          {
+            id: 'p1',
+            version: 4,
+            swimlaneSource: 'WBS',
+            swimlaneWbsLevel: 1,
+            swimlaneCodeTypeId: null,
+          },
+          { source: 'MANUAL', level: null, codeTypeId: null },
         ),
       ).rejects.toThrow('Version conflict.');
     });
@@ -201,7 +213,13 @@ describe('useSwimlaneManagement', () => {
   const args: Parameters<typeof useSwimlaneManagement>[0] = {
     orgSlug: 'acme',
     planId: 'p1',
-    plan: { id: 'p1', version: 4, swimlaneSource: 'MANUAL', swimlaneWbsLevel: null },
+    plan: {
+      id: 'p1',
+      version: 4,
+      swimlaneSource: 'MANUAL',
+      swimlaneWbsLevel: null,
+      swimlaneCodeTypeId: null,
+    },
     shown: true,
     activities: [],
     gate: { writable: true, reason: null },
@@ -267,7 +285,13 @@ describe('useSwimlaneManagement', () => {
 
   it('opens Set up for a plan with none and Manage once it has some, with the matching label', () => {
     const none = mount({
-      plan: { id: 'p1', version: 4, swimlaneSource: 'NONE', swimlaneWbsLevel: null },
+      plan: {
+        id: 'p1',
+        version: 4,
+        swimlaneSource: 'NONE',
+        swimlaneWbsLevel: null,
+        swimlaneCodeTypeId: null,
+      },
     });
     expect(none.result.current.manageLabel).toBe('Set up swimlanes…');
     act(() => none.result.current.openSwimlanes());
@@ -412,7 +436,13 @@ describe('useSwimlaneManagement', () => {
   });
 
   describe('a plan whose swimlanes follow the WBS', () => {
-    const wbs = { id: 'p1', version: 4, swimlaneSource: 'WBS', swimlaneWbsLevel: 2 } as const;
+    const wbs = {
+      id: 'p1',
+      version: 4,
+      swimlaneSource: 'WBS',
+      swimlaneWbsLevel: 2,
+      swimlaneCodeTypeId: null,
+    } as const;
 
     it('shades the gutter’s rows with the WBS reason, since a swimlane is a summary', () => {
       const { result } = mount({ plan: wbs });
@@ -443,6 +473,45 @@ describe('useSwimlaneManagement', () => {
       act(() => result.current.openSwimlanes());
       expect(result.current.dialogs.state).toMatchObject({ setup: false, manage: true });
       expect(result.current.dialogs.plan).toEqual(wbs);
+    });
+  });
+
+  describe('a plan whose swimlanes follow a code', () => {
+    const code = {
+      id: 'p1',
+      version: 4,
+      swimlaneSource: 'ACTIVITY_CODE',
+      swimlaneWbsLevel: null,
+      swimlaneCodeTypeId: 'area',
+    } as const;
+
+    it('shades the gutter’s rows with the code reason, naming the code once its name has arrived', async () => {
+      vi.mocked(apiFetchAllPages).mockResolvedValue([
+        { id: 'area', planId: 'p1', name: 'Area', position: 0, version: 1 },
+      ]);
+      const { result } = mount({ plan: code });
+      await waitFor(() =>
+        expect(result.current.gutterActions.rows).toEqual({
+          writable: false,
+          reason:
+            'Swimlanes follow Area in this plan. Rename or reorder its values in Codes…, or choose Swimlanes… to make them another way.',
+        }),
+      );
+    });
+
+    it('never shades the corner’s Swimlanes… command, and opens Manage', () => {
+      const { result } = mount({ plan: code });
+      expect(result.current.gutterActions.write).toEqual({ writable: true, reason: null });
+      expect(result.current.manageLabel).toBe('Swimlanes…');
+      expect(result.current.dialogs.plan).toEqual(code);
+    });
+
+    it('leads with the pen’s own reason when the pen is why', () => {
+      const { result } = mount({
+        plan: code,
+        gate: { writable: false, reason: 'Start editing to change swimlanes.' },
+      });
+      expect(result.current.gutterActions.rows?.reason).toBe('Start editing to change swimlanes.');
     });
   });
 

@@ -58,6 +58,7 @@ const ACTIVITIES: ActivitySummary[] = [
 let server: CodesServer;
 /** What the host passes as the plan's activities; `undefined` is "still loading". */
 let activitiesNow: ActivitySummary[] | undefined = ACTIVITIES;
+let swimlaneSourceNow: string | null = null;
 
 /** Point the mocked client at the current server. */
 function wire(): void {
@@ -80,6 +81,7 @@ function tree(gate: CodesGate = OPEN, open = true): React.ReactElement {
           planId="p1"
           activities={activitiesNow}
           gate={gate}
+          swimlaneSourceTypeId={swimlaneSourceNow}
           record={record}
         />
       </AnnouncerProvider>
@@ -123,6 +125,7 @@ beforeEach(() => {
   record.mockReset();
   onClose.mockReset();
   activitiesNow = ACTIVITIES;
+  swimlaneSourceNow = null;
   // The app's own staleness (`lib/query/query-client.ts`): without it every remount refetches.
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, retryDelay: 0, staleTime: 30_000 } },
@@ -505,6 +508,29 @@ describe('deleting', () => {
     expect(await within(confirm).findByRole('alert')).toHaveTextContent(
       'Could not delete L1: the codes were changed by someone else.',
     );
+  });
+
+  it('shades Delete… for the type the swimlanes are made from, with the sentence, and only for it', async () => {
+    swimlaneSourceNow = 'area';
+    mount();
+    await settled();
+    const del = screen.getByRole('button', { name: 'Delete…' });
+    expect(del).toHaveAttribute('aria-disabled', 'true');
+    expect(del).not.toHaveAttribute('disabled');
+    expect(del).toHaveAccessibleDescription(
+      'The swimlanes are made from Area. Choose another swimlane source first.',
+    );
+    // Visible as well as described, so a mouse or a finger can read why (ADR-0204).
+    const visible = screen
+      .getAllByText('The swimlanes are made from Area. Choose another swimlane source first.')
+      .find((node) => node.tagName === 'P');
+    expect(visible).toBeVisible();
+    fireEvent.click(del);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // Another type's Delete… is live.
+    fireEvent.click(screen.getByRole('tab', { name: /Trade/ }));
+    await settled('Trade');
+    expect(screen.getByRole('button', { name: 'Delete…' })).not.toHaveAttribute('aria-disabled');
   });
 
   it('deletes a type with its values, selects the neighbouring tab and focuses it', async () => {

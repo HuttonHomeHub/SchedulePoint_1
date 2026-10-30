@@ -31,6 +31,23 @@ describe('swimlaneErrorText', () => {
     expect(swimlaneErrorText('move X', err(404, 'NOT_FOUND'))).toMatch(/changed by someone else/);
   });
 
+  it('keeps the server’s sentence when the code a switch named is gone or deleted', () => {
+    expect(
+      swimlaneErrorText(
+        'set up swimlanes',
+        err(404, 'NOT_FOUND', 'That code no longer exists. Choose another.'),
+      ),
+    ).toBe('Could not set up swimlanes: That code no longer exists. Choose another.');
+    expect(
+      swimlaneErrorText(
+        'set up swimlanes',
+        err(422, 'VALIDATION_ERROR', 'That code has been deleted. Choose another.', {
+          reason: 'SWIMLANE_CODE_TYPE_MISMATCH',
+        }),
+      ),
+    ).toBe('Could not set up swimlanes: That code has been deleted. Choose another.');
+  });
+
   it('keeps the server’s sentence for anything else, after the action', () => {
     expect(swimlaneErrorText('rename X', err(422, 'VALIDATION', 'Name too long.'))).toBe(
       'Could not rename X: Name too long.',

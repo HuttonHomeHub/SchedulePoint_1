@@ -34,8 +34,8 @@ export interface SwimlaneActions {
   /** Switch the plan to hand-made swimlanes. A plan setting, so it is not an undo step. */
   setManualSource: (plan: { id: string; version: number }) => Promise<void>;
   /**
-   * Choose where the plan's swimlanes come from — by hand, or one per WBS group at a level — as one
-   * undo step. It writes the plan record and nothing else: lanes are stored per basis, so the old
+   * Choose where the plan's swimlanes come from — by hand, one per WBS group at a level, or one per
+   * value of a code — as one undo step. It writes the plan record and nothing else: lanes are stored per basis, so the old
    * picture is still there to come back to.
    */
   switchSource: (plan: SwimlanePlanFacts, to: SwimlaneBasisChoice) => Promise<void>;
@@ -47,6 +47,8 @@ export interface SwimlanePlanFacts {
   version: number;
   swimlaneSource: SwimlaneSource;
   swimlaneWbsLevel: number | null;
+  /** The code type the swimlanes are made from, with source `ACTIVITY_CODE`. */
+  swimlaneCodeTypeId: string | null;
 }
 
 /**
@@ -164,11 +166,16 @@ export function useSwimlaneActions(
         version: plan.version,
         source: to.source,
         level: to.level,
+        codeTypeId: to.codeTypeId,
       });
       remember(
         swimlaneSourceCommand({
           planId: plan.id,
-          before: { source: plan.swimlaneSource, level: plan.swimlaneWbsLevel },
+          before: {
+            source: plan.swimlaneSource,
+            level: plan.swimlaneWbsLevel,
+            codeTypeId: plan.swimlaneCodeTypeId,
+          },
           after: to,
           setSource,
         }),

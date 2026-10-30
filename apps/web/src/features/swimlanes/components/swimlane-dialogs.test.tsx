@@ -1,6 +1,7 @@
-import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
+import type { ActivitySummary, CodeTypeSummary, SwimlaneSummary } from '@repo/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
 import type { SwimlaneActions } from '../model/use-swimlane-actions';
@@ -12,7 +13,14 @@ import { SwimlaneRenameDialog } from './SwimlaneRenameDialog';
 import { SwimlaneSetupDialog } from './SwimlaneSetupDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
+
+vi.mock('@/lib/api/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetch: vi.fn(),
+  apiFetchAllPages: vi.fn(),
+}));
 
 const row = (id: string, name: string, version = 1): SwimlaneSummary => ({
   id,
@@ -29,10 +37,11 @@ const GATE: { writable: boolean; reason: string | null } = { writable: true, rea
 const PEN = { writable: false, reason: 'Start editing to change swimlanes.' };
 
 const planFacts = (
-  swimlaneSource: 'NONE' | 'MANUAL' | 'WBS',
+  swimlaneSource: 'NONE' | 'MANUAL' | 'WBS' | 'ACTIVITY_CODE',
   swimlaneWbsLevel: number | null = null,
   version = 7,
-) => ({ id: 'p1', version, swimlaneSource, swimlaneWbsLevel });
+  swimlaneCodeTypeId: string | null = null,
+) => ({ id: 'p1', version, swimlaneSource, swimlaneWbsLevel, swimlaneCodeTypeId });
 
 /** A tree with one summary at level 1 and two at level 2, so level 2 is the suggested one. */
 const summary = (id: string, parentId: string | null, name = id): ActivitySummary =>
@@ -59,8 +68,25 @@ function actions(overrides: Partial<SwimlaneActions> = {}): SwimlaneActions {
   };
 }
 
+/** The plan's code types, as the picker reads them; each test sets what the server holds. */
+let codeTypes: CodeTypeSummary[] = [];
+let queryClient: QueryClient;
+
+beforeEach(() => {
+  codeTypes = [];
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  vi.mocked(apiFetchAllPages)
+    .mockReset()
+    .mockImplementation((path: string) =>
+      Promise.resolve(/\/code-types/.test(path) ? [...codeTypes] : []),
+    );
+  vi.mocked(apiFetch).mockReset().mockResolvedValue([]);
+});
+
 const withAnnouncer = (ui: React.ReactElement): React.ReactElement => (
-  <AnnouncerProvider>{ui}</AnnouncerProvider>
+  <QueryClientProvider client={queryClient}>
+    <AnnouncerProvider>{ui}</AnnouncerProvider>
+  </QueryClientProvider>
 );
 
 const announced = (): string => screen.getByTestId('announcer').textContent;
@@ -70,6 +96,7 @@ describe('the setup dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneSetupDialog
+          orgSlug="acme"
           open
           onClose={onClose}
           plan={planFacts('NONE')}
@@ -105,13 +132,14 @@ describe('the setup dialog', () => {
     await waitFor(() => expect(announced()).toBe('3 swimlanes set up.'));
   });
 
-  it('offers by hand and one per WBS group, by hand first', () => {
+  it('offers by hand, one per WBS group and one per code value, by hand first', () => {
     mount(actions());
     const radios = screen.getAllByRole('radio');
-    expect(radios).toHaveLength(2);
+    expect(radios).toHaveLength(3);
     expect(radios[0]).toHaveAccessibleName('By hand');
     expect(radios[0]).toBeChecked();
     expect(radios[1]).toHaveAccessibleName('One per WBS group at level 2');
+    expect(radios[2]).toHaveAccessibleName('One per code value');
   });
 
   it('preselects the shallowest level with two groups, not a lone "The Works"', () => {
@@ -138,7 +166,11 @@ describe('the setup dialog', () => {
     });
     submit();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), { source: 'WBS', level: 1 });
+    expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), {
+      source: 'WBS',
+      level: 1,
+      codeTypeId: null,
+    });
     // No swimlane is made, and the by-hand source write is not the one used.
     expect(a.add).not.toHaveBeenCalled();
     expect(a.setManualSource).not.toHaveBeenCalled();
@@ -161,7 +193,11 @@ describe('the setup dialog', () => {
     fireEvent.click(screen.getByRole('radio', { name: /One per WBS group/ }));
     submit();
     await waitFor(() =>
-      expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), { source: 'WBS', level: 2 }),
+      expect(a.switchSource).toHaveBeenCalledWith(planFacts('NONE'), {
+        source: 'WBS',
+        level: 2,
+        codeTypeId: null,
+      }),
     );
   });
 
@@ -169,6 +205,7 @@ describe('the setup dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneSetupDialog
+          orgSlug="acme"
           open
           onClose={vi.fn()}
           plan={planFacts('NONE')}
@@ -190,6 +227,7 @@ describe('the setup dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneSetupDialog
+          orgSlug="acme"
           open
           onClose={vi.fn()}
           plan={planFacts('NONE')}
@@ -268,6 +306,7 @@ describe('the setup dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneSetupDialog
+          orgSlug="acme"
           open
           onClose={onClose}
           plan={planFacts('NONE')}
@@ -291,6 +330,7 @@ describe('the setup dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneSetupDialog
+          orgSlug="acme"
           open
           onClose={onClose}
           plan={planFacts('MANUAL')}
@@ -345,6 +385,7 @@ describe('the manage dialog', () => {
     render(
       withAnnouncer(
         <SwimlaneManageDialog
+          orgSlug="acme"
           open
           onClose={vi.fn()}
           plan={planFacts('MANUAL')}
@@ -486,6 +527,7 @@ describe('the manage dialog', () => {
     rerender(
       withAnnouncer(
         <SwimlaneManageDialog
+          orgSlug="acme"
           open
           onClose={vi.fn()}
           plan={planFacts('MANUAL')}
@@ -531,6 +573,7 @@ describe('the manage dialog', () => {
         expect(a.switchSource).toHaveBeenCalledWith(planFacts('MANUAL'), {
           source: 'WBS',
           level: 2,
+          codeTypeId: null,
         }),
       );
       await waitFor(() => expect(announced()).toBe('Swimlanes now follow the WBS at level 2.'));
@@ -558,6 +601,7 @@ describe('the manage dialog', () => {
         expect(a.switchSource).toHaveBeenCalledWith(planFacts('WBS', 2), {
           source: 'MANUAL',
           level: null,
+          codeTypeId: null,
         }),
       );
       await waitFor(() => expect(announced()).toBe('Swimlanes are now made by hand.'));
@@ -575,6 +619,7 @@ describe('the manage dialog', () => {
         expect(a.switchSource).toHaveBeenCalledWith(planFacts('WBS', 2), {
           source: 'WBS',
           level: 1,
+          codeTypeId: null,
         }),
       );
     });
@@ -770,6 +815,7 @@ describe('SwimlaneDialogs counts members only while a dialog is open', () => {
     close: vi.fn(),
     openRename: vi.fn(),
     openDelete: vi.fn(),
+    orgSlug: 'acme',
     plan: planFacts('MANUAL', null, 1),
     afterDelete: vi.fn(),
     swimlanes: LIST,

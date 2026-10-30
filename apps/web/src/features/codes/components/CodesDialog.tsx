@@ -45,6 +45,8 @@ export interface CodesDialogProps {
   /** The plan's activities, which the delete sentences count carriers from; `undefined` while they load. */
   activities: readonly ActivitySummary[] | undefined;
   gate: CodesGate;
+  /** The type the plan's swimlanes are made from, or `null`: it cannot be deleted while it leads. */
+  swimlaneSourceTypeId: string | null;
   /** The workspace's undo history seam. */
   record?: ((command: Command) => void) | undefined;
 }
@@ -73,7 +75,7 @@ const NO_USAGE: CodeUsage = { byValue: new Map(), byType: new Map() };
  * state that opens them lives here and is cleared when this one closes (ADR-0169).
  */
 export function CodesDialog(props: CodesDialogProps): React.ReactElement {
-  const { open, onClose, orgSlug, planId, activities, gate, record } = props;
+  const { open, onClose, orgSlug, planId, activities, gate, swimlaneSourceTypeId, record } = props;
   const actions = useCodesActions(orgSlug, planId, record);
   const types = useCodeTypes(orgSlug, planId, open);
   const list = types.data ?? NO_TYPES;
@@ -135,6 +137,7 @@ export function CodesDialog(props: CodesDialogProps): React.ReactElement {
             usage={usage}
             actions={actions}
             gate={gate}
+            swimlaneSourceTypeId={swimlaneSourceTypeId}
             onClose={close}
             onStack={setStacked}
             removedRowRef={removedRowRef}
@@ -253,6 +256,7 @@ interface BodyProps {
   usage: CodeUsage;
   actions: CodeActions;
   gate: CodesGate;
+  swimlaneSourceTypeId: string | null;
   onClose: () => void;
   onStack: (next: Stacked) => void;
   removedRowRef: React.RefObject<RemovedRow | null>;
@@ -271,6 +275,7 @@ function CodesBody({
   usage,
   actions,
   gate,
+  swimlaneSourceTypeId,
   onClose,
   onStack,
   removedRowRef,
@@ -429,6 +434,7 @@ function CodesBody({
               usage={usage}
               actions={actions}
               gate={gate}
+              swimlaneSourceTypeId={swimlaneSourceTypeId}
               onRenameType={() => onStack({ kind: 'rename-type', typeId: active.id })}
               onDeleteType={() => onStack({ kind: 'delete-type', typeId: active.id, order: ids })}
               onMoveType={(delta) => moveType(active, delta)}

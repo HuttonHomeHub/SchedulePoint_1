@@ -39,6 +39,8 @@ export interface CodeTypePaneProps {
   usage: CodeUsage;
   actions: CodeActions;
   gate: CodesGate;
+  /** The code type the plan's swimlanes are made from, or `null`: its Delete… is shaded (the server refuses it). */
+  swimlaneSourceTypeId: string | null;
   onRenameType: () => void;
   onDeleteType: () => void;
   onEditValue: (value: CodeValueSummary, others: readonly string[]) => void;
@@ -69,6 +71,7 @@ export function CodeTypePane({
   usage,
   actions,
   gate,
+  swimlaneSourceTypeId,
   onRenameType,
   onDeleteType,
   onEditValue,
@@ -79,6 +82,10 @@ export function CodeTypePane({
 }: CodeTypePaneProps): React.ReactElement {
   const announce = useAnnounce();
   const headingId = useId();
+  // Deleting the type the swimlanes are made from is refused by the server (409), so it is shaded up
+  // front with the owner's sentence rather than offered and then refused.
+  const isSwimlaneSource = swimlaneSourceTypeId === type.id;
+  const sourceReason = `The swimlanes are made from ${type.name}. Choose another swimlane source first.`;
   const reasonId = useFieldGate()?.reasonId;
   const values = useCodeValues(orgSlug, planId, type.id);
   const rows = useMemo(() => values.data ?? [], [values.data]);
@@ -311,12 +318,23 @@ export function CodeTypePane({
             >
               Move down
             </PaneButton>
-            <PaneButton shut={shut} reasonId={reasonId} onPress={onDeleteType}>
+            <PaneButton
+              shut={shut || isSwimlaneSource}
+              reasonId={reasonId}
+              endReason={isSwimlaneSource ? sourceReason : undefined}
+              onPress={onDeleteType}
+            >
               Delete…
             </PaneButton>
           </div>
         )}
       </div>
+      {/* Visible as well as described (ADR-0204): a mouse or a finger cannot read an `sr-only` sentence. */}
+      {isSwimlaneSource && !gate.roleDenied ? (
+        <p aria-hidden="true" className="text-muted-foreground text-sm">
+          {sourceReason}
+        </p>
+      ) : null}
       {/* One parent whichever way the table goes, so adding the 101st value does not remount it and
           drop the focus on the row the reader was using. A windowed table needs a bounded scroller to
           window against (ADR-0165), so it gets a fixed band; a short list sits in the pane's own flow

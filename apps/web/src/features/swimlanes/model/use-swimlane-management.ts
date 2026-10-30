@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { useSwimlanes } from '../api/use-swimlanes';
 
+import { codeGutterReason } from './code-swimlane-copy';
 import { focusAfterDelete, type FocusAfterDelete } from './focus-after-delete';
 import { swimlaneErrorText } from './swimlane-errors';
 import {
@@ -13,6 +14,7 @@ import {
 import { WBS_GUTTER_REASON } from './wbs-swimlane-copy';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { useCodeTypes } from '@/features/codes';
 import type { GutterActions } from '@/features/tsld';
 import { gutterWidthForRoom } from '@/features/tsld/render/swimlane-gutter';
 import type { Command } from '@/features/undo-redo';
@@ -47,6 +49,7 @@ export interface SwimlaneDialogsProps {
   close: (which: keyof SwimlaneDialogState) => void;
   openRename: (swimlaneId: string) => void;
   openDelete: (swimlaneId: string) => void;
+  orgSlug: string;
   plan: SwimlanePlanFacts;
   /** Told when a delete has landed, before its dialog closes: see {@link focusAfterDelete}. */
   afterDelete: (swimlane: SwimlaneSummary) => void;
@@ -168,7 +171,12 @@ export function useSwimlaneManagement(args: {
   // Where the delete came from and the order the list had, captured when its dialog OPENS: by the time
   // it succeeds a refetch may already have dropped the row, and the order could not be recovered.
   const deleteContext = useRef<Omit<FocusAfterDelete, 'id'>>({ from: 'gutter', order: [] });
-  const followsWbs = plan.swimlaneSource === 'WBS';
+  // A swimlane that is not hand-made is a summary or a value: its name and order live there, so the
+  // gutter's rows are shut for that reason. The type's name comes from the types the scene already reads.
+  const followsCode = plan.swimlaneSource === 'ACTIVITY_CODE';
+  const notHandMade = plan.swimlaneSource === 'WBS' || followsCode;
+  const codeTypes = useCodeTypes(orgSlug, planId, followsCode);
+  const codeTypeName = codeTypes.data?.find((t) => t.id === plan.swimlaneCodeTypeId)?.name;
   const gutterActions = useMemo<GutterActions>(
     () => ({
       // The pen gates the corner's Swimlanes… command, and only the pen: it is the way out of a WBS
@@ -178,8 +186,11 @@ export function useSwimlaneManagement(args: {
       // is, so its rows are shut for that reason. The pen's own reason, where that is why, comes first
       // (the planner can fix that one).
       rows:
-        writable && followsWbs
-          ? { writable: false, reason: WBS_GUTTER_REASON }
+        writable && notHandMade
+          ? {
+              writable: false,
+              reason: followsCode ? codeGutterReason(codeTypeName) : WBS_GUTTER_REASON,
+            }
           : { writable, reason },
       manage: { label: manageLabel, onOpen: openSwimlanes },
       collapse: {
@@ -224,7 +235,9 @@ export function useSwimlaneManagement(args: {
     [
       writable,
       reason,
-      followsWbs,
+      notHandMade,
+      followsCode,
+      codeTypeName,
       manageLabel,
       openSwimlanes,
       width.collapsed,
@@ -285,17 +298,20 @@ export function useSwimlaneManagement(args: {
   const planVersion = plan.version;
   const planSource = plan.swimlaneSource;
   const planLevel = plan.swimlaneWbsLevel;
+  const planCodeTypeId = plan.swimlaneCodeTypeId;
   const dialogs = useMemo<SwimlaneDialogsProps>(
     () => ({
       state,
       close,
       openRename,
       openDelete,
+      orgSlug,
       plan: {
         id: planIdentity,
         version: planVersion,
         swimlaneSource: planSource,
         swimlaneWbsLevel: planLevel,
+        swimlaneCodeTypeId: planCodeTypeId,
       },
       afterDelete,
       swimlanes,
@@ -312,6 +328,8 @@ export function useSwimlaneManagement(args: {
       planVersion,
       planSource,
       planLevel,
+      planCodeTypeId,
+      orgSlug,
       afterDelete,
       swimlanes,
       activities,
