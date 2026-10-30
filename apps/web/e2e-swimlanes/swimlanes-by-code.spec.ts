@@ -585,13 +585,14 @@ test.describe('choosing a code in Swimlanes…', () => {
         'The swimlanes are made from Area. Choose another swimlane source first.',
       );
       await expect(
-        codes.getByText('The swimlanes are made from Area. Choose another swimlane source first.', {
-          exact: true,
+        codes.locator('p', {
+          hasText: 'The swimlanes are made from Area. Choose another swimlane source first.',
         }),
       ).toBeVisible();
       await remove.focus();
       await expect(remove).toBeFocused();
-      await remove.click();
+      // Playwright waits for an aria-disabled control to become enabled; the press is the point here.
+      await remove.click({ force: true });
       await expect(page.getByRole('alertdialog')).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(codes).toBeHidden();
@@ -645,8 +646,8 @@ test.describe('choosing a code in Swimlanes…', () => {
       await expect(codes).toBeVisible();
       await expect(codes.getByRole('table', { name: 'Area values' })).toBeInViewport();
       await expect(
-        codes.getByText('The swimlanes are made from Area. Choose another swimlane source first.', {
-          exact: true,
+        codes.locator('p', {
+          hasText: 'The swimlanes are made from Area. Choose another swimlane source first.',
         }),
       ).toBeVisible();
       await page.keyboard.press('Escape');
