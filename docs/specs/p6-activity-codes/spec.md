@@ -657,6 +657,14 @@ Additive; `api` minor bumps; OpenAPI and `docs/API.md` per milestone.
   baselines per Q1; D13 no flag.
 - **Consequences:** MSPDI a reported drop; P6 scope flattened; Gantt code cells read-only; rollback hazard
   once the source is used (design §13); the expiry exemption.
+- **M4 decisions to record** (`m4-spec.md` §1b and the owner's answers of 2026-10-30): the 101st value in
+  use keeps drawing, with a standing line; a WBS summary is not "in use"; no public membership route
+  (membership from `codes`, lanes on the list, plus the plan-wide lane read); a removed ghost is **counted,
+  not derived**, when its frozen value is no longer a drawn band, its baseline froze another type or none,
+  or no lane was frozen (ADR-0127); no band-name length clause; a lane-only write names the type it
+  planned against; a hand-made `swimlaneId` is refused under a code source; Move to swimlane… offers the
+  bands on screen plus No <type>; and a guest sees the last band as "No <type>", the type's name being a
+  band label and nothing more (ADR-0205).
 
 ---
 

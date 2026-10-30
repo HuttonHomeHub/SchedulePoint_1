@@ -14,12 +14,14 @@ export interface GhostLaneScene {
   /** Activity id → display lane, exactly the lane the bar is drawn at. */
   displayLanes: ReadonlyMap<string, number>;
   /**
-   * What the swimlanes are made of. Only `MANUAL` can place removed work today: a WBS-grouped scene
-   * keys its rows by summary activity and needs the frozen ancestors, which arrives with M3, and a
-   * code scene needs the baseline's frozen code (M4-T6). Until then removed work on either is
-   * counted, so it never lands in "No swimlane" by default.
+   * What the swimlanes are made of. `MANUAL` places removed work by its frozen swimlane, and
+   * `ACTIVITY_CODE` by its frozen code value and code lane when the baseline froze the SAME type
+   * (P6 M4-T6). A WBS-grouped scene keys its rows by summary activity and counts removed work, so it
+   * never lands in "No swimlane" by default.
    */
   source: 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
+  /** For source `ACTIVITY_CODE`: the type the bands are drawn from, which a ghost must have frozen. */
+  codeTypeId?: string;
   /** `id: null` is "No swimlane". */
   extents: readonly { id: string | null; firstLane: number; laneCount: number }[];
 }
@@ -44,11 +46,12 @@ export function ghostLaneOf(
  *
  * - A ghost of a **live** activity draws on that activity's display lane.
  * - A ghost of **removed** work has no bar, so it is placed from the lane its baseline froze for the
- *   basis today's source resolves to: its frozen swimlane if that swimlane still exists, else "No
- *   swimlane". It is **counted, not drawn** when the baseline froze nothing (a `NONE` capture), when
- *   no frozen row exists for that basis, or when the frozen lane lies outside the swimlane's rows
- *   today. A lane is never derived among today's members, because that would put removed work
- *   somewhere plausible, which is a false statement about where it was.
+ *   basis today's source resolves to (under a code, see {@link removedCodeLane}): its frozen swimlane
+ *   if that swimlane still exists, else "No swimlane". It is **counted, not drawn** when the baseline
+ *   froze nothing (a `NONE` capture), when no frozen row exists for that basis, or when the frozen
+ *   lane lies outside the swimlane's rows today. A lane is never derived among today's members,
+ *   because that would put removed work somewhere plausible, which is a false statement about where
+ *   it was.
  *
  * With no scene the ghosts come back as the same array.
  */
@@ -72,7 +75,29 @@ export function placeCompareGhosts(
   return { ghosts: placed, counted };
 }
 
+/**
+ * Removed work under a code source is drawn only when all five hold: today's source is a code, the
+ * baseline froze that very type, the frozen value (or No <type>) is a drawn band by id, a code lane
+ * was frozen, and that lane is inside the band's rows today. Anything else is counted — a baseline
+ * frozen by hand, by the WBS or before codes, a baseline of another type, a value no longer in use.
+ * Never derived among today's members (m4-spec §1b row 4).
+ */
+function removedCodeLane(ghost: CompareGhost, scene: GhostLaneScene): number | undefined {
+  if (
+    scene.codeTypeId === undefined ||
+    ghost.frozenCodeTypeId !== scene.codeTypeId ||
+    ghost.frozenCodeLane == null
+  ) {
+    return undefined;
+  }
+  const valueId = ghost.frozenCodeValueId ?? null;
+  const extent = scene.extents.find((e) => e.id === valueId);
+  if (extent === undefined || ghost.frozenCodeLane.laneIndex >= extent.laneCount) return undefined;
+  return extent.firstLane + ghost.frozenCodeLane.laneIndex;
+}
+
 function removedLane(ghost: CompareGhost, scene: GhostLaneScene): number | undefined {
+  if (scene.source === 'ACTIVITY_CODE') return removedCodeLane(ghost, scene);
   if (scene.source !== 'MANUAL' || ghost.frozenLanes === undefined) return undefined;
   const own = ghost.frozenSwimlaneId ?? null;
   const known = own !== null && scene.extents.some((e) => e.id === own);

@@ -895,6 +895,39 @@ describe('the comparison overlay’s spoken summary', () => {
     expect(compareOverlaySummary([], 0)).toBeNull();
   });
 
+  it('says why work was not placed: the code wording under a code grouping, the old wording elsewhere', () => {
+    const none = { drawn: 0, undrawable: 0 };
+    const handMade = compareOverlaySummary([ghost('Gone', true)], 0, none, 'NOT_RECORDED', 2);
+    expect(handMade?.heading).toContain(
+      '2 not shown because their swimlane or row can no longer be matched',
+    );
+    expect(handMade?.undrawnLabel).toBe(
+      '2 changes are not shown — their swimlane or row can no longer be matched.',
+    );
+    const byCode = compareOverlaySummary([ghost('Gone', true)], 0, none, 'NOT_RECORDED', 1, 'CODE');
+    expect(byCode?.heading).toContain(
+      '1 not shown because the earlier revision was grouped differently, or its value is no longer in use',
+    );
+    expect(byCode?.undrawnLabel).toBe(
+      '1 change is not shown — the earlier revision was grouped differently, or its value is no longer in use.',
+    );
+  });
+
+  it('still speaks when everything changed was withheld by the swimlanes', () => {
+    const summary = compareOverlaySummary(
+      [],
+      0,
+      { drawn: 0, undrawable: 0 },
+      'NOT_RECORDED',
+      1,
+      'CODE',
+    );
+    expect(summary?.heading).toContain(
+      '1 not shown because the earlier revision was grouped differently',
+    );
+    expect(summary?.removed).toEqual([]);
+  });
+
   it('lists the REMOVED activities and only those', () => {
     // An activity that merely moved already has a listbox row; a removed one has none, which is
     // the whole reason this list exists (ADR-0122).

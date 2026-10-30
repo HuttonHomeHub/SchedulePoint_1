@@ -62,6 +62,11 @@ export default defineConfig({
               // global throttler's 100 requests a minute (the NetPoint grammar suite's measurement
               // and reasoning, `playwright.netpoint-grammar.config.ts`). Raised for this harness
               // only; the guard is untouched and no other suite or environment sees this value.
+              // Measured 2026-10-30 (E2E_THROTTLE_CENSUS=1, 28 cases): the browser's peak was 58
+              // requests per 60 s on one handler (the activity list). The census cannot see the seeder,
+              // which is its own client: `plan:capability-codes-wide` posts 201 code values and 101
+              // activities in one run, the busiest handler at 201, which is why 300 stays and the
+              // default of 100 would not do.
               RATE_LIMIT_LIMIT: '300',
             },
           },

@@ -6,11 +6,14 @@ import { GuestPrincipal } from '../../common/auth/guest-principal';
 import { NotFoundError } from '../../common/errors/domain-errors';
 import type { ActivityRepository } from '../activities/activity.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
+import type { CodeTypeRepository } from '../codes/code-type.repository';
+import type { CodeValueRepository } from '../codes/code-value.repository';
 import type { DependencyRepository } from '../dependencies/dependency.repository';
 import type { PlanRepository } from '../plans/plan.repository';
 import type { ScheduleAggregate, ScheduleRepository } from '../schedule/schedule.repository';
 import type { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
+import type { GuestCodeRepository } from './guest-code.repository';
 import type { PlanShareRepository } from './plan-share.repository';
 import { GUEST_ACCESS_TOUCH_STALE_MS, ShareGuestService } from './share-guest.service';
 
@@ -95,6 +98,12 @@ describe('ShareGuestService', () => {
     findAllActiveByPlan: ReturnType<typeof vi.fn>;
     findLanesForActivities: ReturnType<typeof vi.fn>;
   };
+  let codeTypes: { findActiveInPlan: ReturnType<typeof vi.fn> };
+  let codeValues: { findManyActiveByTypes: ReturnType<typeof vi.fn> };
+  let guestCodes: {
+    findCarriers: ReturnType<typeof vi.fn>;
+    findPlacements: ReturnType<typeof vi.fn>;
+  };
   let shares: { touchLastAccessedIfStale: ReturnType<typeof vi.fn> };
   let logger: Pick<PinoLogger, 'warn'>;
   let service: ShareGuestService;
@@ -117,6 +126,12 @@ describe('ShareGuestService', () => {
       findAllActiveByPlan: vi.fn().mockResolvedValue([]),
       findLanesForActivities: vi.fn().mockResolvedValue(new Map()),
     };
+    codeTypes = { findActiveInPlan: vi.fn().mockResolvedValue(null) };
+    codeValues = { findManyActiveByTypes: vi.fn().mockResolvedValue([]) };
+    guestCodes = {
+      findCarriers: vi.fn().mockResolvedValue([]),
+      findPlacements: vi.fn().mockResolvedValue({ values: new Map(), lanes: new Map() }),
+    };
     shares = { touchLastAccessedIfStale: vi.fn().mockResolvedValue(1) };
     logger = { warn: vi.fn() };
     service = new ShareGuestService(
@@ -126,6 +141,9 @@ describe('ShareGuestService', () => {
       dependencies as unknown as DependencyRepository,
       schedule as unknown as ScheduleRepository,
       swimlanes as unknown as SwimlaneRepository,
+      codeTypes as unknown as CodeTypeRepository,
+      codeValues as unknown as CodeValueRepository,
+      guestCodes as unknown as GuestCodeRepository,
       shares as unknown as PlanShareRepository,
       logger as unknown as PinoLogger,
     );
@@ -302,6 +320,131 @@ describe('ShareGuestService', () => {
       const page = await service.listActivities(guest, { limit: 20 });
       expect(page.items[0]).toMatchObject({ memberOfSwimlaneId: null, swimlaneLaneIndex: null });
       expect(swimlanes.findLanesForActivities).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a code-grouped plan (p6-activity-codes M4-T6, owner answer 3)', () => {
+    const TYPE = '00000000-0000-7000-8000-0000000000c1';
+    const GF = '00000000-0000-7000-8000-0000000000d1';
+    const L1 = '00000000-0000-7000-8000-0000000000d2';
+    const L2 = '00000000-0000-7000-8000-0000000000d3';
+
+    function byCode(): void {
+      plans.findActiveByIdInOrg.mockResolvedValue(
+        planRow({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: TYPE } as never),
+      );
+      codeTypes.findActiveInPlan.mockResolvedValue({ id: TYPE, name: 'Area' });
+      // L2 is a live value nobody carries (and a summary-only value is not "in use").
+      codeValues.findManyActiveByTypes.mockResolvedValue([
+        { id: GF, shortCode: 'GF', description: 'Ground floor' },
+        { id: L1, shortCode: 'L1', description: null },
+        { id: L2, shortCode: 'L2', description: 'Level 2' },
+      ]);
+      guestCodes.findCarriers.mockResolvedValue([
+        { type: 'TASK', valueId: L1 },
+        { type: 'TASK', valueId: GF },
+        { type: 'WBS_SUMMARY', valueId: L2 },
+      ]);
+    }
+
+    it('lists the values in use by name in value order, and names the last band "No <type>"', async () => {
+      byCode();
+      const view = await service.getPlanView(guest);
+      expect(view.swimlanes).toEqual([
+        { id: GF, name: 'Ground floor' },
+        { id: L1, name: 'L1' },
+      ]);
+      expect(view.noSwimlaneName).toBe('No Area');
+      expect(codeTypes.findActiveInPlan).toHaveBeenCalledWith(TYPE, PLAN_ID, ORG_ID);
+      expect(guestCodes.findCarriers).toHaveBeenCalledWith(
+        { organizationId: ORG_ID, planId: PLAN_ID },
+        TYPE,
+      );
+      expect(swimlanes.findAllActiveByPlan).not.toHaveBeenCalled();
+    });
+
+    it('never puts the type, a value or a short code in the plan view beyond names', async () => {
+      byCode();
+      const wire = JSON.stringify(await service.getPlanView(guest));
+      // The band ids are the identity members match against; the type and the codes' own fields are not.
+      expect(wire).toContain(GF);
+      expect(Object.keys((await service.getPlanView(guest)).swimlanes[0] ?? {})).toEqual([
+        'id',
+        'name',
+      ]);
+      for (const absent of [TYPE, 'swimlaneCodeTypeId', 'shortCode', 'codeTypeId']) {
+        expect(wire).not.toContain(absent);
+      }
+    });
+
+    it('derives membership by value and the lane for exactly that band', async () => {
+      byCode();
+      activities.findManyActiveByPlan.mockResolvedValue([
+        activityRow('in-gf'),
+        activityRow('no-value'),
+        { ...activityRow('summary'), type: 'WBS_SUMMARY' },
+        activityRow('moved-on'),
+      ]);
+      const lane = (codeValueId: string | null, laneIndex: number) => ({
+        codeTypeId: TYPE,
+        codeValueId,
+        laneIndex,
+        updatedAt: '2026-07-01T00:00:00.000Z',
+      });
+      guestCodes.findPlacements.mockResolvedValue({
+        values: new Map([
+          ['in-gf', GF],
+          ['summary', L2],
+          // Not a drawn band (a value only a summary carries): the activity reads as in none.
+          ['moved-on', L2],
+        ]),
+        lanes: new Map([
+          ['in-gf', [lane(GF, 3)]],
+          ['no-value', [lane(null, 1)]],
+          ['summary', [lane(L2, 9)]],
+          ['moved-on', [lane(L2, 4)]],
+        ]),
+      });
+      const page = await service.listActivities(guest, { limit: 20 });
+      expect(page.items.map((i) => [i.memberOfSwimlaneId, i.swimlaneLaneIndex])).toEqual([
+        [GF, 3],
+        [null, 1],
+        [null, null],
+        [null, null],
+      ]);
+      expect(guestCodes.findPlacements).toHaveBeenCalledWith(
+        { organizationId: ORG_ID, planId: PLAN_ID },
+        TYPE,
+        ['in-gf', 'no-value', 'summary', 'moved-on'],
+      );
+      expect(swimlanes.findLanesForActivities).not.toHaveBeenCalled();
+      for (const item of page.items) {
+        expect(item).not.toHaveProperty('codes');
+        expect(item).not.toHaveProperty('codeSwimlaneLanes');
+      }
+    });
+
+    it('draws none when the plan’s type has been deleted, as a member’s picture does', async () => {
+      byCode();
+      codeTypes.findActiveInPlan.mockResolvedValue(null);
+      const view = await service.getPlanView(guest);
+      expect(view.swimlanes).toEqual([]);
+      expect(view).not.toHaveProperty('noSwimlaneName');
+    });
+
+    it('names no last band when no band is drawn', async () => {
+      byCode();
+      guestCodes.findCarriers.mockResolvedValue([]);
+      const view = await service.getPlanView(guest);
+      expect(view.swimlanes).toEqual([]);
+      expect(view).not.toHaveProperty('noSwimlaneName');
+    });
+
+    it('sends no noSwimlaneName for a hand-made plan, whose picture is unchanged', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(planRow({ swimlaneSource: 'MANUAL' } as never));
+      const view = await service.getPlanView(guest);
+      expect(view).not.toHaveProperty('noSwimlaneName');
+      expect(guestCodes.findCarriers).not.toHaveBeenCalled();
     });
   });
 

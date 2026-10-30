@@ -1268,7 +1268,11 @@ export function TsldPanel({
   const ghostLaneScene = useMemo<GhostLaneScene | null>(
     () =>
       diagramSource.swimlaneScene
-        ? { ...diagramSource.swimlaneScene, source: swimlanes?.source ?? 'MANUAL' }
+        ? {
+            ...diagramSource.swimlaneScene,
+            source: swimlanes?.source ?? 'MANUAL',
+            ...(swimlanes?.codeTypeId !== undefined ? { codeTypeId: swimlanes.codeTypeId } : {}),
+          }
         : null,
     [diagramSource.swimlaneScene, swimlanes],
   );
@@ -1551,6 +1555,7 @@ export function TsldPanel({
         },
         compareUndrawableReason,
         compareGhostBars ? compareGhostsUnplaced : 0,
+        swimlanes?.source === 'ACTIVITY_CODE' ? 'CODE' : 'SWIMLANE',
       ),
     [
       compareGhostBars,
@@ -1559,6 +1564,7 @@ export function TsldPanel({
       compareLinkLines,
       compareLinksUndrawable,
       compareUndrawableReason,
+      swimlanes?.source,
     ],
   );
 

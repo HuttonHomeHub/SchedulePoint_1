@@ -58,12 +58,18 @@ const SWIMLANES = [
   { id: 's2', name: 'Mechanical' },
 ];
 
-function GuestHarness({ withSwimlanes = true }: { withSwimlanes?: boolean }) {
+function GuestHarness({
+  withSwimlanes = true,
+  noneName,
+}: {
+  withSwimlanes?: boolean;
+  noneName?: string;
+}) {
   const [on, setOn] = useState(true);
   const activities = useMemo(() => GUEST_ACTIVITIES.map((a) => toActivitySummary(a, 'plan-1')), []);
   const input = useMemo(
-    () => toGuestSwimlaneInput(withSwimlanes ? SWIMLANES : [], GUEST_ACTIVITIES),
-    [withSwimlanes],
+    () => toGuestSwimlaneInput(withSwimlanes ? SWIMLANES : [], GUEST_ACTIVITIES, noneName),
+    [withSwimlanes, noneName],
   );
   return (
     <TsldPanel
@@ -91,6 +97,16 @@ describe('the guest view’s swimlanes', () => {
         .getAllByRole('option')
         .map((o) => o.textContent?.split(',')[0]),
     ).toEqual(['Dig']);
+  });
+
+  it('words the last group "No Area" when the server names it for a code-grouped plan', () => {
+    const { getByRole, getAllByRole } = render(<GuestHarness noneName="No Area" />);
+    const groups = getAllByRole('group').filter((g) => getByRole('listbox').contains(g));
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Civil',
+      'Mechanical',
+      'No Area',
+    ]);
   });
 
   it('takes the groups away with the Swimlanes checkbox, and back again', () => {

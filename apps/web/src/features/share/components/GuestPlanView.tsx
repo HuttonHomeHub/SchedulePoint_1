@@ -182,8 +182,8 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   // reshaping of what arrived — there is no second request and so no frame drawn without them. The
   // lens is the guest's own, on by default, and held here because there is no workspace to keep it.
   const swimlaneInput = useMemo(
-    () => toGuestSwimlaneInput(plan?.swimlanes, guestActivities ?? []),
-    [plan?.swimlanes, guestActivities],
+    () => toGuestSwimlaneInput(plan?.swimlanes, guestActivities ?? [], plan?.noSwimlaneName),
+    [plan?.swimlanes, plan?.noSwimlaneName, guestActivities],
   );
   const [swimlanesOn, setSwimlanesOn] = useState(true);
   const [gutterRoom, setGutterRoom] = useState(true);

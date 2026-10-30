@@ -1,6 +1,7 @@
 import type { SeedSpec } from '@repo/seed';
 
 import { calendarsPlan } from './calendars.js';
+import { codesWidePlan } from './codes-wide.js';
 import { codesPlan } from './codes.js';
 import { constraintsPlan, expectedFinishPlan, snetEffectsPlan } from './constraints.js';
 import { costPlan, externalIgnoredPlan, externalPlan } from './cost.js';
@@ -93,6 +94,7 @@ export const CAPABILITY_FAMILIES: readonly CapabilityFamily[] = [
   { key: 'swimlanes', label: 'Swimlanes made by hand', build: swimlanesPlan },
   { key: 'swimlanes', label: 'Swimlanes from the WBS', build: swimlanesWbsPlan },
   { key: 'codes', label: 'Activity codes', build: codesPlan },
+  { key: 'codes-wide', label: 'Activity codes at the swimlane limit', build: codesWidePlan },
 ];
 
 /** Every capability plan, or just one family's. An unknown family yields an empty list. */

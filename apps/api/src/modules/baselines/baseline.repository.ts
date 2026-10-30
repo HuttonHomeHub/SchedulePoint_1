@@ -811,6 +811,39 @@ export class BaselineRepository {
   }
 
   /**
+   * The code value and code lane the given activities froze in ONE baseline (P6 M4-T6) — what a
+   * ghost of removed work needs to be placed in a code swimlane. Meaningful only when that
+   * baseline's frozen source was `ACTIVITY_CODE` (the caller checks); NULL, NULL is "no value, never
+   * placed". Org-scoped and live-baseline-scoped like {@link loadFrozenLanesForGhosts}, chunked like
+   * it, and read through `baseline_activities`, which carries the two columns on its own row.
+   */
+  async loadFrozenCodePlacementsForGhosts(
+    baselineId: string,
+    organizationId: string,
+    sourceActivityIds: readonly string[],
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    { sourceActivityId: string; codeValueId: string | null; codeLaneIndex: number | null }[]
+  > {
+    const out = [];
+    for (const chunk of chunkIds(sourceActivityIds)) {
+      out.push(
+        ...(await db.baselineActivity.findMany({
+          where: {
+            baselineId,
+            organizationId,
+            deletedAt: null,
+            baseline: { deletedAt: null },
+            sourceActivityId: { in: chunk },
+          },
+          select: { sourceActivityId: true, codeValueId: true, codeLaneIndex: true },
+        })),
+      );
+    }
+    return out;
+  }
+
+  /**
    * A plan's active live activities projected to the fields the REVISION DELTA needs — the live
    * side's counterpart to {@link loadSnapshotRowsForDelta}, carrying the same facts so both project
    * to one row shape and the pure delta cannot tell them apart.

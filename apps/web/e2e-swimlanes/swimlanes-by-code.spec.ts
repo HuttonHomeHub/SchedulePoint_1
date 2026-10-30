@@ -3,10 +3,11 @@ import type { Locator, Page } from '@playwright/test';
 
 import { drawActivity } from '../e2e-authoring/support';
 import { expect, test } from '../e2e-support/test';
-import { planCommands } from '../e2e-support/toolbar';
+import { pressPromotable, planCommands, recalculate } from '../e2e-support/toolbar';
 
 import {
   CODES_PLAN,
+  CODES_WIDE_PLAN,
   calculateSeededPlan,
   cursorTo,
   diagramList,
@@ -40,6 +41,11 @@ import {
  * between codes and back with no lane write (SC-M4-4), Delete… shaded for the source code, and 1024 × 600.
  * The first two tests still set the source through the API: they ask what the diagram does with it, and
  * the card is asked in the third.
+ *
+ * **M4-T6 closes it** (third test's last steps, and a fourth test): comparison ghosts of removed work
+ * drawn in their frozen band or counted in words, the guest's view of the bands by name with "No Area"
+ * last and no code in the payload, and `plan:capability-codes-wide`, where the type with 101 values in
+ * use is shaded with its reason and the one with 100 is choosable.
  *
  * What only a browser can say is here: that a pointer drag across a code swimlane's edge is held while
  * it is in progress and nothing is refused by the server (m4-spec Q7), and that a keyboard nudge inside
@@ -250,6 +256,24 @@ async function areaOf(
       };
     },
     { org: orgSlug, id: planId },
+  );
+}
+
+/** One activity's id by its own code (`CD_4`), from the API. */
+async function activityIdOf(page: Page, orgSlug: string, code: string): Promise<string> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id, key }: { org: string; id: string; key: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      const body = (await response.json()) as { data: { id: string; code: string }[] };
+      const found = body.data.find((a) => a.code === key);
+      if (!found) throw new Error(`no activity ${key}`);
+      return found.id;
+    },
+    { org: orgSlug, id: planId, key: code },
   );
 }
 
@@ -598,8 +622,9 @@ test.describe('choosing a code in Swimlanes…', () => {
       await expect(codes).toBeHidden();
     });
 
+    let baselineId = '';
     await test.step('6. a baseline can be taken while swimlanes are made from a code', async () => {
-      const failure = await page.evaluate(
+      const result = await page.evaluate(
         async ({ org, id }: { org: string; id: string }) => {
           const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/baselines`, {
             method: 'POST',
@@ -607,11 +632,170 @@ test.describe('choosing a code in Swimlanes…', () => {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ name: 'Under Area' }),
           });
-          return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+          if (!response.ok)
+            return { failure: `${String(response.status)} ${await response.text()}` };
+          return { id: ((await response.json()) as { data: { id: string } }).data.id };
         },
         { org: orgSlug, id: openPlanId(page) },
       );
-      expect(failure, 'taking a baseline').toBeNull();
+      expect(result.failure, 'taking a baseline').toBeUndefined();
+      baselineId = result.id ?? '';
+      expect(baselineId).not.toBe('');
+    });
+
+    await test.step('6b. removed work is drawn in its frozen band under the same code, and counted in words under another', async () => {
+      const planId = openPlanId(page);
+      // The premise, read from the API rather than assumed: the removed activity's baseline froze its
+      // Area value and a code lane (the nudge in step 3 filed every member of Level 1 at its lane).
+      const doomed = (await storedByCode(page, orgSlug))['CD_4']!;
+      const failure = await page.evaluate(
+        async ({ org, id }: { org: string; id: string }) => {
+          const response = await fetch(`/api/v1/organizations/${org}/activities/${id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+        },
+        { org: orgSlug, id: await activityIdOf(page, orgSlug, 'CD_4') },
+      );
+      expect(failure, 'deleting First-fix services').toBeNull();
+      await recalculate(page);
+      await page.reload();
+      await ensurePen(page);
+      await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 30_000 });
+      const frozen = await page.evaluate(
+        async ({ org, id, from }: { org: string; id: string; from: string }) => {
+          const response = await fetch(
+            `/api/v1/organizations/${org}/plans/${id}/schedule/revision-compare?from=${from}&include=ghosts`,
+            { credentials: 'include' },
+          );
+          const body = (await response.json()) as {
+            data: { ghosts: { name: string; removed: boolean; frozenCodeLane?: unknown }[] };
+          };
+          return body.data.ghosts.find((g) => g.removed);
+        },
+        { org: orgSlug, id: planId, from: baselineId },
+      );
+      expect(frozen?.name).toBe('First-fix services');
+      expect(frozen?.frozenCodeLane, 'a code lane was frozen').toBeTruthy();
+      expect(doomed.name).toBe('First-fix services');
+      // Stated BEFORE the delete, so a missing lane fails here and not as a puzzling counted ghost.
+      expect(doomed.lanes.length, 'CD_4 holds a stored code lane').toBeGreaterThan(0);
+      // From here the case runs on the mutated plan (CD_4 is gone): steps 6c and 7 onwards read it so.
+
+      await pressPromotable(page, {
+        id: 'compare-revisions',
+        via: 'analysis',
+        menuItem: 'Compare revisions…',
+      });
+      const compare = page.getByRole('region', { name: 'Compare revisions' });
+      await compare.getByLabel('Earlier revision').selectOption({ label: 'Under Area' });
+      await page.getByRole('button', { name: 'View', exact: true }).click();
+      await page.getByRole('checkbox', { name: 'Compare on diagram' }).check();
+      await page.keyboard.press('Escape');
+      await expect(
+        page
+          .getByRole('list', { name: 'Removed in this revision' })
+          .getByText('First-fix services'),
+      ).toBeVisible();
+      // Drawn in its frozen band (Level 1 still has members): nothing is said to be withheld.
+      await expect(page.getByText(/Comparison overlay: .*removed/i)).toBeVisible();
+      await expect(
+        page.getByText(
+          /not shown because the earlier revision was grouped differently, or its value is no longer in use/,
+        ),
+      ).toHaveCount(0);
+
+      // Frozen under Area, viewed under Trade: the cost ADR-0127 names, said in words, never derived.
+      const dialog = await openManageFromView(page);
+      await chooseOption(page, dialog.getByRole('combobox', { name: 'Code' }), /^Trade/);
+      await dialog.getByRole('button', { name: 'Use Trade' }).click();
+      await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(
+        page.getByText(
+          /not shown because the earlier revision was grouped differently, or its value is no longer in use/,
+        ),
+      ).toBeVisible();
+      // Counted is not drawn, so it is not in the diagram's removed list either; the comparison panel
+      // still reports the removal in its own words.
+      await expect(page.getByRole('list', { name: 'Removed in this revision' })).toHaveCount(0);
+      await expect(compare.getByText(/1 removed/)).toBeVisible();
+
+      await page.getByRole('button', { name: 'View', exact: true }).click();
+      await page.getByRole('checkbox', { name: 'Compare on diagram' }).uncheck();
+      await page.keyboard.press('Escape');
+      const back = await openManageFromView(page);
+      await chooseOption(page, back.getByRole('combobox', { name: 'Code' }), /^Area/);
+      await back.getByRole('button', { name: 'Use Area' }).click();
+      await back.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(back).toBeHidden();
+      // The comparison dock shares the panel column with Codes…, which a later step opens.
+      await compare.getByRole('button', { name: 'Close revision comparison' }).click();
+      await expect(compare).toBeHidden();
+    });
+
+    await test.step('6c. a guest sees the bands by name, "No Area" last, and no code', async () => {
+      const share = await page.evaluate(
+        async ({ org, id }: { org: string; id: string }) => {
+          const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/shares`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          if (!response.ok)
+            throw new Error(`share link ${String(response.status)}: ${await response.text()}`);
+          return ((await response.json()) as { data: { url: string } }).data.url;
+        },
+        { org: orgSlug, id: openPlanId(page) },
+      );
+      const guestContext = await page.context().browser()!.newContext();
+      try {
+        const guest = await guestContext.newPage();
+        // Both payloads are awaited before anything is asserted about them, so an absence is not a
+        // read taken before the response arrived.
+        const planResponse = guest.waitForResponse((r) => /\/share\/plan(\?|$)/.test(r.url()));
+        const activitiesResponse = guest.waitForResponse((r) =>
+          /\/share\/activities(\?|$)/.test(r.url()),
+        );
+        await guest.goto(share);
+        const payloads = [
+          await (await planResponse).text(),
+          await (await activitiesResponse).text(),
+        ];
+        const guestDiagram = guest.getByRole('region', { name: 'Time-scaled logic diagram' });
+        await expect(guestDiagram).toBeVisible();
+        // CD_4 was deleted above, so Level 1 keeps CD_3 and CD_5; Level 2 is carried by nobody.
+        await expect
+          .poll(() =>
+            guestDiagram
+              .getByRole('listbox')
+              .getByRole('group')
+              .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('aria-label'))),
+          )
+          .toEqual(['Ground floor', 'Level 1', 'Roof', 'No Area']);
+        await expect(
+          guestDiagram.getByRole('listbox').getByRole('option', { name: /Steel frame/ }),
+        ).toContainText(/Level 1/);
+        const wire = payloads.join('');
+        expect(wire).toContain('No Area');
+        for (const secret of [
+          '"codes"',
+          'codeSwimlaneLanes',
+          'codeTypeId',
+          'codeValueId',
+          'shortCode',
+        ]) {
+          expect(wire, secret).not.toContain(secret);
+        }
+        const results = await new AxeBuilder({ page: guest })
+          .withTags(['wcag2a', 'wcag2aa'])
+          .analyze();
+        expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      } finally {
+        await guestContext.close();
+      }
     });
 
     await test.step('7. at 1024 × 600 every card, the picker, an open list’s last option and the submit are reachable, and axe is clean', async () => {
@@ -641,6 +825,9 @@ test.describe('choosing a code in Swimlanes…', () => {
     });
 
     await test.step('8. at 1024 × 600 the printed Delete… reason leaves the Area values table in view', async () => {
+      // Opening the comparison dock in 6b folded the activities panel; Codes… lives in it.
+      const expand = page.getByRole('button', { name: 'Expand activities panel' });
+      if (await expand.isVisible()) await expand.click();
       await page.getByRole('button', { name: 'Codes…' }).click();
       const codes = page.getByRole('dialog', { name: 'Codes', exact: true });
       await expect(codes).toBeVisible();
@@ -652,6 +839,69 @@ test.describe('choosing a code in Swimlanes…', () => {
       ).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(codes).toBeHidden();
+    });
+  });
+});
+
+test.describe('a code with more values in use than a swimlane can draw', () => {
+  test('Room (101 in use) is shaded with its reason in the By code picker, and Zone (100) is choosable', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    const orgSlug = await openSeededPlan(page, Date.now() + 3, CODES_WIDE_PLAN);
+    await ensurePen(page);
+
+    await test.step('1. Room is listed shaded with the sentence, still takes focus, and the first choosable code is preselected', async () => {
+      const panel = await openStructure(page);
+      await manageButton(panel).click();
+      const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('radio', { name: /^One per (code value|value of)/ }).click();
+      const picker = dialog.getByRole('combobox', { name: 'Code' });
+      await expect(picker).toHaveValue('Zone');
+      await picker.focus();
+      await page.keyboard.press('ArrowDown');
+      const room = dialog.getByRole('option', { name: /^Room/ });
+      await expect(room).toHaveAttribute('aria-disabled', 'true');
+      await expect(room).not.toHaveAttribute('disabled', /.*/);
+      await expect(room).toContainText('Room has 101 values in use. Swimlanes can show up to 100.');
+      // Axe with the list open: the shaded Room option is on screen with its reason.
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeVisible();
+    });
+
+    await test.step('2. Zone is accepted: the plan’s source is the code, written once', async () => {
+      const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
+      await dialog.getByRole('button', { name: 'Set up swimlanes', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      const written = await page.evaluate(
+        async ({ org, id }: { org: string; id: string }) => {
+          const base = `/api/v1/organizations/${org}/plans/${id}`;
+          const plan = (await (await fetch(base, { credentials: 'include' })).json()) as {
+            data: { swimlaneSource: string; swimlaneCodeTypeId: string | null };
+          };
+          const types = (await (
+            await fetch(`${base}/code-types?values=none`, { credentials: 'include' })
+          ).json()) as { data: { id: string; name: string }[] };
+          return {
+            source: plan.data.swimlaneSource,
+            typeId: plan.data.swimlaneCodeTypeId,
+            zoneId: types.data.find((t) => t.name === 'Zone')?.id ?? null,
+          };
+        },
+        { org: orgSlug, id: openPlanId(page) },
+      );
+      expect(written.source).toBe('ACTIVITY_CODE');
+      // The code chosen is Zone, the one that fits, and not the shaded Room.
+      expect(written.zoneId).not.toBeNull();
+      expect(written.typeId).toBe(written.zoneId);
+    });
+
+    await test.step('3. axe finds nothing', async () => {
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
     });
   });
 });

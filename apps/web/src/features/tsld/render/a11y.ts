@@ -343,6 +343,10 @@ export function baselineGhostClause(
   return ` (baseline ${span}${view}${variance})`;
 }
 
+/** Why removed work cannot be placed in a code grouping (m4-spec §1b row 4), worded once for both sentences. */
+const CODE_UNPLACED_BECAUSE =
+  'the earlier revision was grouped differently, or its value is no longer in use';
+
 /**
  * The spoken equivalent of the revision-comparison change picture (ADR-0127) — a list of the work
  * the overlay draws that a screen-reader user has **no other route to**.
@@ -396,6 +400,12 @@ export function compareOverlaySummary(
    * had recorded.
    */
   unplaced = 0,
+  /**
+   * Why they could not be placed. Under a code grouping the cause the reader can act on is different
+   * (the earlier revision was grouped by another code, or none, or the value has left the picture), so
+   * it says so; hand-made and WBS keep their wording.
+   */
+  unplacedReason: 'SWIMLANE' | 'CODE' = 'SWIMLANE',
 ): {
   readonly heading: string;
   /**
@@ -416,7 +426,15 @@ export function compareOverlaySummary(
   /** The VISIBLE sentence for that count. Empty when there is nothing withheld. */
   readonly undrawnLabel: string;
 } | null {
-  if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
+  // `unplaced` counts too: an overlay that withheld every changed bar must still say so, or the
+  // reader is told nothing in exactly the case where the picture is empty for a reason.
+  if (
+    ghosts.length === 0 &&
+    undrawable === 0 &&
+    unplaced === 0 &&
+    links.drawn === 0 &&
+    links.undrawable === 0
+  ) {
     return null;
   }
   const removed = ghosts
@@ -449,7 +467,11 @@ export function compareOverlaySummary(
   }
   if (unplaced > 0) {
     parts.push(
-      `${String(unplaced)} not shown because their swimlane or row can no longer be matched`,
+      `${String(unplaced)} not shown because ${
+        unplacedReason === 'CODE'
+          ? CODE_UNPLACED_BECAUSE
+          : 'their swimlane or row can no longer be matched'
+      }`,
     );
   }
   const logic =
@@ -472,8 +494,10 @@ export function compareOverlaySummary(
           `earlier revision did not record where they were.`,
       unplaced === 0
         ? ''
-        : `${String(unplaced)} ${unplaced === 1 ? 'change is' : 'changes are'} not shown — their ` +
-          `swimlane or row can no longer be matched.`,
+        : `${String(unplaced)} ${unplaced === 1 ? 'change is' : 'changes are'} not shown — ` +
+          (unplacedReason === 'CODE'
+            ? `${CODE_UNPLACED_BECAUSE}.`
+            : `their swimlane or row can no longer be matched.`),
     ]
       .filter((sentence) => sentence !== '')
       .join(' '),

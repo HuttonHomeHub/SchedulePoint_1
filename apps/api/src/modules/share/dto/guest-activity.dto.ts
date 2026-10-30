@@ -108,7 +108,9 @@ export class GuestActivityDto {
     description:
       'The swimlane the diagram draws this activity in: an id from the plan view’s `swimlanes`, ' +
       'or null for "No swimlane" (also null on a plan with no swimlanes, and for a member of a ' +
-      'swimlane since deleted). Derived by the same rule the member diagram draws by.',
+      'swimlane since deleted). Derived by the same rule the member diagram draws by. Under a ' +
+      'code source: the id of the activity’s value when that value is a drawn band, or null for ' +
+      '"No <type>".',
   })
   memberOfSwimlaneId!: string | null;
 
@@ -117,7 +119,8 @@ export class GuestActivityDto {
     type: Number,
     description:
       'The 0-based lane inside that swimlane, as stored; null when the activity has never been ' +
-      'placed there (the diagram derives one).',
+      'placed there (the diagram derives one). Under a code source: the activity’s code lane for ' +
+      'that band.',
   })
   swimlaneLaneIndex!: number | null;
 

@@ -555,6 +555,13 @@ export interface CompareGhost {
     readonly swimlaneId: string | null;
     readonly laneIndex: number;
   }[];
+  /**
+   * What the old baseline froze of a CODE (P6 M4-T6), on a removed ghost whose baseline's source was
+   * a code. Absent on every other baseline, which `placeCompareGhosts` counts under a code source.
+   */
+  readonly frozenCodeTypeId?: string;
+  readonly frozenCodeValueId?: string | null;
+  readonly frozenCodeLane?: { readonly laneIndex: number } | null;
 }
 
 /**

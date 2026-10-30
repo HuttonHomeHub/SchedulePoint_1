@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 
 import { ActivitiesModule } from '../activities/activities.module';
 import { CalendarsModule } from '../calendars/calendars.module';
+import { CodesModule } from '../codes/codes.module';
 import { DependenciesModule } from '../dependencies/dependencies.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlansModule } from '../plans/plans.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { SwimlanesModule } from '../swimlanes/swimlanes.module';
 
+import { GuestCodeRepository } from './guest-code.repository';
 import { PlanShareRepository } from './plan-share.repository';
 import { ShareGuestController } from './share-guest.controller';
 import { ShareGuestService } from './share-guest.service';
@@ -40,11 +42,18 @@ import { ShareService } from './share.service';
     PlansModule,
     ActivitiesModule,
     CalendarsModule,
+    CodesModule,
     DependenciesModule,
     ScheduleModule,
     SwimlanesModule,
   ],
   controllers: [ShareController, ShareGuestController],
-  providers: [ShareService, ShareGuestService, ShareTokenGuard, PlanShareRepository],
+  providers: [
+    ShareService,
+    ShareGuestService,
+    ShareTokenGuard,
+    PlanShareRepository,
+    GuestCodeRepository,
+  ],
 })
 export class ShareModule {}

@@ -1,9 +1,10 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { PenHolder, SeedClient, seedPlan } from '@repo/seed-http';
+import { PenHolder, SeedClient, SeedHttpError, seedPlan } from '@repo/seed-http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { codesWidePlan } from '../../seed-cli/src/capabilities/codes-wide.js';
 import { codesPlan } from '../../seed-cli/src/capabilities/codes.js';
 import { swimlanesPlan } from '../../seed-cli/src/capabilities/swimlanes.js';
 import { configureHttpApp } from '../src/app-setup';
@@ -53,7 +54,13 @@ describe.skipIf(!hasDatabase)('The coded seeded plan (e2e)', () => {
   let client: SeedClient;
   let projectId: string;
 
+  let priorRateLimit: string | undefined;
+
   beforeAll(async () => {
+    // The wide plan posts 201 values and 101 activities, more in a minute than the default per-IP
+    // bound allows (the plan-swimlane-code-source spec's reasoning); restored in afterAll.
+    priorRateLimit = process.env.RATE_LIMIT_LIMIT;
+    process.env.RATE_LIMIT_LIMIT = '100000';
     process.env.LOG_LEVEL ??= 'silent';
     const { AppModule } = await import('../src/app.module');
     const { PrismaService: Token } = await import('../src/prisma/prisma.service');
@@ -92,6 +99,8 @@ describe.skipIf(!hasDatabase)('The coded seeded plan (e2e)', () => {
   afterAll(async () => {
     await resetDatabase();
     await app?.close();
+    if (priorRateLimit === undefined) delete process.env.RATE_LIMIT_LIMIT;
+    else process.env.RATE_LIMIT_LIMIT = priorRateLimit;
   });
 
   /** Children before parents. The database is shared between specs, so this clears others' rows too. */
@@ -121,9 +130,21 @@ describe.skipIf(!hasDatabase)('The coded seeded plan (e2e)', () => {
     await prisma.user.deleteMany();
   }
 
-  const activities = async (planId: string): Promise<ActivityRow[]> =>
-    (await client.getPage<ActivityRow>(`/api/v1/organizations/${ORG}/plans/${planId}/activities`))
-      .rows;
+  /** Every activity of the plan: the list is paged at 100, and the wide plan has 101. */
+  const activities = async (planId: string): Promise<ActivityRow[]> => {
+    const path = `/api/v1/organizations/${ORG}/plans/${planId}/activities`;
+    const all: ActivityRow[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: { rows: ActivityRow[]; meta: { nextCursor: string | null } } =
+        await client.getPage<ActivityRow>(
+          cursor === null ? path : `${path}?cursor=${encodeURIComponent(cursor)}`,
+        );
+      all.push(...page.rows);
+      cursor = page.meta.nextCursor;
+    } while (cursor !== null);
+    return all;
+  };
 
   it('creates the three types and their values, in the spec order', async () => {
     const spec = codesPlan();
@@ -238,4 +259,53 @@ describe.skipIf(!hasDatabase)('The coded seeded plan (e2e)', () => {
     });
     for (const code of carriers) expect(await areaOf(code), `${code} restored`).toBe(level1.id);
   });
+  it(
+    'seeds the wide plan with Room one over the swimlane limit and Zone exactly at it (M4-T6)',
+    { timeout: 300_000 },
+    async () => {
+      const spec = codesWidePlan();
+      const seeded = await seedPlan(client, { orgSlug: ORG, projectId }, spec);
+      expect(seeded.findings, JSON.stringify(seeded.findings)).toEqual([]);
+      const planId = seeded.planId!;
+      const planPath = `/api/v1/organizations/${ORG}/plans/${planId}`;
+      const types = await client.get<CodeTypeRow[]>(`${planPath}/code-types`);
+      const byName = new Map(types.map((t) => [t.name, t]));
+      expect(byName.get('Room')!.values).toHaveLength(101);
+      expect(byName.get('Zone')!.values).toHaveLength(100);
+
+      const rows = await activities(planId);
+      expect(rows).toHaveLength(101);
+      const inUse = (typeName: string): number =>
+        new Set(
+          rows
+            .flatMap((r) =>
+              (r.codes ?? []).filter((c) => c.codeTypeId === byName.get(typeName)!.id),
+            )
+            .map((c) => c.codeValueId),
+        ).size;
+      expect(inUse('Room')).toBe(101);
+      expect(inUse('Zone')).toBe(100);
+
+      // The rule the picker states: refused over the limit with its reason, accepted at it.
+      const choose = async (typeId: string): Promise<unknown> => {
+        const plan = await client.get<{ version: number }>(planPath);
+        return client.patch(planPath, {
+          version: plan.version,
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: typeId,
+        });
+      };
+      await PenHolder.withPen(client, ORG, planId, async () => {
+        const refused = await choose(byName.get('Room')!.id).catch((error: unknown) => error);
+        expect(refused).toBeInstanceOf(SeedHttpError);
+        expect((refused as SeedHttpError).status).toBe(422);
+        expect((refused as SeedHttpError).details).toMatchObject({
+          reason: 'SWIMLANE_CODE_TYPE_INELIGIBLE',
+          valuesInUse: 101,
+          limit: 100,
+        });
+        await expect(choose(byName.get('Zone')!.id)).resolves.toBeDefined();
+      });
+    },
+  );
 });
