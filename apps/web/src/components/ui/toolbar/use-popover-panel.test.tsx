@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { usePopoverPanel } from './use-popover-panel';
+
+import { AnnouncerProvider } from '@/components/ui/announcer';
+import { Combobox } from '@/components/ui/combobox';
 
 /**
  * The behaviours fix-slice M-C ADDED to the shared panel (#203, #196a's third copy). The
@@ -13,7 +16,13 @@ import { usePopoverPanel } from './use-popover-panel';
  * default action), so each case asserts the MECHANISM — `defaultPrevented`, the style properties,
  * the chosen portal parent — stated rather than implied, per #196's precedent.
  */
-function Host({ label = 'Panel' }: { label?: string }): React.ReactElement {
+function Host({
+  label = 'Panel',
+  children,
+}: {
+  label?: string;
+  children?: React.ReactNode;
+}): React.ReactElement {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popover = usePopoverPanel({ triggerRef });
   return (
@@ -25,6 +34,7 @@ function Host({ label = 'Panel' }: { label?: string }): React.ReactElement {
         label,
         <div>
           <p>Row one</p>
+          {children}
         </div>,
       )}
     </>
@@ -66,5 +76,124 @@ describe('usePopoverPanel (M-C additions)', () => {
     const panel = screen.getByRole('dialog', { name: 'Panel' });
     expect(dialog.contains(panel)).toBe(true);
     dialog.remove();
+  });
+
+  describe('Escape and an open inner popup (ADR-0111)', () => {
+    /** Stands in for `Combobox`: an expanded combobox that closes itself on a later capture listener. */
+    function Inner(): React.ReactElement {
+      const [expanded, setExpanded] = useState(true);
+      useEffect(() => {
+        if (!expanded) return;
+        const onKey = (event: KeyboardEvent): void => {
+          if (event.key === 'Escape') setExpanded(false);
+        };
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
+      }, [expanded]);
+      return (
+        <input role="combobox" aria-label="Value" aria-controls="list" aria-expanded={expanded} />
+      );
+    }
+
+    it('leaves the first Escape to the open popup, then closes the panel and refocuses the trigger', () => {
+      render(
+        <Host>
+          <Inner />
+        </Host>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      const input = screen.getByRole('combobox', { name: 'Value' });
+      input.focus();
+
+      const notPrevented = fireEvent.keyDown(input, { key: 'Escape' });
+      expect(notPrevented).toBe(true);
+      expect(screen.getByRole('dialog', { name: 'Panel' })).toBeInTheDocument();
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.queryByRole('dialog', { name: 'Panel' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
+
+    it('the real Combobox: the first Escape collapses the list, the second closes the panel', () => {
+      function Real(): React.ReactElement {
+        const [value, setValue] = useState('');
+        const [query, setQuery] = useState('');
+        return (
+          <Combobox
+            id="real"
+            value={value}
+            onChange={setValue}
+            query={query}
+            onQueryChange={setQuery}
+            options={[{ value: 'a', label: 'Alpha' }]}
+            toggleLabel="Show values"
+          />
+        );
+      }
+      render(
+        <AnnouncerProvider>
+          <Host>
+            <Real />
+          </Host>
+        </AnnouncerProvider>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      const input = screen.getByRole('combobox');
+      input.focus();
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(input).toHaveAttribute('aria-expanded', 'true');
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('dialog', { name: 'Panel' })).toBeInTheDocument();
+      expect(input).toHaveFocus();
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.queryByRole('dialog', { name: 'Panel' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
+
+    it('an expanded combobox outside the panel does not stop the panel closing', () => {
+      render(
+        <>
+          <input role="combobox" aria-label="Elsewhere" aria-controls="x" aria-expanded="true" />
+          <Host />
+        </>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      const outside = screen.getByRole('combobox', { name: 'Elsewhere' });
+      outside.focus();
+      fireEvent.keyDown(outside, { key: 'Escape' });
+      expect(screen.queryByRole('dialog', { name: 'Panel' })).not.toBeInTheDocument();
+    });
+
+    it('yields when the key targets the document but the expanded input holds focus', () => {
+      render(
+        <Host>
+          <Inner />
+        </Host>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      const input = screen.getByRole('combobox', { name: 'Value' });
+      input.focus();
+
+      const notPrevented = fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(notPrevented).toBe(true);
+      expect(screen.getByRole('dialog', { name: 'Panel' })).toBeInTheDocument();
+      expect(input).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('closes the panel on Escape when no inner popup is open', () => {
+      render(
+        <Host>
+          <input role="combobox" aria-label="Value" aria-controls="list" aria-expanded="false" />
+        </Host>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+      screen.getByRole('combobox', { name: 'Value' }).focus();
+      fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog', { name: 'Panel' })).not.toBeInTheDocument();
+    });
   });
 });

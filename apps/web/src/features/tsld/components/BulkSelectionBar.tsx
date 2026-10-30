@@ -74,6 +74,13 @@ export interface BulkSelectionBarProps {
     names: readonly string[];
     gate: { writable: boolean; reason: string | null };
   } | null;
+  /**
+   * **Set code…** for the whole selection (P6 activity codes, M3-T4). The host renders it — a button
+   * with a popover over `features/codes`' control — because this feature must not import that one
+   * (`docs/TECH_DEBT.md` #548). Absent where the plan has no code types, which omits it. It sits
+   * after Move to swimlane… and before Delete, and carries its own shading and reason.
+   */
+  codeAction?: React.ReactNode;
 }
 
 function BulkAction({
@@ -138,6 +145,7 @@ export function BulkSelectionBar({
   busy = false,
   canMove = false,
   moveToSwimlane = null,
+  codeAction = null,
 }: BulkSelectionBarProps): React.ReactElement | null {
   const statusId = useId();
   // Below two this is not a plural selection and the floating per-object bar is the right surface.
@@ -211,6 +219,7 @@ export function BulkSelectionBar({
             gate={moveToSwimlane.gate}
           />
         ) : null}
+        {codeAction}
         <BulkAction
           gate={remove}
           busy={busy}

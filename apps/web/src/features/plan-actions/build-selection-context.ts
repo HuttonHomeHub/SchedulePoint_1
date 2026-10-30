@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 
 import { deriveMakeMilestoneGate } from './make-milestone-gate';
-import type { SelectionBarContext, SelectionCanvasContext } from './selection-actions';
+import type { SelectionBarContext, SelectionCanvasContext, SetCodeGate } from './selection-actions';
 
 import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
@@ -83,6 +83,17 @@ export interface SelectionContextInput {
   onToggleFloatPaths?: ((activity: ActivitySummary) => void) | undefined;
   /** Move to swimlane… — absent where swimlanes are not offered, which omits the item. */
   moveToSwimlane?: SwimlaneAssignment | null | undefined;
+  /**
+   * Set code… — renders the code panel for one activity. Absent where the plan has no code types,
+   * which omits the item. A render function because this feature must not import `features/codes`.
+   */
+  setCodePanel?:
+    | ((
+        activity: ActivitySummary,
+        gate: SetCodeGate,
+        initialFocus: React.RefObject<HTMLSelectElement | null>,
+      ) => React.ReactNode)
+    | undefined;
 }
 
 /**
@@ -153,6 +164,11 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
       input.onToggleFloatPaths === undefined ? null : () => input.onToggleFloatPaths?.(activity),
     moveToSwimlane: input.moveToSwimlane
       ? { assignment: input.moveToSwimlane, ids: [activity.id], names: [activity.name] }
+      : null,
+    setCode: input.setCodePanel
+      ? {
+          panel: (gate, initialFocus) => input.setCodePanel?.(activity, gate, initialFocus),
+        }
       : null,
   };
 }

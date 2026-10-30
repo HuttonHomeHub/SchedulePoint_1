@@ -71,6 +71,8 @@ import { useUpdateActivityFields } from '@/features/activities/api/use-activitie
 import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
+  CodeAssignButton,
+  CodeAssignControl,
   CodeBulkAssignBar,
   deriveCodesGate,
   useCodeColumns,
@@ -356,6 +358,45 @@ export function ToolbarPlanWorkspace({
     [model.orgSlug, model.planId, recordCodeEdit],
   );
   const codeBulk = (codeTypesForBulk.data?.length ?? 0) > 0 ? renderCodeBulk : undefined;
+  // Set code… on the diagram's two selection bars and the Gantt dock (M3-T4): the same control and the
+  // same history seam as the table's, handed to `features/tsld` and `features/plan-actions` as render
+  // functions because neither may import `features/codes`. Memoised, because the single bar's context
+  // is rebuilt whenever `panel`'s identity changes. Absent while the plan has no code type.
+  const hasCodeTypes = (codeTypesForBulk.data?.length ?? 0) > 0;
+  const setCodeHost = useMemo(
+    () =>
+      hasCodeTypes
+        ? {
+            panel: (
+              activity: ActivitySummary,
+              gate: { writable: boolean; reason: string | null },
+              initialFocus: React.RefObject<HTMLSelectElement | null>,
+            ) => (
+              <CodeAssignControl
+                orgSlug={model.orgSlug}
+                planId={model.planId}
+                activities={[activity]}
+                gate={gate}
+                record={recordCodeEdit}
+                selectRef={initialFocus}
+              />
+            ),
+            action: (
+              activities: readonly ActivitySummary[],
+              gate: { writable: boolean; reason: string | null },
+            ) => (
+              <CodeAssignButton
+                orgSlug={model.orgSlug}
+                planId={model.planId}
+                activities={activities}
+                gate={gate}
+                record={recordCodeEdit}
+              />
+            ),
+          }
+        : null,
+    [hasCodeTypes, model.orgSlug, model.planId, recordCodeEdit],
+  );
   const swimlanesManage = useMemo(
     () => ({ label: swimlaneManagement.manageLabel, open: swimlaneManagement.openSwimlanes }),
     [swimlaneManagement.manageLabel, swimlaneManagement.openSwimlanes],
@@ -1521,6 +1562,7 @@ export function ToolbarPlanWorkspace({
       // The selection bars shade the move while swimlanes are off (`assignment.shown`); the editor
       // keeps it with a hint.
       swimlaneAssignment={swimlaneAssignment}
+      setCode={setCodeHost}
       onGutterRoomChange={swimlaneManagement.onGutterRoomChange}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -1737,6 +1779,7 @@ export function ToolbarPlanWorkspace({
     // they are things the object cannot do in this projection, not things this reader may not
     // do (ADR-0082's omit branch).
     canvas: null,
+    ...(setCodeHost ? { setCodePanel: setCodeHost.panel } : {}),
     activities: model.activities.data ?? [],
     selectedId: model.selectedActivityId ?? model.logicActivity?.id,
     // The Gantt has no plural selection of its OWN yet (ADR-0080's model is canvas-derived and

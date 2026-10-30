@@ -11,6 +11,7 @@ import {
   Split,
   SquarePen,
   StickyNote,
+  Tag,
   Trash2,
   TriangleAlert,
   Ungroup,
@@ -67,6 +68,18 @@ import {
 } from '@/features/tsld/render/conflicts';
 import type { LogicPathMode } from '@/features/tsld/render/logic-path';
 import { cn } from '@/lib/utils';
+
+/** The write right a code panel shades itself with: the pen's, as the item beside it shows it. */
+export interface SetCodeGate {
+  writable: boolean;
+  reason: string | null;
+}
+
+/** What the host renders inside the **Set code…** popover (`initialFocus` is the first field). */
+export type SetCodePanel = (
+  gate: SetCodeGate,
+  initialFocus: React.RefObject<HTMLSelectElement | null>,
+) => React.ReactNode;
 
 /**
  * The context for the **floating selection-actions** bar (ADR-0031, Fork-2 default): the commands
@@ -162,6 +175,14 @@ export interface SelectionActionContext {
     ids: readonly string[];
     names: readonly string[];
   } | null;
+  /**
+   * **Set code…** for the selected activity, or `null`/absent when the plan has no code types (the
+   * plan's precondition, so the item is omitted rather than lit and inert). The host supplies the
+   * panel as a render function because `features/plan-actions` must not import `features/codes`
+   * (`docs/TECH_DEBT.md` #548): this file never learns what a code type is. `gate` is the pen's, so
+   * the control inside can shade itself the way the item does.
+   */
+  setCode?: { panel: SetCodePanel } | null;
   /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
    * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
   onResources: () => void;
@@ -276,6 +297,7 @@ const PEN_ACTION = 'change this activity';
 function penRefusal(ctx: SelectionActionContext): string | undefined {
   return ctx.definitionGate?.reason ?? ctx.scheduleRefusal(PEN_ACTION) ?? undefined;
 }
+export const SET_CODE_LABEL = 'Set code…';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 // The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt
 // the refusal there meets the identical wording here (`docs/specs/object-bar-defects/` M2).
@@ -569,6 +591,44 @@ function MoveToSwimlaneItem({
           selectRef={selectRef}
         />
       </ArrowKeysStayInPanel>
+    </ToolbarPopover>
+  );
+}
+
+/**
+ * The popover behind **Set code…**: the {@link MoveToSwimlaneItem} shape, for the same two reasons —
+ * the panel takes focus on its first field, which needs a ref, and it is portalled out of the toolbar
+ * but not out of its React tree, so the arrows must be kept from the toolbar's roving handler.
+ */
+/** `writable` is derived from the reason so the two cannot disagree: writable ⇔ nothing refuses. */
+function setCodeGate(ctx: SelectionActionContext): {
+  writable: boolean;
+  reason: string | null;
+} {
+  const reason = penRefusal(ctx) ?? null;
+  return { writable: reason == null, reason };
+}
+
+function SetCodeItem({
+  ctx,
+  api,
+}: {
+  ctx: SelectionBarContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement | null {
+  const selectRef = useRef<HTMLSelectElement>(null);
+  if (!ctx.setCode) return null;
+  return (
+    <ToolbarPopover
+      label={SET_CODE_LABEL}
+      icon={<Tag className="size-4" />}
+      itemProps={api.itemProps}
+      labelState={api.labelState}
+      initialFocus={selectRef}
+      {...(api.disabled ? { disabled: true } : {})}
+      {...(api.disabled && api.disabledReason ? { disabledReason: api.disabledReason } : {})}
+    >
+      <ArrowKeysStayInPanel>{ctx.setCode.panel(setCodeGate(ctx), selectRef)}</ArrowKeysStayInPanel>
     </ToolbarPopover>
   );
 }
@@ -983,6 +1043,23 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       isVisible: (ctx: SelectionActionContext) => ctx.moveToSwimlane != null,
       lostReason: 'Not available here: the plan has no swimlanes to move to.',
       render: (ctx, api) => <MoveToSwimlaneItem ctx={ctx} api={api} />,
+    },
+    // ── Set code… (P6 activity codes, M3-T4) ─────────────────────────────────────────────────
+    //
+    // The same popover-on-the-bar shape as Move to swimlane…, so the two read as siblings. Omitted
+    // while the plan has no code type (nothing to set), shaded with the pen's sentence otherwise.
+    {
+      id: 'set-code',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 5.75,
+      label: SET_CODE_LABEL,
+      icon: <Tag className="size-4" />,
+      penGated: true,
+      disabledReason: (ctx) => penRefusal(ctx),
+      isVisible: (ctx: SelectionActionContext) => ctx.setCode != null,
+      lostReason: 'Not available here: the plan has no code types yet.',
+      render: (ctx, api) => <SetCodeItem ctx={ctx} api={api} />,
     },
     {
       id: 'delete',

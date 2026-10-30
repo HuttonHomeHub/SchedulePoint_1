@@ -195,3 +195,16 @@ describe('the way out', () => {
     expect(onClear).toHaveBeenCalledOnce();
   });
 });
+
+describe('Set code… (the host-supplied codeAction slot)', () => {
+  it('renders the slot after Link and before Delete, and nothing when absent', () => {
+    const { unmount } = renderBar();
+    expect(screen.queryByRole('button', { name: 'Set code…' })).toBeNull();
+    unmount();
+    renderBar({ codeAction: <button type="button">Set code…</button> });
+    const names = screen.getAllByRole('button').map((b) => b.textContent);
+    const at = names.indexOf('Set code…');
+    expect(at).toBeGreaterThan(names.indexOf('Link in sequence…'));
+    expect(at).toBeLessThan(names.indexOf('Delete'));
+  });
+});

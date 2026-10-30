@@ -9,6 +9,8 @@ import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
 import {
   CODES_PLAN,
   calculateSeededPlan,
+  cursorTo,
+  diagramList,
   ensurePen,
   expectFocused,
   openPlanId,
@@ -732,6 +734,147 @@ test.describe('Setting codes', () => {
           { codeTypeId: trade, codeValueId: tradeValues['CIV'] },
         ]),
       );
+    });
+  });
+});
+
+/**
+ * **Set code… on the diagram's selection bars** (M3-T4, ADR-0081, the owner's second decision). The
+ * single-activity bar and the plural bar open the same control the table does, so the journey asserts
+ * what only a browser can: one request for the whole selection, one Undo for it, the panel handing focus
+ * back to its trigger, Escape closing the open value list before the panel, and every control on the
+ * single bar still reachable at the 1024 × 600 floor and at 1646.
+ */
+test.describe('Setting codes from the diagram', () => {
+  test('the single bar, the plural bar, undo, Escape and the floor', async ({ page }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await openSeededPlan(page, Date.now() + 5, CODES_PLAN);
+    const types = await storedTypes(page, orgSlug);
+    const trade = types['Trade']!;
+    const area = types['Area']!;
+    const tradeValues = await storedValues(page, orgSlug, trade);
+    const areaValues = await storedValues(page, orgSlug, area);
+    await ensurePen(page);
+    const list = diagramList(page);
+    await list.focus();
+    await list.press('Escape');
+
+    await test.step('1. CD_8 on the diagram: Set code… ▸ Area ▸ Roof ▸ Set Area, then undo', async () => {
+      await cursorTo(page, 'Snagging');
+      const bar = page.getByRole('toolbar', { name: 'Actions for Snagging, with no codes at all' });
+      const trigger = bar.getByRole('button', { name: 'Set code…' });
+      await trigger.click();
+      const panel = page.getByRole('dialog', { name: 'Set code…' });
+      await expectFocused(page, panel.getByLabel('Code type', { exact: true }));
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
+      const value = panel.getByRole('combobox', { name: 'Value' });
+      await chooseOption(page, value, /Roof/);
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      await panel.getByRole('button', { name: 'Set Area' }).click();
+      await expect
+        .poll(async () => (await storedCodes(page, orgSlug))['CD_8']?.map((c) => c.codeValueId))
+        .toContain(areaValues['RF']);
+      await expect(panel).toBeHidden();
+      await expectFocused(page, trigger);
+
+      await planCommands(page)
+        .getByRole('button', { name: /^Undo\b/ })
+        .click();
+      await expect
+        .poll(async () => (await storedCodes(page, orgSlug))['CD_8']?.length ?? 0)
+        .toBe(0);
+    });
+
+    await test.step('2. Escape closes the open value list first, then the panel', async () => {
+      await cursorTo(page, 'Snagging');
+      const bar = page.getByRole('toolbar', { name: 'Actions for Snagging, with no codes at all' });
+      await bar.getByRole('button', { name: 'Set code…' }).click();
+      const panel = page.getByRole('dialog', { name: 'Set code…' });
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Area' });
+      const value = panel.getByRole('combobox', { name: 'Value' });
+      await value.focus();
+      await page.keyboard.press('ArrowDown');
+      const values = page.getByRole('listbox', { name: /values$/ });
+      await expect(values.getByRole('option', { name: /Roof/ })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(values).toBeHidden();
+      await expect(panel).toBeVisible();
+      await expectFocused(page, value);
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+      await expectFocused(page, bar.getByRole('button', { name: 'Set code…' }));
+    });
+
+    await test.step('3. three selected: Set code… ▸ Trade ▸ ENV ▸ Set Trade is ONE request, one Undo', async () => {
+      await list.focus();
+      await list.press('Escape');
+      await cursorTo(page, 'Ground-bearing slab');
+      await list.press('Shift+ArrowDown');
+      await list.press('Shift+ArrowDown');
+      const bar = page.getByTestId('bulk-selection-bar');
+      await expect(bar).toContainText(/3 activities selected/);
+      await bar.getByRole('button', { name: 'Set code…' }).click();
+      const panel = page.getByRole('dialog', { name: 'Set code…' });
+      await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Trade' });
+      await chooseOption(page, panel.getByRole('combobox', { name: 'Value' }), /Building envelope/);
+      let writes = 0;
+      page.on('request', (request) => {
+        if (request.method() === 'PATCH' && /\/activities\/codes$/.test(request.url())) writes += 1;
+      });
+      await panel.getByRole('button', { name: 'Set Trade' }).click();
+      await expect
+        .poll(async () => {
+          const stored = await storedCodes(page, orgSlug);
+          return ['CD_2', 'CD_3', 'CD_4'].map((k) =>
+            stored[k]?.some((c) => c.codeValueId === tradeValues['ENV']),
+          );
+        })
+        .toEqual([true, true, true]);
+      expect(writes).toBe(1);
+
+      await planCommands(page)
+        .getByRole('button', { name: /^Undo\b/ })
+        .click();
+      await expect
+        .poll(async () => {
+          const stored = await storedCodes(page, orgSlug);
+          return ['CD_2', 'CD_3', 'CD_4'].map((k) =>
+            stored[k]?.some((c) => c.codeValueId === tradeValues['ENV']),
+          );
+        })
+        .toEqual([false, false, false]);
+    });
+
+    await test.step('4. the single bar stays inside the viewport at 1024 × 600 and 1646', async () => {
+      await list.focus();
+      await list.press('Escape');
+      await cursorTo(page, 'Snagging');
+      for (const viewport of [
+        { width: 1024, height: 600 },
+        { width: 1646, height: 900 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(500);
+        const buttons = page
+          .getByRole('toolbar', { name: 'Actions for Snagging, with no codes at all' })
+          .getByRole('button');
+        const count = await buttons.count();
+        expect(count).toBeGreaterThan(3);
+        for (let i = 0; i < count; i += 1) {
+          const box = await buttons.nth(i).boundingBox();
+          if (box === null) continue;
+          expect(box.x, `control ${String(i)} at ${String(viewport.width)}`).toBeGreaterThanOrEqual(
+            0,
+          );
+          expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+        }
+        await expect(
+          page
+            .getByRole('toolbar', { name: 'Actions for Snagging, with no codes at all' })
+            .getByRole('button', { name: 'Set code…' }),
+        ).toBeVisible();
+      }
     });
   });
 });

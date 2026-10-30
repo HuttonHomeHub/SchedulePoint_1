@@ -9,6 +9,25 @@ import {
 } from '@/components/ui/overlay-position';
 import { cn } from '@/lib/utils';
 
+/**
+ * Whether Escape belongs to an expanded combobox inside the panel (ADR-0111: this changes which
+ * Escape the panel claims). Checks the event target and the active element, because a key can be
+ * dispatched at the document while focus sits on the input.
+ *
+ * It **assumes the matching widget closes itself on Escape** — true of `Combobox` today. A future
+ * `role="combobox"` that does not would trap Escape: the panel would yield and nothing would close.
+ * Nested `usePopoverPanel` panels are unchanged (the outer one registers its listener first and still
+ * closes everything at once); nothing nests them today.
+ */
+function openInnerPopup(panel: HTMLElement | null, target: EventTarget | null): boolean {
+  if (!panel) return false;
+  const selector = '[role="combobox"][aria-expanded="true"]';
+  const candidates = [target, document.activeElement];
+  return candidates.some(
+    (node) => node instanceof Element && panel.contains(node) && node.matches(selector),
+  );
+}
+
 /** Estimated panel box for the first paint only — the measured correction lands before paint. */
 const ESTIMATED_WIDTH = 288;
 const ESTIMATED_HEIGHT = 320;
@@ -34,6 +53,10 @@ const ESTIMATED_HEIGHT = 320;
  *
  * **`ToolbarPopover`'s public props are unchanged by the extraction**, which is what makes
  * `ToolbarPopover.test.tsx` the before/after oracle: it passes untouched, or the move was not a move.
+ *
+ * **Escape yields to an open inner popup** (`[role="combobox"][aria-expanded="true"]` inside the
+ * panel): the first Escape is left to that popup, which closes itself, and the panel closes on the
+ * next. Without this the panel's capture listener, registered first, closed everything at once.
  *
  * The **trigger** is deliberately not part of this. `ToolbarPopover`'s trigger is a labelled
  * disclosure with a caret; the split button's is two halves with separate gates. They share a panel,
@@ -140,6 +163,11 @@ export function usePopoverPanel({
     (initialFocus?.current ?? panel)?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // An open inner popup (a `Combobox` list) owns its own Escape, registered on the same node and
+        // phase LATER than this listener, so registration order would run this one first and one
+        // press would close the whole panel. Leave the key alone — no `preventDefault`, no close —
+        // and the popup closes itself; the next Escape finds it shut and closes the panel.
+        if (openInnerPopup(panelRef.current, event.target)) return;
         // **Both, and `preventDefault` is the load-bearing one** (#196a, its third copy — the fix
         // landed in `Menu` and `Combobox` and this file kept only `stopPropagation`).
         // `stopPropagation` keeps the key from other LISTENERS; a modal `<dialog>`'s
