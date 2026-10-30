@@ -11,6 +11,7 @@ import {
 } from '../model/code-assignment-plan';
 import { codeErrorText } from '../model/code-errors';
 import { codeValueName } from '../model/code-names';
+import { codeWriteSize, useCodeSwimlaneLanePlanner } from '../model/code-swimlane-lanes';
 import { useSetActivityCodes } from '../model/use-set-activity-codes';
 
 import { CodeValuePicker, type CodeValueChoice } from './CodeValuePicker';
@@ -90,12 +91,29 @@ export function CodeAssignControl({
     return found === undefined ? null : codeValueName(found);
   }, [choice, values.data]);
 
-  const plan = useMemo(
+  const basePlan = useMemo(
     () =>
       type === undefined || choice === undefined
         ? null
         : planCodeAssignment(activities, new Map([[type.id, choice]])),
     [activities, type, choice],
+  );
+  // While the plan's swimlanes come from this type, the write also places the bars it moves and the
+  // unplaced members of the bands it touches, and the route's cap counts those rows too. Planned here,
+  // once, so the count the button is shaded on and the lanes sent are the same lanes.
+  const planner = useCodeSwimlaneLanePlanner();
+  const lanes = useMemo(
+    () => (basePlan === null || basePlan.willChange === 0 ? null : (planner?.(basePlan) ?? null)),
+    [basePlan, planner],
+  );
+  const plan = useMemo(
+    () =>
+      basePlan !== null &&
+      !basePlan.tooMany &&
+      codeWriteSize(basePlan, lanes) > CODE_ASSIGNMENT_LIMIT
+        ? { ...basePlan, tooMany: true }
+        : basePlan,
+    [basePlan, lanes],
   );
   const hasTypes = (types.data?.length ?? 0) > 0;
   const blocked =
@@ -111,7 +129,7 @@ export function CodeAssignControl({
     setError(null);
     setBusy(true);
     const valueNames = new Map((values.data ?? []).map((v) => [v.id, codeValueName(v)] as const));
-    setCodes({ plan, typeNames: [type.name], valueNames }).then(
+    setCodes({ plan, typeNames: [type.name], valueNames, lanes }).then(
       () => {
         setBusy(false);
         announce(

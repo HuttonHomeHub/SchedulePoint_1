@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivityCodeLaneInput, ActivitySummary } from '@repo/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
@@ -14,6 +14,13 @@ export interface ActivityCodesWriteRow {
 
 export interface WriteActivityCodesInput {
   activities: ActivityCodesWriteRow[];
+  /**
+   * While the plan's swimlanes come from a code: each bar's lane in the band it will be in after the
+   * write, at the basis the server derives from the codes (ADR-0206 A3), and the code type they were
+   * planned against. The union of `activities` and `lanes` is at most 2,000 activities.
+   */
+  lanes?: ActivityCodeLaneInput[];
+  lanesCodeTypeId?: string;
 }
 
 /**
@@ -40,7 +47,11 @@ export function useWriteActivityCodes(orgSlug: string, planId: string) {
     onSettled: (_data, _error, input) => {
       // One sweep per family rather than a call per activity: a bulk write names up to 2,000, and a
       // call each would walk the cache 4,000 times. The id is the fourth element of both keys.
-      const touched = new Set(input.activities.map((row) => row.id));
+      // A lane-only row's version is bumped too, and its own cached detail goes stale with it.
+      const touched = new Set([
+        ...input.activities.map((row) => row.id),
+        ...(input.lanes ?? []).map((row) => row.id),
+      ]);
       const isTouched = ({ queryKey }: { queryKey: readonly unknown[] }): boolean =>
         touched.has(String(queryKey[3]));
       return Promise.all([

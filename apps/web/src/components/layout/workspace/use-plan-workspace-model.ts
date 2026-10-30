@@ -911,11 +911,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       visualStart: dropDate,
       // Drawn in a swimlane: it joins that swimlane (nothing to send for "No swimlane"). By hand that
       // is its `swimlaneId`; from the WBS the swimlane IS a summary, so it is filed under it (SQ-5) and
-      // the endpoint, which refuses a `swimlaneId` there, derives the membership from the parent.
+      // the endpoint, which refuses a `swimlaneId` there, derives the membership from the parent. From
+      // a code the swimlane IS a value, so the bar is created carrying it, in the one request: a create
+      // then a codes write would leave a frame where the new bar sits in "No <type>" (M4, §5.4).
       ...(input.swimlane?.swimlaneId
         ? swimlaneSource === 'WBS'
           ? { parentId: input.swimlane.swimlaneId }
-          : { swimlaneId: input.swimlane.swimlaneId }
+          : swimlaneSource === 'ACTIVITY_CODE'
+            ? swimlaneCodeTypeId === null
+              ? {}
+              : {
+                  codes: [
+                    { codeTypeId: swimlaneCodeTypeId, codeValueId: input.swimlane.swimlaneId },
+                  ],
+                }
+            : { swimlaneId: input.swimlane.swimlaneId }
         : {}),
     };
     // Before the write, so the new bar is "not in S0" and rule 1 can move it (ADR-0153).

@@ -19,3 +19,15 @@ export {
   type ActivityCodesSectionState,
 } from './components/ActivityCodesSection';
 export { useCodeValueNames, type ResolvedCodeValue } from './api/use-code-value-names';
+export {
+  CodeSwimlaneLanePlannerProvider,
+  useCodeSwimlaneLanePlanner,
+  type CodeLanePlan,
+  type CodeSwimlaneLanePlanner,
+} from './model/code-swimlane-lanes';
+export {
+  CODE_ASSIGNMENT_LIMIT,
+  planCodeAssignment,
+  type CodeAssignmentPlan,
+} from './model/code-assignment-plan';
+export { codeErrorText } from './model/code-errors';

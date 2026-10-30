@@ -655,38 +655,81 @@ export function assignToSwimlane(
   ids: readonly string[],
   target: string | null,
 ): SwimlaneMove {
+  return assignToSwimlanes(ctx, [{ ids, target }]);
+}
+
+/** One destination in a plural move: these bars go to `target` (`null`: "No swimlane"). */
+export interface SwimlaneAssignGroup {
+  readonly ids: readonly string[];
+  readonly target: string | null;
+}
+
+/**
+ * {@link assignToSwimlane} for several destinations at once, which a code write needs: setting a code
+ * on a row of activities, or undoing it, can send each to a different value, and planning the groups
+ * one after another against the same picture would give two of them the same lane. All the movers
+ * leave their lanes first, then each group is placed in turn, so a bar placed earlier is an obstacle
+ * to the next.
+ *
+ * `lenient` is the code write's: it is a codes write first and a layout second, so it must never
+ * refuse. A bar that is not drawn is left out (it has no lane to keep), and a value nobody uses yet,
+ * which has no swimlane until this write gives it one, is planned as an empty swimlane the movers
+ * pack into. Strict (the default) is Move to swimlane…, which names a swimlane on screen and refuses
+ * one that is gone.
+ */
+export function assignToSwimlanes(
+  ctx: SwimlaneEditContext,
+  groups: readonly SwimlaneAssignGroup[],
+  options: { readonly lenient?: boolean } = {},
+): SwimlaneMove {
+  const lenient = options.lenient === true;
   const { extents } = ctx.scene;
   const members = membersOf(ctx);
-  const rows: Member[] = [];
-  for (const id of ids) {
-    const m = members.get(id);
-    if (m !== undefined) rows.push(m);
+  // Extent indexes for destinations the scene does not draw yet sit past "No swimlane", which takes
+  // `extents.length` when nothing is in it.
+  let drawnLater = extents.length + 1;
+  const planned: {
+    target: string | null;
+    extent: number;
+    rows: Member[];
+    moving: Member[];
+  }[] = [];
+  for (const { ids, target } of groups) {
+    const rows: Member[] = [];
+    for (const id of ids) {
+      const m = members.get(id);
+      if (m !== undefined) rows.push(m);
+    }
+    if (!lenient && rows.length < ids.length) {
+      return { kind: 'refuse', reason: notDrawnReason(ids.length - rows.length, ids.length) };
+    }
+    const found = extents.findIndex((e) => e.id === target);
+    // A swimlane with no member still takes one lane, so every real target is an extent; one that is
+    // not has been deleted since the list was read (its id may still be on members, kept for a restore).
+    if (target !== null && found < 0 && !lenient) {
+      return { kind: 'refuse', reason: SWIMLANE_GONE_REASON };
+    }
+    // "No swimlane" is drawn only when something is in it, so moving the first bar into none targets an
+    // extent that does not exist yet; it sits below the last one.
+    const extent = found >= 0 ? found : target === null ? extents.length : drawnLater++;
+    const moving = rows
+      .filter((m) => m.extent !== extent)
+      .sort(
+        (a, b) =>
+          a.span.startDay - b.span.startDay ||
+          a.span.endDay - b.span.endDay ||
+          (a.id < b.id ? -1 : 1),
+      );
+    planned.push({ target, extent, rows, moving });
   }
-  if (rows.length < ids.length) {
-    return { kind: 'refuse', reason: notDrawnReason(ids.length - rows.length, ids.length) };
-  }
-  const found = extents.findIndex((e) => e.id === target);
-  // A swimlane with no member still takes one lane, so every real target is an extent; one that is
-  // not has been deleted since the list was read (its id may still be on members, kept for a restore).
-  if (target !== null && found < 0) return { kind: 'refuse', reason: SWIMLANE_GONE_REASON };
-  // "No swimlane" is drawn only when something is in it, so moving the first bar into none targets an
-  // extent that does not exist yet; it sits below the last one.
-  const extent = found < 0 ? extents.length : found;
-  const to = extents[extent];
-  const moving = rows
-    .filter((m) => m.extent !== extent)
-    .sort(
-      (a, b) =>
-        a.span.startDay - b.span.startDay ||
-        a.span.endDay - b.span.endDay ||
-        (a.id < b.id ? -1 : 1),
-    );
-  if (moving.length === 0) {
-    const first = rows[0];
+  const everyMover = planned.flatMap((p) => p.moving);
+  const lead = planned.find((p) => p.moving.length > 0);
+  if (lead === undefined) {
+    const first = planned[0]?.rows[0];
     return {
       kind: 'stay',
       landed: first
-        ? landedOf(ctx, extent, first.lane, false, 'stays')
+        ? landedOf(ctx, planned[0]!.extent, first.lane, false, 'stays')
         : {
             swimlane: ctx.input.noneName ?? NO_SWIMLANE_LABEL,
             lane: 0,
@@ -698,30 +741,36 @@ export function assignToSwimlane(
     };
   }
 
-  const occupancy = new Occupancy(members.values(), new Set(moving.map((m) => m.id)));
+  const occupancy = new Occupancy(members.values(), new Set(everyMover.map((m) => m.id)));
   const placements: SwimlaneLanePlacement[] = [];
   let firstHow: SwimlaneLaneFacts['how'] = 'asked';
   let firstLane = 0;
-  for (const m of moving) {
-    const remembered = ctx.remembered(m.id, target);
-    const lane = occupancy.nearest(extent, remembered ?? 0, m.span);
-    occupancy.add(extent, lane, m.span);
-    if (placements.length === 0) {
-      firstLane = lane;
-      firstHow = remembered !== undefined && lane === remembered ? 'remembered' : 'next-free';
+  for (const { target, extent, moving } of planned) {
+    for (const m of moving) {
+      const remembered = ctx.remembered(m.id, target);
+      const lane = occupancy.nearest(extent, remembered ?? 0, m.span);
+      occupancy.add(extent, lane, m.span);
+      if (placements.length === 0) {
+        firstLane = lane;
+        firstHow = remembered !== undefined && lane === remembered ? 'remembered' : 'next-free';
+      }
+      placements.push({
+        id: m.id,
+        lane,
+        swimlaneId: target,
+        from: { swimlaneId: ctx.scene.extents[m.extent]!.id, lane: m.lane },
+      });
     }
-    placements.push({
-      id: m.id,
-      lane,
-      swimlaneId: target,
-      from: { swimlaneId: ctx.scene.extents[m.extent]!.id, lane: m.lane },
-    });
   }
-  const touched = new Set([extent, ...moving.map((m) => m.extent)]);
+  const touched = new Set([
+    ...planned.filter((p) => p.moving.length > 0).map((p) => p.extent),
+    ...everyMover.map((m) => m.extent),
+  ]);
+  const to = extents[lead.extent];
   const landedLane = Math.max(...placements.map((p) => p.lane)) + 1;
   const landed: SwimlaneLaneFacts =
     to !== undefined
-      ? landedOf(ctx, extent, firstLane, true, firstHow)
+      ? landedOf(ctx, lead.extent, firstLane, true, firstHow)
       : {
           swimlane: ctx.input.noneName ?? NO_SWIMLANE_LABEL,
           lane: firstLane,
@@ -732,9 +781,12 @@ export function assignToSwimlane(
         };
   return {
     kind: 'write',
-    placements: [...placements, ...materialise(ctx, members, touched, new Set(ids))],
+    placements: [
+      ...placements,
+      ...materialise(ctx, members, touched, new Set(groups.flatMap((g) => g.ids))),
+    ],
     landed: to !== undefined ? { ...landed, count: Math.max(landed.count, landedLane) } : landed,
     requested: firstLane,
-    original: moving[0]!.lane,
+    original: lead.moving[0]!.lane,
   };
 }

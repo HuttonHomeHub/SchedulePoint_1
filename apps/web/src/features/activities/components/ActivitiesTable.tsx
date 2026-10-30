@@ -530,7 +530,10 @@ export function ActivitiesTable({
    * another is the Breakdown picker's job (spec C-1b) — a checklist has nowhere to put the cycle
    * feedback that restructuring the tree needs.
    */
-  const swimlaneAssignment = swimlanes?.source === 'MANUAL' ? swimlanes.assignment : null;
+  const swimlaneAssignment =
+    swimlanes === null || swimlanes === undefined || swimlanes.source === 'WBS'
+      ? null
+      : swimlanes.assignment;
   const selectableIds = useMemo(
     () =>
       WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null || codeBulk !== undefined

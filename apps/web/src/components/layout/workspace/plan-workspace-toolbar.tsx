@@ -74,6 +74,7 @@ import {
   CodeAssignButton,
   CodeAssignControl,
   CodeBulkAssignBar,
+  CodeSwimlaneLanePlannerProvider,
   deriveCodesGate,
   useCodeColumns,
   useCodeTypes,
@@ -130,6 +131,9 @@ import {
 } from '@/features/schedule-health';
 import {
   SWIMLANE_GROUND,
+  useCodeSwimlaneAssignment,
+  useCodeSwimlaneLanePlanner,
+  useCodeSwimlaneSource,
   useSwimlaneAssignment,
   useSwimlaneManagement,
   useSwimlaneScene,
@@ -727,10 +731,11 @@ export function ToolbarPlanWorkspace({
    */
   const barDateSource = barDateSourceFor(lateOverlayActive);
   useLateOverlayAnnouncement(lateOverlayActive);
-  // Move to swimlane… for the selection bars and the editor (M2-T10): one plan of the write, planned
+  // Move to swimlane… for the selection bars and the table (M2-T10): one plan of the write, planned
   // against the projection the canvas draws. `null` — and so absent from both — unless the plan has
-  // hand-made swimlanes. It works with the lens hidden (the list is the scene's own query).
-  const swimlaneAssignment = useSwimlaneAssignment({
+  // swimlanes to move to (hand-made, or made from a code). It works with the lens hidden (the list, or
+  // the type's values, is the scene's own query).
+  const handMadeAssignment = useSwimlaneAssignment({
     orgSlug: model.orgSlug,
     planId: model.planId,
     source: plan.swimlaneSource,
@@ -741,6 +746,41 @@ export function ToolbarPlanWorkspace({
     wbsBandOn: canvasUi.viewToggles.wbsBand ?? false,
     moveMany: model.bulkOperations.moveMany,
   });
+  // A code source (p6-activity-codes M4): the type, its values and (when the list lacks them) the lanes
+  // are the scene's own queries, so reading them here is the same fetch. Under it Move to swimlane…
+  // writes the code, and every other codes write plans the lanes it must carry.
+  const codeTypeId =
+    plan.swimlaneSource === 'ACTIVITY_CODE' ? (plan.swimlaneCodeTypeId ?? null) : null;
+  const codeSource = useCodeSwimlaneSource({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    codeTypeId,
+    activities: model.activities.data,
+  });
+  const wbsBandOn = canvasUi.viewToggles.wbsBand ?? false;
+  const codeAssignment = useCodeSwimlaneAssignment({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    code: codeSource,
+    activities: codeTypeId === null ? undefined : model.activities.data,
+    barDateSource,
+    dataDate: plan.plannedStart,
+    shown: swimlanesAreShown,
+    wbsBandOn,
+    record: model.recordCodeEdit,
+  });
+  const swimlaneAssignment = handMadeAssignment ?? (codeTypeId === null ? null : codeAssignment);
+  const codeLanePlanner = useCodeSwimlaneLanePlanner({
+    orgSlug: model.orgSlug,
+    planId: model.planId,
+    codeTypeId,
+    code: codeSource,
+    activities: model.activities.data,
+    barDateSource,
+    dataDate: plan.plannedStart,
+    wbsBandOn,
+  });
+  const codeTypeName = codeSource.type?.name;
 
   // What the Activities table is told about swimlanes (M4-T1): the same plan of the write the bars and
   // the editor use, or the WBS source's read-only column. Memoised so the panel's memo still hits.
@@ -749,9 +789,13 @@ export function ToolbarPlanWorkspace({
       plan.swimlaneSource === 'WBS'
         ? { source: 'WBS' }
         : swimlaneAssignment
-          ? { source: 'MANUAL', assignment: swimlaneAssignment }
+          ? codeTypeId !== null
+            ? codeTypeName === undefined
+              ? null
+              : { source: 'ACTIVITY_CODE', assignment: swimlaneAssignment, typeName: codeTypeName }
+            : { source: 'MANUAL', assignment: swimlaneAssignment }
           : null,
-    [plan.swimlaneSource, swimlaneAssignment],
+    [plan.swimlaneSource, swimlaneAssignment, codeTypeId, codeTypeName],
   );
 
   /**
@@ -2281,25 +2325,29 @@ export function ToolbarPlanWorkspace({
     // React tree, not the DOM — so one provider here reaches both, and the shell stays plan-unaware
     // (ADR-0029) exactly as it does for the dock.
     <PlanFactsProvider>
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
-        {/*
+      {/* The lanes a codes write carries while the swimlanes are made from a code (M4): one provider
+          over every writer — the editor's Codes section, the table's bar and the diagram's two — so
+          all four plan a write alike. */}
+      <CodeSwimlaneLanePlannerProvider value={codeLanePlanner}>
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+        <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
+          {/*
         The plan's accessible name for the `<main>` landmark, and it **stays here** while the visible
         identity line moves into the chrome band with the commands (ADR-0090 M4-T2).
         `document.querySelector('h1')` is not the point: a screen-reader user navigating by landmark
         lands in `main`, and a `main` with no heading is a region that does not say what it is. The
         band is outside `main`, so an `<h1>` moved there would name the banner instead.
       */}
-        <h1 className="sr-only">{plan.name}</h1>
+          <h1 className="sr-only">{plan.name}</h1>
 
-        {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
+          {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
           the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
           Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
-        {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
+          {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
           Only the DOM node moves — in the React tree they stay right here, which is why `ctx`, the
           registry predicates and the workspace key scope are all untouched by the move. */}
-        {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
+          {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
           ADR-0092 M5 withdrew at "134 px short at 1646", which Landing D1a paid for by moving the
           organisation nav into the rail (+250 px of slack at 1440; `m0-landing-d1-measurement.md`).
           It is a second named slot rather than a second portal API, and the header receives a NODE
@@ -2315,18 +2363,18 @@ export function ToolbarPlanWorkspace({
           Flag-off `ChromePortal` is an identity wrapper, so this renders in place exactly as it did
           before the band existed. */}
 
-        <ChromePortal>
-          {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
+          <ChromePortal>
+            {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
               directly on the band's 3 px amber rule with nothing between them — a double seam that
               said the same thing twice, 1 px apart. */}
-          {/* **A named `<section>`, so the band is a landmark** (`docs/TECH_DEBT.md` #493). The slot
+            {/* **A named `<section>`, so the band is a landmark** (`docs/TECH_DEBT.md` #493). The slot
               it is portalled into is a plain `div` outside `<main>`, which landmark navigation
               skipped and axe's `region` rule flagged. It lives here rather than on the slot so a
               page with no plan has no empty region. "Plan command band", not "Plan commands": that
               is the deck's own `toolbar` name inside it, and a landmark and a widget answering to
               the same words is one thing announced twice. */}
-          <section aria-label="Plan command band" className="flex flex-col">
-            {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
+            <section aria-label="Plan command band" className="flex flex-col">
+              {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
               at 1280, so something has to give. Every arrangement that made the header FIT put
@@ -2341,7 +2389,7 @@ export function ToolbarPlanWorkspace({
               call and is written up with its numbers at the end of
               `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
               a shipped regression in place while the decision is open. */}
-            {/* **The plan's identity, its modes and its pen controls — portalled into the APP HEADER
+              {/* **The plan's identity, its modes and its pen controls — portalled into the APP HEADER
           ROW** (the one-row header, 2026-08-26). This block had a row of its own inside the band
           until now; the header row wraps, so it can hold this beside the brand and the account chip
           and give the canvas the row back.
@@ -2352,7 +2400,7 @@ export function ToolbarPlanWorkspace({
 
           The band is a plain `<div>` that publishes no width, so there is nothing to wrap this in
           (`docs/TECH_DEBT.md` #193). */}
-            {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
+              {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
           mode cluster below (2026-08-26): the header places the two in different sections of a
           `justify-between` row, and one slot cannot put its contents in two places.
           `chrome-slot.tsx` argues the naming.
@@ -2360,8 +2408,8 @@ export function ToolbarPlanWorkspace({
           `ChromePortal` moves the DOM node and leaves the React tree alone, so every piece of state
           this block reads — `model`, `ctx`, the ADR-0031 registry, the workspace key scope — stays
           exactly where it was and the shell stays plan-unaware (ADR-0029). */}
-            <ChromePortal name="identity">
-              {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+              <ChromePortal name="identity">
+                {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
                 app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
                 header — so without a home it would have taken a 44 px row of its own inside the
                 band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
@@ -2377,8 +2425,8 @@ export function ToolbarPlanWorkspace({
 
                 No portal any more: the identity and the modes are rendered by the same component,
                 so the slot that carried it across the shell boundary has nothing left to carry. */}
-              <div data-plan-identity className="flex min-w-0 shrink items-center gap-3">
-                {/* **`shrink` rather than `flex-1`, and this comment used to claim it was the line
+                <div data-plan-identity className="flex min-w-0 shrink items-center gap-3">
+                  {/* **`shrink` rather than `flex-1`, and this comment used to claim it was the line
               the one-row header turns on. It is not, and the correction is worth more than the
               claim was.** The journey's headline assertion — one line at 1646, two at 1440 — was run
               against a build with `flex-1` restored *here*, and it **passed**. The wrap is decided
@@ -2410,8 +2458,8 @@ export function ToolbarPlanWorkspace({
               **void**: ADR-0109 D1 deleted the width ladder and the overflow menu, and `Toolbar`
               wraps instead (`Toolbar.tsx:183-187`). The hazard is real but different, and it is
               named above. */}
-                <div className="flex min-w-0 shrink items-center gap-2">
-                  {/* **Two crumbs: the project, then this plan.**
+                  <div className="flex min-w-0 shrink items-center gap-2">
+                    {/* **Two crumbs: the project, then this plan.**
                 D1b first shipped the plan name alone, on the measurement that the four-crumb trail
                 cost 455 px and that the Project Explorer already answers "where am I". Right about
                 orientation, wrong about navigation, and **three Playwright suites failed on one
@@ -2428,19 +2476,19 @@ export function ToolbarPlanWorkspace({
                 name truncates instead of growing the header a line (the header row is `min-h-12` and
                 may wrap; a wrapped crumb would cost a line of diagram, 48 px). At enlarged browser
                 text the crumb is wider than at 100 % (`a11y-touch-sweep/m0-measurement.md` §4). */}
-                  <Breadcrumbs
-                    variant="nowrap"
-                    items={[
-                      {
-                        label: model.project.data?.name ?? 'Project',
-                        to: '/orgs/$orgSlug/projects/$projectId',
-                        params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                      },
-                      { label: plan.name },
-                    ]}
-                  />
-                  <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-                  {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                    <Breadcrumbs
+                      variant="nowrap"
+                      items={[
+                        {
+                          label: model.project.data?.name ?? 'Project',
+                          to: '/orgs/$orgSlug/projects/$projectId',
+                          params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                        },
+                        { label: plan.name },
+                      ]}
+                    />
+                    <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                    {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
                 ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
                 `presentational` registry item, so the `⋯` could stay the row's rightmost control.
                 It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
@@ -2448,7 +2496,7 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                  {/* **The plan's facts, as their own named toolbar — Plan summary and Edit plan
+                    {/* **The plan's facts, as their own named toolbar — Plan summary and Edit plan
                 details** (toolbar-redesign M2-T1). The pencil that stood here was a hand-rolled
                 `Button` and the Summary popover was a deck item two rows down; both are registry
                 items now (`row: 'identity'`), rendered by one `Toolbar`, so they get the same
@@ -2463,30 +2511,30 @@ export function ToolbarPlanWorkspace({
                 M4: not a dense-list row, so it reaches 44 px under a coarse pointer). That is still
                 the rule and is now the registry's: `ToolbarButton` and `ToolbarPopover` size
                 through `toolbarControlVariants`, which reads `--control-h`. */}
-                  <Toolbar
-                    items={rows.identity}
-                    context={ctx}
-                    label="Plan details"
-                    // The group is named for what it holds. The default, "Plan actions", would sit
-                    // beside the deck's "Plan" group and the "Plan view" switch, and an accessible
-                    // name that is a substring of two others is a locator trap (the e2e suites
-                    // match by name).
-                    groupLabels={{ object: 'About this plan' }}
-                    // The header's toolbars wear the quieter glyph with the deck (toolbar-grid M3, D-5);
-                    // the selection bar and the diagram-corner cluster do not.
-                    quietIcons
-                    className="shrink-0"
-                  />
+                    <Toolbar
+                      items={rows.identity}
+                      context={ctx}
+                      label="Plan details"
+                      // The group is named for what it holds. The default, "Plan actions", would sit
+                      // beside the deck's "Plan" group and the "Plan view" switch, and an accessible
+                      // name that is a substring of two others is a locator trap (the e2e suites
+                      // match by name).
+                      groupLabels={{ object: 'About this plan' }}
+                      // The header's toolbars wear the quieter glyph with the deck (toolbar-grid M3, D-5);
+                      // the selection bar and the diagram-corner cluster do not.
+                      quietIcons
+                      className="shrink-0"
+                    />
+                  </div>
                 </div>
-              </div>
-            </ChromePortal>
+              </ChromePortal>
 
-            {/* **The plan's modes and pen — section 2, the middle of the header row.**
+              {/* **The plan's modes and pen — section 2, the middle of the header row.**
           Nothing publishes a band width any more, so there is no wrapper to omit
           (`docs/TECH_DEBT.md` #193). */}
-            <ChromePortal name="mode">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                {/* **The mode cluster is back on the identity line, beside the pen** (workspace
+              <ChromePortal name="mode">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {/* **The mode cluster is back on the identity line, beside the pen** (workspace
                 redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
                 a mode is not a command, it sets how every command behaves, which is exactly the
                 pen's relationship to the deck.
@@ -2510,7 +2558,7 @@ export function ToolbarPlanWorkspace({
                 and unclickable. They now wrap. The ADR-0112 ordering is unaffected, because the
                 identity slot beside this one carries `min-w-0` and therefore gives way first and
                 completely; see `chrome-slot.tsx`. */}
-                {/* **The `MODE` caption is gone** (ADR-0119, ux gate). It was one `aria-hidden`
+                  {/* **The `MODE` caption is gone** (ADR-0119, ux gate). It was one `aria-hidden`
                     word spanning what are now two hairline-separated switches, so it asserted the
                     single umbrella this change exists to remove — and ADR-0119's first draft cited
                     it as *evidence the visual half was carried*, which is the opposite of what it
@@ -2518,36 +2566,36 @@ export function ToolbarPlanWorkspace({
                     received it), removes the false statement, and BUYS width on a width-critical
                     row. ADR-0090 M2-T6 set the precedent by deleting this surface's other
                     row-purpose captions. */}
-                <div className="flex items-center gap-2">
-                  <Toolbar
-                    items={rows.mode}
-                    context={ctx}
-                    // **"Plan view", down from "Plan mode and view"** (one-planning-surface
-                    // M-F-T5). ADR-0119's ux gate established the rule: a compound name is wrong for
-                    // a group and right for a **container of two groups** — `Plan mode` wrapping a
-                    // group named `Plan view` had an AT user hearing the container deny its own
-                    // child. The scheduling-mode segment is gone, so this container now holds one
-                    // group, and keeping the compound name would reintroduce that contradiction
-                    // from the other end: a container promising a mode that is not in it.
-                    label="Plan view"
-                    authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // One named sub-group now — see the map's docblock. ADR-0119's precondition is
-                    // all-or-nothing rather than plural, and it records the one-segment case
-                    // explicitly, so the partition still holds with `view-mode` alone.
-                    //
-                    // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
-                    // The partition is all-or-nothing, so an item arriving without a `segment` makes
-                    // the whole group fall back to one region named from here. Omitting this left
-                    // that fallback rendering `Display` — the deck's `lens` group name, i.e. exactly
-                    // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
-                    // It costs nothing while the structural gate holds and only matters the one day
-                    // it does not.
-                    groupLabels={{ lens: 'Plan view' }}
-                    segmentLabels={PLAN_MODE_SEGMENT_LABELS}
-                    quietIcons
-                  />
-                </div>
-                {/* **The pen's VERB left this row for the command deck** (console epic M5): it is
+                  <div className="flex items-center gap-2">
+                    <Toolbar
+                      items={rows.mode}
+                      context={ctx}
+                      // **"Plan view", down from "Plan mode and view"** (one-planning-surface
+                      // M-F-T5). ADR-0119's ux gate established the rule: a compound name is wrong for
+                      // a group and right for a **container of two groups** — `Plan mode` wrapping a
+                      // group named `Plan view` had an AT user hearing the container deny its own
+                      // child. The scheduling-mode segment is gone, so this container now holds one
+                      // group, and keeping the compound name would reintroduce that contradiction
+                      // from the other end: a container promising a mode that is not in it.
+                      label="Plan view"
+                      authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                      // One named sub-group now — see the map's docblock. ADR-0119's precondition is
+                      // all-or-nothing rather than plural, and it records the one-segment case
+                      // explicitly, so the partition still holds with `view-mode` alone.
+                      //
+                      // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
+                      // The partition is all-or-nothing, so an item arriving without a `segment` makes
+                      // the whole group fall back to one region named from here. Omitting this left
+                      // that fallback rendering `Display` — the deck's `lens` group name, i.e. exactly
+                      // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
+                      // It costs nothing while the structural gate holds and only matters the one day
+                      // it does not.
+                      groupLabels={{ lens: 'Plan view' }}
+                      segmentLabels={PLAN_MODE_SEGMENT_LABELS}
+                      quietIcons
+                    />
+                  </div>
+                  {/* **The pen's VERB left this row for the command deck** (console epic M5): it is
                     the control that unlocks the eleven authoring commands, and it sat three
                     sections away from them. Its badge, its `role="status"` sentence and its seven
                     hand-off actions render in the plan's foot row instead — the product owner's
@@ -2557,17 +2605,17 @@ export function ToolbarPlanWorkspace({
                     `usePenLockView` is called ONCE (below) and its result feeds both this and the
                     deck's control. The hook holds local state, so a second call would let the two
                     halves disagree about the same lock. */}
-                <PenStatusHost>
-                  <PenStatusCluster
-                    penLock={penLock}
-                    only={HANDOFF_ACTIONS}
-                    portalSentence={false}
-                  />
-                </PenStatusHost>
-              </div>
-            </ChromePortal>
+                  <PenStatusHost>
+                    <PenStatusCluster
+                      penLock={penLock}
+                      only={HANDOFF_ACTIONS}
+                      portalSentence={false}
+                    />
+                  </PenStatusHost>
+                </div>
+              </ChromePortal>
 
-            {/*
+              {/*
             **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
             folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:
             the 53 px row plus the 8 px that separated it from the workspace pane, against a 533 px
@@ -2589,13 +2637,13 @@ export function ToolbarPlanWorkspace({
             control here is Edit plan, and the dialog it opens restores focus through its own
             `restoreFocusRef`, which holds an element reference and never queries the DOM at all.
           */}
-            {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
+              {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
               directly above two rows that are `py-1` around a `min-h-9` control, and a third rhythm
               in one surface reads as three surfaces. Measured: 53 → 45 px, the same height as Row 1.
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-            {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
+              {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
               difference is the whole point rather than a styling choice.
 
               `Toolbar` answers "too many commands" by measuring its container and demoting the
@@ -2612,54 +2660,57 @@ export function ToolbarPlanWorkspace({
               fills the band by wrapping into it rather than by being told to grow, and a flex child
               that grows is exactly how a row ends up measuring its own leftover width, which is the
               defect class this replaces. */}
-            {/* `py-1` since the console epic's M6-T2 — the captions left this deck, so the
+              {/* `py-1` since the console epic's M6-T2 — the captions left this deck, so the
                 wrapper's own inset is the last of the band's height that is not a control.
                 `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
                 COPIES this one rather than judging its own, so the two cannot part company. */}
-            <div className="px-2 py-1 max-lg:px-0">
-              <Deck
-                items={rows.strip}
-                context={ctx}
-                label="Plan commands"
-                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              />
-            </div>
-          </section>
-        </ChromePortal>
+              <div className="px-2 py-1 max-lg:px-0">
+                <Deck
+                  items={rows.strip}
+                  context={ctx}
+                  label="Plan commands"
+                  authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                />
+              </div>
+            </section>
+          </ChromePortal>
 
-        {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
+          {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
           toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders
           nothing until an export/print fails; `null` when the flag is off. */}
-        {/* **The "Diagram viewport" cluster** (toolbar-redesign M4) — portalled into the slot the canvas
+          {/* **The "Diagram viewport" cluster** (toolbar-redesign M4) — portalled into the slot the canvas
             publishes at its bottom-right, so the context stays derived once, here. The slot exists
             only while the diagram is mounted: in the Gantt it is `null` and the cluster is absent
             rather than shaded (CQ-1, owner decision), which is also what hands focus on
             (`DiagramViewportCluster`). */}
-        {viewportSlot
-          ? createPortal(<DiagramViewportCluster items={rows.canvas} context={ctx} />, viewportSlot)
-          : null}
+          {viewportSlot
+            ? createPortal(
+                <DiagramViewportCluster items={rows.canvas} context={ctx} />,
+                viewportSlot,
+              )
+            : null}
 
-        {ctx.exportError ? (
-          <div className="px-4 pt-2">
-            <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
-          </div>
-        ) : null}
+          {ctx.exportError ? (
+            <div className="px-4 pt-2">
+              <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
+            </div>
+          ) : null}
 
-        {/* A lossy-but-successful interchange export (ADR-0050 M4d) surfaces here as a dismissable INFO
+          {/* A lossy-but-successful interchange export (ADR-0050 M4d) surfaces here as a dismissable INFO
           banner with an opt-in "Download report" button — the export already downloaded; the report is
           offered on click (not auto-fired, which the browser's multi-download guard can silently block). */}
-        {ctx.exportNotice ? (
-          <div className="px-4 pt-2">
-            <EditConflictBanner
-              message={ctx.exportNotice.message}
-              severity="info"
-              action={{ label: 'Download report', onClick: ctx.exportNotice.downloadReport }}
-              onDismiss={ctx.dismissExportNotice}
-            />
-          </div>
-        ) : null}
+          {ctx.exportNotice ? (
+            <div className="px-4 pt-2">
+              <EditConflictBanner
+                message={ctx.exportNotice.message}
+                severity="info"
+                action={{ label: 'Download report', onClick: ctx.exportNotice.downloadReport }}
+                onDismiss={ctx.dismissExportNotice}
+              />
+            </div>
+          ) : null}
 
-        {/*
+          {/*
         The keyboard-shortcuts sheet, mounted ONCE for the whole workspace (`docs/TECH_DEBT.md`
         #137). It used to live inside `TsldPanel`, so in the Gantt the `?` binding and the account
         menu set `showHelp` and nothing rendered — a lit-but-inert control in the view that had
@@ -2670,66 +2721,66 @@ export function ToolbarPlanWorkspace({
         opens the logic editor on the canvas and commits a cell edit in the grid — so one merged
         list would qualify half its rows into unreadability.
       */}
-        <PlanShortcutsHelp
-          open={canvasUi.showHelp}
-          onClose={() => canvasUi.setShowHelp(false)}
-          editingEnabled={model.canEditSchedule}
-          view={ctx.planView}
-        />
+          <PlanShortcutsHelp
+            open={canvasUi.showHelp}
+            onClose={() => canvasUi.setShowHelp(false)}
+            editingEnabled={model.canEditSchedule}
+            view={ctx.planView}
+          />
 
-        {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
+          {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
-        {PROGRAMME_SCHEDULING_ENABLED ? (
-          <div className="px-4 pt-2">
-            <ProgrammeScheduleSection
-              orgSlug={model.orgSlug}
-              planId={model.planId}
-              canRecalc={model.canRecalc}
-            />
-          </div>
-        ) : null}
+          {PROGRAMME_SCHEDULING_ENABLED ? (
+            <div className="px-4 pt-2">
+              <ProgrammeScheduleSection
+                orgSlug={model.orgSlug}
+                planId={model.planId}
+                canRecalc={model.canRecalc}
+              />
+            </div>
+          ) : null}
 
-        {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
+          {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
           in a docked, resizable RIGHT panel inside the body below (toggled by Comments), so the always-
           inline block renders ONLY flag-off — byte-for-byte the prior behaviour. */}
-        {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
-          <div className="px-4 pt-2">
-            <PlanNotesSection
-              orgSlug={model.orgSlug}
-              planId={model.planId}
-              canWrite={model.canWriteNotes}
-              bounded
-              headingRef={notesHeadingRef}
-            />
-          </div>
-        ) : null}
+          {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
+            <div className="px-4 pt-2">
+              <PlanNotesSection
+                orgSlug={model.orgSlug}
+                planId={model.planId}
+                canWrite={model.canWriteNotes}
+                bounded
+                headingRef={notesHeadingRef}
+              />
+            </div>
+          ) : null}
 
-        {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
-        {lateOverlayActive && model.canEditSchedule ? (
-          <div className="px-4 pt-2">
-            <p
-              role="status"
-              className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
-            >
-              The Late-start overlay is on — editing is paused. Turn off{' '}
-              <span className="font-medium">Late-start overlay</span> to edit.
-            </p>
-          </div>
-        ) : null}
+          {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
+          {lateOverlayActive && model.canEditSchedule ? (
+            <div className="px-4 pt-2">
+              <p
+                role="status"
+                className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
+              >
+                The Late-start overlay is on — editing is paused. Turn off{' '}
+                <span className="font-medium">Late-start overlay</span> to edit.
+              </p>
+            </div>
+          ) : null}
 
-        {/* The canvas dock (workspace-chrome M3) wraps the diagram AND the activities row, because
+          {/* The canvas dock (workspace-chrome M3) wraps the diagram AND the activities row, because
           the strips are produced by the first and land in the second. Provider here rather than at
           the shell, so the shell stays plan-unaware (ADR-0029). */}
-        <CanvasDockProvider>
-          {/* **No inset** (workspace visual polish, 2026-08-28): the `px-3 pb-3` that floated the
+          <CanvasDockProvider>
+            {/* **No inset** (workspace visual polish, 2026-08-28): the `px-3 pb-3` that floated the
             stage as a card on the gradient is removed with the card itself — the fully-flush
             steer. The workspace body IS the window's inner wall now, deliberately. */}
-          <div
-            ref={bodyRef}
-            data-testid="workspace-body"
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          >
-            {/* A vertical stack at EVERY width (ADR-0181) — the canvas row (canvas beside any open right
+            <div
+              ref={bodyRef}
+              data-testid="workspace-body"
+              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              {/* A vertical stack at EVERY width (ADR-0181) — the canvas row (canvas beside any open right
               dock) above the full-width activities foot. **A dock pushes the CANVAS only**
               (workspace visual polish item 8, 2026-08-28): the docks used to be full-height siblings
               of this whole stack, so opening one narrowed the foot row too — and a narrowed foot is
@@ -2741,26 +2792,26 @@ export function ToolbarPlanWorkspace({
               (888) to the foot's top (845), and with the dock open the foot spans its full 1369 px
               instead of narrowing to 944. (The M0 table's 1345 was the pre-full-bleed width — M1
               removed the 12 px frame before this landed.) */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div
-                ref={canvasRowRef}
-                // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
-                // already removes it from the tree), and the canvas keeps its viewport.
-                hidden={swapped}
-                onFocus={trackFocusIn}
-                onBlur={trackFocusOut}
-                className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
-              >
-                {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div
+                  ref={canvasRowRef}
+                  // Hidden by the swap, never unmounted: no `aria-hidden`, no `inert` (display:none
+                  // already removes it from the tree), and the canvas keeps its viewport.
+                  hidden={swapped}
+                  onFocus={trackFocusIn}
+                  onBlur={trackFocusOut}
+                  className={cn('min-h-0 flex-1 overflow-hidden', swapped ? undefined : 'flex')}
+                >
+                  {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                 panel (when open) is overlaid via the `relative` container. */}
-                {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
+                  {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
                   pass; it is FULLY FLUSH now on the product owner's explicit steer — no radius,
                   no hairline, no shadow, the diagram runs to the surfaces around it. */}
-                {/* **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
+                  {/* **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
                   card floating in a pane rather than as the surface the workspace exists to show, and
                   it cost 8 px of height and 32 px of width for nothing. Separation from the band
                   above is the band's own `border-b`; from the dock beside it, the dock's. */}
-                {/* **`inert` while a dock has taken the row** (retire-single-pane AC-2.4): the stage is
+                  {/* **`inert` while a dock has taken the row** (retire-single-pane AC-2.4): the stage is
                   then a sliver beside a dock that fills the body, and a focusable diagram nobody can
                   see is a focus-visibility failure of its own. Laid out, not `display: none`, so the
                   canvas keeps its viewport; the legend and the resource strip ride inside it.
@@ -2769,50 +2820,50 @@ export function ToolbarPlanWorkspace({
                   holds the foot row and not the ruler above it). It is the STAGE that goes inert and not
                   the row: the row also holds the four right docks, and an inert dock cannot take focus
                   on mount or be closed from the keyboard. */}
-                <div
-                  inert={dockSqueezed || canvasRowTooShort}
-                  className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
-                >
-                  {/* The list failed while swimlanes are on: the diagram is drawn without them, and
+                  <div
+                    inert={dockSqueezed || canvasRowTooShort}
+                    className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
+                  >
+                    {/* The list failed while swimlanes are on: the diagram is drawn without them, and
                     this says so with a retry (the lens row carries the same sentence). Only on the
                     diagram, which is where the division is drawn; its live region is mounted empty
                     on the diagram so the sentence is announced when it arrives. */}
-                  {ctx.planView !== 'gantt' ? (
-                    <SwimlanesFailedRegion
-                      failed={swimlanesAreShown && swimlaneScene.failed}
-                      onRetry={swimlaneScene.refetch}
-                      restoreFocus={focusPlanSurface}
-                    />
-                  ) : null}
-                  {surface}
-                  {legendPanel}
-                  {resourceStripPanel}
-                </div>
+                    {ctx.planView !== 'gantt' ? (
+                      <SwimlanesFailedRegion
+                        failed={swimlanesAreShown && swimlaneScene.failed}
+                        onRetry={swimlaneScene.refetch}
+                        restoreFocus={focusPlanSurface}
+                      />
+                    ) : null}
+                    {surface}
+                    {legendPanel}
+                    {resourceStripPanel}
+                  </div>
 
-                {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the
+                  {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the
                 canvas, never overlays; toggled by Comments. Its vertical splitter sets the width. */}
-                {/* Each dock's resizer is withheld when `dockBounds` says it means nothing: a squeezed dock
+                  {/* Each dock's resizer is withheld when `dockBounds` says it means nothing: a squeezed dock
                   is pinned to the whole row, and one whose minimum already fills the body has no range
                   (retire-single-pane AC-2.2). `max-w-full` on the dock is the visual bound on the first
                   paint, before the observer has reported a width. */}
-                {floatPathsDockActive ? (
-                  <>
-                    {floatPathsBounds.resizable ? (
-                      <PanelResizer
-                        orientation="vertical"
-                        size={floatPathsBounds.width}
-                        min={floatPathsBounds.min}
-                        max={floatPathsBounds.max}
-                        label="Resize float paths panel"
-                        sizeLabel="Float paths panel width"
-                        onReset={floatPathsPrefs.resetSize}
-                        onResize={onFloatPathsResize}
-                        pointerToSize={rightDockPointerToSize}
-                        reverseKeys
-                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                      />
-                    ) : null}
-                    {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
+                  {floatPathsDockActive ? (
+                    <>
+                      {floatPathsBounds.resizable ? (
+                        <PanelResizer
+                          orientation="vertical"
+                          size={floatPathsBounds.width}
+                          min={floatPathsBounds.min}
+                          max={floatPathsBounds.max}
+                          label="Resize float paths panel"
+                          sizeLabel="Float paths panel width"
+                          onReset={floatPathsPrefs.resetSize}
+                          onResize={onFloatPathsResize}
+                          pointerToSize={rightDockPointerToSize}
+                          reverseKeys
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      ) : null}
+                      {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
                     visual polish item 7, 2026-08-28). The Project Explorer on the other side of
                     the stage is `<Surface tone="panel">`; these three were `bg-card` on the page
                     scope — two mechanisms for one near-white, the exact split-pair class
@@ -2821,239 +2872,243 @@ export function ToolbarPlanWorkspace({
                     now serves both edges: every token inside the docks rebinds to the panel
                     family with no component change, and `border-border` draws the seam in the
                     panel's own vocabulary. */}
-                    <PanelSurface
-                      border="start"
-                      data-right-dock="floatPaths"
-                      style={{ width: floatPathsBounds.width }}
-                      className="max-w-full shrink-0"
-                    >
-                      {floatPathsDockContent}
-                    </PanelSurface>
-                  </>
-                ) : null}
+                      <PanelSurface
+                        border="start"
+                        data-right-dock="floatPaths"
+                        style={{ width: floatPathsBounds.width }}
+                        className="max-w-full shrink-0"
+                      >
+                        {floatPathsDockContent}
+                      </PanelSurface>
+                    </>
+                  ) : null}
 
-                {healthDockActive ? (
-                  <>
-                    {healthBounds.resizable ? (
-                      <PanelResizer
-                        orientation="vertical"
-                        size={healthBounds.width}
-                        min={healthBounds.min}
-                        max={healthBounds.max}
-                        label="Resize health check panel"
-                        sizeLabel="Health check panel width"
-                        onReset={healthPrefs.resetSize}
-                        onResize={onHealthResize}
-                        pointerToSize={rightDockPointerToSize}
-                        reverseKeys
-                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                      />
-                    ) : null}
-                    {/* `panel` scope — see the Float paths dock above (item 7). */}
-                    <PanelSurface
-                      border="start"
-                      data-right-dock="health"
-                      style={{ width: healthBounds.width }}
-                      className="max-w-full shrink-0"
-                    >
-                      {healthDockContent}
-                    </PanelSurface>
-                  </>
-                ) : null}
+                  {healthDockActive ? (
+                    <>
+                      {healthBounds.resizable ? (
+                        <PanelResizer
+                          orientation="vertical"
+                          size={healthBounds.width}
+                          min={healthBounds.min}
+                          max={healthBounds.max}
+                          label="Resize health check panel"
+                          sizeLabel="Health check panel width"
+                          onReset={healthPrefs.resetSize}
+                          onResize={onHealthResize}
+                          pointerToSize={rightDockPointerToSize}
+                          reverseKeys
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      ) : null}
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <PanelSurface
+                        border="start"
+                        data-right-dock="health"
+                        style={{ width: healthBounds.width }}
+                        className="max-w-full shrink-0"
+                      >
+                        {healthDockContent}
+                      </PanelSurface>
+                    </>
+                  ) : null}
 
-                {revisionsDockActive ? (
-                  <>
-                    {revisionBounds.resizable ? (
-                      <PanelResizer
-                        orientation="vertical"
-                        size={revisionBounds.width}
-                        min={revisionBounds.min}
-                        max={revisionBounds.max}
-                        label="Resize revision comparison panel"
-                        sizeLabel="Revision comparison panel width"
-                        onReset={revisionPrefs.resetSize}
-                        onResize={onRevisionResize}
-                        pointerToSize={rightDockPointerToSize}
-                        reverseKeys
-                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                      />
-                    ) : null}
-                    {/* `panel` scope — see the Float paths dock above (item 7). */}
-                    <PanelSurface
-                      border="start"
-                      data-right-dock="revisions"
-                      style={{ width: revisionBounds.width }}
-                      className="max-w-full shrink-0"
-                    >
-                      {revisionsDockContent}
-                    </PanelSurface>
-                  </>
-                ) : null}
+                  {revisionsDockActive ? (
+                    <>
+                      {revisionBounds.resizable ? (
+                        <PanelResizer
+                          orientation="vertical"
+                          size={revisionBounds.width}
+                          min={revisionBounds.min}
+                          max={revisionBounds.max}
+                          label="Resize revision comparison panel"
+                          sizeLabel="Revision comparison panel width"
+                          onReset={revisionPrefs.resetSize}
+                          onResize={onRevisionResize}
+                          pointerToSize={rightDockPointerToSize}
+                          reverseKeys
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      ) : null}
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <PanelSurface
+                        border="start"
+                        data-right-dock="revisions"
+                        style={{ width: revisionBounds.width }}
+                        className="max-w-full shrink-0"
+                      >
+                        {revisionsDockContent}
+                      </PanelSurface>
+                    </>
+                  ) : null}
 
-                {notesDockActive ? (
-                  <>
-                    {notesBounds.resizable ? (
-                      <PanelResizer
-                        orientation="vertical"
-                        size={notesBounds.width}
-                        min={notesBounds.min}
-                        max={notesBounds.max}
-                        label="Resize notes panel"
-                        sizeLabel="Notes panel width"
-                        onReset={notesPanel.resetSize}
-                        onResize={onNotesResize}
-                        pointerToSize={rightDockPointerToSize}
-                        // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
-                        // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
-                        reverseKeys
-                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                      />
-                    ) : null}
-                    {/* `panel` scope — see the Float paths dock above (item 7). */}
-                    <PanelSurface
-                      border="start"
-                      data-right-dock="notes"
-                      style={{ width: notesBounds.width }}
-                      className="max-w-full shrink-0"
-                    >
-                      {notesDockContent}
-                    </PanelSurface>
-                  </>
-                ) : null}
-              </div>
+                  {notesDockActive ? (
+                    <>
+                      {notesBounds.resizable ? (
+                        <PanelResizer
+                          orientation="vertical"
+                          size={notesBounds.width}
+                          min={notesBounds.min}
+                          max={notesBounds.max}
+                          label="Resize notes panel"
+                          sizeLabel="Notes panel width"
+                          onReset={notesPanel.resetSize}
+                          onResize={onNotesResize}
+                          pointerToSize={rightDockPointerToSize}
+                          // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
+                          // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
+                          reverseKeys
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      ) : null}
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <PanelSurface
+                        border="start"
+                        data-right-dock="notes"
+                        style={{ width: notesBounds.width }}
+                        className="max-w-full shrink-0"
+                      >
+                        {notesDockContent}
+                      </PanelSurface>
+                    </>
+                  ) : null}
+                </div>
 
-              {/* The full-width foot: below the canvas row, outside any dock's column — see the
+                {/* The full-width foot: below the canvas row, outside any dock's column — see the
                 branch comment above (item 8). */}
-              {collapsed ? (
-                <ActivityPanelCollapsedBar onExpand={expandPanel} focusExpandOnMount={interacted} />
-              ) : (
-                <>
-                  {/* Withheld while swapped: the panel owns the body, so there is no edge to drag.
+                {collapsed ? (
+                  <ActivityPanelCollapsedBar
+                    onExpand={expandPanel}
+                    focusExpandOnMount={interacted}
+                  />
+                ) : (
+                  <>
+                    {/* Withheld while swapped: the panel owns the body, so there is no edge to drag.
                     `contents` keeps the wrapper out of the flex layout; it is only here to hear
                     the focus the unmount would strand. */}
-                  {swapped ? null : (
-                    <div className="contents" onFocus={trackFocusIn} onBlur={trackFocusOut}>
-                      <PanelResizer
-                        orientation="horizontal"
-                        size={panelHeight}
-                        min={PANEL_MIN_OPEN}
-                        max={effectiveMax}
-                        label="Resize activities panel"
-                        sizeLabel="Activities panel height"
-                        onReset={panel.resetSize}
-                        onResize={onResize}
-                        pointerToSize={pointerToSize}
-                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                    {swapped ? null : (
+                      <div className="contents" onFocus={trackFocusIn} onBlur={trackFocusOut}>
+                        <PanelResizer
+                          orientation="horizontal"
+                          size={panelHeight}
+                          min={PANEL_MIN_OPEN}
+                          max={effectiveMax}
+                          label="Resize activities panel"
+                          sizeLabel="Activities panel height"
+                          onReset={panel.resetSize}
+                          onResize={onResize}
+                          pointerToSize={pointerToSize}
+                          className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                        />
+                      </div>
+                    )}
+                    {/* The same box in both states, re-styled and never re-mounted, so the plan's
+                    facts and dock outlets (inside the panel's foot row) mount exactly once. */}
+                    <div
+                      ref={panelBoxRef}
+                      style={swapped ? undefined : { height: panelHeight }}
+                      className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
+                    >
+                      <ActivityBottomPanel
+                        model={activityPanelModel}
+                        onCollapse={collapse}
+                        focusCollapseOnMount={interacted}
+                        diagramHidden={swapped}
+                        hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
+                        toolDisarmed={toolPutAway}
+                        collapseRef={collapseButtonRef}
+                        swimlanes={tableSwimlanes}
+                        onOpenCodes={codesDialog.request}
+                        codeColumns={tableCodes.columns}
+                        codeColumnsChoice={tableCodes.choice}
+                        {...(codeBulk ? { codeBulk } : {})}
                       />
                     </div>
-                  )}
-                  {/* The same box in both states, re-styled and never re-mounted, so the plan's
-                    facts and dock outlets (inside the panel's foot row) mount exactly once. */}
-                  <div
-                    ref={panelBoxRef}
-                    style={swapped ? undefined : { height: panelHeight }}
-                    className={cn('min-h-0', swapped ? 'flex-1' : 'shrink-0')}
-                  >
-                    <ActivityBottomPanel
-                      model={activityPanelModel}
-                      onCollapse={collapse}
-                      focusCollapseOnMount={interacted}
-                      diagramHidden={swapped}
-                      hiddenView={ctx.planView === 'gantt' ? 'gantt' : 'diagram'}
-                      toolDisarmed={toolPutAway}
-                      collapseRef={collapseButtonRef}
-                      swimlanes={tableSwimlanes}
-                      onOpenCodes={codesDialog.request}
-                      codeColumns={tableCodes.columns}
-                      codeColumnsChoice={tableCodes.choice}
-                      {...(codeBulk ? { codeBulk } : {})}
-                    />
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </CanvasDockProvider>
+          </CanvasDockProvider>
 
-        {/* Plan-chrome dialogs the toolbar overflow opens (shared with the ADR-0030 header menu). */}
-        <PlanChromeDialogs
-          dialog={dialog}
-          onClose={() => setDialog(null)}
-          model={model}
-          plan={plan}
-        />
+          {/* Plan-chrome dialogs the toolbar overflow opens (shared with the ADR-0030 header menu). */}
+          <PlanChromeDialogs
+            dialog={dialog}
+            onClose={() => setDialog(null)}
+            model={model}
+            plan={plan}
+          />
 
-        {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
-        <PlanDialogs model={model} plan={plan} />
+          {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
+          <PlanDialogs model={model} plan={plan} />
 
-        {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
+          {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
           command band and the mode cluster are portalled: the facts belong to the plan, the row
           belongs to the shell, and ADR-0029 says the shell must not learn the difference. */}
-        <ChromePortal name="status">
-          <PlanStatusBar
-            activityCount={scheduleSummary.data?.activityCount}
-            criticalCount={scheduleSummary.data?.criticalCount}
-            dataDate={scheduleSummary.data?.dataDate}
-            projectFinish={scheduleSummary.data?.projectFinish}
-            scheduleState={scheduleState}
-            onRecalculate={() => ctx.recalculate()}
-            pending={scheduleSummary.isPending}
-          />
-        </ChromePortal>
-
-        {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
-        <ActivityCrudDialogs model={model} swimlaneAssignment={swimlaneAssignment} />
-        {codesDialog.wanted ? (
-          <Suspense fallback={null}>
-            <CodesDialog
-              open={codesDialog.open}
-              onClose={codesDialog.close}
-              orgSlug={model.orgSlug}
-              planId={model.planId}
-              activities={model.activities.data}
-              gate={codesGate}
-              record={model.recordCodeEdit}
+          <ChromePortal name="status">
+            <PlanStatusBar
+              activityCount={scheduleSummary.data?.activityCount}
+              criticalCount={scheduleSummary.data?.criticalCount}
+              dataDate={scheduleSummary.data?.dataDate}
+              projectFinish={scheduleSummary.data?.projectFinish}
+              scheduleState={scheduleState}
+              onRecalculate={() => ctx.recalculate()}
+              pending={scheduleSummary.isPending}
             />
-          </Suspense>
-        ) : null}
-        {swimlaneDialogsWanted ? (
-          <Suspense fallback={null}>
-            <SwimlaneDialogs {...swimlaneManagement.dialogs} />
-          </Suspense>
-        ) : null}
+          </ChromePortal>
 
-        {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —
+          {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
+          <ActivityCrudDialogs model={model} swimlaneAssignment={swimlaneAssignment} />
+          {codesDialog.wanted ? (
+            <Suspense fallback={null}>
+              <CodesDialog
+                open={codesDialog.open}
+                onClose={codesDialog.close}
+                orgSlug={model.orgSlug}
+                planId={model.planId}
+                activities={model.activities.data}
+                gate={codesGate}
+                record={model.recordCodeEdit}
+              />
+            </Suspense>
+          ) : null}
+          {swimlaneDialogsWanted ? (
+            <Suspense fallback={null}>
+              <SwimlaneDialogs {...swimlaneManagement.dialogs} />
+            </Suspense>
+          ) : null}
+
+          {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —
             the canvas bar, the Gantt row menu and the activities table. A fresh `key` per target,
             so a pick or an error never carries over from a previous opening. */}
-        {model.makeMilestoneActivity ? (
-          <MakeMilestoneDialog
-            // Mounted while closed, so closing runs `close()` and the native restore returns focus
-            // to the activity (the model's docblock). A fresh key per OPENING, not per target.
-            key={`${model.makeMilestoneActivity.id}:${String(model.makeMilestoneOpening)}`}
-            open={model.makeMilestoneOpen}
-            onClose={model.closeMakeMilestone}
-            activityName={model.makeMilestoneActivity.name}
-            reportedDate={
-              model.makeMilestoneActivity.visualEffectiveStart ??
-              model.makeMilestoneActivity.earlyStart
-            }
-            defaultType={defaultMilestoneType(
-              model.makeMilestoneActivity.id,
-              model.dependencies.data ?? [],
-            )}
-            carriesProjectFinish={
-              scheduleSummary.data?.projectFinish != null &&
-              (model.makeMilestoneActivity.visualEffectiveFinish ??
-                model.makeMilestoneActivity.earlyFinish) === scheduleSummary.data.projectFinish
-            }
-            onConfirm={model.confirmMakeMilestone}
-          />
-        ) : null}
+          {model.makeMilestoneActivity ? (
+            <MakeMilestoneDialog
+              // Mounted while closed, so closing runs `close()` and the native restore returns focus
+              // to the activity (the model's docblock). A fresh key per OPENING, not per target.
+              key={`${model.makeMilestoneActivity.id}:${String(model.makeMilestoneOpening)}`}
+              open={model.makeMilestoneOpen}
+              onClose={model.closeMakeMilestone}
+              activityName={model.makeMilestoneActivity.name}
+              reportedDate={
+                model.makeMilestoneActivity.visualEffectiveStart ??
+                model.makeMilestoneActivity.earlyStart
+              }
+              defaultType={defaultMilestoneType(
+                model.makeMilestoneActivity.id,
+                model.dependencies.data ?? [],
+              )}
+              carriesProjectFinish={
+                scheduleSummary.data?.projectFinish != null &&
+                (model.makeMilestoneActivity.visualEffectiveFinish ??
+                  model.makeMilestoneActivity.earlyFinish) === scheduleSummary.data.projectFinish
+              }
+              onConfirm={model.confirmMakeMilestone}
+            />
+          ) : null}
 
-        {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
+          {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
           now lives in the shared `PlanDialogs`, so it's mounted once for whichever canvas layout is
           active and both entry points open the same dialog. */}
-      </div>
+        </div>
+      </CodeSwimlaneLanePlannerProvider>
     </PlanFactsProvider>
   );
 }

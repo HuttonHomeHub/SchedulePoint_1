@@ -42,6 +42,9 @@ export function codeErrorText(action: string, error: unknown, subject?: string):
     if (/PARENT_DELETED/.test(reason)) {
       return `Could not ${action}: restore ${subject ?? 'its code type'} first.`;
     }
+    if (/SWIMLANE_SOURCE_CHANGED/.test(reason)) {
+      return `Could not ${action}: the plan’s swimlanes were changed by someone else. The plan has been refreshed, so check the diagram and try again.`;
+    }
     if (error.status === 409 || error.status === 404) {
       return `Could not ${action}: the codes were changed by someone else. The list has been refreshed, so check it and try again.`;
     }
