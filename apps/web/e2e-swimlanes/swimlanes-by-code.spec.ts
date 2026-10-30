@@ -17,7 +17,6 @@ import {
   openPlanId,
   openSeededPlan,
   option,
-  optionSentences,
 } from './support';
 
 /**
@@ -258,6 +257,12 @@ async function chooseOption(page: Page, picker: Locator, text: RegExp): Promise<
     .click();
 }
 
+/** Every option's sentence in this plan's list, keyed by the activity's name (the text before ", CD_n"). */
+async function codePlanSentences(page: Page): Promise<Map<string, string>> {
+  const texts = await diagramList(page).getByRole('option').allTextContents();
+  return new Map(texts.map((t) => [t.split(/, CD_\d/)[0]!, t]));
+}
+
 test.describe('writes under a code source', () => {
   test('Move to swimlane…, Save codes, Set code… and a drawn bar write Area and keep the diagram still', async ({
     page,
@@ -330,7 +335,7 @@ test.describe('writes under a code source', () => {
     });
 
     await test.step('2. the editor on CD_4: the Swimlane line is read-only; Area = Ground floor ▸ Save codes moves CD_4 and nothing else', async () => {
-      const sentences = await optionSentences(page);
+      const sentences = await codePlanSentences(page);
       const editor = await openActivityEditor(page, 'First-fix services');
       const line = editor.getByRole('textbox', { name: 'Current swimlane' });
       await expect(line).toHaveValue('Level 1');
@@ -356,7 +361,7 @@ test.describe('writes under a code source', () => {
       await expect(editor).toBeHidden();
 
       await expect(option(page, 'First-fix services')).toContainText(/in Ground floor/);
-      const after = await optionSentences(page);
+      const after = await codePlanSentences(page);
       // Nothing but the subject moved: every other bar reads the lane it read before.
       for (const name of ['Piling', 'Ground-bearing slab', 'Steel frame', 'Roof deck']) {
         expect(after.get(name), name).toBe(sentences.get(name));
@@ -396,19 +401,22 @@ test.describe('writes under a code source', () => {
     });
 
     await test.step('4. a bar drawn in Level 1 is created carrying Area = Level 1, in one request', async () => {
-      const steel = await findBar(page, 'Steel frame');
+      // Level 1's row is the gutter label's own: its centre is inside the swimlane's first lane.
+      const level = (await gutterLabels(page)
+        .getByRole('button', { name: /^Level 1/ })
+        .boundingBox())!;
       const box = (await page
         .locator('section[aria-label="Time-scaled logic diagram"] canvas')
         .first()
         .boundingBox())!;
       const gutterBox = (await page.getByTestId('tsld-swimlane-gutter').boundingBox())!;
-      // Level 1's row, before Steel frame starts: free in time, and inside the swimlane by its y.
+      // Before Steel frame starts: free in time, and inside the swimlane by its y.
       const created = page.waitForRequest(
         (request) => request.method() === 'POST' && /\/activities$/.test(request.url()),
       );
       await drawActivity(page, 'Task', 'Drawn in Level 1', {
         x: gutterBox.x + gutterBox.width + 80 - box.x,
-        y: steel.y - box.y,
+        y: level.y + level.height / 2 - box.y,
       });
       const sent = JSON.parse((await created).postData()!) as {
         codes?: { codeTypeId: string; codeValueId: string }[];
