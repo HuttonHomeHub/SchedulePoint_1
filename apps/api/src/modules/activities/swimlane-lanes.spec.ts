@@ -178,8 +178,7 @@ describe('loadPlanCodeLanes', () => {
     ]);
     const lanes = await loadPlanCodeLanes(
       { $queryRaw: queryRaw },
-      { organizationId: 'o', planId: 'p' },
-      't',
+      { id: 't', planId: 'p', organizationId: 'o' },
     );
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(lanes.map((l) => l.activityId)).toEqual(['a', 'b']);

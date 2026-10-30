@@ -874,14 +874,17 @@ field**: lanes are written through the positions batch and the codes write's `la
 write reads it after its own upsert, in its transaction. Owner decision 2026-10-30, "current code
 only" (`m4-record.md` §1).
 
-**`GET …/plans/:planId/code-swimlane-lanes?codeTypeId=<uuid>` (M4-T1)** returns the same thing for **any
+**`GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes` (M4-T1)** returns the same thing for **any
 live type of the plan**, for every live activity in one request: `{ data: { codeTypeId, lanes: [{
 activityId, codeValueId | null, laneIndex, updatedAt }] } }`, ordered by activity id, at most one lane
 an activity. It is what a client reads when the planner switches the swimlanes to another code, because
 the activity list only carries the lanes of the code the plan already uses. A member read
 (**`activity:read`**, a Viewer included), never an External Guest route. A type that is deleted,
-unknown, another plan's or another organisation's is one **404**; a missing or malformed `codeTypeId`
-is **422**. Not a write and not a schedule input.
+unknown, another plan's or another organisation's is one **404**; a malformed `:codeTypeId` is
+rejected by the path pipe (**400**, as any path id). Throttled to 30 a minute. **Deliberately
+unpaginated**: at most one row per live activity, bounded by the plan's size (about 5,000
+activities; no per-plan activity cap is enforced), and a cursor would force many round trips on a
+switch; there is no `meta`. Not a write and not a schedule input.
 
 ### Activity change history (ADR-0174)
 

@@ -1,13 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { PlanCodeLane, PlanCodeSwimlaneLanes } from '@repo/types';
-import { IsUUID } from 'class-validator';
-
-/** The query of the plan-wide code-lane read. */
-export class CodeSwimlaneLanesQueryDto {
-  @ApiProperty({ format: 'uuid', description: 'A live code type of this plan.' })
-  @IsUUID()
-  codeTypeId!: string;
-}
 
 export class PlanCodeLaneResponseDto implements PlanCodeLane {
   @ApiProperty({ format: 'uuid' })

@@ -342,7 +342,7 @@ export class ActivityResponseDto implements ActivitySummary {
       'live value of it (`codeValueId`), or `null` for none or a deleted value. At most one entry; ' +
       'a basis the activity no longer has, and every other type, is stored but not sent. **Absent, ' +
       'not empty, unless the plan’s swimlane source is `ACTIVITY_CODE`**, when `[]` means never ' +
-      'placed at this basis. Another code’s lanes come from `GET …/plans/:planId/code-swimlane-lanes`. ' +
+      'placed at this basis. Another code’s lanes come from `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`. ' +
       'A read projection: never sent on a write (lanes are written through `PATCH ' +
       '…/activities/positions` and the `lanes` of `PATCH …/activities/codes`).',
   })

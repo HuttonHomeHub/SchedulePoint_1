@@ -223,15 +223,22 @@ export interface PlanCodeLaneRow {
 /**
  * **Every activity's current-basis lane under one type of the plan, in one statement** (the
  * database-architect's Statement B), for the moment a planner switches the swimlanes to that code.
- * The caller has loaded `typeId` as a live type of this plan and organisation (404 otherwise): that
- * check is what makes leaving `plan_id` off the child tables safe, and naming it there makes the
- * planner walk the plan-leading unique index instead (13 to 15 ms against 7 to 8). States
- * `deleted_at` of `activities` and `code_values`. Ordered in memory by activity id for a stable body.
+ *
+ * Takes the **type row itself**, which the caller has loaded as a live type of this plan and
+ * organisation: the precondition is structural, so a bare id cannot reach the statement. That check
+ * is also what makes leaving `plan_id` off `code_swimlane_lanes` and `code_value_assignments` safe,
+ * and naming it there makes the planner walk the plan-leading unique index instead (13 to 15 ms
+ * against 7 to 8). The statement still joins the type fail-closed (a primary-key probe), so a type
+ * deleted a moment later reads nothing. States `deleted_at` of `code_types`, `activities` and
+ * `code_values`.
+ *
+ * **Deliberately unpaginated**: at most one row per live activity, bounded by the plan's size (about
+ * 5,000 activities; no per-plan activity cap is enforced), and a cursor would force many round trips
+ * on a switch. Ordered in memory by activity id for a stable body.
  */
 export async function loadPlanCodeLanes(
   db: Pick<PrismaClient, '$queryRaw'>,
-  scope: { organizationId: string; planId: string },
-  typeId: string,
+  type: { id: string; planId: string; organizationId: string },
 ): Promise<PlanCodeLaneRow[]> {
   const rows = await db.$queryRaw<
     { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
@@ -239,14 +246,16 @@ export async function loadPlanCodeLanes(
     SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
            l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
     FROM code_swimlane_lanes l
+    JOIN code_types t
+      ON t.id = ${type.id}::uuid AND t.plan_id = ${type.planId}::uuid AND t.deleted_at IS NULL
     JOIN activities a
-      ON a.id = l.activity_id AND a.organization_id = ${scope.organizationId}::uuid
-      AND a.plan_id = ${scope.planId}::uuid AND a.deleted_at IS NULL
+      ON a.id = l.activity_id AND a.organization_id = ${type.organizationId}::uuid
+      AND a.plan_id = ${type.planId}::uuid AND a.deleted_at IS NULL
     LEFT JOIN code_value_assignments cva
-      ON cva.activity_id = l.activity_id AND cva.code_type_id = ${typeId}::uuid
+      ON cva.activity_id = l.activity_id AND cva.code_type_id = ${type.id}::uuid
     LEFT JOIN code_values v
-      ON v.code_type_id = ${typeId}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
-    WHERE l.code_type_id = ${typeId}::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id
+      ON v.code_type_id = ${type.id}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+    WHERE l.code_type_id = ${type.id}::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id
   `;
   return rows
     .map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }))

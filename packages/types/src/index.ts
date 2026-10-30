@@ -332,7 +332,7 @@ export interface ActivityCodeLaneSummary {
   updatedAt: string;
 }
 
-/** One activity's current-basis lane in the plan-wide read (`GET …/plans/:planId/code-swimlane-lanes`). */
+/** One activity's current-basis lane in the plan-wide read (`GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`). */
 export interface PlanCodeLane {
   activityId: string;
   codeValueId: string | null;
@@ -341,7 +341,7 @@ export interface PlanCodeLane {
 }
 
 /**
- * What `GET …/plans/:planId/code-swimlane-lanes?codeTypeId=` returns: every live activity's lane at its
+ * What `GET …/code-types/:codeTypeId/swimlane-lanes` returns: every live activity's lane at its
  * current basis under that type, ordered by activity id. Read when the planner switches the swimlanes to
  * a code, since a list only carries the lanes of the code the plan already uses.
  */
@@ -779,7 +779,7 @@ export interface ActivitySummary {
    * (p6-activity-codes M4, owner decision 2026-10-30). **Absent, not empty, unless the plan's swimlane
    * source is `ACTIVITY_CODE`**; then `[]` means "never placed at this basis". Sent by the list, the
    * single read, the codes write and create (when it sent `codes`). Another code's lanes come from
-   * `GET …/plans/:planId/code-swimlane-lanes`.
+   * `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`.
    */
   codeSwimlaneLanes?: ActivityCodeLaneSummary[];
   /**

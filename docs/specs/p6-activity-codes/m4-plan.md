@@ -85,7 +85,7 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   - List (and the single read, the codes write and create responses): `codeSwimlaneLanes`. **Amended 2026-10-30 by the owner's decision (current code only).** Only under an
     `ACTIVITY_CODE` source, only the source type, only the current basis (at most one entry, absent
     otherwise), run in the list's `Promise.all`; the codes write reads it inside its transaction after the
-    upsert. Plus a plan-wide read `GET …/plans/:planId/code-swimlane-lanes?codeTypeId=` for any live type
+    upsert. Plus a plan-wide read `GET …/code-types/:codeTypeId/swimlane-lanes` for any live type
     (member read, not a guest route). Success criteria: the list ≤ 6 ms per 200 rows added; that read
     ≤ 10 ms DB time at 5,000 activities (median paired difference).
   - `@repo/types`: `ActivitySummary.codeSwimlaneLanes?`, `CreateActivityInput.codes?`, the codes-write
@@ -234,7 +234,7 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   `edgeNoteFor(input)`; `swimlanesShown` and the lens's "set up" test name `ACTIVITY_CODE`; the over-100
   standing line in the lens (owner answer 1 recommended).
   - **Amended 2026-10-30 by the owner's decision (current code only):** switching the source to another code
-    fetches that code's lanes with `GET …/code-swimlane-lanes?codeTypeId=` (T1) and shows the settled shape
+    fetches that code's lanes with `GET …/code-types/:codeTypeId/swimlane-lanes` (T1) and shows the settled shape
     while it loads (ADR-0202); the list only carries the lanes of the code the plan already uses. Consistency
     rule: a lane is applied only when its `codeValueId` equals the activity's current `codes` value of the
     type (or both are null), else it counts as unplaced and is derived on the client.
@@ -361,7 +361,7 @@ API) and grows a step per task. **No new Playwright config and no new CI step.**
   Delete… shaded for the source type with spec Q3's sentence; `ChosenSource` no longer excludes
   `ACTIVITY_CODE` and its comment is corrected.
   - **Amended 2026-10-30 by the owner's decision (current code only):** switching the source to another code
-    fetches that code's lanes with `GET …/code-swimlane-lanes?codeTypeId=` (T1) and shows the settled shape
+    fetches that code's lanes with `GET …/code-types/:codeTypeId/swimlane-lanes` (T1) and shows the settled shape
     while it loads (ADR-0202); the list only carries the lanes of the code the plan already uses. Consistency
     rule: a lane is applied only when its `codeValueId` equals the activity's current `codes` value of the
     type (or both are null), else it counts as unplaced and is derived on the client.

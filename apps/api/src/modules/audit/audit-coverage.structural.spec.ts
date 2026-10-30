@@ -341,7 +341,8 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/order': REASONS.DURABLY_ATTRIBUTED,
   'PATCH /api/v1/organizations/:orgSlug/plans/:planId/swimlanes/:swimlaneId':
     REASONS.DURABLY_ATTRIBUTED,
-  'GET /api/v1/organizations/:orgSlug/plans/:planId/code-swimlane-lanes': REASONS.READ,
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId/swimlane-lanes':
+    REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/code-types': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/code-types/:codeTypeId/values': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/code-values': REASONS.READ,

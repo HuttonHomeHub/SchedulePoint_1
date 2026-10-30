@@ -362,14 +362,9 @@ export class ActivityCodesService {
     if (!(await this.plans.findActiveByIdInOrg(planId, organization.id))) {
       throw new NotFoundError('Plan not found.');
     }
-    if (!(await this.types.findActiveInPlan(codeTypeId, planId, organization.id))) {
-      throw new NotFoundError('Code type not found in this plan.');
-    }
-    const lanes = await loadPlanCodeLanes(
-      this.prisma,
-      { organizationId: organization.id, planId },
-      codeTypeId,
-    );
+    const type = await this.types.findActiveInPlan(codeTypeId, planId, organization.id);
+    if (!type) throw new NotFoundError('Code type not found in this plan.');
+    const lanes = await loadPlanCodeLanes(this.prisma, type);
     return { codeTypeId, lanes };
   }
 

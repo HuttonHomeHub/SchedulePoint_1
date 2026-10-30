@@ -651,7 +651,7 @@ describe.skipIf(!hasDatabase)('Code swimlane lanes API (e2e, pen enforced)', () 
 
   describe('the plan-wide code lane read', () => {
     const lanesUrl = (planId: string, typeId: string, org = 'acme') =>
-      `${planUrl(planId, org)}/code-swimlane-lanes?codeTypeId=${typeId}`;
+      `${planUrl(planId, org)}/code-types/${typeId}/swimlane-lanes`;
 
     it('returns every activity’s current-basis lane for any type of the plan, and only that', async () => {
       const { actor, planId, area, trade, l1, l2, mech, a, b } = await seed();
@@ -759,10 +759,9 @@ describe.skipIf(!hasDatabase)('Code swimlane lanes API (e2e, pen enforced)', () 
       await request(server()).get(lanesUrl(planId, area.id)).expect(401);
     });
 
-    it('needs a type id, lets a Viewer read it, and is not on the guest surface', async () => {
+    it('rejects a malformed type id at the path, and lets a Viewer read it', async () => {
       const { actor, orgId, planId, area } = await seed();
-      await actor.agent.get(`${planUrl(planId)}/code-swimlane-lanes`).expect(422);
-      await actor.agent.get(`${planUrl(planId)}/code-swimlane-lanes?codeTypeId=nope`).expect(422);
+      await actor.agent.get(lanesUrl(planId, 'not-a-uuid')).expect(400);
       const viewer = await addMember(orgId, 'VIEWER', 'viewer@example.com');
       await viewer.agent.get(lanesUrl(planId, area.id)).expect(200);
     });
