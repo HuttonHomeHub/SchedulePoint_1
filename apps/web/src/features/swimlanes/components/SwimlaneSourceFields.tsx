@@ -1,7 +1,12 @@
 import type { SwimlaneSource } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
-import { codeNoneHint, valuesInUseBadge } from '../model/code-swimlane-copy';
+import {
+  CODE_CARD_NONE_ELIGIBLE,
+  codeCardDescription,
+  codeNoneHint,
+  valuesInUseBadge,
+} from '../model/code-swimlane-copy';
 import type { CodeSourcePicker } from '../model/use-code-source-picker';
 
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
@@ -34,8 +39,10 @@ const groups = (n: number): string => (n === 1 ? '1 group' : `${String(n)} group
  * **The code card** is shaded with exactly one reason (`code.cardReason`), and its type picker is a
  * `Combobox` beside the group for the same reason as the level: some of its options are shaded with a
  * reason of their own (no value in use, or more than swimlanes can show), and a native `<option
- * disabled>` drops out of the keyboard and carries no reason (ADR-0082, ADR-0204). The picker still
- * renders when every type is shaded, so each type's own reason stays readable.
+ * disabled>` drops out of the keyboard and carries no reason (ADR-0082, ADR-0204). The picker renders
+ * while the card is the chosen one, and also while the card is shaded because no code can be chosen:
+ * its sentence points at each code's reason, so those must be reachable (arrow keys land on a shaded
+ * option and read it) rather than hidden behind a card that cannot be selected.
  */
 export function SwimlaneSourceFields({
   source,
@@ -92,12 +99,7 @@ export function SwimlaneSourceFields({
           {
             value: 'ACTIVITY_CODE',
             title: codeName === undefined ? 'One per code value' : `One per value of ${codeName}`,
-            description:
-              'One for each value activities carry, named after it, in the order set in Codes…, ' +
-              (codeName === undefined
-                ? 'then the activities with none. '
-                : `then “No ${codeName}”. `) +
-              `They follow the codes: setting an activity’s ${codeName ?? 'code'} moves it.`,
+            description: codeCardDescription(codeName),
             figures: null,
             disabled: code.cardReason !== null,
             disabledReason: code.cardReason,
@@ -120,7 +122,9 @@ export function SwimlaneSourceFields({
           ))}
         </SelectField>
       ) : null}
-      {source === 'ACTIVITY_CODE' ? <CodePicker code={code} /> : null}
+      {source === 'ACTIVITY_CODE' || code.cardReason === CODE_CARD_NONE_ELIGIBLE ? (
+        <CodePicker code={code} />
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { ActivitySummary, SwimlaneSummary } from '@repo/types';
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { CODE_CHOICE_NOT_READY } from '../model/code-swimlane-copy';
 import { swimlaneErrorText } from '../model/swimlane-errors';
 import { swimlaneNameProblem } from '../model/swimlane-names';
 import { useCodeSourcePicker } from '../model/use-code-source-picker';
@@ -128,6 +129,8 @@ function ManageBody({
   });
   const codeChoice = code.choices?.find((c) => c.id === code.typeId);
   const currentCodeName = code.choices?.find((c) => c.id === plan.swimlaneCodeTypeId)?.name;
+  // Until the codes arrive the button has no code to name or write.
+  const codesLoading = source === 'ACTIVITY_CODE' && code.loading;
   const unchanged =
     source === current &&
     (source === 'MANUAL' ||
@@ -146,7 +149,10 @@ function ManageBody({
       });
     }
     if (source === 'ACTIVITY_CODE') {
-      if (codeChoice === undefined) return Promise.resolve();
+      if (codeChoice === undefined) {
+        setFailure(code.cardReason ?? CODE_CHOICE_NOT_READY);
+        return Promise.resolve();
+      }
       if (codeChoice.reason !== null) {
         // A shaded type reaches the button when it is the one the plan already uses, or after a refetch
         // shaded the choice: say why instead of writing what the server would refuse.
@@ -237,7 +243,7 @@ function ManageBody({
           <Button
             type="button"
             variant="outline"
-            aria-disabled={busy || shut || unchanged}
+            aria-disabled={busy || shut || unchanged || codesLoading}
             aria-busy={busy}
             aria-describedby={
               [shut ? reasonId : undefined, unchanged ? unchangedId : undefined]
@@ -251,7 +257,9 @@ function ManageBody({
               : source === 'WBS'
                 ? 'Use WBS groups'
                 : source === 'ACTIVITY_CODE'
-                  ? `Use ${codeChoice?.name ?? 'the code'}`
+                  ? codeChoice === undefined
+                    ? 'Loading codes…'
+                    : `Use ${codeChoice.name}`
                   : 'Make by hand'}
           </Button>
         </div>
@@ -260,7 +268,9 @@ function ManageBody({
         <p className="text-muted-foreground text-sm">
           {followsWbs
             ? `Swimlanes follow the WBS at level ${String(plan.swimlaneWbsLevel ?? level ?? 1)}: one for each summary, in WBS order. Rename or move a summary to change them.`
-            : `Swimlanes follow ${currentCodeName ?? 'a code'}: one for each value in use, in the order set in Codes…. Set an activity’s ${currentCodeName ?? 'code'} to move it.`}
+            : currentCodeName === undefined
+              ? 'Loading…'
+              : `Swimlanes follow ${currentCodeName}: one for each value in use, in the order set in Codes…. Set an activity’s ${currentCodeName} to move it.`}
           {swimlanes.length > 0
             ? ` The swimlanes you made by hand (${String(swimlanes.length)}) are kept, and come back if you switch back.`
             : ''}

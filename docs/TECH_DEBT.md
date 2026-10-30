@@ -9507,3 +9507,11 @@ Deferred on purpose, each cheap to add and none worth building before a screen b
 A lane is stored per `(activity, type, value)` basis (ADR-0206: switching a source, or an activity's value, and back finds each layout), so each time an activity moves to a new value of a type it gains one more row, and nothing sweeps or caps a stale one. **The payload no longer carries them**: the list and the single read send only the source type's row at the current basis, one entry at most, and the plan-wide read sends the same for the type asked about (`docs/API.md`). **What remains** is the stored stale rows of one type making the plan-wide read (Statement B) grow, since it joins every row of the type before keeping the current-basis ones.
 
 Options for later: sweep or cap stale rows per activity on a write, or a covering partial index (database-architect, CLAUDE.md §19.3). **Trigger:** stored lane rows of one type exceeding about 10 per activity on average, or the plan-wide read's measured median passing 10 ms at 5,000 activities.
+
+### 564. A shaded radio card's reason is dimmed below contrast, and the Combobox's listbox shares its name with its toggle
+
+**Status:** open · **Verified:** 2026-10-30, by the accessibility review of M4-T5 reading `apps/web/src/components/ui/radio-card-group.tsx` (the `aria-disabled:opacity-60` at the card, which also dims the reason text printed in it, about 2.6:1 against the surface) and `apps/web/src/components/ui/combobox.tsx` (the listbox and the toggle button both take the consumer's toggle label, "Show codes" on the swimlane source picker) · **Raised:** 2026-10-30 (M4-T5 review) · **Size:** S · **Owner:** web
+
+Both pre-date M4-T5 and both are shared-primitive contracts (ADR-0111), so T5 changes neither. The first affects every shaded `RadioCardGroup` option, whose reason is the one sentence a planner needs; a fix is to dim the title and figures and leave the reason at full contrast. The second means a screen-reader list of controls names two things alike; a fix is a distinct `aria-label` for the listbox.
+
+**Trigger:** the next change to `RadioCardGroup` or `Combobox`, or the next screen to shade a radio card, whichever is first. Either change needs accessibility-reviewer and component-reviewer before release.

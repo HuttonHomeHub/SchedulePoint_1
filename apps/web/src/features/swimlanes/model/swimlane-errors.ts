@@ -24,9 +24,13 @@ export function swimlaneErrorText(action: string, error: unknown): string {
     if (/SWIMLANE_LIMIT/.test(reason)) {
       return `Could not ${action}: a plan holds at most 100 swimlanes.`;
     }
-    // The plan write's own words for a code that is gone or unusable ("That code has been deleted. Choose
-    // another."), which a planner can act on; a bare 404 elsewhere still reads as a colleague's change.
-    if ((error.status === 404 || error.status === 422) && /^That code /.test(error.message)) {
+    // The plan write's own words for a code that is unusable, classified by its reason; the unknown-code
+    // 404 carries no reason, only its sentence ("That code no longer exists. Choose another."). A bare 404
+    // elsewhere still reads as a colleague's change.
+    if (
+      /SWIMLANE_CODE_TYPE_/.test(reason) ||
+      (error.status === 404 && /^That code /.test(error.message))
+    ) {
       return `Could not ${action}: ${error.message}`;
     }
     if (error.status === 409 || error.status === 404) {

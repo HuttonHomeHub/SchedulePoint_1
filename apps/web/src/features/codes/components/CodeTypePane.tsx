@@ -12,6 +12,7 @@ import {
 
 import { useCodeValues } from '../api/use-code-values';
 import { codeErrorText } from '../model/code-errors';
+import { codeTypeDeleteBlockedReason } from '../model/code-swimlane-source-copy';
 import { hasValueProblem, valueProblems, type ValueProblems } from '../model/code-text';
 import type { CodeUsage } from '../model/code-usage';
 import type { CodesGate } from '../model/codes-gating';
@@ -85,7 +86,7 @@ export function CodeTypePane({
   // Deleting the type the swimlanes are made from is refused by the server (409), so it is shaded up
   // front with the owner's sentence rather than offered and then refused.
   const isSwimlaneSource = swimlaneSourceTypeId === type.id;
-  const sourceReason = `The swimlanes are made from ${type.name}. Choose another swimlane source first.`;
+  const sourceReason = codeTypeDeleteBlockedReason(type.name);
   const reasonId = useFieldGate()?.reasonId;
   const values = useCodeValues(orgSlug, planId, type.id);
   const rows = useMemo(() => values.data ?? [], [values.data]);

@@ -545,6 +545,20 @@ test.describe('choosing a code in Swimlanes…', () => {
     });
 
     await test.step('4. while Area leads, the gutter’s rows are shaded with their reason and the manage dialog hides the hand-made list', async () => {
+      // The label opens its menu: Rename… and Move up are shaded with the code's sentence, which is the
+      // item's description and its printed text, and the item keeps its name.
+      await gutter.filter({ hasText: 'Level 1' }).click();
+      const menu = page.getByRole('menu', { name: /^Actions for Level 1/ });
+      await expect(menu).toBeVisible();
+      for (const name of ['Rename…', 'Move up']) {
+        const item = menu.getByRole('menuitem', { name, exact: true });
+        await expect(item).toHaveAttribute('aria-disabled', 'true');
+        await expect(item).toHaveAccessibleDescription(
+          'Swimlanes follow Area in this plan. Rename or reorder its values in Codes…, or choose Swimlanes… to make them another way.',
+        );
+      }
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
       const dialog = await openManageFromView(page);
       await expect(dialog.getByRole('list', { name: 'Swimlanes' })).toHaveCount(0);
       await expect(
@@ -570,6 +584,11 @@ test.describe('choosing a code in Swimlanes…', () => {
       await expect(remove).toHaveAccessibleDescription(
         'The swimlanes are made from Area. Choose another swimlane source first.',
       );
+      await expect(
+        codes.getByText('The swimlanes are made from Area. Choose another swimlane source first.', {
+          exact: true,
+        }),
+      ).toBeVisible();
       await remove.focus();
       await expect(remove).toBeFocused();
       await remove.click();
@@ -613,10 +632,25 @@ test.describe('choosing a code in Swimlanes…', () => {
       const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       await page.keyboard.press('Escape');
+      await expect(picker).toBeFocused();
       const close = dialog.getByRole('button', { name: 'Close', exact: true });
       await close.scrollIntoViewIfNeeded();
       await expect(close).toBeInViewport();
       await close.click();
+    });
+
+    await test.step('8. at 1024 × 600 the printed Delete… reason leaves the Area values table in view', async () => {
+      await page.getByRole('button', { name: 'Codes…' }).click();
+      const codes = page.getByRole('dialog', { name: 'Codes', exact: true });
+      await expect(codes).toBeVisible();
+      await expect(codes.getByRole('table', { name: 'Area values' })).toBeInViewport();
+      await expect(
+        codes.getByText('The swimlanes are made from Area. Choose another swimlane source first.', {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(codes).toBeHidden();
     });
   });
 });

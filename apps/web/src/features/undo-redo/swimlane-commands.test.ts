@@ -443,7 +443,7 @@ describe('swimlaneSourceCommand', () => {
       expect(p.setSource).not.toHaveBeenCalled();
     });
 
-    it('sets the step aside when the server refuses the code at replay (no values in use now)', async () => {
+    it('sets the step aside, with its own reason, when the server refuses the code at replay (values in use left 1 to 100)', async () => {
       const p = plan({ swimlaneSource: 'NONE', swimlaneWbsLevel: null }, ['area']);
       p.setSource.mockRejectedValueOnce(
         new ApiFetchError(422, {
@@ -460,7 +460,7 @@ describe('swimlaneSourceCommand', () => {
       });
       expect(await command.redo(p.ctx)).toMatchObject({
         kind: 'not-applicable',
-        reason: 'changed',
+        reason: 'code-not-choosable',
         subjectName: 'Area',
       });
     });

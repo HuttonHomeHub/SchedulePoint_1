@@ -308,7 +308,7 @@ export function swimlaneSourceCommand(params: {
           (error.error.details as { reason?: string } | undefined)?.reason ?? '',
         )
       ) {
-        return notApplicable('changed', to.codeTypeName ?? 'The code');
+        return notApplicable('code-not-choosable', to.codeTypeName ?? 'The code');
       }
       throw error;
     }

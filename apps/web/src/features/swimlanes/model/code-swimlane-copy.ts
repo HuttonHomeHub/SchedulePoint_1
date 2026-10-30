@@ -24,8 +24,17 @@ export const CODE_CARD_LOADING = 'The plan’s activities have not loaded yet.';
 export const CODE_CARD_NO_TYPES =
   'This plan has no codes yet. Add them with Codes… in the Activities panel.';
 export const CODE_CARD_NONE_ELIGIBLE =
-  'No code has values in use that swimlanes can show. Set a code on some activities first, or see each code’s reason below.';
+  'No code has between 1 and 100 values in use. Set a code on some activities, or see each code’s reason below.';
 export const CODE_CARD_UNREADABLE = 'The plan’s codes could not be read. Close this and try again.';
+
+/** The code card's description; `name` is the code it will use, once one is resolved. */
+export const codeCardDescription = (name: string | undefined): string =>
+  'One for each value activities carry, named after it, in the order set in Codes…, ' +
+  (name === undefined ? 'then the activities with none. ' : `then “No ${name}”. `) +
+  `They follow the codes: setting an activity’s ${name ?? 'code'} moves it.`;
+
+/** A switch pressed before the codes have arrived: say so rather than do nothing. */
+export const CODE_CHOICE_NOT_READY = 'The codes have not loaded yet. Try again in a moment.';
 
 /** Why a code cannot be chosen (ui-design §4.2); `limit` is `SWIMLANE_LIMIT`. */
 export const codeOptionReason = (

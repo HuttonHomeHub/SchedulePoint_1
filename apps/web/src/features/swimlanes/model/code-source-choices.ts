@@ -17,8 +17,10 @@ export interface CodeSourceChoice {
  * The plan's code types as the picker offers them, in type order, each with its values-in-use count
  * and the reason it is shaded, if it is. **The count is the shared rule** (`codeSwimlaneValues`, the
  * one the API's 422 and the scene read), applied to the activity list the web already holds: no
- * request, and web and server agree on what "in use" means. The list carries live values only, so
- * the values a type holds in use are the distinct ones its carriers name.
+ * request, and web and server agree on what "in use" means. **This relies on the list carrying live
+ * values only** — a deleted value is never in an activity's `codes` (`code-assignment.repository.ts`
+ * joins `deleted_at IS NULL`) — so the distinct values its carriers name are the type's live ones;
+ * `code-source-choices.test.ts` pins the count against a carrier of a value the type no longer lists.
  */
 export function codeSourceChoices(
   types: readonly CodeTypeSummary[],

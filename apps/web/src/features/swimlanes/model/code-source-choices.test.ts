@@ -41,6 +41,16 @@ describe('codeSourceChoices', () => {
     );
   });
 
+  it('counts only what the list carries, which is live values only: a type that lists none of a carried value still counts it once', () => {
+    // The assumption the count rests on: a deleted value never appears in an activity's `codes`, so every
+    // value a carrier names is live. The counter therefore reads the carriers and never the type's values.
+    const [area] = codeSourceChoices(TYPES, [
+      carrying('a', 'area', 'v1'),
+      carrying('b', 'area', 'v1'),
+    ]);
+    expect(area?.valuesInUse).toBe(1);
+  });
+
   it('refuses a type with more values in use than swimlanes can show, at 101 and not at 100', () => {
     const rows = (n: number) =>
       Array.from({ length: n }, (_, i) => carrying(`r${String(i)}`, 'area', `v${String(i)}`));

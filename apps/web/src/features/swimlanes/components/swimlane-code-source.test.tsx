@@ -242,20 +242,42 @@ describe('the code card in the setup dialog', () => {
     );
   });
 
-  it('shades the card when no code has values in use, and still lists each code’s own reason', async () => {
+  it('shades the card when no code has values in use, and still shows each code’s own reason', async () => {
     mountSetup(actions(), [anActivity({ id: 'x' })]);
     await waitFor(() => expect(codeCard()).toHaveAttribute('aria-disabled', 'true'));
     expect(codeCard()).toHaveAccessibleDescription(
-      /^No code has values in use that swimlanes can show\./,
+      /^No code has between 1 and 100 values in use\./,
     );
-    // The card is reachable by arrows and the picker's reasons stay readable: choose it by keyboard.
-    expect(codeCard()).toHaveAttribute('tabindex');
+    // The sentence points at each code's reason, so the picker is on screen though the card is shaded:
+    // open it and read one.
+    fireEvent.keyDown(picker(), { key: 'ArrowDown' });
+    const area = await screen.findByRole('option', { name: /^Area/ });
+    expect(area).toHaveAttribute('aria-disabled', 'true');
+    expect(area).toHaveAccessibleDescription(
+      'No activity carries a value of Area yet. Set Area on some activities first.',
+    );
   });
 
   it('says the activities have not loaded, rather than that there is nothing to choose', () => {
     mountSetup(actions(), undefined);
     expect(codeCard()).toHaveAttribute('aria-disabled', 'true');
     expect(codeCard()).toHaveAccessibleDescription('The plan’s activities have not loaded yet.');
+  });
+
+  it('falls back to by hand when the card was chosen while the codes loaded and none can be chosen', async () => {
+    let release: (rows: CodeTypeSummary[]) => void = () => undefined;
+    vi.mocked(apiFetchAllPages).mockImplementation((path: string) =>
+      /\/code-types/.test(path)
+        ? new Promise<never[]>((resolve) => {
+            release = resolve as (rows: CodeTypeSummary[]) => void;
+          })
+        : Promise.resolve([]),
+    );
+    mountSetup(actions(), [anActivity({ id: 'x' })]);
+    fireEvent.click(codeCard());
+    expect(screen.getByRole('radio', { name: /^One per code value/ })).toBeChecked();
+    release([AREA]);
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'By hand' })).toBeChecked());
   });
 
   it('claims no reason while the types are still on their way', () => {

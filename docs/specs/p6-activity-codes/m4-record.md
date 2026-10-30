@@ -246,3 +246,15 @@ browser is still the orchestrator's `web:swimlanes` run.
   stale. T5 closed only `swimlaneCodeTypeId`.
 - **The 101-values shading** is pinned at the component tier (`swimlane-code-source.test.tsx`,
   `code-source-choices.test.ts`); the browser case waits for T6's wide plan.
+
+**T5 review findings folded (2026-10-30).** When the card is shaded because no code can be chosen, the picker
+is rendered anyway so each code's reason is reachable, as its sentence says. A card chosen while the codes
+loaded falls back to by hand if it then becomes shaded; the manage dialog says "Loading…" and "Loading codes…"
+until the code's name is known and names the failure rather than doing nothing. An undo or redo of a switch to
+a code that is no longer choosable has its own reason (`code-not-choosable`), distinct from "changed". The Delete…
+sentence moved to the codes feature's own copy module. **Recorded, not changed:** `docs/TECH_DEBT.md` #564 — a
+shaded radio card's reason is dimmed to about 2.6:1 by the shared primitive, and the `Combobox` listbox shares its
+name with its toggle. Neither is T5's to change (ADR-0111). The "no code choosable" state is not reachable from the
+seeded plan (`plan:capability-codes` has Area in use), so it is pinned at the component tier only. Not yet checked in
+a browser: that CodeTypePane's printed Delete… reason leaves the values table above the fold at 1024 × 600 (U6);
+the journey's floor step does not open Codes….

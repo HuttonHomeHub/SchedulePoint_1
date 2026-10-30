@@ -69,17 +69,23 @@ function SetupForm({
   const announce = useAnnounce();
   const errorId = useId();
   const reasonId = useId();
-  const [source, setSource] = useState<ChosenSource>('MANUAL');
+  const [chosenSource, setSource] = useState<ChosenSource>('MANUAL');
   const [pickedLevel, setPickedLevel] = useState<WbsSwimlaneLevel | null>(null);
   const levels = useMemo(() => wbsSwimlaneLevels(activities ?? []), [activities]);
   const level = clampWbsLevel(pickedLevel, levels);
+  // `current` is null: Set up is only offered while no source is in use, so there is no code of the
+  // plan's own to hold selected.
   const code = useCodeSourcePicker({
     orgSlug,
     planId: plan.id,
     activities,
     current: null,
-    chosen: source === 'ACTIVITY_CODE',
+    chosen: chosenSource === 'ACTIVITY_CODE',
   });
+  // A card chosen while the codes loaded can become shaded when they arrive (none to choose): the dialog
+  // falls back to by hand rather than leave a selected card that cannot be used.
+  const source: ChosenSource =
+    chosenSource === 'ACTIVITY_CODE' && code.cardReason !== null ? 'MANUAL' : chosenSource;
   const [text, setText] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
