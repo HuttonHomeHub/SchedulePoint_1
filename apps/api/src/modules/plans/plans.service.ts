@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Plan, Prisma } from '@prisma/client';
-import { STANDARD_CALENDAR_NAME, type PageMeta } from '@repo/types';
+import { STANDARD_CALENDAR_NAME, SWIMLANE_LIMIT, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -30,7 +30,6 @@ import { CodeTypeRepository } from '../codes/code-type.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { ProjectRepository } from '../projects/project.repository';
-import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 
 import type { CreatePlanDto } from './dto/create-plan.dto';
 import type { UpdatePlanDto } from './dto/update-plan.dto';
