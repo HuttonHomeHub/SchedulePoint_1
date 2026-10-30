@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PlanStatus } from '@prisma/client';
 import { WorkingWeekdays } from '@repo/types';
 
@@ -15,7 +15,7 @@ import type { GuestSwimlaneEntry } from '../guest-swimlanes';
  * that copies it). In particular these carry NO cost / Earned-Value / money, NO
  * resources / assignments, NO baselines / variance, NO notes, NO audit columns
  * (createdBy/updatedBy/version/deletedAt/timestamps), NO user identity, NO plan-lock
- * holder, NO swimlane source/level (only the swimlanes' ids and names), and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
+ * holder, NO swimlane source/level (only the swimlanes' ids and names, and under a code the name of its last band), and NO token / tokenHash — see the `guest-dto.spec.ts` exclusion assertions.
  */
 
 /** A single dated calendar exception, stripped to what the time axis needs. */
@@ -137,6 +137,8 @@ export interface GuestPlanViewSource {
   aggregate: ScheduleAggregate;
   /** The plan's swimlanes a guest is shown, in display order (empty unless hand-made). */
   swimlanes: readonly GuestSwimlaneEntry[];
+  /** What the last band is called under a code source ("No Area"); absent under every other source. */
+  noSwimlaneName?: string;
 }
 
 /**
@@ -183,6 +185,15 @@ export class GuestPlanViewDto {
   })
   swimlanes!: GuestSwimlaneDto[];
 
+  @ApiPropertyOptional({
+    description:
+      'What the last band — the activities in no swimlane — is called when the swimlanes are made ' +
+      'from a code: "No <type name>", exactly as a member’s picture reads it (ADR-0205, owner ' +
+      'decision 2026-10-30). Absent under every other source, where the client words it itself. ' +
+      'A band name and nothing more: no code id, value or short code is ever sent.',
+  })
+  noSwimlaneName?: string;
+
   static from(source: GuestPlanViewSource): GuestPlanViewDto {
     const dataDate = source.plan.plannedStart ? formatCalendarDate(source.plan.plannedStart) : null;
     return {
@@ -194,6 +205,7 @@ export class GuestPlanViewDto {
       calendar: source.calendar ? GuestCalendarDto.from(source.calendar) : null,
       summary: GuestScheduleSummaryDto.from(source.aggregate, dataDate),
       swimlanes: source.swimlanes.map(({ id, name }) => ({ id, name })),
+      ...(source.noSwimlaneName === undefined ? {} : { noSwimlaneName: source.noSwimlaneName }),
     };
   }
 }

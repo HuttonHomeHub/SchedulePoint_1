@@ -1,7 +1,12 @@
-import type { ActivitySwimlaneLaneSummary } from '@repo/types';
+import type { ActivityCodeLaneSummary, ActivitySwimlaneLaneSummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { guestSwimlaneList, guestSwimlanePlacement } from './guest-swimlanes';
+import {
+  guestCodePlacement,
+  guestCodeSwimlaneList,
+  guestSwimlaneList,
+  guestSwimlanePlacement,
+} from './guest-swimlanes';
 
 const A = 'lane-a';
 const B = 'lane-b';
@@ -75,6 +80,79 @@ describe('guestSwimlanePlacement', () => {
 
   it('places nothing when the plan shows no swimlanes, whatever the row is filed under', () => {
     expect(guestSwimlanePlacement(new Set(), { swimlaneId: A }, [row('SWIMLANE', A, 1)])).toEqual({
+      memberOfSwimlaneId: null,
+      swimlaneLaneIndex: null,
+    });
+  });
+});
+
+describe('guestCodeSwimlaneList', () => {
+  const values = [
+    { id: 'gf', shortCode: 'GF', description: 'Ground floor' },
+    { id: 'l1', shortCode: 'L1', description: null },
+    { id: 'l2', shortCode: 'L2', description: 'Level 2' },
+  ];
+
+  it('is the values in use in value order, named by description else short code, id and name only', () => {
+    const list = guestCodeSwimlaneList(values, [
+      { type: 'TASK', valueId: 'l1' },
+      { type: 'TASK', valueId: 'gf' },
+    ]);
+    expect(list).toEqual([
+      { id: 'gf', name: 'Ground floor' },
+      { id: 'l1', name: 'L1' },
+    ]);
+    expect(Object.keys(list[0] ?? {})).toEqual(['id', 'name']);
+  });
+
+  it('leaves out a value only a WBS summary carries, and a value that is not live', () => {
+    const list = guestCodeSwimlaneList(values, [
+      { type: 'WBS_SUMMARY', valueId: 'l2' },
+      { type: 'TASK', valueId: 'deleted' },
+    ]);
+    expect(list).toEqual([]);
+  });
+});
+
+describe('guestCodePlacement', () => {
+  const known = new Set(['gf', 'l1']);
+  const lane = (codeValueId: string | null, laneIndex: number): ActivityCodeLaneSummary => ({
+    codeTypeId: 'area',
+    codeValueId,
+    laneIndex,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  });
+
+  it('puts an activity in its value’s band, on the lane stored for that band', () => {
+    expect(guestCodePlacement(known, { type: 'TASK' }, 'gf', [lane('gf', 2)])).toEqual({
+      memberOfSwimlaneId: 'gf',
+      swimlaneLaneIndex: 2,
+    });
+  });
+
+  it('files an activity with no value under No <type> (null), on its none-band lane', () => {
+    expect(guestCodePlacement(known, { type: 'TASK' }, undefined, [lane(null, 4)])).toEqual({
+      memberOfSwimlaneId: null,
+      swimlaneLaneIndex: 4,
+    });
+  });
+
+  it('says null, not 0, for an activity never placed in its band', () => {
+    expect(guestCodePlacement(known, { type: 'TASK' }, 'l1', [])).toEqual({
+      memberOfSwimlaneId: 'l1',
+      swimlaneLaneIndex: null,
+    });
+  });
+
+  it('files a value that is not a drawn band under none, and ignores the row kept for the value', () => {
+    expect(guestCodePlacement(known, { type: 'TASK' }, 'l2', [lane('l2', 7)])).toEqual({
+      memberOfSwimlaneId: null,
+      swimlaneLaneIndex: null,
+    });
+  });
+
+  it('never makes a WBS summary a member, whatever it carries', () => {
+    expect(guestCodePlacement(known, { type: 'WBS_SUMMARY' }, 'gf', [lane('gf', 1)])).toEqual({
       memberOfSwimlaneId: null,
       swimlaneLaneIndex: null,
     });

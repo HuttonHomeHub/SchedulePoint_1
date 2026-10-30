@@ -117,6 +117,15 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   // `swimlaneLanes` carries every basis the activity was ever placed on, with audit timestamps.
   'swimlaneId',
   'swimlaneLanes',
+  // p6-activity-codes M4-T6 (ADR-0205, owner answer 3): under a code source a guest is given band
+  // NAMES and derived membership, never the codes themselves — not the member's `codes` (type and
+  // value ids), nor the code lane rows (`codeSwimlaneLanes`, which carry the type, the value and an
+  // audit timestamp). The activity row below carries no such column, so this list also fails any
+  // future mapper that adds one; the service spec asserts the assembled page.
+  'codes',
+  'codeSwimlaneLanes',
+  'codeTypeId',
+  'codeValueId',
   // CQ-4 of `docs/TECH_DEBT.md` #86: a guest adopts the CORRECTED `durationDays` and never learns
   // that a resource is why. The exact-key assertion below already enforces this structurally; both
   // are named here because every other CQ-4 exclusion is, and an exclusion nobody wrote down reads
@@ -527,8 +536,23 @@ describe('GuestPlanViewDto', () => {
     'swimlaneSource',
     'swimlaneWbsLevel',
     'swimlaneCodeTypeId',
+    'codeTypeId',
+    'codes',
   ])('never exposes %s', (key) => {
     expect(dto).not.toHaveProperty(key);
+  });
+
+  it('carries the last band’s name only when the caller supplies one, and nothing else about the type', () => {
+    const source = {
+      plan: { id: 'plan-1', name: 'T', status: 'ACTIVE', description: null, plannedStart: DAY },
+      calendar: null,
+      aggregate: aggregate(),
+      swimlanes: [{ id: 'value-1', name: 'Ground floor' }],
+    } as const;
+    expect(GuestPlanViewDto.from(source)).not.toHaveProperty('noSwimlaneName');
+    const named = GuestPlanViewDto.from({ ...source, noSwimlaneName: 'No Area' });
+    expect(named.noSwimlaneName).toBe('No Area');
+    expect(Object.keys(named).sort()).toEqual([...Object.keys(dto), 'noSwimlaneName'].sort());
   });
 
   it('renders the data date as YYYY-MM-DD and nests the stripped calendar + summary', () => {

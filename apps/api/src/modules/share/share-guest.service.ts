@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { SwimlaneSource } from '@prisma/client';
+import type { Plan } from '@prisma/client';
 import type { ActivitySwimlaneLaneSummary, PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -9,6 +9,8 @@ import { ActivityRepository } from '../activities/activity.repository';
 import { attachDayFactors } from '../activities/day-factor';
 import { toDrivingCalendarMap } from '../activities/driving-calendars';
 import { CalendarRepository } from '../calendars/calendar.repository';
+import { CodeTypeRepository } from '../codes/code-type.repository';
+import { CodeValueRepository } from '../codes/code-value.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { attachLagDayFactors } from '../dependencies/lag-day-factor';
 import { PlanRepository } from '../plans/plan.repository';
@@ -18,7 +20,10 @@ import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 import { GuestActivityDto } from './dto/guest-activity.dto';
 import { GuestDependencyDto } from './dto/guest-dependency.dto';
 import { GuestPlanViewDto } from './dto/guest-plan.dto';
+import { GuestCodeRepository } from './guest-code.repository';
 import {
+  guestCodePlacement,
+  guestCodeSwimlaneList,
   guestSwimlaneList,
   guestSwimlanePlacement,
   type GuestSwimlaneEntry,
@@ -64,6 +69,9 @@ export class ShareGuestService {
     private readonly dependencies: DependencyRepository,
     private readonly schedule: ScheduleRepository,
     private readonly swimlanes: SwimlaneRepository,
+    private readonly codeTypes: CodeTypeRepository,
+    private readonly codeValues: CodeValueRepository,
+    private readonly guestCodes: GuestCodeRepository,
     private readonly shares: PlanShareRepository,
     @InjectPinoLogger(ShareGuestService.name) private readonly logger: PinoLogger,
   ) {}
@@ -82,10 +90,16 @@ export class ShareGuestService {
       ? await this.calendars.findActiveDetailByIdInOrg(plan.calendarId, guest.organizationId)
       : null;
     const aggregate = await this.schedule.summarise(guest.organizationId, guest.planId);
-    const swimlanes = await this.liveSwimlanes(guest, plan.swimlaneSource);
+    const { entries: swimlanes, noneName } = await this.liveSwimlanes(guest, plan);
 
     this.touchAccess(guest.shareId);
-    return GuestPlanViewDto.from({ plan, calendar, aggregate, swimlanes });
+    return GuestPlanViewDto.from({
+      plan,
+      calendar,
+      aggregate,
+      swimlanes,
+      ...(noneName === null ? {} : { noSwimlaneName: noneName }),
+    });
   }
 
   /** A cursor-paginated page of the plan's activities, stripped to the guest scope. */
@@ -104,10 +118,21 @@ export class ShareGuestService {
     // list decides which swimlane a member is in, and the stored lane is the row for that basis.
     const plan = await this.plans.findActiveByIdInOrg(guest.planId, guest.organizationId);
     if (!plan) throw this.notFound();
-    const live = await this.liveSwimlanes(guest, plan.swimlaneSource);
+    const { entries: live, codeTypeId } = await this.liveSwimlanes(guest, plan);
     const known = new Set(live.map((swimlane) => swimlane.id));
+    const scope = { organizationId: guest.organizationId, planId: guest.planId };
+    // Under a code source the placement reads are the page's own: each activity's live value of the
+    // type and its lane at that basis. Elsewhere the member's lane rows are read, as ever.
+    const codePage =
+      codeTypeId !== null && known.size > 0
+        ? await this.guestCodes.findPlacements(
+            scope,
+            codeTypeId,
+            items.map((row) => row.id),
+          )
+        : null;
     const lanes =
-      known.size > 0
+      known.size > 0 && codePage === null
         ? await this.swimlanes.findLanesForActivities(items)
         : new Map<string, ActivitySwimlaneLaneSummary[]>();
     // Day-denominated fields are measured on each activity's effective calendar (ADR-0068), so a
@@ -132,7 +157,17 @@ export class ShareGuestService {
     this.touchAccess(guest.shareId);
     return {
       items: decorated.map((row) =>
-        GuestActivityDto.from(row, guestSwimlanePlacement(known, row, lanes.get(row.id) ?? [])),
+        GuestActivityDto.from(
+          row,
+          codePage === null
+            ? guestSwimlanePlacement(known, row, lanes.get(row.id) ?? [])
+            : guestCodePlacement(
+                known,
+                row,
+                codePage.values.get(row.id),
+                codePage.lanes.get(row.id) ?? [],
+              ),
+        ),
       ),
       meta,
     };
@@ -176,16 +211,51 @@ export class ShareGuestService {
     return { items: decorated.map((row) => GuestDependencyDto.from(row)), meta };
   }
 
-  /** The swimlanes a guest is shown (`[]` unless hand-made), read only when the plan could have any. */
+  /**
+   * The bands a guest is shown, and what the last one is called: the plan's hand-made swimlanes under
+   * `MANUAL` (no name for the none band, which the web words "No swimlane" as ever), the values in
+   * use of the plan's type under a code source (the none band is "No <type>", owner answer 3 of
+   * p6-activity-codes M4 — the type's name, as a member's picture reads it), and nothing otherwise.
+   * `codeTypeId` is for the caller's page reads and is never serialised.
+   */
   private async liveSwimlanes(
     guest: GuestPrincipal,
-    source: SwimlaneSource,
-  ): Promise<GuestSwimlaneEntry[]> {
-    if (source !== 'MANUAL') return [];
-    return guestSwimlaneList(
-      source,
-      await this.swimlanes.findAllActiveByPlan(guest.organizationId, guest.planId),
-    );
+    plan: Pick<Plan, 'swimlaneSource' | 'swimlaneCodeTypeId'>,
+  ): Promise<{
+    entries: GuestSwimlaneEntry[];
+    noneName: string | null;
+    codeTypeId: string | null;
+  }> {
+    if (plan.swimlaneSource === 'ACTIVITY_CODE' && plan.swimlaneCodeTypeId !== null) {
+      const type = await this.codeTypes.findActiveInPlan(
+        plan.swimlaneCodeTypeId,
+        guest.planId,
+        guest.organizationId,
+      );
+      // A deleted type draws no swimlanes for a member either.
+      if (type === null) return { entries: [], noneName: null, codeTypeId: null };
+      const [values, carriers] = await Promise.all([
+        this.codeValues.findManyActiveByTypes(guest.organizationId, [type.id]),
+        this.guestCodes.findCarriers(
+          { organizationId: guest.organizationId, planId: guest.planId },
+          type.id,
+        ),
+      ]);
+      return {
+        entries: guestCodeSwimlaneList(values, carriers),
+        noneName: `No ${type.name}`,
+        codeTypeId: type.id,
+      };
+    }
+    if (plan.swimlaneSource !== 'MANUAL') return { entries: [], noneName: null, codeTypeId: null };
+    return {
+      entries: guestSwimlaneList(
+        plan.swimlaneSource,
+        await this.swimlanes.findAllActiveByPlan(guest.organizationId, guest.planId),
+      ),
+      noneName: null,
+      codeTypeId: null,
+    };
   }
 
   /** Keyset page helper (id cursor) — the member list convention (take limit+1, peek for hasMore). */
