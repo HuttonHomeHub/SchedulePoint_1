@@ -348,6 +348,10 @@ function minimapShutReason(ctx: TsldToolbarContext): string | undefined {
 /** What a checked Swimlanes lens says once its list failed: the lens row and the canvas notice agree. */
 export const SWIMLANES_FAILED_NOTE = "Couldn't load swimlanes. The diagram is shown without them.";
 
+/** What a checked lens says when a code's saved lanes could not be read: bars are placed afresh, not as left. */
+export const SWIMLANES_LANES_FAILED_NOTE =
+  "Couldn't read where bars were placed. They are placed afresh and may sit differently than you left them.";
+
 /**
  * What a checked Swimlanes lens says while a code draws more bands than swimlanes are made for: a
  * standing condition, not an event, so a note on the row and not an announcement (ADR-0132). The
@@ -592,13 +596,15 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
         ? undefined
         : ctx.swimlanesFailed === true
           ? SWIMLANES_FAILED_NOTE
-          : ctx.swimlanesOverLimit
-            ? swimlanesOverLimitNote(
-                ctx.swimlanesOverLimit.typeName,
-                ctx.swimlanesOverLimit.count,
-                SWIMLANE_LIMIT,
-              )
-            : undefined,
+          : ctx.swimlanesLanesFailed === true
+            ? SWIMLANES_LANES_FAILED_NOTE
+            : ctx.swimlanesOverLimit
+              ? swimlanesOverLimitNote(
+                  ctx.swimlanesOverLimit.typeName,
+                  ctx.swimlanesOverLimit.count,
+                  SWIMLANE_LIMIT,
+                )
+              : undefined,
     // **Why it is shut, in the order a planner can act on them** (C1): there is nothing to draw on,
     // then nothing is set up (the plan's own source, so a plan with none never hears about a load),
     // then the list is on its way, then it failed. All are `aria-describedby` text on the row

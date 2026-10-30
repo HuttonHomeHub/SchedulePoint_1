@@ -51,6 +51,23 @@ describe('codeSwimlaneInput', () => {
     expect(codeSwimlaneInput(activities, TYPE, VALUES, new Map())).not.toBe(first);
   });
 
+  it('walks the activities once per identity: a cache hit reads nothing', () => {
+    let reads = 0;
+    const counted = anActivity({ id: 'a' });
+    Object.defineProperty(counted, 'codes', {
+      get: () => {
+        reads += 1;
+        return [{ codeTypeId: 'area', codeValueId: 'gf' }];
+      },
+    });
+    const activities = [counted];
+    codeSwimlaneInput(activities, TYPE, VALUES);
+    const afterBuild = reads;
+    expect(afterBuild).toBeGreaterThan(0);
+    for (let render = 0; render < 5; render += 1) codeSwimlaneInput(activities, TYPE, VALUES);
+    expect(reads).toBe(afterBuild);
+  });
+
   it('is one swimlane per value in use, in value order, named description else short code', () => {
     const input = codeSwimlaneInput(
       [carrying('a', 'l2'), carrying('b', 'gf'), carrying('c', 'l2')],

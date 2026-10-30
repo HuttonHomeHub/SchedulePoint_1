@@ -183,7 +183,7 @@ describe('useSwimlaneScene under a code source (M4-T3)', () => {
       const { result } = render({});
       // The query's own single retry (1 s) runs before the failure settles.
       await waitFor(() => expect(result.current.pending).toBe(false), { timeout: 4000 });
-      expect(result.current).toMatchObject({ failed: false });
+      expect(result.current).toMatchObject({ failed: false, lanesFailed: true });
       expect(result.current.input).not.toBeNull();
       expect(result.current.input?.storedLanes.size).toBe(0);
     });

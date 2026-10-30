@@ -188,6 +188,13 @@ describe('edgeNoteFor', () => {
     expect(edgeNoteFor({ ...swimlanes, source: 'WBS' })).toBe(WBS_EDGE_NOTE);
     expect(edgeNoteFor(null)).toBe(WBS_EDGE_NOTE);
   });
+
+  it('reads grammatically when the type is not named', () => {
+    expect(edgeNoteFor({ ...swimlanes, source: 'ACTIVITY_CODE' })).toContain(
+      'made from a code, so the bar stays in it. Use Move to swimlane… or Set code… to change its code.',
+    );
+    expect(codeFilingReason()).not.toMatch(/its its/);
+  });
 });
 
 describe('settleInSwimlanes', () => {

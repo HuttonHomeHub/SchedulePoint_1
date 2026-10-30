@@ -380,6 +380,9 @@ export const swimlaneKeys = {
  * type's values when it needs them (`GET …/code-types/:id/values`), never every type's at once.
  * `names` holds the by-id resolution of a set of value ids (`GET …/code-values?id=`).
  */
+/** The last segment of a plan-wide code lane key; `invalidateCodeSwimlaneLanes` matches on it. */
+export const SWIMLANE_LANES_SEGMENT = 'swimlane-lanes';
+
 export const codeKeys = {
   all: (orgSlug: string) => ['codes', orgSlug] as const,
   byPlan: (orgSlug: string, planId: string) => [...codeKeys.all(orgSlug), 'plan', planId] as const,
@@ -393,7 +396,7 @@ export const codeKeys = {
     [...codeKeys.values(orgSlug, planId, codeTypeId), 'deleted'] as const,
   /** One type's plan-wide swimlane lanes (read when the swimlanes switch to a code, M4). */
   swimlaneLanes: (orgSlug: string, planId: string, codeTypeId: string) =>
-    [...codeKeys.byPlan(orgSlug, planId), 'type', codeTypeId, 'swimlane-lanes'] as const,
+    [...codeKeys.byPlan(orgSlug, planId), 'type', codeTypeId, SWIMLANE_LANES_SEGMENT] as const,
   namesAll: (orgSlug: string, planId: string) =>
     [...codeKeys.byPlan(orgSlug, planId), 'names'] as const,
   names: (orgSlug: string, planId: string, ids: readonly string[]) =>

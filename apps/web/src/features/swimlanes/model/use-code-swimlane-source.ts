@@ -18,8 +18,13 @@ export interface CodeSwimlaneSource {
   planLanes: ReadonlyMap<string, PlanCodeLane> | undefined;
   /** Something the picture needs is on its way: the first paint holds the settled shape (ADR-0202). */
   pending: boolean;
-  /** The type or its values could not be read. A failed lanes read is not this: it degrades to derived lanes. */
+  /** The type or its values could not be read. A failed lanes read is not this: it degrades to derived lanes (`lanesFailed`). */
   failed: boolean;
+  /**
+   * The plan-wide lanes were asked for and could not be read: the picture still draws, with derived
+   * lanes, so the lens says so rather than let placed bars move without a word.
+   */
+  lanesFailed: boolean;
   /** Read the type and its values again, for the retry a failed picture offers. */
   refetch: () => void;
 }
@@ -86,9 +91,12 @@ export function useCodeSwimlaneSource(args: {
     pending:
       on && !failed && (types.isPending || values.isPending || (lanesWanted && lanes.isPending)),
     failed,
+    lanesFailed: lanesWanted && lanes.isError,
+    // The retry a failed picture offers reads everything it needs, a failed lanes read included.
     refetch: () => {
       void types.refetch();
       void values.refetch();
+      if (lanesWanted) void lanes.refetch();
     },
   };
 }

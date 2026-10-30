@@ -101,6 +101,11 @@ export interface SwimlaneScene {
    * diagram keeps drawing every band rather than refuse the planner's classification work.
    */
   overLimit?: { typeName: string; count: number } | undefined;
+  /**
+   * A code source drawn with derived lanes because the plan-wide lane read failed. Placed bars may sit
+   * in other lanes than the planner left them; the lens says so as a standing note (ADR-0132).
+   */
+  lanesFailed?: boolean;
   /** Try the list again. */
   refetch: () => void;
 }
@@ -176,6 +181,7 @@ export function useSwimlaneScene(args: {
     failed: (manual && list.isError) || (byCode && code.failed),
     count: manual ? swimlanes?.length : undefined,
     overLimit,
+    lanesFailed: byCode && code.lanesFailed,
     refetch: () => {
       if (byCode) code.refetch();
       else void list.refetch();

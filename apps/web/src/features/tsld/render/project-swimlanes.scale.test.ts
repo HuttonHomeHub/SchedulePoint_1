@@ -64,7 +64,7 @@ function timeIt(bands: number): { ms: number; lanes: number; extents: number } {
  * **The projection's cost with many bands** (m4-spec owner answer 1: a code with over 100 values in
  * use is still drawn, so 1,000 bands must not be a different order of cost from 100). Not a canvas
  * frame claim: it times `projectSwimlanes` alone, which runs once per data change and not per frame
- * (`docs/specs/p6-activity-codes/m4-record.md` §3). The ceiling is a ratio, because an absolute
+ * (`docs/specs/p6-activity-codes/m4-record.md` §4). The ceiling is a ratio, because an absolute
  * millisecond figure belongs to the machine that took it (ADR-0128).
  */
 describe('projectSwimlanes at many bands', () => {
@@ -74,8 +74,8 @@ describe('projectSwimlanes at many bands', () => {
     expect(hundred.extents).toBe(100);
     expect(thousand.extents).toBe(1000);
     expect(thousand.lanes).toBeGreaterThanOrEqual(1000);
-    // Ten times the bands over the same activities: far inside a tenfold ratio (generous, for a loaded runner).
-    expect(thousand.ms).toBeLessThan(Math.max(hundred.ms * 10, 50));
+    // Ten times the bands over the same activities: far inside a tenfold ratio .
+    expect(thousand.ms).toBeLessThan(hundred.ms * 10);
     process.stdout.write(
       `projectSwimlanes ${String(ACTIVITIES)} activities: 100 bands ${hundred.ms.toFixed(2)} ms (${String(hundred.lanes)} lanes), 1000 bands ${thousand.ms.toFixed(2)} ms (${String(thousand.lanes)} lanes)\n`,
     );

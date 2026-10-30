@@ -11,11 +11,14 @@ const LANES_SEGMENT = 'swimlane-lanes';
 export function codeSwimlaneLanesQueryOptions(orgSlug: string, planId: string, codeTypeId: string) {
   return queryOptions({
     queryKey: codeKeys.swimlaneLanes(orgSlug, planId, codeTypeId),
-    // One retry, and no kept copy: this answers "what are the lanes right now" for a switch, and a copy
-    // from an earlier switch would place bars by lanes the planner has since moved.
+    // One retry. A short stale time and no refetch on focus: on a code plan with no lane rows this stays
+    // enabled for good, and a whole-plan payload per window focus would be paid for nothing. A copy is
+    // kept to be reused for a moment, and the writers that move a lane or a code mark it stale
+    // (`invalidateCodeSwimlaneLanes`); the picture also applies a lane only to the value it was
+    // stored for, so a stale row cannot place a bar wrongly.
     retry: 1,
-    gcTime: 0,
-    staleTime: 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: () =>
       apiFetch<PlanCodeSwimlaneLanes>(
         `/organizations/${orgSlug}/plans/${planId}/code-types/${codeTypeId}/${LANES_SEGMENT}`,

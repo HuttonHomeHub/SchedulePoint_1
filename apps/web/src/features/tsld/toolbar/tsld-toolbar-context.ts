@@ -452,6 +452,11 @@ export interface TsldToolbarContext {
    * A code-sourced plan drawing more bands than `SWIMLANE_LIMIT`: the type's name and the count of
    * values in use. A standing condition, stated on the lens row (ADR-0132); absent otherwise.
    */
+  /**
+   * A code-sourced plan drawn with derived lanes because the saved lanes could not be read; a standing
+   * condition on the lens row (ADR-0132). Absent otherwise.
+   */
+  swimlanesLanesFailed?: boolean;
   swimlanesOverLimit?: { typeName: string; count: number };
 
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------

@@ -68,8 +68,9 @@ describe('useWriteSwimlaneLanes', () => {
       }),
     );
 
-    // One call per gesture's write: the activities, never the swimlane list a lane cannot change.
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    // One call per gesture's write for the activities and one for the plan-wide code lane reads (a lane
+    // stored under a code source), never the swimlane list a lane cannot change.
+    expect(invalidate).toHaveBeenCalledTimes(2);
     expect(qc.getQueryState(activityKeys.listByPlan('acme', 'p1'))?.isInvalidated).toBe(true);
     expect(qc.getQueryState(swimlaneKeys.byPlan('acme', 'p1'))?.isInvalidated).toBe(false);
   });
@@ -89,7 +90,7 @@ describe('useWriteSwimlaneLanes', () => {
         }),
       );
 
-      expect(invalidate).toHaveBeenCalledTimes(2);
+      expect(invalidate).toHaveBeenCalledTimes(3);
       expect(qc.getQueryState(swimlaneKeys.byPlan('acme', 'p1'))?.isInvalidated).toBe(true);
     }
   });

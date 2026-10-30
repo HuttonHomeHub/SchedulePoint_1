@@ -149,3 +149,14 @@ at both sizes) measured 19.07 / 19.55 ms, 13.31 / 14.50 ms and 13.89 / 13.28 ms 
 members only adds one extent. The 1,000-band stack is 1,000 lanes tall, which is the diagram's vertical
 extent and not a projection cost. **For the performance-reviewer:** no figure here bears on painting,
 the gutter's 1,000 labels, or the listbox's 1,000 groups; those are the reviewer's to ask about.
+
+**Carried forward from the T3 reviews (2026-10-30).**
+
+- **T4/T5 must verify before T5 opens the entry point:** the code swimlane edge note and the filing
+  refusal both tell the planner to use **Move to swimlane…** or **Set code…**. Neither exists for a code
+  plan until T4/T5, which is fine while the feature is dark and is not fine the day T5 lights it.
+- **Untested at size:** with 1,000 values in use the gutter has 1,000 buttons and the listbox 1,000
+  groups. Screen-reader group navigation at that size has not been tried.
+- **The plan-wide lane read waits for the activity list** (it is enabled only once the list is known to
+  carry no lane for the type), so a code plan with no saved lanes pays a second round trip on first
+  load. Defensible as built; recorded so it is not rediscovered.

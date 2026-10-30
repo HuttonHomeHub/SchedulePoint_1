@@ -127,4 +127,15 @@ describe('the Swimlanes lens note', () => {
       }),
     ).toBe("Couldn't load swimlanes. The diagram is shown without them.");
   });
+
+  it('says the placements were not read when only the saved lanes failed, after the failure note', () => {
+    const note1 = note({ swimlanesShown: true, swimlanesLanesFailed: true });
+    expect(note1).toBe(
+      "Couldn't read where bars were placed. They are placed afresh and may sit differently than you left them.",
+    );
+    expect(note({ swimlanesShown: false, swimlanesLanesFailed: true })).toBeUndefined();
+    expect(note({ swimlanesShown: true, swimlanesFailed: true, swimlanesLanesFailed: true })).toBe(
+      "Couldn't load swimlanes. The diagram is shown without them.",
+    );
+  });
 });

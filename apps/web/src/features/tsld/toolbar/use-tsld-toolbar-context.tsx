@@ -146,6 +146,7 @@ export function useTsldToolbarContext({
     failed?: boolean;
     count?: number | undefined;
     overLimit?: { typeName: string; count: number } | undefined;
+    lanesFailed?: boolean;
   };
   /** The Set up / Manage swimlanes command (M2-T9): its label and what it opens. Both stable. */
   swimlanesManage?: { label: string; open: () => void };
@@ -739,6 +740,7 @@ export function useTsldToolbarContext({
       swimlanesLoading: swimlaneScene.pending,
       swimlanesManage,
       ...(swimlaneScene.failed ? { swimlanesFailed: true } : {}),
+      ...(swimlaneScene.lanesFailed ? { swimlanesLanesFailed: true } : {}),
       ...(swimlaneScene.overLimit ? { swimlanesOverLimit: swimlaneScene.overLimit } : {}),
       hasActiveBaseline,
       varianceLoading,
@@ -1124,6 +1126,7 @@ export function useTsldToolbarContext({
     swimlaneScene.failed,
     swimlaneScene.count,
     swimlaneScene.overLimit,
+    swimlaneScene.lanesFailed,
     swimlanesManage,
     hasActiveBaseline,
     varianceLoading,

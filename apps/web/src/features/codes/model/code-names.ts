@@ -9,7 +9,9 @@ type NamedValue = Pick<CodeValueSummary, 'shortCode' | 'description'>;
  * swimlane-name decision, `spec.md` Answered) — it is `@repo/layout`'s `codeSwimlaneName`, the one
  * the API's guest read shares.
  */
-export const codeValueName: (value: NamedValue) => string = codeSwimlaneName;
+export function codeValueName(value: NamedValue): string {
+  return codeSwimlaneName(value);
+}
 
 /**
  * A value in a list of choices: the short code leads, because it is what P6 users type, then the

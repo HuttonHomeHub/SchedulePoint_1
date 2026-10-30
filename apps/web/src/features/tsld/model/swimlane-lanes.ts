@@ -135,7 +135,7 @@ const label = (extent: SwimlaneExtent): string => extent.name ?? NO_SWIMLANE_LAB
  * else (the parent, the code) that the planner makes by name — never as a side effect of a vertical
  * drag. An input with no source is the hand-made one (`SwimlaneInput.source`).
  */
-const filingIsDrag = (input: SwimlaneInput): boolean => (input.source ?? 'MANUAL') === 'MANUAL';
+const isManualSource = (input: SwimlaneInput): boolean => (input.source ?? 'MANUAL') === 'MANUAL';
 const overlaps = (a: DaySpan, b: DaySpan): boolean =>
   !(a.endDay < b.startDay || b.endDay < a.startDay);
 
@@ -255,7 +255,7 @@ export function laneRangeOf(
 ): { min: number; max: number } | null {
   const display = ctx.scene.displayLanes.get(activityId);
   if (display === undefined) return null;
-  if (filingIsDrag(ctx.input)) return { min: 0, max: Number.POSITIVE_INFINITY };
+  if (isManualSource(ctx.input)) return { min: 0, max: Number.POSITIVE_INFINITY };
   const home = ctx.scene.extents[extentIndexAt(ctx.scene, display)];
   if (home === undefined) return null;
   return { min: home.firstLane, max: home.firstLane + home.laneCount - 1 };
@@ -273,14 +273,12 @@ export const WBS_EDGE_NOTE =
  * Said, once, when a drag in a code swimlane is held at the swimlane's edge. Names the type, because
  * "its code" would not tell a planner with six code types which one the swimlanes follow.
  */
-export const codeEdgeNote = (typeName: string): string =>
-  `This swimlane is made from ${typeName}, so the bar stays in it. Use Move to swimlane… or Set code… to change its ${typeName}. Press Alt+Down to add a lane in the swimlane.`;
+export const codeEdgeNote = (typeName?: string): string =>
+  `This swimlane is made from ${typeName ?? 'a code'}, so the bar stays in it. Use Move to swimlane… or Set code… to change its ${typeName ?? 'code'}. Press Alt+Down to add a lane in the swimlane.`;
 
 /** The note for a drag held at the swimlane's edge, by what the swimlanes are made of. */
 export function edgeNoteFor(input: SwimlaneInput | null | undefined): string {
-  return input?.source === 'ACTIVITY_CODE'
-    ? codeEdgeNote(input.codeTypeName ?? 'its code')
-    : WBS_EDGE_NOTE;
+  return input?.source === 'ACTIVITY_CODE' ? codeEdgeNote(input.codeTypeName) : WBS_EDGE_NOTE;
 }
 
 /** What a drop that would carry a bar into another WBS swimlane says: the WBS owns filing. */
@@ -288,8 +286,8 @@ export const WBS_FILING_REASON =
   'Swimlanes follow the WBS in this plan. Change the activity’s Breakdown to move it to another swimlane.';
 
 /** The same refusal for a code: the planner changes the code, and the bar follows. */
-export const codeFilingReason = (typeName: string): string =>
-  `Swimlanes are made from ${typeName} in this plan. Use Move to swimlane… or Set code… to change the activity’s ${typeName}.`;
+export const codeFilingReason = (typeName?: string): string =>
+  `Swimlanes are made from ${typeName ?? 'a code'} in this plan. Use Move to swimlane… or Set code… to change the activity’s ${typeName ?? 'code'}.`;
 
 /**
  * The top of the swimlane a bar is in, as a display lane, and the name to say it by — what the
@@ -330,12 +328,12 @@ export function dropInSwimlane(
   const changedSwimlane = target !== subject.extent;
   // The gesture is clamped by `laneRange`, so this is the backstop for a caller that is not: the
   // server refuses a swimlane on a WBS or a code plan, and the bar must not be shown crossing first.
-  if (changedSwimlane && !filingIsDrag(ctx.input)) {
+  if (changedSwimlane && !isManualSource(ctx.input)) {
     return {
       kind: 'refuse',
       reason:
         ctx.input.source === 'ACTIVITY_CODE'
-          ? codeFilingReason(ctx.input.codeTypeName ?? 'its code')
+          ? codeFilingReason(ctx.input.codeTypeName)
           : WBS_FILING_REASON,
     };
   }
