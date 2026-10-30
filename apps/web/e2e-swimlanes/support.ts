@@ -127,7 +127,7 @@ export function gutterLabels(page: Page): Locator {
 
 /** Which catalogue family, plan and picture {@link openSeededPlan} opens. */
 export interface SeededPlan {
-  /** The `--family` value: `swimlanes` seeds both swimlane plans, `codes` the activity-codes plan. */
+  /** The `--family` value: `swimlanes` seeds both swimlane plans, `codes` the activity-codes plan, `codes-wide` the 101-value one. */
   family: string;
   /** The plan's link on the project page, found by the words in its name. */
   planLink: RegExp;
@@ -150,6 +150,14 @@ export const CODES_PLAN: SeededPlan = {
   family: 'codes',
   planLink: /three types, eight activities/,
   activityCount: 8,
+  gutter: false,
+};
+
+/** `plan:capability-codes-wide` (M4-T6): Room has 101 values in use and Zone exactly 100. */
+export const CODES_WIDE_PLAN: SeededPlan = {
+  family: 'codes-wide',
+  planLink: /Room with 101 values in use/,
+  activityCount: 101,
   gutter: false,
 };
 
