@@ -3,7 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ValidationError } from '../../common/errors/domain-errors';
 
-import { attachSwimlaneLanes, deriveLaneBasis, loadSwimlaneLanes } from './swimlane-lanes';
+import {
+  attachSwimlaneLanes,
+  codeLaneTypeOf,
+  deriveCodeLaneBasis,
+  deriveLaneBasis,
+  loadCurrentCodeLanes,
+  loadPlanCodeLanes,
+  loadSwimlaneLanes,
+} from './swimlane-lanes';
 
 const node = (id: string, parentId: string | null, type = 'TASK'): [string, WbsNode] => [
   id,
@@ -102,5 +110,102 @@ describe('loadSwimlaneLanes', () => {
   it('attaches [] to an activity that was never placed', () => {
     const attached = attachSwimlaneLanes([{ id: 'c' }], new Map());
     expect(attached).toEqual([{ id: 'c', swimlaneLanes: [] }]);
+  });
+});
+
+describe('deriveCodeLaneBasis', () => {
+  const live = new Set(['roof', 'l1']);
+
+  it('is (type, the live value) for a carrier of a live value', () => {
+    expect(deriveCodeLaneBasis('area', 'roof', live)).toEqual({
+      codeTypeId: 'area',
+      codeValueId: 'roof',
+    });
+  });
+
+  it('is (type, null) for no value, and for a value that has been deleted', () => {
+    expect(deriveCodeLaneBasis('area', null, live)).toEqual({
+      codeTypeId: 'area',
+      codeValueId: null,
+    });
+    expect(deriveCodeLaneBasis('area', 'gone', live).codeValueId).toBeNull();
+  });
+
+  it('is not reachable through the hand-made and WBS derivation', () => {
+    expect(() =>
+      deriveLaneBasis({ swimlaneSource: 'ACTIVITY_CODE', swimlaneWbsLevel: null }, 'a', null, TREE),
+    ).toThrow(/by code/);
+  });
+});
+
+describe('loadCurrentCodeLanes', () => {
+  const at = new Date('2026-10-30T10:00:00.000Z');
+  const scope = { organizationId: 'o', planId: 'p' };
+
+  it('issues one statement for the page and gives each activity at most its one current lane', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValue([{ activityId: 'a', codeValueId: 'v', laneIndex: 2, updatedAt: at }]);
+    const lanes = await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', ['a', 'c']);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(lanes.get('a')).toEqual([
+      { codeTypeId: 'area', codeValueId: 'v', laneIndex: 2, updatedAt: at.toISOString() },
+    ]);
+    expect(lanes.get('c')).toEqual([]);
+  });
+
+  it('keeps the no-value row as a null codeValueId', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValue([{ activityId: 'a', codeValueId: null, laneIndex: 0, updatedAt: at }]);
+    const lanes = await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', ['a']);
+    expect(lanes.get('a')?.[0]?.codeValueId).toBeNull();
+  });
+
+  it('issues none for an empty page', async () => {
+    const queryRaw = vi.fn();
+    expect((await loadCurrentCodeLanes({ $queryRaw: queryRaw }, scope, 'area', [])).size).toBe(0);
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadPlanCodeLanes', () => {
+  const at = new Date('2026-10-30T10:00:00.000Z');
+  const type = { id: 't', planId: 'p', organizationId: 'o' };
+
+  it('matches the lanes to each live activity’s current value, in two statements', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { activityId: 'b', valueId: null },
+        { activityId: 'a', valueId: 'v1' },
+        { activityId: 'c', valueId: 'v2' },
+      ])
+      .mockResolvedValueOnce([
+        { activityId: 'b', codeValueId: null, laneIndex: 1, updatedAt: at },
+        { activityId: 'a', codeValueId: 'v1', laneIndex: 3, updatedAt: at },
+        // Stale: c now holds v2, not v1.
+        { activityId: 'c', codeValueId: 'v1', laneIndex: 9, updatedAt: at },
+        // A deleted activity (not among the members).
+        { activityId: 'z', codeValueId: null, laneIndex: 4, updatedAt: at },
+        // b holds no value, so a stored lane for a value is stale.
+        { activityId: 'b', codeValueId: 'v1', laneIndex: 8, updatedAt: at },
+      ]);
+    const lanes = await loadPlanCodeLanes({ $queryRaw: queryRaw }, type);
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(lanes.map((l) => [l.activityId, l.codeValueId, l.laneIndex])).toEqual([
+      ['a', 'v1', 3],
+      ['b', null, 1],
+    ]);
+    expect(lanes[0]?.updatedAt).toBe(at.toISOString());
+  });
+});
+
+describe('codeLaneTypeOf', () => {
+  it('names the type only under a code source', () => {
+    expect(codeLaneTypeOf({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 't' })).toBe('t');
+    for (const swimlaneSource of ['NONE', 'MANUAL', 'WBS'] as const) {
+      expect(codeLaneTypeOf({ swimlaneSource, swimlaneCodeTypeId: null })).toBeNull();
+    }
   });
 });

@@ -17,6 +17,7 @@ import { ActivityStepsController } from './activity-steps.controller';
 import { ActivityStepsService } from './activity-steps.service';
 import { ActivityRepository } from './activity.repository';
 import { PlanActivitiesController } from './plan-activities.controller';
+import { PlanCodeLanesController } from './plan-code-lanes.controller';
 
 /**
  * Activities module — the leaf of the Client → Project → Plan → Activity
@@ -36,7 +37,12 @@ import { PlanActivitiesController } from './plan-activities.controller';
     SwimlanesModule,
     CodesModule,
   ],
-  controllers: [PlanActivitiesController, ActivitiesController, ActivityStepsController],
+  controllers: [
+    PlanActivitiesController,
+    PlanCodeLanesController,
+    ActivitiesController,
+    ActivityStepsController,
+  ],
   providers: [
     ActivitiesService,
     ActivityCodesService,

@@ -6,9 +6,11 @@ import {
   DurationType,
   PercentCompleteType,
 } from '@prisma/client';
-import { MONEY_MINOR_UNITS_MAX } from '@repo/types';
+import { CODE_TYPE_LIMIT, MONEY_MINOR_UNITS_MAX } from '@repo/types';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -20,6 +22,7 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 import { IsCalendarDate } from '../../../common/validation/calendar-date';
@@ -27,6 +30,7 @@ import { IsMutuallyExclusiveWith } from '../../../common/validation/mutually-exc
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 import { IsConstraintPaired, IsZeroWhenMilestone } from './activity-validators';
+import { ActivityCodeValueDto } from './update-activity-codes.dto';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -340,4 +344,20 @@ export class CreateActivityDto {
   @Min(0)
   @Max(1_000_000)
   levelingPriority?: number;
+
+  @ApiPropertyOptional({
+    type: ActivityCodeValueDto,
+    isArray: true,
+    maxItems: CODE_TYPE_LIMIT,
+    description:
+      'Code values the new activity carries (p6-activity-codes M4): a live type of this plan at ' +
+      'most once each (else 422 `DUPLICATE_CODES_TYPE_ID`), each with a live value of that type (`codeValueId: null` writes nothing). ' +
+      'Written in the same transaction, so an activity drawn in a code swimlane is created in it.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(CODE_TYPE_LIMIT)
+  @ValidateNested({ each: true })
+  @Type(() => ActivityCodeValueDto)
+  codes?: ActivityCodeValueDto[];
 }

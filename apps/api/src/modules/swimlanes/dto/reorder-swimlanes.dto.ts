@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { SWIMLANE_LIMIT } from '@repo/types';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -10,9 +11,6 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-
-/** The cap on active swimlanes per plan (swimlanes spec §2): also the longest order a body may name. */
-export const SWIMLANE_LIMIT = 100;
 
 /** One swimlane in the new order, with the version it was read at. */
 export class SwimlaneOrderItemDto {

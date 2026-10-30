@@ -151,6 +151,12 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
       '(`duplicateActivities`). A cross-plan paste is refused before any write, so there is nothing ' +
       'to drop and count (p6-activity-codes m3-ui-design F5).',
   },
+  codeSwimlaneLanes: {
+    disposition: 'withheld',
+    reason:
+      'A read projection of server-kept lane rows keyed to the source activity; the create DTO has no ' +
+      'such field, and the clone has no lane until it is placed (p6-activity-codes M4).',
+  },
   parentId: {
     disposition: 'transformed',
     reason:

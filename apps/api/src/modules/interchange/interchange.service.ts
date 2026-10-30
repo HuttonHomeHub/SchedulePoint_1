@@ -16,6 +16,7 @@ import {
   type RestoreLayout,
 } from '@repo/interchange';
 import { drawnSpanDays, packAroundCarried, packLanes, type PackItem } from '@repo/layout';
+import { SWIMLANE_LIMIT } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -49,7 +50,6 @@ import { ProjectRepository } from '../projects/project.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import { ResourceRepository } from '../resources/resource.repository';
 import { ScheduleService } from '../schedule/schedule.service';
-import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import {

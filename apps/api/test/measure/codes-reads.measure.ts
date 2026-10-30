@@ -7,7 +7,7 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, it, vi } from 'vitest';
 
 import { configureHttpApp } from '../../src/app-setup';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -32,12 +32,27 @@ import { clearDomainData } from '../audit-reset';
  * service, Prisma), warm, `ITER` repetitions, reported as p50 and p95 in milliseconds. The ids are v4
  * (`gen_random_uuid()`), so the index locality is the worst case, not the v7 an import writes.
  */
+// M4-T1 (p6-activity-codes m4-plan T1): a switch that turns the code-lane read off, so the same running
+// application answers both with and without it and the difference is the statement, nothing else.
+const skipLanes = vi.hoisted(() => ({ on: false }));
+vi.mock('../../src/modules/activities/swimlane-lanes', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('../../src/modules/activities/swimlane-lanes')>();
+  return {
+    ...original,
+    loadCurrentCodeLanes: (...args: Parameters<typeof original.loadCurrentCodeLanes>) =>
+      skipLanes.on ? Promise.resolve(new Map()) : original.loadCurrentCodeLanes(...args),
+  };
+});
+
 const ORIGIN = 'http://localhost:5173';
 const PASSWORD = 'correct-horse-battery';
 const ACTIVITIES = 5000;
 const TYPES = 30;
 const VALUES = 50;
 const ITER = Number(process.env.MEASURE_ITER ?? 30);
+// M4-T1 only: `MEASURE_ONLY=lanes` runs the code-lane cases alone, on their own smaller plan.
+const ONLY_LANES = process.env.MEASURE_ONLY === 'lanes';
 
 const API = '/api/v1/organizations/acme';
 
@@ -68,7 +83,7 @@ describe('codes — request-path cost', () => {
     await app?.close();
   });
 
-  it('times the list, the batch write and the type list', async () => {
+  it.skipIf(ONLY_LANES)('times the list, the batch write and the type list', async () => {
     await clearDomainData(prisma);
     const agent = request.agent(app.getHttpServer());
     await agent
@@ -292,6 +307,278 @@ describe('codes — request-path cost', () => {
     );
     await time('GET activities/:id, 30-type coded plan, every type set', () =>
       agent.get(`${API}/activities/${codedDetail}`).expect(200),
+    );
+
+    process.stdout.write(`\n${out.join('\n')}\n`);
+    if (process.env.MEASURE_OUT) writeFileSync(process.env.MEASURE_OUT, `${out.join('\n')}\n`);
+  });
+
+  /**
+   * M4-T1 (`m4-record.md` §1, ADR-0142): what code lanes add to the request path. One plan of 5,000
+   * activities, three code types of 50 values each, every activity holding every type and a lane under
+   * each (15,000 lane rows), the plan drawn from the first type. Ceilings: a 2,000-row codes write with
+   * lanes at most 150 ms over the same write without; a 200-row list page (two 100-row pages, the route's cap) at most 6 ms over the same
+   * page without the lane statement; the full list payload recorded.
+   */
+  it('times the code lanes on the codes write and the list', async () => {
+    await clearDomainData(prisma);
+    const agent = request.agent(app.getHttpServer());
+    await agent
+      .post('/api/auth/sign-up/email')
+      .set('Origin', ORIGIN)
+      .send({ name: 'lanes', email: 'lanes@example.com', password: PASSWORD })
+      .expect(200);
+    const org = await agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+    const orgId = org.body.data.id as string;
+    const client = await agent.post(`${API}/clients`).send({ name: 'C' }).expect(201);
+    const project = await agent
+      .post(`${API}/clients/${client.body.data.id}/projects`)
+      .send({ name: 'P' })
+      .expect(201);
+    const planId = (
+      await agent
+        .post(`${API}/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Lanes', plannedStart: '2026-01-01' })
+        .expect(201)
+    ).body.data.id as string;
+    await prisma.activity.createMany({
+      data: Array.from({ length: ACTIVITIES }, (_, i) => ({
+        organizationId: orgId,
+        planId,
+        name: `Activity ${i}`,
+        code: `A${String(i).padStart(5, '0')}`,
+      })),
+    });
+    await prisma.$executeRaw`
+      INSERT INTO code_types (id, organization_id, plan_id, name, position, version, created_at, updated_at)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ${planId}::uuid, 'Type ' || t, t, 1, now(), now()
+      FROM generate_series(0, 2) AS t`;
+    await prisma.$executeRaw`
+      INSERT INTO code_values (id, organization_id, code_type_id, short_code, position, version, created_at, updated_at)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ct.id, 'V' || v, v, 1, now(), now()
+      FROM code_types ct, generate_series(0, ${VALUES - 1}) AS v
+      WHERE ct.plan_id = ${planId}::uuid`;
+    await prisma.$executeRaw`
+      INSERT INTO code_value_assignments
+        (id, organization_id, plan_id, activity_id, code_type_id, code_value_id, created_at, updated_at)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ${planId}::uuid, a.id, ct.id,
+             (SELECT cv.id FROM code_values cv WHERE cv.code_type_id = ct.id
+              ORDER BY cv.position OFFSET (abs(hashtext(a.id::text || ct.id::text)) % ${VALUES}) LIMIT 1),
+             now(), now()
+      FROM activities a CROSS JOIN code_types ct
+      WHERE a.plan_id = ${planId}::uuid AND ct.plan_id = ${planId}::uuid`;
+    await prisma.$executeRaw`
+      INSERT INTO code_swimlane_lanes
+        (id, organization_id, plan_id, activity_id, code_type_id, code_value_id, lane_index, created_at, updated_at)
+      SELECT gen_random_uuid(), ${orgId}::uuid, ${planId}::uuid, cva.activity_id, cva.code_type_id,
+             cva.code_value_id, abs(hashtext(cva.activity_id::text)) % 40, now(), now()
+      FROM code_value_assignments cva WHERE cva.plan_id = ${planId}::uuid`;
+    const types = (await prisma.codeType.findMany({
+      where: { planId },
+      orderBy: { position: 'asc' },
+    })) as { id: string }[];
+    const source = types[0]!.id;
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: source },
+    });
+    await prisma.$executeRawUnsafe('ANALYZE');
+
+    const out: string[] = [];
+
+    const list = (query: string) =>
+      agent.get(`${API}/plans/${planId}/activities?${query}`).expect(200);
+    // Paired: each repetition times the page without the lane statement and then with it, back to back,
+    // so the machine's drift lands on both halves; the figure is the median of the paired differences.
+    const median = (xs: number[]): number =>
+      [...xs].sort((x, y) => x - y)[Math.floor(xs.length / 2)]!;
+    const timed = async (fn: () => Promise<unknown>): Promise<number> => {
+      const started = performance.now();
+      await fn();
+      return performance.now() - started;
+    };
+    const pairedList: number[] = [];
+    const listWithout: number[] = [];
+    const listWith: number[] = [];
+    await list('limit=100');
+    for (let i = 0; i < ITER; i += 1) {
+      skipLanes.on = true;
+      const without = await timed(() => list('limit=100'));
+      skipLanes.on = false;
+      const withLanes = await timed(() => list('limit=100'));
+      listWithout.push(without);
+      listWith.push(withLanes);
+      pairedList.push(withLanes - without);
+    }
+    out.push(
+      `list 100 activities, 3 placed types: median without ${median(listWithout).toFixed(1)} ms, with ${median(listWith).toFixed(1)} ms, median paired difference ${median(pairedList).toFixed(1)} ms (n=${ITER} pairs; two pages = 2x)`,
+    );
+
+    // The full list payload: every page, summed as bytes on the wire.
+    const payload = async (): Promise<number> => {
+      let bytes = 0;
+      let cursor = '';
+      for (;;) {
+        const res = await list(`limit=100${cursor}`);
+        bytes += Buffer.byteLength(JSON.stringify(res.body));
+        if (!res.body.meta.hasMore) return bytes;
+        cursor = `&cursor=${res.body.meta.nextCursor as string}`;
+      }
+    };
+    skipLanes.on = true;
+    const without = await payload();
+    skipLanes.on = false;
+    const withLanes = await payload();
+    out.push(
+      `list payload, 5,000 activities x 3 placed types: without ${without} B, with ${withLanes} B (+${withLanes - without} B, ${(((withLanes - without) / without) * 100).toFixed(1)} %)`,
+    );
+
+    // Statement B, the plan-wide read (`GET …/code-types/:id/swimlane-lanes`): over HTTP, and in the
+    // database alone with and without the fail-closed `code_types` join, each as a paired median, plus
+    // EXPLAIN (ANALYZE, BUFFERS) of both. 5,000 activities, one current-basis lane each.
+    const lanesRoute = `${API}/plans/${planId}/code-types/${source}/swimlane-lanes`;
+    // The route's own throttle is 30 a minute and not raised by RATE_LIMIT_LIMIT: 1 warm-up, 1 body
+    // read and 24 timed requests stay inside it.
+    await agent.get(lanesRoute).expect(200);
+    const http: number[] = [];
+    for (let i = 0; i < 24; i += 1) http.push(await timed(() => agent.get(lanesRoute).expect(200)));
+    const body = (await agent.get(lanesRoute).expect(200)).body.data as { lanes: unknown[] };
+    out.push(
+      `plan-wide read over HTTP: median ${median(http).toFixed(1)} ms, p95 ${[...http].sort((x, y) => x - y)[Math.floor(0.95 * http.length)]!.toFixed(1)} ms (n=24), ${body.lanes.length} lanes, ${Buffer.byteLength(JSON.stringify(body))} B`,
+    );
+    const stmtB = (withJoin: boolean): string => `
+      SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
+             l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
+      FROM code_swimlane_lanes l
+      ${withJoin ? `JOIN code_types t ON t.id = '${source}'::uuid AND t.plan_id = '${planId}'::uuid AND t.deleted_at IS NULL` : ''}
+      JOIN activities a
+        ON a.id = l.activity_id AND a.organization_id = '${orgId}'::uuid
+        AND a.plan_id = '${planId}'::uuid AND a.deleted_at IS NULL
+      LEFT JOIN code_value_assignments cva
+        ON cva.activity_id = l.activity_id AND cva.code_type_id = '${source}'::uuid
+      LEFT JOIN code_values v
+        ON v.code_type_id = '${source}'::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+      WHERE l.code_type_id = '${source}'::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id`;
+    const dbMs = async (withJoin: boolean): Promise<number> => {
+      const plan = await prisma.$queryRawUnsafe<{ 'QUERY PLAN': { 'Execution Time': number }[] }[]>(
+        `EXPLAIN (ANALYZE, FORMAT JSON) ${stmtB(withJoin)}`,
+      );
+      return plan[0]!['QUERY PLAN'][0]!['Execution Time'];
+    };
+    await dbMs(false);
+    await dbMs(true);
+    const withoutJoin: number[] = [];
+    const withJoinMs: number[] = [];
+    const paired: number[] = [];
+    for (let i = 0; i < ITER; i += 1) {
+      const a = await dbMs(false);
+      const b = await dbMs(true);
+      withoutJoin.push(a);
+      withJoinMs.push(b);
+      paired.push(b - a);
+    }
+    out.push(
+      `Statement B, database execution time: without code_types join median ${median(withoutJoin).toFixed(1)} ms, with ${median(withJoinMs).toFixed(1)} ms, median paired difference ${median(paired).toFixed(2)} ms (n=${ITER} pairs; target <= 10 ms)`,
+    );
+    // The two-statement fallback (t1-lanes-sql.md): the plan's live activities with their live value of T,
+    // and T's lanes by type alone, matched in memory. Database execution time of the two, summed.
+    const fallbackS1 = `
+      SELECT a.id AS "activityId", v.id AS "valueId"
+      FROM activities a
+      LEFT JOIN code_value_assignments cva
+        ON cva.activity_id = a.id AND cva.code_type_id = '${source}'::uuid
+      LEFT JOIN code_values v
+        ON v.code_type_id = '${source}'::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+      WHERE a.plan_id = '${planId}'::uuid AND a.organization_id = '${orgId}'::uuid
+        AND a.deleted_at IS NULL`;
+    const fallbackS2 = `
+      SELECT l.activity_id, l.code_value_id, l.lane_index, l.updated_at
+      FROM code_swimlane_lanes l WHERE l.code_type_id = '${source}'::uuid`;
+    const execMs = async (sql: string): Promise<number> =>
+      (
+        await prisma.$queryRawUnsafe<{ 'QUERY PLAN': { 'Execution Time': number }[] }[]>(
+          `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+        )
+      )[0]!['QUERY PLAN'][0]!['Execution Time'];
+    await execMs(fallbackS1);
+    const fallback: number[] = [];
+    for (let i = 0; i < ITER; i += 1)
+      fallback.push((await execMs(fallbackS1)) + (await execMs(fallbackS2)));
+    out.push(
+      `Two-statement fallback, database execution time (sum of both): median ${median(fallback).toFixed(1)} ms (n=${ITER}; target <= 10 ms)`,
+    );
+    for (const withJoin of [false, true]) {
+      const plan = await prisma.$queryRawUnsafe<{ 'QUERY PLAN': string }[]>(
+        `EXPLAIN (ANALYZE, BUFFERS) ${stmtB(withJoin)}`,
+      );
+      out.push(
+        `EXPLAIN (ANALYZE, BUFFERS) Statement B ${withJoin ? 'WITH' : 'WITHOUT'} the code_types join:\n${plan.map((r) => `    ${r['QUERY PLAN']}`).join('\n')}`,
+      );
+    }
+
+    const rows = (await prisma.activity.findMany({
+      where: { planId },
+      orderBy: { id: 'asc' },
+      take: 2000,
+      select: { id: true },
+    })) as { id: string }[];
+    const valueIds = (await prisma.codeValue.findMany({
+      where: { codeTypeId: source },
+      orderBy: { position: 'asc' },
+      select: { id: true },
+    })) as { id: string }[];
+    let flip = 0;
+    const write = async (withLanes: boolean): Promise<void> => {
+      flip += 1;
+      const current = await prisma.activity.findMany({
+        where: { id: { in: rows.map((r) => r.id) } },
+        select: { id: true, version: true },
+      });
+      const body: Record<string, unknown> = {
+        activities: current.map((r: { id: string; version: number }) => ({
+          id: r.id,
+          version: r.version,
+          codes: [{ codeTypeId: source, codeValueId: valueIds[flip % VALUES]!.id }],
+        })),
+      };
+      if (withLanes) {
+        body.lanes = current.map((r: { id: string; version: number }, i: number) => ({
+          id: r.id,
+          version: r.version,
+          laneIndex: i % 40,
+        }));
+        body.lanesCodeTypeId = source;
+      }
+      await agent.patch(`${API}/plans/${planId}/activities/codes`).send(body).expect(200);
+    };
+    // The lane table grows with every write that changes a value (a new basis row each time), which
+    // is what made an unpaired run drift; it is rebuilt to the seeded 15,000 rows before every half.
+    const rebuildLanes = async (): Promise<void> => {
+      await prisma.$executeRaw`DELETE FROM code_swimlane_lanes WHERE plan_id = ${planId}::uuid`;
+      await prisma.$executeRaw`
+        INSERT INTO code_swimlane_lanes
+          (id, organization_id, plan_id, activity_id, code_type_id, code_value_id, lane_index, created_at, updated_at)
+        SELECT gen_random_uuid(), ${orgId}::uuid, ${planId}::uuid, cva.activity_id, cva.code_type_id,
+               cva.code_value_id, abs(hashtext(cva.activity_id::text)) % 40, now(), now()
+        FROM code_value_assignments cva WHERE cva.plan_id = ${planId}::uuid`;
+      await prisma.$executeRawUnsafe('ANALYZE code_swimlane_lanes');
+    };
+    const PAIRS = Number(process.env.MEASURE_PAIRS ?? 7);
+    const writeWithout: number[] = [];
+    const writeWith: number[] = [];
+    const pairedWrite: number[] = [];
+    await write(false);
+    for (let i = 0; i < PAIRS; i += 1) {
+      await rebuildLanes();
+      const without = await timed(() => write(false));
+      await rebuildLanes();
+      const withLanes = await timed(() => write(true));
+      writeWithout.push(without);
+      writeWith.push(withLanes);
+      pairedWrite.push(withLanes - without);
+    }
+    out.push(
+      `PATCH codes, 2,000 activities, 1 type, a new value each time: median without ${median(writeWithout).toFixed(1)} ms, with 2,000 lanes ${median(writeWith).toFixed(1)} ms, median paired difference ${median(pairedWrite).toFixed(1)} ms (n=${PAIRS} pairs, lanes rebuilt before each half; pairs: ${pairedWrite.map((x) => x.toFixed(0)).join(', ')})`,
     );
 
     process.stdout.write(`\n${out.join('\n')}\n`);

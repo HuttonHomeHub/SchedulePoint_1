@@ -83,7 +83,13 @@ export class PlanActivitiesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an activity under a plan (Planner or Org Admin).' })
+  @ApiOperation({
+    summary: 'Create an activity under a plan (Planner or Org Admin).',
+    description:
+      'Optional `codes` (0–100) are written in the create transaction, so a bar drawn in a code ' +
+      'swimlane is created in it; creating with codes needs `activity:update` as well. A create ' +
+      'that sent `codes` answers with `codes`, and with `codeSwimlaneLanes` under a code source. No lane is written.',
+  })
   @ApiCreatedResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'An activity with this name or code already exists.' })
@@ -92,12 +98,15 @@ export class PlanActivitiesController {
       'A field-level validation failure, or `calendarId` names a calendar this activity’s project ' +
       'may not use — a PROJECT calendar owned by another project (CALENDAR_WRONG_SCOPE, ' +
       'ADR-0053 §2) or an archived one (CALENDAR_ARCHIVED, ADR-0053 §4). A `swimlaneId` is refused ' +
-      'while the plan’s swimlanes come from its WBS (SWIMLANE_SOURCE_IS_WBS).',
+      'while the plan’s swimlanes come from its WBS (SWIMLANE_SOURCE_IS_WBS) or a code ' +
+      '(SWIMLANE_SOURCE_IS_ACTIVITY_CODE). A code type twice in `codes` (DUPLICATE_CODES_TYPE_ID), ' +
+      'a value of another type (CODE_VALUE_WRONG_TYPE) or a deleted value (CODE_VALUE_DELETED).',
   })
   @ApiNotFoundResponse({
     description:
-      'The organisation or plan is not found, or a `swimlaneId` is unknown, deleted or another ' +
-      'plan’s (or organisation’s), never told apart.',
+      'The organisation or plan is not found, a `swimlaneId` is unknown, deleted or another ' +
+      'plan’s (or organisation’s), or a `codes` type or value is unknown, deleted (a type) or another ' +
+      'plan’s, never told apart.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async create(
@@ -129,7 +138,9 @@ export class PlanActivitiesController {
     description:
       'The same activity id appears more than once in the batch; a `swimlane` lane while the plan ' +
       'has no swimlane source (SWIMLANE_SOURCE_NONE); or a named `swimlane.swimlaneId` while the ' +
-      'swimlanes come from the WBS (SWIMLANE_SOURCE_IS_WBS).',
+      'swimlanes come from the WBS (SWIMLANE_SOURCE_IS_WBS) or a code ' +
+      '(SWIMLANE_SOURCE_IS_ACTIVITY_CODE). Under a code source a `swimlane` lane is stored at ' +
+      '`(source type, the activity’s live value)` in `code_swimlane_lanes`.',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async updatePositions(
@@ -197,24 +208,36 @@ export class PlanActivitiesController {
       'bumps each named activity’s `version` and is recorded in its history as a `code:<codeTypeId>` ' +
       'item. A row states only the types it means to touch (`codeValueId: null` clears one); every ' +
       'other type the activity carries is left alone. Not a schedule input, so computed dates are ' +
-      'not made stale. Returns the written activities at their fresh versions, with `codes`.',
+      'not made stale. Returns the written activities at their fresh versions, with `codes` and ' +
+      '`codeSwimlaneLanes`. **Lanes:** while the plan’s swimlanes come from a code, `lanes` ' +
+      '(`{ id, version, laneIndex }`, 0–2,000) with `lanesCodeTypeId` stores each lane at the basis ' +
+      'the activity holds after the write, derived on the server. A row only in `lanes` is a ' +
+      'lane-only row: its codes are untouched but it is locked, version-checked, bumped, returned and ' +
+      'records no history. The union of `activities` and `lanes` is at most 2,000.',
   })
   @ApiOkResponse({ type: ActivityResponseDto, isArray: true })
   @ApiPayloadTooLargeResponse({ description: BATCH_BODY_TOO_LARGE })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiNotFoundResponse({
     description:
-      'The organisation or plan is not found, a row names an activity id not in the plan, or a ' +
-      'row names a code type or value that is unknown, deleted (a type) or another plan’s.',
+      'The organisation or plan is not found, a row or lane names an activity id not in the plan, or ' +
+      'a row names a code type or value that is unknown, deleted (a type) or another plan’s.',
   })
   @ApiConflictResponse({
-    description: 'A stale version — the whole batch is rejected and nothing changes.',
+    description:
+      'A stale version (STALE_VERSION), including a lane-only row’s — the whole batch is rejected ' +
+      'and nothing changes; or `lanes` were planned against a swimlane source that is no longer ' +
+      'the plan’s (SWIMLANE_SOURCE_CHANGED).',
   })
   @ApiUnprocessableEntityResponse({
     description:
       'The same activity (DUPLICATE_CODES_ACTIVITY_ID) or the same code type within an activity ' +
       '(DUPLICATE_CODES_TYPE_ID) appears twice, a value belongs to another code type of the plan ' +
-      '(CODE_VALUE_WRONG_TYPE) or was deleted (CODE_VALUE_DELETED), or a field fails validation.',
+      '(CODE_VALUE_WRONG_TYPE) or was deleted (CODE_VALUE_DELETED), an activity is twice in `lanes` ' +
+      '(DUPLICATE_LANES_ACTIVITY_ID), `lanes` come without `lanesCodeTypeId` ' +
+      '(LANES_CODE_TYPE_REQUIRED), an activity in both lists states two versions ' +
+      '(LANES_VERSION_DISAGREES), the union passes 2,000 (CODES_BATCH_TOO_LARGE), or a field fails ' +
+      'validation (an over-long single array is that plain failure, with no reason).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async updateCodes(
@@ -223,8 +246,13 @@ export class PlanActivitiesController {
     @Param('planId', ParseUUIDPipe) planId: string,
     @Body() dto: UpdateActivityCodesDto,
   ): Promise<ActivityResponseDto[]> {
-    const { items, canReadCost } = await this.codes.write(principal, orgSlug, planId, dto);
-    const decorated = await this.service.decorateWithCodes(items);
+    const { items, canReadCost, codeLanes } = await this.codes.write(
+      principal,
+      orgSlug,
+      planId,
+      dto,
+    );
+    const decorated = await this.service.decorateWithCodes(items, { codeLanes });
     return decorated.map((activity) => ActivityResponseDto.from(activity, canReadCost));
   }
 

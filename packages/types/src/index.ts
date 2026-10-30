@@ -221,6 +221,13 @@ export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
 export type SwimlaneLaneBasis = 'SWIMLANE' | 'NO_SWIMLANE' | 'WBS_SUMMARY' | 'NO_WBS_SUMMARY';
 
 /**
+ * The cap on a plan's hand-made swimlanes (swimlanes spec §2) and the longest swimlane order a body
+ * may name. Also what a code-sourced plan's "values in use" is judged against when the source is
+ * switched to a code (p6-activity-codes M4), so the web and the API read one number.
+ */
+export const SWIMLANE_LIMIT = 100;
+
+/**
  * One stored in-swimlane lane (swimlanes schema-design §3.5): which basis it was written against —
  * exactly the columns that basis names are set, the rest `null` — and the lane. `updatedAt` is the
  * tie-break when two placed members of one basis collide.
@@ -308,6 +315,65 @@ export interface CodeTypeSummary {
 export interface ActivityCodeAssignment {
   codeTypeId: string;
   codeValueId: string;
+}
+
+/**
+ * An activity's stored lane at its **current** basis under the plan's swimlane code type (p6-activity-codes
+ * M4, owner decision 2026-10-30, "current code only"): `(codeTypeId, the activity's live value of it)`, or
+ * `(codeTypeId, null)` for none or a deleted value. At most one entry an activity; a basis the activity
+ * no longer has, and every other type, is stored but not sent. A client applies a lane only when its
+ * `codeValueId` equals the activity's current value of the type (or both are null). `updatedAt` is the
+ * tie-break when two placed members of one basis collide.
+ */
+export interface ActivityCodeLaneSummary {
+  codeTypeId: string;
+  codeValueId: string | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/** One activity's current-basis lane in the plan-wide read (`GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`). */
+export interface PlanCodeLane {
+  activityId: string;
+  codeValueId: string | null;
+  laneIndex: number;
+  updatedAt: string;
+}
+
+/**
+ * What `GET …/code-types/:codeTypeId/swimlane-lanes` returns: every live activity's lane at its
+ * current basis under that type, ordered by activity id. Read when the planner switches the swimlanes to
+ * a code, since a list only carries the lanes of the code the plan already uses.
+ */
+export interface PlanCodeSwimlaneLanes {
+  codeTypeId: string;
+  lanes: PlanCodeLane[];
+}
+
+/** One value to set on a new activity, or on an activity in a codes write (`null` clears the type). */
+export interface ActivityCodeValueInput {
+  codeTypeId: string;
+  codeValueId: string | null;
+}
+
+/**
+ * One activity's place in a code swimlane, sent beside a codes write (`lanes`): the activity's lane
+ * inside the band it will be in once the write lands. Carries no basis: the server derives it from the
+ * activity's value of `lanesCodeTypeId` after the write (ADR-0206 A3).
+ */
+export interface ActivityCodeLaneInput {
+  id: string;
+  version: number;
+  laneIndex: number;
+}
+
+/** The body of `PATCH …/activities/codes` (`docs/API.md` "Codes"). */
+export interface UpdateActivityCodesInput {
+  activities: { id: string; version: number; codes: ActivityCodeValueInput[] }[];
+  /** Lanes to write at the basis the codes write leaves; needs `lanesCodeTypeId`. 0–2,000. */
+  lanes?: ActivityCodeLaneInput[];
+  /** The plan's current swimlane code type; the write is refused (409) if the source is not it. */
+  lanesCodeTypeId?: string;
 }
 
 /**
@@ -708,6 +774,14 @@ export interface ActivitySummary {
    * by the activity list and by the codes write only; any other activity response omits it.
    */
   codes?: ActivityCodeAssignment[];
+  /**
+   * The activity's lane at its current basis under the plan's swimlane code type, at most one entry
+   * (p6-activity-codes M4, owner decision 2026-10-30). **Absent, not empty, unless the plan's swimlane
+   * source is `ACTIVITY_CODE`**; then `[]` means "never placed at this basis". Sent by the list, the
+   * single read, the codes write and create (when it sent `codes`). Another code's lanes come from
+   * `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`.
+   */
+  codeSwimlaneLanes?: ActivityCodeLaneSummary[];
   /**
    * Schedule As-Late-As-Possible (ADR-0035 §11): a display-only placement preference. When set, the
    * activity renders at its late-based position; it never changes early/late/float. False by default.

@@ -110,6 +110,7 @@ describe('ActivityCodesService', () => {
       types as unknown as CodeTypeRepository,
       values as unknown as CodeValueRepository,
       assignments as unknown as CodeAssignmentRepository,
+      { upsertMany: vi.fn().mockResolvedValue(undefined) },
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       history as unknown as ActivityHistoryRecorder,

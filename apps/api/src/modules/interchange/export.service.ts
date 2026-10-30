@@ -7,6 +7,7 @@ import {
   type ExportGraph,
   type InterchangeReport,
 } from '@repo/interchange';
+import { SWIMLANE_LIMIT } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -21,7 +22,6 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
 import { ResourceAssignmentRepository } from '../resources/resource-assignment.repository';
 import { ResourceRepository } from '../resources/resource.repository';
-import { SWIMLANE_LIMIT } from '../swimlanes/dto/reorder-swimlanes.dto';
 import { SwimlaneRepository } from '../swimlanes/swimlane.repository';
 
 import { INTERCHANGE_EXPORT } from './interchange-permissions';
