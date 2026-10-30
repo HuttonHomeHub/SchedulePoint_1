@@ -746,7 +746,11 @@ uuid joins that swimlane, **`null` clears the membership ("No swimlane") and sto
 has been deleted is shown under "No swimlane", so an omitted `swimlaneId` writes its lane as
 `NO_SWIMLANE` too (200, not 404) and leaves its `swimlaneId` untouched for a restore. A lane write
 while the source is `NONE` is **422 `SWIMLANE_SOURCE_NONE`**; a named swimlane in WBS mode is **422
-`SWIMLANE_SOURCE_IS_WBS`**; an unknown, deleted or foreign swimlane is **404** and, like any failed
+`SWIMLANE_SOURCE_IS_WBS`**, and while it is `ACTIVITY_CODE` a `swimlaneId` is **422
+`SWIMLANE_SOURCE_IS_ACTIVITY_CODE`** ("set the activity's code to move it"; the stored value is
+kept) — under a code source the lane is stored in `code_swimlane_lanes` at `(the source type, the
+activity's live value of it)`, or `(type, null)` for none or a deleted value, never in
+`activity_swimlane_lanes` and never in `laneIndex`; an unknown, deleted or foreign swimlane is **404** and, like any failed
 row, nothing is written. The server writes exactly the rows it is sent: a client placing a
 swimlane's unplaced members sends them in the same batch. A move into another swimlane, or out of
 one with `null`, is recorded in the activity's history; a lane written inside the swimlane the
@@ -806,6 +810,30 @@ so computed dates are not made stale. The activity's history records a **`code:<
 holding `{ from, to }` as code **value ids** (`null` for none) under scope `DEFINITION`, one entry per
 activity sharing a `batch`.
 
+**Lanes with a codes write (M4-T1).** While the plan's swimlanes come from a code, the same body may
+carry **`lanes: [{ id, version, laneIndex }]`** (0 to 2,000, `laneIndex` 0 to 10,000) and
+**`lanesCodeTypeId`** (required with `lanes`). Each lane is stored at the basis the activity holds
+**after** the write, derived on the server: `(lanesCodeTypeId, the activity's value of it)`, or
+`(type, null)` for none or a deleted value. A row in `lanes` that is not in `activities` is a
+**lane-only** row: its codes are untouched but it is locked, version-checked and bumped like a mover,
+and records no history (the history carries code changes only). The plan's source is re-read under the
+plan lock and must be `ACTIVITY_CODE` with that type, or the write is **409
+`SWIMLANE_SOURCE_CHANGED`** and nothing is written. Also **422**: an id twice in `lanes`
+(`DUPLICATE_LANES_ACTIVITY_ID`), `lanes` without `lanesCodeTypeId` (`LANES_CODE_TYPE_REQUIRED`), an
+id in both lists at two versions (`LANES_VERSION_DISAGREES`), and more than 2,000 activities in the
+union (`CODES_BATCH_TOO_LARGE`). A stale lane-only version is **409 `STALE_VERSION`** and a foreign or
+unknown id is **404**, never told apart. The answer carries the lane-only rows too. There is no
+membership route.
+
+**Create with codes (M4-T1).** `POST …/activities` takes **`codes`**: `[{ codeTypeId, codeValueId }]`,
+0 to 100, a type at most once (**422 `DUPLICATE_CODES_TYPE_ID`**), each value live and of its type
+(**422 `CODE_VALUE_WRONG_TYPE`** / **`CODE_VALUE_DELETED`**), an unknown or foreign type or value
+**404**. The assignments are written in the create transaction, after the insert and before the
+schedule-input stamp (types `FOR SHARE`, then values in id order), so a bar drawn in a code swimlane is
+created in it; a create without `codes` issues no extra statement. No lane is written: an unplaced
+activity has none, and the next positions batch or codes write stores it. A create that sent `codes`
+answers with `codes` and `codeSwimlaneLanes`.
+
 **The batch bound.** `maxItems: 2000` is not the real limit of `PATCH …/activities/codes`: the 512 KB
 organisation body limit is, and a body with many types per activity reaches it first (about 4,000
 entries). Send a selection, not a plan. **The type list at the caps is a large payload**: 100 types of
@@ -830,6 +858,12 @@ activity has no value for has no entry, and a deleted value or type reads as no 
 exactly as before; once it has one, an activity with no value carries `[]`. **Every other activity
 response omits `codes`**, so a client must not replace a cached activity's codes with a response that
 has none. An External Guest never receives a code field.
+
+**`codeSwimlaneLanes` (M4-T1)** rides wherever `codes` does: `[{ codeTypeId, codeValueId | null,
+laneIndex, updatedAt }]`, one entry per live type and value the activity has been placed against,
+read in one statement per page after the assignments. **Absent, not empty, with `codes`** (a plan with
+no live code type), and a deleted type's rows are not sent: they stay stored, so a restore brings the
+layout back. Switching the source from one code to another and back finds each layout as it was.
 
 ### Activity change history (ADR-0174)
 
