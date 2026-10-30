@@ -3,65 +3,56 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-28. The owner asked for a hand-off check, then to build the two plan-lock gaps
-(#553, #559), the `CheckboxField` touch-size change (#558) and the P6 activity-codes follow-on, driven to
-completion. **All of it is merged and released:** the three small fixes, the P6 spec and its database
-design (approved 2026-10-27), and **P6 milestones M0, M1 and M2 (T1 to T6)**: the import report line,
-the storage, the export, the clean-up, the codes API and the seeded sample plan. Released as **`api`
-0.102.2 and `web` 0.200.2** (Version Packages #1189), then **`api` 0.103.0** (#1197). **The codes
-have no screen yet: M3 (show and edit them) is next.** The owner's **hard rule** still stands: nothing
-that needs them to test, measure or check anything on their server or devices (a decision question is
-fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-30. The owner asked for a hand-off check, then chose **P6 M3, the first screen for the
+codes**, with codes loading their values on demand, and asked for it to be driven to completion. **All of it
+is merged and released** as **`api` 0.103.1** and **`web` 0.200.3** (Version Packages #1205): the M3 design, spec
+and plan (approved 2026-10-29), the on-demand codes reads (T0), the Codes… dialog (T1), code columns in the
+Activities table and the Gantt plus printing them (T2), the editor's Codes section, the table's Set, undo,
+history and paste (T3), and Set code… on the diagram's selection bars (T4). **M4 (swimlanes by a code) is
+next.** The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything on
+their server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the
+owner's call (ADR-0190).
 
-## The owner's answers this session (2026-10-27)
+## The owner's answers this session (2026-10-29)
 
-- **What to build:** the plan-lock gaps (#553 and #559), the checkbox touch size (#558) and the P6
-  activity-codes follow-on; close the leftover Dependabot PR #1161; **one release at the end**.
-- **P6 design:** **keep the codes in the plan** (not "swimlanes once at import"); a swimlane is named by the
-  value's **description, else its short code**; no real P6 file exists yet, so build everything that needs
-  no unconfirmed P6 column and hold the P6 import and export steps (M5, M6).
-- **The spec (`docs/specs/p6-activity-codes/`) is approved with every recommended answer**, plus: **Q1**
-  baselines remember codes **only if one capture of the largest plan adds at most 1 second** (it measured
-  2.4 to 2.8 s, so the fallback shipped: baselines freeze only the swimlane source type); **Q2** codes belong
-  **to each plan**; Q3 refuse deleting the type the swimlanes are drawn from; Q4 limits 100 types per plan and
-  1,000 values per type; Q5 provisional lengths 80 and 255 and no parent value yet; Q6 guests see names only;
-  Q7 a drag never changes a code; Q8 "Swimlanes by code" in the import window, default none; Q9 call them
-  "Codes"; Q10 MS Project files say plainly they are not carried; Q11 nested values stored if the file has a
-  parent, shown flat.
+- **What to build:** P6 **M3** (show and edit codes); not M4 or M7 yet. M5 and M6 still wait for a real P6
+  export that uses activity codes.
+- **How the codes list loads:** **values on demand** (the list without values, then one type's values when
+  needed), not the nested read.
+- **Gantt printing:** **yes, print the code columns switched on**, in on-screen order, as many as fit, with one
+  line under the chart naming the rest ("Not printed, to leave room for the chart: System, Phase.").
+- **Where to set a code on many activities:** **both** the Activities table and the diagram's selection bars,
+  in M3 (T4).
+- **The M3 spec and plan are approved** (`docs/specs/p6-activity-codes/m3-spec.md`, `m3-plan.md`,
+  `m3-ui-design.md`).
+- **The one measured miss is accepted:** the `values=none` list reads about 70 ms against its 60 ms slice (the
+  value counts are a sequential scan with no index); the dialog's first paint is 121 to 136 ms against 200 ms,
+  so no index and no contract change (`m3-record.md` §1).
 
 ## Where things stand
 
-- **Latest releases:** `api` **0.103.0** (tag `api-v0.103.0`, Version Packages #1197) and `web` **0.200.2**
-  (tag `web-v0.200.2`). Before that `api` 0.102.2 (Version Packages #1189, which first published the
-  plan-lock fixes, the dependency re-read, the checkbox size, the P6 import-report line and migration A).
-  Both publish jobs passed for 0.102.2; the 0.103.0 publish run is `Release` run 40616405552.
-  `@repo/interchange` was not versioned this time.
+- **Latest releases:** `api` **0.103.1** (tag `api-v0.103.1`) and `web` **0.200.3** (tag `web-v0.200.3`), Version
+  Packages #1205. Before that `api` 0.103.0 and `web` 0.200.2. `@repo/interchange` was not versioned.
 - **This session's PRs, in merge order:**
-  - **#1188** #559: plan create takes the calendar lock and binds only the ORG-scope Standard calendar
-    (an archived Standard binds nothing).
-  - **#1190** #553: dependency create re-reads the plan and both ends under the plan lock (the audit of the
-    other writers is in the closed ledger row; the accepted note-create race is row **#560**).
-  - **#1191** the P6 spec, plan and database design, approved.
-  - **#1192** #558: a labelled `CheckboxField` row is finger-sized (44 px) under a coarse pointer (the
-    toolbar's hand-rolled radio rows were measured to break the View panel's 420 px bar if grown: row **#561**).
-  - **#1193** P6 M0 + M1: an XER import now names the P6 activity codes it does not carry yet
-    (`docs/specs/p6-activity-codes/m0-record.md` records which P6 columns public sources confirm).
-  - **#1194** M2-T1/T2: migration A, the `ACTIVITY_CODE` label on its own; the Prisma probe results.
-  - **#1195** a fix to two changesets whose frontmatter lacked `: patch` (see the lessons).
-  - **#1189** Version Packages (release 1).
-  - **#1196** M2-T3: migration B, four tables (`code_types`, `code_values`, `code_value_assignments`,
-    `code_swimlane_lanes`), `plans.swimlane_code_type_id`, three nullable baseline columns, organisation
-    export **format 2.3**, expiry and import-compensation order, `clearPlanTree` test helper.
-  - **#1198** M2-T4: the codes API (`/plans/:planId/code-types`, `/code-values`, `PATCH …/activities/codes`),
-    the per-page `codes` field on the activity list, `code:*` permissions, audit and history.
-  - **#1199** M2-T5: plan, project and client delete and restore take their codes with them, under the
-    60 s batch transaction timeout (a project of ten plans at the code caps measured 17 s; ceiling in row **#562**).
-  - **#1200** M2-T6: the seeded plan `capability-codes` and its playbook rows (`pnpm check:playbook` says 51).
-  - **#1201** the swimlane name check also refuses U+2028, U+2029 and U+FFF9 to U+FFFB.
-  - **#1197** Version Packages (release 2). Dependabot #1161 was closed (its bump had merged as #1184).
-- **The P6 epic:** M0, M1 and M2 are shipped and **dark** (API only; nothing in the screens uses the codes).
-  `docs/specs/p6-activity-codes/` holds the spec, plan, `database-design.md` (§16 probe results, §17 what landed)
-  and `m2-record.md` (every measurement).
+  - **#1203** the M3 design, spec and plan, approved.
+  - **#1204** M3-T0: `GET code-types?values=none` with a live `valueCount`; `GET code-types/:id/values`
+    (cursor-paged, `include=deleted` behind `code:restore`, an unknown cursor is 422 `CODE_CURSOR_UNKNOWN`);
+    `GET code-values?id=` (names up to 100 values, deleted ones too); `codes` on the single-activity GET. No
+    schema change. Row #562's first, second and eighth items closed.
+  - **#1206** M3-T1: the **Codes…** dialog in the Activities panel (rail of types, values pane; add, rename,
+    edit, reorder, delete, restore, each one undo step). `RowActionButton` moved to `components/ui/`.
+  - **#1207** M3-T2: code columns in the Activities table (**Code columns** menu, `acodes`) and the Gantt
+    (View ▾ ▸ Columns ▸ Codes, `gcodes`), up to 10, off by default; the Gantt prints them as many as fit.
+  - **#1208** M3-T3: the editor's **Codes** section with its own **Save codes**; the table's ticked-rows
+    **Set <type>** (one request, one undo step, cap 2,000); undo sets aside a since-deleted value; history
+    names each change; paste within a plan keeps codes; the five surface-contract gaps closed.
+  - **#1209** M3-T4: **Set code…** on the diagram's single and plural selection bars (a popover), and the
+    shared `usePopoverPanel` now lets an open combobox take the first Escape (ADR-0111 reviewed). Both publish
+    jobs passed for this release (`Release` run 40987002495).
+  - **#1205** Version Packages (the one release).
+- **The P6 epic:** M0 to M3 are shipped. Codes are now visible and editable. M4 (swimlanes by a code) and M7
+  (the ADR) remain buildable; M5 and M6 wait for a real P6 file. `docs/specs/p6-activity-codes/` holds the
+  M3 design, spec, plan and `m3-record.md` (the T0 measurements).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -126,6 +117,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   every default, and Dependabot #1153 to #1162 left for later; then "merge the Dependabot PRs now".
 - 2026-10-27: the P6 follow-on is built (keep the codes in the plan, per plan); the spec approved with every
   default; Q1 baselines yes-if-under-1-second (the fallback shipped); close Dependabot #1161; one release at the end.
+- 2026-10-29: P6 M3 (values on demand; Gantt prints code columns, as many as fit, naming the rest; Set a
+  code from the table and the diagram); the M3 spec approved; the `values=none` 70 ms miss accepted.
 
 ## Parked by the owner — keep, do not raise
 
@@ -190,26 +183,26 @@ owner returns to one, the steps are ready:
 - **Untested, no row:** dragging a milestone onto a non-working day (ADR-0207 changed how a placed
   finish milestone reads back; only a journey can check the drag).
 
+- **2026-10-29 (M3):** no new rows. **#562** was updated in place: its first, second and eighth items are
+  closed; the deleted-values sort is recorded with a trigger (a type with more than about 10,000 deleted
+  values); the write's full answer, `bumpVersions`, the history re-measure, the required-`codes` DTO, the
+  pen check and the 60 s sweep ceiling stay open with their reasons.
+
 ## Suggested next
 
-**The P6 epic is mid-build; the next step is M3, the first screen.** Switch the session to **Opus** for the
-UI design, then **Sonnet** for building (§19.14). Everything below is in `docs/specs/p6-activity-codes/plan.md`.
+**The P6 epic continues with M4, swimlanes by a code.** Switch the session to **Opus** for the design, then
+**Sonnet** for building (§19.14). Everything is in `docs/specs/p6-activity-codes/plan.md` (M4) and spec §4.5.
 
-- **M3: show and edit the codes** (the "Codes…" window, a column per code in the activity table and the
-  Gantt, a Codes section in the activity editor, set a value on many selected rows, undo and history). It adds
-  a user-facing entry point, so a **ui-architect pass comes first**, then the ux, accessibility and component
-  reviewers, and a Playwright journey (ADR-0081). **Before any screen binds to `GET code-types`, decide the
-  values-on-demand read** (at 100 types by 1,000 values it measured 2.3 s and 32 MB; row #562). The `@repo/types`
-  additions broke four web files that now say "Code changed" and carry five known-gap entries in
-  `scripts/surface-contract.json`; M3 closes them.
-- **M4: swimlanes by a code** (a "By code" source in Swimlanes… setup, the switch between codes keeping each
-  layout, `UpdatePlanDto` admitting `swimlaneCodeTypeId`, removing the `classifiedAheadOfDto` allowance in
-  `schedule-inputs.structural.spec.ts`, and making `swimlanesShown` in
-  `use-tsld-canvas-ui-state.ts` explicit about `MANUAL` and `WBS`). It needs the database-architect again.
-- **M5 and M6 (P6 import and export of codes) wait for a real P6 export** that uses activity codes (M0-T2,
-  `m0-record.md`); the owner has none yet. Do not build them on guessed column names (ADR-0071 §5).
-- **M7:** the ADR and the register and backlog updates.
-- Still open from the lock work: row **#560** and **#562** above.
+- **M4: swimlanes by a code** (a **By code** source in Swimlanes… setup, switching codes keeps each layout,
+  `UpdatePlanDto` admitting `swimlaneCodeTypeId`, the membership endpoint, removing the `classifiedAheadOfDto`
+  allowance in `schedule-inputs.structural.spec.ts`, `swimlanesShown` explicit about `MANUAL` and `WBS`, and
+  the `docs/DEPLOYMENT.md` rollback runbook). It needs the **database-architect** first. T3 and T4 built
+  `useSetActivityCodes` and the shared `CodeAssignControl` so M4's code-sourced "Move to swimlane" can reuse
+  them.
+- **M5 and M6 still wait for a real P6 export** that uses activity codes (`m0-record.md`); never on guessed
+  column names (ADR-0071 §5).
+- **M7:** the epic's ADR and the register and backlog updates, after M4.
+- Still open: rows **#560** and **#562**.
 
 The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26).
 
@@ -733,3 +726,29 @@ origin/main <old base>` after the one below merges; union the ADR lines, take ou
   - **Reviewers found real things, each cheap before merge:** the org-export index shape `(organization_id, id)`
     for a linear keyset scan; the line separators the database refuses but the DTO did not (the swimlane DTO had
     the same gap); a missing `details.reason` on a 409.
+
+- **2026-10-29/30 lessons (P6 M3, the codes screens):**
+  - **Stacked builders work: one task per worktree, each based on the previous task's head.** After each
+    squash-merge, `git rebase --onto origin/main <old base head>` moved the next one cleanly; the conflicts were
+    only `CLAUDE.md`'s web file count (take either side, then set what `pnpm check:counts` names) and the odd
+    shared journey helper. A builder will refuse to force-push its own branch; do that rebase yourself.
+  - **`src/styles/token-architecture.test.ts` caps screen-placed font weights at 132 and must never be
+    raised.** Two new screens each added one `font-semibold`/`font-medium` and failed CI's unit job. Brief
+    builders up front: no `font-medium|semibold|bold|normal` outside `components/ui/`.
+  - **Playwright's `toBeDisabled()` counts `aria-disabled`**, so it can never pass for a shaded-but-focusable
+    control. Assert no native `disabled` and that it takes focus.
+  - **A screen-reader-only (`sr-only`) span is `position: absolute`;** with no positioned ancestor below a
+    dialog it stretched the dialog's scroll height (963 px) while every pane looked bounded. `relative` on the
+    pane fixed it; only the 1024 × 600 journey could see it.
+  - **Two document-capture `keydown` listeners on one node run in registration order**, so a popover that
+    opened first swallowed a combobox's Escape. `usePopoverPanel` now yields to an open inner
+    `[role="combobox"]` (ADR-0111 reviewed); a unit stand-in hid the order, the real Combobox in the test does not.
+  - **Journey locators must be scoped to the control's own listbox** (`aria-controls`): the diagram's search
+    list also had a "Roof" option and broke `getByRole('option', { name: /Roof/ })`.
+  - **A merge-conflict fix can leave a formatting difference** that only `pnpm check:format` catches; run it
+    after every hand-resolved conflict.
+  - **The announcer writes its text one animation frame later** (`requestAnimationFrame` in
+    `components/ui/announcer.tsx`), so a unit test must `waitFor` it; an immediate check passed locally and
+    failed CI's unit job once (#1209).
+  - **Four reviewers in parallel per task, then one fold builder,** kept each PR to one CI round; the UX
+    reviewer caught real copy defects every time (a false "no activities" count while loading; bare "Code").
