@@ -14,6 +14,7 @@ import type { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy
 import { BATCH_TRANSACTION_TIMEOUT_MS, type PrismaService } from '../../prisma/prisma.service';
 import type { AuditService } from '../audit/audit.service';
 import type { CalendarRepository } from '../calendars/calendar.repository';
+import type { CodeTypeRepository } from '../codes/code-type.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { ProjectRepository } from '../projects/project.repository';
@@ -132,6 +133,12 @@ describe('PlansService', () => {
   let audit: { record: ReturnType<typeof vi.fn> };
   // Hoisted so a test can make the pen refuse (423) and assert the swimlane write stops there.
   let penGuard: { assertHoldsPen: ReturnType<typeof vi.fn> };
+  // The switch's type checks: lock-for-share, the any-state fallback and the in-use count.
+  let codeTypes: {
+    lockActiveForShare: ReturnType<typeof vi.fn>;
+    findInPlan: ReturnType<typeof vi.fn>;
+    countValuesInUse: ReturnType<typeof vi.fn>;
+  };
   let service: PlansService;
 
   beforeEach(() => {
@@ -175,6 +182,11 @@ describe('PlansService', () => {
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     penGuard = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
+    codeTypes = {
+      lockActiveForShare: vi.fn().mockResolvedValue([{ id: 'ct1', name: 'Area' }]),
+      findInPlan: vi.fn().mockResolvedValue(null),
+      countValuesInUse: vi.fn().mockResolvedValue(3),
+    };
     service = new PlansService(
       organizations as unknown as OrganizationsService,
       projects as unknown as ProjectRepository,
@@ -184,6 +196,7 @@ describe('PlansService', () => {
       prisma as unknown as PrismaService,
       audit as unknown as AuditService,
       penGuard as unknown as PlanEditLockService,
+      codeTypes as unknown as CodeTypeRepository,
       logger,
     );
   });
@@ -474,6 +487,201 @@ describe('PlansService', () => {
         await service.update(principalWith(ALL), 'acme', 'pl1', { name: 'Renamed', version: 1 });
         expect(patchOf()).not.toHaveProperty('swimlaneSource');
         expect(patchOf()).not.toHaveProperty('swimlaneWbsLevel');
+      });
+
+      it('leaves the type column alone when the request names no swimlane field', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(plan());
+        await service.update(principalWith(ALL), 'acme', 'pl1', { name: 'Renamed', version: 1 });
+        expect(patchOf()).not.toHaveProperty('swimlaneCodeTypeId');
+      });
+    });
+
+    describe('swimlane source from a code (M4)', () => {
+      const patchOf = (): Record<string, unknown> =>
+        plans.updateIfVersionMatches.mock.calls[0]?.[2] as Record<string, unknown>;
+      const attempt = (body: Record<string, unknown>) =>
+        service
+          .update(principalWith(ALL), 'acme', 'pl1', { ...body, version: 1 })
+          .catch((e: unknown) => e);
+
+      beforeEach(() => {
+        plans.updateIfVersionMatches.mockResolvedValue(1);
+        plans.findActiveByIdInOrg.mockResolvedValue(plan());
+      });
+
+      it('writes source, type and a null level together, as scalars', async () => {
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: 'ct1',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneWbsLevel: null,
+          swimlaneCodeTypeId: 'ct1',
+        });
+        expect(stampedPlanIds()).toEqual([]);
+      });
+
+      it('clears the type in the same write when the source leaves ACTIVITY_CODE', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'ct1' }),
+        );
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'MANUAL',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({
+          swimlaneSource: 'MANUAL',
+          swimlaneWbsLevel: null,
+          swimlaneCodeTypeId: null,
+        });
+        expect(codeTypes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+
+      it('moves a code plan to another type, and keeps the type when only the source is resent', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'ct1' }),
+        );
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneCodeTypeId: 'ct2',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: 'ct2',
+        });
+
+        plans.updateIfVersionMatches.mockClear();
+        codeTypes.lockActiveForShare.mockClear();
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'ACTIVITY_CODE',
+          version: 1,
+        });
+        expect(patchOf()).toMatchObject({ swimlaneCodeTypeId: 'ct1' });
+        // Restating the stored pair is not a new choice, so a count that drifted over 100 does not
+        // refuse it.
+        expect(codeTypes.lockActiveForShare).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['a code source without a type', { swimlaneSource: 'ACTIVITY_CODE' as const }, 'NONE'],
+        [
+          'a code source with a null type',
+          { swimlaneSource: 'ACTIVITY_CODE' as const, swimlaneCodeTypeId: null },
+          'NONE',
+        ],
+        [
+          'a type beside a source that is not a code',
+          { swimlaneSource: 'MANUAL' as const, swimlaneCodeTypeId: 'ct1' },
+          'NONE',
+        ],
+        ['a type on a plan whose source is not a code', { swimlaneCodeTypeId: 'ct1' }, 'NONE'],
+        ['a cleared type on a code plan', { swimlaneCodeTypeId: null }, 'CODE'],
+        [
+          'a level beside a code source',
+          {
+            swimlaneSource: 'ACTIVITY_CODE' as const,
+            swimlaneCodeTypeId: 'ct1',
+            swimlaneWbsLevel: 1,
+          },
+          'NONE',
+        ],
+      ])('refuses %s (422), where the CHECK would be a 500', async (_name, body, held) => {
+        plans.findActiveByIdInOrg.mockResolvedValue(
+          plan(
+            held === 'CODE' ? { swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'ct1' } : {},
+          ),
+        );
+        const error = await attempt(body);
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).details).toMatchObject({
+          reason: expect.stringMatching(/^SWIMLANE_(CODE_TYPE|LEVEL)_MISMATCH$/) as string,
+        });
+        expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
+      });
+
+      it('reads another plan’s or an unknown type as missing (404), not as a foreign-key error', async () => {
+        codeTypes.lockActiveForShare.mockResolvedValue([]);
+        codeTypes.findInPlan.mockResolvedValue(null);
+        const error = await attempt({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'x' });
+        expect(error).toBeInstanceOf(NotFoundError);
+        expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
+      });
+
+      it('refuses a type of this plan that has been deleted (422 MISMATCH)', async () => {
+        codeTypes.lockActiveForShare.mockResolvedValue([]);
+        codeTypes.findInPlan.mockResolvedValue({ id: 'ct1', deletedAt: new Date() });
+        const error = await attempt({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'ct1' });
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).details).toEqual({
+          reason: 'SWIMLANE_CODE_TYPE_MISMATCH',
+        });
+      });
+
+      it.each([
+        [0, 'has no values in use'],
+        [101, 'has 101 values in use. Swimlanes can show up to 100.'],
+      ])('refuses a type with %i values in use, with the count to act on', async (n, text) => {
+        codeTypes.countValuesInUse.mockResolvedValue(n);
+        const error = await attempt({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'ct1' });
+        expect(error).toBeInstanceOf(ValidationError);
+        expect((error as ValidationError).message).toContain(text);
+        expect((error as ValidationError).details).toEqual({
+          reason: 'SWIMLANE_CODE_TYPE_INELIGIBLE',
+          valuesInUse: n,
+          limit: 100,
+        });
+        expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
+      });
+
+      it.each([1, 100])('admits a type with %i values in use', async (n) => {
+        codeTypes.countValuesInUse.mockResolvedValue(n);
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: 'ct1',
+          version: 1,
+        });
+        expect(plans.updateIfVersionMatches).toHaveBeenCalledTimes(1);
+      });
+
+      const planLockCall = (): number =>
+        txExecuteRaw.mock.invocationCallOrder[
+          txExecuteRaw.mock.calls.findIndex((call) => call.includes('dependency-plan'))
+        ] ?? -1;
+
+      it('takes the plan lock first, then the calendar guard, the re-read, the type and the write', async () => {
+        plans.findActiveByIdInOrg.mockClear();
+        await service.update(principalWith(ALL), 'acme', 'pl1', {
+          swimlaneSource: 'ACTIVITY_CODE',
+          swimlaneCodeTypeId: 'ct1',
+          calendarId: 'cal-1',
+          version: 1,
+        });
+        const at = (fn: ReturnType<typeof vi.fn>, call = 0): number =>
+          fn.mock.invocationCallOrder[call] ?? Number.POSITIVE_INFINITY;
+        const lock = planLockCall();
+        expect(lock).toBeGreaterThan(0);
+        // call 0 is the pre-transaction load; call 1 is the re-read under the lock.
+        expect(at(plans.findActiveByIdInOrg, 1)).toBeGreaterThan(lock);
+        expect(at(calendars.findActiveByIdInOrg)).toBeGreaterThan(lock);
+        expect(at(codeTypes.lockActiveForShare)).toBeGreaterThan(at(plans.findActiveByIdInOrg, 1));
+        expect(at(codeTypes.countValuesInUse)).toBeGreaterThan(at(codeTypes.lockActiveForShare));
+        expect(at(plans.updateIfVersionMatches)).toBeGreaterThan(at(codeTypes.countValuesInUse));
+      });
+
+      it('takes no plan lock when the request carries no swimlane field', async () => {
+        await service.update(principalWith(ALL), 'acme', 'pl1', { name: 'Renamed', version: 1 });
+        expect(planLockCall()).toBe(-1);
+        // The load before the transaction and the read of the answer after it; no re-read under a lock.
+        expect(plans.findActiveByIdInOrg).toHaveBeenCalledTimes(2);
+      });
+
+      it('404s when the plan is deleted while the switch waited for the lock', async () => {
+        plans.findActiveByIdInOrg.mockResolvedValueOnce(plan()).mockResolvedValueOnce(null);
+        const error = await attempt({ swimlaneSource: 'MANUAL' });
+        expect(error).toBeInstanceOf(NotFoundError);
+        expect(plans.updateIfVersionMatches).not.toHaveBeenCalled();
       });
     });
 

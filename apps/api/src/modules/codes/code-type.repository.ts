@@ -249,6 +249,38 @@ export class CodeTypeRepository {
     `;
   }
 
+  /**
+   * How many distinct live values of this type the plan's live activities carry: the number of
+   * swimlanes a plan sourced from the type would draw, and the rule that decides whether it may be
+   * (the 1-to-100 switch rule). A WBS summary is never a member of a swimlane, so a value only a
+   * summary carries is not "in use" (m4-spec §1b row 2) — `a.type <> 'WBS_SUMMARY'` is the same
+   * exclusion the web's membership rule applies, and the shared fixture pins them together.
+   *
+   * The type filter sits on the assignment side only and the plan is reached through the activity:
+   * the composite key (plan_id, code_type_id) already makes every assignment of the type one of this
+   * plan's, and naming the plan on the assignment as well sends the planner down the wrong index
+   * (13-15 ms against 7-8 ms at 5,000 activities × 30 types, m4-database-review §2.2-§2.3). Raw SQL
+   * because Prisma's relation filters do not produce this join. The caller holds the plan lock.
+   */
+  async countValuesInUse(
+    organizationId: string,
+    planId: string,
+    typeId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await db.$queryRaw<{ n: number }[]>`
+      SELECT count(DISTINCT cva.code_value_id)::int AS n
+      FROM code_value_assignments cva
+      JOIN activities a ON a.id = cva.activity_id
+      JOIN code_values v ON v.id = cva.code_value_id
+      WHERE cva.code_type_id = ${typeId}::uuid
+        AND a.organization_id = ${organizationId}::uuid AND a.plan_id = ${planId}::uuid
+        AND a.deleted_at IS NULL AND a.type <> 'WBS_SUMMARY'
+        AND v.deleted_at IS NULL
+    `;
+    return rows[0]?.n ?? 0;
+  }
+
   /** Rewrite `position` to the given dense values in one statement; rows already there are untouched. */
   async rewritePositions(
     organizationId: string,

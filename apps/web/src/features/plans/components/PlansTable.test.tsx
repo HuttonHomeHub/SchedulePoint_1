@@ -42,6 +42,7 @@ const PLANS: PlanSummary[] = [
     ignoreExternalRelationships: false,
     swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
     levelResources: false,
     levelWithinFloatOnly: false,
     eacMethod: 'CPI',

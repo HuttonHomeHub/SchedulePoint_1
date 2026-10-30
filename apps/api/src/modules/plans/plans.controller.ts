@@ -66,11 +66,14 @@ export class PlansController {
   @ApiConflictResponse({ description: 'Stale version, or a name collision within the project.' })
   @ApiUnprocessableEntityResponse({
     description:
-      'A field-level validation failure, or `swimlaneSource` and `swimlaneWbsLevel` disagree ' +
-      '(SWIMLANE_LEVEL_MISMATCH): WBS needs a level of 1 to 3, any other source has none.',
+      'A field-level validation failure; `swimlaneSource` and `swimlaneWbsLevel` disagree ' +
+      '(SWIMLANE_LEVEL_MISMATCH: WBS needs a level of 1 to 3, any other source has none); ' +
+      '`swimlaneSource` and `swimlaneCodeTypeId` disagree, or the code type is deleted ' +
+      '(SWIMLANE_CODE_TYPE_MISMATCH); or the code has no values in use or more than 100 ' +
+      '(SWIMLANE_CODE_TYPE_INELIGIBLE, with `valuesInUse` and `limit`).',
   })
   @ApiLockedResponse(
-    'Sending `swimlaneSource` or `swimlaneWbsLevel` needs the plan edit-lock (when enforcement is on).',
+    'Sending `swimlaneSource`, `swimlaneWbsLevel` or `swimlaneCodeTypeId` needs the plan edit-lock (when enforcement is on).',
   )
   async update(
     @CurrentUser() principal: Principal,

@@ -108,7 +108,7 @@ export class PlanResponseDto implements PlanSummary {
     enum: SwimlaneSource,
     enumName: 'SwimlaneSource',
     description:
-      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL or WBS. ' +
+      'Where the plan’s swimlanes come from (swimlanes spec §4.6): NONE, MANUAL, WBS or ACTIVITY_CODE. ' +
       'Presentation only — never a scheduling input.',
   })
   swimlaneSource!: SwimlaneSource;
@@ -121,6 +121,15 @@ export class PlanResponseDto implements PlanSummary {
     description: 'The WBS level (1 to 3) when the source is WBS, null otherwise.',
   })
   swimlaneWbsLevel!: number | null;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
+      'The code type the swimlanes are made from when the source is ACTIVITY_CODE, null otherwise.',
+  })
+  swimlaneCodeTypeId!: string | null;
 
   @ApiProperty({
     format: 'date',
@@ -187,6 +196,7 @@ export class PlanResponseDto implements PlanSummary {
       currencyCode: entity.currencyCode,
       swimlaneSource: entity.swimlaneSource,
       swimlaneWbsLevel: entity.swimlaneWbsLevel,
+      swimlaneCodeTypeId: entity.swimlaneCodeTypeId,
       plannedStart: entity.plannedStart ? formatCalendarDate(entity.plannedStart) : null,
       calendarId: entity.calendarId,
       editedSinceCalculated: isEditedSinceCalculated(

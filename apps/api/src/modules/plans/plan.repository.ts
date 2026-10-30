@@ -50,8 +50,8 @@ export interface PlanPatch {
   /**
    * The code type the swimlanes are made from, set iff the source is ACTIVITY_CODE
    * (`ck_plans_swimlane_source_level`; P6 activity codes). A scalar, never `swimlaneCodeType:
-   * { connect }` (database-design §16 D-P1). No write path sets it yet: UpdatePlanDto does not admit
-   * ACTIVITY_CODE until the codes module does.
+   * { connect }` (database-design §16 D-P1). Written with the source and level as one triple by
+   * `PlansService.update`, under the plan lock.
    */
   swimlaneCodeTypeId?: string | null;
 }

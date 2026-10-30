@@ -30,7 +30,11 @@ import type { CriticalityRule } from '../schedule/criticality-rule';
 import { type WorkingTimeCalendar } from '../schedule/engine';
 import { buildPlanCalendar, buildPlanCalendarOrReject } from '../schedule/plan-calendar';
 
-import { BaselineRepository, type CaptureActivityRow } from './baseline.repository';
+import {
+  BaselineRepository,
+  type CaptureActivityRow,
+  type CaptureCodePlacement,
+} from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
 import type { CreateBaselineDto } from './dto/create-baseline.dto';
 import { computeVariance } from './variance';
@@ -204,6 +208,7 @@ export class BaselinesService {
             // the criticality mirrors above (schema-design §13.4).
             swimlaneSource: true,
             swimlaneWbsLevel: true,
+            swimlaneCodeTypeId: true,
           },
         });
         // Soft-deleted between the check above and this lock. The hierarchy cascade takes the plan
@@ -228,6 +233,20 @@ export class BaselinesService {
                 makeOpenEndsCritical: mirrors.scheduleMakeOpenEndsCritical!,
               };
 
+        // The code half of the snapshot, read only under a code source: every other plan freezes the
+        // three activity columns as NULL and pays no statement for it. Under the same plan lock and
+        // activity row locks as the rows above, so a codes write cannot land between them.
+        const codeTypeId = mirrors.swimlaneCodeTypeId ?? null;
+        const codePlacements =
+          mirrors.swimlaneSource === 'ACTIVITY_CODE' && codeTypeId !== null
+            ? await this.baselines.loadCodePlacementsForCapture(
+                organization.id,
+                planId,
+                codeTypeId,
+                tx,
+              )
+            : new Map<string, CaptureCodePlacement>();
+
         const baseline = await this.baselines.createWithSnapshot(
           {
             organizationId: organization.id,
@@ -244,8 +263,13 @@ export class BaselinesService {
             actorId: principal.userId,
             activities,
             dependencies,
-            swimlane: { source: mirrors.swimlaneSource, wbsLevel: mirrors.swimlaneWbsLevel },
+            swimlane: {
+              source: mirrors.swimlaneSource,
+              wbsLevel: mirrors.swimlaneWbsLevel,
+              codeTypeId,
+            },
             lanes,
+            codePlacements,
           },
           tx,
         );

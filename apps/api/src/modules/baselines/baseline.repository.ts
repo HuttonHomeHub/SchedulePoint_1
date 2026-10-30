@@ -135,6 +135,19 @@ export interface CaptureLaneRow {
 }
 
 /**
+ * One activity's frozen code placement for the plan's source type (`baseline_activities.code_*`).
+ * `codeValueId` is the activity's stored assignment of the type **verbatim** — a soft-deleted value
+ * too, because the capture records facts and runs no rule — and null means "no value of that type".
+ * The lane pair is the `code_swimlane_lanes` row for (that type, that value or "no value"), or both
+ * null when the activity was never placed there (`ck_baseline_activities_code_lane_pair`).
+ */
+export interface CaptureCodePlacement {
+  codeValueId: string | null;
+  codeLaneIndex: number | null;
+  codeLaneUpdatedAt: Date | null;
+}
+
+/**
  * A live dependency projected to the fields a baseline snapshot freezes (ADR-0126).
  *
  * All four value fields are required, matching the four no-default columns on
@@ -185,9 +198,15 @@ export interface CaptureInput {
    * (schema-design §13.4). Required: `ck_baselines_swimlane_snapshot_shape` refuses a `FULL`
    * baseline without a source, and the pair is the live `ck_plans_swimlane_source_level` one.
    */
-  swimlane: { source: SwimlaneSource; wbsLevel: number | null };
+  swimlane: { source: SwimlaneSource; wbsLevel: number | null; codeTypeId: string | null };
   /** Every lane row of every captured activity (see {@link CaptureLaneRow}). */
   lanes: CaptureLaneRow[];
+  /**
+   * The code placement of each captured activity, by activity id, under an `ACTIVITY_CODE` source
+   * and empty otherwise. An activity absent from it froze no value and no lane, which under a code
+   * source is complete (it carried none) and under any other source is what the three columns hold.
+   */
+  codePlacements: ReadonlyMap<string, CaptureCodePlacement>;
 }
 
 /**
@@ -257,6 +276,13 @@ export class BaselineRepository {
         swimlaneSnapshotLevel: 'FULL',
         swimlaneSource: input.swimlane.source,
         swimlaneWbsLevel: input.swimlane.wbsLevel,
+        // The plan's code type at capture (set iff the frozen source is ACTIVITY_CODE) and the level
+        // of what was frozen of the codes. Written unconditionally, for the fifth time and the same
+        // reason: under every other source the three activity columns are NULL and that is
+        // complete, which only this level says rather than "nobody looked". `SWIMLANE_TYPE`
+        // requires the FULL swimlane level above (`ck_baselines_code_snapshot_shape`).
+        swimlaneCodeTypeId: input.swimlane.codeTypeId,
+        codeSnapshotLevel: 'SWIMLANE_TYPE',
         criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
         criticalFloatThresholdMinutes: input.criticalityRule?.criticalFloatThresholdMinutes ?? null,
         totalFloatMode: input.criticalityRule?.totalFloatMode ?? null,
@@ -267,50 +293,57 @@ export class BaselineRepository {
     });
     if (input.activities.length > 0) {
       await db.baselineActivity.createMany({
-        data: input.activities.map((a) => ({
-          organizationId: input.organizationId,
-          baselineId: baseline.id,
-          sourceActivityId: a.id,
-          code: a.code,
-          name: a.name,
-          type: a.type,
-          // Both live and baseline durations are working-minutes now (ADR-0036) — a
-          // direct copy keeps the frozen snapshot faithful (ADR-0025), no ×1440.
-          durationMinutes: a.durationMinutes,
-          baselineStart: a.earlyStart,
-          baselineFinish: a.earlyFinish,
-          lateStart: a.lateStart,
-          lateFinish: a.lateFinish,
-          totalFloat: a.totalFloat,
-          isCritical: a.isCritical,
-          // The cost baseline frozen at capture (EV1, ADR-0042 / the ADR-0025 amendment) — an
-          // integer minor-unit budget, computed by the service-side load below.
-          budgetedCost: a.budgetedCost,
-          // The activity-expense component of that total (ADR-0071 M3), so the decomposition is
-          // stated rather than recovered by subtracting the assignment rows.
-          budgetedExpense: a.budgetedExpense,
-          // The frozen SHAPE (ADR-0126). Copied field for field, no derivation: a snapshot that
-          // computed anything would be recording a rule rather than a fact.
-          laneIndex: a.laneIndex,
-          parentId: a.parentId,
-          calendarId: a.calendarId,
-          constraintType: a.constraintType,
-          constraintDate: a.constraintDate,
-          secondaryConstraintType: a.secondaryConstraintType,
-          secondaryConstraintDate: a.secondaryConstraintDate,
-          percentComplete: a.percentComplete,
-          actualStart: a.actualStart,
-          actualFinish: a.actualFinish,
-          // The frozen PLACEMENT (M-C). Copied field for field like the shape above — a snapshot
-          // that derived a placement would be recording a rule rather than a fact.
-          placedStart: a.placedStart,
-          placedFinish: a.placedFinish,
-          visualStart: a.visualStart,
-          // The frozen swimlane membership (§13.3), copied whatever the plan's source was.
-          swimlaneId: a.swimlaneId,
-          createdBy: input.actorId,
-          updatedBy: input.actorId,
-        })),
+        data: input.activities.map((a) => {
+          const placed = input.codePlacements.get(a.id);
+          return {
+            organizationId: input.organizationId,
+            baselineId: baseline.id,
+            sourceActivityId: a.id,
+            code: a.code,
+            name: a.name,
+            type: a.type,
+            // Both live and baseline durations are working-minutes now (ADR-0036) — a
+            // direct copy keeps the frozen snapshot faithful (ADR-0025), no ×1440.
+            durationMinutes: a.durationMinutes,
+            baselineStart: a.earlyStart,
+            baselineFinish: a.earlyFinish,
+            lateStart: a.lateStart,
+            lateFinish: a.lateFinish,
+            totalFloat: a.totalFloat,
+            isCritical: a.isCritical,
+            // The cost baseline frozen at capture (EV1, ADR-0042 / the ADR-0025 amendment) — an
+            // integer minor-unit budget, computed by the service-side load below.
+            budgetedCost: a.budgetedCost,
+            // The activity-expense component of that total (ADR-0071 M3), so the decomposition is
+            // stated rather than recovered by subtracting the assignment rows.
+            budgetedExpense: a.budgetedExpense,
+            // The frozen SHAPE (ADR-0126). Copied field for field, no derivation: a snapshot that
+            // computed anything would be recording a rule rather than a fact.
+            laneIndex: a.laneIndex,
+            parentId: a.parentId,
+            calendarId: a.calendarId,
+            constraintType: a.constraintType,
+            constraintDate: a.constraintDate,
+            secondaryConstraintType: a.secondaryConstraintType,
+            secondaryConstraintDate: a.secondaryConstraintDate,
+            percentComplete: a.percentComplete,
+            actualStart: a.actualStart,
+            actualFinish: a.actualFinish,
+            // The frozen PLACEMENT (M-C). Copied field for field like the shape above — a snapshot
+            // that derived a placement would be recording a rule rather than a fact.
+            placedStart: a.placedStart,
+            placedFinish: a.placedFinish,
+            visualStart: a.visualStart,
+            // The frozen swimlane membership (§13.3), copied whatever the plan's source was.
+            swimlaneId: a.swimlaneId,
+            // The frozen code placement for the source type, verbatim (see CaptureCodePlacement).
+            codeValueId: placed?.codeValueId ?? null,
+            codeLaneIndex: placed?.codeLaneIndex ?? null,
+            codeLaneUpdatedAt: placed?.codeLaneUpdatedAt ?? null,
+            createdBy: input.actorId,
+            updatedBy: input.actorId,
+          };
+        }),
       });
       // The cost decomposition (ADR-0071 M3). Same transaction as the baseline row and the activity
       // rows, so the `ASSIGNMENT` discriminator and the rows it promises are never separately
@@ -490,6 +523,51 @@ export class BaselineRepository {
       for (const { updatedAt, ...rest } of rows) out.push({ ...rest, laneUpdatedAt: updatedAt });
     }
     return out;
+  }
+
+  /**
+   * The code half of a capture under an `ACTIVITY_CODE` source: for each activity that has either a
+   * stored assignment of `typeId` or a lane for it, the assignment **verbatim** and the lane row for
+   * (that type, that value or "no value"). Two reads joined in memory, the cheapest shape measured
+   * (m4-database-review §2.10): the type's assignments by the type filter alone and the type's lanes
+   * for the plan, both served by an index, against a single three-way `IS NOT DISTINCT FROM` join at
+   * 19-22 ms. Neither table carries `deleted_at`, so there is no filter to forget, and a soft-deleted
+   * value is returned as stored on purpose: the capture freezes facts and runs no rule.
+   *
+   * Org-scoped (anti-IDOR). Read inside the capture tx, after the activity rows are locked and under
+   * the plan lock, so the codes and lanes describe the same moment as the activities beside them
+   * (every codes write takes the plan lock; every lane write holds an activity row lock).
+   */
+  async loadCodePlacementsForCapture(
+    organizationId: string,
+    planId: string,
+    typeId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<Map<string, CaptureCodePlacement>> {
+    const assignments = await db.codeValueAssignment.findMany({
+      where: { organizationId, codeTypeId: typeId },
+      select: { activityId: true, codeValueId: true },
+    });
+    const lanes = await db.codeSwimlaneLane.findMany({
+      where: { organizationId, planId, codeTypeId: typeId },
+      select: { activityId: true, codeValueId: true, laneIndex: true, updatedAt: true },
+    });
+    const valueOf = new Map(assignments.map((a) => [a.activityId, a.codeValueId]));
+    const placements = new Map<string, CaptureCodePlacement>();
+    for (const [activityId, codeValueId] of valueOf) {
+      placements.set(activityId, { codeValueId, codeLaneIndex: null, codeLaneUpdatedAt: null });
+    }
+    for (const lane of lanes) {
+      // The lane that belongs to the value the activity holds now; a lane under any other value is
+      // a layout kept for that value, not this activity's placement.
+      if ((valueOf.get(lane.activityId) ?? null) !== lane.codeValueId) continue;
+      placements.set(lane.activityId, {
+        codeValueId: lane.codeValueId,
+        codeLaneIndex: lane.laneIndex,
+        codeLaneUpdatedAt: lane.updatedAt,
+      });
+    }
+    return placements;
   }
 
   /**

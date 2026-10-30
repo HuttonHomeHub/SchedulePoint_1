@@ -206,9 +206,9 @@ export type ProgressRecalcMode = 'RETAINED_LOGIC' | 'PROGRESS_OVERRIDE' | 'ACTUA
  * summaries at `swimlaneWbsLevel`. MUST stay in lock-step with the API's Prisma `SwimlaneSource`
  * enum, which `apps/api/src/modules/plans/swimlane-enums.spec.ts` checks in both directions.
  *
- * `ACTIVITY_CODE` (P6 activity codes, database-design.md §5.1) is in the database enum before
- * anything can store or write it: no plan holds it until the codes schema lands, and the API does
- * not accept it. The web draws no swimlanes for it (`use-swimlane-scene.ts` admits MANUAL and WBS).
+ * `ACTIVITY_CODE` (P6 activity codes, database-design.md §5.1) makes one swimlane per value of the
+ * code type `swimlaneCodeTypeId` that some activity carries. The API accepts it from M4-T2; the web
+ * draws no swimlanes for it until M4's web tasks (`use-swimlane-scene.ts` admits MANUAL and WBS).
  */
 export type SwimlaneSource = 'NONE' | 'MANUAL' | 'WBS' | 'ACTIVITY_CODE';
 
@@ -529,6 +529,11 @@ export interface PlanSummary {
   swimlaneSource: SwimlaneSource;
   /** 1 to 3 when {@link PlanSummary.swimlaneSource} is `WBS`, `null` otherwise. */
   swimlaneWbsLevel: number | null;
+  /**
+   * The code type the swimlanes are made from: set iff {@link PlanSummary.swimlaneSource} is
+   * `ACTIVITY_CODE`, `null` otherwise.
+   */
+  swimlaneCodeTypeId: string | null;
   /**
    * The Earned-Value EAC forecast method (EV1, ADR-0042, Q3). Client-settable plan option; default
    * `CPI` (P6's headline EAC = BAC / CPI). Read by the EV2 read module (a query param may override

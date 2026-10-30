@@ -575,6 +575,9 @@
   "plans/update-plan.swimlaneWbsLevel": {
     "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the swimlane setup dialog that chooses the WBS level lands in M2-T9 behind the lens toggle. Presentation only: the engine never reads it."
   },
+  "plans/update-plan.swimlaneCodeTypeId": {
+    "gap": "docs/specs/p6-activity-codes/m4-plan.md T2. No client yet: the By code card that chooses the code lands in T5 (the entry point, after the web writes in T3 and T4 are in place); until then the field is reached only through the API. Presentation only: the engine never reads it."
+  },
   "plans/update-plan.totalFloatMode": {
     "surface": "features/plans/components/PlanScheduleSettings.tsx"
   },
