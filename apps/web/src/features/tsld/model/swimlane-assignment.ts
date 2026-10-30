@@ -34,6 +34,8 @@ export interface SwimlaneAssignment {
   readonly shown: boolean;
   /** The plan's swimlanes in their order, then "No swimlane". */
   readonly choices: readonly SwimlaneChoice[];
+  /** A standing sentence under the choices, for a source whose list is not every place work could go. */
+  readonly note?: string;
   /** The swimlane an activity is drawn in now (`null`: none). */
   readonly currentOf: (activityId: string) => string | null;
   /**
@@ -56,6 +58,27 @@ export const SWIMLANES_OFF_MOVE_REASON =
  */
 export const SWIMLANES_FOLLOW_WBS_REASON =
   'Swimlanes follow the WBS in this plan. To move an activity, file it under another summary in Breakdown.';
+/**
+ * Why the activity editor's Swimlane field is read-only while the swimlanes are made from a code, and
+ * where the value is written: the Codes section of the same tab. Lives beside the grids' sentence so the
+ * two cannot drift; `features/tsld` imports no feature, so the swimlanes feature imports this.
+ */
+export const swimlanesFollowCodeEditorReason = (typeName: string): string =>
+  `Swimlanes follow ${typeName} in this plan. Change it under Codes on this tab.`;
+
+/**
+ * What the Move to swimlane… control says under a code source about a value that is not listed: its
+ * choices are the swimlanes drawn, so one nobody uses yet is set with Set code… (owner decision).
+ */
+export const CODE_MOVE_NOT_LISTED_NOTE = 'Need a swimlane that isn’t listed? Use Set code…';
+
+/**
+ * Why a grid's Swimlane cell is read-only while the plan's swimlanes are made from a code, and where the
+ * value is written instead (`m4-ui-design.md` §6.2, ADR-0204). Named for the type, because "its code"
+ * would not tell a planner with six types which one the swimlanes follow.
+ */
+export const swimlanesFollowCodeReason = (typeName: string): string =>
+  `Swimlanes follow ${typeName} in this plan. Change it with Set code… or the editor’s Codes.`;
 /** What a swimlane column's cell reads under the WBS source: the rule, stated once per surface (US-4). */
 export const FOLLOWS_WBS_LABEL = 'Follows the WBS';
 
@@ -63,11 +86,15 @@ export const FOLLOWS_WBS_LABEL = 'Follows the WBS';
  * What a grid's Swimlane column is told about the plan's swimlanes (swimlanes M4-T1, M4-T2). The host
  * composes it, so the table and the Gantt learn nothing of how a swimlane is stored or written: with
  * hand-made swimlanes it carries the one assignment the selection bars and the editor also use; with
- * swimlanes that follow the WBS the column is read-only with its reason. One type, so the two grids
- * cannot drift apart when a source is added.
+ * swimlanes that follow the WBS the column is read-only with its reason, and with swimlanes made from a
+ * code it names the value (the same assignment, whose choices are the bands) and is read-only too: the
+ * cell is a code cell, written by Set code… and the editor's Codes. One type, so the two grids cannot
+ * drift apart when a source is added.
  */
 export type SwimlaneColumnSource =
-  { source: 'MANUAL'; assignment: SwimlaneAssignment } | { source: 'WBS' };
+  | { source: 'MANUAL'; assignment: SwimlaneAssignment }
+  | { source: 'WBS' }
+  | { source: 'ACTIVITY_CODE'; assignment: SwimlaneAssignment; typeName: string };
 export const MOVE_TO_SWIMLANE_FIELD = 'Move to';
 export const MOVE_BUTTON_LABEL = 'Move';
 

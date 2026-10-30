@@ -70,6 +70,10 @@ const NEVER_MEETS_THE_SWIMLANE_SCENE: Readonly<Record<string, string>> = {
     'reads the stored in-swimlane lane rows to build the projection input; it is the input, not a consumer of the result',
   'features/swimlanes/model/code-membership.ts':
     'reads the stored code-lane entries to build the projection input (M4); it is the input, not a consumer of the result',
+  'features/swimlanes/model/code-lane-planning.ts':
+    'turns the lanes INSIDE a code swimlane that the edit planner chose into the rows a codes write carries (M4); it takes no display lane',
+  'features/undo-redo/code-commands.ts':
+    'a codes step carries the lanes INSIDE a code swimlane its planner chose at replay (M4); it reads and sends no display lane',
   'features/wbs/model/wbs-swimlane-membership.ts':
     'orders sibling summaries by their stored lane, which is the WBS order the Gantt sorts by, and reads the stored in-swimlane lane rows to build the projection input (M3); it is the input, not a consumer of the result',
   'features/wbs/model/use-reparent-activities.ts':

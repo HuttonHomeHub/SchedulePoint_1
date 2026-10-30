@@ -23,5 +23,8 @@ export {
   type SwimlaneManagement,
 } from './model/use-swimlane-management';
 export { useSwimlaneAssignment } from './model/use-swimlane-assignment';
+export { useCodeSwimlaneAssignment } from './model/use-code-swimlane-assignment';
+export { useBuildCodeSwimlaneLanePlanner } from './model/use-build-code-swimlane-lane-planner';
 export { SwimlaneBulkAssignBar } from './components/SwimlaneBulkAssignBar';
 export { WbsSwimlaneField } from './components/WbsSwimlaneField';
+export { CodeSwimlaneField } from './components/CodeSwimlaneField';

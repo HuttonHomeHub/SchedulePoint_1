@@ -38,6 +38,8 @@ import { ApiFetchError } from '@/lib/api/client';
  * - `value-deleted` — a code step whose target value has been deleted since (the server's 422
  *   `CODE_VALUE_DELETED` / `CODE_VALUE_WRONG_TYPE`). Unlike a deleted activity it is restorable from
  *   Codes…, so the strip says where the way back is (`m3-ui-design.md` §8.2).
+ * - `swimlanes-changed` — a code step whose lanes the server refused (409 `SWIMLANE_SOURCE_CHANGED`)
+ *   because a colleague switched the plan's swimlane source since the lanes were planned.
  */
 export type NotApplicableReason =
   | 'changed'
@@ -47,7 +49,8 @@ export type NotApplicableReason =
   | 'cycle'
   | 'unfiled'
   | 'already-restored'
-  | 'value-deleted';
+  | 'value-deleted'
+  | 'swimlanes-changed';
 
 export type ReplayResult =
   | { readonly kind: 'applied' }

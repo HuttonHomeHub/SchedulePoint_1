@@ -91,6 +91,8 @@ function setAsideClause(setAside: SetAside): string {
       return `“${setAside.subjectName}” is back, but its activities could not be moved back under it`;
     case 'value-deleted':
       return `${setAside.subjectName} was deleted. Restore it in Codes… to set it again`;
+    case 'swimlanes-changed':
+      return 'the plan’s swimlanes were changed after your edit';
   }
 }
 

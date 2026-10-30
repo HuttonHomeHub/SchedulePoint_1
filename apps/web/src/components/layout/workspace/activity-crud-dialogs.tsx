@@ -24,7 +24,7 @@ import { ActivityHistoryPanel } from '@/features/activity-history';
 import { ActivityCodesSection } from '@/features/codes';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
-import { WbsSwimlaneField } from '@/features/swimlanes';
+import { CodeSwimlaneField, WbsSwimlaneField } from '@/features/swimlanes';
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
   NO_SWIMLANE_CHOICE_LABEL,
@@ -66,6 +66,10 @@ export function ActivityCrudDialogs({
   const [bandCopyPending, setBandCopyPending] = useState(false);
 
   const plan = model.plan.data;
+  // Made from a code: the editor's Swimlane section only says where the activity is, because the
+  // value it would change is written in the Codes section of the same tab (`m4-ui-design.md` §5.3).
+  const codeSwimlaneTypeId =
+    plan?.swimlaneSource === 'ACTIVITY_CODE' ? (plan.swimlaneCodeTypeId ?? null) : null;
   const wbsSwimlaneLevel =
     plan?.swimlaneSource === 'WBS' && isWbsSwimlaneLevel(plan.swimlaneWbsLevel)
       ? plan.swimlaneWbsLevel
@@ -180,6 +184,20 @@ export function ActivityCrudDialogs({
         planActivitiesLoading={model.activities.isPending}
         planActivitiesError={model.activities.isError}
         activity={intended}
+        {...(intended && codeSwimlaneTypeId !== null
+          ? {
+              swimlaneSlot: () => (
+                <FormSection title="Swimlane">
+                  <CodeSwimlaneField
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    codeTypeId={codeSwimlaneTypeId}
+                    activity={intended}
+                  />
+                </FormSection>
+              ),
+            }
+          : {})}
         {...(intended && !swimlaneAssignment && wbsSwimlaneLevel !== null && model.activities.data
           ? {
               // The swimlanes follow the WBS: the field says where the activity is, and why it is not
@@ -195,7 +213,7 @@ export function ActivityCrudDialogs({
               ),
             }
           : {})}
-        {...(intended && swimlaneAssignment
+        {...(intended && swimlaneAssignment && codeSwimlaneTypeId === null
           ? {
               swimlaneSlot: ({ generalDirty }: { generalDirty: boolean }) => (
                 <FormSection title="Swimlane">

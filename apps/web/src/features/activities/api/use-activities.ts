@@ -275,6 +275,11 @@ export interface PlacedActivityInput {
    * plan's swimlanes come from its WBS (swimlanes M3-T2, SQ-5).
    */
   parentId?: string;
+  /**
+   * The value the new activity carries of the plan's swimlane code type — how a create inside a swimlane
+   * joins it when the swimlanes are made from a code (p6-activity-codes M4). Absent for "No <type>".
+   */
+  codes?: { codeTypeId: string; codeValueId: string }[];
 }
 
 export function useCreatePlacedActivity(orgSlug: string, planId: string) {

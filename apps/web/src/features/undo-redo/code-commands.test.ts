@@ -12,6 +12,7 @@ import {
   codeValueEditCommand,
   codeValueReorderCommand,
 } from './code-commands';
+import type { PlanActivityCodeLanesFn } from './code-commands';
 import { historyResultMessage } from './history-result';
 
 import { ApiFetchError } from '@/lib/api/client';
@@ -649,5 +650,133 @@ describe('activityCodesCommand', () => {
       });
       await expect(command.undo(server.ctx)).rejects.toBeInstanceOf(ApiFetchError);
     });
+  });
+});
+
+describe('activityCodesCommand under a code swimlane source', () => {
+  const held = (...pairs: [string, string][]): ActivityCodeAssignment[] =>
+    pairs.map(([codeTypeId, codeValueId]) => ({ codeTypeId, codeValueId }));
+
+  /** a1 was moved from L1 to L2 (and so is L2 now); b1 sits in L1, unplaced, and was pinned by the move. */
+  function moved(planLanes: Parameters<typeof activityCodesCommand>[0]['planLanes']) {
+    const server = fakePlanServer({
+      codeTypes: [aType('area', 'Area', 0)],
+      codeValues: [
+        aValue('l1', 'area', 'L1', 0, 'Level 1'),
+        aValue('l2', 'area', 'L2', 1, 'Level 2'),
+      ],
+      activities: [
+        anActivity({ id: 'a1', name: 'Piling', codes: held(['area', 'l2']) }),
+        anActivity({ id: 'b1', name: 'Pour', codes: held(['area', 'l1']) }),
+      ],
+    });
+    const command = activityCodesCommand({
+      steps: [
+        { id: 'a1', name: 'Piling', changes: [{ codeTypeId: 'area', before: 'l1', after: 'l2' }] },
+      ],
+      label: 'Move “Piling” to Level 2',
+      valueNames: new Map([
+        ['l1', 'Level 1'],
+        ['l2', 'Level 2'],
+      ]),
+      write: server.mutations.writeActivityCodes,
+      planLanes,
+    });
+    return { server, command };
+  }
+
+  it('plans the lanes again at replay, against the rows as they are now, and sends them with the codes', async () => {
+    const planLanes = vi.fn<PlanActivityCodeLanesFn>((plan) => ({
+      lanesCodeTypeId: 'area',
+      lanes: [
+        ...plan.rows.map((row) => ({ id: row.id, version: row.version, laneIndex: 2 })),
+        { id: 'b1', version: 1, laneIndex: 0 },
+      ],
+    }));
+    const { server, command } = moved(planLanes);
+
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(planLanes).toHaveBeenCalledTimes(1);
+    // The rows it is asked about carry the target: the value the step left, and the current version.
+    expect(planLanes.mock.calls[0]?.[0].rows).toEqual([
+      { id: 'a1', version: 1, codes: [{ codeTypeId: 'area', codeValueId: 'l1' }] },
+    ]);
+    const sent = server.mutations.writeActivityCodes.mock.calls[0]?.[0];
+    expect(sent?.lanesCodeTypeId).toBe('area');
+    expect(sent?.lanes?.map((l) => l.id)).toEqual(['a1', 'b1']);
+    // One request, and the lane-only row was locked and bumped with it.
+    expect(server.mutations.writeActivityCodes).toHaveBeenCalledTimes(1);
+    expect(server.row('b1').version).toBe(2);
+
+    await command.redo(server.ctx);
+    expect(planLanes).toHaveBeenCalledTimes(2);
+    expect(planLanes.mock.calls[1]?.[0].rows[0]?.codes).toEqual([
+      { codeTypeId: 'area', codeValueId: 'l2' },
+    ]);
+  });
+
+  it('writes the codes alone once the plan’s swimlanes are no longer made from the type', async () => {
+    const { server, command } = moved(() => null);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    const sent = server.mutations.writeActivityCodes.mock.calls[0]?.[0];
+    expect(sent).not.toHaveProperty('lanes');
+    expect(sent).not.toHaveProperty('lanesCodeTypeId');
+  });
+
+  it('writes the codes alone where there is no planner at all', async () => {
+    const { server, command } = moved(undefined);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.writeActivityCodes.mock.calls[0]?.[0]).not.toHaveProperty('lanes');
+  });
+
+  it('reads the plan again and sets the step aside when the source was switched under it', async () => {
+    const { server, command } = moved(() => ({ lanesCodeTypeId: 'area', lanes: [] }));
+    server.mutations.writeActivityCodes.mockRejectedValueOnce(
+      new ApiFetchError(409, {
+        code: 'CONFLICT',
+        message: 'The swimlanes changed.',
+        details: { reason: 'SWIMLANE_SOURCE_CHANGED' },
+      }),
+    );
+    const readPlan = vi.fn().mockResolvedValue(undefined);
+    const result = await command.undo({ ...server.ctx, readPlan });
+    expect(result).toEqual({
+      kind: 'not-applicable',
+      reason: 'swimlanes-changed',
+      subjectName: 'Piling',
+    });
+    expect(readPlan).toHaveBeenCalledTimes(1);
+    expect(
+      historyResultMessage({
+        direction: 'undo',
+        outcome: 'set-aside',
+        label: command.label,
+        setAside: { reason: 'swimlanes-changed', subjectName: 'Piling', nextLabel: null },
+      }),
+    ).toBe(
+      'Couldn’t undo move “Piling” to Level 2 — the plan’s swimlanes were changed after your edit, so that step was skipped.',
+    );
+  });
+
+  it('still reads any other 409 as a plain change', async () => {
+    const { server, command } = moved(() => ({ lanesCodeTypeId: 'area', lanes: [] }));
+    server.mutations.writeActivityCodes.mockRejectedValueOnce(
+      new ApiFetchError(409, { code: 'CONFLICT', message: 'Stale.' }),
+    );
+    const readPlan = vi.fn();
+    expect(await command.undo({ ...server.ctx, readPlan })).toMatchObject({ reason: 'changed' });
+    expect(readPlan).not.toHaveBeenCalled();
+  });
+
+  it('plans lanes at replay, not at record time: a step made off a code source writes codes alone, one replayed on a code source carries lanes', async () => {
+    const planLanes = vi.fn<PlanActivityCodeLanesFn>(() => null);
+    const { server, command } = moved(planLanes);
+    expect(await command.undo(server.ctx)).toEqual({ kind: 'applied' });
+    expect(server.mutations.writeActivityCodes.mock.calls[0]?.[0]).not.toHaveProperty('lanes');
+    // The plan has been switched to a code since: the same step now asks the planner again and sends lanes.
+    planLanes.mockReturnValueOnce({ lanesCodeTypeId: 'area', lanes: [] });
+    await command.redo(server.ctx);
+    expect(planLanes).toHaveBeenCalledTimes(2);
+    expect(server.mutations.writeActivityCodes.mock.calls[1]?.[0].lanesCodeTypeId).toBe('area');
   });
 });

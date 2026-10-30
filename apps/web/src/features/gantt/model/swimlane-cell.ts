@@ -5,6 +5,7 @@ import type { SwimlaneColumnSource } from '@/features/tsld/model/swimlane-assign
 import {
   FOLLOWS_WBS_LABEL,
   SWIMLANES_FOLLOW_WBS_REASON,
+  swimlanesFollowCodeReason,
 } from '@/features/tsld/model/swimlane-assignment';
 
 /**
@@ -17,8 +18,9 @@ import {
 export type GanttSwimlanes = SwimlaneColumnSource;
 
 /**
- * The gate for one Swimlane cell: shut with the rule's own sentence under the WBS source (even for a
- * writer), else the pen's and role's verdict that every definition cell reads (ADR-0095).
+ * The gate for one Swimlane cell: shut with the rule's own sentence under the WBS source or a code
+ * source (even for a writer: the cell is a code cell, and M3 made every Gantt code cell read-only),
+ * else the pen's and role's verdict that every definition cell reads (ADR-0095).
  */
 export function swimlaneCellGate(
   swimlanes: GanttSwimlanes,
@@ -27,6 +29,14 @@ export function swimlaneCellGate(
 ): GanttCellGate {
   if (swimlanes.source === 'WBS') {
     return { writable: false, readable: true, readOnly: true, reason: SWIMLANES_FOLLOW_WBS_REASON };
+  }
+  if (swimlanes.source === 'ACTIVITY_CODE') {
+    return {
+      writable: false,
+      readable: true,
+      readOnly: true,
+      reason: swimlanesFollowCodeReason(swimlanes.typeName),
+    };
   }
   return editing.gateFor('swimlane', activityId);
 }

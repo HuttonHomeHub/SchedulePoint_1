@@ -405,10 +405,16 @@ export function fakePlanServer(
           version: number;
           codes: { codeTypeId: string; codeValueId: string | null }[];
         }[];
+        lanes?: { id: string; version: number; laneIndex: number }[];
+        lanesCodeTypeId?: string;
       }) => {
         // All-or-nothing, like the endpoint: stale versions first, then each value must be a live
-        // value of its own type (422 otherwise), and a missing activity is a 404.
-        for (const row of input.activities) lock(rowOf(row.id), row.version);
+        // value of its own type (422 otherwise), and a missing activity is a 404. A lane-only row is
+        // locked and bumped like any other, and carries no code change.
+        const laneOnly = (input.lanes ?? []).filter(
+          (lane) => !input.activities.some((row) => row.id === lane.id),
+        );
+        for (const row of [...input.activities, ...laneOnly]) lock(rowOf(row.id), row.version);
         for (const row of input.activities) {
           for (const c of row.codes) {
             if (c.codeValueId === null) continue;
@@ -432,6 +438,7 @@ export function fakePlanServer(
             }
           }
         }
+        for (const lane of laneOnly) write(lane.id, lane.version, {});
         return Promise.resolve(
           input.activities.map((row) => {
             const held = rowOf(row.id);

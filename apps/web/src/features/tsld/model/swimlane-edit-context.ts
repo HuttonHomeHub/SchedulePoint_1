@@ -41,13 +41,20 @@ export function swimlaneEditContext(args: {
     input,
     spans,
     stored,
-    remembered: (id, swimlaneId) =>
-      rows
-        .get(id)
-        ?.swimlaneLanes.find((l) =>
-          swimlaneId === null
-            ? l.basis === 'NO_SWIMLANE'
-            : l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId,
-        )?.laneIndex,
+    remembered: (id, swimlaneId) => {
+      const row = rows.get(id);
+      // A code swimlane remembers the lane stored for (the type, that value) — the list carries the
+      // activity's current basis only, so an activity moved to a value it has not held reads none.
+      if (input.source === 'ACTIVITY_CODE') {
+        return row?.codeSwimlaneLanes?.find(
+          (l) => l.codeTypeId === input.codeTypeId && l.codeValueId === swimlaneId,
+        )?.laneIndex;
+      }
+      return row?.swimlaneLanes.find((l) =>
+        swimlaneId === null
+          ? l.basis === 'NO_SWIMLANE'
+          : l.basis === 'SWIMLANE' && l.swimlaneId === swimlaneId,
+      )?.laneIndex;
+    },
   };
 }

@@ -348,13 +348,35 @@ export function codeValueDeleteCommand(params: {
   };
 }
 
-export type WriteActivityCodesFn = (input: {
-  activities: {
-    id: string;
-    version: number;
-    codes: { codeTypeId: string; codeValueId: string | null }[];
-  }[];
-}) => Promise<ActivitySummary[]>;
+/** One activity's part of a codes write, as the replay and the planner see it. */
+export interface ActivityCodesRowInput {
+  id: string;
+  version: number;
+  codes: { codeTypeId: string; codeValueId: string | null }[];
+}
+
+/**
+ * The lanes a codes write carries while the plan's swimlanes come from a code, in the shape the route
+ * takes (`docs/API.md` "Codes"). Declared here and not imported from the codes feature, which imports
+ * this one.
+ */
+export interface ActivityCodesLanesInput {
+  lanesCodeTypeId: string;
+  lanes: { id: string; version: number; laneIndex: number }[];
+}
+
+/**
+ * Plans the lanes for a replayed codes write against the picture **as it is now**, or `null` when the
+ * plan's swimlanes are no longer made from a type the step touched — the step then writes its codes
+ * alone, and the lane kept for the old value puts the bar back.
+ */
+export type PlanActivityCodeLanesFn = (plan: {
+  rows: readonly ActivityCodesRowInput[];
+}) => ActivityCodesLanesInput | null;
+
+export type WriteActivityCodesFn = (
+  input: { activities: ActivityCodesRowInput[] } & Partial<ActivityCodesLanesInput>,
+) => Promise<ActivitySummary[]>;
 
 /** One type's change on one activity: the value ids on either side, `null` for "no value". */
 export interface ActivityCodeChange {
@@ -374,6 +396,16 @@ export interface ActivityCodesStep {
 /** What a fresh row holds for a type: the value id, or `null` when it has none. */
 const heldValue = (row: ActivitySummary, codeTypeId: string): string | null =>
   row.codes?.find((c: ActivityCodeAssignment) => c.codeTypeId === codeTypeId)?.codeValueId ?? null;
+
+/** The server refusing lanes because the plan's swimlanes are not made from the code they were planned against. */
+export function isSwimlaneSourceChanged(err: unknown): boolean {
+  if (!(err instanceof ApiFetchError) || err.status !== 409) return false;
+  const reason = (err.error.details as { reason?: string } | undefined)?.reason ?? '';
+  return reason === 'SWIMLANE_SOURCE_CHANGED';
+}
+
+/** Thrown inside the write so {@link writeOrSetAside} cannot read the 409 as a plain `changed`. */
+class SwimlaneSourceMoved extends Error {}
 
 /** The server refusing a value because it was deleted since, or is not of that type (422). */
 function isValueRefusal(err: unknown): boolean {
@@ -395,6 +427,14 @@ function isValueRefusal(err: unknown): boolean {
  *
  * Both directions write the CURRENT version of each row. Codes are `NOT_INPUT` to the engine, so the
  * step never asks for a recalculation (`affectsSchedule: false`).
+ *
+ * **Lanes are planned again at replay** (p6-activity-codes M4, `m4-ui-design.md` §5.3): the lanes the
+ * forward write carried were planned against the picture of that moment, and a replay lands in
+ * another. `planLanes` is asked then, with the rows as they are now, and answers `null` once the plan's
+ * swimlanes are not made from a type the step touched — so the replay writes codes alone, as it did
+ * before swimlanes could come from a code. A 409 `SWIMLANE_SOURCE_CHANGED` means a colleague switched
+ * the source between that answer and the write: the plan is read again so the diagram follows, and the
+ * step is set aside rather than retried against a picture the planner has not seen.
  */
 export function activityCodesCommand(params: {
   steps: readonly ActivityCodesStep[];
@@ -402,8 +442,9 @@ export function activityCodesCommand(params: {
   /** Names for the value ids the step mentions, for the set-aside sentence. */
   valueNames: ReadonlyMap<string, string>;
   write: WriteActivityCodesFn;
+  planLanes?: PlanActivityCodeLanesFn | undefined;
 }): Command {
-  const { steps, label, valueNames, write } = params;
+  const { steps, label, valueNames, write, planLanes } = params;
   const subject = steps.length === 1 && steps[0] !== undefined ? steps[0].name : UNNAMED_SUBJECT;
   const replay = async (
     ctx: ReplayContext,
@@ -447,9 +488,19 @@ export function activityCodesCommand(params: {
     // "A value", because naming one of them would be a guess.
     const known = only === undefined ? undefined : valueNames.get(only);
     const valueName = known === undefined ? 'A value' : `“${known}”`;
+    const lanes = planLanes?.({ rows: activities }) ?? null;
     try {
-      return await writeOrSetAside(subject, () => write({ activities }));
+      return await writeOrSetAside(subject, async () => {
+        try {
+          await write({ activities, ...(lanes === null ? {} : lanes) });
+        } catch (err) {
+          if (!isSwimlaneSourceChanged(err)) throw err;
+          await ctx.readPlan();
+          throw new SwimlaneSourceMoved();
+        }
+      });
     } catch (err) {
+      if (err instanceof SwimlaneSourceMoved) return notApplicable('swimlanes-changed', subject);
       // `writeOrSetAside` set aside the 409 and 404 and rethrew everything else, so this sees the 422.
       if (isValueRefusal(err)) return notApplicable('value-deleted', valueName);
       throw err;
