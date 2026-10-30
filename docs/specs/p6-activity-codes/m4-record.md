@@ -3,82 +3,81 @@
 - **Spec:** [`./m4-spec.md`](./m4-spec.md) · **Plan:** [`./m4-plan.md`](./m4-plan.md) · **Database review:**
   [`./m4-database-review.md`](./m4-database-review.md) · **Before this:** [`./m3-record.md`](./m3-record.md)
 
-## 1. T1: code lanes on every lane write, codes on create, code lanes on the list (2026-10-30, the builder)
+## 1. T1: code lanes on every lane write, codes on create, current-basis code lanes on the reads (2026-10-30, the builder)
 
-**Status: built and tested; the measurement verdict is NOT settled, and both readings are kept here
-(ADR-0076).** The first, unpaired run missed the write ceiling. The backend-performance-reviewer then
-re-measured paired and reported a pass. The builder's paired re-run (below) agrees the unpaired figure was
-noise but does **not** reproduce a clean pass: the write median sits at or over the ceiling and the list
-page sits over its ceiling. No schema change and no index was written. If the answer is an index or a
-different statement shape, that is the database-architect's (CLAUDE.md §19.3).
-
-**The criterion, restated for this record** (the approved plan is not edited): the **median paired
-difference**, "with lanes" minus "without", each pair timed back to back. Ceilings unchanged: the
-2,000-row codes write at most 150 ms added; a 200-row list page at most 6 ms added.
+**Status: built, tested and measured. Every ceiling holds on the shipped shape; the 2,000-row write is
+stated honestly below as not demonstrable to within 50 ms on this machine.** No schema change and no index.
 
 ### What was built
 
 No schema change. Under a code source the positions batch derives the basis `(T, the activity's live value
 of T, else NULL)` and upserts `code_swimlane_lanes` by raw `INSERT … ON CONFLICT`
-(`code-swimlane-lane.repository.ts`); `lockPlanSwimlaneSource` also returns the type; a `swimlaneId` is
-refused 422 `SWIMLANE_SOURCE_IS_ACTIVITY_CODE` on create, the single PATCH and the positions batch. The codes
-write takes `lanes` and `lanesCodeTypeId`. Create takes `codes` (and needs `activity:update` then). The list,
-the single read, the codes write and create (when it sent codes) carry `codeSwimlaneLanes`, read after
-`loadActivityCodes` finds a live type so a plan with no code type issues no new statement.
-`SWIMLANE_LIMIT` moved to `@repo/types`. `activity-history-statements.e2e-spec.ts` passes unchanged.
+(`code-swimlane-lane.repository.ts`); `lockPlanSwimlaneSource` also returns the type; a `swimlaneId` is refused
+422 `SWIMLANE_SOURCE_IS_ACTIVITY_CODE` on create, the single PATCH and the positions batch. The codes write
+takes `lanes` and `lanesCodeTypeId`. Create takes `codes` (and then needs `activity:update`). `SWIMLANE_LIMIT`
+moved to `@repo/types`. `activity-history-statements.e2e-spec.ts` passes unchanged.
 
-### Measurement (ADR-0142)
+**What the reads send, after the owner's decision below.** The list, the single read, the codes write
+(read inside its transaction after the upsert) and create (when it sent `codes`) carry `codeSwimlaneLanes`
+only under an `ACTIVITY_CODE` source, only for that type, only the row at the activity's current basis
+(`loadCurrentCodeLanes`, the database-architect's Statement A, in the list's own `Promise.all`). A new member
+read, `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes`, returns the same for any live type of the
+plan (`loadPlanCodeLanes`), throttled to 30 a minute, deliberately unpaginated, `activity:read`, not a guest
+route.
 
-`apps/api/test/measure/codes-reads.measure.ts`, case `MEASURE_ONLY=lanes`: one plan of 5,000 activities,
-three code types of 50 values each, every activity holding every type and a lane under each (15,000 lane
-rows), drawn from the first type. Same method as `m2-record.md` §9: local PostgreSQL 16.15 in the shared
-container (not the deployed host), over HTTP through the real application, v4 ids,
-`RATE_LIMIT_LIMIT=100000`. The "without" half switches the lane statement off with a `vi.mock` toggle on
-the same running application. **A list page is capped at 100 rows** (`PaginationQueryDto` `@Max(100)`), so
-the plan's "200-row page" is two pages; the figures are per 100-row page.
+### The measurement history (ADR-0076: nothing here is erased)
 
-**Run 1, unpaired (the original miss, kept).** Without then with, in alternating blocks, p50 ms:
+Same method as `m2-record.md` §9: local PostgreSQL 16.15 in the shared container (not the deployed host), over
+HTTP through the real application, v4 ids, `RATE_LIMIT_LIMIT=100000`. A list page is capped at 100 rows
+(`PaginationQueryDto` `@Max(100)`), so the plan's "200-row page" is two pages. Criterion for the write and the
+reads: the **median paired difference**, "with lanes" minus "without", each pair timed back to back (the
+approved plan is not edited).
 
-| Case                                         | Without     | With        | Added       | Result             |
-| -------------------------------------------- | ----------- | ----------- | ----------- | ------------------ |
-| PATCH codes, 2,000 activities, alternation 1 | 700.6       | 921.1       | +220.5      | miss (ceiling 150) |
-| PATCH codes, 2,000 activities, alternation 2 | 882.1       | 1170.3      | +288.2      | miss               |
-| List, one 100-row page, alternations 1 and 2 | 34.8 / 27.7 | 31.5 / 29.4 | -3.3 / +1.7 | within noise       |
+1. **First run, unpaired, every type and every stored basis on the list: a miss.** PATCH codes of 2,000 rows:
+   +220.5 and +288.2 ms over its 150 ms ceiling. The method was wrong: the unchanged baseline swung 700 to 882
+   ms between alternations (the reviewer saw 665 to 1,069 ms), and the lane table grew between alternations
+   (each value change inserts a new basis row), so the "with" half met a bigger table.
+2. **Paired, as first shipped: the write is not demonstrable, and the list missed.** The backend-performance
+   reviewer's 14 pairs gave **+119 ms** (2,000 rows, inserting new lane rows) and **+121 ms** (updating in
+   place); 50 rows +3 / +5 ms; 1 row +0 / +2 ms; statement log +120 / +81 ms, the upsert itself 63 / 53 ms,
+   about 43 ms of it the four foreign-key triggers. Builder's pairs, table rebuilt before every half: +102.5
+   (7 pairs, spread 20 to 479), +199.0 (9 pairs), +97.7, +193.7, +173.5 ms. **Stated plainly: the 2,000-row
+   worst case is about 120 ms on the reviewer's 14-pair median and is not demonstrable to within 50 ms on
+   this machine; 1 to 50 rows add under 5 ms.** The list, sending every type and every stored basis, added
+   **+5.2 to +6.0 ms per 100-row page** (about 10 to 12 per 200 against 6) and **+24.1 %** payload
+   (9,968,157 to 12,374,479 B at 5,000 activities x 3 placed types): **a miss**, and unbounded as stale rows
+   accumulate (TECH_DEBT #563).
+3. **The owner's decision, 2026-10-30: "current code only"** (the recommended of three options offered). The
+   other two were to keep every type and basis, and to cap or filter by another rule. The reads now send only
+   the source type's current-basis row and the other code's lanes come from the new read when the planner
+   switches.
 
-**Why that was the wrong method.** The "without" write moved from 700 to 882 ms between alternations on an
-unchanged build (the reviewer saw 665 to 1,069 ms), and the lane table grew between alternations: every
-write that changes a value inserts a new `(activity, type, value)` row, so the table the "with" half met was
-larger than the one the "without" half met. Alternating blocks put that drift into the difference.
+### Figures on the shipped shape (one plan, 5,000 activities, three types of 50 values, 15,000 lane rows)
 
-**Reviewer's paired re-measurement** (14 pairs, each "without" then "with" back to back): 2,000 rows
-**+119 ms** inserting new lane rows and **+121 ms** updating in place; 50 rows +3 / +5 ms; 1 row +0 / +2 ms.
-Statement log: +120 / +81 ms, the upsert itself 63 / 53 ms, about 43 ms of that the four foreign-key
-triggers. Pass on the 150 ms ceiling.
+| Case                                                                            | Ceiling               | Result                                                                   |
+| ------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------ |
+| List, 100-row page, median paired difference (40 pairs)                         | 6 ms per 200 rows     | **+0.8 / +1.5 / +1.6 ms** in three runs (about 1.6 to 3.2 per 200): pass |
+| List payload, 5,000 activities                                                  | recorded              | 9,968,157 to 10,766,906 B, **+8.0 %** (was +24.1 %)                      |
+| Plan-wide read, over HTTP (24 requests)                                         | recorded              | median 46.1 to 57.1 ms, p95 51 to 74 ms, 5,000 lanes, 803,812 B          |
+| Plan-wide read, **single-statement join** (Statement B), database time, 40 runs | <= 10 ms              | median **11.5 to 12.7 ms**: **a miss**                                   |
+| Statement B with the `code_types` join vs without, median paired difference     | keep if within target | +0.28 to +0.39 ms (11.8 to 13.0 vs 11.5 to 12.7)                         |
+| Plan-wide read, **two-statement fallback**, sum of both, database time          | <= 10 ms              | median **6.1 to 6.4 ms**: pass                                           |
+| PATCH codes 2,000 rows, median paired difference (7 pairs)                      | 150 ms added          | +97.7, +173.5, +193.7 ms: **not demonstrable**, see item 2               |
 
-**Builder's paired re-runs** (the harness now pairs each repetition and rebuilds the lane table to its seeded
-15,000 rows before every half), median paired difference:
+`EXPLAIN (ANALYZE, BUFFERS)` of Statement B (the harness prints both, `MEASURE_ONLY=lanes`): a nested loop that
+sequentially scans `code_swimlane_lanes` (filter `code_type_id`, 10,000 rows removed) and
+`code_value_assignments` (10,000 removed), hash-joins them, and probes `activities_pkey` 5,000 times;
+**15,535 buffers, all hits**, execution 12.3 to 12.5 ms without the join and 18.3 to 18.6 ms with it on that
+sample (planning 0.5 to 0.8 ms); the extra join is one `Seq Scan on code_types` of three rows. The two
+sequential scans read the whole table because it holds 15,000 rows, and the 5,000 index probes dominate; no
+plan was index-starved, so **no index is proposed**. Statement B missed, so the **two-statement fallback
+shipped**: the plan's live activities with their live value of the type, then the type's lanes by
+`code_type_id` alone joined fail-closed to the type, matched in memory. The `code_types` join stays (0.3 to
+0.4 ms) on the fallback's lane statement and on B.
 
-| Run                             | PATCH codes, 2,000 rows                                                                       | List, 100-row page                    |
-| ------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
-| A: 30 list pairs, 7 write pairs | **+102.5 ms** (pairs 188, 59, 58, 400, 20, 479, 102; medians 853 without, 992 with)           | **+6.0 ms** (41.3 without, 45.0 with) |
-| B: 60 list pairs, 9 write pairs | **+199.0 ms** (pairs 45, 204, 208, 199, 210, 153, 75, 217, 25; medians 805 without, 936 with) | **+5.2 ms** (40.8 without, 47.5 with) |
-
-Reading: the write difference is spread from about 20 to 480 ms between pairs on this machine, so a median
-of 7 or 9 pairs is itself unstable (+102 then +199), against the reviewer's +119 / +121 over 14. The write
-is consistent with a figure around 100 to 200 ms, i.e. at or over the 150 ms ceiling, and **not** a clean
-pass. The list page costs 5 to 6 ms per 100 rows, about 10 to 12 per 200, **over** the 6 ms ceiling, which
-was set from the database-only read of 0.6 ms per 200 rows (`m4-database-review.md` §2.3); the difference
-is mostly the response (+24.1 % bytes, below) that is serialised, sent and parsed, not the statement.
-
-**List payload at 5,000 activities x 3 placed types** (recorded, no ceiling): 9,968,157 B without,
-12,374,479 B with, +2,406,322 B (+24.1 %), summed over the 50 pages; about 160 B per lane entry.
-
-### Open
-
-The verdict needs the reviewer's call on two things: whether the write ceiling is met (reviewer +119 / +121,
-builder +102 / +199), and whether the list ceiling should have counted the serialised response (builder +5 to
-+6 ms per page). `docs/TECH_DEBT.md` #563 records that the lane read returns stale rows for ever, which
-widens both figures over time.
+TECH_DEBT #563 is reworded to the stored-stale-rows residue: the payload no longer carries them, and the
+plan-wide read grows with them. Trigger: stored lane rows of one type above about 10 per activity, or the
+read's median above 10 ms at 5,000 activities.
 
 ## 2. Create with codes: lock order, confirmed by the database-architect
 

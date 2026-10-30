@@ -433,6 +433,89 @@ describe('codes — request-path cost', () => {
       `list payload, 5,000 activities x 3 placed types: without ${without} B, with ${withLanes} B (+${withLanes - without} B, ${(((withLanes - without) / without) * 100).toFixed(1)} %)`,
     );
 
+    // Statement B, the plan-wide read (`GET …/code-types/:id/swimlane-lanes`): over HTTP, and in the
+    // database alone with and without the fail-closed `code_types` join, each as a paired median, plus
+    // EXPLAIN (ANALYZE, BUFFERS) of both. 5,000 activities, one current-basis lane each.
+    const lanesRoute = `${API}/plans/${planId}/code-types/${source}/swimlane-lanes`;
+    // The route's own throttle is 30 a minute and not raised by RATE_LIMIT_LIMIT: 1 warm-up, 1 body
+    // read and 24 timed requests stay inside it.
+    await agent.get(lanesRoute).expect(200);
+    const http: number[] = [];
+    for (let i = 0; i < 24; i += 1) http.push(await timed(() => agent.get(lanesRoute).expect(200)));
+    const body = (await agent.get(lanesRoute).expect(200)).body.data as { lanes: unknown[] };
+    out.push(
+      `plan-wide read over HTTP: median ${median(http).toFixed(1)} ms, p95 ${[...http].sort((x, y) => x - y)[Math.floor(0.95 * http.length)]!.toFixed(1)} ms (n=24), ${body.lanes.length} lanes, ${Buffer.byteLength(JSON.stringify(body))} B`,
+    );
+    const stmtB = (withJoin: boolean): string => `
+      SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
+             l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
+      FROM code_swimlane_lanes l
+      ${withJoin ? `JOIN code_types t ON t.id = '${source}'::uuid AND t.plan_id = '${planId}'::uuid AND t.deleted_at IS NULL` : ''}
+      JOIN activities a
+        ON a.id = l.activity_id AND a.organization_id = '${orgId}'::uuid
+        AND a.plan_id = '${planId}'::uuid AND a.deleted_at IS NULL
+      LEFT JOIN code_value_assignments cva
+        ON cva.activity_id = l.activity_id AND cva.code_type_id = '${source}'::uuid
+      LEFT JOIN code_values v
+        ON v.code_type_id = '${source}'::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+      WHERE l.code_type_id = '${source}'::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id`;
+    const dbMs = async (withJoin: boolean): Promise<number> => {
+      const plan = await prisma.$queryRawUnsafe<{ 'QUERY PLAN': { 'Execution Time': number }[] }[]>(
+        `EXPLAIN (ANALYZE, FORMAT JSON) ${stmtB(withJoin)}`,
+      );
+      return plan[0]!['QUERY PLAN'][0]!['Execution Time'];
+    };
+    await dbMs(false);
+    await dbMs(true);
+    const withoutJoin: number[] = [];
+    const withJoinMs: number[] = [];
+    const paired: number[] = [];
+    for (let i = 0; i < ITER; i += 1) {
+      const a = await dbMs(false);
+      const b = await dbMs(true);
+      withoutJoin.push(a);
+      withJoinMs.push(b);
+      paired.push(b - a);
+    }
+    out.push(
+      `Statement B, database execution time: without code_types join median ${median(withoutJoin).toFixed(1)} ms, with ${median(withJoinMs).toFixed(1)} ms, median paired difference ${median(paired).toFixed(2)} ms (n=${ITER} pairs; target <= 10 ms)`,
+    );
+    // The two-statement fallback (t1-lanes-sql.md): the plan's live activities with their live value of T,
+    // and T's lanes by type alone, matched in memory. Database execution time of the two, summed.
+    const fallbackS1 = `
+      SELECT a.id AS "activityId", v.id AS "valueId"
+      FROM activities a
+      LEFT JOIN code_value_assignments cva
+        ON cva.activity_id = a.id AND cva.code_type_id = '${source}'::uuid
+      LEFT JOIN code_values v
+        ON v.code_type_id = '${source}'::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+      WHERE a.plan_id = '${planId}'::uuid AND a.organization_id = '${orgId}'::uuid
+        AND a.deleted_at IS NULL`;
+    const fallbackS2 = `
+      SELECT l.activity_id, l.code_value_id, l.lane_index, l.updated_at
+      FROM code_swimlane_lanes l WHERE l.code_type_id = '${source}'::uuid`;
+    const execMs = async (sql: string): Promise<number> =>
+      (
+        await prisma.$queryRawUnsafe<{ 'QUERY PLAN': { 'Execution Time': number }[] }[]>(
+          `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+        )
+      )[0]!['QUERY PLAN'][0]!['Execution Time'];
+    await execMs(fallbackS1);
+    const fallback: number[] = [];
+    for (let i = 0; i < ITER; i += 1)
+      fallback.push((await execMs(fallbackS1)) + (await execMs(fallbackS2)));
+    out.push(
+      `Two-statement fallback, database execution time (sum of both): median ${median(fallback).toFixed(1)} ms (n=${ITER}; target <= 10 ms)`,
+    );
+    for (const withJoin of [false, true]) {
+      const plan = await prisma.$queryRawUnsafe<{ 'QUERY PLAN': string }[]>(
+        `EXPLAIN (ANALYZE, BUFFERS) ${stmtB(withJoin)}`,
+      );
+      out.push(
+        `EXPLAIN (ANALYZE, BUFFERS) Statement B ${withJoin ? 'WITH' : 'WITHOUT'} the code_types join:\n${plan.map((r) => `    ${r['QUERY PLAN']}`).join('\n')}`,
+      );
+    }
+
     const rows = (await prisma.activity.findMany({
       where: { planId },
       orderBy: { id: 'asc' },

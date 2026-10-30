@@ -170,18 +170,33 @@ describe('loadCurrentCodeLanes', () => {
 });
 
 describe('loadPlanCodeLanes', () => {
-  it('orders by activity id and serialises the timestamp', async () => {
-    const at = new Date('2026-10-30T10:00:00.000Z');
-    const queryRaw = vi.fn().mockResolvedValue([
-      { activityId: 'b', codeValueId: null, laneIndex: 1, updatedAt: at },
-      { activityId: 'a', codeValueId: 'v', laneIndex: 3, updatedAt: at },
+  const at = new Date('2026-10-30T10:00:00.000Z');
+  const type = { id: 't', planId: 'p', organizationId: 'o' };
+
+  it('matches the lanes to each live activity’s current value, in two statements', async () => {
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { activityId: 'b', valueId: null },
+        { activityId: 'a', valueId: 'v1' },
+        { activityId: 'c', valueId: 'v2' },
+      ])
+      .mockResolvedValueOnce([
+        { activityId: 'b', codeValueId: null, laneIndex: 1, updatedAt: at },
+        { activityId: 'a', codeValueId: 'v1', laneIndex: 3, updatedAt: at },
+        // Stale: c now holds v2, not v1.
+        { activityId: 'c', codeValueId: 'v1', laneIndex: 9, updatedAt: at },
+        // A deleted activity (not among the members).
+        { activityId: 'z', codeValueId: null, laneIndex: 4, updatedAt: at },
+        // b holds no value, so a stored lane for a value is stale.
+        { activityId: 'b', codeValueId: 'v1', laneIndex: 8, updatedAt: at },
+      ]);
+    const lanes = await loadPlanCodeLanes({ $queryRaw: queryRaw }, type);
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    expect(lanes.map((l) => [l.activityId, l.codeValueId, l.laneIndex])).toEqual([
+      ['a', 'v1', 3],
+      ['b', null, 1],
     ]);
-    const lanes = await loadPlanCodeLanes(
-      { $queryRaw: queryRaw },
-      { id: 't', planId: 'p', organizationId: 'o' },
-    );
-    expect(queryRaw).toHaveBeenCalledTimes(1);
-    expect(lanes.map((l) => l.activityId)).toEqual(['a', 'b']);
     expect(lanes[0]?.updatedAt).toBe(at.toISOString());
   });
 });

@@ -221,16 +221,22 @@ export interface PlanCodeLaneRow {
 }
 
 /**
- * **Every activity's current-basis lane under one type of the plan, in one statement** (the
- * database-architect's Statement B), for the moment a planner switches the swimlanes to that code.
+ * **Every activity's current-basis lane under one type of the plan, in two statements matched in
+ * memory** (the database-architect's two-statement fallback to Statement B), for the moment a planner
+ * switches the swimlanes to that code. The single-statement join measured 11.5 to 12.7 ms of database
+ * time at 5,000 activities against a 10 ms target (`m4-record.md` §1); these two sum to about 6.4 ms.
  *
- * Takes the **type row itself**, which the caller has loaded as a live type of this plan and
- * organisation: the precondition is structural, so a bare id cannot reach the statement. That check
- * is also what makes leaving `plan_id` off `code_swimlane_lanes` and `code_value_assignments` safe,
- * and naming it there makes the planner walk the plan-leading unique index instead (13 to 15 ms
- * against 7 to 8). The statement still joins the type fail-closed (a primary-key probe), so a type
- * deleted a moment later reads nothing. States `deleted_at` of `code_types`, `activities` and
- * `code_values`.
+ * 1. the plan's live activities, each with its **live** value of the type (a deleted or absent value
+ *    reads as none);
+ * 2. the type's lanes by `code_type_id` alone, joined fail-closed to the type as a live type of this
+ *    plan (a primary-key probe).
+ *
+ * A lane is kept when its activity is live and its `codeValueId` equals that activity's live value (or
+ * both are none): the current basis, nothing stale. Takes the **type row itself**, which the caller
+ * has loaded as a live type of this plan and organisation, so the precondition is structural and a
+ * bare id cannot reach the statements; it is also what makes leaving `plan_id` off the child tables
+ * safe (naming it makes the planner walk the plan-leading unique index, 13 to 15 ms against 7 to 8).
+ * States `deleted_at` of `activities`, `code_values` and `code_types`.
  *
  * **Deliberately unpaginated**: at most one row per live activity, bounded by the plan's size (about
  * 5,000 activities; no per-plan activity cap is enforced), and a cursor would force many round trips
@@ -240,24 +246,31 @@ export async function loadPlanCodeLanes(
   db: Pick<PrismaClient, '$queryRaw'>,
   type: { id: string; planId: string; organizationId: string },
 ): Promise<PlanCodeLaneRow[]> {
-  const rows = await db.$queryRaw<
-    { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
-  >`
-    SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
-           l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
-    FROM code_swimlane_lanes l
-    JOIN code_types t
-      ON t.id = ${type.id}::uuid AND t.plan_id = ${type.planId}::uuid AND t.deleted_at IS NULL
-    JOIN activities a
-      ON a.id = l.activity_id AND a.organization_id = ${type.organizationId}::uuid
-      AND a.plan_id = ${type.planId}::uuid AND a.deleted_at IS NULL
-    LEFT JOIN code_value_assignments cva
-      ON cva.activity_id = l.activity_id AND cva.code_type_id = ${type.id}::uuid
-    LEFT JOIN code_values v
-      ON v.code_type_id = ${type.id}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
-    WHERE l.code_type_id = ${type.id}::uuid AND l.code_value_id IS NOT DISTINCT FROM v.id
-  `;
-  return rows
+  const [members, stored] = await Promise.all([
+    db.$queryRaw<{ activityId: string; valueId: string | null }[]>`
+      SELECT a.id AS "activityId", v.id AS "valueId"
+      FROM activities a
+      LEFT JOIN code_value_assignments cva
+        ON cva.activity_id = a.id AND cva.code_type_id = ${type.id}::uuid
+      LEFT JOIN code_values v
+        ON v.code_type_id = ${type.id}::uuid AND v.id = cva.code_value_id AND v.deleted_at IS NULL
+      WHERE a.plan_id = ${type.planId}::uuid AND a.organization_id = ${type.organizationId}::uuid
+        AND a.deleted_at IS NULL
+    `,
+    db.$queryRaw<
+      { activityId: string; codeValueId: string | null; laneIndex: number; updatedAt: Date }[]
+    >`
+      SELECT l.activity_id AS "activityId", l.code_value_id AS "codeValueId",
+             l.lane_index AS "laneIndex", l.updated_at AS "updatedAt"
+      FROM code_swimlane_lanes l
+      JOIN code_types t
+        ON t.id = ${type.id}::uuid AND t.plan_id = ${type.planId}::uuid AND t.deleted_at IS NULL
+      WHERE l.code_type_id = ${type.id}::uuid
+    `,
+  ]);
+  const valueOf = new Map(members.map((m) => [m.activityId, m.valueId]));
+  return stored
+    .filter((row) => valueOf.has(row.activityId) && valueOf.get(row.activityId) === row.codeValueId)
     .map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }))
     .sort((a, b) => (a.activityId < b.activityId ? -1 : a.activityId > b.activityId ? 1 : 0));
 }

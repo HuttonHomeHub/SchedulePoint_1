@@ -124,7 +124,10 @@ describe('the clone field census', () => {
     // 67 -> 68 on 2026-10-27: `codes` (P6 activity codes, M2-T4). Sent by the list and the codes write
     // only, and set by a write of its own, never by the create DTO. Classified `withheld` from the
     // create body; a paste within a plan carries it afterwards by one codes write (M3-T3).
-    expect(entries.length).toBe(68);
+    //
+    // 68 -> 69 on 2026-10-30: `codeSwimlaneLanes` (P6 activity codes, M4-T1), a server-kept read projection
+    // sent only under a code swimlane source; classified `withheld`.
+    expect(entries.length).toBe(69);
   });
 
   it('sends nothing the census withholds', () => {
