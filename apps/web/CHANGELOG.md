@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.200.6
+
+### Patch Changes
+
+- [#1227](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1227) [`78ddd79`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/78ddd791e8bbeeeb60a2955341bebed2dfd1c4c4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt view now tells you when the swimlane list could not be loaded. Before, its Swimlane column quietly disappeared; now a notice says the column is hidden until swimlanes load, with a Try again button.
+
+- [#1229](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1229) [`48b88dc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/48b88dc0f6a67db20b2a0d3bb5488c9572ff0571) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Three small consistency fixes. The recent-changes section on the overview and the float paths panel now say "Try again" on their error buttons, as the rest of the product does. The Gantt's "That schedule could not be loaded" message uses the standard button. The diagram's built-in fallback colours are now the light theme's, so a missing colour can no longer paint a dark diagram on a light page.
+
 ## 0.200.5
 
 ### Patch Changes
