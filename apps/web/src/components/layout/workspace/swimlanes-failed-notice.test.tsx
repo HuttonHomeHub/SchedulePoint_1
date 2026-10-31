@@ -2,7 +2,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SwimlanesFailedNotice, SwimlanesFailedRegion } from './swimlanes-failed-notice';
+import {
+  GANTT_SWIMLANES_FAILED_NOTE,
+  SwimlanesFailedNotice,
+  SwimlanesFailedRegion,
+} from './swimlanes-failed-notice';
 
 describe('SwimlanesFailedNotice', () => {
   it('says the diagram is shown without swimlanes, and Try again calls the retry', () => {
@@ -12,6 +16,22 @@ describe('SwimlanesFailedNotice', () => {
       "Couldn't load swimlanes. The diagram is shown without them.",
     );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a given sentence instead, with the same retry', () => {
+    const onRetry = vi.fn();
+    render(
+      <SwimlanesFailedNotice
+        onRetry={onRetry}
+        restoreFocus={vi.fn()}
+        message={GANTT_SWIMLANES_FAILED_NOTE}
+      />,
+    );
+    expect(screen.getByTestId('swimlanes-failed-notice')).toHaveTextContent(
+      "Couldn't load swimlanes. The Swimlane column is hidden until they load.",
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

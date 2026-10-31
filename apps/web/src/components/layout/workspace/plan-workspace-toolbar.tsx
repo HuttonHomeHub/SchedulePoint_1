@@ -19,7 +19,7 @@ import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
 import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
-import { SwimlanesFailedRegion } from './swimlanes-failed-notice';
+import { GANTT_SWIMLANES_FAILED_NOTE, SwimlanesFailedRegion } from './swimlanes-failed-notice';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -2824,17 +2824,23 @@ export function ToolbarPlanWorkspace({
                     inert={dockSqueezed || canvasRowTooShort}
                     className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
                   >
-                    {/* The list failed while swimlanes are on: the diagram is drawn without them, and
-                    this says so with a retry (the lens row carries the same sentence). Only on the
-                    diagram, which is where the division is drawn; its live region is mounted empty
-                    on the diagram so the sentence is announced when it arrives. */}
-                    {ctx.planView !== 'gantt' ? (
-                      <SwimlanesFailedRegion
-                        failed={swimlanesAreShown && swimlaneScene.failed}
-                        onRetry={swimlaneScene.refetch}
-                        restoreFocus={focusPlanSurface}
-                      />
-                    ) : null}
+                    {/* The list failed while swimlanes are on, and this says so with a retry (the lens row
+                    carries the sentence too). The region is mounted empty in both views so the
+                    sentence is announced when it arrives. On the diagram it fires on the failure
+                    alone: the diagram is drawn without the division. In the Gantt it fires only when
+                    the Swimlane column is actually gone (`tableSwimlanes` is null while the list is
+                    missing), so a failure that leaves a column on screen does not claim it is hidden
+                    (#549). */}
+                    <SwimlanesFailedRegion
+                      failed={
+                        swimlanesAreShown &&
+                        swimlaneScene.failed &&
+                        (ctx.planView !== 'gantt' || tableSwimlanes === null)
+                      }
+                      onRetry={swimlaneScene.refetch}
+                      restoreFocus={focusPlanSurface}
+                      message={ctx.planView === 'gantt' ? GANTT_SWIMLANES_FAILED_NOTE : undefined}
+                    />
                     {surface}
                     {legendPanel}
                     {resourceStripPanel}

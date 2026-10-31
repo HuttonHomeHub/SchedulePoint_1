@@ -1504,6 +1504,34 @@ describe('a failed swimlane list is said over the diagram, with a retry', () => 
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('in the Gantt says the column is hidden, not the diagram, and Try again refetches (#549)', () => {
+    const refetch = vi.fn();
+    h.swimlanes = {
+      source: 'MANUAL',
+      list: { data: undefined, isPending: false, isError: true, refetch },
+    };
+    h.search = { view: 'gantt' };
+    renderScreen();
+    const notice = screen.getByTestId('swimlanes-failed-notice');
+    expect(notice).toHaveTextContent(
+      "Couldn't load swimlanes. The Swimlane column is hidden until they load.",
+    );
+    expect(notice).not.toHaveTextContent('diagram');
+    expect(notice.closest('[role="status"]')).not.toBeNull();
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('in the Gantt is silent while the list is fine', () => {
+    h.swimlanes = {
+      source: 'MANUAL',
+      list: { data: [{ id: 's1', name: 'Civil' }], isPending: false },
+    };
+    h.search = { view: 'gantt' };
+    renderScreen();
+    expect(screen.queryByTestId('swimlanes-failed-notice')).not.toBeInTheDocument();
+  });
+
   it('is not there when the list is fine, or when swimlanes are off', () => {
     h.swimlanes = {
       source: 'MANUAL',

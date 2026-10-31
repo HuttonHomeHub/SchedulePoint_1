@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { SWIMLANES_FAILED_NOTE } from '@/features/tsld/toolbar/tsld-toolbar-items';
 
+/** The Gantt's sentence: its table loses the Swimlane column, and the diagram is not on screen (#549). */
+export const GANTT_SWIMLANES_FAILED_NOTE =
+  "Couldn't load swimlanes. The Swimlane column is hidden until they load.";
+
 /**
  * Said over the diagram while swimlanes are on and their list could not be loaded (swimlanes M2 gate
  * review). The diagram is drawn without them in that state, so without a sentence a planner sees
@@ -23,9 +27,12 @@ import { SWIMLANES_FAILED_NOTE } from '@/features/tsld/toolbar/tsld-toolbar-item
 export function SwimlanesFailedNotice({
   onRetry,
   restoreFocus,
+  message = SWIMLANES_FAILED_NOTE,
 }: {
   onRetry: () => void;
   restoreFocus: () => void;
+  /** The sentence; the default names the diagram, so the Gantt passes its own (#549). */
+  message?: string | undefined;
 }): React.ReactElement {
   const retryRef = useRef<HTMLButtonElement>(null);
   const restoreRef = useRef(restoreFocus);
@@ -43,7 +50,7 @@ export function SwimlanesFailedNotice({
       tone="warning"
       density="comfortable"
       messageFit="grow"
-      message={SWIMLANES_FAILED_NOTE}
+      message={message}
       data-testid="swimlanes-failed-notice"
     >
       <Button ref={retryRef} type="button" variant="secondary" size="sm" onClick={onRetry}>
@@ -54,7 +61,7 @@ export function SwimlanesFailedNotice({
 }
 
 /**
- * The live region the notice arrives in. It is rendered whenever the diagram is the plan view and
+ * The live region the notice arrives in. It is rendered in both plan views and
  * holds the notice only while the list has failed, so the region exists before its content changes.
  * Empty, it is zero-height; `empty:-mb-2` cancels the container's `gap-2` after it so the quiet state
  * costs the diagram no space (the region cannot be `hidden`, which would remove it from the
@@ -64,14 +71,18 @@ export function SwimlanesFailedRegion({
   failed,
   onRetry,
   restoreFocus,
+  message,
 }: {
   failed: boolean;
   onRetry: () => void;
   restoreFocus: () => void;
+  message?: string | undefined;
 }): React.ReactElement {
   return (
     <div role="status" className="empty:-mb-2">
-      {failed ? <SwimlanesFailedNotice onRetry={onRetry} restoreFocus={restoreFocus} /> : null}
+      {failed ? (
+        <SwimlanesFailedNotice onRetry={onRetry} restoreFocus={restoreFocus} message={message} />
+      ) : null}
     </div>
   );
 }
