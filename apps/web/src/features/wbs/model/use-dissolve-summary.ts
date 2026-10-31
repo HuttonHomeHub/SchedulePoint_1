@@ -29,30 +29,57 @@ export function useDissolveSummaryInSwimlanes(orgSlug: string, planId: string) {
   const { mutateAsync: dissolveAsync } = dissolve;
   const { snapshot, store } = lanes;
 
+  /** Plan and write the lanes for a dissolve that has landed. Never rejects (see the store). */
+  const storeLanes = useCallback(
+    (
+      before: ReturnType<typeof snapshot>,
+      input: DissolveSummaryInput,
+      result: DissolveSummaryResponse,
+    ): Promise<void> =>
+      store({
+        before,
+        changes: result.promoted.map((child) => ({ id: child.id, parentId: child.parentId })),
+        saved: result.promoted,
+        removed: [typeof input === 'string' ? input : input.activityId],
+      }),
+    [store],
+  );
+
   const mutateAsync = useCallback(
     async (input: DissolveSummaryInput): Promise<DissolveSummaryResponse> => {
       const before = snapshot();
       const result = await dissolveAsync(input);
-      const summaryId = typeof input === 'string' ? input : input.activityId;
-      await store({
-        before,
-        changes: result.promoted.map((child) => ({ id: child.id, parentId: child.parentId })),
-        saved: result.promoted,
-        removed: [summaryId],
-      });
+      await storeLanes(before, input, result);
       return result;
     },
-    [snapshot, store, dissolveAsync],
+    [snapshot, storeLanes, dissolveAsync],
   );
 
+  // The caller's `onSuccess` runs before the lanes are written, as the editor's save does: the host
+  // records its undo step from it, and a slow or failed lane write must not delay or lose that. A
+  // throw from a caller's callback is logged, never left as an unhandled rejection.
   const mutate = useCallback(
     (input: DissolveSummaryInput, callbacks?: DissolveCallbacks): void => {
-      mutateAsync(input).then(
-        (result) => callbacks?.onSuccess?.(result),
-        (error: Error) => callbacks?.onError?.(error),
+      const before = snapshot();
+      void dissolveAsync(input).then(
+        async (result) => {
+          try {
+            callbacks?.onSuccess?.(result);
+          } catch (error) {
+            console.error('A dissolve success callback threw', error);
+          }
+          await storeLanes(before, input, result);
+        },
+        (error: Error) => {
+          try {
+            callbacks?.onError?.(error);
+          } catch (thrown) {
+            console.error('A dissolve error callback threw', thrown);
+          }
+        },
       );
     },
-    [mutateAsync],
+    [snapshot, storeLanes, dissolveAsync],
   );
 
   return { mutate, mutateAsync, isPending: dissolve.isPending || lanes.isPending };

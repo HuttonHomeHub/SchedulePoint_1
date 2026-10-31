@@ -87,8 +87,16 @@ describe('useDissolveSummaryInSwimlanes', () => {
     };
     // The lane is written at the version the dissolve returned, not the one the cache held (4), and
     // the dissolved summary itself is never a position.
-    const rows = body.positions as { id: string; version: number }[];
-    expect(rows.find((r) => r.id === 'c1')?.version).toBe(5);
+    const rows = body.positions as {
+      id: string;
+      version: number;
+      swimlane: { laneIndex: number };
+    }[];
+    expect(rows.find((r) => r.id === 'c1')).toEqual({
+      id: 'c1',
+      version: 5,
+      swimlane: { laneIndex: 0 },
+    });
     expect(rows.map((r) => r.id)).not.toContain('S');
   });
 
@@ -102,6 +110,43 @@ describe('useDissolveSummaryInSwimlanes', () => {
     });
 
     expect(paths()).toEqual([DISSOLVE, POSITIONS]);
+  });
+
+  it('reports success before writing the lane, and still reports it when the lane write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(apiFetch).mockImplementation((path) =>
+      String(path) === DISSOLVE ? Promise.resolve(RESULT) : Promise.reject(new Error('boom')),
+    );
+    const { result } = mount();
+    const onSuccess = vi.fn(() => {
+      expect(paths()).toEqual([DISSOLVE]);
+    });
+
+    await act(async () => {
+      result.current.mutate('S', { onSuccess });
+      await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    });
+
+    expect(onSuccess).toHaveBeenCalledWith(RESULT);
+    expect(paths()).toEqual([DISSOLVE, POSITIONS]);
+    error.mockRestore();
+  });
+
+  it('logs, rather than rejecting, when a caller’s callback throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = mount();
+
+    await act(async () => {
+      result.current.mutate('S', {
+        onSuccess: () => {
+          throw new Error('caller');
+        },
+      });
+      await vi.waitFor(() => expect(paths()).toEqual([DISSOLVE, POSITIONS]));
+    });
+
+    expect(error).toHaveBeenCalledWith('A dissolve success callback threw', expect.any(Error));
+    error.mockRestore();
   });
 
   it('is exactly the bare write when the plan’s swimlanes are not from the WBS', async () => {
