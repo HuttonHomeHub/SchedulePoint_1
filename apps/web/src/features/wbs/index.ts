@@ -1,7 +1,9 @@
 export { ActivityMembersPanel } from './components/ActivityMembersPanel';
 export { WbsBulkAssignBar } from './components/WbsBulkAssignBar';
 export type { OnReparented } from './model/reparented';
+export { useDissolveSummaryInSwimlanes } from './model/use-dissolve-summary';
 export { useReparentActivities } from './model/use-reparent-activities';
+export { useStoreReparentLanes } from './model/use-store-reparent-lanes';
 export { bulkParentChanges, membershipDiff, type MembershipChange } from './model/membership-diff';
 export { deriveWbsBandSource, type WbsBandSource } from './model/wbs-band-source';
 export { ancestorIds, wouldCloseLoop } from './model/wbs-tree';

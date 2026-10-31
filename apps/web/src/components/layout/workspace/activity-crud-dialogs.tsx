@@ -18,7 +18,6 @@ import {
   deleteActivityDescription,
   dissolveSummaryDescription,
   useDeleteActivity,
-  useDissolveSummary,
 } from '@/features/activities';
 import { ActivityHistoryPanel } from '@/features/activity-history';
 import { ActivityCodesSection } from '@/features/codes';
@@ -30,7 +29,7 @@ import {
   NO_SWIMLANE_CHOICE_LABEL,
   type SwimlaneAssignment,
 } from '@/features/tsld/model/swimlane-assignment';
-import { isWbsSwimlaneLevel } from '@/features/wbs';
+import { isWbsSwimlaneLevel, useDissolveSummaryInSwimlanes } from '@/features/wbs';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
@@ -58,7 +57,7 @@ export function ActivityCrudDialogs({
 }): React.ReactElement {
   const { orgSlug, planId } = model;
   const deleteActivity = useDeleteActivity(orgSlug, planId);
-  const dissolveSummary = useDissolveSummary(orgSlug, planId);
+  const dissolveSummary = useDissolveSummaryInSwimlanes(orgSlug, planId);
   const announce = useAnnounce();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dissolveError, setDissolveError] = useState<string | null>(null);

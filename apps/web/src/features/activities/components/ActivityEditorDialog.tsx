@@ -16,6 +16,7 @@ import { ActivityEditorSession } from './ActivityEditorSession';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Dialog } from '@/components/ui/dialog';
+import { useStoreReparentLanes } from '@/features/wbs';
 
 /**
  * The tabbed activity editor, **as a modal dialog** (ADR-0060, ADR-0101). Unconditional since ADR-0089 retired
@@ -81,6 +82,7 @@ export function ActivityEditorDialog({
 }: ActivityEditorDialogProps): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
+  const lanes = useStoreReparentLanes(orgSlug, planId);
   const progress = useUpdateActivityProgress(orgSlug, planId);
   // The steps endpoint is addressed by the activity; a closed frame has none, and nothing can call it.
   const replaceSteps = useReplaceActivitySteps(orgSlug, planId, activity?.id ?? '');
@@ -109,8 +111,18 @@ export function ActivityEditorDialog({
    * session, so they survive the session being unmounted mid-save.
    */
   const saveFields = ({ activity: row, patch, label, onSuccess, onError }: ScopeSave): void => {
+    // General sends `parentId` on every save, so the write is a membership change only when the parent
+    // actually moved. Planned against the list as it stood before the write (docs/TECH_DEBT.md #547).
+    const before = 'parentId' in patch ? lanes.snapshot() : undefined;
     void update.mutateAsync({ activityId: row.id, version: row.version, patch }).then(
-      (after) => {
+      async (after) => {
+        if (before !== undefined && after.parentId !== row.parentId) {
+          await lanes.store({
+            before,
+            changes: [{ id: after.id, parentId: after.parentId }],
+            saved: [after],
+          });
+        }
         // The session's own effects first: they mark the scope clean, and a throw from the host's undo
         // recording must not leave a saved form looking unsaved.
         onSuccess(after);

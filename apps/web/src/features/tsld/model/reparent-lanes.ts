@@ -34,15 +34,22 @@ export function planReparentLanes(args: {
   level: number | null | undefined;
   /** The plan's data date, which the projection measures spans from. */
   dataDate: string | null | undefined;
+  /**
+   * Activities the write removes from the plan, left out of the picture it is planned against. A
+   * dissolved summary is no longer a swimlane, so the children promoted out of it are settled in the
+   * groups they now belong to, not beside an empty lane that is about to disappear.
+   */
+  removed?: readonly string[] | undefined;
 }): SwimlaneLanePlacement[] {
   const { activities, changes, source, level, dataDate } = args;
+  const gone = new Set(args.removed ?? []);
   if (source !== 'WBS' || !isWbsSwimlaneLevel(level) || !dataDate || changes.length === 0) {
     return [];
   }
   const moved = new Map(changes.map((c) => [c.id, c.parentId] as const));
-  const after = activities.map((a) =>
-    moved.has(a.id) ? { ...a, parentId: moved.get(a.id) ?? null } : a,
-  );
+  const after = activities
+    .filter((a) => !gone.has(a.id))
+    .map((a) => (moved.has(a.id) ? { ...a, parentId: moved.get(a.id) ?? null } : a));
   const was = wbsSwimlaneInput(activities, level).membership;
   const input = wbsSwimlaneInput(after, level);
   const changedGroup = after.flatMap((a) =>

@@ -40,7 +40,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useDeleteActivity: () => ({ mutate: mutateSpy, isPending: false }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),
-  useDissolveSummary: () => ({ mutate: dissolveSpy, isPending: false }),
   // The REAL copy helper, not a stub: this host must actually produce the WBS cascade warning, and
   // a stub would let it silently stop while the test kept passing (the defect being fixed was
   // precisely one surface saying something the other did not).
@@ -61,6 +60,13 @@ vi.mock('@/features/activities', async (importOriginal) => ({
     onSavedSpy(onSaved);
     return open ? <div data-testid="edit-dialog">Editing {activity?.name}</div> : null;
   },
+}));
+
+// The dissolve goes through the wrapper that stores the promoted children's lanes (#547); the spy
+// stands in for it so this file still mounts without a `QueryClientProvider`.
+vi.mock('@/features/wbs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useDissolveSummaryInSwimlanes: () => ({ mutate: dissolveSpy, isPending: false }),
 }));
 
 import { ActivityCrudDialogs } from './activity-crud-dialogs';

@@ -40,10 +40,7 @@ import {
 // Deep imports for the next three groups, for the reason the activities note above gives: these are
 // plain mutation hooks, and the barrels they belong to are replaced wholesale by a dozen workspace
 // tests that never mean to stub a write.
-import {
-  useDissolveSummary,
-  type DissolveSummaryResponse,
-} from '@/features/activities/api/use-activities';
+import type { DissolveSummaryResponse } from '@/features/activities/api/use-activities';
 import { useReplaceActivityStepsOn } from '@/features/activities/api/use-activity-steps';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import {
@@ -188,7 +185,7 @@ import {
   type CheckableCommand,
   type LanePlacement,
 } from '@/features/undo-redo';
-import { useReparentActivities } from '@/features/wbs';
+import { useDissolveSummaryInSwimlanes, useReparentActivities } from '@/features/wbs';
 import {
   canCalculateSchedule,
   canExportSchedule,
@@ -872,7 +869,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // plain mutation hook the history calls through `mutateAsync`; the surfaces that make the forward
   // writes have their own observers and report what landed through the `record*` seams below.
   const updateParents = useReparentActivities(orgSlug, planId);
-  const dissolveSummary = useDissolveSummary(orgSlug, planId);
+  const dissolveSummary = useDissolveSummaryInSwimlanes(orgSlug, planId);
   const replaceSteps = useReplaceActivityStepsOn(orgSlug, planId);
   const createAssignmentOn = useCreateAssignmentOn(orgSlug, planId);
   const updateAssignment = useUpdateAssignment(orgSlug, planId);

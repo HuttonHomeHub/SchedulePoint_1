@@ -17,6 +17,7 @@ export {
   useBatchPlacements,
   activitiesQueryOptions,
   activityKeys,
+  type DissolveSummaryInput,
   type DissolveSummaryResponse,
   type PlacedActivityInput,
 } from './api/use-activities';
