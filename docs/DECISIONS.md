@@ -10,6 +10,37 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-10-31 — P6 activity codes M7: ADR-0210 filed, and the reconciliation pass at the epic boundary
+
+**What was decided.** The product owner confirmed ADR-0210's outline as written (fourteen decisions and the
+measured misses they had accepted) and, when told that an XER or MSPDI export leaves out a plan's codes and its
+code swimlane source without a word in the report, chose **"say so in the report"** over "record it only". That
+fix is a code change with a patch changeset, so M7 was not documentation-only after all: it carries one release.
+
+**What the gate pass checked against the code, not the documents.** The plan's amendment list fitted what shipped
+with two corrections: the guest change belongs to **ADR-0205** (which amends ADR-0051 §4), so the note went there
+and ADR-0051's status line points at it; and **ADR-0156's** planned "fourth source value" has not shipped, so its
+note says the field is unchanged until M6. ADR-0025's note records the smaller freeze that shipped (the swimlane
+code's value and lane), not the full freeze Q1 asked about. ADR-0194's note names both format numbers (2.2 in `api`
+0.102.2, 2.3 in `api` 0.103.0, read from the release tags). The rollback runbook matched the code apart from two
+words: "api 0.103.x" now includes the current release, and the screen says "One per value of <code>", not "By code".
+The epic spec's "codes are dropped and counted when pasted into another plan" never applied: a paste into another
+plan is refused before any write (`clipboard.ts`), recorded in ADR-0210's alternatives.
+
+**The reconciliation pass (`docs/RECONCILE.md`, last full pass 2026-10-26).** Found wrong: the silent export loss
+above; every reviewer agent ignorant of codes, and `security-reviewer.md`'s guest rule false for a code-grouped
+plan; ROADMAP's ADR-0207 entry still "ships with the next release" (it shipped in `api` 0.102.0); `DATABASE.md`'s
+"twenty-one" soft-deleted models (23, with `CodeType` and `CodeValue`); `PROJECT_BRIEF.md` and `BACKLOG.md` calling
+codes a follow-on; two `scripts/surface-contract.json` rows still `gap`s that said the dialogs "land in M2-T9".
+Register rows: none resolved. Corrected in place: #74 (the 60 s override is at eight sites, not two), #279 (two
+`<Tabs` consumers, both in modal dialogs, so its "latent" conclusion holds), #549 (code-sourced plans too), #552
+(b)'s line, #557 (its trigger named a file that does not exist) and #562 (title, and a trigger M3 has passed).
+Pointer drift only, recorded and not fixed: #121, #202, #211, #263, #320, #358, #366, #560. Not run: step 5a's
+one-commit query (the clone is shallow). Negative results are in the RECONCILE.md row.
+
+**Consequences.** One patch release for the export report (`api`; the export file's bytes are unchanged). M5 and
+M6 still wait for a real P6 export.
+
 ## 2026-10-26 — Notes through XER and MSPDI shipped, and what the build corrected in the spec
 
 **What was decided.** The approved spec was built as ADR-0209 with every default. Three spec claims were corrected by

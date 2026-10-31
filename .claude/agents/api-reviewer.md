@@ -54,6 +54,13 @@ predictable, and well-documented. You review; you do not edit code.
   A client-supplied lane `basis` on a position write is a 422: the server derives it (A3).
 - **Every activity response carries `swimlaneId` and `swimlaneLanes`**; the guest view carries the
   derived pair instead (ADR-0205).
+- **P6 activity codes (ADR-0210):** routes under `…/plans/:planId/code-types` and `…/code-values`, the bulk
+  `PATCH …/activities/codes`, and the member read `GET …/code-types/:codeTypeId/swimlane-lanes` (throttled 30 a
+  minute, deliberately unpaginated). Reasons: `CODE_TYPE_NAME_TAKEN`, `CODE_VALUE_TAKEN`, `CODE_TYPE_LIMIT`,
+  `CODE_VALUE_LIMIT`, `CODE_VALUE_WRONG_TYPE`, `CODE_VALUE_DELETED`, 409 `CODE_TYPE_IS_SWIMLANE_SOURCE`, 409
+  `SWIMLANE_SOURCE_CHANGED`, 422 `SWIMLANE_SOURCE_IS_ACTIVITY_CODE`, `SWIMLANE_CODE_TYPE_INELIGIBLE` and
+  `SWIMLANE_CODE_TYPE_MISMATCH`. An activity's `codes` is **absent, not empty**, when the plan has no live type,
+  and `codeSwimlaneLanes` is sent only under an `ACTIVITY_CODE` source, for that code's current value.
 
 ## Review checklist
 

@@ -127,9 +127,16 @@ review; you do not edit code. Assume an adversarial user.
   refusal order is 404 (foreign org, then another plan's, deleted or missing swimlane), then 403, then
   423, and the 409 never echoes a stored name. Only delete and restore are audited.
 - **Guests widen `SCHEDULE_READ` by name (ADR-0205 D1–D2, D5):** the plan view gains
-  `swimlanes: {id,name}[]` (empty unless the source is `MANUAL`) and each activity a derived
+  `swimlanes: {id,name}[]` (empty unless the source is `MANUAL` or `ACTIVITY_CODE`; under a code the bands
+  are the values' names, plus `noSwimlaneName`, "No <code>", ADR-0210 D12) and each activity a derived
   `memberOfSwimlaneId` / `swimlaneLaneIndex`. Never the raw `swimlaneId`/`swimlaneLanes`, the source or
   level, `position`/`version`, WBS `parentId` or lane-row `updatedAt`; `guest-dto.spec.ts` pins the lists.
+  Under a code source, never `codes`, `codeSwimlaneLanes`, `swimlaneCodeTypeId`, the type id, or a value's short
+  code or description beyond the band name.
+- **P6 activity codes (ADR-0210):** `code:read` for every member; `code:create/update/delete/restore` for
+  Planner and Org Admin, with the pen. An assignment is an activity write (`activity:update`). A 404 never tells a
+  foreign, other-plan, deleted or unknown type or value apart. Only `code_type.deleted/.restored` and
+  `code_value.deleted/.restored` are audited.
 
 ## Review checklist
 

@@ -570,10 +570,10 @@
     "surface": "components/ui/spinner.tsx"
   },
   "plans/update-plan.swimlaneSource": {
-    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the swimlane setup and manage dialogs that choose the source land in M2-T9 behind the lens toggle. Presentation only: the engine never reads it."
+    "surface": "features/swimlanes/components/SwimlaneSourceFields.tsx"
   },
   "plans/update-plan.swimlaneWbsLevel": {
-    "gap": "docs/specs/swimlanes/ M1-T3. No client yet: the swimlane setup dialog that chooses the WBS level lands in M2-T9 behind the lens toggle. Presentation only: the engine never reads it."
+    "surface": "features/swimlanes/components/SwimlaneSourceFields.tsx"
   },
   "plans/update-plan.swimlaneCodeTypeId": {
     "surface": "features/swimlanes/components/SwimlaneSourceFields.tsx"
