@@ -52,7 +52,7 @@ describe('resolvePrintPalette — title/subtitle ink contrast on paper (WCAG 1.4
 describe('lag-handle palette entries (outline core / handleHalo ring)', () => {
   it('resolveTsldPalette resolves the halo (documented jsdom fallback)', () => {
     const palette = resolveTsldPalette(document.documentElement);
-    expect(palette.handleHalo).toBe('#161a22'); // --color-card fallback
+    expect(palette.handleHalo).toBe('#fcfdff'); // --color-card fallback
     // The core/halo pair must be two distinct colours — the ring is what makes the disc read.
     expect(palette.handleHalo).not.toBe(palette.outline);
   });
@@ -67,8 +67,8 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   it('resolveTsldPalette resolves the refresh entries (documented jsdom fallbacks)', () => {
     const palette = resolveTsldPalette(document.documentElement);
     // jsdom serves no tokens, so the documented fallbacks come back — the entries are total.
-    expect(palette.barStroke).toBe('#2a2f3a'); // --color-border fallback
-    expect(palette.hoverRing).toBe('#7a8090'); // --color-muted-foreground fallback
+    expect(palette.barStroke).toBe('#e0e0e0'); // --color-border fallback
+    expect(palette.hoverRing).toBe('#636363'); // --color-muted-foreground fallback
     // Hover must never masquerade as selection (two distinct state rings).
     expect(palette.hoverRing).not.toBe(palette.selection);
   });
@@ -84,15 +84,15 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
 describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
   it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
     const palette = resolveTsldPalette(document.documentElement);
-    expect(palette.gridLineDay).toBe('#565c6a');
-    expect(palette.gridLineMonth).toBe('#2a2f3a');
-    expect(palette.gridLineYear).toBe('#9098ab');
+    expect(palette.gridLineDay).toBe('#eceeef');
+    expect(palette.gridLineMonth).toBe('#cfd2d5');
+    expect(palette.gridLineYear).toBe('#b2b7bb');
     // The whole point is a visible hierarchy — three distinct colours, not one repeated.
     expect(new Set([palette.gridLineDay, palette.gridLineMonth, palette.gridLineYear]).size).toBe(
       3,
     );
     // The flag-off value is unchanged by this addition (total contract, kept separate).
-    expect(palette.gridLine).toBe('#2a2f3a');
+    expect(palette.gridLine).toBe('#e0e0e0');
   });
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
@@ -114,13 +114,14 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
         parseInt(clean.slice(4, 6), 16)
       );
     };
-    const dark = resolveTsldPalette(document.documentElement);
+    const screen = resolveTsldPalette(document.documentElement);
     const print = resolvePrintPalette(document.documentElement);
     // A gap that reads clearly on screen — comfortably above the old ~1.1:1 case (channel-sum
-    // delta of roughly 16 there vs. the much larger gaps asserted below).
-    expect(Math.abs(channelSum(dark.gridLineDay) - channelSum(dark.gridLineMonth))).toBeGreaterThan(
-      100,
-    );
+    // delta of roughly 16 there). The on-screen pair is the light theme's own `--canvas-grid-day`
+    // and `--canvas-grid-month` values (83 apart); the paper pair is wider still.
+    expect(
+      Math.abs(channelSum(screen.gridLineDay) - channelSum(screen.gridLineMonth)),
+    ).toBeGreaterThan(60);
     expect(
       Math.abs(channelSum(print.gridLineDay) - channelSum(print.gridLineMonth)),
     ).toBeGreaterThan(100);
@@ -139,7 +140,7 @@ describe('non-working wash ink (nonWorking)', () => {
   // work alone needs a value chosen for the job.
   it('resolveTsldPalette resolves the dedicated wash token, not the shared muted grey', () => {
     const palette = resolveTsldPalette(document.documentElement);
-    expect(palette.nonWorking).toBe('#20242d');
+    expect(palette.nonWorking).toBe('#f8fafc');
   });
 
   it('resolvePrintPalette carries a light fallback for the same entry', () => {
@@ -165,8 +166,8 @@ describe('today marker pill ink (todayInk)', () => {
 describe('data-date marker pair (dataDate / dataDateInk)', () => {
   it('resolveTsldPalette resolves the pair (documented jsdom fallbacks), distinct from today/bar/selection', () => {
     const palette = resolveTsldPalette(document.documentElement);
-    expect(palette.dataDate).toBe('#e6e8ee'); // --color-foreground fallback
-    expect(palette.dataDateInk).toBe('#161a22'); // --color-background fallback
+    expect(palette.dataDate).toBe('#333333'); // --color-foreground fallback
+    expect(palette.dataDateInk).toBe('#fcfdff'); // --color-background fallback
     // CQ-1's whole point: the data-date hue must not collide with an existing MARK. `--color-info`
     // was measured and REJECTED (a near neighbour of the primary bar fill in all three themes);
     // the chosen foreground neutral differs from the today rule, the bar fill and the selection

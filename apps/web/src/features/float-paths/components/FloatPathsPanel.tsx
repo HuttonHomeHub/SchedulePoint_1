@@ -235,7 +235,7 @@ export function FloatPathsPanel({
             message="The float-path analysis could not be run."
           >
             <Button variant="secondary" size="sm" onClick={onRetry}>
-              Retry
+              Try again
             </Button>
           </NoticeStrip>
         ) : null}

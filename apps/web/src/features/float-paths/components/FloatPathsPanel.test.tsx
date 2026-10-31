@@ -162,7 +162,7 @@ describe('FloatPathsPanel', () => {
   it('reports a failure as an alert with a Retry — never as an empty list', () => {
     const { panel: p } = renderPanel({ isError: true, model: null });
     expect(screen.getByRole('alert')).toHaveTextContent(/could not be run/i);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(p.onRetry).toHaveBeenCalledOnce();
     // Empty and error are different sentences, and only one of them is showing.
     expect(screen.queryByText(/no predecessors/i)).not.toBeInTheDocument();
