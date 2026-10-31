@@ -73,8 +73,15 @@ describe('Combobox', () => {
       render(<Harness toggleLabel="Show codes" />);
       openWithKeyboard();
       expect(screen.getByRole('button', { name: 'Show codes' })).toBeInTheDocument();
-      expect(screen.getByRole('listbox', { name: 'codes' })).toBeInTheDocument();
+      expect(screen.getByRole('listbox', { name: 'Codes' })).toBeInTheDocument();
       expect(screen.queryByRole('listbox', { name: 'Show codes' })).not.toBeInTheDocument();
+    });
+
+    it('names the listbox "Options" for the default toggle label (#564)', () => {
+      render(<Harness />);
+      openWithKeyboard();
+      expect(screen.getByRole('button', { name: 'Show options' })).toBeInTheDocument();
+      expect(screen.getByRole('listbox', { name: 'Options' })).toBeInTheDocument();
     });
 
     it('still differs when the toggle label has no "Show" lead (#564)', () => {

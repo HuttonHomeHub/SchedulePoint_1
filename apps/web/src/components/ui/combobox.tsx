@@ -162,12 +162,13 @@ const PLACEHOLDER_UNAVAILABLE = 'Unavailable';
  * cannot share the toggle's name: a screen reader's list of controls would then announce two
  * different things alike. `aria-labelledby` on the field's own label was rejected because that
  * `<label>` lives in the consumer's markup and the primitive does not know its id; "Show codes"
- * therefore becomes "codes", the noun the toggle reveals. A label with no "Show " lead keeps its
- * words and gains " list", so the two names always differ.
+ * therefore becomes "Codes", the noun the toggle reveals, capitalised like the UI's other labels.
+ * A label with no "Show " lead keeps its words and gains " list", so the two names always differ.
  */
 function listboxNameFor(toggleLabel: string): string {
   const noun = toggleLabel.replace(/^show\s+/i, '');
-  return noun === toggleLabel ? `${toggleLabel} list` : noun;
+  if (noun === toggleLabel) return `${toggleLabel} list`;
+  return noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
 /** The full accessible name of an option: its label plus its badge, if any. */

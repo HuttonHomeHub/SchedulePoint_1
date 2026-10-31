@@ -10,9 +10,9 @@ import { expect, type Locator, type Page } from '@playwright/test';
  *
  * Two traps these helpers exist to close:
  *
- * 1. **`getByLabel` is ambiguous.** The toggle button and the listbox both carry the widget's
- *    "Show calendars"/"Show resources" name, which a substring label match selects alongside the
- *    input — a strict-mode violation. The field is therefore always addressed by its combobox
+ * 1. **`getByLabel` is ambiguous.** The toggle button ("Show calendars") and the listbox
+ *    ("Calendars") are both named from the widget's toggle label, which a substring label match
+ *    selects alongside the input — a strict-mode violation. The field is therefore always addressed by its combobox
  *    role and its exact `<Label>` text.
  * 2. **Clicking the input does not open the list.** Only the toggle button (pointer) and `↓`
  *    (keyboard) do, per the APG pattern — so these helpers press `ArrowDown`.

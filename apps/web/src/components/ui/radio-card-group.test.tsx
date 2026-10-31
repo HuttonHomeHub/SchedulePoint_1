@@ -134,5 +134,9 @@ describe('RadioCardGroup', () => {
     expect(reason.className).toContain('text-muted-foreground');
     const titleRow = screen.getByText('Tidy').parentElement!;
     expect(titleRow.className).toContain('group-aria-disabled/card:opacity-60');
+    // Structure, not just classes: the dim cannot reach the reason, and the radio is described by it.
+    expect(titleRow.contains(reason)).toBe(false);
+    expect(tidy).toHaveAttribute('aria-describedby', reason.id);
+    expect(tidy).toHaveAccessibleDescription('Too large to tidy.');
   });
 });
