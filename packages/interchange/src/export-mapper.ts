@@ -245,6 +245,35 @@ function mapLayout(
 }
 
 /**
+ * What an export leaves out of a plan that holds P6 activity codes (ADR-0210 D13): no format writes them
+ * yet, and a plan whose swimlanes come from a code is written as having no swimlane source. Both are
+ * reported, never lost silently (ADR-0050); a plan without codes reports nothing and writes the same bytes.
+ */
+function reportUnwrittenCodes(graph: ExportGraph, findings: ReportFinding[]): void {
+  const types = graph.codeTypeCount ?? 0;
+  if (types > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'project',
+      sourceRef: null,
+      detail: `${String(types)} code type(s) and the values set on activities were not written to the exported file`,
+      reason:
+        'an export does not write P6 activity codes yet; writing them waits for a real P6 file to confirm the format (ADR-0210)',
+    });
+  }
+  if (graph.swimlaneCodeName !== undefined) {
+    findings.push({
+      kind: 'drop',
+      entity: 'project',
+      sourceRef: null,
+      detail: `the plan's swimlanes come from the code ${graph.swimlaneCodeName}, which is not written; the exported file has no swimlanes made from it`,
+      reason:
+        'a code is not written by an export yet, so neither are swimlanes made from one (ADR-0210)',
+    });
+  }
+}
+
+/**
  * The notes the target format will write, and the findings for what it will not or cannot keep. ONE
  * producer for both formats, for the reason the placement finding gives below: two copies would drift
  * and each would look right alone. Every finding is aggregate. Authors and dates are never written, so
@@ -503,6 +532,7 @@ export function mapExportGraphToCanonical(
     });
   }
 
+  reportUnwrittenCodes(graph, findings);
   const notes = mapNotes(graph, options.notesFormat, findings);
 
   const relationships: CanonicalRelationship[] = graph.dependencies.map((dependency) => ({

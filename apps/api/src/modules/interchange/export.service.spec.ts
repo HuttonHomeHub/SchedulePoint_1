@@ -7,6 +7,7 @@ import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { ActivityRepository } from '../activities/activity.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
+import type { CodeTypeRepository } from '../codes/code-type.repository';
 import type { DependencyRepository } from '../dependencies/dependency.repository';
 import type { NoteRepository } from '../notes/note.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -37,6 +38,7 @@ function planRow(overrides: Partial<Record<string, unknown>> = {}): Record<strin
     calendarId: 'cal-1',
     swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
+    swimlaneCodeTypeId: null,
     ...overrides,
   };
 }
@@ -111,6 +113,10 @@ describe('ExportService.exportPlan', () => {
     findActiveActivityNotesForExport: ReturnType<typeof vi.fn>;
     countActiveForPlan: ReturnType<typeof vi.fn>;
   };
+  let codeTypes: {
+    countActive: ReturnType<typeof vi.fn>;
+    findActiveInPlan: ReturnType<typeof vi.fn>;
+  };
   let logger: Pick<PinoLogger, 'info' | 'warn' | 'error'>;
   let service: ExportService;
   const member = principalWith(['interchange:export']);
@@ -144,6 +150,10 @@ describe('ExportService.exportPlan', () => {
       findActiveActivityNotesForExport: vi.fn().mockResolvedValue({ notes: [], truncated: false }),
       countActiveForPlan: vi.fn().mockResolvedValue(0),
     };
+    codeTypes = {
+      countActive: vi.fn().mockResolvedValue(0),
+      findActiveInPlan: vi.fn().mockResolvedValue(null),
+    };
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     service = new ExportService(
@@ -156,6 +166,7 @@ describe('ExportService.exportPlan', () => {
       assignments as unknown as ResourceAssignmentRepository,
       swimlanes as unknown as SwimlaneRepository,
       notes as unknown as NoteRepository,
+      codeTypes as unknown as CodeTypeRepository,
       logger as unknown as PinoLogger,
     );
   });
@@ -421,6 +432,39 @@ describe('ExportService.exportPlan', () => {
       NotFoundError,
     );
     expect(plans.findActiveByIdInOrg).not.toHaveBeenCalled();
+  });
+
+  // ADR-0210 D13: no export writes P6 activity codes yet, and the report must say so rather than lose them
+  // silently (ADR-0050). Regression for the gap found at the epic's gate pass on 2026-10-31.
+  it.each(['xer', 'mspdi'] as const)(
+    'reports the codes and a code swimlane source it does not write (%s)',
+    async (format) => {
+      plans.findActiveByIdInOrg.mockResolvedValue(
+        planRow({ swimlaneSource: 'ACTIVITY_CODE', swimlaneCodeTypeId: 'type-area' }),
+      );
+      codeTypes.countActive.mockResolvedValue(3);
+      codeTypes.findActiveInPlan.mockResolvedValue({ id: 'type-area', name: 'Area' });
+
+      const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, format);
+
+      expect(codeTypes.countActive).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+      expect(codeTypes.findActiveInPlan).toHaveBeenCalledWith('type-area', PLAN_ID, ORG_ID);
+      const details = report.drops.map((finding) => finding.detail);
+      expect(details).toContain(
+        '3 code type(s) and the values set on activities were not written to the exported file',
+      );
+      expect(details).toContain(
+        "the plan's swimlanes come from the code Area, which is not written; the exported file has no swimlanes made from it",
+      );
+    },
+  );
+
+  it('reports nothing about codes for a plan that holds none, and reads no code source', async () => {
+    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+
+    expect(codeTypes.findActiveInPlan).not.toHaveBeenCalled();
+    const all = [...report.drops, ...report.approximations, ...report.repairs];
+    expect(all.filter((finding) => /code type|from the code/.test(finding.detail))).toEqual([]);
   });
 
   it('403s a principal lacking interchange:export (defence in depth, before the plan read)', async () => {
