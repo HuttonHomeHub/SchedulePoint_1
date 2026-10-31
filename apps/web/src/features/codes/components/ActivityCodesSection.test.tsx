@@ -137,7 +137,7 @@ const picker = (name: string): HTMLElement => screen.getByRole('combobox', { nam
 async function pick(typeName: string, optionName: string): Promise<void> {
   const input = picker(typeName);
   fireEvent.keyDown(input, { key: 'ArrowDown' });
-  const list = within(screen.getByRole('listbox', { name: `Show ${typeName} values` }));
+  const list = within(screen.getByRole('listbox', { name: `${typeName} values` }));
   const option = await list.findByRole('option', { name: new RegExp(optionName) });
   const index = list.getAllByRole('option').indexOf(option);
   for (let i = 0; i < index; i += 1) fireEvent.keyDown(input, { key: 'ArrowDown' });

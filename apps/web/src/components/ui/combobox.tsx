@@ -124,7 +124,7 @@ export interface ComboboxProps {
   /** Ids of help/error text describing the field, merged into the input's `aria-describedby`. */
   describedBy?: string | undefined;
   invalid?: boolean;
-  /** Accessible name for the toggle button (defaults to a generic one). */
+  /** Accessible name for the toggle button (defaults to a generic one); the listbox's name derives from it. */
   toggleLabel?: string;
   /**
    * The text input's DOM node, for a consumer that must move focus to it — chiefly restoring focus
@@ -157,6 +157,19 @@ const idSegment = (value: string): string => encodeURIComponent(value);
 const PLACEHOLDER_LOADING = 'Loading…';
 const PLACEHOLDER_UNAVAILABLE = 'Unavailable';
 
+/**
+ * The listbox's accessible name, derived from `toggleLabel` so no prop is added (ADR-0105). It
+ * cannot share the toggle's name: a screen reader's list of controls would then announce two
+ * different things alike. `aria-labelledby` on the field's own label was rejected because that
+ * `<label>` lives in the consumer's markup and the primitive does not know its id; "Show codes"
+ * therefore becomes "codes", the noun the toggle reveals. A label with no "Show " lead keeps its
+ * words and gains " list", so the two names always differ.
+ */
+function listboxNameFor(toggleLabel: string): string {
+  const noun = toggleLabel.replace(/^show\s+/i, '');
+  return noun === toggleLabel ? `${toggleLabel} list` : noun;
+}
+
 /** The full accessible name of an option: its label plus its badge, if any. */
 function optionText(option: ComboboxOption): string {
   return option.badge ? `${option.label}, ${option.badge}` : option.label;
@@ -187,6 +200,7 @@ export function Combobox({
 }: ComboboxProps): React.ReactElement {
   const announce = useAnnounce();
   const listboxId = `${id}-listbox`;
+  const listboxName = listboxNameFor(toggleLabel);
   const groupIdPrefix = useId();
   const ownInputRef = useRef<HTMLInputElement>(null);
   // One ref either way: the consumer's when given, else our own. There is a single input, so
@@ -583,7 +597,7 @@ export function Combobox({
         ref={listRef}
         id={listboxId}
         role="listbox"
-        aria-label={toggleLabel}
+        aria-label={listboxName}
         hidden={!open}
         className={cn(
           'border-border bg-popover text-popover-foreground absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border p-1 shadow-md',
