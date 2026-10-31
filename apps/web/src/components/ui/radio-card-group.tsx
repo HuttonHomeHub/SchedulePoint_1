@@ -123,15 +123,17 @@ export function RadioCardGroup<T extends string>({
             }}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              'border-input flex cursor-pointer flex-col gap-2 rounded-md border p-3 text-sm',
+              'group/card border-input flex cursor-pointer flex-col gap-2 rounded-md border p-3 text-sm',
               'focus-visible:ring-ring outline-none focus-visible:ring-2',
               'aria-checked:border-primary aria-checked:ring-primary aria-checked:ring-1',
               // No `pointer-events-none`, unlike a shaded Button (ADR-0145): a shaded option is still
               // a stop, so a click moves focus to it and its reason is read, exactly as arrowing does.
-              'aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
+              // The dim is NOT on the card: opacity would also fade the reason sentence (~2.6:1), the
+              // one text a shaded option exists to show. Only the title row takes it (a shaded option shows no figures).
+              'aria-disabled:cursor-not-allowed',
             )}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 group-aria-disabled/card:opacity-60">
               <span
                 aria-hidden="true"
                 className={cn(
