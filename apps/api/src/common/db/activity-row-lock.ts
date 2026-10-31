@@ -108,3 +108,31 @@ export async function lockActivityIdsInIdOrder(
     FOR NO KEY UPDATE
   `;
 }
+
+/**
+ * Lock one activity row `FOR SHARE` if it is active and in this organisation, and say which plan it
+ * belongs to; `null` means it is deleted, foreign or gone (`docs/TECH_DEBT.md` #560).
+ *
+ * A writer that attaches a child to an activity (a note) must not commit it after a delete sweep
+ * has passed. The single-activity delete cascade takes every subtree row `FOR NO KEY UPDATE` in
+ * {@link lockActivityIdsInIdOrder} BEFORE it sweeps the children, and `FOR SHARE` conflicts with
+ * that where the `FOR KEY SHARE` of a foreign-key check does not. Share first: the delete waits,
+ * then its later statements see the committed child and sweep it. Delete first: this statement waits
+ * and PostgreSQL re-evaluates `deleted_at IS NULL` against the committed row, which no longer
+ * matches (READ COMMITTED; the same re-evaluation `hierarchy-row-lock.ts` relies on).
+ */
+export async function lockActiveActivityForShare(
+  db: Prisma.TransactionClient,
+  organizationId: string,
+  activityId: string,
+): Promise<{ planId: string } | null> {
+  const rows = await db.$queryRaw<{ planId: string }[]>`
+    SELECT plan_id AS "planId"
+    FROM activities
+    WHERE id = ${activityId}::uuid
+      AND organization_id = ${organizationId}::uuid
+      AND deleted_at IS NULL
+    FOR SHARE
+  `;
+  return rows[0] ?? null;
+}

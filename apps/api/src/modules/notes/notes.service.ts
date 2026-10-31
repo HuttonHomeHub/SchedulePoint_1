@@ -4,6 +4,8 @@ import type { ActivityNoteCount, PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { lockActiveActivityForShare } from '../../common/db/activity-row-lock';
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -109,21 +111,38 @@ export class NotesService {
   ): Promise<NoteWithAuthor> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'note:create', organization.id);
-    const plan = await this.loadActivePlan(planId, organization.id);
+    // The cheap early 404 and the 422 stay outside the transaction; the parent is read again inside it.
+    await this.loadActivePlan(planId, organization.id);
     const body = this.assertBody(dto.body);
 
-    const note = await this.notes.create({
-      organizationId: organization.id,
-      entityType: 'PLAN',
-      // Derived from the resolved parent — never client input.
-      planId: plan.id,
-      activityId: null,
-      body,
-      createdBy: principal.userId,
-      updatedBy: principal.userId,
+    const note = await this.prisma.$transaction(async (tx) => {
+      // The plan advisory lock, not a row lock: a plan delete stamps the plan row LAST, after it has
+      // swept the notes (`hierarchy-lifecycle.service.ts`, the `plan` branch), so a `FOR SHARE` on the
+      // plan row would be granted, and the note committed, after the sweep had already passed. The
+      // cascade takes this lock first (`lockPlansForCascade`), before any write, so holding it here
+      // orders the create and the sweep strictly, and the re-read below sees which one won
+      // (`docs/TECH_DEBT.md` #560). Same-plan note creates serialise; they are brief. Accepted: the
+      // wait has no `lock_timeout`, so one longer than the 15 s transaction timeout (behind an import
+      // commit, which may run to 60 s) fails as a 500, not a 409. A recalculation is far shorter.
+      await acquirePlanWriteLock(tx, planId);
+      const plan = await this.plans.findActiveByIdInOrg(planId, organization.id, tx);
+      if (!plan) throw new NotFoundError('Plan not found.');
+      return this.notes.create(
+        {
+          organizationId: organization.id,
+          entityType: 'PLAN',
+          // Derived from the resolved parent — never client input.
+          planId: plan.id,
+          activityId: null,
+          body,
+          createdBy: principal.userId,
+          updatedBy: principal.userId,
+        },
+        tx,
+      );
     });
     this.logger.info(
-      { noteId: note.id, entityType: 'PLAN', planId: plan.id, userId: principal.userId },
+      { noteId: note.id, entityType: 'PLAN', planId: note.planId, userId: principal.userId },
       'note created',
     );
     return this.withAuthor(note);
@@ -138,26 +157,40 @@ export class NotesService {
   ): Promise<NoteWithAuthor> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'note:create', organization.id);
-    const activity = await this.loadActiveActivity(activityId, organization.id);
+    // The cheap early 404 and the 422 stay outside the transaction; the parent is read again inside it.
+    await this.loadActiveActivity(activityId, organization.id);
     const body = this.assertBody(dto.body);
 
-    const note = await this.notes.create({
-      organizationId: organization.id,
-      entityType: 'ACTIVITY',
-      // An activity note carries its activity's plan id (the denormalised cascade key) and the
-      // activity id — both derived from the resolved parent, never client input.
-      planId: activity.planId,
-      activityId: activity.id,
-      body,
-      createdBy: principal.userId,
-      updatedBy: principal.userId,
+    const note = await this.prisma.$transaction(async (tx) => {
+      // `FOR SHARE` on the activity row meets the row locks the delete cascade takes before it
+      // sweeps the activity's notes (`lockActivityIdsInIdOrder`), and re-reads the activity active
+      // in the same statement (`docs/TECH_DEBT.md` #560). The plan lock is not taken: the activity
+      // row is what the sweep waits on. The row lock still waits for any write holding that row (a
+      // recalculation's persist updates every row of the plan, as does a placement batch); it only
+      // spares the note the plan-lock holders that never touch the row.
+      const activity = await lockActiveActivityForShare(tx, organization.id, activityId);
+      if (!activity) throw new NotFoundError('Activity not found.');
+      return this.notes.create(
+        {
+          organizationId: organization.id,
+          entityType: 'ACTIVITY',
+          // An activity note carries its activity's plan id (the denormalised cascade key) and the
+          // activity id — both derived from the resolved parent, never client input.
+          planId: activity.planId,
+          activityId,
+          body,
+          createdBy: principal.userId,
+          updatedBy: principal.userId,
+        },
+        tx,
+      );
     });
     this.logger.info(
       {
         noteId: note.id,
         entityType: 'ACTIVITY',
-        planId: activity.planId,
-        activityId: activity.id,
+        planId: note.planId,
+        activityId,
         userId: principal.userId,
       },
       'note created',

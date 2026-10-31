@@ -360,6 +360,72 @@ describe.skipIf(!hasDatabase)('Notes API (e2e, pen enforced)', () => {
     await actor.agent.get(planNotes(planId)).expect(404);
   });
 
+  it('404s a note create under a deleted activity or plan, and writes no row (#560)', async () => {
+    const { actor, planId, activityId } = await setup();
+    await actor.agent.post(lockUrl(planId)).send({}).expect(200);
+    await actor.agent.delete(`${base()}/activities/${activityId}`).expect(200);
+    await actor.agent.post(activityNotes(activityId)).send({ body: 'late' }).expect(404);
+
+    await actor.agent.delete(`${base()}/plans/${planId}`).expect(204);
+    await actor.agent.post(planNotes(planId)).send({ body: 'late' }).expect(404);
+    expect(await prisma.note.count()).toBe(0);
+  });
+
+  /** Wait until some other backend is blocked on a lock — the request under test has passed its first read. */
+  async function waitForBlockedBackend(): Promise<void> {
+    for (let i = 0; i < 100; i += 1) {
+      const rows = await prisma.$queryRaw<{ n: bigint }[]>`
+        SELECT count(*) AS n FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+      if ((rows[0]?.n ?? 0n) > 0n) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('the note create never blocked on the delete');
+  }
+
+  // The harness cannot race two requests (#70), so the delete is played by a held transaction that
+  // takes the locks the cascade takes and stamps the parent, and the create is released only once it
+  // is provably blocked behind it: the request has read an ACTIVE parent and must still answer 404.
+  it('404s a note create that read an active activity a delete then swept (#560)', async () => {
+    const { actor, orgId, activityId } = await setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const deleter = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM activities WHERE id = ${activityId}::uuid FOR NO KEY UPDATE`;
+      await tx.$executeRaw`UPDATE activities SET deleted_at = now() WHERE id = ${activityId}::uuid`;
+      await held;
+    });
+    const pending = actor.agent
+      .post(activityNotes(activityId))
+      .send({ body: 'raced' })
+      .then((res) => res);
+    await waitForBlockedBackend();
+    release();
+    await deleter;
+    expect((await pending).status).toBe(404);
+    expect(await prisma.note.count({ where: { organizationId: orgId } })).toBe(0);
+  });
+
+  it('404s a note create that read an active plan a delete then swept (#560)', async () => {
+    const { actor, orgId, planId } = await setup();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const deleter = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('dependency-plan'), hashtext(${planId}))`;
+      await tx.$executeRaw`UPDATE plans SET deleted_at = now() WHERE id = ${planId}::uuid`;
+      await held;
+    });
+    const pending = actor.agent
+      .post(planNotes(planId))
+      .send({ body: 'raced' })
+      .then((res) => res);
+    await waitForBlockedBackend();
+    release();
+    await deleter;
+    expect((await pending).status).toBe(404);
+    expect(await prisma.note.count({ where: { organizationId: orgId } })).toBe(0);
+  });
+
   it('401s without a session', async () => {
     await request(server()).get(planNotes('00000000-0000-7000-8000-000000000000')).expect(401);
   });
