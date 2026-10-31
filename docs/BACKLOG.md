@@ -242,14 +242,14 @@ a product idea that has not yet earned a roadmap line:
   isolated (the import producer must **not** sit in its transaction, because phase 2 hard-deletes
   the plan on recalculation failure). Three `database-architect` tasks are mandatory at M1/M4/M5.
 
-- `M` **Swimlanes from P6 activity codes.** Labelled swimlanes shipped on 2026-10-25 (ADR-0206,
-  `docs/specs/swimlanes/`), made by hand or from the WBS. A P6 programme often groups work by an
-  **activity code** (system, area, trade) rather than by its WBS, and an import cannot use that today:
-  the XER parser reads no `ACTVTYPE`, `ACTVCODE` or `TASKACTV` (no match in `packages/interchange/src`
-  on 2026-10-25). A third source would let a planner pick one code type and get one swimlane per value.
-  It needs a spec: the codes have to be stored (or the swimlanes made once, at import, by hand-made
-  source), and that choice is a schema question for the database-architect. Demand: the swimlanes spec
-  names it as the follow-on (feature-spec §4.8); the owner has not asked for it yet.
+- `M` **P6 activity codes: keep them on import, and write them to an XER** (the rest of
+  `docs/specs/p6-activity-codes/`, M5 and M6). Swimlanes from a P6 activity code **shipped** on 2026-10-31 for
+  M0 to M4 (ADR-0210): a plan holds codes, they are edited in **Codes…**, shown as columns, set from the editor,
+  the table or the diagram, and the swimlanes can be one per value of a code. A P6 import still keeps none of
+  them: it reports the code types it drops. **Blocked on evidence, not on work:** M5 and M6 wait for a real P6
+  export that uses activity codes, because `ACTVCODE`'s column names and lengths are known only from public
+  sources (`m0-record.md`, ADR-0071 §5). The approved plan (`plan.md` M5, M6) is the spec; the XER reader ships
+  one release before the writer (ADR-0156 D9).
 
 ## Platform foundations not yet built
 

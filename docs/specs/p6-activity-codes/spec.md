@@ -1,6 +1,10 @@
 # Feature Spec: P6 activity codes, kept in the plan
 
-- **Status:** Approved — approved by the product owner on 2026-10-27, with the answers recorded below
+- **Status:** Accepted — shipped (ADR-0210) for **M0 to M4** only: `api` 0.103.2 and `web` 0.200.4, 2026-10-31.
+  **M5 (keep codes on a P6 import, and "Swimlanes by code" in the import window) and M6 (write codes to an XER)
+  have NOT shipped**; they wait for a real P6 export that uses activity codes (`m0-record.md`). Approved by the
+  product owner on 2026-10-27, with the answers recorded below; where M3 and M4 changed this spec, their own
+  specs (`m3-spec.md`, `m4-spec.md` §1b) and ADR-0210 say what shipped.
 - **Author(s):** Feature Analyst (Claude Code), for James Ewbank (product owner)
 - **Date:** 2026-10-27 (revised twice the same day: the owner chose to keep the codes in the plan; then
   the database design landed and is folded in, §7)
