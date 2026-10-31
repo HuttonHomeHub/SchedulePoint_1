@@ -3,55 +3,52 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-31. The owner asked for a hand-off check (everything matched GitHub), then for **P6 M4,
-swimlanes by a code**, driven to completion: the database-architect first, a spec and plan approved through
-clickable questions, one small PR per task, one release, and this hand-off. **All of it is merged and released**
-as **`api` 0.103.2** and **`web` 0.200.4** (Version Packages #1213). A plan's swimlanes can now be made from a code:
-Swimlanes… ▸ **One per value of Area**. **M7 (the epic's ADR and documents) is next**; M5 and M6 still wait for a
-real P6 export. The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything
-on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's
-call (ADR-0190).
+**Written:** 2026-10-31 (late morning). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.2
+and `web` 0.200.4 on #1213, both publish jobs passed in run 41148931556, #1219 merged, no PRs open), then for **P6 M7,
+the epic's ADR and documents**, driven to completion with the reconciliation pass that fell due at this epic boundary.
+**All of it is merged.** M7 was meant to be documentation only; the gate pass found a silent export loss, the owner chose
+to report it, and that fix shipped as **`api` 0.103.3** and **`web` 0.200.5** (Version Packages #1224; web moved only because
+it depends on the changed export package). **The P6 epic is closed for what shipped
+(M0 to M4); M5 and M6 still wait for a real P6 export.** The owner's **hard rule** still stands: nothing that needs them to
+test, measure or check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not
+cut**; that stays the owner's call (ADR-0190).
 
-## The owner's answers this session (2026-10-30)
+## The owner's answers this session (2026-10-31)
 
-- **What to build:** P6 **M4** (swimlanes by a code); M5 and M6 still wait for a real P6 export.
-- **The M4 spec and plan are approved** (`docs/specs/p6-activity-codes/m4-spec.md`, `m4-plan.md`, with
-  `m4-database-review.md` and `m4-ui-design.md`), with every recommended answer: **past 100 values in use** after a
-  code is chosen, the diagram keeps drawing every band and the swimlanes lens says so; **Move to swimlane…** offers
-  the bands on screen plus "No <type>" (an unused value is reached with Set code…); a **share-link guest** sees the
-  last band named "No <type>", as members do.
-- **"Current code only"** (after T1's first list read missed its ceiling): the activity list carries code lanes only
-  for the code the swimlanes use, at each activity's current value; switching to another code fetches that code's
-  lanes (one request), so the switch is no longer instant. Recorded as an amendment in `m4-spec.md` §4.5.
-- **The baseline capture miss is accepted:** a baseline of a code-grouped plan costs about +0.1–0.15 s (target 0.05 s)
-  so it can remember each activity's code and lane; the other option (counting removed work, never drawing it) was
-  declined (`m4-record.md` §3).
-- **Approved stopping a builder's orphaned local test server** (five processes in its own worktree) after the
-  safety check refused the builder's own kill; I asked rather than doing it on the builder's behalf.
+- **ADR-0210's outline is right as written** (fourteen decisions plus the accepted misses; it was filed with fifteen
+  because codes as their own write scope and values on demand became D4 and D5).
+- **The export gap: "Say so in the report"** (recommended) over "record it only". An XER or MSPDI export wrote no codes
+  and wrote a code-grouped plan as having no swimlane source, with nothing in the report. Now the report names both.
 
 ## Where things stand
 
-- **Latest releases:** `api` **0.103.2** (tag `api-v0.103.2`) and `web` **0.200.4** (tag `web-v0.200.4`), Version
-  Packages #1213; both publish jobs passed (`Release` run 41148931556). Before that `api` 0.103.1 and `web` 0.200.3.
+- **Latest releases:** `api` **0.103.3** (tag `api-v0.103.3`) and `web` **0.200.5** (tag `web-v0.200.5`, a dependency bump
+  only), Version Packages #1224; both publish jobs passed (`Release` run 41189620756). Before that `api` 0.103.2 / `web` 0.200.4
+  (#1213).
 - **This session's PRs, in merge order:**
-  - **#1211** the M4 database review (no schema change), UI design, spec and plan, approved.
-  - **#1212** M4-T1: lane writes under a code source go to `code_swimlane_lanes` (they 500'd before); `codes` on
-    activity create; `codeSwimlaneLanes` on activity responses for the current code and value only; the plan-wide
-    read `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes` (two statements, 6 ms; throttled 30/min).
-  - **#1214** M4-T2: the source switch (`ACTIVITY_CODE` + `swimlaneCodeTypeId`, under the plan advisory lock, values
-    in use 1–100 with WBS summaries excluded); baseline capture of a code-grouped plan (a 23514 in 0.103.1); the
-    `docs/DEPLOYMENT.md` rollback steps rewritten as seven numbered owner steps.
-  - **#1215** M4-T3: the shared code-swimlane rule in `@repo/layout`; the projection with "No <type>" last; the drag
-    held at a code swimlane's edge; the over-100 lens line. Also lengthened the flaky Codes… dialog unit wait.
-  - **#1216** M4-T4: Move to swimlane…, Set code…, the table's Set and the editor's Save codes write the code and the
-    lanes together, one undo step; editor and Gantt Swimlane fields read-only with reasons; a drawn bar takes its band.
-  - **#1217** M4-T5: **the entry point**, the By code card with a Code picker (shaded codes with reasons), Delete…
-    shaded for the source code.
-  - **#1218** M4-T6: removed-work ghosts drawn in their frozen code swimlane (else counted, with a reason); guests see
-    code swimlanes by name; the `plan:capability-codes-wide` seeded plan; the journey closed.
-  - **#1213** Version Packages (the one release).
-- **The P6 epic:** M0 to M4 are shipped. M7 (ADR, documents, gate pass) is buildable; M5 and M6 wait for a real P6
-  file. `docs/specs/p6-activity-codes/m4-record.md` holds every M4 measurement, miss and decision.
+  - **#1220** ADR-0210, "An activity code is plan data, and a code type is a swimlane source", its `CLAUDE.md` §16 line,
+    the index row and the roadmap entry.
+  - **#1221** the amendment notes, each checked against the code: ADR-0206 A2/A7, ADR-0205 (and ADR-0051's status line
+    pointing at it, because ADR-0205 is what widened the guest scope for swimlanes), ADR-0025 Amendment 4 (the smaller
+    freeze that shipped, not Q1's full one), ADR-0194 (formats 2.2 in `api` 0.102.2 and 2.3 in 0.103.0), and ADR-0156
+    (its field is **unchanged**; the planned fourth source waits for M6).
+  - **#1222** the spec header `Accepted — shipped (ADR-0210)` for M0–M4 only, saying M5/M6 have not shipped; the backlog
+    entry narrowed to M5/M6; two words in `docs/DEPLOYMENT.md`'s P6 rollback section ("0.103.x" and "By code"); ADR-0050's
+    codes row.
+  - **#1223** `fix(api)`: the export report says when codes and a code swimlane source are left out (bytes unchanged).
+  - **#1224** Version Packages (the one release).
+  - **#1225** the reconciliation pass (below).
+- **The P6 epic:** M0 to M4 shipped and recorded in ADR-0210. **M5 and M6 wait for a real P6 export** that uses activity
+  codes (`m0-record.md`); the approved `plan.md` M5/M6 is their spec.
+
+## The reconciliation pass (2026-10-31)
+
+Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md`. Found wrong and fixed: the silent export loss (#1223); every
+reviewer agent ignorant of codes, and `security-reviewer.md`'s guest rule false for a code-grouped plan (five agents now
+carry the codes invariants); ROADMAP's ADR-0207 still "ships with the next release"; `DATABASE.md`'s soft-delete model
+count (21 → 23); `PROJECT_BRIEF.md` calling codes a follow-on; two `scripts/surface-contract.json` `gap` rows for dialogs
+that shipped. Rows #74, #279, #549, #552, #557 and #562 corrected in place; none resolved. **Pointer drift recorded, not
+fixed:** #121, #202, #211, #263, #320, #358, #366, #560. **Not run:** step 5a (the clone is shallow).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -120,6 +117,7 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   code from the table and the diagram); the M3 spec approved; the `values=none` 70 ms miss accepted.
 - 2026-10-30: P6 M4 with every recommended answer (keep drawing past 100; Move to swimlane… offers the bands on
   screen; guests see "No <type>"); "current code only" for code lanes; the baseline capture miss accepted.
+- 2026-10-31: ADR-0210's outline as written; the export gap is reported ("say so in the report").
 
 ## Parked by the owner — keep, do not raise
 
@@ -200,16 +198,14 @@ owner returns to one, the steps are ready:
 
 ## Suggested next
 
-**The P6 epic continues with M7, its ADR and documents** (`docs/specs/p6-activity-codes/plan.md` M7-T1): file the
-epic ADR (spec §4.12, with the M3 and M4 decisions noted in its outline), the `CLAUDE.md` §16 line, the amendment
-notes (ADR-0206 A2/A7, ADR-0156, ADR-0194, ADR-0051, ADR-0025), the spec header to `Accepted — shipped`, the backlog
-entry closed, and the reconciliation pass that falls due at this epic boundary. Opus for the ADR (§19.14).
+**The P6 epic is closed for what shipped.** Nothing in it is buildable until a real P6 export with activity codes
+arrives (M5 keeps them on import; M6 writes them to an XER, with the reader released first, ADR-0156 D9). Never on
+guessed column names (ADR-0071 §5).
 
-- **M5 and M6 still wait for a real P6 export** that uses activity codes (`m0-record.md`); never on guessed
-  column names (ADR-0071 §5).
-- Still open: rows **#560**, **#562**, **#563**, **#564**.
-
-The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26).
+- The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31). The pointer-drift list above
+  is cheap to clear in it.
+- Still open from the codes work: rows **#560**, **#562**, **#563**, **#564**.
+- Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -779,3 +775,17 @@ head>` moved the next one. A local "wip stack" merge commit of an unmerged sibli
     hangs to the test timeout; press it with `force: true` and assert nothing opened.
   - **A text locator finds both copies of a shaded control's reason** (the `sr-only` description and the printed
     paragraph): locate the visible paragraph.
+
+- **2026-10-31 lessons (P6 M7, the gate pass):**
+  - **A gate pass finds real defects, not only prose.** Checking ADR-0210's interchange decision against
+    `export.service.ts` found codes and a code source dropped silently on export. Read each "not yet built" claim's
+    export and import paths, not only the feature's own module.
+  - **Stack documentation PRs and validate once at the top.** Five branches were built on each other; one full
+    `pnpm prepush` ran on the top, `scripts/prepush.sh --checks` on each lower head, and after each squash
+    `git rebase --update-refs --onto origin/main <old head>` (worktrees on the lower branches detached first) moved the
+    rest with `git diff <tested top> HEAD` empty, so the result carried over.
+  - **Web lint ran out of memory in `pnpm prepush`** (exit 134) on a fresh container; `NODE_OPTIONS=--max-old-space-size=8192`
+    on the whole run fixed it.
+  - **The proxy refuses deleting a remote branch** (`git push --delete` hangs up). Leave merged branches.
+  - **A plan's amendment list can name the wrong ADR.** The guest change belonged on ADR-0205 (which already amends
+    ADR-0051 §4) and ADR-0156's planned change had not shipped; check each target against the code first.
