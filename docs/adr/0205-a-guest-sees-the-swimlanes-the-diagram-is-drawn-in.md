@@ -84,6 +84,22 @@ swimlanes follow its WBS. The owner chose on 2026-10-25 to keep it as a follow-o
 building it is a new branch in `guest-swimlanes.ts` that derives the summaries at the plan's level, in WBS order,
 without sending `parentId`.
 
+## Amendment, 2026-10-31 ([ADR-0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md))
+
+A plan whose swimlanes come from a P6 activity code (`ACTIVITY_CODE`, P6 activity codes M4-T6) is shown to a guest
+in its bands, which D1's "empty unless the plan's source is hand-made" no longer says.
+
+- **D1, widened.** For a code-grouped plan, `swimlanes` lists one band per value in use as `{ id, name }` (the
+  value's description, else its short code, in the value order), and the plan view gains `noSwimlaneName`, the
+  last band's name, "No <code>" under the code's own name (the owner's answer, 2026-10-30). `memberOfSwimlaneId`
+  and `swimlaneLaneIndex` keep their meaning: the band and the lane stored against the activity's current value.
+- **D2, extended.** Membership is derived on the server by the rule the member diagram draws by
+  (`guest-swimlanes.ts`, mirroring `code-membership.ts` in the web): a WBS summary is never a member, and a
+  deleted value reads as "No <code>". The code type's id, its values, each activity's `codes` and the stored code
+  lane rows are **never** sent (`share/dto/guest-plan.dto.ts`); the type's name reaches the guest only as a band
+  label. `guest-dto.spec.ts` and the share e2e pin the field lists.
+- **D3 unchanged.** A plan grouped by its WBS is still shown to a guest without swimlanes.
+
 ## References
 
 - ADR-0051 §4; ADR-0163; ADR-0198.

@@ -180,6 +180,28 @@ stays on the network basis (structural, not a comparison, ADR-0116). **The CPM e
 the variance read does not call `computeSchedule`, so the ADR-0034 recalc parity gate is unaffected in
 its strong form.
 
+### 4 — A baseline of a code-grouped plan freezes that code's value and lane ([ADR-0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md), P6 activity codes M2/M4, 2026-10-31)
+
+When the plan's swimlanes come from a code (`swimlaneSource = 'ACTIVITY_CODE'`), a capture freezes, **for that
+code only**, each captured activity's value and its lane in that value's swimlane: three nullable columns on
+`baseline_activities` (`code_value_id`, `code_lane_index`, `code_lane_updated_at`), with
+`baselines.swimlane_code_type_id` naming the code and `baselines.code_snapshot_level` (`NONE` | `SWIMLANE_TYPE`)
+saying whether they were recorded. A baseline captured before this, or of a plan grouped by hand, by WBS or not at
+all, reads `NONE` permanently, for Amendment 2's reason: a frozen snapshot cannot be back-filled.
+
+The owner had asked for **every** code to be frozen if one capture of the largest plan added at most 1 s. It
+measured 2.4 to 2.8 s (`docs/specs/p6-activity-codes/m2-record.md` §4), so this smaller freeze shipped. Its own
+cost, about +0.1 to +0.15 s on a 5,000-activity code-grouped plan against a 0.05 s target, was accepted by the owner
+on 2026-10-30 (`m4-record.md` §3). Captures of plans not grouped by a code issue no new statement and bind no new
+parameter.
+
+**What it is for, and what it is not.** It lets a removed activity's comparison ghost be drawn in the band it was
+in; when the baseline froze another code or none, the frozen value is no longer a band, or no lane was frozen, the
+ghost is **counted** with its reason (ADR-0127). Variance, Earned Value and the revision delta do not read these
+columns; no "code changed since the baseline" report exists. The `ck_baselines_swimlane_snapshot_shape` CHECK was
+widened in the same release whatever the owner answered, because without it the first baseline of a code-grouped
+plan failed (`23514`).
+
 ## References
 
 - Feature spec: [`docs/specs/baselines.md`](../specs/baselines.md) · Implementation plan:
@@ -188,7 +210,8 @@ its strong form.
 - Builds on: ADR-0012 (RBAC + resource scoping), ADR-0016 (identity & tenancy), ADR-0022
   (CPM execution & persistence — the plan advisory lock), ADR-0023 (CPM date convention),
   ADR-0024 (working-day calendars).
-- Amended by: ADR-0148 (a bar is drawn where it is placed — the placed basis this amendment reads).
+- Amended by: ADR-0148 (a bar is drawn where it is placed — the placed basis this amendment reads); ADR-0210
+  (Amendment 4).
 - Amendment 3 now also governs the revision comparison (`#405` (a)): both routes choose one
   `datesBasis` per read from the frozen sides' `placementSnapshotLevel` — placed against placed only
   when every baseline side is `FULL`, earliest against earliest otherwise — through

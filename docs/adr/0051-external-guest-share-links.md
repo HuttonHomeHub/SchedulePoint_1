@@ -3,7 +3,9 @@
 - **Status:** Accepted. Amended by ADR-0163 (§4 — `SCHEDULE_READ` widens to include the placed
   span, `visualEffectiveStart`/`visualEffectiveFinish`) and ADR-0198 (§4 — it widens again to
   include `isNearCritical` on an activity and `isDriving` on a dependency) and ADR-0205 (§4 — it
-  widens once more to include the plan's swimlanes and each activity's derived swimlane and lane).
+  widens once more to include the plan's swimlanes and each activity's derived swimlane and lane) and
+  ADR-0210 (through ADR-0205's amendment of 2026-10-31 — a plan grouped by a code shows its bands by name and
+  its last band as "No <code>"; no code field is sent).
 - **Date:** 2026-07-21
 - **Deciders:** Backend architecture, Security, Product
 - **Related:** ADR-0003 (Better Auth), ADR-0012 (RBAC + resource scoping), ADR-0016

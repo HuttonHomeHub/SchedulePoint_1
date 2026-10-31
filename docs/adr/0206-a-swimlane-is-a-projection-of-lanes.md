@@ -8,6 +8,7 @@
   `Structure` lens, no new row), ADR-0063 Consequences (a third reservation edge), ADR-0100 (the readout),
   ADR-0152 and ADR-0153 (the partition, both layouts). ADR-0200, ADR-0203 and ADR-0156 were amended in
   place by the milestones that changed them (M2-T7, M2-T6, M4-T4/T5); ADR-0205 (guests) was filed with M4-T3.
+- **Amended by:** [ADR-0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md) (2026-10-31): A2 and A7 gain a third source; see the amendment at the end.
 - **Spec:** [`docs/specs/swimlanes/`](../specs/swimlanes/): `feature-spec.md` §4.14 (this ADR's outline),
   `schema-design.md` (the schema), `ui-architecture.md` §3 (Part B, adopted as written)
 
@@ -177,6 +178,23 @@ Taken from feature-spec §4.14, where each is argued:
   if real plans pass about three rows per activity.
 - **The follow-on the brief now points at** is P6 activity codes as a third source
   (`docs/BACKLOG.md`).
+
+## Amendment, 2026-10-31 ([ADR-0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md), P6 activity codes)
+
+- **A2.** "In-swimlane lanes live in `activity_swimlane_lanes`" now holds for the hand-made and WBS sources only.
+  Lanes written while the swimlanes come from a code live in their own table, `code_swimlane_lanes`, one row per
+  (activity, code, value or none), so switching between codes, or to another source and back, is as lossless as
+  A2 promises. `SwimlaneLaneBasis` keeps its four labels and `activity_swimlane_lanes` is unchanged: widening its
+  unique index would have broken the previous image's lane writes on every plan (`42P10`, probed), so a rollback
+  would have failed everywhere.
+- **A7.** A fourth value, `ACTIVITY_CODE` (one swimlane per value of a code in use, kept live), with
+  `plans.swimlane_code_type_id` bound to it by the replaced `ck_plans_swimlane_source_level`. A code can be chosen
+  when 1 to 100 of its values are in use, WBS summaries not counting. Under it, as under `WBS`, a drag stops at
+  the swimlane edge; work changes band through **Move to swimlane…** or **Set code…**, which write the code and
+  the lanes together, and a hand-made `swimlaneId` is refused 422 (kept for switching back, as A7 already said for
+  the WBS source). The rest of the decisions it rests on are ADR-0210's.
+- **Consequences.** The follow-on this ADR pointed at has shipped for M0 to M4; P6 import and XER export of codes
+  wait for a real P6 export (ADR-0210 D13).
 
 ## References
 
