@@ -197,8 +197,8 @@ describe('ActivityCreateDialog — resource-dependent type (flag on)', () => {
     // `readOnly`, not `disabled` (ADR-0083 D1 row 4, adopted here at M3-T1): the picker still shows
     // which calendar the activity carries, focusable and copyable, which is what the reader being
     // told it is overridden most needs to see.
-    expect(screen.getByLabelText(/Calendar/)).toHaveAttribute('readonly');
-    expect(screen.getByLabelText(/Calendar/)).not.toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /Calendar/ })).toHaveAttribute('readonly');
+    expect(screen.getByRole('combobox', { name: /Calendar/ })).not.toBeDisabled();
     expect(
       screen.getByText(/scheduled on its driving resource’s calendar instead/i),
     ).toBeInTheDocument();
@@ -211,6 +211,6 @@ describe('ActivityCreateDialog — resource-dependent type (flag on)', () => {
 
     // A shaded spell must not be permanent: the shading is a function of the current type, not a
     // one-way latch.
-    expect(screen.getByLabelText(/Calendar/)).not.toHaveAttribute('readonly');
+    expect(screen.getByRole('combobox', { name: /Calendar/ })).not.toHaveAttribute('readonly');
   });
 });
