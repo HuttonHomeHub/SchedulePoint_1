@@ -116,18 +116,23 @@ export function ActivityEditorDialog({
     const before = 'parentId' in patch ? lanes.snapshot() : undefined;
     void update.mutateAsync({ activityId: row.id, version: row.version, patch }).then(
       async (after) => {
-        if (before !== undefined && after.parentId !== row.parentId) {
-          await lanes.store({
-            before,
-            changes: [{ id: after.id, parentId: after.parentId }],
-            saved: [after],
-          });
-        }
         // The session's own effects first: they mark the scope clean, and a throw from the host's undo
         // recording must not leave a saved form looking unsaved.
-        onSuccess(after);
-        announce(`${label} saved.`);
-        onSaved?.(row, after);
+        try {
+          onSuccess(after);
+          announce(`${label} saved.`);
+          onSaved?.(row, after);
+        } finally {
+          // Last, and never rejecting: `onSaved` opens the layout edit and must run right after the
+          // PATCH (ADR-0153), and a second Save during the lane write would 409 on the bumped version.
+          if (before !== undefined && after.parentId !== row.parentId) {
+            await lanes.store({
+              before,
+              changes: [{ id: after.id, parentId: after.parentId }],
+              saved: [after],
+            });
+          }
+        }
       },
       failed(label, onError),
     );

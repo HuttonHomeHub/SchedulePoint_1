@@ -66,9 +66,10 @@ const GATING = deriveActivityEditorGating({
   canReadCost: true,
 });
 
+let failPositions = false;
 const calls: { url: string; method: string; body: Record<string, unknown> }[] = [];
 
-function mount() {
+function mount(onSaved?: (row: ActivitySummary, after: ActivitySummary) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(activityKeys.listByPlan('acme', 'plan-1'), PLAN);
   return render(
@@ -81,6 +82,7 @@ function mount() {
         activity={T1}
         planActivities={PLAN}
         gating={GATING}
+        {...(onSaved ? { onSaved } : {})}
       />
     </QueryClientProvider>,
   );
@@ -92,6 +94,7 @@ const saveGeneral = (): void => {
 
 beforeEach(() => {
   calls.length = 0;
+  failPositions = false;
   h.plan = { swimlaneSource: 'WBS', swimlaneWbsLevel: 1, plannedStart: '2026-01-01' };
   vi.stubGlobal(
     'fetch',
@@ -99,6 +102,7 @@ beforeEach(() => {
       const method = (init?.method ?? 'GET').toUpperCase();
       const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as object) : {};
       calls.push({ url, method, body: body as Record<string, unknown> });
+      if (failPositions && url.includes('/positions')) return Promise.reject(new Error('boom'));
       const answer = url.includes('/positions')
         ? []
         : { ...T1, parentId: (body as { parentId?: string }).parentId ?? null, version: 5 };
@@ -127,6 +131,32 @@ describe('ActivityEditorDialog — re-filing stores the swimlane lane', () => {
     expect(calls.findIndex((c) => c.url.includes('/positions'))).toBeGreaterThan(
       calls.findIndex((c) => c.method === 'PATCH' && !c.url.includes('/positions')),
     );
+  });
+
+  it('reports the save before it writes the lane, so the undo record follows the PATCH', async () => {
+    const seen: string[][] = [];
+    mount(() => seen.push(calls.map((c) => c.url)));
+
+    fireEvent.change(screen.getByLabelText('Parent WBS summary'), { target: { value: 'G2' } });
+    saveGeneral();
+
+    await waitFor(() => expect(calls.some((c) => c.url.includes('/positions'))).toBe(true));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.some((url) => url.includes('/positions'))).toBe(false);
+  });
+
+  it('still reports the save when the lane write fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    failPositions = true;
+    const onSaved = vi.fn();
+    mount(onSaved);
+
+    fireEvent.change(screen.getByLabelText('Parent WBS summary'), { target: { value: 'G2' } });
+    saveGeneral();
+
+    await waitFor(() => expect(error).toHaveBeenCalled());
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    error.mockRestore();
   });
 
   it('writes no lane when the parent did not change', async () => {
