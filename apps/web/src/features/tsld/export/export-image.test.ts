@@ -175,7 +175,7 @@ describe('buildExportViewport — view extent', () => {
 });
 
 describe('resolvePrintPalette', () => {
-  it('is a LIGHT-forced palette (dark ink on white paper), distinct from the theme palette', () => {
+  it('is a LIGHT-forced palette (dark ink on white paper), its ground distinct from the canvas', () => {
     const print = resolvePrintPalette(document.documentElement);
     const themed = resolveTsldPalette(document.documentElement);
     // Light fallbacks: white paper, dark ink/labels (not the dark palette's near-white ink).
@@ -186,8 +186,11 @@ describe('resolvePrintPalette', () => {
     expect(print.ink).toBe('#333333');
     expect(print.labelBeside).toBe('#333333');
     expect(print.outline).toBe('#333333');
-    // The theme palette's fallbacks are DARK (near-white beside-label ink) — the two must differ.
-    expect(print.labelBeside).not.toBe(themed.labelBeside);
+    // The theme palette's fallbacks were DARK until `docs/TECH_DEBT.md` #552 made them the one light
+    // theme's values, so the two now share their ink. What still separates paper from the screen is
+    // the ground: paper is pure white (`--print`), the diagram's canvas is its own off-white token.
+    expect(themed.labelBeside).toBe(print.labelBeside);
+    expect(print.ground).not.toBe(themed.canvasGround);
   });
 
   it('reads the design tokens when present (token-derived) and forces light regardless of theme', () => {

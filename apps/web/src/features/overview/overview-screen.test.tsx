@@ -174,11 +174,11 @@ describe('OverviewScreen — states', () => {
     expect(screen.queryByRole('link', { name: /Northgate/ })).toBeNull();
   });
 
-  it('offers one Retry when the request fails, keeping the heading', async () => {
+  it('offers one Try again when the request fails, keeping the heading', async () => {
     renderScreen({ fail: true });
 
-    expect(await screen.findByRole('button', { name: 'Retry' })).toBeVisible();
-    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeVisible();
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
     // A failed page is not a page that pretends the attention section is empty.
     expect(screen.queryByRole('heading', { name: 'Needs your attention' })).toBeNull();

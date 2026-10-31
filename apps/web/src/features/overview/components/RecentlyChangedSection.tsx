@@ -73,7 +73,7 @@ export function RecentlyChangedSection({
           description="This is usually temporary."
           action={
             <Button variant="outline" size="sm" onClick={onRetry}>
-              Retry
+              Try again
             </Button>
           }
         />

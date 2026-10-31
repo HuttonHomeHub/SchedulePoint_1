@@ -89,6 +89,7 @@ import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 import { GanttSwimlaneCell } from './GanttSwimlaneCell';
 
 import { CodeColumnsNotice } from '@/components/layout/code-columns-notice';
+import { Button } from '@/components/ui/button';
 import {
   FORCED_ARMED_OUTLINE,
   FORCED_BAND_IN_OUTLINED_BAR,
@@ -1123,13 +1124,9 @@ function GanttPanelBody({
     return (
       <GanttMessage title="That schedule could not be loaded">
         <p className="text-muted-foreground text-sm">{error.message}</p>
-        <button
-          type="button"
-          onClick={error.retry}
-          className="border-input hover:bg-accent focus-visible:ring-ring mt-3 rounded-md border px-3 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
-        >
+        <Button variant="outline" size="sm" onClick={error.retry} className="mt-3">
           Try again
-        </button>
+        </Button>
       </GanttMessage>
     );
   }
