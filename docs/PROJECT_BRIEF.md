@@ -280,7 +280,7 @@ Deliberately postponed — become backlog items when a real signal picks them up
 
 - Do we allow "hammock" activities to span across projects? Default: no, hammocks are plan-scoped.
 - Should baselines be shareable across plans (e.g., master baseline for a program)? Default: no in v1.
-- Does the graphical view need a "swimlane by resource / WBS" mode? Default: no in v1; manual lane assignment only. **Answered 2026-10-25 (ADR-0206):** labelled swimlanes shipped, made by hand or one per WBS group at a chosen level, kept live. By resource was not built: an activity can carry several resources, so it has no single band. P6 activity codes as a source are a `docs/BACKLOG.md` follow-on.
+- Does the graphical view need a "swimlane by resource / WBS" mode? Default: no in v1; manual lane assignment only. **Answered 2026-10-25 (ADR-0206):** labelled swimlanes shipped, made by hand or one per WBS group at a chosen level, kept live. By resource was not built: an activity can carry several resources, so it has no single band. P6 activity codes became a third source on 2026-10-31 (ADR-0210): one swimlane per value of a code, with flat, plan-level codes.
 
 ## 21. Assumptions
 

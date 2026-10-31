@@ -45,6 +45,11 @@ not edit code.
 - **Swimlane writes (the 100-per-plan cap check, reorder, lane writes) run under the plan advisory
   lock**, and membership is read `FOR SHARE` in the writing transaction (ADR-0206 A3). A lane write
   materialises every derived member in the same batch (A4).
+- **P6 activity codes (ADR-0210):** code writes take the plan advisory lock first, then activity rows, then
+  types and values `FOR SHARE` in id order. `idx_code_value_assignments_type_value` and
+  `idx_code_swimlane_lanes_type_value` exist only for the RESTRICT foreign-key checks on delete; without them one
+  plan's values delete measured 15–16 s and 177 s (`docs/specs/p6-activity-codes/m2-record.md`). Every measured
+  miss the owner accepted is listed in ADR-0210; do not re-raise them as new findings.
 
 ## Review checklist
 

@@ -75,6 +75,13 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
   admitted and drawn under "No swimlane"; only a new assignment to a deleted swimlane is refused. Expiry
   deletes lane rows, then activities, then swimlanes, then the plan (`activities.swimlane_id` is
   RESTRICT; `hierarchy-expiry.runner.ts`).
+- **P6 activity codes (ADR-0210) are plan data with `plan_id`-leading composite keys on every edge.** Code lanes
+  live in `code_swimlane_lanes` (`uq_code_swimlane_lanes_basis`, `NULLS NOT DISTINCT`), never as new
+  `SwimlaneLaneBasis` labels: widening `activity_swimlane_lanes`' unique index breaks the previous image's upsert
+  (`42P10`). `plans.swimlane_code_type_id` → `code_types` is a RESTRICT cycle with the plan: expiry clears the
+  pointer, then deletes code lanes and assignments with the activities, then values, then types
+  (`hierarchy-expiry.runner.ts`; `'Plan→CodeType'` is in the structural spec's `EXEMPT_EDGES`).
+  `ck_plans_swimlane_source_level` also binds `ACTIVITY_CODE` to the pointer.
 
 ## What you do
 

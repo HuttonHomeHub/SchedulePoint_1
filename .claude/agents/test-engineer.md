@@ -86,6 +86,10 @@ exist** — ADR-0057 deleted them. Read real suites instead:
 - **Swimlane seeds are `plan:capability-swimlanes` and `plan:capability-swimlanes-wbs`**
   (`docs/TEST_PLAYBOOK.md`); the journey suite is `e2e-swimlanes`. A spec that creates swimlanes clears
   them in `afterAll` (`clearDomainData`), or later specs fail on `swimlanes_plan_id_fkey`.
+- **Code seeds are `plan:capability-codes` and `plan:capability-codes-wide`** (101 values in use;
+  `apps/seed-cli/src/capabilities/codes.ts`, `codes-wide.ts`), proven by `apps/api/test/seed-codes.e2e-spec.ts`.
+  Clearing a plan that holds codes clears `plans.swimlaneCodeTypeId` first, then values, then types, all before
+  the plan (`apps/api/test/audit-reset.ts`): the plan and its code types reference each other.
 
 ## Standards
 

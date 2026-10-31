@@ -941,8 +941,8 @@ discriminators. Each becomes a spec/plan before build:
   swimlane-free picture exactly. The Activities table and the Gantt have a Swimlane column, the export and
   print carry them, and a SchedulePoint XER keeps them. The engine never sees them. P6 activity codes became
   the third source on 2026-10-31 (the entry below).
-- **A milestone stays where its logic puts it, across calendars** — **built, ships with the next release**
-  (approved 2026-10-26, [ADR-0207](adr/0207-a-milestone-stays-where-its-logic-puts-it.md); spec and plan at
+- **A milestone stays where its logic puts it, across calendars** — **shipped** (2026-10-26, `api` 0.102.0;
+  approved 2026-10-26, [ADR-0207](adr/0207-a-milestone-stays-where-its-logic-puts-it.md); spec and plan at
   [`docs/specs/milestone-cross-calendar/`](specs/milestone-cross-calendar/), `docs/TECH_DEBT.md` #539): a
   milestone or zero-duration task between weekend or shift work and weekday work no longer pushes its
   successors a calendar period or charges the work before it a false negative float, and existing plans are

@@ -116,7 +116,7 @@ UPDATE`, which the PostgreSQL documentation says locks rows in the order returne
 ## Soft deletes
 
 - Default to **soft delete** via a nullable `deleted_at timestamptz`. Deletes set
-  the timestamp. Twenty-one models carry `deleted_at`, and **filtering is per query**:
+  the timestamp. Twenty-three models carry `deleted_at`, and **filtering is per query**:
   nothing excludes soft-deleted rows centrally (there is no Prisma extension,
   middleware or base repository — `PrismaService` is a bare `PrismaClient`).
   Each read **and write** states its rule itself — through the repository's

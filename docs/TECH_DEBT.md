@@ -348,7 +348,7 @@ can.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
-**Status:** open · **Verified:** 2026-10-26
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-26)
 
 > **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
 > when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
@@ -368,8 +368,10 @@ can.
 **Eighteen** call sites across six modules now serialise on the same per-plan advisory key —
 `activities.service.ts` (8), `baselines.service.ts` (3), `plan-lock.service.ts` (3),
 `swimlanes.service.ts` (2, at `:95` and `:309`), `dependency.repository.ts` (1) and
-`schedule.repository.ts` (1); the two 60 s `BATCH_TRANSACTION_TIMEOUT_MS` overrides are at
-`activities.service.ts:1928` and `hierarchy-expiry.service.ts:291` (re-counted 2026-10-26). If recalculate's hold time were to
+`schedule.repository.ts` (1); the 60 s `BATCH_TRANSACTION_TIMEOUT_MS` override is at eight sites:
+`activities.service.ts:2078`, `hierarchy-expiry.service.ts:307`, and the delete and restore of a plan
+(`plans.service.ts:479`, `:525`), a project (`projects.service.ts:236`, `:291`) and a client
+(`clients.service.ts:206`, `:254`), the last six added by P6 activity codes M2-T5 (re-counted 2026-10-31). If recalculate's hold time were to
 approach the transaction timeout, a batch WBS write queued behind it would fail with a P2028 rather
 than waiting cleanly.
 
@@ -6972,7 +6974,7 @@ a mechanism that explains everything explains nothing.
 
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-26) · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
 
 **#118 item 4 asked for a per-pair scope filter. Specced properly, the answer is that the mechanism
 this repository already decided on was never built** — and the filter is a way of writing down a hole
@@ -7024,8 +7026,9 @@ That is why #118 item 4 reads as one missing row and is not.
 
 **One claim in the spec is OVERSTATED and is corrected here rather than inherited.** It calls the
 1.04:1 pair "not hypothetical" on the strength of `tabs.tsx:169` writing `bg-card text-foreground`.
-That line is real; the containment is not. **There is exactly one `<Tabs` consumer in the product** —
-`ActivityEditorSession.tsx:728` (was `ActivityEditorDialog.tsx:650`) — and it is a modal `<Dialog>`, which sits in the browser's top layer
+That line is real; the containment is not. **There are two `<Tabs` consumers in the product** —
+`ActivityEditorSession.tsx:753` (was `ActivityEditorDialog.tsx:650`) and, since P6 activity codes M3,
+`features/codes/components/CodesDialog.tsx:419` (re-counted 2026-10-31) — and each is inside a modal `<Dialog>`, which sits in the browser's top layer
 and is inside no surface scope at all. So every one of the 34 is **latent**, which is what #118 item
 4 concluded and what `surface.tsx:62-65` already says in its own words ("latent rather than live
 only because no `<Card>` currently renders inside a `<Surface>`"). The correction strengthens that
@@ -9405,9 +9408,10 @@ ADR-0026 §8 says `features/tsld` "imports **no** other feature". Ten non-test f
 
 ### 549. The Gantt view says nothing when the swimlane list fails to load, and its Swimlane column disappears
 
-**Status:** open · **Verified:** 2026-10-25, by reading `plan-workspace-toolbar.tsx` (the `SwimlanesFailedRegion` is mounted only when `ctx.planView !== 'gantt'`; `tableSwimlanes` is `null` while a hand-made plan has no assignment, and `shownColumns(…, tableSwimlanes !== null)` then drops the column) and `swimlanes-failed-notice.tsx` (`SWIMLANES_FAILED_NOTE` names the diagram) · **Raised:** 2026-10-25 (swimlanes M5 gate, UX review) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-25), by reading `plan-workspace-toolbar.tsx` (the `SwimlanesFailedRegion` is mounted only when `ctx.planView !== 'gantt'`; `tableSwimlanes` is `null` while a hand-made plan has no assignment, and `shownColumns(…, tableSwimlanes !== null)` then drops the column) and `swimlanes-failed-notice.tsx` (`SWIMLANES_FAILED_NOTE` names the diagram) · **Raised:** 2026-10-25 (swimlanes M5 gate, UX review) · **Size:** S · **Owner:** web
 
-On the diagram, a failed swimlane list shows a warning strip with **Try again** (the M2 gate). In the Gantt view a plan with hand-made swimlanes loses its Swimlane column and the table's bulk bar is withheld, with no sentence and no retry, until the list loads. Nothing is written wrongly; the reader is just not told. The Activities table under the diagram is covered by the diagram's strip.
+On the diagram, a failed swimlane list shows a warning strip with **Try again** (the M2 gate). In the Gantt view a plan with hand-made swimlanes (or, since P6 activity codes M4, swimlanes from a code, while
+its assignment or the code's name is missing) loses its Swimlane column and the table's bulk bar is withheld, with no sentence and no retry, until the list loads. Nothing is written wrongly; the reader is just not told. The Activities table under the diagram is covered by the diagram's strip.
 
 **Next:** mount the region in the Gantt view too, with a Gantt sentence ("Couldn't load swimlanes. The Swimlane column is hidden until they load.") passed to `SwimlanesFailedNotice`, and a unit test in the toolbar suite. **Trigger:** the next change to the Gantt's swimlane column or to the failed notice.
 
@@ -9423,12 +9427,12 @@ The application already collects one browser-side signal: the CSP report sink (`
 
 ### 552. Three small UI-consistency slips found by the 2026-10-26 pass
 
-**Status:** open · **Verified:** 2026-10-26, by reading each cited file at the cited line · **Raised:** 2026-10-26 (the post-swimlanes reconciliation pass) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-26), by reading each cited file at the cited line · **Raised:** 2026-10-26 (the post-swimlanes reconciliation pass) · **Size:** S · **Owner:** web
 
 None is a defect a user would report; each is a place the shared pattern was copied by hand and drifted.
 
 - **(a) "Retry" where every other error state says "Try again".** `features/overview/components/RecentlyChangedSection.tsx:76` and `features/float-paths/components/FloatPathsPanel.tsx:238` label the button "Retry"; `components/ui/query-error-state.tsx:45` and the rest of the product say "Try again". The Playwright suites contain no `Retry` button locator for either (`grep -rn "Retry" apps/web/e2e*/` finds only `X-Retry-After` and "Retry recording"), but check that again before renaming, and note `FloatPathsPanel.test.tsx:165` finds the button by the name `Retry`.
-- **(b) The Gantt hand-rolls its retry button.** `features/gantt/components/GanttPanel.tsx` (the load-error branch, `Try again` at `:1112`) writes the button's classes inline rather than using the shared `Button` or `QueryErrorState`, so it will not follow a change to either.
+- **(b) The Gantt hand-rolls its retry button.** `features/gantt/components/GanttPanel.tsx` (the load-error branch, `Try again` at `:1131`, was `:1112` until 2026-10-31) writes the button's classes inline rather than using the shared `Button` or `QueryErrorState`, so it will not follow a change to either.
 - **(c) The canvas palette falls back to dark-theme literals.** `features/tsld/render/palette.ts:149-162` (and the entries after it) read each colour from a CSS token and fall back to a hard-coded value such as `#14161c` when the token is missing, though the product has one light theme (ADR-0097). The fallback is reachable only when a token is absent (jsdom, a broken stylesheet), so it paints nothing wrong today; it would paint a dark canvas under a light page.
 
 **Next:** fix the three together: (a) rename both buttons to "Try again" and update any test that finds them by name; (b) render the Gantt's error through `QueryErrorState` or `Button`; (c) make a missing token a loud failure in development, or fall back to the light values. **Trigger:** the next change to any of the three files.
@@ -9459,11 +9463,12 @@ A comment-only marker's row is the whole of its state. Rolling the images back l
 
 ### 557. The redundant-link exclusion for an intermediate left at its start may be over-conservative since #539
 
-**Status:** open · **Verified:** 2026-10-26, by running the original CE2 plan of `redundant-links.oracle.spec.ts` (A, B on the office calendar, C on Mon-Sat, a finish milestone M after C and E) on the new engine: `oracleDivergences(p, ['AC'])` returns no divergence, where it diverged on A's late finish and total float before the change · **Raised:** 2026-10-26 (milestone-cross-calendar review, finding CE2) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-26), by running the original CE2 plan of `redundant-links.oracle.spec.ts` (A, B on the office calendar, C on Mon-Sat, a finish milestone M after C and E) on the new engine: `oracleDivergences(p, ['AC'])` returns no divergence, where it diverged on A's late finish and total float before the change · **Raised:** 2026-10-26 (milestone-cross-calendar review, finding CE2) · **Size:** S · **Owner:** api
 
 ADR-0196's exclusion list keeps a link out of the redundant set when its intermediate is entered at its start across calendars, and CE2 is the counterexample that justified the entry. That counterexample depended on the old engine rolling a milestone's late finish back a weekend (ADR-0207 D1 removed it). A replacement counterexample in the same family was found by searching a grid of calendars and durations (336 variants diverged; A on the plan calendar, B on the office calendar, C a full-day plan task), so the exclusion still has a witness, but the witness is narrower than the entry's description and the exclusion may now withhold a flag the engine would not contradict.
 
-**Next:** run the oracle's seeded population (`generatePlan`, 150 seeds) with the SS-intermediate exclusion lifted, and either narrow the exclusion to the shape the replacement witnesses or keep it with the replacement named as its case. **Trigger:** the next change to `redundant-links.rule.ts` or to the oracle.
+**Next:** run the oracle's seeded population (`generatePlan`, 150 seeds) with the SS-intermediate exclusion lifted, and either narrow the exclusion to the shape the replacement witnesses or keep it with the replacement named as its case. **Trigger:** the next change to `apps/api/src/modules/schedule/health/redundant-links.ts` (the file was
+named `redundant-links.rule.ts` here until 2026-10-31; no such file exists) or to the oracle.
 
 ### 560. A note create may land under an activity or plan that a delete swept an instant earlier
 
@@ -9481,9 +9486,9 @@ A note insert whose parent was swept between the read and the insert commits a l
 
 **Next:** grow the radio rows only together with a decision on the bar (a taller coarse bar in `assertViewPanelFitsTheFloor`, or folding Zoom and Colour-by by default), so the 44 px target and the 420 px bar are settled at once rather than one breaking the other. **Trigger:** the next change to the radio rows in `tsld-toolbar-items.tsx`, or a mis-tap report on Zoom or Colour-by.
 
-### 562. The codes API ships with eight deferred review findings
+### 562. The codes API's deferred review findings: four still open
 
-**Status:** open · **Verified:** 2026-10-29, by reading `apps/api/src/modules/codes/` after M3-T0 and by `test/measure/codes-reads.measure.ts` (`m3-record.md` §1: the nested 100 × 1,000 list reads 3.1 s, the on-demand first paint 121 to 136 ms; a 2,000-row write ranged 1.0 to 2.6 s on 2026-10-27) · **Raised:** 2026-10-27 (M2-T4 security, API and backend-performance reviews, none blocking) · **Owner:** api
+**Status:** open · **Verified:** 2026-10-31 (the reconciliation pass re-read the cited code; before that 2026-10-29), by reading `apps/api/src/modules/codes/` after M3-T0 and by `test/measure/codes-reads.measure.ts` (`m3-record.md` §1: the nested 100 × 1,000 list reads 3.1 s, the on-demand first paint 121 to 136 ms; a 2,000-row write ranged 1.0 to 2.6 s on 2026-10-27) · **Raised:** 2026-10-27 (M2-T4 security, API and backend-performance reviews, none blocking) · **Owner:** api
 
 Deferred on purpose, each cheap to add and none worth building before a screen binds to the routes:
 
@@ -9498,7 +9503,9 @@ Deferred on purpose, each cheap to add and none worth building before a screen b
 - ~~When M2-T5's cascade lands, re-check the lock order and the reverse-lookup index.~~ Done 2026-10-27 (M2-T5, `m2-record.md` §10): the cascade stamps types then values under the plan lock, and the reverse lookup is served by `plans_pkey`, so no index is owed.
 - **The codes sweep has a ceiling, kept open here.** The plan, project and client delete and restore now run under `BATCH_TRANSACTION_TIMEOUT_MS` (60 s) because a project of 10 plans at the 100 × 1,000 caps took 17.9 s to delete and 26.2 s to restore (`m2-record.md` §10), over the 15 s default. At about 18 µs a value to delete and 26 µs to restore, 60 s is about 2.3 million values in one project or client restore (more than 20 plans at the caps), which would still answer 500 and roll back. Trigger: a report of a failed delete or restore on a very large coded hierarchy. Fix options then: derive a value's liveness from its type's batch so the sweep stamps types only (database-architect), or move the cascade to a background job.
 
-**Next:** take the first four together as one change with the screen that needs them, and the rest at the M2-T5 review. **Trigger:** before M3 binds a screen to `GET code-types`, or any report of a slow plan open with many codes.
+**Next:** take the first four together as one change with the screen that needs them, and the rest at the M2-T5 review. **Trigger:** before M3 binds a screen to `GET code-types`, or any report of a slow plan open with many codes. _(2026-10-31
+reconciliation pass: M3 and M4 have shipped, so the first half of that trigger has passed; the items still open
+above each keep their own trigger, and the row stays open on those.)_
 
 ### 563. Stored code lanes for bases an activity no longer has are never swept, so the plan-wide lane read grows
 
