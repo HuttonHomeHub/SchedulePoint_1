@@ -867,7 +867,7 @@ swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, thre
      docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';"
      ```
 
-     - **Going back to api 0.103.x or 0.102.2** (the images that already know the value): such a plan
+     - **Going back to api 0.103.1, 0.103.0 or 0.102.2** (the images that already know the value): such a plan
        still opens, but it draws no swimlanes. Those images fail with a server error when you change
        that plan's swimlane source and when you capture a baseline of it. A baseline that froze the
        code source is harmless to them, so a non-zero count here does not stop you.
@@ -915,8 +915,8 @@ swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, thre
      is what stops the newer image coming straight back.
 
   What is kept: every code, value and assignment, and every code swimlane lane
-  (`code_swimlane_lanes` is not touched). After rolling forward, a planner chooses **Swimlanes… ▸ By
-  code** again for each plan in the saved file and the bars return to the lanes they had. What is
+  (`code_swimlane_lanes` is not touched). After rolling forward, a planner chooses **Swimlanes… ▸ One per
+  value of <code>** again for each plan in the saved file and the bars return to the lanes they had. What is
   lost: only the choice itself, until it is made again.
 
 - **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
