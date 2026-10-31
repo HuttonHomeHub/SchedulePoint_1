@@ -86,8 +86,9 @@ export const exportGraphSchema = importGraphSchema.extend({
   codeTypeCount: z.number().int().min(0).optional(),
   /**
    * The name of the code the plan's swimlanes are made from, when they are (`ACTIVITY_CODE`). The file
-   * says the plan has no swimlane source, so the report names what was not written.
+   * says the plan has no swimlane source, so the report names what was not written. At most 80
+   * characters, the cap `ck_code_types_name_shape` holds a code's name to (`CODE_NAME_MAX`).
    */
-  swimlaneCodeName: z.string().min(1).optional(),
+  swimlaneCodeName: z.string().min(1).max(80).optional(),
 });
 export type ExportGraph = z.infer<typeof exportGraphSchema>;
