@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.103.4
+
+### Patch Changes
+
+- [#1230](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1230) [`5c81547`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5c815472960dc7d99d413cdaad9113c93cd6a72d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A note added at the same moment its activity or plan is deleted is no longer saved under the deleted item; the request now answers "not found" instead.
+
 ## 0.103.3
 
 ### Patch Changes
