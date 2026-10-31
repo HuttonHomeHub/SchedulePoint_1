@@ -805,9 +805,37 @@ every plan that holds a milestone or zero-duration task (or is linked across pla
 time, in the background and never awaited. A planner who opens such a plan before its turn waits at most
 one recalculation. Each API replica runs the same pass, so a plan can be recalculated once per replica; that
 is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
-deploy would repeat the whole re-derivation unasked. The #421 marker
-(`20260930120000_progressed_predecessor_visual_marker`) has the same gap and no section of its own
-(`docs/TECH_DEBT.md` #556).
+deploy would repeat the whole re-derivation unasked.
+
+### Rolling back past the progressed-predecessor release
+
+That release (`docs/specs/progressed-predecessor-visual/`, `docs/TECH_DEBT.md` #421) changes how the
+engine propagates a progressed predecessor's planned duration into the engine-owned `visual_effective_*`
+columns. Its migration `20260930120000_progressed_predecessor_visual_marker` is a file of comments with
+**no statement and no change to any stored input**: its only product is its `_prisma_migrations` row, and
+at the first boot `ProgressedVisualRederiveService` recalculates once every plan with progress (or an
+applied Expected Finish) whose `schedule_computed_at` is earlier than that row's `finished_at`. There is
+nothing to reverse in the schema, and the reason redeploying the previous images alone is still wrong is
+the same as for the milestone release above: the row stays, every plan the previous image recalculates is
+stamped after its `finished_at` with the old Pass 2's dates, and a roll-forward finds the row applied and
+never re-derives them.
+
+Roll back in this order:
+
+1. Stop the API container (leave the database running).
+2. Delete the marker row:
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260930120000_progressed_predecessor_visual_marker';"`
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
+   stay that way until each plan's next recalculation; the previous image has no boot service to revert
+   them.
+
+Run the delete after the images are rolled back past that release and before the roll-forward; the
+sequence above does it first so the previous image never boots beside a row it ignores. A later
+roll-forward re-applies the file with a fresh `finished_at` and every affected progressed plan is
+re-derived again, which is correct. Outside a rollback, do **not** delete the row as a "reset": the next
+deploy would recalculate every progressed plan computed before that moment, a full re-derivation nobody
+asked for. The cost of that first boot is read in `docs/DATABASE.md` "Re-derivation markers".
 
 ### Rolling back past the P6 activity codes release
 

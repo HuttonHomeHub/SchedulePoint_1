@@ -2213,9 +2213,9 @@ keyed on a migration's `finished_at`:
   carries the marker, and plans already done are stamped after it. A plan restored from the recycle bin
   keeps its old `schedule_computed_at`, so it is pending at the next boot (as with the three above).
 - **Rolling the image back must delete the marker row** (`docs/DEPLOYMENT.md` "Rolling back past the
-  milestone cross-calendar release"). The previous image ignores an extra applied row, stamps the plans
-  it recalculates after `finished_at`, and a later roll-forward would never re-derive them. The #421
-  marker has the same gap and no rollback section (`docs/TECH_DEBT.md` #556).
+  milestone cross-calendar release"; "Rolling back past the progressed-predecessor release" for the #421
+  marker). The previous image ignores an extra applied row, stamps the plans it recalculates after
+  `finished_at`, and a later roll-forward would never re-derive them.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

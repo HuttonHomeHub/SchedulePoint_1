@@ -2691,7 +2691,7 @@ double-submit apart from a slow one. Left open rather than guessed at.
 
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
-**Status:** open · **Verified:** 2026-10-26
+**Status:** open · **Verified:** 2026-10-31, by reading `apps/web/playwright.config.ts` (the pins are at `:76-77`), counting `test(` in the four specs (1, 3, 2, 2) and finding `derivePlanGating(` at `use-plan-workspace-model.ts:269`
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
 whole base journey, so its eight editing tests — `activities.spec.ts` (×1), `baselines.spec.ts`
@@ -2717,7 +2717,7 @@ flags. What needs re-hosting is the end-to-end proof against a real API, which n
 
 _(Re-counted 2026-10-26: `baselines.spec.ts` now holds three tests, not one, so eight in all; the pins
 are at `playwright.config.ts:76-77` and the `derivePlanGating(` call is
-`components/layout/workspace/use-plan-workspace-model.ts:267`. Earlier "six" and `:180`, `:65-68`
+`components/layout/workspace/use-plan-workspace-model.ts:269` (was `:267` until 2026-10-31). Earlier "six" and `:180`, `:65-68`
 figures below were true on their dates.)_
 
 **Trigger:** the next epic that touches plan editing end to end, or the next time a base-journey
@@ -4314,7 +4314,7 @@ the better pattern sitting one directory over.
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
-**Status:** open · **Verified:** 2026-10-26
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two panel labels are `aria-label`s at `activity-bottom-panel.tsx:432` and `:592`, its chrome `Surface` opens at `:498-499`, `chrome-band.tsx:74` and `toolbar-styles.ts:112` are unmoved, the Gantt sweep case is `command-surface.spec.ts:1297-1326`, `SelectionActionsBar` is mounted at `plan-workspace-toolbar.tsx:2064`, and `resolveDockStrip` is called at `TsldPanel.tsx:1907`
 
 **Five of the six are resolved; one remains, and it is spec-gated** (swept 2026-09-11, item by
 item). (b), (c) and (d) closed between 2026-08-31 and 2026-09-09, (e) closed as stale and (f) was
@@ -4396,18 +4396,18 @@ happening — recorded here so it is a decision rather than an omission.
 > nothing would also look like — a sweep of an unchanged workspace reads as coverage while testing
 > the state that was already covered. It now asserts the panel's table is visible before sweeping,
 > the table being the thing that is not rendered at all while collapsed. Both labels were read from
-> `activity-bottom-panel.tsx:163,325` rather than guessed.
+> `activity-bottom-panel.tsx:163,325` (now `:432,592`) rather than guessed.
 >
 > **CLOSED 2026-09-09 — the Gantt half was owed and is built.** This paragraph said "still owed"
-> until the register sweep re-derived it. `e2e-workspace-fit/command-surface.spec.ts:579-604` is the
+> until the register sweep re-derived it. `e2e-workspace-fit/command-surface.spec.ts:1297-1326` (`:579-604` until 2026-10-31) is the
 > third state: it switches view, clicks a real row, pins the state positively on the `Actions for`
 > toolbar being visible, and then runs `sweepObjectBar('Gantt, panel collapsed')`. The route is the
 > different one this item predicted — a row click, not the canvas's parallel listbox, which does not
 > exist in that view.
 >
 > **Three citations in this item were wrong, and two of them were wrong inside the journey too.**
-> The bar renders at `plan-workspace-toolbar.tsx:1331`, not `:1151` (which is a `clearPlacement`
-> gate object); the two labels are at `activity-bottom-panel.tsx:163,325`, not `:155,317` (which are
+> The bar renders at `plan-workspace-toolbar.tsx:2064` (`:1331` when this was written, since moved), not `:1151` (which is a `clearPlacement`
+> gate object); the two labels are at `activity-bottom-panel.tsx:163,325` (now `:432,592`), not `:155,317` (which are
 > `hostsPlanSlots` props). The spec repeated both — the second under a comment reading _"Names read
 > from `activity-bottom-panel.tsx:155,317` rather than guessed"_. The **names** were read and the
 > locators work; the **line numbers** were not, in the sentence claiming they were. All corrected.
@@ -4491,7 +4491,7 @@ BOTH plan slots, always", and the foot row's wrap and the outlet's bound are pin
 **(f) ~~`bg-foreground/5` now paints on the canvas-dock surface scope for the first time.~~
 WITHDRAWN 2026-08-31 — the premise lapsed within twelve hours of the row being filed.** There is no
 "canvas-dock surface scope": the foot row that hosts the object bar is
-`<Surface tone="chrome">` (`activity-bottom-panel.tsx:224-225`; this said `:217` until the
+`<Surface tone="chrome">` (`activity-bottom-panel.tsx:498-499`; this said `:224-225` until 2026-10-31 and `:217` before the
 2026-09-09 sweep), which is the same scope `Deck` already sits in — verified from the other side too,
 at `chrome-band.tsx:74` — so the pairing paints exactly where it always did. The row was filed on 2026-08-27 from
 ADR-0114 M7, when the foot row genuinely had no scope at all; ADR-0115 gave it `chrome` that
@@ -4503,7 +4503,10 @@ Not re-filed here, because the same finding in two places is how a register star
 itself. _(This said "already filed as #204(b)" until 2026-09-09, which overstates it: #204(b) names
 `hover:bg-accent/60` and `bg-warning/15` and does **not** name `bg-foreground/5`. The reasoning
 transfers and the utility does not, so the honest word is the class. It is still live, at
-`toolbar-styles.ts:112` (was `:119`), consumed by `selection-actions.tsx:1005` and `Deck.tsx:237`.)_
+`toolbar-styles.ts:112` (was `:119`), now consumed by `features/plan-actions/selection-actions.tsx:1504` and
+`features/tsld/toolbar/diagram-viewport-cluster.tsx:56`; the pointers this named, `selection-actions.tsx:1005` and
+`Deck.tsx:237`, are gone — `Deck.tsx` no longer calls `toolbarCardVariants` (#285), and the selection bar moved
+to `features/plan-actions/`.)_
 
 **Not worth a test either, and that is the decisive half.** The row concedes 1.4.11 does not apply
 to the card; a contrast assertion asserts a **floor**, and a floor on a 5 % decorative wash would
@@ -4812,7 +4815,7 @@ ScheduleHealthPanel.tsx:364-365`) and nothing in `HealthPrintDocument.tsx`
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` in the re-read notes below (the documented gesture is `docs/UX_STANDARDS.md:111-113`, the undo/redo pair's `useTooltip({` is `tsld-toolbar-items.tsx:2648`, `<PlanShortcutsHelp` is `plan-workspace-toolbar.tsx:2724`, the `markerRow` default is `render-export-image.ts:344`, the reservation case is `export-image.test.ts:353-368`) · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
@@ -4884,6 +4887,21 @@ default, in both extents')` case down to the phrase this row quotes, and
   > `plan-workspace-toolbar.tsx:2556`; the `markerRow` default is at
   > `features/tsld/export/render-export-image.ts:344`; the undo/redo pair's `useTooltip({` is at
   > `tsld-toolbar-items.tsx:2624`. The conclusions above are unchanged.)_
+  >
+  > _(Re-read again 2026-10-31, the cites having drifted again: the gesture is documented at
+  > `docs/UX_STANDARDS.md:111-113` (was `:102-104,127`) and `docs/DESIGN_SYSTEM.md:1584` (was `:1001`);
+  > `<PlanShortcutsHelp` is at `plan-workspace-toolbar.tsx:2724`; the undo/redo pair's `useTooltip({` is at
+  > `tsld-toolbar-items.tsx:2648` (`UndoRedoControl`, `:2620`); `TsldPanel.tsx:3193-3198`, the note that the
+  > sheet is no longer mounted there, is now `:4030-4034`; the `markerRow` default is still `:344`, and
+  > the reservation case is `export-image.test.ts:353-368` (was `:286-298`, cited twice in this row);
+  > `HierarchyTree`'s long-press is in `features/navigator/components/HierarchyTree.tsx` at `:33-34`,
+  > `:174-177`, `:391-405` and `:576-584` (was `:16`, `:114`, `:203`, `:360`, `:385`). **One thing read
+  > differently, and it is not a pointer:** the option named `showLabel` here is `labelVisibility` now
+  > (`toolbar-registry.ts:209` records the rename), and production items set `labelVisibility: 'never'`
+  > at thirteen sites in `tsld-toolbar-items.tsx` and `features/plan-actions/selection-actions.tsx`, so
+  > "`ToolbarButton`'s icon-only branch is dormant" no longer holds and the live members of the class
+  > are more than the two counted above. The finding is unchanged; its blast radius has grown and is
+  > not re-counted here.)_
 
 - **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
   `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
@@ -5292,6 +5310,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                                                              | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 556 | The progressed-predecessor marker (#421) had no rollback section                                                                         | 2026-10-31 | **Closed.** `docs/DEPLOYMENT.md` "Rolling back past the progressed-predecessor release" deletes `20260930120000_progressed_predecessor_visual_marker` from `_prisma_migrations` in the milestone section's order; the migration file is comment-only, so nothing in the schema is reversed. The row's full text is in the history before this commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 549 | The Gantt view said nothing when the swimlane list failed to load, and its Swimlane column disappeared                                   | 2026-10-31 | **Closed.** `SwimlanesFailedRegion` is mounted in both plan views and takes an optional `message`; in the Gantt it says "Couldn't load swimlanes. The Swimlane column is hidden until they load." with Try again, and fires only when the list failed, swimlanes are on and `tableSwimlanes` is null (the column is actually gone), so a failure that leaves a column on screen does not claim it is hidden. Focus returns to the plan surface after a successful retry, as on the diagram. Pinned in `plan-workspace-toolbar.test.tsx` and `swimlanes-failed-notice.test.tsx`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 552 | Three small UI-consistency slips found by the 2026-10-26 pass                                                                            | 2026-10-31 | **Closed.** The overview's recently-changed error and the float-paths panel say "Try again"; the Gantt's load error renders the shared `Button`; and `features/tsld/render/palette.ts` falls back to the light theme's values rather than dark literals. The row's full text is in the history before this commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 558 | A labelled `CheckboxField` row is 24 px tall under a coarse pointer                                                                      | 2026-10-27 | **Closed.** The labelled row gains `pointer-coarse:min-h-(--control-h)` in `apps/web/src/components/ui/form.tsx` (ADR-0118 D2), pinned in `form.test.tsx`. Every consumer is an auto-height flow (no fixed-height row), so none needed an ADR-0118 D1 exception. The row's full text is in the history before this commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -6470,7 +6489,7 @@ than having to remember to look.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two `slice(0, cap)` are `apps/api/src/modules/baselines/revision-ghosts.ts:231,305`, `REVISION_ROW_CAP` is `schedule.service.ts:270`, `takeBothSides` is `schedule.service.ts:280`, the DTO reads `REVISION_LINK_STATES` at `revision-compare.dto.ts:518`, the inline union is `packages/types/src/index.ts:4089`, `hasRevisionPair` is `plan-workspace-toolbar.tsx:479`, `print-document.ts:74` is unmoved and the colour-literal selectors are `packages/config/eslint/react.js:69,77` · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -6538,7 +6557,7 @@ a gap its sibling had documented.
 
 **(d)** ~~`RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
 literal with no backing tuple~~ — **CLOSED 2026-09-11.** `REVISION_LINK_STATES` is the missing
-tuple, `RevisionLinkState` derives from it, and `revision-compare.dto.ts:351` reads the identifier.
+tuple, `RevisionLinkState` derives from it, and `revision-compare.dto.ts:518` (was `:351`) reads the identifier.
 The wire values are unchanged; what changes is that a fourth state reaches the DTO without anybody
 editing it, which is the whole of what the header's "every `enum:` is DERIVED" promises. The header
 said so with a footnote naming this exception, and the footnote is now a closure note rather than a
@@ -6553,7 +6572,7 @@ standing caveat.
 > - **Three are hand-copies of a union that lives in `@repo/types`** and are the same class as this
 >   item: `enum: ['CODE']` against `CrossPlanCorrelationKey`, `enum: ['NO_COMMON_CODES']` against
 >   `CrossPlanNotAssessableReason`, and `enum: ['SIDE_NOT_SCHEDULED', 'NO_COMMON_CODES']` against the
->   inline union at `packages/types/src/index.ts:3122`. **Two of those three unions are themselves
+>   inline union at `packages/types/src/index.ts:4089` (was `:3122`). **Two of those three unions are themselves
 >   bare types rather than tuples**, so closing them means adding the tuple first — exactly the work
 >   this item just did, three times over, and on a union with **one** member where a tuple is
 >   arguable rather than obvious.
@@ -6566,10 +6585,10 @@ standing caveat.
 
 **(e)** ~~`docs/API.md`'s **existing, untouched** description of the plan-nested route's
 `ghosts`/`links` says "Neither is capped"~~ — **CLOSED 2026-09-11.** The claim was verified against
-the code rather than taken from this row: `revision-ghosts.ts:151,225` both `slice(0, cap)` and
+the code rather than taken from this row: `revision-ghosts.ts:151,225` (now `:231,305`, in `modules/baselines/`) both `slice(0, cap)` and
 return the pre-cap `total`, and `schedule.service.ts:270` sets `REVISION_ROW_CAP = 200` (was `:227`). So the
 paragraph described the state that shipped for one review cycle before two independent reviews
-caught it, which that file's own docblock records. `docs/API.md:1193` now names the cap, names the
+caught it, which that file's own docblock records. `docs/API.md` (the paragraph is at `:2505-2514` now; `:1193` when this was written) names the cap, names the
 two total fields (`ghostsTotal`/`linksTotal`), and carries the correction's date and reason rather
 than being silently rewritten.
 
@@ -6607,7 +6626,7 @@ component, but a planner may expect to click through from the list they were tol
 **(i)** ~~The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
 terms even when reached through the cross-plan picker, where the planner chose a _plan_~~ —
 **CLOSED 2026-10-20.** The literal symptom was already gone: `hasRevisionPair` counts a chosen plan
-(`plan-workspace-toolbar.tsx:376`, was `:315`), so the cross-plan path meets no refusal. What remained was
+(`plan-workspace-toolbar.tsx:479`, was `:376`, `:315` before that), so the cross-plan path meets no refusal. What remained was
 "two revisions" when one choice suffices and a plan is also a valid choice; it now reads "Choose
 what to compare in Compare revisions… first", pinned negatively in `compare-overlay-refusal.test.ts`.
 
@@ -6658,7 +6677,7 @@ hex on a docblock claiming a `@media print` sheet cannot read a runtime token~~ 
 >
 > **The blind spot, stated rather than implied.** Nothing stops a new hex literal appearing in
 > either file: the colour-literal lint rule is a `no-restricted-syntax` selector scoped to
-> `JSXAttribute[name.name=/^(className|style)$/]` (`packages/config/eslint/react.js:64,72`), so it
+> `JSXAttribute[name.name=/^(className|style)$/]` (`packages/config/eslint/react.js:69,77`, was `:64,72`), so it
 > cannot see a stylesheet at all. `token-alias-reads.structural.test.ts` records the same
 > `.ts`/`.tsx`-only limit for its own question. These two files are correct today because somebody
 > read them, which is the condition ADR-0058 says to replace with a check — and widening either
@@ -8121,7 +8140,7 @@ name.
 
 ### 320. Four findings the diagnostics gate pass recorded rather than folded
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-31, by opening the cited code: the diagnostics `SET LOCAL statement_timeout = '3s'` is `staff-diagnostics.repository.ts:63`, the export's `'30s'` is `organization-export/organization-export.repository.ts:255`, and no other `statement_timeout` is set in `apps/api/src`; `staff-boundary.structural.spec.ts` still holds its three original checks (`:76`, `:112`, `:118`) beside the S-3 block's pinned positive (`:230`) · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
 
 Six specialists reviewed the diagnostics epic and sixteen defects were folded with regression tests.
 These four were not, each for a reason, and they are here rather than in the gate-pass write-up so
@@ -8162,7 +8181,7 @@ others" is not.
 _(Narrowed 2026-10-26: this read "no statement timeout on any raw query" until then. Two now set
 `SET LOCAL statement_timeout` inside their transaction — the diagnostics route's `'3s'`
 (`staff-diagnostics.repository.ts:63`) and the organisation export's `'30s'`
-(`organization-export.repository.ts:243`) — so the diagnostics tail this item worried about is
+(`organization-export/organization-export.repository.ts:255`, was `:243`) — so the diagnostics tail this item worried about is
 bounded. What is left is the rest of the application's raw SQL, and the decision about a default.)_
 ADR-0140 D6 establishes
 that the diagnostics route sequentially scans by design and its cost is untested past ~102,000
@@ -8630,7 +8649,7 @@ change with a design question in it, not a mechanical substitution.
 
 ### 358. A rule cited nine times, which the file citing it most already breaks
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-21 (one-planning-surface M-I,
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the four sideways imports are `TsldPanel.tsx:150-153`, the rule is asserted at `TsldPanel.tsx:361`, `:445` and `:1133` and `TsldCanvas.tsx:513`, and the cited structural choices are at `use-plan-workspace-model.ts:1002`, `activity-crud-dialogs.tsx:38`, `wbs-groups.ts:161` and `wbs-groups.test.ts:163` · **Raised:** 2026-09-21 (one-planning-surface M-I,
 incidentally — the milestone was verifying its own premise) · **Size:** M · **Owner:** web
 
 Nine comments across seven files state, as a rule with a citation, that **`features/tsld` imports no
@@ -8645,17 +8664,17 @@ apps/web/src/features/tsld/components/TsldPanel.tsx:108  import … from '@/feat
 _(Re-read 2026-10-26. The same imports are now `TsldPanel.tsx:150-153`: `ACTIVITY_TYPE_LABELS`, the
 type-only `ScopeGate` from `features/activities/lib/activity-editor-gating`, `buildSelectionBarContext`
 and the `features/wbs` band helpers — **four**, not three. The comments now number **12 sites in 9
-files** (`grep -rn "imports no other feature" apps/web/src`), the swimlanes epic having added
+files** (re-counted 2026-10-31: still 12 lines, in 8 files, the same grep) (`grep -rn "imports no other feature" apps/web/src`), the swimlanes epic having added
 `project-swimlanes.ts`, a second `TsldCanvas.tsx` site and more. The wider census of sideways imports,
 by file, is **#548**; this row is the rule being false, that one is the imports.)_
 
-`TsldPanel.tsx:329` asserts the rule 221 lines below those three imports. `TsldCanvas.tsx:414` is
+`TsldPanel.tsx:361` (was `:329`) asserts the rule about 210 lines below those imports. `TsldCanvas.tsx:513` (was `:414`) is
 sharper still: it explains that a derivation lives in `features/wbs` **"because the tsld feature
 imports no other feature"** — and `TsldPanel` imports exactly that module.
 
 **It is not a cosmetic inconsistency, because the rule has been shaping designs.** Things are passed
 in as props, and derivations are placed in other features, _because_ of it —
-`use-plan-workspace-model.ts:729`, `activity-crud-dialogs.tsx:28`, `wbs-groups.ts:159` and
+`use-plan-workspace-model.ts:1002` (was `:729`), `activity-crud-dialogs.tsx:38` (was `:28`), `wbs-groups.ts:161` (was `:159`) and
 `wbs-groups.test.ts:163` each cite it as the reason for a structural choice. A reader deciding where
 to put the next thing gets a rule that the code does not follow, so either the designs are paying a
 cost for nothing or three imports are violations nobody has noticed. **Which of those it is cannot
@@ -8692,7 +8711,7 @@ than opportunistically, because the cheap half — correcting nine comments to m
 
 ### 366. Four findings from the Part C gate pass that are not defects in the diff
 
-**Status:** open · **Verified:** 2026-10-26 · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the command is `label: 'Arrange'` at `tsld-toolbar-items.tsx:3525`, the rule it collides with is `docs/UX_STANDARDS.md:240-247`, `canEdit` is at `TsldPanel.tsx:322` (its #114.1 note `:326`), `TsldPanel` is mounted at `plan-workspace-toolbar.tsx:1575`, `canAutoArrange: canEditSchedule` is `use-tsld-toolbar-context.tsx:607`, and the offer's gate is `arrangeOfferAvailable` at `TsldPanel.tsx:1899`, whose `!lateOverlayActive` arrives through the host's `canEdit` at `plan-workspace-toolbar.tsx:1440` · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
 accessibility / UX / component reviews) · **Size:** S · **Owner:** web
 
 Each was raised as non-blocking against the `Arrange` offer (ADR-0149 D6) and each is really about
@@ -8700,9 +8719,9 @@ something the offer sits next to rather than about the offer. Kept together beca
 share one cause.
 
 **(a) Two simultaneously-visible controls both named exactly "Arrange."** The dock strip's button
-and the command-surface item (`tsld-toolbar-items.tsx:3501`) do the same thing to the same plan and
+and the command-surface item (`tsld-toolbar-items.tsx:3525`, was `:3501`) do the same thing to the same plan and
 carry the same accessible name, which is not a WCAG failure — both names describe both controls
-correctly — but it is what `docs/UX_STANDARDS.md:160-168` and ADR-0145 D6 exist to prevent. The
+correctly — but it is what `docs/UX_STANDARDS.md:240-247` (was `:160-168`) and ADR-0145 D6 exist to prevent. The
 strip's name is the honest one for its sentence; the command's would have to change, and it is
 shared with the Gantt. Deliberately not renamed inside the epic that introduced the collision.
 
@@ -8715,14 +8734,14 @@ has the unfused facts. Fixing (b) means fixing #114.1; shading without them woul
 sentence on screen, which is the defect #114 records shipping.
 
 **(c) "Dismissed for the session" is really "dismissed for this mount."** Switching to the Gantt and
-back remounts `TsldPanel` (mounted at `plan-workspace-toolbar.tsx:1418`) and the offer returns.
+back remounts `TsldPanel` (mounted at `plan-workspace-toolbar.tsx:1575`, was `:1418`) and the offer returns.
 `PlacementMigrationNotice` solves the same problem with `localStorage`, per plan per user. Not
 obviously wrong — the offer is a live fact about the current layout and a returning planner may want
 it again — but the docblock should say _mount_ until somebody decides which it is.
 
-**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:604`) is looser than its own
+**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:607`, was `:604`) is looser than its own
 docblock claims ("editing **and** an `onAutoArrange` handler") and looser than
-`arrangeOfferAvailable`, which also folds in `!lateOverlayActive`. No live defect: in the one real
+`arrangeOfferAvailable`, which also folds in `!lateOverlayActive` (through the host's `canEdit`, `plan-workspace-toolbar.tsx:1440`, and `editingEnabled` at `TsldPanel.tsx:1834`). No live defect: in the one real
 host both handlers are unconditionally defined. It is the "one correct pattern applied to a control
 and not its neighbour" shape, with the offer now being the neighbour that has it.
 
@@ -9434,14 +9453,6 @@ ADR-0208 stops an import copying a calendar that is identical to one the tier ho
 The plan for #539 M3-T2 asked for the row's fixture split at `M → K` and at `W → M`, with the one-plan and two-plan runs asserted equal. The twin harness only knows a 24-hour, a Standard and an eight-hour calendar, so a weekend calendar, which is what makes the fixture a fixture, cannot be expressed in it. What stands instead: the matrix covers a finish milestone as the local and the remote end across the two calendars, in both directions, with every lag calendar, and `cross-plan-derivation.spec.ts` pins a remote milestone dated on a Friday and on a Sunday. A defect that only a Sat-Sun calendar shows (a remote milestone whose date falls on a day with no working time on the other plan's calendar) would pass all of them.
 
 **Next:** add a `weekend` shape to `MatrixCalendarName` and `MATRIX_CALENDAR_SHAPES`, and add a mixed pair (weekday upstream, weekend downstream and back) for the finish-milestone rows; verify it red by restoring the late-date roll in `remoteInstants`. **Trigger:** the next change to `cross-plan-derivation.ts` or to the date readers in `instants.ts`.
-
-### 556. The progressed-predecessor marker (#421) has no rollback section, so a roll-forward skips plans the previous image touched
-
-**Status:** open · **Verified:** 2026-10-26, by reading `docs/DEPLOYMENT.md` (sections exist for the finish-milestone and cross-plan lag releases and, since #539, the milestone release; none for `20260930120000_progressed_predecessor_visual_marker`) and the database-architect's design for #539 (§9) · **Raised:** 2026-10-26 (milestone-cross-calendar M4-T1) · **Size:** S · **Owner:** ops
-
-A comment-only marker's row is the whole of its state. Rolling the images back leaves the row in `_prisma_migrations`, the previous image stamps every plan it recalculates after that row's `finished_at` with old-rule placed dates, and a later roll-forward finds the row already applied and re-derives nothing. The finish-milestone, cross-plan lag and milestone releases each delete their row in their rollback procedure; this one has no procedure.
-
-**Next:** add "Rolling back past the progressed-predecessor release" to `docs/DEPLOYMENT.md` with the one-statement `DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20260930120000_progressed_predecessor_visual_marker'`, in the same order as the milestone section. **Trigger:** none, open now; it is a paragraph.
 
 ### 557. The redundant-link exclusion for an intermediate left at its start may be over-conservative since #539
 
