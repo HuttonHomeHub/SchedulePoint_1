@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.103.3
+
+### Patch Changes
+
+- [#1223](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1223) [`38bfa27`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/38bfa270f2a816763a1cc5d731d2b02195c4e8e0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An export now says when it leaves out a plan's codes. A P6 (XER) or MS Project file does not carry codes yet, and a plan whose swimlanes are made from a code is written as having no swimlanes; until now the export report said nothing about either. It now names how many code types were left out and which code the swimlanes come from. The exported file itself is unchanged.
+- Updated dependencies [[`38bfa27`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/38bfa270f2a816763a1cc5d731d2b02195c4e8e0)]:
+  - @repo/interchange@0.16.1
+
 ## 0.103.2
 
 ### Patch Changes
