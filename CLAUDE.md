@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 28 API modules
 > (`apps/api/src/modules/`), 42 Prisma models across 80 migrations, 1904 web
 > source files with 49 Playwright suites beside the base journey, and
-> 209 ADRs.
+> 210 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -612,6 +612,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0207** _(Accepted; amends ADR-0035 §12 and §22, ADR-0155 and ADR-0162 D3)_ — A milestone stays where its logic puts it, across calendars → [`0207-a-milestone-stays-where-its-logic-puts-it.md`](docs/adr/0207-a-milestone-stays-where-its-logic-puts-it.md)
 - **ADR-0208** _(Accepted; amends ADR-0053 §5)_ — An import reuses a calendar it would have copied exactly → [`0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`](docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)
 - **ADR-0209** _(Accepted; amends ADR-0050's notes mapping row)_ — An imported note is the importer's, and a SchedulePoint note travels as text under its own topic → [`0209-an-imported-note-is-the-importers.md`](docs/adr/0209-an-imported-note-is-the-importers.md)
+- **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
