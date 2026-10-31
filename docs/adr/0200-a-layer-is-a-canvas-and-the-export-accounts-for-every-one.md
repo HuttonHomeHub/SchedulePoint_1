@@ -58,6 +58,10 @@ paper contrast sweep.
   ruler and the swimlane gutter now carry a literal `data-chrome` and have a roster, `EXPORT_CHROME_INPUTS`, with the
   same floor (the two names) and the same staleness check in both directions; verified red by removing the
   composer's `swimlaneGutter` input. The legend and the strip's panel still have no roster and are still not claimed.
+  **Amended 2026-10-31 (TECH_DEBT #546):** the legend (`legend` → `scene`) and the strip's panel (`strip-caption` →
+  `resourceStrip`) now carry a literal `data-chrome` and sit in the same roster, the floor now four names; verified
+  red by removing the composer's `scene` input. They are claimed covered in the same sense as the ruler and gutter:
+  the composer is told, and the pixels remain hand mirrors asserted by their own tests.
 - The gate shipped one commit ahead of the fix, with the strip in a `KNOWN_GAPS` record naming `docs/TECH_DEBT.md`
   #223 rather than in the screen-only record, whose reasons say "by design". Verified red on that tree (removing the
   entry names `resource-strip`); the entry failed the build once the composer named the strip, and the record was
