@@ -170,3 +170,11 @@ swimlanes writes the bytes it always did.
 - **Never refused:** the export mapper applies the reader's own `isSwimlaneName` and `foldSwimlaneName`, so
   a name the reader would refuse, or repeat ignoring case, is left out with its members and counted in one
   `drop` finding.
+
+## Amendment: P6 activity codes (2026-10-31, [ADR-0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md))
+
+The P6 activity codes epic planned to give the `swimlanes` field a fourth `source`, `ACTIVITY_CODE`. **It has not
+shipped**, and this field is unchanged: the reader still admits only `NONE`, `MANUAL` and `WBS` and discards any
+other source with a report line (`xer-layout-fields.ts`). Until the codes export (that epic's M6) gives it a form,
+an XER or MSPDI export of a plan grouped by a code writes its source as `NONE` (`export.service.ts`). When M6 is
+built, D9 applies: the reader that understands the new source ships one release before the writer emits it.
