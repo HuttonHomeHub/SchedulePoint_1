@@ -190,7 +190,8 @@ export const EXPORT_LAYER_INPUTS = {
  * every one is a key here and that the composer names its input.
  *
  * The ruler's labels are painted by {@link drawAxisMarkerRow} into the row `markerRow` reserves;
- * the gutter's by {@link paintExportGutter}.
+ * the gutter's by {@link paintExportGutter}; the legend's rows by {@link legendFor}; the strip
+ * panel's caption by `drawStripCaption`.
  *
  * **What the gate proves, and what it does not:** that the composer was TOLD about each input — the
  * key is named in the `renderExportImage` call — not that pixels exist. The pixels are asserted by
@@ -200,6 +201,10 @@ export const EXPORT_LAYER_INPUTS = {
 export const EXPORT_CHROME_INPUTS = {
   ruler: 'markerRow',
   'swimlane-gutter': 'swimlaneGutter',
+  // Keyed by `legendFor(scene, …)`: the entries follow what the scene draws.
+  legend: 'scene',
+  // The strip's caption row, painted by `drawStripCaption` from the strip's snapshot.
+  'strip-caption': 'resourceStrip',
 } as const satisfies Record<string, keyof RenderExportImageInput>;
 
 /** Injectable seams so the off-screen render is testable without a real 2D context. */

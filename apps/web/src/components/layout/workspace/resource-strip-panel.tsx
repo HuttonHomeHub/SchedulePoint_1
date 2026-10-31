@@ -309,6 +309,8 @@ export function ResourceStripPanel({
       // A landmark name distinct from "Activities panel" (ADR-0049 §5). `tabIndex={-1}` makes it a
       // focus target for the reveal without adding a Tab stop.
       aria-label="Resource loading"
+      // The export reproduces this panel's caption by hand (ADR-0200 D2): the roster fails if it is dropped.
+      data-chrome="strip-caption"
       // The load basis (#413), only while the note is on screen — a description pointing at nothing
       // is worse than none.
       aria-describedby={series.length > 0 ? loadBasisId : undefined}
