@@ -3,6 +3,8 @@ import type { PinoLogger } from 'nestjs-pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Principal, type Permission } from '../../common/auth/principal';
+import { lockActiveActivityForShare } from '../../common/db/activity-row-lock';
+import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import {
   ConflictError,
   ForbiddenError,
@@ -16,6 +18,9 @@ import type { PlanRepository } from '../plans/plan.repository';
 
 import type { NoteRepository } from './note.repository';
 import { NotesService } from './notes.service';
+
+vi.mock('../../common/db/plan-advisory-lock', () => ({ acquirePlanWriteLock: vi.fn() }));
+vi.mock('../../common/db/activity-row-lock', () => ({ lockActiveActivityForShare: vi.fn() }));
 
 const ORG_ID = 'org-1';
 const AUTHOR_ID = 'user-author';
@@ -77,6 +82,7 @@ describe('NotesService', () => {
     softDelete: ReturnType<typeof vi.fn>;
     findAuthorNames: ReturnType<typeof vi.fn>;
   };
+  let tx: object;
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
   let service: NotesService;
 
@@ -98,7 +104,9 @@ describe('NotesService', () => {
       softDelete: vi.fn().mockResolvedValue(1),
       findAuthorNames: vi.fn().mockResolvedValue(new Map([[AUTHOR_ID, 'Ada Author']])),
     };
-    const tx = {};
+    tx = {};
+    vi.mocked(acquirePlanWriteLock).mockReset();
+    vi.mocked(lockActiveActivityForShare).mockReset().mockResolvedValue({ planId: PLAN_ID });
     prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(tx)) };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new NotesService(
@@ -126,13 +134,14 @@ describe('NotesService', () => {
           createdBy: AUTHOR_ID,
           updatedBy: AUTHOR_ID,
         }),
+        tx,
       );
       expect(result.authorName).toBe('Ada Author');
     });
 
     it('trims the body and rejects a whitespace-only body (422)', async () => {
       await service.createForPlan(principalWith(ALL), 'acme', PLAN_ID, { body: '  hi  ' });
-      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ body: 'hi' }));
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ body: 'hi' }), tx);
 
       await expect(
         service.createForPlan(principalWith(ALL), 'acme', PLAN_ID, { body: '   ' }),
@@ -153,11 +162,26 @@ describe('NotesService', () => {
       ).rejects.toBeInstanceOf(NotFoundError);
       expect(repo.create).not.toHaveBeenCalled();
     });
+
+    it('takes the plan lock and re-reads the plan inside the transaction that inserts (#560)', async () => {
+      await service.createForPlan(principalWith(ALL), 'acme', PLAN_ID, { body: 'x' });
+      expect(acquirePlanWriteLock).toHaveBeenCalledWith(tx, PLAN_ID);
+      expect(plans.findActiveByIdInOrg).toHaveBeenLastCalledWith(PLAN_ID, ORG_ID, tx);
+      expect(repo.create).toHaveBeenCalledWith(expect.anything(), tx);
+    });
+
+    it('404s and inserts nothing when a delete swept the plan after the first read (#560)', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValueOnce(plan()).mockResolvedValueOnce(null);
+      await expect(
+        service.createForPlan(principalWith(ALL), 'acme', PLAN_ID, { body: 'x' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('createForActivity', () => {
     it("copies the activity's planId and sets activityId from the resolved parent", async () => {
-      activities.findActiveByIdInOrg.mockResolvedValue(activity({ planId: 'plan-xyz' }));
+      vi.mocked(lockActiveActivityForShare).mockResolvedValue({ planId: 'plan-xyz' });
       await service.createForActivity(principalWith(ALL), 'acme', ACTIVITY_ID, { body: 'note' });
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -165,6 +189,7 @@ describe('NotesService', () => {
           planId: 'plan-xyz',
           activityId: ACTIVITY_ID,
         }),
+        tx,
       );
     });
 
@@ -173,6 +198,24 @@ describe('NotesService', () => {
       await expect(
         service.createForActivity(principalWith(ALL), 'acme', ACTIVITY_ID, { body: 'x' }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('locks the activity row FOR SHARE inside the transaction and inserts with that tx (#560)', async () => {
+      vi.mocked(lockActiveActivityForShare).mockResolvedValue({ planId: 'plan-locked' });
+      await service.createForActivity(principalWith(ALL), 'acme', ACTIVITY_ID, { body: 'x' });
+      expect(lockActiveActivityForShare).toHaveBeenCalledWith(tx, ORG_ID, ACTIVITY_ID);
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ planId: 'plan-locked', activityId: ACTIVITY_ID }),
+        tx,
+      );
+    });
+
+    it('404s and inserts nothing when a delete swept the activity after the first read (#560)', async () => {
+      vi.mocked(lockActiveActivityForShare).mockResolvedValue(null);
+      await expect(
+        service.createForActivity(principalWith(ALL), 'acme', ACTIVITY_ID, { body: 'x' }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(repo.create).not.toHaveBeenCalled();
     });
   });
 
