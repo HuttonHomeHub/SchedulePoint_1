@@ -939,8 +939,8 @@ discriminators. Each becomes a spec/plan before build:
   per WBS group at a chosen level, kept live. The names sit in a gutter at the diagram's left, a quiet rule
   marks each boundary, bars pack inside their swimlane, and turning swimlanes off gives back the
   swimlane-free picture exactly. The Activities table and the Gantt have a Swimlane column, the export and
-  print carry them, and a SchedulePoint XER keeps them. The engine never sees them. P6 activity codes as a
-  source are the `docs/BACKLOG.md` follow-on.
+  print carry them, and a SchedulePoint XER keeps them. The engine never sees them. P6 activity codes became
+  the third source on 2026-10-31 (the entry below).
 - **A milestone stays where its logic puts it, across calendars** — **built, ships with the next release**
   (approved 2026-10-26, [ADR-0207](adr/0207-a-milestone-stays-where-its-logic-puts-it.md); spec and plan at
   [`docs/specs/milestone-cross-calendar/`](specs/milestone-cross-calendar/), `docs/TECH_DEBT.md` #539): a
@@ -959,6 +959,12 @@ discriminators. Each becomes a spec/plan before build:
   a P6 `TASKMEMO` and an MS Project task `<Notes>` import as plain-text notes authored by the importer, and every
   export writes the plan's notes (one memo per activity under a SchedulePoint topic in an XER, one task note in an
   MSPDI), text only. The report counts them and says what changed or was left out.
+- **P6 activity codes, kept in the plan, and swimlanes by a code** — **shipped for M0 to M4** (2026-10-31, `api`
+  0.103.2 and `web` 0.200.4; [ADR-0210](adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md);
+  spec and plan at [`docs/specs/p6-activity-codes/`](specs/p6-activity-codes/)): a plan holds codes such as Area or
+  Trade, edited in **Codes…**, shown as table and Gantt columns and set from the editor, the table or the diagram,
+  and the diagram's swimlanes can be one per value of a code. A P6 import reports the codes it does not keep yet;
+  keeping them on import (M5) and writing them to an XER (M6) wait for a real P6 export that uses them.
 - **A share link shows the plan's swimlanes** — **shipped** (with swimlanes M4)
   ([ADR-0205](adr/0205-a-guest-sees-the-swimlanes-the-diagram-is-drawn-in.md); spec and plan at
   [`docs/specs/swimlanes/`](specs/swimlanes/), SQ-4): the guest read gains the plan's swimlane list
