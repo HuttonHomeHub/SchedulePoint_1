@@ -3,43 +3,40 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-31 (late morning). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.2
-and `web` 0.200.4 on #1213, both publish jobs passed in run 41148931556, #1219 merged, no PRs open), then for **P6 M7,
-the epic's ADR and documents**, driven to completion with the reconciliation pass that fell due at this epic boundary.
-**All of it is merged.** M7 was meant to be documentation only; the gate pass found a silent export loss, the owner chose
-to report it, and that fix shipped as **`api` 0.103.3** and **`web` 0.200.5** (Version Packages #1224; web moved only because
-it depends on the changed export package). **The P6 epic is closed for what shipped
-(M0 to M4); M5 and M6 still wait for a real P6 export.** The owner's **hard rule** still stands: nothing that needs them to
-test, measure or check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not
-cut**; that stays the owner's call (ADR-0190).
+**Written:** 2026-10-31 (evening). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.3
+and `web` 0.200.5 on #1224, both publish jobs passed in run 41189620756, #1220 to #1226 merged, no PRs open; GitHub's
+PR list prints `merged: false` for squash-merged PRs while giving a `merged_at`, which is the list endpoint, not a
+fault), then for a short list of what to build next. They chose three small rows, **#549**, **#552** and **#560**, and
+all three are merged and released as **`api` 0.103.4** and **`web` 0.200.6** (Version Packages #1228). None needed a
+spec (each stayed inside its row and added no new surface, ADR-0105). The owner's **hard rule** still stands: nothing
+that needs them to test, measure or check anything on their server or devices (a decision question is fine; a test is
+not). **1.0 is not cut**; that stays the owner's call (ADR-0190). **The P6 epic stays closed for what shipped (M0 to
+M4); M5 and M6 still wait for a real P6 export**, so do not offer them.
 
-## The owner's answers this session (2026-10-31)
+## The owner's answers this session (2026-10-31, evening)
 
-- **ADR-0210's outline is right as written** (fourteen decisions plus the accepted misses; it was filed with fifteen
-  because codes as their own write scope and values on demand became D4 and D5).
-- **The export gap: "Say so in the report"** (recommended) over "record it only". An XER or MSPDI export wrote no codes
-  and wrote a code-grouped plan as having no swimlane source, with nothing in the report. Now the report names both.
+- **Build:** "Gantt swimlane warning" (#549, recommended) and "Three consistency slips" (#552). Not taken: the two
+  shared-primitive accessibility fixes (#564) and the eight stale pointers.
+- **Codes rows:** "#560 note safety" over the recommended "None for now". #562 and #563 stay open on their triggers.
 
 ## Where things stand
 
-- **Latest releases:** `api` **0.103.3** (tag `api-v0.103.3`) and `web` **0.200.5** (tag `web-v0.200.5`, a dependency bump
-  only), Version Packages #1224; both publish jobs passed (`Release` run 41189620756). Before that `api` 0.103.2 / `web` 0.200.4
-  (#1213).
+- **Latest releases:** `api` **0.103.4** (tag `api-v0.103.4`) and `web` **0.200.6** (tag `web-v0.200.6`), Version Packages
+  #1228; both publish jobs passed (`Release` run 41226850290). Before that `api` 0.103.3 / `web` 0.200.5 (#1224).
 - **This session's PRs, in merge order:**
-  - **#1220** ADR-0210, "An activity code is plan data, and a code type is a swimlane source", its `CLAUDE.md` §16 line,
-    the index row and the roadmap entry.
-  - **#1221** the amendment notes, each checked against the code: ADR-0206 A2/A7, ADR-0205 (and ADR-0051's status line
-    pointing at it, because ADR-0205 is what widened the guest scope for swimlanes), ADR-0025 Amendment 4 (the smaller
-    freeze that shipped, not Q1's full one), ADR-0194 (formats 2.2 in `api` 0.102.2 and 2.3 in 0.103.0), and ADR-0156
-    (its field is **unchanged**; the planned fourth source waits for M6).
-  - **#1222** the spec header `Accepted — shipped (ADR-0210)` for M0–M4 only, saying M5/M6 have not shipped; the backlog
-    entry narrowed to M5/M6; two words in `docs/DEPLOYMENT.md`'s P6 rollback section ("0.103.x" and "By code"); ADR-0050's
-    codes row.
-  - **#1223** `fix(api)`: the export report says when codes and a code swimlane source are left out (bytes unchanged).
-  - **#1224** Version Packages (the one release).
-  - **#1225** the reconciliation pass (below).
+  - **#1227** `fix(web)` (#549): the failed-swimlanes notice now shows in the Gantt view too, saying the Swimlane column
+    is hidden until swimlanes load, with Try again; it fires only when the column is actually gone.
+  - **#1229** `fix(web)` (#552): "Retry" → "Try again" on the overview and the float-paths panel; the Gantt's load-error
+    button uses the shared `Button`; the canvas palette's missing-token fallbacks are the light theme's values.
+  - **#1230** `fix(api)` (#560): a note create runs in a transaction and re-reads its parent there (an activity note
+    takes the activity row `FOR SHARE`; a plan note takes the plan advisory lock, because a plan delete stamps the plan
+    row last). Same 404s; no schema change. Accepted and written in the code: the wait has no `lock_timeout`, so a plan
+    note waiting past the 15 s transaction timeout behind a long import commit fails as a 500.
+  - **#1228** Version Packages (the one release).
 - **The P6 epic:** M0 to M4 shipped and recorded in ADR-0210. **M5 and M6 wait for a real P6 export** that uses activity
   codes (`m0-record.md`); the approved `plan.md` M5/M6 is their spec.
+- **Pointer drift still recorded, not fixed** (from the 2026-10-31 reconciliation pass): #121, #202, #211, #263, #320,
+  #358, #366. (#560 is closed now.) The owner did not pick it; it stays cheap to clear in the next pass.
 
 ## The reconciliation pass (2026-10-31)
 
@@ -48,7 +45,7 @@ reviewer agent ignorant of codes, and `security-reviewer.md`'s guest rule false 
 carry the codes invariants); ROADMAP's ADR-0207 still "ships with the next release"; `DATABASE.md`'s soft-delete model
 count (21 → 23); `PROJECT_BRIEF.md` calling codes a follow-on; two `scripts/surface-contract.json` `gap` rows for dialogs
 that shipped. Rows #74, #279, #549, #552, #557 and #562 corrected in place; none resolved. **Pointer drift recorded, not
-fixed:** #121, #202, #211, #263, #320, #358, #366, #560. **Not run:** step 5a (the clone is shallow).
+fixed:** #121, #202, #211, #263, #320, #358, #366, #560 (#560 has since been closed, #1230). **Not run:** step 5a (the clone is shallow).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -118,6 +115,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-30: P6 M4 with every recommended answer (keep drawing past 100; Move to swimlane… offers the bands on
   screen; guests see "No <type>"); "current code only" for code lanes; the baseline capture miss accepted.
 - 2026-10-31: ADR-0210's outline as written; the export gap is reported ("say so in the report").
+- 2026-10-31 (evening): build #549 and #552, plus #560 (over "none for now"); #564, the pointer list, #562 and
+  #563 not taken.
 
 ## Parked by the owner — keep, do not raise
 
@@ -171,8 +170,8 @@ owner returns to one, the steps are ready:
   section), **#557** (ADR-0196's exclusion may now be over-conservative),
   **#558** (a labelled `CheckboxField` row is 24 px under a coarse pointer), **#559** (a new plan takes
   the Standard calendar without the calendar lock). **#550** and **#371** are closed.
-- **New on 2026-10-27:** **#560** (a note create can land under an activity or plan a delete swept an instant
-  earlier; accepted, invisible through the API), **#561** (the toolbar's hand-rolled radio rows stay 24 px under
+- **New on 2026-10-27:** **#560** (a note create could land under an activity or plan a delete swept an instant
+  earlier; **closed 2026-10-31 by #1230**), **#561** (the toolbar's hand-rolled radio rows stay 24 px under
   a coarse pointer; growing them breaks the View panel's 420 px bar), **#562** (the codes API's deferred items:
   a values-on-demand read, `?include=deleted` unbounded, the write response returns every code, the redundant
   lock re-take in `bumpVersions`, the unreproduced 2.6 s history flush, and the cascade's **60 s ceiling of about
@@ -202,10 +201,16 @@ owner returns to one, the steps are ready:
 arrives (M5 keeps them on import; M6 writes them to an XER, with the reader released first, ADR-0156 D9). Never on
 guessed column names (ADR-0071 §5).
 
-- The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31). The pointer-drift list above
-  is cheap to clear in it.
-- Still open from the codes work: rows **#560**, **#562**, **#563**, **#564**.
 - Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
+  `docs/BACKLOG.md` has nothing buildable today (every entry has shipped, waits on an outside trigger, or is P6), so
+  the list comes from `docs/TECH_DEBT.md`.
+- Offered this session and not taken, still open and still true on 2026-10-31: **#564** (a shaded radio card's reason
+  dimmed to about 2.6:1; the Combobox's listbox named like its toggle; needs accessibility-reviewer and
+  component-reviewer, ADR-0111), the pointer-drift list above (cheap), **#562** and **#563** (each on its own trigger).
+- Other small open rows checked this session as still real: **#554** (an import's unused calendar copy; needs a spec),
+  **#547** (two re-filing paths leave a swimlane lane derived), **#551** (a browser crash reaches nobody; needs a
+  channel, so likely an owner decision).
+- The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
@@ -789,3 +794,19 @@ head>` moved the next one. A local "wip stack" merge commit of an unmerged sibli
   - **The proxy refuses deleting a remote branch** (`git push --delete` hangs up). Leave merged branches.
   - **A plan's amendment list can name the wrong ADR.** The guest change belonged on ADR-0205 (which already amends
     ADR-0051 §4) and ADR-0156's planned change had not shipped; check each target against the code first.
+
+- **2026-10-31 evening lessons (#549, #552, #560):**
+  - **Three builders in parallel worked when only one owned the database.** The two web builders ran unit tests,
+    lint and typecheck only; the API builder ran Postgres, the API e2e and its own prepush. Then the orchestrator ran
+    `pnpm prepush` on each exact head, one at a time.
+  - **A full `pnpm prepush` catches what a builder's targeted tests miss.** #552's builder ran the palette, overview,
+    float-paths and Gantt tests; the full run failed `export-image.test.ts`, which asserted the theme palette's
+    fallbacks were dark. Read a builder's "all pass" as "the files I named pass".
+  - **Stack the next fix on the PR under review, then cherry-pick it onto `main` after the squash.** When
+    `git diff <tested head> HEAD` is empty the gate result carries over; each move was clean, and the only conflict
+    was the closed ledger (keep both rows).
+  - **A ledger row's last cell is padded to the widest row,** so lengthening the widest row repads another row under
+    prettier. Put a long note in the code or the row's open section instead of the closed ledger.
+  - **Killing a finished builder's leftover test process is refused** by the safety check; leave it, it ends on its own.
+  - **A body line starting `word:` reads as a footer** to commitlint (`footer-leading-blank` warning); harmless, and
+    only the squash title lands on `main`.
