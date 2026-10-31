@@ -16,6 +16,7 @@ import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { ActivityRepository } from '../activities/activity.repository';
 import { CalendarRepository, type CalendarWithExceptions } from '../calendars/calendar.repository';
 import { MINUTES_PER_HOUR } from '../calendars/hours-per-day';
+import { CodeTypeRepository } from '../codes/code-type.repository';
 import { DependencyRepository, type ExportEdge } from '../dependencies/dependency.repository';
 import { NoteRepository } from '../notes/note.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -86,6 +87,7 @@ export class ExportService {
     private readonly assignments: ResourceAssignmentRepository,
     private readonly swimlanes: SwimlaneRepository,
     private readonly notes: NoteRepository,
+    private readonly codeTypes: CodeTypeRepository,
     @InjectPinoLogger(ExportService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -178,6 +180,8 @@ export class ExportService {
       laneRows,
       noteRows,
       planNotes,
+      codeTypeCount,
+      swimlaneCodeType,
     ] = await Promise.all([
       this.activities.findAllActiveByPlan(organizationId, plan.id),
       this.dependencies.findAllActiveByPlan(organizationId, plan.id),
@@ -196,6 +200,11 @@ export class ExportService {
       }),
       // Plan notes have no field in either format; they are only counted for the report.
       this.notes.countActiveForPlan(organizationId, plan.id, 'PLAN'),
+      // No export writes P6 activity codes yet (ADR-0210 D13); they are counted so the report says so.
+      this.codeTypes.countActive(organizationId, plan.id),
+      plan.swimlaneSource === 'ACTIVITY_CODE' && plan.swimlaneCodeTypeId !== null
+        ? this.codeTypes.findActiveInPlan(plan.swimlaneCodeTypeId, plan.id, organizationId)
+        : Promise.resolve(null),
     ]);
 
     if (swimlaneRows.length >= SWIMLANE_LIMIT) {
@@ -255,9 +264,9 @@ export class ExportService {
         dataDate: formatCalendarDate(plan.plannedStart),
         defaultCalendarKey: calendarKeyOrNull(plan.calendarId),
         // Where the plan's swimlanes come from; the pure mapper decides whether and how to write them.
-        // ACTIVITY_CODE cannot be stored yet (20261027120000_swimlane_source_activity_code) and the
-        // XER/MSPDI layout fields have no form for it; it travels as NONE until the codes export
-        // milestone gives it one.
+        // The XER/MSPDI layout fields have no form for an ACTIVITY_CODE source (ADR-0156's amendment); it
+        // travels as NONE until the codes export (p6-activity-codes M6) gives it one, and the report names
+        // the code through `swimlaneCodeName` (ADR-0210).
         swimlaneSource: plan.swimlaneSource === 'ACTIVITY_CODE' ? 'NONE' : plan.swimlaneSource,
         swimlaneWbsLevel: plan.swimlaneWbsLevel,
       },
@@ -268,6 +277,8 @@ export class ExportService {
             notes: exportNotes.map((n) => ({ activityKey: n.activityId, body: n.body })),
           }),
       ...(planNotes === 0 ? {} : { planNoteCount: planNotes }),
+      ...(codeTypeCount === 0 ? {} : { codeTypeCount }),
+      ...(swimlaneCodeType === null ? {} : { swimlaneCodeName: swimlaneCodeType.name }),
       ...(unwrittenNotes === 0 ? {} : { unwrittenNoteCount: unwrittenNotes }),
       calendars: calendarRows.map((c) => this.toExportCalendar(c)),
       activities: activityRows.map((a) => ({

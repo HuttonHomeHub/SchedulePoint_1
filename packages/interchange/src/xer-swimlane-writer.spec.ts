@@ -160,3 +160,35 @@ describe('export — a format without the fields reports the loss', () => {
     expect(Buffer.from(withLanes.bytes).equals(Buffer.from(plain.bytes))).toBe(true);
   });
 });
+
+describe('export — P6 activity codes are reported, not written (ADR-0210 D13)', () => {
+  const coded = (): ExportGraph => ({
+    ...buildLaidOutExportGraph(),
+    codeTypeCount: 2,
+    swimlaneCodeName: 'Area',
+  });
+
+  it('writes the same bytes as a plan without codes, in both formats', () => {
+    expect(bytesOf(coded()).equals(bytesOf(buildLaidOutExportGraph()))).toBe(true);
+    const plain = exportMspdi({ graph: buildLaidOutExportGraph() });
+    const withCodes = exportMspdi({ graph: coded() });
+    if (!plain.ok || !withCodes.ok) throw new Error('mspdi export failed');
+    expect(Buffer.from(withCodes.bytes).equals(Buffer.from(plain.bytes))).toBe(true);
+  });
+
+  it('names the code types and the code swimlane source it left out', () => {
+    const { findings } = mapExportGraphToCanonical(coded(), { carriesLayout: true });
+    const drops = findings.filter((f) => f.kind === 'drop').map((f) => f.detail);
+    expect(drops).toContain(
+      '2 code type(s) and the values set on activities were not written to the exported file',
+    );
+    expect(drops.some((d) => d.includes('from the code Area'))).toBe(true);
+  });
+
+  it('says nothing about codes when the plan holds none', () => {
+    const { findings } = mapExportGraphToCanonical(buildLaidOutExportGraph(), {
+      carriesLayout: true,
+    });
+    expect(findings.filter((f) => /code type|from the code/.test(f.detail))).toEqual([]);
+  });
+});

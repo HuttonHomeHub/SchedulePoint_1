@@ -78,5 +78,16 @@ export const exportGraphSchema = importGraphSchema.extend({
    * Counted so the report can say how many were left out rather than exporting a silent truncation.
    */
   unwrittenNoteCount: z.number().int().min(0).optional(),
+  /**
+   * The plan's live P6 activity code types (ADR-0210). No export writes codes yet (the codes export waits
+   * for a real P6 file, ADR-0210 D13), so they are only counted, and the report says they were left out
+   * rather than losing them silently. The API supplies it; absent or 0 reports nothing.
+   */
+  codeTypeCount: z.number().int().min(0).optional(),
+  /**
+   * The name of the code the plan's swimlanes are made from, when they are (`ACTIVITY_CODE`). The file
+   * says the plan has no swimlane source, so the report names what was not written.
+   */
+  swimlaneCodeName: z.string().min(1).optional(),
 });
 export type ExportGraph = z.infer<typeof exportGraphSchema>;

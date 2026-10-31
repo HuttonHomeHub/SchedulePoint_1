@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { ActivitiesModule } from '../activities/activities.module';
 import { CalendarsModule } from '../calendars/calendars.module';
+import { CodesModule } from '../codes/codes.module';
 import { DependenciesModule } from '../dependencies/dependencies.module';
 import { NotesModule } from '../notes/notes.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
@@ -43,6 +44,7 @@ import { PlanExportController } from './plan-export.controller';
     ProjectsModule,
     PlansModule,
     CalendarsModule,
+    CodesModule,
     ActivitiesModule,
     DependenciesModule,
     NotesModule,
