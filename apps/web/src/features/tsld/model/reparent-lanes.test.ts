@@ -127,6 +127,24 @@ describe('planReparentLanes', () => {
     expect(ids).toContain('t1');
   });
 
+  it('plans a dissolve against the picture without the summary: its children, never the summary', () => {
+    const plan = [
+      summary('G1'),
+      summary('G2'),
+      task('t2', 'G2', 0, 3, { summary: 'G2', lane: 0 }),
+      task('c1', 'G1', 0, 3, { summary: 'G1', lane: 0 }),
+    ];
+    // G1 is dissolved: c1 is promoted to the top level, out of G1 and into no group.
+    const writes = planReparentLanes({
+      ...BASE,
+      activities: plan,
+      changes: [{ id: 'c1', parentId: null }],
+      removed: ['G1'],
+    });
+    expect(writes.map((p) => p.id)).toContain('c1');
+    expect(writes.map((p) => p.id)).not.toContain('G1');
+  });
+
   it('never names a swimlane and never carries an undo origin', () => {
     const writes = planReparentLanes({
       ...BASE,

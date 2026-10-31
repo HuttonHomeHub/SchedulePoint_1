@@ -32,6 +32,10 @@ vi.mock('@/features/cross-plan-dependencies', () => ({
   CrossPlanLinksSection: () => <div data-testid="cross-plan-section" />,
 }));
 
+vi.mock('@/features/wbs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useDissolveSummaryInSwimlanes: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 vi.mock('@/features/notes', () => ({ ActivityNotesSection: () => null }));
 vi.mock('@/features/plans', () => ({ PlanFormDialog: () => null }));
 vi.mock('@/features/resources', () => ({
@@ -54,7 +58,6 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useDeleteActivity: () => ({ mutate: vi.fn(), isPending: false }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),
-  useDissolveSummary: () => ({ mutate: vi.fn(), isPending: false }),
   isMilestoneType: () => false,
   ActivityFormDialog: () => null,
   ActivityProgressDialog: () => null,

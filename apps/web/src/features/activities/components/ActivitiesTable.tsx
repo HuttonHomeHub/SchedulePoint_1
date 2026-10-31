@@ -6,7 +6,6 @@ import { flushSync } from 'react-dom';
 import {
   useActivities,
   useDeleteActivity,
-  useDissolveSummary,
   type DissolveSummaryResponse,
 } from '../api/use-activities';
 import {
@@ -54,7 +53,7 @@ import {
   SWIMLANES_FOLLOW_WBS_REASON,
   type SwimlaneColumnSource,
 } from '@/features/tsld';
-import { WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
+import { useDissolveSummaryInSwimlanes, WbsBulkAssignBar, type OnReparented } from '@/features/wbs';
 import { codeCellText, NO_CODE_COLUMNS, type CodeColumn } from '@/lib/code-columns';
 import { formatConstraint } from '@/lib/constraint-format';
 import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
@@ -453,7 +452,7 @@ export function ActivitiesTable({
 }): React.ReactElement {
   const activities = useActivities(orgSlug, planId);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
-  const dissolveSummary = useDissolveSummary(orgSlug, planId);
+  const dissolveSummary = useDissolveSummaryInSwimlanes(orgSlug, planId);
   const calendarNameById = useMemo(
     () => new Map(calendars.map((c) => [c.id, c.name])),
     [calendars],
