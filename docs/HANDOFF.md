@@ -3,56 +3,55 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-30. The owner asked for a hand-off check, then chose **P6 M3, the first screen for the
-codes**, with codes loading their values on demand, and asked for it to be driven to completion. **All of it
-is merged and released** as **`api` 0.103.1** and **`web` 0.200.3** (Version Packages #1205): the M3 design, spec
-and plan (approved 2026-10-29), the on-demand codes reads (T0), the Codes… dialog (T1), code columns in the
-Activities table and the Gantt plus printing them (T2), the editor's Codes section, the table's Set, undo,
-history and paste (T3), and Set code… on the diagram's selection bars (T4). **M4 (swimlanes by a code) is
-next.** The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything on
-their server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the
-owner's call (ADR-0190).
+**Written:** 2026-10-31. The owner asked for a hand-off check (everything matched GitHub), then for **P6 M4,
+swimlanes by a code**, driven to completion: the database-architect first, a spec and plan approved through
+clickable questions, one small PR per task, one release, and this hand-off. **All of it is merged and released**
+as **`api` 0.103.2** and **`web` 0.200.4** (Version Packages #1213). A plan's swimlanes can now be made from a code:
+Swimlanes… ▸ **One per value of Area**. **M7 (the epic's ADR and documents) is next**; M5 and M6 still wait for a
+real P6 export. The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything
+on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's
+call (ADR-0190).
 
-## The owner's answers this session (2026-10-29)
+## The owner's answers this session (2026-10-30)
 
-- **What to build:** P6 **M3** (show and edit codes); not M4 or M7 yet. M5 and M6 still wait for a real P6
-  export that uses activity codes.
-- **How the codes list loads:** **values on demand** (the list without values, then one type's values when
-  needed), not the nested read.
-- **Gantt printing:** **yes, print the code columns switched on**, in on-screen order, as many as fit, with one
-  line under the chart naming the rest ("Not printed, to leave room for the chart: System, Phase.").
-- **Where to set a code on many activities:** **both** the Activities table and the diagram's selection bars,
-  in M3 (T4).
-- **The M3 spec and plan are approved** (`docs/specs/p6-activity-codes/m3-spec.md`, `m3-plan.md`,
-  `m3-ui-design.md`).
-- **The one measured miss is accepted:** the `values=none` list reads about 70 ms against its 60 ms slice (the
-  value counts are a sequential scan with no index); the dialog's first paint is 121 to 136 ms against 200 ms,
-  so no index and no contract change (`m3-record.md` §1).
+- **What to build:** P6 **M4** (swimlanes by a code); M5 and M6 still wait for a real P6 export.
+- **The M4 spec and plan are approved** (`docs/specs/p6-activity-codes/m4-spec.md`, `m4-plan.md`, with
+  `m4-database-review.md` and `m4-ui-design.md`), with every recommended answer: **past 100 values in use** after a
+  code is chosen, the diagram keeps drawing every band and the swimlanes lens says so; **Move to swimlane…** offers
+  the bands on screen plus "No <type>" (an unused value is reached with Set code…); a **share-link guest** sees the
+  last band named "No <type>", as members do.
+- **"Current code only"** (after T1's first list read missed its ceiling): the activity list carries code lanes only
+  for the code the swimlanes use, at each activity's current value; switching to another code fetches that code's
+  lanes (one request), so the switch is no longer instant. Recorded as an amendment in `m4-spec.md` §4.5.
+- **The baseline capture miss is accepted:** a baseline of a code-grouped plan costs about +0.1–0.15 s (target 0.05 s)
+  so it can remember each activity's code and lane; the other option (counting removed work, never drawing it) was
+  declined (`m4-record.md` §3).
+- **Approved stopping a builder's orphaned local test server** (five processes in its own worktree) after the
+  safety check refused the builder's own kill; I asked rather than doing it on the builder's behalf.
 
 ## Where things stand
 
-- **Latest releases:** `api` **0.103.1** (tag `api-v0.103.1`) and `web` **0.200.3** (tag `web-v0.200.3`), Version
-  Packages #1205. Before that `api` 0.103.0 and `web` 0.200.2. `@repo/interchange` was not versioned.
+- **Latest releases:** `api` **0.103.2** (tag `api-v0.103.2`) and `web` **0.200.4** (tag `web-v0.200.4`), Version
+  Packages #1213; both publish jobs passed (`Release` run 41148931556). Before that `api` 0.103.1 and `web` 0.200.3.
 - **This session's PRs, in merge order:**
-  - **#1203** the M3 design, spec and plan, approved.
-  - **#1204** M3-T0: `GET code-types?values=none` with a live `valueCount`; `GET code-types/:id/values`
-    (cursor-paged, `include=deleted` behind `code:restore`, an unknown cursor is 422 `CODE_CURSOR_UNKNOWN`);
-    `GET code-values?id=` (names up to 100 values, deleted ones too); `codes` on the single-activity GET. No
-    schema change. Row #562's first, second and eighth items closed.
-  - **#1206** M3-T1: the **Codes…** dialog in the Activities panel (rail of types, values pane; add, rename,
-    edit, reorder, delete, restore, each one undo step). `RowActionButton` moved to `components/ui/`.
-  - **#1207** M3-T2: code columns in the Activities table (**Code columns** menu, `acodes`) and the Gantt
-    (View ▾ ▸ Columns ▸ Codes, `gcodes`), up to 10, off by default; the Gantt prints them as many as fit.
-  - **#1208** M3-T3: the editor's **Codes** section with its own **Save codes**; the table's ticked-rows
-    **Set <type>** (one request, one undo step, cap 2,000); undo sets aside a since-deleted value; history
-    names each change; paste within a plan keeps codes; the five surface-contract gaps closed.
-  - **#1209** M3-T4: **Set code…** on the diagram's single and plural selection bars (a popover), and the
-    shared `usePopoverPanel` now lets an open combobox take the first Escape (ADR-0111 reviewed). Both publish
-    jobs passed for this release (`Release` run 40987002495).
-  - **#1205** Version Packages (the one release).
-- **The P6 epic:** M0 to M3 are shipped. Codes are now visible and editable. M4 (swimlanes by a code) and M7
-  (the ADR) remain buildable; M5 and M6 wait for a real P6 file. `docs/specs/p6-activity-codes/` holds the
-  M3 design, spec, plan and `m3-record.md` (the T0 measurements).
+  - **#1211** the M4 database review (no schema change), UI design, spec and plan, approved.
+  - **#1212** M4-T1: lane writes under a code source go to `code_swimlane_lanes` (they 500'd before); `codes` on
+    activity create; `codeSwimlaneLanes` on activity responses for the current code and value only; the plan-wide
+    read `GET …/plans/:planId/code-types/:codeTypeId/swimlane-lanes` (two statements, 6 ms; throttled 30/min).
+  - **#1214** M4-T2: the source switch (`ACTIVITY_CODE` + `swimlaneCodeTypeId`, under the plan advisory lock, values
+    in use 1–100 with WBS summaries excluded); baseline capture of a code-grouped plan (a 23514 in 0.103.1); the
+    `docs/DEPLOYMENT.md` rollback steps rewritten as seven numbered owner steps.
+  - **#1215** M4-T3: the shared code-swimlane rule in `@repo/layout`; the projection with "No <type>" last; the drag
+    held at a code swimlane's edge; the over-100 lens line. Also lengthened the flaky Codes… dialog unit wait.
+  - **#1216** M4-T4: Move to swimlane…, Set code…, the table's Set and the editor's Save codes write the code and the
+    lanes together, one undo step; editor and Gantt Swimlane fields read-only with reasons; a drawn bar takes its band.
+  - **#1217** M4-T5: **the entry point**, the By code card with a Code picker (shaded codes with reasons), Delete…
+    shaded for the source code.
+  - **#1218** M4-T6: removed-work ghosts drawn in their frozen code swimlane (else counted, with a reason); guests see
+    code swimlanes by name; the `plan:capability-codes-wide` seeded plan; the journey closed.
+  - **#1213** Version Packages (the one release).
+- **The P6 epic:** M0 to M4 are shipped. M7 (ADR, documents, gate pass) is buildable; M5 and M6 wait for a real P6
+  file. `docs/specs/p6-activity-codes/m4-record.md` holds every M4 measurement, miss and decision.
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -119,6 +118,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   default; Q1 baselines yes-if-under-1-second (the fallback shipped); close Dependabot #1161; one release at the end.
 - 2026-10-29: P6 M3 (values on demand; Gantt prints code columns, as many as fit, naming the rest; Set a
   code from the table and the diagram); the M3 spec approved; the `values=none` 70 ms miss accepted.
+- 2026-10-30: P6 M4 with every recommended answer (keep drawing past 100; Move to swimlane… offers the bands on
+  screen; guests see "No <type>"); "current code only" for code lanes; the baseline capture miss accepted.
 
 ## Parked by the owner — keep, do not raise
 
@@ -188,21 +189,25 @@ owner returns to one, the steps are ready:
   values); the write's full answer, `bumpVersions`, the history re-measure, the required-`codes` DTO, the
   pen check and the 60 s sweep ceiling stay open with their reasons.
 
+- **2026-10-30 (M4):** **#563** (stored code lane rows for values an activity no longer holds are kept for ever, so
+  the plan-wide lanes read grows; nothing stale is sent any more) and **#564** (two pre-existing shared-primitive
+  issues the T5 review found: a shaded `RadioCardGroup` card dims its reason to about 2.6:1, and the `Combobox`
+  listbox shares its name with its toggle; neither primitive was changed).
+- **Also noted, no row:** the seeder printed "LOCKED on recalculate" for every plan during local swimlanes runs; the
+  suites passed and it was not investigated. `e2e-swimlanes` took about 6.4 minutes locally against its 190 s
+  estimate in `scripts/e2e-durations.json`; this container runs far slower than CI, so judge it from CI step times
+  (ADR-0138's fifth-shard trigger is the slowest shard above 1,250 s).
+
 ## Suggested next
 
-**The P6 epic continues with M4, swimlanes by a code.** Switch the session to **Opus** for the design, then
-**Sonnet** for building (§19.14). Everything is in `docs/specs/p6-activity-codes/plan.md` (M4) and spec §4.5.
+**The P6 epic continues with M7, its ADR and documents** (`docs/specs/p6-activity-codes/plan.md` M7-T1): file the
+epic ADR (spec §4.12, with the M3 and M4 decisions noted in its outline), the `CLAUDE.md` §16 line, the amendment
+notes (ADR-0206 A2/A7, ADR-0156, ADR-0194, ADR-0051, ADR-0025), the spec header to `Accepted — shipped`, the backlog
+entry closed, and the reconciliation pass that falls due at this epic boundary. Opus for the ADR (§19.14).
 
-- **M4: swimlanes by a code** (a **By code** source in Swimlanes… setup, switching codes keeps each layout,
-  `UpdatePlanDto` admitting `swimlaneCodeTypeId`, the membership endpoint, removing the `classifiedAheadOfDto`
-  allowance in `schedule-inputs.structural.spec.ts`, `swimlanesShown` explicit about `MANUAL` and `WBS`, and
-  the `docs/DEPLOYMENT.md` rollback runbook). It needs the **database-architect** first. T3 and T4 built
-  `useSetActivityCodes` and the shared `CodeAssignControl` so M4's code-sourced "Move to swimlane" can reuse
-  them.
 - **M5 and M6 still wait for a real P6 export** that uses activity codes (`m0-record.md`); never on guessed
   column names (ADR-0071 §5).
-- **M7:** the epic's ADR and the register and backlog updates, after M4.
-- Still open: rows **#560** and **#562**.
+- Still open: rows **#560**, **#562**, **#563**, **#564**.
 
 The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-26).
 
@@ -752,3 +757,25 @@ origin/main <old base>` after the one below merges; union the ADR lines, take ou
     failed CI's unit job once (#1209).
   - **Four reviewers in parallel per task, then one fold builder,** kept each PR to one CI round; the UX
     reviewer caught real copy defects every time (a false "no activities" count while loading; bare "Code").
+
+- **2026-10-30/31 lessons (P6 M4, swimlanes by a code):**
+  - **Stacked builders on unmerged branches work, if each rebase drops what is already upstream.** T3 to T6 were
+    built on top of each other before T1 to T5 merged; after each squash, `git rebase --onto origin/main <old base
+head>` moved the next one. A local "wip stack" merge commit of an unmerged sibling (T2 under T3) must be dropped
+    on the rebase, and git drops a duplicate fix by itself ("patch contents already upstream").
+  - **A builder that runs only some gates misses the rest.** T6 ran `check:e2e-roster` but not
+    `check:doc-register`, so `scripts/e2e-durations.json`'s recorded total went stale and CI's unit job failed. Brief
+    builders to run the whole `bash scripts/prepush.sh --checks` (no tests, a few minutes).
+  - **A paired measurement, not two medians minutes apart.** T1's first lane-write figure (+220 to +288 ms) was the
+    machine's drift; pairing each "with" against a "without" run back to back gave about +120 ms. Even paired, a
+    7-pair median moved from +102 to +199 ms, so record a range when the spread exceeds the ceiling (ADR-0076).
+  - **A refused kill is not mine to do on a builder's behalf.** A builder's own leftover test server held port 3000
+    and the safety check refused its kill; I checked the processes read-only, asked the owner, and only then stopped
+    them by exact id. Brief builders to start servers under `setsid` and stop their own process group.
+  - **CI's "Set up Node.js" can stall for 10 minutes** and push a web shard past its 30-minute limit (#1214 shard 2:
+    every test step passed, then the time ran out). Read the job's step timings before believing a cancel; one
+    re-run was justified.
+  - **Playwright waits for an `aria-disabled` control to become enabled**, so pressing a shaded-but-focusable button
+    hangs to the test timeout; press it with `force: true` and assert nothing opened.
+  - **A text locator finds both copies of a shaded control's reason** (the `sr-only` description and the printed
+    paragraph): locate the visible paragraph.
