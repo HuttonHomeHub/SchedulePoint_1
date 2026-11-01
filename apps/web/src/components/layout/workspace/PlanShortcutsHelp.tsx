@@ -219,6 +219,22 @@ const GANTT_TOUCH_EDIT_SHORTCUTS: readonly Shortcut[] = [
   },
 ];
 
+/** One titled block of the sheet — the heading's weight is placed here once, not at every section. */
+function SheetSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 /**
  * `keys` is for chords, which are short and must not break; `gesture` is for a phrase, which must
  * wrap inside the dialog's `max-w-md` at the 1024 floor (ADR-0179).
@@ -280,20 +296,17 @@ export function PlanShortcutsHelp({
         description="Focus a row in the chart, then use these keys to navigate and edit."
       >
         <div className="flex flex-col gap-5">
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Navigate</h3>
+          <SheetSection title="Navigate">
             <ShortcutList items={GANTT_READ_SHORTCUTS} />
-          </section>
+          </SheetSection>
           {editingEnabled ? (
-            <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold">Edit</h3>
+            <SheetSection title="Edit">
               <ShortcutList
                 items={[...GANTT_EDIT_SHORTCUTS, ...undoRedoShortcuts(isApplePlatform())]}
               />
-            </section>
+            </SheetSection>
           ) : null}
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Touch</h3>
+          <SheetSection title="Touch">
             <ShortcutList
               variant="gesture"
               items={[
@@ -302,7 +315,7 @@ export function PlanShortcutsHelp({
                 ...(editingEnabled ? GANTT_TOUCH_EDIT_SHORTCUTS : []),
               ]}
             />
-          </section>
+          </SheetSection>
         </div>
       </Dialog>
     );
@@ -321,17 +334,14 @@ export function PlanShortcutsHelp({
       description="Focus the activity list, then use these keys to navigate and edit."
     >
       <div className="flex flex-col gap-5">
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Navigate</h3>
+        <SheetSection title="Navigate">
           <ShortcutList items={READ_SHORTCUTS} />
-        </section>
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Minimap (Diagram viewport ▸ Minimap)</h3>
+        </SheetSection>
+        <SheetSection title="Minimap (Diagram viewport ▸ Minimap)">
           <ShortcutList items={MINIMAP_SHORTCUTS} />
-        </section>
+        </SheetSection>
         {CANVAS_MULTI_SELECT_ENABLED ? (
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Select</h3>
+          <SheetSection title="Select">
             <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
             {/*
               **What a selection unlocks** (ADR-0090 M5, discharging the M2-T1 obligation).
@@ -357,18 +367,16 @@ export function PlanShortcutsHelp({
               <strong className="text-foreground font-medium">Isolate logic path</strong>, which act
               on what you have selected.
             </p>
-          </section>
+          </SheetSection>
         ) : null}
         {editingEnabled ? (
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Edit</h3>
+          <SheetSection title="Edit">
             <ShortcutList items={editShortcuts} />
-          </section>
+          </SheetSection>
         ) : null}
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Touch</h3>
+        <SheetSection title="Touch">
           <ShortcutList variant="gesture" items={TOUCH_SHORTCUTS} />
-        </section>
+        </SheetSection>
       </div>
     </Dialog>
   );

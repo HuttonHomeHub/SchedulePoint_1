@@ -655,7 +655,10 @@ describe('weight is a governed axis', () => {
   // (`KpiTile`, `Count` and two `Stat`s) became `StatGrid` / `ContextStrip`, which place the weight once.
   // Five sites went, not four: the schedule summary's qualifier span also restated `font-normal`,
   // which `ContextStrip`'s `note` now owns.
-  const SCREEN_WEIGHT_CEILING = 132;
+  // ...and 132 -> 127 (help-sheet Touch section): six hand-rolled `<h3 font-semibold>` section headings
+  // in `PlanShortcutsHelp` became one local `SheetSection`, which places the weight once; the new
+  // Touch sections reuse it rather than adding two more.
+  const SCREEN_WEIGHT_CEILING = 127;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
