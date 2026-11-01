@@ -68,6 +68,7 @@ import {
 import { firstFreeImportedName, importedNameProbePrefix } from './imported-name';
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
+import { findResourceCollisions, matchImportResources } from './resource-match';
 import type { UploadedInterchangeFile } from './uploaded-file';
 
 export { importedNameProbePrefix };
@@ -878,19 +879,8 @@ export class InterchangeService {
             // `archivedAt` rides along so the CQ-4 unarchive-and-report path needs no second query.
             select: { id: true, code: true, name: true, archivedAt: true },
           });
-    // The LIBRARY's handles are kept separate from the decisions this import makes, because the two
-    // mean different things. A library name match is the ambiguous case the planner must answer; a
-    // name this import has already decided about is the SAME source crew appearing twice, which needs
-    // no second question. Folding both into one map (as this once did) makes the second source row
-    // indistinguishable from a fresh collision.
-    const libraryIdByCode = new Map<string, string>();
-    const libraryIdByName = new Map<string, string>();
-    for (const r of existingResources) {
-      if (r.code !== null) libraryIdByCode.set(r.code, r.id);
-      libraryIdByName.set(r.name, r.id);
-    }
-    const resolvedIdByCode = new Map<string, string>();
-    const resolvedIdByName = new Map<string, string>();
+    // Every decision (insert, or match to a library row / an earlier row of this file) is made by the
+    // pure matcher, so this method does no matching of its own and the dry-run asks the same questions.
     // An ARCHIVED row is still an ACTIVE row (archive is orthogonal to soft delete, ADR-0053 §4),
     // so `existingResources` above already matched archived resources — and it must: an archived
     // row keeps its name and code (the partial uniques are predicated on `deleted_at` alone), so
@@ -898,18 +888,14 @@ export class InterchangeService {
     // answer is therefore MATCH + AUTO-UNARCHIVE + REPORT: leaving it archived would have the
     // import create assignments to an archived resource, contradicting the RESOURCE_ARCHIVED rule
     // that the very same commit enforces everywhere else.
-    const archivedById = new Map(
-      existingResources.filter((r) => r.archivedAt !== null).map((r) => [r.id, r]),
-    );
-    const unarchivedResources: { id: string; name: string; code: string | null }[] = [];
     const resourceFindings: ReportFinding[] = [];
 
     // The planner's answers from the dry-run, and the free copy-names a `CREATE_COPY` will need. Both
     // are prepared BEFORE the loop so the loop itself does no I/O — the rest of `persistGraph` is
     // batched for exactly that reason (the interactive-transaction budget).
     const resolutions = options.resourceResolutions ?? {};
-    const collisions = this.findGraphResourceCollisions(graph, existingResources);
-    const unresolved = collisions.filter((c) => resolutions[c.resourceKey] === undefined);
+    const match = matchImportResources(graph, existingResources, resolutions);
+    const { collisions, unresolved } = match;
     if (unresolved.length > 0) {
       // Fail the WHOLE import rather than guess. Reuse silently discards the file's rate and calendar
       // for a crew that may not be the same crew; a silent duplicate splits one crew's demand across
@@ -927,42 +913,16 @@ export class InterchangeService {
       organizationId,
       collisions.filter((c) => resolutions[c.resourceKey] === 'CREATE_COPY'),
     );
+    const unarchivedResources = match.unarchive;
 
     for (const resource of graph.resources) {
-      // (a) CODE IS IDENTITY. A code match — in the library, or on a row this import already made —
-      // is not a guess, so it never asks a question.
-      const codeMatch =
-        resource.code !== null
-          ? (resolvedIdByCode.get(resource.code) ?? libraryIdByCode.get(resource.code))
-          : undefined;
-      // (b) A name this import already decided about: the same source crew appearing twice.
-      const existingId = codeMatch ?? resolvedIdByName.get(resource.name);
-      if (existingId !== undefined) {
-        resourceIdByKey.set(resource.key, existingId);
-        if (resource.code !== null) resolvedIdByCode.set(resource.code, existingId);
-        resolvedIdByName.set(resource.name, existingId);
-        const archived = archivedById.get(existingId);
-        if (archived !== undefined) {
-          archivedById.delete(existingId); // report each row once, however many source rows hit it
-          unarchivedResources.push({ id: archived.id, name: archived.name, code: archived.code });
-        }
-        continue;
-      }
-
-      // (c) The LIBRARY holds this name and nothing identified the row — the ambiguous case, which
-      // the planner has already answered (an unanswered one threw above).
-      const libraryMatch = libraryIdByName.get(resource.name);
-      let name = resource.name;
-      if (libraryMatch !== undefined) {
-        if (resolutions[resource.key] === 'REUSE_EXISTING') {
-          resourceIdByKey.set(resource.key, libraryMatch);
-          if (resource.code !== null) resolvedIdByCode.set(resource.code, libraryMatch);
-          resolvedIdByName.set(resource.name, libraryMatch);
-          const archived = archivedById.get(libraryMatch);
-          if (archived !== undefined) {
-            archivedById.delete(libraryMatch);
-            unarchivedResources.push({ id: archived.id, name: archived.name, code: archived.code });
-          }
+      const decision = match.decisions.get(resource.key)!;
+      if (decision.kind === 'match') {
+        // `file` points at an earlier source row, whose id (library or minted) is already mapped.
+        const matchedId =
+          decision.via === 'file' ? resourceIdByKey.get(decision.fileKey!)! : decision.libraryId!;
+        resourceIdByKey.set(resource.key, matchedId);
+        if (decision.via === 'answer') {
           resourceFindings.push({
             kind: 'repair',
             entity: 'resource',
@@ -972,8 +932,12 @@ export class InterchangeService {
               'you chose to reuse the existing resource, so the file’s own rate and calendar for ' +
               'it were not imported',
           });
-          continue;
         }
+        continue;
+      }
+
+      let name = resource.name;
+      if (decision.copy) {
         // CREATE_COPY — a new row under a name the org-unique will accept.
         name = copyNameByKey.get(resource.key) ?? resource.name;
         resourceFindings.push({
@@ -990,10 +954,6 @@ export class InterchangeService {
       const id = randomUUID();
       resourceIdByKey.set(resource.key, id);
       createdResourceIds.push(id);
-      // Fold the new row in so a later source row naming the same crew reuses it rather than
-      // colliding on the org-unique partial-uniques.
-      if (resource.code !== null) resolvedIdByCode.set(resource.code, id);
-      resolvedIdByName.set(resource.name, id);
       // A resource is ORG-GLOBAL, so it may only hold an ORG calendar (ADR-0053 §2 — the
       // `assertCalendarUsableBy` seam rejects anything else with RESOURCE_REQUIRES_ORG_CALENDAR). The
       // mapper guarantees this by forcing every resource-held calendar to ORG; re-assert it here so a
@@ -1096,52 +1056,7 @@ export class InterchangeService {
       },
       select: { id: true, code: true, name: true, archivedAt: true },
     });
-    return this.findGraphResourceCollisions(graph, existing);
-  }
-
-  /**
-   * The pure half of {@link findResourceCollisions}: given the library rows that could possibly match,
-   * which source rows are genuinely ambiguous. **The commit calls this too**, against its own in-transaction
-   * probe — one function, so the set of questions the dry-run asks and the set the commit demands answers
-   * for cannot drift apart. (Two implementations of "is this a collision" would disagree in exactly one
-   * place: a commit refusing a resolution the planner was never shown.)
-   */
-  private findGraphResourceCollisions(
-    graph: ImportGraph,
-    existing: readonly { id: string; code: string | null; name: string; archivedAt: Date | null }[],
-  ): ResourceCollision[] {
-    const byCode = new Map(
-      existing.filter((r) => r.code !== null).map((r) => [r.code as string, r] as const),
-    );
-    const byName = new Map(existing.map((r) => [r.name, r] as const));
-
-    const collisions: ResourceCollision[] = [];
-    // Names claimed by earlier source rows in THIS file, so two source resources sharing a name do not
-    // both report a collision against the library and then collide with each other on insert. The
-    // commit's loop mirrors this with `resolvedIdByName`.
-    const claimed = new Set<string>();
-    for (const resource of graph.resources) {
-      if (resource.code !== null && byCode.has(resource.code)) {
-        claimed.add(resource.name); // identity match — no question, but the name is now spoken for
-        continue;
-      }
-      if (claimed.has(resource.name)) continue; // this file already decided about this name
-      claimed.add(resource.name);
-      const clash = byName.get(resource.name);
-      if (clash === undefined) continue;
-      collisions.push({
-        resourceKey: resource.key,
-        name: resource.name,
-        code: resource.code,
-        existing: {
-          id: clash.id,
-          name: clash.name,
-          code: clash.code,
-          archived: clash.archivedAt !== null,
-        },
-      });
-    }
-    return collisions;
+    return findResourceCollisions(graph.resources, existing);
   }
 
   /**
@@ -1181,7 +1096,7 @@ export class InterchangeService {
    * Decide, for each calendar in the file, whether the import REUSES an existing one or CREATES its
    * own under a free name (ADR-0208, amending ADR-0053 §5). Shared by the dry-run and the commit, so
    * the reviewed report and the persisted result come from one function (the
-   * `findGraphResourceCollisions` precedent).
+   * `findResourceCollisions` precedent).
    *
    * A source reuses a calendar only when the stored rows equal what the import would write for it
    * (`calendarIdentityKey`) AND the name is the file's or the importer's own `(imported …)` variant of
